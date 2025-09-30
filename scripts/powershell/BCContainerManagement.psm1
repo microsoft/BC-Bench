@@ -291,13 +291,16 @@ function New-BCContainerAsync {
         [bool]$AcceptEula = $true,
 
         [Parameter(Mandatory = $false)]
-        [string]$AuthType = "UserPassword"
+        [string]$AuthType = "UserPassword",
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$AdditionalFolders = @()
     )
 
     Write-Log "Starting container creation job for: $ContainerName" -Level Info
 
     [System.Management.Automation.Job]$containerJob = Start-Job -ScriptBlock {
-        param([string] $url, [string] $containerName, [PSCredential] $credential, [bool] $acceptEula, [string] $authType)
+        param([string] $url, [string] $containerName, [PSCredential] $credential, [bool] $acceptEula, [string] $authType, [string[]] $additionalFolders)
 
         Import-Module BcContainerHelper -Force -DisableNameChecking
 
@@ -312,8 +315,17 @@ function New-BCContainerAsync {
             $params.accept_eula = $true
         }
 
+        if ($additionalFolders -and $additionalFolders.Count -gt 0) {
+            [string[]]$volumeMappings = @()
+            foreach ($folder in $additionalFolders) {
+                $volumeMappings += "--volume"
+                $volumeMappings += "${folder}:C:\Source"
+            }
+            $params.additionalParameters = $volumeMappings
+        }
+
         New-BCContainer @params
-    } -ArgumentList $ArtifactUrl, $ContainerName, $Credential, $AcceptEula, $AuthType
+    } -ArgumentList $ArtifactUrl, $ContainerName, $Credential, $AcceptEula, $AuthType, $AdditionalFolders
 
     Write-Log "Container creation job started (Job ID: $($containerJob.Id))" -Level Success
     return $containerJob

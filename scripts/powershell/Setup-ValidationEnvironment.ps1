@@ -43,6 +43,13 @@ catch {
     exit 1
 }
 
+# Determine NAV clone path first (before container creation)
+if (-not $NAVRepoPath) {
+    $NAVRepoPath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
+    Write-Log "Using default NAV clone path: $NAVRepoPath" -Level Info
+} else {
+    Write-Log "Using provided NAV clone path: $NAVRepoPath" -Level Info
+}
 
 # Import required modules
 Import-Module BcContainerHelper -Force -DisableNameChecking
@@ -62,8 +69,8 @@ if (-not $containerExists) {
         [string] $url = Get-BCArtifactUrl -version $Version -Country $Country
         Write-Log "Retrieved artifact URL: $url" -Level Info
 
-        # Create container asynchronously
-        $containerJob = New-BCContainerAsync -ContainerName $containerName -ArtifactUrl $url -Credential $credential
+        # Create container asynchronously with NAV folder shared
+        $containerJob = New-BCContainerAsync -ContainerName $containerName -ArtifactUrl $url -Credential $credential -AdditionalFolders @($NAVRepoPath)
     }
     catch {
         Write-Log "Failed to start container creation job for $containerName`: $($_.Exception.Message)" -Level Error
@@ -73,23 +80,22 @@ if (-not $containerExists) {
     Write-Log "Container $containerName already exists, reusing it" -Level Warning
 }
 
-# Clone NAV repository while container is being created (or immediately if container exists)
-try {
-    if (-not $NAVRepoPath) {
+if (Test-Path $NAVRepoPath) {
+    Write-Log "NAV repository already exists at $NAVRepoPath, skipping clone." -Level Warning
+} else {
+    try {
         [string] $navBranch = "releases/$Version"
-        [string] $navClonePath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
         [string] $navURL = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
 
-        Write-Log "Cloning NAV repository..." -Level Info
         Invoke-GitCloneWithRetry -RepoUrl $navURL -Token $env:NAV_REPO_TOKEN -Branch $navBranch `
-            -ClonePath $navClonePath -PrefetchCommits ($versionEntries | Select-Object -ExpandProperty base_commit) `
+            -ClonePath $NAVRepoPath -PrefetchCommits ($versionEntries | Select-Object -ExpandProperty base_commit) `
             -SparseCheckoutPaths ($versionEntries | ForEach-Object { $_.project_paths } | Where-Object { $_ })
     }
-}
-catch {
-    Write-Log "Failed to clone NAV repository: $($_.Exception.Message)" -Level Error
-    if ($containerJob) { Stop-Job $containerJob; Remove-Job $containerJob }
-    exit 1
+    catch {
+        Write-Log "Failed to clone NAV repository: $($_.Exception.Message)" -Level Error
+        if ($containerJob) { Stop-Job $containerJob; Remove-Job $containerJob }
+        exit 1
+    }
 }
 
 # Wait for container creation job to complete (if it was started)
@@ -102,5 +108,5 @@ if ($containerJob) {
 
 # Set output for GitHub Actions or return path
 if ($env:GITHUB_OUTPUT) {
-    "nav_clone_path=$navClonePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+    "nav_clone_path=$NAVRepoPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 }
