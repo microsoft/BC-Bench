@@ -309,6 +309,7 @@ function New-BCContainerAsync {
             containerName = $containerName
             auth = $authType
             credential = $credential
+            includeTestToolkit = $true
         }
 
         if ($acceptEula) {
