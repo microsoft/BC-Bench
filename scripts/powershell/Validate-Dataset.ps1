@@ -81,7 +81,7 @@ foreach ($entry in $versionEntries) {
             Update-AppProjectVersion -ProjectPath $fullProjectPath -Version $Version
 
             Write-Log "Compiling app in path: $fullProjectPath" -Level Info
-            Compile-AppInBcContainer -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential
+            Compile-AppInBcContainer -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential -gitHubActions:$env:CI
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to compile app at $projectPath"
             }
