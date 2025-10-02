@@ -336,7 +336,7 @@ function Write-Log {
 .PARAMETER PatchContent
     The patch content as a string
 .PARAMETER PatchId
-    Optional identifier for the patch (used in temp filename, default: random GUID)
+    Unique identifier for the patch
 .PARAMETER RepositoryPath
     Optional path to the git repository (default: current directory)
 .OUTPUTS
@@ -352,8 +352,8 @@ function Invoke-GitApplyPatch {
         [Parameter(Mandatory = $true)]
         [string]$PatchContent,
 
-        [Parameter(Mandatory = $false)]
-        [string]$PatchId = [System.Guid]::NewGuid().ToString(),
+        [Parameter(Mandatory = $true)]
+        [string]$PatchId,
 
         [Parameter(Mandatory = $false)]
         [string]$RepositoryPath
@@ -361,11 +361,10 @@ function Invoke-GitApplyPatch {
 
     try {
         # Create temporary patch file
-        $patchPath = Join-Path -Path $env:TEMP -ChildPath "patch_$PatchId.diff"
+        [string]$patchPath = Join-Path -Path $env:TEMP -ChildPath "patch_$PatchId.diff"
         Write-Log "Saving patch to temporary file: $patchPath" -Level Debug
         $PatchContent | Out-File -FilePath $patchPath -Encoding utf8 -Force
 
-        # Apply the patch
         if ($RepositoryPath) {
             $applyResult = git -C $RepositoryPath apply $patchPath 2>&1
         } else {
@@ -383,7 +382,6 @@ function Invoke-GitApplyPatch {
         throw
     }
     finally {
-        # Clean up temporary patch file
         if (Test-Path $patchPath) {
             Remove-Item -Path $patchPath -Force -ErrorAction SilentlyContinue
         }

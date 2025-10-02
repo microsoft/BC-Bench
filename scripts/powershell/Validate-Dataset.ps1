@@ -1,5 +1,6 @@
 using module .\DatasetEntry.psm1
 using module .\BCBenchUtils.psm1
+using module .\AppUtils.psm1
 
 param(
     [Parameter(Mandatory=$true)]
@@ -69,31 +70,36 @@ foreach ($entry in $versionEntries) {
         }
 
         Write-Log "Applying test patch for $($entry.instance_id)" -Level Info
-        $patchApplied = Invoke-GitApplyPatch -PatchContent $entry.test_patch -PatchId $entry.instance_id
-        if (-not $patchApplied) {
-            throw "Failed to apply test patch"
-        }
+        Invoke-GitApplyPatch -PatchContent $entry.test_patch -PatchId $entry.instance_id
 
-        Write-Log "Building test project for $($entry.instance_id)" -Level Info
+        Write-Log "[Test Patch Only] Building projects for $($entry.instance_id)" -Level Info
         foreach ($projectPath in $entry.project_paths) {
             [string]$fullProjectPath = Join-Path -Path $NAVClonePath -ChildPath $projectPath
-
             Update-AppProjectVersion -ProjectPath $fullProjectPath -Version $Version
-
-            Write-Log "Compiling app in path: $fullProjectPath" -Level Info
-            Compile-AppInBcContainer -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential -gitHubActions:$env:CI
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to compile app at $projectPath"
-            }
+            Invoke-AppBuildAndPublish -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential -skipVerification
         }
-        Write-Log "Build completed successfully" -Level Success
+        Write-Log "[Test Patch Only] Build completed successfully for $($entry.instance_id)" -Level Success
 
-        Write-Log "Running validation tests for $($entry.instance_id)" -Level Info
-        $testResults = Run-TestsInBcContainer -containerName $containerName -credential $credential -returnTrueIfAllPassed
-        Write-Log "Tests completed successfully" -Level Success
+        Write-Log "[Test Patch Only] Running FAIL_TO_PASS tests for $($entry.instance_id)" -Level Info
+        Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.FAIL_TO_PASS -expectation 'Fail'
 
-        Write-Log "Successfully validated $($entry.instance_id)" -Level Success
-        $validationResults += [ValidationResult]::new($entry.instance_id, "Success", "Validation completed successfully")
+        Write-Log "Applying gold patch for $($entry.instance_id)" -Level Info
+        Invoke-GitApplyPatch -PatchContent $entry.patch -PatchId $entry.instance_id
+
+        Write-Log "[Gold Patch Applied] Building projects for $($entry.instance_id)" -Level Info
+        # only need to build the test project
+        foreach ($projectPath in $entry.project_paths) {
+            [string]$fullProjectPath = Join-Path -Path $NAVClonePath -ChildPath $projectPath
+            Update-AppProjectVersion -ProjectPath $fullProjectPath -Version $Version
+            Invoke-AppBuildAndPublish -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential -skipVerification
+        }
+        Write-Log "[Gold Patch Applied] Build completed successfully for $($entry.instance_id)" -Level Success
+
+        Write-Log "[Gold Patch Applied] Running FAIL_TO_PASS tests for $($entry.instance_id)" -Level Info
+        Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.FAIL_TO_PASS -expectation 'Pass'
+
+        Write-Log "[Gold Patch Applied] Tests passed successfully" -Level Success
+        $validationResults += [ValidationResult]::new($entry.instance_id, "Passed", "All tests passed after applying patch")
         $successCount++
     }
     catch {
