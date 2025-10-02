@@ -99,7 +99,9 @@ if (Test-Path $NAVRepoPath) {
 # Wait for container creation job to complete (if it was started)
 if ($containerJob) {
     $success = Wait-JobWithProgress -Job $containerJob -StatusMessage "Container creation"
-    if (-not $success) {
+    if ($success) {
+        Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
+    } else {
         exit 1
     }
 }
