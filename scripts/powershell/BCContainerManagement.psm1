@@ -192,7 +192,8 @@ function Initialize-ContainerForDevelopment() {
     )
 
     $BCContainerModule = "$PSScriptRoot\BCContainerManagement.psm1"
-    Copy-FileToBcContainer -containerName $ContainerName -localpath $BCContainerModule
+    $containerModulePath = "C:\Run\bcbench\BCContainerManagement.psm1"
+    Copy-FileToBcContainer -containerName $ContainerName -localpath $BCContainerModule -containerPath $containerModulePath
 
     Invoke-ScriptInBcContainer -containerName $ContainerName -scriptblock {
         param([string] $ContainerModule, [System.Version] $RepoVersion, [string] $DatabaseName = "CRONUS")
@@ -236,7 +237,7 @@ function Initialize-ContainerForDevelopment() {
             Start-NAVServerInstance -ServerInstance $server.ServerInstance
         }
 
-    } -argumentList $BCContainerModule,$RepoVersion -usePwsh $false
+    } -argumentList $containerModulePath,$RepoVersion
 }
 
 <#
