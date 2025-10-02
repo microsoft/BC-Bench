@@ -329,7 +329,6 @@ function New-BCContainerAsync {
         }
 
         New-BCContainer @params
-        Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion [System.Version]$Version
     } -ArgumentList $ArtifactUrl, $ContainerName, $Credential, $AcceptEula, $AuthType, $AdditionalFolders, $Version
 
     Write-Log "Container creation job started (Job ID: $($containerJob.Id))" -Level Success
