@@ -20,19 +20,19 @@ param(
     [SecureString]$Password
 )
 
-Write-Log "Running BC Bench Dataset Validation for version $Version, , Dataset Path: $DatasetPath ..." -Level Info
+Write-Log "Verifying FAIL to PASS tests for version $Version, Dataset Path: $DatasetPath ..." -Level Info
 
 [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
 if (-not $NAVClonePath) {
     $NAVClonePath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
-    Write-Log "Using default NAV clone path: $NAVClonePath" -Level Info
+    Write-Log "Using default NAV repository path: $NAVClonePath" -Level Info
 } else {
-    Write-Log "Using provided NAV clone path: $NAVClonePath" -Level Info
+    Write-Log "Using provided NAV repository path: $NAVClonePath" -Level Info
 }
 
 if (-not (Test-Path $NAVClonePath)) {
-    Write-Error "NAV repository not found at: $NAVClonePath. Please run Setup-ValidationEnvironment.ps1 first."
+    Write-Error "NAV repository not found at: $NAVClonePath. Please run Setup-ContainerAndRepository.ps1 first."
     exit 1
 }
 
@@ -59,7 +59,7 @@ Import-Module BcContainerHelper -Force -DisableNameChecking
 [ValidationResult[]]$validationResults = @()
 
 foreach ($entry in $versionEntries) {
-    Write-Log "Validating entry: $($entry.instance_id)" -Level Info
+    Write-Log "Verifying FAIL to PASS tests for entry: $($entry.instance_id)" -Level Info
 
     try {
         Push-Location $NAVClonePath
@@ -103,7 +103,7 @@ foreach ($entry in $versionEntries) {
         $validationResults += [ValidationResult]::new($entry.instance_id, "Passed", "All tests passed after applying patch")
     }
     catch {
-        Write-Log "Exception while validating $($entry.instance_id): $($_.Exception.Message)" -Level Error
+        Write-Log "Exception while verifying $($entry.instance_id): $($_.Exception.Message)" -Level Error
         $validationResults += [ValidationResult]::new($entry.instance_id, "Failed", $_.Exception.Message)
     }
     finally {
@@ -121,14 +121,14 @@ function Show-ValidationResults {
     )
 
     Write-Host "`n" -NoNewline
-    Write-Log "=== Validation Summary ===" -Level Info
+    Write-Log "=== FAIL to PASS Verification Summary ===" -Level Info
 
     [int] $successCount = ($Results | Where-Object { $_.Status -eq "Passed" }).Count
     [int] $failureCount = ($Results | Where-Object { $_.Status -eq "Failed" }).Count
 
     Write-Log "Total entries processed: $($Results.Count)" -Level Info
-    Write-Log "Successful validations: $successCount" -Level Success
-    Write-Log "Failed validations: $failureCount" -Level $(if ($failureCount -gt 0) { "Error" } else { "Info" })
+    Write-Log "Successful verifications: $successCount" -Level Success
+    Write-Log "Failed verifications: $failureCount" -Level $(if ($failureCount -gt 0) { "Error" } else { "Info" })
 
     if ($env:RUNNER_DEBUG -eq '1') {
         Write-Host "`n" -NoNewline
@@ -144,9 +144,9 @@ function Show-ValidationResults {
 
 # Exit with appropriate code
 if ($failureCount -gt 0) {
-    Write-Log "Dataset validation completed with failures" -Level Error
+    Write-Log "FAIL to PASS verification completed with failures" -Level Error
     exit 1
 } else {
-    Write-Log "Dataset validation completed successfully" -Level Success
+    Write-Log "FAIL to PASS verification completed successfully" -Level Success
     exit 0
 }

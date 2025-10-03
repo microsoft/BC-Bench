@@ -22,7 +22,7 @@ param(
     [string]$NAVRepoPath
 )
 
-Write-Log "Setting up validation environment for version $Version, Dataset Path: $DatasetPath" -Level Info
+Write-Log "Setting up BC container and cloning NAV repository for version $Version, Dataset Path: $DatasetPath" -Level Info
 
 [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
@@ -43,15 +43,13 @@ catch {
     exit 1
 }
 
-# Determine NAV clone path first (before container creation)
 if (-not $NAVRepoPath) {
     $NAVRepoPath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
-    Write-Log "Using default NAV clone path: $NAVRepoPath" -Level Info
+    Write-Log "Using default NAV repository clone path: $NAVRepoPath" -Level Info
 } else {
-    Write-Log "Using provided NAV clone path: $NAVRepoPath" -Level Info
+    Write-Log "Using provided NAV repository clone path: $NAVRepoPath" -Level Info
 }
 
-# Import required modules
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
 [string] $containerName = Get-StandardContainerName -Version $Version
@@ -96,7 +94,6 @@ if (Test-Path $NAVRepoPath) {
     }
 }
 
-# Wait for container creation job to complete (if it was started)
 if ($containerJob) {
     $success = Wait-JobWithProgress -Job $containerJob -StatusMessage "Container creation" -TimeoutMinutes 45
     if ($success) {

@@ -103,8 +103,6 @@ function Set-AppVersion()
         [string]$DatabaseServer = '.'
     )
 
-    Write-Host "Set version $Major.$Minor.0.0 for app $Name published by $Publisher."
-
     $command = @"
     UPDATE [$DatabaseName].[dbo].[Published Application]
     SET [Version Major] = $Major, [Version Minor] = $Minor, [Version Build] = 0, [Version Revision] = 0
@@ -159,8 +157,6 @@ function Move-AppIntoDevScope()
         [Parameter(Mandatory = $false)]
         [string]$DatabaseServer = '.'
     )
-    Write-Host "Move app $Name published by $Publisher to the DEV scope."
-
     if (!$TenantId)
     {
         $TenantId = 'default'
@@ -219,13 +215,12 @@ function Initialize-ContainerForDevelopment() {
             }
         }
 
-        Write-Host "Stopping server instance $($server.ServerInstance)" -ForegroundColor Green
         Stop-NAVServerInstance -ServerInstance $server.ServerInstance
 
+        Write-Host "Moving $($installedApps.Count) apps to Dev Scope and setting version to $($RepoVersion).0.0"
         try {
             $installedApps | ForEach-Object {
                 if ($_.Scope -eq 'Global') {
-                    Write-Host "Moving $($_.Name) to Dev Scope"
                     Move-AppIntoDevScope -Name ($_.Name) -DatabaseName $DatabaseName
                 }
                 if ($_.Version -ne "$($RepoVersion.Major).$($RepoVersion.Minor).0.0") {

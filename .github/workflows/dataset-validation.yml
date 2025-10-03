@@ -37,7 +37,7 @@ jobs:
         "versions=$uniqueVersions" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       shell: pwsh
 
-  validate-bc-containers:
+  verify-fail-to-pass-tests:
     runs-on: windows-latest
     needs: validate-dataset-schema
     if: needs.validate-dataset-schema.outputs.versions != '[]'
@@ -54,20 +54,20 @@ jobs:
         Install-Module -Name BcContainerHelper -Force -AllowClobber
       shell: pwsh
 
-    - name: Setup validation environment for Version ${{ matrix.version }}
+    - name: Setup BC container and clone NAV repository for Version ${{ matrix.version }}
       id: setup-env
       env:
         BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         NAV_REPO_TOKEN: ${{ secrets.NAV_REPO_TOKEN }}
       run: |
         cd scripts/powershell
-        .\Setup-ValidationEnvironment.ps1 -Version "${{ matrix.version }}"
+        .\Setup-ContainerAndRepository.ps1 -Version "${{ matrix.version }}"
       shell: pwsh
 
-    - name: Run dataset validation for Version ${{ matrix.version }}
+    - name: Run FAIL to PASS verification for Version ${{ matrix.version }}
       env:
         BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
       run: |
         cd scripts/powershell
-        .\Validate-Dataset.ps1 -Version "${{ matrix.version }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
+        .\Verify-FailToPassTests.ps1 -Version "${{ matrix.version }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
       shell: pwsh
