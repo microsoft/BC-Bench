@@ -1,4 +1,5 @@
-name: Dataset Validation
+name: Dataset Validation and Verification
+description: Validate dataset schema and verify FAIL to PASS tests
 permissions:
   contents: read
 
