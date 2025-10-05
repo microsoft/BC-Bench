@@ -4,9 +4,8 @@ from __future__ import annotations
 import re
 import subprocess
 from html import unescape
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Literal
 from unidiff import PatchSet
-import logging
 from pathlib import Path
 
 
@@ -32,24 +31,40 @@ DATASET_PATH = BC_BENCH_ROOT / "dataset" / "bcbench_nav.jsonl"
 DATASET_SCHEMA_PATH = BC_BENCH_ROOT / "dataset" / "schema.json"
 NAV_REPO_PATH = BC_BENCH_ROOT.parent / "NAV"
 
+# ANSI color codes
+CYAN = '\033[36m'
+GREEN = '\033[32m'
+YELLOW = '\033[33m'
+BLUE = '\033[34m'
+MAGENTA = '\033[35m'
+RED = '\033[31m'
+GREY = '\033[90m'
+RESET = '\033[0m'
+
 __all__ = [
     "extract_patches",
     "strip_html",
     "normalize_repo_subpath",
-    "configure_logging",
     "find_project_paths_from_patch",
+    "colored",
+    "CYAN",
+    "GREEN",
+    "YELLOW",
+    "BLUE",
+    "MAGENTA",
+    "RED",
+    "GREY",
     "BC_BENCH_ROOT",
     "DATASET_PATH",
     "DATASET_SCHEMA_PATH",
     "NAV_REPO_PATH",
 ]
 
-
-def configure_logging(*, verbose: bool) -> None:
-    """Configure basic logging for CLI commands."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(message)s")
-
+def colored(text: str, color: str) -> str:
+    allowed_colors = {CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY}
+    if color not in allowed_colors:
+        raise ValueError(f"Invalid color. Must be one of: CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY")
+    return f"{color}{text}{RESET}"
 
 def extract_patches(base_commit_id: str, commit_id: str) -> Tuple[str, str, str]:
     """Return the gold and fix patch between two commits in the NAV repository."""

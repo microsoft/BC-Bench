@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List, Set
 
 from dataset_entry import DatasetEntry
-from utils import DATASET_PATH, configure_logging
+from utils import DATASET_PATH
 
 
 def get_unique_versions(dataset_path: Path) -> List[str]:
@@ -64,10 +64,6 @@ def get_unique_versions(dataset_path: Path) -> List[str]:
 
 
 def main():
-    """Main entry point for the script."""
-    # Configure logging (non-verbose by default)
-    configure_logging(verbose=False)
-
     # Use command line argument if provided, otherwise use default from utils
     if len(sys.argv) > 1:
         dataset_path = Path(sys.argv[1])

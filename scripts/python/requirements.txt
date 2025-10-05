@@ -1,7 +1,9 @@
-# BC Bench Python Scripts Dependencies
-# Auto-generated from pyproject.toml
-
+# For dataset collection and verification
 jsonschema>=4.0
 python-dotenv>=1.0
 requests>=2.0
 unidiff>=0.7
+
+# For mini-BCBench-agent
+mini-swe-agent>=1.0.0
+typer>=0.9.0

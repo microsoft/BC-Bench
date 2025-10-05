@@ -1,83 +1,110 @@
 using module .\DatasetEntry.psm1
+using module .\BCBenchUtils.psm1
+using module .\AppUtils.psm1
+using module .\BCContainerManagement.psm1
 
 param(
+    [Parameter(Mandatory=$true)]
+    [string]$InstanceID,
+
     [Parameter(Mandatory=$false)]
     [string]$DatasetPath = "$PSScriptRoot\..\..\dataset\bcbench_nav.jsonl",
 
     [Parameter(Mandatory=$false)]
-    [string]$Country = "w1",
+    [string]$NAVClonePath,
 
     [Parameter(Mandatory=$false)]
-    [switch]$DryRun
+    [string]$Username='admin',
+
+    [Parameter(Mandatory=$false)]
+    [SecureString]$Password
 )
 
-Import-Module "$PSScriptRoot/BCContainerManagement.psm1" -Force
+Write-Log "Evaluating generated patch for entry: $InstanceID..." -Level Info
 
-Write-Host "BC-Bench Evaluation Starting..." -ForegroundColor Green
-Write-Host "Dataset Path: $DatasetPath" -ForegroundColor Gray
+[PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
-# Read all dataset entries
 try {
-    [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath
-    Write-Host "Found $($entries.Count) entries in dataset" -ForegroundColor Green
+    [DatasetEntry] $entry = Get-DatasetEntry -DatasetPath $DatasetPath -InstanceId $InstanceID
+
+    if (-not $entry) {
+        Write-Error "Entry not found: $InstanceID"
+        exit 1
+    }
+
+    Write-Log "Found entry: $($entry.instance_id)" -Level Success
 }
 catch {
-    Write-Error "Failed to read dataset: $($_.Exception.Message)"
+    Write-Error "Failed to load entry from dataset: $($_.Exception.Message)"
     exit 1
 }
 
-Write-Host "`nProcessing entries..." -ForegroundColor Green
-
-[int] $successCount = 0
-[int] $errorCount = 0
-
-foreach ($entry in $entries) {
-    Write-Host "`n--- Processing Entry ---" -ForegroundColor Cyan
-    Write-Host "Instance ID: $($entry.instance_id)" -ForegroundColor White
-
-    # Get the environment setup version directly from the property
-    [string] $environmentVersion = $entry.environment_setup_version
-
-    if ([string]::IsNullOrEmpty($environmentVersion)) {
-        Write-Warning "No environment_setup_version found for entry $($entry.instance_id). Skipping."
-        $errorCount++
-        continue
-    }
-
-    Write-Host "Environment Setup Version: $environmentVersion" -ForegroundColor White
-
-    if ($DryRun) {
-        Write-Host "[DRY Run] Would call: Set-BCEnvironment -Version '$environmentVersion' -Country '$Country'" -ForegroundColor Yellow
-        $successCount++
-    }
-    else {
-        try {
-            [string] $containerName = "bcbench-$($environmentVersion -replace '\.', '')"
-            [bool] $ContainerExists = Test-ContainerExists -ContainerName $containerName
-
-            if (-not $ContainerExists) {
-                [string] $url = Get-BCArtifactUrl -version $environmentVersion -Country $Country
-                Write-Host "Creating container $containerName with artifact $url" -ForegroundColor Green
-
-                New-BCContainer -accept_eula -artifactUrl $url -containerName $containerName
-                Initialize-ContainerForDevelopment -ContainerName $containerName -RepoVersion ([System.Version]$environmentVersion)
-            } else {
-                Write-Host "Container $containerName already exists. Skipping creation." -ForegroundColor Yellow
-            }
-
-            Write-Host "Environment setup completed successfully" -ForegroundColor Green
-            $successCount++
-        }
-        catch {
-            Write-Error "Failed to setup environment for entry $($entry.instance_id): $($_.Exception.Message)"
-            $errorCount++
-        }
-    }
-
-    # TODO
+if (-not $NAVClonePath) {
+    $NAVClonePath = Join-Path -Path $env:TEMP -ChildPath "NAV-$version"
+    Write-Log "Using default NAV repository path: $NAVClonePath" -Level Info
+} else {
+    Write-Log "Using provided NAV repository path: $NAVClonePath" -Level Info
 }
 
-Write-Host "`n--- Evaluation Summary ---" -ForegroundColor Green
-Write-Host "Total entries processed: $($entries.Count)" -ForegroundColor White
-Write-Host "Successful setups: $successCount" -ForegroundColor Green
-Write-Host "Failed setups: $errorCount" -ForegroundColor Red
+if (-not (Test-Path $NAVClonePath)) {
+    Write-Error "NAV repository not found at: $NAVClonePath. Please run Setup-ContainerAndRepository.ps1 first."
+    exit 1
+}
+
+Import-Module BcContainerHelper -Force -DisableNameChecking
+
+[string] $Version = $entry.environment_setup_version
+[string] $containerName = Get-StandardContainerName -Version $Version
+[ValidationResult]$validationResult = $null
+
+Write-Log "Processing entry: $($entry.instance_id)" -Level Info
+
+try {
+    Push-Location $NAVClonePath
+
+    Write-Log "Checking out base commit: $($entry.base_commit)" -Level Info
+    $checkoutResult = git checkout $entry.base_commit 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to checkout base commit: $checkoutResult"
+    }
+
+    Write-Log "Applying test patch for $($entry.instance_id)" -Level Info
+    Invoke-GitApplyPatch -PatchContent $entry.test_patch -PatchId $entry.instance_id
+
+    Write-Log "Building and publishing projects for $($entry.instance_id)" -Level Info
+    foreach ($projectPath in $entry.project_paths) {
+        [string]$fullProjectPath = Join-Path -Path $NAVClonePath -ChildPath $projectPath
+        Invoke-AppBuildAndPublish -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential -skipVerification -useDevEndpoint
+    }
+    Write-Log "Build completed successfully for $($entry.instance_id)" -Level Success
+
+    Write-Log "Running FAIL_TO_PASS tests for $($entry.instance_id)" -Level Info
+    Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.FAIL_TO_PASS -expectation 'Pass'
+
+    Write-Log "Tests passed successfully - Evaluation PASSED" -Level Success
+    $validationResult = [ValidationResult]::new($entry.instance_id, "Passed", "All tests passed after applying generated patch")
+}
+catch {
+    Write-Log "Exception during evaluation of $($entry.instance_id): $($_.Exception.Message)" -Level Error
+    $validationResult = [ValidationResult]::new($entry.instance_id, "Failed", $_.Exception.Message)
+}
+finally {
+    Write-Log "Cleaning up Git state for $($entry.instance_id)" -Level Debug
+    git reset --hard HEAD 2>&1 | Out-Null
+    git clean -fd 2>&1 | Out-Null
+    Pop-Location
+}
+
+Write-Log "=== Evaluation Summary ===" -Level Info
+
+if ($validationResult.Status -eq "Passed") {
+    Write-Log "Status: SUCCESS" -Level Success
+    Write-Log "Instance: $($validationResult.InstanceId)" -Level Info
+    Write-Log "Message: $($validationResult.Message)" -Level Success
+    exit 0
+} else {
+    Write-Log "Status: FAILED" -Level Error
+    Write-Log "Instance: $($validationResult.InstanceId)" -Level Info
+    Write-Log "Message: $($validationResult.Message)" -Level Error
+    exit 1
+}

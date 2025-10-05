@@ -38,7 +38,7 @@ from dotenv import load_dotenv
 
 # Import local modules
 from dataset_entry import DatasetEntry
-from utils import configure_logging, DATASET_PATH
+from utils import DATASET_PATH
 
 # Set up logging
 LOGGER = logging.getLogger(__name__)
@@ -54,9 +54,6 @@ def main() -> int:
     """Main entry point for the collect_nav script."""
     parser = create_parser()
     args = parser.parse_args()
-
-    # Configure logging
-    configure_logging(verbose=args.verbose)
 
     # Check for required environment variables
     try:

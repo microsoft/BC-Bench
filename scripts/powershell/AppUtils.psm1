@@ -1,3 +1,5 @@
+using module .\BCBenchUtils.psm1
+
 <#
     .Synopsis
     Compiles and publishes an app to a Business Central container with force sync.
@@ -93,6 +95,73 @@ function Invoke-AppBuildAndPublish {
 
 <#
     .Synopsis
+    Runs tests for a single codeunit in a Business Central container.
+    .Parameter containerName
+    The name of the container to run tests in.
+    .Parameter credential
+    The credential to use when running tests.
+    .Parameter codeunitID
+    The ID of the test codeunit to run.
+    .Parameter functionNames
+    Optional array of function names to run. If not specified, all tests in the codeunit will run.
+    .Description
+    This function runs tests for a single codeunit in a Business Central container.
+    Returns $true if all tests pass, $false otherwise.
+#>
+function Invoke-BCTest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $containerName,
+
+        [Parameter(Mandatory = $true)]
+        [PSCredential] $credential,
+
+        [Parameter(Mandatory = $true)]
+        [int] $codeunitID,
+
+        [Parameter(Mandatory = $false)]
+        [string[]] $functionNames
+    )
+
+    if ($functionNames -and $functionNames.Count -gt 0) {
+        [string] $combinedFunctions = $functionNames -join '|'
+        Write-Log "Running tests for Codeunit $codeunitID with functions: $combinedFunctions" -Level Info
+    } else {
+        [string] $combinedFunctions = '*'
+        Write-Log "Running all tests for Codeunit $codeunitID" -Level Info
+    }
+
+    $testParams = @{
+        containerName = $containerName
+        credential = $credential
+        returnTrueIfAllPassed = $true
+        testCodeunitRange = $codeunitID.ToString()
+        testFunction = $combinedFunctions
+    }
+
+    if ($env:RUNNER_DEBUG -eq '1') {
+        $testParams.detailed = $true
+    }
+
+    try {
+        [bool] $testPassed = Run-TestsInBcContainer @testParams
+
+        if ($testPassed) {
+            Write-Log "Tests passed for Codeunit $codeunitID" -Level Success
+        } else {
+            Write-Log "Tests failed for Codeunit $codeunitID" -Level Error
+        }
+
+        return $testPassed
+    }
+    catch {
+        Write-Log "Test execution error for Codeunit ${codeunitID}: $($_.Exception.Message)" -Level Error
+        throw
+    }
+}
+
+<#
+    .Synopsis
     Runs tests in a Business Central container based on TestEntry objects.
     .Parameter containerName
     The name of the container to run tests in.
@@ -132,31 +201,13 @@ function Invoke-DatasetTests {
 
     foreach ($testEntry in $testEntries) {
         [int] $codeunitID = $testEntry.codeunitID
-        [string] $combinedFunctions = $testEntry.functionName -join '|'
+        [string[]] $functionNames = $testEntry.functionName
 
-        Write-Log "Running tests for Codeunit $codeunitID with functions: $combinedFunctions" -Level Info
+        [bool] $testPassed = Invoke-BCTest -containerName $containerName -credential $credential -codeunitID $codeunitID -functionNames $functionNames
 
-        $testParams = @{
-            containerName = $containerName
-            credential = $credential
-            returnTrueIfAllPassed = $true
-            testCodeunitRange = $codeunitID.ToString()
-            testFunction = $combinedFunctions
-        }
-
-        if ($env:RUNNER_DEBUG -eq '1') {
-            $testParams.detailed = $true
-        }
-
-        [bool] $testPassed = Run-TestsInBcContainer @testParams
-
-        if ($testPassed) {
-            Write-Log "Tests passed for Codeunit $codeunitID" -Level Success
-        } else {
-            Write-Log "Tests failed for Codeunit $codeunitID" -Level Error
+        if (-not $testPassed) {
             $allTestsPassed = $false
         }
-
     }
 
     # Validate expectation

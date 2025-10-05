@@ -1,5 +1,5 @@
-name: Dataset Validation and Verification
-description: Validate dataset schema and verify FAIL to PASS tests
+name: Evaluation with Mini Agent
+description: Evaluate using mini-bcbench-agent
 permissions:
   contents: read
 
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  validate-dataset-schema:
+  get-versions:
     runs-on: windows-latest
     outputs:
       versions: ${{ steps.get-versions.outputs.versions }}
@@ -25,11 +25,6 @@ jobs:
           cd scripts/python
           pip install -r requirements.txt
 
-      - name: Validate dataset schema
-        run: |
-          cd scripts/python
-          python validate_dataset_schema.py
-
       - name: Get unique versions for matrix
         id: get-versions
         run: |
@@ -38,18 +33,17 @@ jobs:
           "versions=$uniqueVersions" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         shell: pwsh
 
-  verify-fail-to-pass-tests:
+  environment-setup:
     runs-on: windows-latest
-    needs: validate-dataset-schema
-    if: needs.validate-dataset-schema.outputs.versions != '[]'
+    outputs:
+      entries: ${{ steps.get-entries.outputs.entries }}
+    needs: get-versions
+    if: needs.get-versions.outputs.versions != '[]'
     strategy:
       fail-fast: false
       matrix:
-        version: ${{ fromJson(needs.validate-dataset-schema.outputs.versions) }}
+        version: ${{ fromJson(needs.get-versions.outputs.versions) }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Install BcContainerHelper module
         run: |
           Install-Module -Name BcContainerHelper -Force -AllowClobber
@@ -65,10 +59,34 @@ jobs:
           .\Setup-ContainerAndRepository.ps1 -Version "${{ matrix.version }}"
         shell: pwsh
 
-      - name: Run FAIL to PASS verification for Version ${{ matrix.version }}
+      - name: Get entries for version ${{ matrix.version }}
+        id: get-entries
+        run: |
+          cd scripts/python
+          $entries = python get_entries_for_version.py --version "${{ matrix.version }}"
+          "entries=$entries" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        shell: pwsh
+
+  evaluate-with-mini-agent:
+    runs-on: windows-latest
+    needs: environment-setup
+    if: needs.environment-setup.outputs.entries != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        entry: ${{ fromJson(needs.environment-setup.outputs.entries) }}
+    steps:
+      - name: Generate Patch using mini-bcbench-agent for entry ${{ matrix.entry }}
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
+          cd scripts/python
+
+          # TODO: call the mini agent script here
+          # e.g. python mini_bcbench_agent.py --entry "${{ matrix.entry }}"
+
+      - name: Running FAIL to PASS tests to verify the generated patch
+        run: |
           cd scripts/powershell
-          .\Verify-FailToPassTests.ps1 -Version "${{ matrix.version }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
+          .\Evaluate.ps1 -InstanceID "${{ matrix.entry }}"
         shell: pwsh
