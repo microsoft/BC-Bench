@@ -6,3 +6,4 @@ unidiff>=0.7
 
 # For mini-BCBench-agent
 mini-swe-agent>=1.0.0
+typer>=0.9.0
