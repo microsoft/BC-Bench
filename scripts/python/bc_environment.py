@@ -41,6 +41,7 @@ class BCEnvironment(LocalEnvironment):
             return self._execute_powershell(command, cwd, timeout)
 
     def _bc_build(self, command: str, cwd: str, timeout: int | None) -> dict[str, Any]:
+        logger.debug(f"Executing command: {command}")
         parts = command.split(maxsplit=1)
         if len(parts) < 2:
             return {
@@ -74,13 +75,10 @@ $credential = New-Object System.Management.Automation.PSCredential('{self.config
 Invoke-AppBuildAndPublish -containerName '{self.config.container_name}' -appProjectFolder $projectPath -credential $credential -skipVerification -useDevEndpoint
 """
 
-        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout)
+        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout, log_command=False)
 
     def _bc_test(self, command: str, cwd: str, timeout: int | None) -> dict[str, Any]:
-        """
-        Run BC tests
-        Usage: bc_test <codeunit_id> [function_name1,function_name2,...]
-        """
+        logger.debug(f"Executing command: {command}")
         parts = command.split(maxsplit=2)
         if len(parts) < 2:
             return {
@@ -122,16 +120,17 @@ Write-Host "Running tests for codeunit {codeunit_id}"
 Invoke-BCTest -containerName '{self.config.container_name}' -credential $credential -codeunitID {codeunit_id} {function_param}
 """
 
-        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout)
+        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout, log_command=False)
 
-    def _execute_powershell(self, command: str, cwd: str, timeout: int | None) -> dict[str, Any]:
+    def _execute_powershell(self, command: str, cwd: str, timeout: int | None, log_command: bool = True) -> dict[str, Any]:
         """Execute a PowerShell command"""
         if timeout is None:
             timeout = self.config.timeout
 
         working_dir: str = cwd or self.config.cwd or os.getcwd()
 
-        logger.debug(f"Executing command: `{colored(command, GREY)}`")
+        if log_command:
+            logger.debug(f"Executing command: `{colored(command, GREY)}`")
 
         try:
             result = subprocess.run(
