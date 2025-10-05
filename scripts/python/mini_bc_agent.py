@@ -9,9 +9,15 @@ from minisweagent.models.litellm_model import LitellmModel
 
 from bc_environment import BCEnvironment
 from dataset_entry import DatasetEntry
-from utils import DATASET_PATH
+from utils import DATASET_PATH, colored, GREY
 
+logging.basicConfig(
+    level=logging.WARNING,  # Set root logger to WARNING to suppress underlying packages
+    format='[%(asctime)s] %(name)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 def load_entry_from_dataset(instance_id: str) -> DatasetEntry:
     with open(DATASET_PATH, "r", encoding="utf-8") as f:
@@ -26,17 +32,18 @@ def build_task_description(entry: DatasetEntry) -> str:
     task = entry.problem_statement
     if entry.hints_text:
         task += f"\n\n## Additional Hints\n{entry.hints_text}"
-    logger.debug(f"Task description:\n{task}")
+    logger.info(f"Task description:\n{colored(task, GREY)}")
     return task
 
 class BCAgent(DefaultAgent):
     def query(self) -> dict:
-        logger.debug(f"Current messages:\n{self.messages}")
+        # logger.debug(f"Current messages:\n{self.messages}")
+        logger.debug(f"============================ Current step: {self.model.n_calls} =============================")
         return super().query()
 
     def parse_action(self, response: dict) -> dict:
         """Parse the action from the message. Returns the action."""
-        logger.debug(f"Agent response content:\n{response}")
+        logger.debug(f"Agent response content:\n{colored(response['content'], GREY)}")
         actions = re.findall(r"```powershell\s*\n(.*?)\n```", response["content"], re.DOTALL)
         if len(actions) == 1:
             return {"action": actions[0].strip(), **response}

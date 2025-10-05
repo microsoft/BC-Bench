@@ -5,8 +5,10 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
+from utils import colored, GREY
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 @dataclass
 class BCEnvironmentConfig(LocalEnvironmentConfig):
@@ -129,7 +131,7 @@ Invoke-BCTest -containerName '{self.config.container_name}' -credential $credent
 
         working_dir: str = cwd or self.config.cwd or os.getcwd()
 
-        logger.debug(f"Executing PowerShell command:\n{command}\nIn directory: {working_dir}")
+        logger.debug(f"Executing command: `{colored(command, GREY)}`")
 
         try:
             result = subprocess.run(
@@ -145,9 +147,19 @@ Invoke-BCTest -containerName '{self.config.container_name}' -credential $credent
             if result.stderr:
                 output += "\n" + result.stderr
 
+            # Log output in a more manageable way
+            output_stripped: str = output.strip()
+            output_lines: list[str] = output_stripped.split('\n')
+            line_count: int = len(output_lines)
+
+            if line_count <= 6:
+                logger.debug(colored(f"Output:\n{output_stripped}", GREY))
+            else:
+                logger.debug(colored(f"Output ({line_count} lines, showing first/last 3):\n{"\n".join(output_lines[:3])}\n... (other lines omitted) ...\n{"\n".join(output_lines[-3:])}", GREY))
+
             return {
                 "returncode": result.returncode,
-                "output": output.strip()
+                "output": output_stripped
             }
 
         except subprocess.TimeoutExpired as e:
