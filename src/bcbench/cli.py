@@ -141,5 +141,24 @@ def list_entries(
     query_entries(version, dataset_path, github_output)
 
 
+@dataset_app.command("entry-matrix")
+def list_entry_matrix(
+    dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
+    github_output: Annotated[Optional[str], typer.Option("--github-output", help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging")] = False,
+):
+    """
+    Get all entries with version info for GitHub Actions matrix strategy.
+
+    Returns a list of objects with 'entry' and 'version' keys, suitable for use
+    with GitHub Actions matrix.include strategy. Use --github-output <key> to
+    write JSON output to GITHUB_OUTPUT for use in CI/CD workflows.
+    """
+    setup_logger(verbose)
+    from bcbench.core.dataset_queries import query_entry_matrix
+
+    query_entry_matrix(dataset_path, github_output)
+
+
 if __name__ == "__main__":
     app()

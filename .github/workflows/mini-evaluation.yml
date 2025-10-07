@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  get-versions:
+  get-entries:
     runs-on: windows-latest
     outputs:
-      versions: ${{ steps.get-versions.outputs.versions }}
+      entry_matrix: ${{ steps.get-entries.outputs.entry_matrix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,24 +24,20 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Get unique versions for matrix
-        id: get-versions
+      - name: Get all entries with version info for matrix
+        id: get-entries
         run: |
-          python -m bcbench dataset versions --github-output versions
+          python -m bcbench dataset entry-matrix --github-output entry_matrix
         shell: pwsh
 
-  environment-setup:
+  evaluate-with-mini-agent:
     runs-on: windows-latest
-    outputs:
-      entries: ${{ steps.get-entries.outputs.entries }}
-      repoPath: ${{ steps.setup-env.outputs.nav_clone_path }}
-      containerName: ${{ steps.setup-env.outputs.container_name }}
-    needs: get-versions
-    if: needs.get-versions.outputs.versions != '[]'
+    needs: get-entries
+    if: needs.get-entries.outputs.entry_matrix != '[]'
     strategy:
       fail-fast: false
       matrix:
-        version: ${{ fromJson(needs.get-versions.outputs.versions) }}
+        include: ${{ fromJson(needs.get-entries.outputs.entry_matrix) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -70,33 +66,6 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Get entries for version ${{ matrix.version }}
-        id: get-entries
-        run: |
-          python -m bcbench dataset entries "${{ matrix.version }}" --github-output entries
-        shell: pwsh
-
-  evaluate-with-mini-agent:
-    runs-on: windows-latest
-    needs: environment-setup
-    if: needs.environment-setup.outputs.entries != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        entry: ${{ fromJson(needs.environment-setup.outputs.entries) }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-
-      - name: Install bcbench package
-        run: |
-          pip install -e .
-
       - name: Generate Patch using mini-bc-agent for entry ${{ matrix.entry }}
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
@@ -104,7 +73,7 @@ jobs:
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
           AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
         run: |
-          python -m bcbench agent mini "${{ matrix.entry }}" --repo-path "${{ needs.environment-setup.outputs.repoPath }}"
+          python -m bcbench agent mini "${{ matrix.entry }}" --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}"
         shell: pwsh
 
       - name: Running FAIL to PASS tests to verify the generated patch
@@ -112,5 +81,5 @@ jobs:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
           cd scripts/powershell
-          .\Evaluate.ps1 -InstanceID "${{ matrix.entry }}" -NavClonePath "${{ needs.environment-setup.outputs.repoPath }}"
+          .\Evaluate.ps1 -InstanceID "${{ matrix.entry }}" -NavClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
         shell: pwsh

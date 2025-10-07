@@ -10,7 +10,7 @@ import typer
 
 from bcbench.core.dataset_entry import DatasetEntry
 
-__all__ = ["query_versions", "query_entries"]
+__all__ = ["query_versions", "query_entries", "query_entry_matrix"]
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +179,63 @@ def query_entries(
         logger.info(f"Written to GITHUB_OUTPUT as '{github_output}'")
 
     return entries
+
+
+def query_entry_matrix(
+    dataset_path: Path,
+    github_output: Optional[str] = None,
+) -> List[dict]:
+    """
+    Get all entries with their version information for GitHub Actions matrix.
+
+    Args:
+        dataset_path: Path to the dataset file
+        github_output: If provided, write to GITHUB_OUTPUT with this key name
+
+    Returns:
+        List of dictionaries with 'entry' and 'version' keys
+
+    Raises:
+        typer.Exit: Exits with code 1 on failure
+    """
+    if not dataset_path.exists():
+        logger.error(f"Dataset file not found: {dataset_path}")
+        raise typer.Exit(code=1)
+
+    entry_matrix: List[dict] = []
+
+    try:
+        with open(dataset_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    data = json.loads(line)
+                    entry = DatasetEntry.from_json(data)
+                    if entry.instance_id and entry.environment_setup_version:
+                        entry_matrix.append({"entry": entry.instance_id, "version": entry.environment_setup_version})
+                except Exception as e:
+                    logger.debug(f"Skipping invalid entry: {e}")
+                    continue
+    except Exception as e:
+        logger.error(f"Failed to read dataset file: {e}")
+        raise typer.Exit(code=1)
+
+    if not entry_matrix:
+        logger.error("No valid entries found in dataset")
+        raise typer.Exit(code=1)
+
+    print(f"Found {len(entry_matrix)} entry(ies) for evaluation:")
+    for item in entry_matrix:
+        print(f"  - {item['entry']} (version: {item['version']})")
+
+    if github_output:
+        _write_github_output(github_output, json.dumps(entry_matrix))
+        logger.info(f"Written to GITHUB_OUTPUT as '{github_output}'")
+
+    return entry_matrix
 
 
 def _write_github_output(name: str, value: str) -> None:
