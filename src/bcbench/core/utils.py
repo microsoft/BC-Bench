@@ -1,10 +1,11 @@
 """Shared utilities for BC Bench Python scripts."""
+
 from __future__ import annotations
 
 import re
 import subprocess
 from html import unescape
-from typing import List, Set, Tuple, Literal
+from typing import List, Set, Tuple
 from unidiff import PatchSet
 from pathlib import Path
 
@@ -38,14 +39,14 @@ DATASET_SCHEMA_PATH = _get_schema_path()
 NAV_REPO_PATH = BC_BENCH_ROOT.parent / "NAV"
 
 # ANSI color codes
-CYAN = '\033[36m'
-GREEN = '\033[32m'
-YELLOW = '\033[33m'
-BLUE = '\033[34m'
-MAGENTA = '\033[35m'
-RED = '\033[31m'
-GREY = '\033[90m'
-RESET = '\033[0m'
+CYAN = "\033[36m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+BLUE = "\033[34m"
+MAGENTA = "\033[35m"
+RED = "\033[31m"
+GREY = "\033[90m"
+RESET = "\033[0m"
 
 __all__ = [
     "extract_patches",
@@ -66,11 +67,15 @@ __all__ = [
     "NAV_REPO_PATH",
 ]
 
+
 def colored(text: str, color: str) -> str:
     allowed_colors = {CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY}
     if color not in allowed_colors:
-        raise ValueError(f"Invalid color. Must be one of: CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY")
+        raise ValueError(
+            "Invalid color. Must be one of: CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY"
+        )
     return f"{color}{text}{RESET}"
+
 
 def extract_patches(base_commit_id: str, commit_id: str) -> Tuple[str, str, str]:
     """Return the gold and fix patch between two commits in the NAV repository."""

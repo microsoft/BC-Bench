@@ -3,7 +3,7 @@
 
 import json
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import typer
 
@@ -29,11 +29,19 @@ def validate_dataset(dataset_path: Path = DATASET_PATH) -> Tuple[int, int, List[
 
     if not dataset_path.exists():
         logger.error(f"Dataset file not found at {dataset_path}")
-        return total_entries, failed_entries, [f"Dataset file not found at {dataset_path}"]
+        return (
+            total_entries,
+            failed_entries,
+            [f"Dataset file not found at {dataset_path}"],
+        )
 
     if not DATASET_SCHEMA_PATH.exists():
         logger.error(f"Schema file not found at {DATASET_SCHEMA_PATH}")
-        return total_entries, failed_entries, [f"Schema file not found at {DATASET_SCHEMA_PATH}"]
+        return (
+            total_entries,
+            failed_entries,
+            [f"Schema file not found at {DATASET_SCHEMA_PATH}"],
+        )
 
     error_messages = []
 
@@ -42,7 +50,7 @@ def validate_dataset(dataset_path: Path = DATASET_PATH) -> Tuple[int, int, List[
     print("-" * 50)
 
     try:
-        with open(dataset_path, 'r', encoding='utf-8') as file:
+        with open(dataset_path, "r", encoding="utf-8") as file:
             for line_num, line in enumerate(file, 1):
                 line = line.strip()
                 if not line:
@@ -119,7 +127,9 @@ def validate_dataset_file(dataset_path: Path) -> None:
         for error in errors:
             print(f"  - {error}")
 
-        logger.error(f"Dataset validation failed: {failed} out of {total} entries have errors")
+        logger.error(
+            f"Dataset validation failed: {failed} out of {total} entries have errors"
+        )
         raise typer.Exit(code=1)
     else:
         logger.info(f"Dataset validation successful: All {total} entries are valid")
