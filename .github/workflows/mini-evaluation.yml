@@ -10,7 +10,7 @@ jobs:
   get-entries:
     runs-on: windows-latest
     outputs:
-      entry_matrix: ${{ steps.get-entries.outputs.entry_matrix }}
+      versions: ${{ steps.get-versions.outputs.versions }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,20 +24,20 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Get all entries with version info for matrix
-        id: get-entries
+      - name: Get unique versions for matrix
+        id: get-versions
         run: |
-          python -m bcbench dataset entry-matrix --github-output entry_matrix
+          python -m bcbench dataset versions --github-output versions
         shell: pwsh
 
   evaluate-with-mini-agent:
     runs-on: windows-latest
     needs: get-entries
-    if: needs.get-entries.outputs.entry_matrix != '[]'
+    if: needs.get-entries.outputs.versions != '[]'
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.get-entries.outputs.entry_matrix) }}
+        include: ${{ fromJson(needs.get-entries.outputs.versions) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -66,20 +66,16 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Generate Patch using mini-bc-agent for entry ${{ matrix.entry }}
+      - name: Run mini-bc-agent for all entries within version ${{ matrix.version }}
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
           AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
         run: |
-          python -m bcbench agent mini "${{ matrix.entry }}" --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}"
-        shell: pwsh
-
-      - name: Running FAIL to PASS tests to verify the generated patch
-        env:
-          BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
-        run: |
-          cd scripts/powershell
-          .\Evaluate.ps1 -InstanceID "${{ matrix.entry }}" -NavClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
+          python -m bcbench run mini `
+            --version "${{ matrix.version }}" `
+            --container-name "${{ steps.setup-env.outputs.container_name }}" `
+            --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
+            --output-dir "results"
         shell: pwsh

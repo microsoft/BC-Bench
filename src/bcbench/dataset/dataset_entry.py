@@ -5,16 +5,14 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, TypedDict
-from jsonschema import ValidationError, validate
 from bcbench.core.utils import (
-    DATASET_SCHEMA_PATH,
     NAV_REPO_PATH,
     extract_patches,
     find_project_paths_from_patch,
     strip_html,
 )
 
-__all__ = ["DatasetEntry", "TestEntry"]
+__all__ = ["DatasetEntry"]
 
 
 class TestEntry(TypedDict):
@@ -116,25 +114,20 @@ class DatasetEntry:
             "project_paths": list(self.project_paths),
         }
 
-    def to_json(self, *, indent: Optional[int] = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
-
-    def save_to_file(self, filepath: Path | str, *, append: bool = False) -> None:
+    def save_to_file(self, filepath: Path | str, *, overwrite: bool = False) -> None:
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a" if append else "w", encoding="utf-8") as handle:
+        with path.open("w" if overwrite else "a", encoding="utf-8") as handle:
             # For JSONL format, always write compact JSON without indentation
             json.dump(self.to_dict(), handle, ensure_ascii=False)
             handle.write("\n")
 
-    def validate(self, schema_path: Path | str = DATASET_SCHEMA_PATH) -> None:
-        schema_file = Path(schema_path)
-        with schema_file.open("r", encoding="utf-8") as handle:
-            schema = json.load(handle)
-        try:
-            validate(instance=self.to_dict(), schema=schema)
-        except ValidationError as exc:  # pragma: no cover - simple passthrough
-            raise ValueError(f"Dataset entry validation error: {exc.message}") from exc
+    def get_task(self) -> str:
+        """Get the full task description including hints."""
+        task = self.problem_statement
+        if self.hints_text:
+            task += f"\n\n## Additional Hints\n{self.hints_text}"
+        return task
 
 
 def _determine_environment_setup_version(commit: str) -> str:

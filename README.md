@@ -29,9 +29,8 @@ python -m BCBench --help
 ╭─ Commands ─────────────────────────────────────────────────────────────╮
 │ version    Show bcbench version.                                       │
 │ collect    Collect dataset entries from various sources                │
-│ agent      Run AI agents on benchmark tasks                            │
-│ validate   Validate dataset entries                                    │
 │ dataset    Query and analyze dataset                                   │
+│ run        Run benchmarks with various agents                          │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -59,13 +58,13 @@ See full spec in [`dataset/schema.json`](./dataset/schema.json).
 
 ## What We're Evaluating
 
-### Mini-BC-Agent (Baseline)
+### mini-BC-agent (Baseline)
 
 A minimal agent loop based on [mini-swe-agent](https://github.com/SWE-agent/mini-SWE-agent). As they noted:
 
 > Currently, top-performing systems represent a wide variety of AI scaffolds; from simple LM agent loops, to RAG systems, to multi-rollout and review type systems.
 
-Its simplicity makes it perfect for establishing baseline performance. See [mini_agent.py](src/bcbench/agent/mini_agent.py).
+Its simplicity makes it perfect for establishing baseline performance. See [mini-BC-agent](src/bcbench/agent/mini/agent.py).
 
 ### GitHub Copilot CLI
 

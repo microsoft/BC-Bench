@@ -7,7 +7,7 @@ import requests
 import typer
 from dotenv import load_dotenv
 
-from bcbench.core.dataset_entry import DatasetEntry
+from bcbench.dataset.dataset_entry import DatasetEntry
 from bcbench.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -20,8 +20,7 @@ load_dotenv()
 def collect_nav_entry(
     pr_number: int,
     output: Path,
-    append: bool = False,
-    skip_validate: bool = False,
+    overwrite: bool = False,
 ) -> None:
     try:
         _validate_environment()
@@ -31,19 +30,12 @@ def collect_nav_entry(
 
     try:
         entry = collect_dataset_entry(pr_number)
-    except Exception as exc:  # pragma: no cover - network interaction
+    except Exception as exc:
         logger.error("Failed to collect dataset entry: %s", exc)
         raise typer.Exit(code=1)
 
-    if not skip_validate:
-        try:
-            entry.validate()
-        except ValueError as exc:
-            logger.error("Dataset entry validation failed: %s", exc)
-            raise typer.Exit(code=1)
-
     try:
-        entry.save_to_file(output, append=append)
+        entry.save_to_file(output, overwrite=overwrite)
     except OSError as exc:
         logger.error("Failed to write dataset entry: %s", exc)
         raise typer.Exit(code=1)

@@ -129,7 +129,6 @@ Invoke-BCTest -containerName '{self.config.container_name}' -credential $credent
             if result.stderr:
                 output += "\n" + result.stderr
 
-            # Log output in a more manageable way
             output_stripped: str = output.strip()
             output_lines: list[str] = output_stripped.split("\n")
             line_count: int = len(output_lines)

@@ -26,7 +26,7 @@ jobs:
 
       - name: Validate dataset schema
         run: |
-          python -m bcbench validate dataset
+          python -m bcbench dataset validate
 
       - name: Get unique versions for matrix
         id: get-versions

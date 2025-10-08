@@ -71,9 +71,7 @@ __all__ = [
 def colored(text: str, color: str) -> str:
     allowed_colors = {CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY}
     if color not in allowed_colors:
-        raise ValueError(
-            "Invalid color. Must be one of: CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY"
-        )
+        raise ValueError("Invalid color. Must be one of: CYAN, GREEN, YELLOW, BLUE, MAGENTA, RED, GREY")
     return f"{color}{text}{RESET}"
 
 
@@ -81,9 +79,7 @@ def extract_patches(base_commit_id: str, commit_id: str) -> Tuple[str, str, str]
     """Return the gold and fix patch between two commits in the NAV repository."""
     repo_path = NAV_REPO_PATH
     if not repo_path.exists():
-        raise FileNotFoundError(
-            f"NAV repository not found at {repo_path}. Adjust NAV_REPO_PATH in constants.py."
-        )
+        raise FileNotFoundError(f"NAV repository not found at {repo_path}. Adjust NAV_REPO_PATH in constants.py.")
 
     result = subprocess.run(
         ["git", "diff", base_commit_id, commit_id],
