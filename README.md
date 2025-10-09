@@ -36,7 +36,7 @@ Then install the extension and run **"BC Bench: Start Automation"** from the com
 
 We follow the [SWE-Bench schema](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified) with BC-specific adjustments:
 
-- `environment_setup_version` instead of `environment_setup_commit` (needed for `Get-BCArtifactUrl -version`)
+- `environment_setup_commit` and `version` are combined into `environment_setup_version`.
 - `project_paths` to enumerate AL project roots touched by the fix
 
 See full spec in [`dataset/schema.json`](./dataset/schema.json).
