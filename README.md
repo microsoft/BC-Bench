@@ -38,7 +38,6 @@ We follow the [SWE-Bench schema](https://huggingface.co/datasets/SWE-bench/SWE-b
 
 - `environment_setup_version` instead of `environment_setup_commit` (needed for `Get-BCArtifactUrl -version`)
 - `project_paths` to enumerate AL project roots touched by the fix
-- TODO: investigate if Version field is still needed
 
 See full spec in [`dataset/schema.json`](./dataset/schema.json).
 

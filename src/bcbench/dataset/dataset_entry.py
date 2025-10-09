@@ -34,7 +34,6 @@ class DatasetEntry:
     created_at: str = ""
     test_patch: str = ""
     problem_statement: str = ""
-    version: str = ""
     environment_setup_version: str = ""
     fail_to_pass: List[TestEntry] = field(default_factory=list)
     pass_to_pass: List[TestEntry] = field(default_factory=list)
@@ -56,7 +55,6 @@ class DatasetEntry:
             created_at=str(payload.get("created_at", "")),
             test_patch=str(payload.get("test_patch", "")),
             problem_statement=str(payload.get("problem_statement", "")),
-            version=str(payload.get("version", "")),
             environment_setup_version=str(payload.get("environment_setup_version", "")),
             fail_to_pass=_parse_test_entries(payload.get("FAIL_TO_PASS", [])),
             pass_to_pass=_parse_test_entries(payload.get("PASS_TO_PASS", [])),
@@ -107,7 +105,6 @@ class DatasetEntry:
             "created_at": self.created_at,
             "test_patch": self.test_patch,
             "problem_statement": self.problem_statement,
-            "version": self.version,
             "environment_setup_version": self.environment_setup_version,
             "FAIL_TO_PASS": list(self.fail_to_pass),
             "PASS_TO_PASS": list(self.pass_to_pass),

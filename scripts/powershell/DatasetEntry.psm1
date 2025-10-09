@@ -33,7 +33,6 @@ class DatasetEntry {
     [string]$created_at
     [string]$test_patch
     [string]$problem_statement
-    [string]$version
     [string]$environment_setup_version
     [TestEntry[]]$FAIL_TO_PASS
     [TestEntry[]]$PASS_TO_PASS
@@ -49,7 +48,6 @@ class DatasetEntry {
         $this.created_at = $jsonObject.created_at
         $this.test_patch = $jsonObject.test_patch
         $this.problem_statement = $jsonObject.problem_statement
-        $this.version = $jsonObject.version
         $this.environment_setup_version = $jsonObject.environment_setup_version
         $this.FAIL_TO_PASS = @()
         foreach ($entry in $jsonObject.FAIL_TO_PASS) {

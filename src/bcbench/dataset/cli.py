@@ -92,7 +92,6 @@ def view_entry(
     info_table.add_row("Instance ID", entry.instance_id or "N/A")
     info_table.add_row("Base Commit", entry.base_commit or "N/A")
     info_table.add_row("Created At", entry.created_at or "N/A")
-    info_table.add_row("Version", entry.version or "N/A")
     info_table.add_row("Environment Setup Version", entry.environment_setup_version or "N/A")
     info_table.add_row("Project Paths", "\n".join(entry.project_paths) if entry.project_paths else "N/A")
 
