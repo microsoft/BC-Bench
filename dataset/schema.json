@@ -40,10 +40,6 @@
       "type": "string",
       "description": "The issue (bug) title and body"
     },
-    "version": {
-      "type": "string",
-      "description": "Installation version to use for running evaluation"
-    },
     "environment_setup_version": {
       "type": "string",
       "description": "The latest minor version that doesn't include the fix, BC Artifact version to setup the environment",
@@ -116,7 +112,6 @@
     "created_at",
     "test_patch",
     "problem_statement",
-    "version",
     "environment_setup_version",
     "FAIL_TO_PASS",
     "PASS_TO_PASS",
