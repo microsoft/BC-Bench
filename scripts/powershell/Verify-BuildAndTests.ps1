@@ -84,6 +84,9 @@ foreach ($entry in $versionEntries) {
         Write-Log "[Test Patch Only] Running FAIL_TO_PASS tests for $($entry.instance_id)" -Level Info
         Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.FAIL_TO_PASS -expectation 'Fail'
 
+        Write-Log "[Test Patch Only] Running PASS_TO_PASS tests for $($entry.instance_id)" -Level Info
+        Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.PASS_TO_PASS -expectation 'Pass'
+
         Write-Log "Applying gold patch for $($entry.instance_id)" -Level Info
         Invoke-GitApplyPatch -PatchContent $entry.patch -PatchId $entry.instance_id
 
@@ -98,6 +101,9 @@ foreach ($entry in $versionEntries) {
 
         Write-Log "[Gold Patch Applied] Running FAIL_TO_PASS tests for $($entry.instance_id)" -Level Info
         Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.FAIL_TO_PASS -expectation 'Pass'
+
+        Write-Log "[Gold Patch Applied] Running PASS_TO_PASS tests for $($entry.instance_id)" -Level Info
+        Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.PASS_TO_PASS -expectation 'Pass'
 
         Write-Log "[Gold Patch Applied] Tests passed successfully" -Level Success
         $validationResults += [ValidationResult]::new($entry.instance_id, "Passed", "All tests passed after applying patch")

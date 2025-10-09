@@ -1,5 +1,5 @@
 name: Dataset Validation and Verification
-description: Validate dataset schema and verify FAIL to PASS tests
+description: Validate dataset schema, verify projects can be built and tests pass
 permissions:
   contents: read
 
@@ -34,7 +34,7 @@ jobs:
           python -m bcbench dataset versions --github-output versions
         shell: pwsh
 
-  verify-fail-to-pass-tests:
+  verify-build-and-tests:
     runs-on: windows-latest
     needs: validate-dataset-schema
     if: needs.validate-dataset-schema.outputs.versions != '[]'
@@ -61,10 +61,10 @@ jobs:
           .\Setup-ContainerAndRepository.ps1 -Version "${{ matrix.version }}"
         shell: pwsh
 
-      - name: Run FAIL to PASS verification for Version ${{ matrix.version }}
+      - name: Run build and test verification for Version ${{ matrix.version }}
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
           cd scripts/powershell
-          .\Verify-FailToPassTests.ps1 -Version "${{ matrix.version }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
+          .\Verify-BuildAndTests.ps1 -Version "${{ matrix.version }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
         shell: pwsh
