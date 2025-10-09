@@ -1,5 +1,6 @@
 import subprocess
 import os
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
@@ -118,10 +119,21 @@ Invoke-BCTest -containerName '{self.config.container_name}' -credential $credent
         working_dir: str = cwd or self.config.cwd or os.getcwd()
 
         if log_command:
-            command_preview: str = command if len(command) <= 100 else command[:97] + "..."
+            # Redact password assignments in the command string when logging
+            def redact_passwords(cmd: str) -> str:
+                # Replace e.g. $password = ConvertTo-SecureString '...'
+                # Supports both single and double quotes
+                return re.sub(
+                    r"(\$password\s*=\s*ConvertTo-SecureString\s*['\"])[^'\"]*(['\"]\s*-AsPlainText\s*-Force)",
+                    r"\1******\2",
+                    cmd,
+                )
+
+            redacted_command = redact_passwords(command)
+            command_preview: str = redacted_command if len(redacted_command) <= 100 else redacted_command[:97] + "..."
             logger.info(f"Executing:\n{command_preview}")
-            if len(command) > 100:
-                logger.debug(f"Full command: {command}")
+            if len(redacted_command) > 100:
+                logger.debug(f"Full command: {redacted_command}")
 
         try:
             result = subprocess.run(
