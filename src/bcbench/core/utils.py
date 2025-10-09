@@ -26,18 +26,12 @@ def _get_git_root() -> Path:
         return Path(__file__).parent.parent.parent.parent
 
 
-def _get_schema_path() -> Path:
-    """Get the schema file path from the dataset directory."""
-    git_root = _get_git_root()
-    return git_root / "dataset" / "schema.json"
-
-
 # Constants - dynamically resolve BC-Bench root from git root
 BC_BENCH_ROOT = _get_git_root()
 DATASET_PATH = BC_BENCH_ROOT / "dataset" / "bcbench_nav.jsonl"
-DATASET_SCHEMA_PATH = _get_schema_path()
+DATASET_SCHEMA_PATH = BC_BENCH_ROOT / "dataset" / "schema.json"
 NAV_REPO_PATH = BC_BENCH_ROOT.parent / "NAV"
-
+PS_SCRIPT_PATH = BC_BENCH_ROOT / "scripts" / "powershell"
 
 __all__ = [
     "extract_patches",

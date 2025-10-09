@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
 from bcbench.core.logger import get_logger
+from bcbench.core.utils import PS_SCRIPT_PATH
 
 logger = get_logger(__name__)
 
@@ -54,8 +55,7 @@ class BCEnvironment(LocalEnvironment):
         full_project_path = os.path.join(self.config.nav_repo_path, project_path)
 
         # Get the path to AppUtils module (relative to this script)
-        script_dir = Path(__file__).parent
-        app_utils_path = script_dir.parent.parent.parent / "scripts" / "powershell" / "AppUtils.psm1"
+        app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
 
         ps_script = f"""
 Import-Module BcContainerHelper -Force -DisableNameChecking
@@ -94,8 +94,7 @@ Invoke-AppBuildAndPublish -containerName '{self.config.container_name}' -appProj
             logger.info(f"Running all tests in codeunit {codeunit_id}")
 
         # Get the path to AppUtils module (relative to this script)
-        script_dir = Path(__file__).parent
-        app_utils_path = script_dir.parent.parent.parent / "scripts" / "powershell" / "AppUtils.psm1"
+        app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
 
         ps_script = f"""
 Import-Module BcContainerHelper -Force -DisableNameChecking

@@ -45,9 +45,9 @@ def evaluate_mini(
     logger.info(f"Found {len(entries)} entries for version {version}")
 
     for idx, entry in enumerate(entries, 1):
-        logger.info(f"\n{'=' * 80}")
+        logger.info(f"{'=' * 80}")
         logger.info(f"Processing entry {idx}/{len(entries)}: {entry.instance_id}")
-        logger.info(f"{'=' * 80}\n")
+        logger.info(f"{'=' * 80}")
 
         try:
             _evaluate_single_entry(

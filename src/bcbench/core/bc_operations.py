@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from bcbench.core.logger import get_logger
+from bcbench.core.utils import PS_SCRIPT_PATH
 
 logger = get_logger(__name__)
 
@@ -18,8 +19,7 @@ def build_and_publish_projects(
     """Build and publish all projects."""
     logger.info(f"Building and publishing {len(project_paths)} projects")
 
-    script_dir = Path(__file__).parent.parent.parent / "scripts" / "powershell"
-    app_utils_path = script_dir / "AppUtils.psm1"
+    app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
 
     for project_path in project_paths:
         logger.info(f"Building project: {project_path}")
@@ -62,8 +62,7 @@ def run_tests(
     """Run fail-to-pass and pass-to-pass tests."""
     logger.info("Running tests")
 
-    script_dir = Path(__file__).parent.parent.parent / "scripts" / "powershell"
-    app_utils_path = script_dir / "AppUtils.psm1"
+    app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
 
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
