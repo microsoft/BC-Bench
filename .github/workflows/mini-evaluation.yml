@@ -76,4 +76,43 @@ jobs:
           python -m bcbench evaluate mini "${{ matrix.version }}" `
             --container-name "${{ steps.setup-env.outputs.container_name }}" `
             --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}"
+            --output-dir "evaluation_results"
+            --run-id ${{ github.run_id }}
+        shell: pwsh
+
+      - name: Upload evaluation results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evaluation-results-${{ github.run_id }}
+          path: evaluation_results/
+          retention-days: 30
+
+  summarize-results:
+    runs-on: windows-latest
+    needs: evaluate-with-mini-agent
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Install bcbench package
+        run: |
+          pip install -e .
+
+      - name: Download all evaluation results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: evaluation-results-*
+          path: evaluation_results/
+          merge-multiple: true
+
+      - name: Summarize evaluation results
+        run: |
+          python -m bcbench evaluate summarize ${{ github.run_id }}
         shell: pwsh

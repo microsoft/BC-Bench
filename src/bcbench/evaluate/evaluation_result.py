@@ -1,20 +1,13 @@
 from dataclasses import dataclass
 from typing import Optional
-from enum import Enum
 from pathlib import Path
 import json
 from bcbench.core.logger import get_logger
+from rich.console import Console
+from rich.table import Table
 
 logger = get_logger(__name__)
-
-
-class FailureReason(Enum):
-    TIMEOUT = "timeout"
-    MAX_STEPS = "max_steps"
-    COMPILATION_ERROR = "compilation_error"
-    TEST_FAILURE = "test_failure"
-    AGENT_ERROR = "agent_error"
-    INVALID_PATCH = "invalid_patch"
+console = Console()
 
 
 @dataclass(slots=True)
@@ -31,7 +24,6 @@ class EvaluationResult:
 
     # Error tracking
     error_message: Optional[str] = None
-    failure_reason: Optional[FailureReason] = None
 
     # Metadata
     evaluation_time_seconds: Optional[float] = None
@@ -53,3 +45,55 @@ class EvaluationResult:
             f.write(json.dumps(result_dict) + "\n")
 
         logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")
+
+
+def summarize_results(results_dir: Path, result_file: str = "instance_results.jsonl") -> None:
+    """Read evaluation results from JSONL file and print a summary using rich tables."""
+    results_path = results_dir / result_file
+
+    if not results_path.exists():
+        console.print(f"[red]Error: Results file not found at {results_path}[/red]")
+        return
+
+    results: list[EvaluationResult] = []
+    with open(results_path, "r") as f:
+        for line in f:
+            if line.strip():
+                data = json.loads(line)
+                # Map environment_setup_version back to version
+                result = EvaluationResult(
+                    instance_id=data.get("instance_id", "Unknown"),
+                    version=data.get("environment_setup_version", "Unknown"),
+                    resolved=data.get("resolved", False),
+                    agent_patch=data.get("agent_patch"),
+                    step_count=data.get("step_count", 0),
+                    error_message=data.get("error_message"),
+                    evaluation_time_seconds=data.get("evaluation_time_seconds"),
+                )
+                results.append(result)
+
+    if not results:
+        console.print("[yellow]No results found in the file.[/yellow]")
+        return
+
+    total = len(results)
+    succeeded = sum(1 for r in results if r.resolved)
+    failed = total - succeeded
+
+    console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
+    console.print(f"Total Processed: [bold]{total}[/bold]")
+    console.print(f"Succeeded: [bold green]{succeeded}[/bold green]")
+    console.print(f"Failed: [bold red]{failed}[/bold red]")
+
+    # Create results table
+    table = Table(title="\nDetailed Results", show_lines=True)
+    table.add_column("Instance ID", style="cyan", no_wrap=True)
+    table.add_column("Status", justify="center")
+    table.add_column("Error Message", style="dim")
+
+    for result in results:
+        status = "[green]Success[/green]" if result.resolved else "[red]Failed[/red]"
+        table.add_row(result.instance_id, status, result.error_message or "")
+
+    console.print(table)
+    console.print()

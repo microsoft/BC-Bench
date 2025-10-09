@@ -14,7 +14,7 @@ from bcbench.core.git_operations import clean_repo, checkout_commit, apply_patch
 from bcbench.core.bc_operations import build_and_publish_projects, run_tests
 from bcbench.dataset import load_dataset_entries, DatasetEntry
 from bcbench.agent.mini import run_mini_agent
-from bcbench.evaluate.evaluation_result import EvaluationResult
+from bcbench.evaluate.evaluation_result import EvaluationResult, summarize_results
 
 logger = get_logger(__name__)
 
@@ -101,3 +101,24 @@ def evaluate_mini(
     logger.info(f"Total entries: {len(entries)}")
     logger.info(f"Results saved to: {run_dir}")
     logger.info(f"{'=' * 80}")
+
+
+@evaluate_app.command("summarize")
+def evaluate_summarize(
+    run_id: Annotated[str, typer.Argument(help="Unique identifier for the evaluation run to summarize")],
+    output_dir: Annotated[Path, typer.Option(help="Directory containing evaluation results")] = Path("evaluation_results"),
+    result_file: Annotated[str, typer.Option(help="Name of the results file")] = "instance_results.jsonl",
+):
+    """
+    Summarize evaluation results from a completed run.
+
+    Example:
+        bcbench evaluate summarize mini_test_run
+    """
+    run_dir = output_dir / run_id
+
+    if not run_dir.exists():
+        logger.error(f"Results directory not found: {run_dir}")
+        raise typer.Exit(code=1)
+
+    summarize_results(run_dir, result_file)

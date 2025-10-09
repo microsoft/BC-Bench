@@ -262,3 +262,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Evaluation Result files
+evaluation_results/
