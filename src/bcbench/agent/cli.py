@@ -41,7 +41,7 @@ def run_mini(
         dataset_path=dataset_path,
         entry_id=entry_id,
         repo_path=repo_path,
-        use_container=use_container,
+        enable_bc_tools=use_container,
         container_name=container_name,
         username=username,
         password=password,

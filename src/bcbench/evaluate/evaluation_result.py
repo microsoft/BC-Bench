@@ -47,33 +47,44 @@ class EvaluationResult:
         logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")
 
 
-def summarize_results(results_dir: Path, result_file: str = "instance_results.jsonl") -> None:
-    """Read evaluation results from JSONL file and print a summary using rich tables."""
-    results_path = results_dir / result_file
+def summarize_results(results_dir: Path, result_pattern: str) -> None:
+    """Read evaluation results from JSONL file(s) and print a summary using rich tables.
 
-    if not results_path.exists():
-        console.print(f"[red]Error: Results file not found at {results_path}[/red]")
+    This function will search for all files matching result_file pattern in results_dir
+    and its subdirectories, aggregating results from all found files.
+    """
+    results: list[EvaluationResult] = []
+
+    # Find all matching result files in the directory and subdirectories
+    result_files = list(results_dir.rglob(result_pattern))
+
+    if not result_files:
+        console.print(f"[red]Error: No results files matching '{result_pattern}' found in {results_dir}[/red]")
         return
 
-    results: list[EvaluationResult] = []
-    with open(results_path, "r") as f:
-        for line in f:
-            if line.strip():
-                data = json.loads(line)
-                # Map environment_setup_version back to version
-                result = EvaluationResult(
-                    instance_id=data.get("instance_id", "Unknown"),
-                    version=data.get("environment_setup_version", "Unknown"),
-                    resolved=data.get("resolved", False),
-                    agent_patch=data.get("agent_patch"),
-                    step_count=data.get("step_count", 0),
-                    error_message=data.get("error_message"),
-                    evaluation_time_seconds=data.get("evaluation_time_seconds"),
-                )
-                results.append(result)
+    logger.info(f"Found {len(result_files)} result file(s) to process")
+
+    # Read all result files
+    for results_path in result_files:
+        logger.info(f"Reading results from: {results_path}")
+        with open(results_path, "r") as f:
+            for line in f:
+                if line.strip():
+                    data = json.loads(line)
+                    # Map environment_setup_version back to version
+                    result = EvaluationResult(
+                        instance_id=data.get("instance_id", "Unknown"),
+                        version=data.get("environment_setup_version", "Unknown"),
+                        resolved=data.get("resolved", False),
+                        agent_patch=data.get("agent_patch"),
+                        step_count=data.get("step_count", 0),
+                        error_message=data.get("error_message"),
+                        evaluation_time_seconds=data.get("evaluation_time_seconds"),
+                    )
+                    results.append(result)
 
     if not results:
-        console.print("[yellow]No results found in the file.[/yellow]")
+        console.print("[yellow]No results found in the files.[/yellow]")
         return
 
     total = len(results)
@@ -88,12 +99,13 @@ def summarize_results(results_dir: Path, result_file: str = "instance_results.js
     # Create results table
     table = Table(title="\nDetailed Results", show_lines=True)
     table.add_column("Instance ID", style="cyan", no_wrap=True)
+    table.add_column("Version", style="magenta", no_wrap=True)
     table.add_column("Status", justify="center")
     table.add_column("Error Message", style="dim")
 
     for result in results:
         status = "[green]Success[/green]" if result.resolved else "[red]Failed[/red]"
-        table.add_row(result.instance_id, status, result.error_message or "")
+        table.add_row(result.instance_id, result.version, status, result.error_message or "")
 
     console.print(table)
     console.print()

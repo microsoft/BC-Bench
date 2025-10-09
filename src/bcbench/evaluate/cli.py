@@ -33,6 +33,7 @@ def evaluate_mini(
     cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
     output_dir: Annotated[Path, typer.Option(help="Directory to save evaluation results")] = Path("evaluation_results"),
     run_id: Annotated[str, typer.Option(help="Unique identifier for this evaluation run")] = "mini_test_run",
+    enable_bc_tools: Annotated[bool, typer.Option(help="Whether to enable BC tools for mini agent (build and test)")] = False,
 ):
     """
     Evaluate mini-bc-agent on all entries for a specific version.
@@ -69,7 +70,7 @@ def evaluate_mini(
                 dataset_path=DATASET_PATH,
                 entry_id=entry.instance_id,
                 repo_path=repo_path,
-                use_container=False,
+                enable_bc_tools=enable_bc_tools,
                 container_name=container_name,
                 username=username,
                 password=password,
@@ -107,7 +108,7 @@ def evaluate_mini(
 def evaluate_summarize(
     run_id: Annotated[str, typer.Argument(help="Unique identifier for the evaluation run to summarize")],
     output_dir: Annotated[Path, typer.Option(help="Directory containing evaluation results")] = Path("evaluation_results"),
-    result_file: Annotated[str, typer.Option(help="Name of the results file")] = "instance_results.jsonl",
+    result_pattern: Annotated[str, typer.Option(help="Pattern for the result files")] = "*.jsonl",
 ):
     """
     Summarize evaluation results from a completed run.
@@ -121,4 +122,4 @@ def evaluate_summarize(
         logger.error(f"Results directory not found: {run_dir}")
         raise typer.Exit(code=1)
 
-    summarize_results(run_dir, result_file)
+    summarize_results(run_dir, result_pattern)

@@ -6,6 +6,9 @@ permissions:
 on:
   workflow_dispatch:
 
+env:
+  EVALUATION_RESULTS_DIR: evaluation_results
+
 jobs:
   get-entries:
     runs-on: windows-latest
@@ -75,8 +78,8 @@ jobs:
         run: |
           python -m bcbench evaluate mini "${{ matrix.version }}" `
             --container-name "${{ steps.setup-env.outputs.container_name }}" `
-            --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}"
-            --output-dir "evaluation_results"
+            --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             --run-id ${{ github.run_id }}
         shell: pwsh
 
@@ -84,8 +87,8 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: evaluation-results-${{ github.run_id }}
-          path: evaluation_results/
+          name: evaluation-results-${{ github.run_id }}-${{ matrix.version }}
+          path: "${{ env.EVALUATION_RESULTS_DIR }}/"
           retention-days: 30
 
   summarize-results:
@@ -108,8 +111,7 @@ jobs:
       - name: Download all evaluation results
         uses: actions/download-artifact@v4
         with:
-          pattern: evaluation-results-*
-          path: evaluation_results/
+          path: "${{ env.EVALUATION_RESULTS_DIR }}/"
           merge-multiple: true
 
       - name: Summarize evaluation results

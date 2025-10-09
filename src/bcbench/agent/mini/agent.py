@@ -56,7 +56,7 @@ def run_mini_agent(
     dataset_path: Path,
     entry_id: str,
     repo_path: Path,
-    use_container: bool = False,
+    enable_bc_tools: bool = False,
     container_name: Optional[str] = None,
     username: str = "admin",
     password: Optional[str] = None,
@@ -64,10 +64,10 @@ def run_mini_agent(
     cost_limit: float = 1.0,
 ) -> None:
     """Run mini-bc-agent on a single dataset entry."""
-    if use_container and not container_name:
+    if enable_bc_tools and not container_name:
         raise ValueError("container_name is required when use_container is True")
 
-    if use_container and not password:
+    if enable_bc_tools and not password:
         password = os.environ.get("BC_CONTAINER_PASSWORD")
         if not password:
             raise ValueError("Password required when use_container is True. Set password or BC_CONTAINER_PASSWORD env var")
@@ -98,7 +98,7 @@ def run_mini_agent(
             password=password,
             project_paths=entry.project_paths,
             cwd=str(repo_path),
-            enable_bc_tools=use_container,
+            enable_bc_tools=enable_bc_tools,
             version=entry.environment_setup_version,
         ),
         **agent_config,
