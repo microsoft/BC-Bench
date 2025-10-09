@@ -29,7 +29,7 @@ def collect_nav_entry(
         raise typer.Exit(code=1)
 
     try:
-        entry = collect_dataset_entry(pr_number)
+        entry: DatasetEntry = collect_dataset_entry(pr_number)
     except Exception as exc:
         logger.error("Failed to collect dataset entry: %s", exc)
         raise typer.Exit(code=1)
@@ -40,7 +40,7 @@ def collect_nav_entry(
         logger.error("Failed to write dataset entry: %s", exc)
         raise typer.Exit(code=1)
 
-    logger.info("Saved dataset entry to %s", output)
+    logger.info(f"Saved dataset entry {entry.instance_id} to {output}")
 
 
 def _validate_environment() -> None:
