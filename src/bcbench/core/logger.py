@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import sys
 
 __all__ = ["setup_logger", "get_logger"]
@@ -12,6 +13,72 @@ BLUE = "\033[34m"
 YELLOW = "\033[33m"
 RED = "\033[31m"
 RESET = "\033[0m"
+
+
+class SensitiveDataFilter(logging.Filter):
+    """Filter that automatically redacts sensitive information from log messages."""
+
+    # Patterns for detecting and redacting sensitive data
+    PATTERNS = [
+        # PowerShell ConvertTo-SecureString password assignments
+        # Matches: $password = ConvertTo-SecureString 'secret' -AsPlainText -Force
+        (
+            re.compile(
+                r"(\$password\s*=\s*ConvertTo-SecureString\s*['\"])[^'\"]*(['\"]\s*-AsPlainText\s*-Force)",
+                re.IGNORECASE,
+            ),
+            r"\1******\2",
+        ),
+        # Generic password assignments (various formats)
+        # Matches: password='secret', password="secret", password=secret
+        (
+            re.compile(r"(password\s*[=:]\s*['\"]?)[^\s'\"]+(['\"]?)", re.IGNORECASE),
+            r"\1******\2",
+        ),
+        # Bearer tokens and API keys
+        # Matches: Authorization: Bearer token, api_key=abc123
+        (
+            re.compile(r"(bearer\s+)[a-zA-Z0-9._\-]+", re.IGNORECASE),
+            r"\1******",
+        ),
+        (
+            re.compile(r"(api[_\-]?key\s*[=:]\s*['\"]?)[^\s'\"]+", re.IGNORECASE),
+            r"\1******",
+        ),
+        # Authorization headers
+        # Matches: Authorization: Basic base64string
+        (
+            re.compile(r"(Authorization\s*:\s*\w+\s+)[^\s]+", re.IGNORECASE),
+            r"\1******",
+        ),
+    ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Redact sensitive information from the log record's message."""
+        if isinstance(record.msg, str):
+            # Apply all redaction patterns
+            redacted_msg = record.msg
+            for pattern, replacement in self.PATTERNS:
+                redacted_msg = pattern.sub(replacement, redacted_msg)
+            record.msg = redacted_msg
+
+        # Also redact from args if present
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = {key: self._redact_value(value) for key, value in record.args.items()}
+            elif isinstance(record.args, tuple):
+                record.args = tuple(self._redact_value(arg) for arg in record.args)
+
+        return True
+
+    def _redact_value(self, value):
+        """Redact sensitive information from a single value."""
+        if isinstance(value, str):
+            redacted = value
+            for pattern, replacement in self.PATTERNS:
+                redacted = pattern.sub(replacement, redacted)
+            return redacted
+        return value
 
 
 class ColoredFormatter(logging.Formatter):
@@ -64,9 +131,10 @@ def setup_logger(verbose: bool = False) -> None:
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Create console handler with colored formatter
+    # Create console handler with colored formatter and sensitive data filter
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(ColoredFormatter())
+    console_handler.addFilter(SensitiveDataFilter())
     root_logger.addHandler(console_handler)
 
     # Configure bcbench loggers to use the desired level

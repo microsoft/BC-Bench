@@ -1,6 +1,5 @@
 import subprocess
 import os
-import re
 from dataclasses import dataclass, field
 from typing import Any
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
@@ -101,21 +100,11 @@ class BCEnvironment(LocalEnvironment):
         working_dir: str = cwd or self.config.cwd or os.getcwd()
 
         if log_command:
-            # Redact password assignments in the command string when logging
-            def redact_passwords(cmd: str) -> str:
-                # Replace e.g. $password = ConvertTo-SecureString '...'
-                # Supports both single and double quotes
-                return re.sub(
-                    r"(\$password\s*=\s*ConvertTo-SecureString\s*['\"])[^'\"]*(['\"]\s*-AsPlainText\s*-Force)",
-                    r"\1******\2",
-                    cmd,
-                )
-
-            redacted_command = redact_passwords(command)
-            command_preview: str = redacted_command if len(redacted_command) <= 100 else redacted_command[:97] + "..."
+            # Sensitive data redaction is now handled automatically by the logging filter
+            command_preview: str = command if len(command) <= 100 else command[:97] + "..."
             logger.info(f"Executing:\n{command_preview}")
-            if len(redacted_command) > 100:
-                logger.debug(f"Full command: {redacted_command}")
+            if len(command) > 100:
+                logger.debug(f"Full command: {command}")
 
         try:
             result = subprocess.run(
