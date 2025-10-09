@@ -10,10 +10,7 @@ from typing_extensions import Annotated
 from bcbench.core.utils import DATASET_PATH, NAV_REPO_PATH
 from bcbench.core.logger import get_logger
 from bcbench.core.git_operations import clean_repo, checkout_commit, apply_patch
-from bcbench.core.bc_operations import (
-    build_and_publish_projects,
-    run_tests,
-)
+from bcbench.core.bc_operations import build_and_publish_projects, run_tests
 from bcbench.dataset.dataset_loader import load_dataset_entries
 from bcbench.agent.mini import run_mini_agent
 

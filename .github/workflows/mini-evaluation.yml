@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.get-entries.outputs.versions) }}
+        version: ${{ fromJson(needs.get-entries.outputs.versions) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
