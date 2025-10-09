@@ -72,34 +72,8 @@ def run_mini_agent(
         if not password:
             raise ValueError("Password required when use_container is True. Set password or BC_CONTAINER_PASSWORD env var")
 
-    entry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
     logger.info(f"Running mini-bc-agent on: {entry.instance_id}")
-
-    _run_single_entry(
-        entry=entry,
-        repo_path=repo_path,
-        use_container=use_container,
-        container_name=container_name or "",
-        username=username,
-        password=password or "",
-        step_limit=step_limit,
-        cost_limit=cost_limit,
-    )
-
-    logger.info(f"Agent finished after {step_limit} steps")
-
-
-def _run_single_entry(
-    entry: DatasetEntry,
-    repo_path: Path,
-    container_name: str,
-    username: str,
-    password: str,
-    use_container: bool,
-    step_limit: int,
-    cost_limit: float,
-) -> None:
-    """Run mini-bc-agent on a single entry."""
 
     task: str = entry.get_task()
 
@@ -125,8 +99,11 @@ def _run_single_entry(
             project_paths=entry.project_paths,
             cwd=str(repo_path),
             enable_bc_tools=use_container,
+            version=entry.environment_setup_version,
         ),
         **agent_config,
     )
 
     agent.run(task)
+
+    logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")

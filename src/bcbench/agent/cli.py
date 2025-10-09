@@ -13,7 +13,7 @@ from bcbench.core.logger import get_logger
 
 logger = get_logger(__name__)
 
-run_app = typer.Typer(help="Run agents on single dataset entry for testing")
+run_app = typer.Typer(help="Run agents on single dataset entry")
 
 
 @run_app.command("mini")
