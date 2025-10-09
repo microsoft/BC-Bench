@@ -131,15 +131,13 @@ def run_tests(
     """Run fail-to-pass and pass-to-pass tests."""
     logger.info("Running tests")
 
-    app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
-
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
-        _run_test_suite(entry.fail_to_pass, "Pass", container_name, username, password, app_utils_path)
+        _run_test_suite(entry.fail_to_pass, "Pass", container_name, username, password)
 
     if entry.pass_to_pass:
         logger.info(f"Running {len(entry.pass_to_pass)} pass-to-pass tests")
-        _run_test_suite(entry.pass_to_pass, "Pass", container_name, username, password, app_utils_path)
+        _run_test_suite(entry.pass_to_pass, "Pass", container_name, username, password)
 
     logger.info("All tests completed")
 
@@ -150,7 +148,6 @@ def _run_test_suite(
     container_name: str,
     username: str,
     password: str,
-    app_utils_path: Path,
 ) -> None:
     """Run a suite of tests."""
     test_entries_json = str(test_entries).replace("'", '"')

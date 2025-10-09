@@ -1,6 +1,7 @@
 """CLI commands for evaluating agents on benchmark datasets."""
 
 import os
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,7 @@ from bcbench.core.git_operations import clean_repo, checkout_commit, apply_patch
 from bcbench.core.bc_operations import build_and_publish_projects, run_tests
 from bcbench.dataset import load_dataset_entries, DatasetEntry
 from bcbench.agent.mini import run_mini_agent
+from bcbench.evaluate.evaluation_result import EvaluationResult
 
 logger = get_logger(__name__)
 
@@ -29,6 +31,8 @@ def evaluate_mini(
     password: Annotated[Optional[str], typer.Option(help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)")] = None,
     step_limit: Annotated[int, typer.Option(help="Maximum number of agent steps")] = 20,
     cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
+    output_dir: Annotated[Path, typer.Option(help="Directory to save evaluation results")] = Path("evaluation_results"),
+    run_id: Annotated[str, typer.Option(help="Unique identifier for this evaluation run")] = "mini_test_run",
 ):
     """
     Evaluate mini-bc-agent on all entries for a specific version.
@@ -44,10 +48,17 @@ def evaluate_mini(
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, version=version)
     logger.info(f"Found {len(entries)} entries for version {version}")
 
+    run_dir = output_dir / run_id
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True)
+
     for idx, entry in enumerate(entries, 1):
         logger.info(f"{'=' * 80}")
         logger.info(f"Processing entry {idx}/{len(entries)}: {entry.instance_id}")
         logger.info(f"{'=' * 80}")
+
+        result = EvaluationResult(instance_id=entry.instance_id, version=entry.environment_setup_version)
 
         try:
             clean_repo(repo_path)
@@ -66,13 +77,27 @@ def evaluate_mini(
                 cost_limit=cost_limit,
             )
 
+            # TODO: Extract run detailed from agent (metrics to be discussed)
+
             apply_patch(repo_path, entry.test_patch, entry.instance_id)
             build_and_publish_projects(repo_path, entry.project_paths, container_name, username, password, entry.environment_setup_version)
             run_tests(entry, container_name, username, password)
 
-            logger.info(f"Successfully completed {entry.instance_id}")
-        except Exception as e:
-            logger.error(f"Failed to process {entry.instance_id}: {e}")
-            continue
+            # TODO: Parse test_results to extract pass/fail counts and resolved status
+            # For now, assume resolved if no exception
+            result.resolved = True
 
-        logger.info(f"\nEvaluation complete. Processed {len(entries)} entries.")
+            logger.info(f"Successfully completed {entry.instance_id}")
+
+        except Exception as e:
+            result.resolved = False
+            result.error_message = str(e)
+            logger.error(f"Failed to process {entry.instance_id}: {e}")
+
+        result.save(run_dir)
+
+    logger.info(f"{'=' * 80}")
+    logger.info("Evaluation complete!")
+    logger.info(f"Total entries: {len(entries)}")
+    logger.info(f"Results saved to: {run_dir}")
+    logger.info(f"{'=' * 80}")
