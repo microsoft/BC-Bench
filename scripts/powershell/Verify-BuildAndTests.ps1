@@ -106,7 +106,7 @@ foreach ($entry in $versionEntries) {
         Invoke-DatasetTests -containerName $containerName -credential $credential -testEntries $entry.PASS_TO_PASS -expectation 'Pass'
 
         Write-Log "[Gold Patch Applied] Tests passed successfully" -Level Success
-        $validationResults += [ValidationResult]::new($entry.instance_id, "Passed", "All tests passed after applying patch")
+        $validationResults += [ValidationResult]::new($entry.instance_id, "Passed", "")
     }
     catch {
         Write-Log "Exception while verifying $($entry.instance_id): $($_.Exception.Message)" -Level Error
@@ -150,12 +150,9 @@ function Show-ValidationResults {
         Write-Log "Writing results to GitHub Actions job summary" -Level Info
 
         $summary = @"
-# Dataset Verification Summary
-
-## Overview
-- **Total entries processed:** $($Results.Count)
-- **Successful verifications:** $successCount :white_check_mark:
-- **Failed verifications:** $failureCount $(if ($failureCount -gt 0) { ':x:' } else { ':white_check_mark:' })
+Total entries processed: $($Results.Count)
+- Successful verifications: $successCount :white_check_mark:
+- Failed verifications: $failureCount $(if ($failureCount -gt 0) { ':x:' } else { ':white_check_mark:' })
 
 ## Detailed Results
 
