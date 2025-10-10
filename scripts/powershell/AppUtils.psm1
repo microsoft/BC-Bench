@@ -1,4 +1,5 @@
 using module .\BCBenchUtils.psm1
+using module .\DatasetEntry.psm1
 
 <#
     .Synopsis
@@ -37,9 +38,10 @@ function Invoke-AppBuildAndPublish {
     )
 
     try {
-        Write-Log "Compiling app in path: $appProjectFolder" -Level Info
+        if ($env:CI) {
+            Write-Output "::group::Compiling app: $appProjectFolder"
+        }
 
-        # Set output folder for compiled app
         [string] $outputPath = Join-Path $appProjectFolder "output"
 
         $compileParams = @{
@@ -49,12 +51,15 @@ function Invoke-AppBuildAndPublish {
             credential = $credential
         }
 
-        if ($env:CI) {
-            $compileParams.gitHubActions = $true
+        if ($env:RUNNER_DEBUG -eq '1') { # debug mode
+            Compile-AppInBcContainer @compileParams
+        } else {
+            $compileOutput = Compile-AppInBcContainer @compileParams 2>&1
         }
 
-        Compile-AppInBcContainer @compileParams
-
+        if ($env:CI) {
+            Write-Output "::endgroup::"
+        }
         Write-Log "Publishing and syncing app from: $outputPath" -Level Info
 
         # Get the compiled result app file
@@ -89,6 +94,13 @@ function Invoke-AppBuildAndPublish {
     }
     catch {
         Write-Log "Failed to compile and publish app from ${appProjectFolder}: $($_.Exception.Message)" -Level Error
+
+        if ($env:RUNNER_DEBUG -ne '1') {
+            if ($compileOutput) {
+                Write-Log "Compilation output:" -Level Error
+                Write-Log $compileOutput -Level Error
+            }
+        }
         throw
     }
 }
@@ -184,13 +196,16 @@ function Invoke-DatasetTests {
         [Parameter(Mandatory = $true)]
         [PSCredential] $credential,
 
-        [Parameter(Mandatory = $true)]
-        [object[]] $testEntries,
+        [Parameter(Mandatory = $false)]
+        [TestEntry[]] $testEntries,
 
         [Parameter(Mandatory = $true)]
         [ValidateSet('Pass', 'Fail')]
         [string] $expectation
     )
+    if ($env:CI) {
+        Write-Output "::group::Running Tests for: $($testEntries.CodeunitID), expectation: $expectation"
+    }
 
     if ($testEntries.Count -eq 0) {
         Write-Log "No test entries provided, skipping test execution" -Level Warning
@@ -210,7 +225,6 @@ function Invoke-DatasetTests {
         }
     }
 
-    # Validate expectation
     if ($expectation -eq 'Pass' -and -not $allTestsPassed) {
         throw "Tests were expected to Pass but some tests failed"
     }
@@ -219,4 +233,8 @@ function Invoke-DatasetTests {
     }
 
     Write-Log "Test expectation '$expectation' met successfully" -Level Success
+
+    if ($env:CI) {
+        Write-Output "::endgroup::"
+    }
 }
