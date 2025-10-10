@@ -80,7 +80,9 @@ jobs:
             --container-name "${{ steps.setup-env.outputs.container_name }}" `
             --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            --run-id ${{ github.run_id }}
+            --run-id ${{ github.run_id }} `
+            --step-limit 50 `
+            --enable-bc-tools
         shell: pwsh
 
       - name: Upload evaluation results

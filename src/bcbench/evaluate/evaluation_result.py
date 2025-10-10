@@ -123,12 +123,9 @@ def summarize_results(results_dir: Path, result_pattern: str) -> None:
 
     if os.environ.get("GITHUB_ACTIONS") == "true":
         success_icon = ":white_check_mark:" if failed == 0 else ":x:"
-        markdown_summary = f"""# Evaluation Results Summary
-
-## Overview
-- **Total entries processed:** {total}
-- **Successful evaluations:** {succeeded} :white_check_mark:
-- **Failed evaluations:** {failed} {success_icon}
+        markdown_summary = f"""Total entries processed: {total}
+- Successful evaluations: {succeeded} :white_check_mark:
+- Failed evaluations: {failed} {success_icon}
 
 ## Detailed Results
 

@@ -33,7 +33,7 @@ def evaluate_mini(
     cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
     output_dir: Annotated[Path, typer.Option(help="Directory to save evaluation results")] = Path("evaluation_results"),
     run_id: Annotated[str, typer.Option(help="Unique identifier for this evaluation run")] = "mini_test_run",
-    enable_bc_tools: Annotated[bool, typer.Option(help="Whether to enable BC tools for mini agent (build and test)")] = False,
+    enable_bc_tools: Annotated[bool, typer.Option(help="Whether to enable BC tools for the agent (build and test)")] = False,
 ):
     """
     Evaluate mini-bc-agent on all entries for a specific version.

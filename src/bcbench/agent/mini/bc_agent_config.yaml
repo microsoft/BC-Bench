@@ -20,31 +20,43 @@ agent:
 
     Failure to follow these rules will cause your response to be rejected.
   instance_template: |
-    Please solve this issue: {{task}}
+    ## Task
+    {{task}}
 
-    You are working in: {{nav_repo_path}} folder
-    You can most likely find relevant files in these project paths: {{project_paths|join(", ")}}
+    ## Environment
+    - Working directory: {{nav_repo_path}}
+    - Relevant project paths: {{project_paths|join(", ")}}
 
-    You can execute PowerShell commands and edit files to implement the necessary changes.
+    ## Objective
+    Make changes to non-test files in the project paths to fix the issue. Your solution should be general and consistent with the existing codebase.
+
+    ## Response Format
+    Each response must contain:
+    1. A THOUGHT section explaining your reasoning
+    2. Exactly ONE PowerShell command in triple backticks
+
+    This is an interactive process: issue one command, observe the result, then proceed with the next command.
 
     ## Recommended Workflow
 
-    This workflow should be done step-by-step so that you can iterate on your changes.
+    Follow these steps iteratively:
 
-    1. Analyze the codebase by finding and reading relevant files
-    2. Create a test case to reproduce the issue
-    3. Edit the source code to resolve the issue
-    4. Verify your fix works by running the created tests
-    5. Test edge cases to ensure your fix is robust
-    6. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
-       Do not combine it with any other command. <important>After this command, you cannot continue working on this task.</important>
+    1. **Analyze**: Find and read relevant files in the codebase
+    1. **Implement**: Edit the source code to resolve the issue
+    {% if bc_tools_enabled %}
+    1. **Verify**: Build the project to confirm the code compiles and runs
+    1. **Test (optional)**: If you feel it would help, create a NEW test file to reproduce the issue
+    {% endif %}
+    1. **Validate**: Read your changes to confirm it has considered edge cases
+    1. **Submit**: Execute `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` when complete
+       - This must be a standalone command
+       - After submission, you can NOT continue working on this task
 
     ## Important Rules
-
-    1. Every response must contain exactly one action
-    2. The action must be enclosed in triple backticks
-    3. Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
-       However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+    1. Every response must contain exactly ONE action enclosed in triple backticks
+    2. Directory/environment changes are not persistent across commands (each runs in a new subshell)
+       - Use prefixes like `MY_VAR=value cd /path && ...` to set context per command
+       - Or persist state by writing/reading from files
 
     <system_information>
     {{system}} {{release}} {{version}} {{machine}}
@@ -64,6 +76,24 @@ agent:
 
     ## Useful Command Examples
 
+    {% if bc_tools_enabled %}
+
+    ### BC-Specific Commands
+
+    Business Central/AL requires compilation before execution. Use these commands:
+
+    - `bc_build <project_path>`: Compile, publish, and install a BC app
+      - REQUIRED before running any code (tests or application logic)
+      - Example: `bc_build Test/MyApp`
+
+    - `bc_test <codeunit_id> [function1,function2,...]`: Execute tests in a codeunit
+      - Prerequisites: The test app MUST be built first using `bc_build`
+      - Run all tests: `bc_test 123456`
+      - Run specific tests: `bc_test 123456 TestFunction1,TestFunction2`
+
+    Important: Always run `bc_build` before `bc_test` when you create or modify test files.
+    {% endif %}
+
     ### Navigate and explore:
     ```powershell
     # Find all AL files recursively
@@ -80,7 +110,7 @@ agent:
     ```
 
     ### Edit files:
-    Do not attempt to open an editor. Instead, use PowerShell commands to edit files directly.
+    Do NOT attempt to open an editor. Instead, use PowerShell commands to edit files directly.
     ```powershell
     # Replace text in a file
     (Get-Content filename.al) -replace 'OldText', 'NewText' | Set-Content filename.al
@@ -88,17 +118,6 @@ agent:
     # Append a line to a file
     Add-Content filename.al "new line of code"
     ```
-
-    {% if bc_tools_enabled %}
-
-    ### BC-Specific High-Level Commands
-
-    These commands are available to simplify BC development:
-    - `bc_build <project_path>`: Build and publish a BC app project
-      Example: bc_build Test/MyApp
-    - `bc_test <codeunit_id> [function1,function2,...]`: Run tests in a codeunit
-      Example: bc_test 123456 TestFunction1,TestFunction2
-    {% endif %}
 
     ## Submission
     When you've completed your work (reading, editing, testing), and cannot make further progress
