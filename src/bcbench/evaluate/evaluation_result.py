@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
 import json
+import os
 from bcbench.core.logger import get_logger
 from rich.console import Console
 from rich.table import Table
@@ -45,6 +46,16 @@ class EvaluationResult:
             f.write(json.dumps(result_dict) + "\n")
 
         logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")
+
+
+def _write_github_step_summary(content: str) -> None:
+    """Write content to GitHub Actions step summary."""
+    github_step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if github_step_summary:
+        with open(github_step_summary, "a", encoding="utf-8") as f:
+            f.write(content)
+            f.write("\n")
+        logger.info("Wrote evaluation summary to GitHub Actions step summary")
 
 
 def summarize_results(results_dir: Path, result_pattern: str) -> None:
@@ -109,3 +120,27 @@ def summarize_results(results_dir: Path, result_pattern: str) -> None:
 
     console.print(table)
     console.print()
+
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        success_icon = ":white_check_mark:" if failed == 0 else ":x:"
+        markdown_summary = f"""# Evaluation Results Summary
+
+## Overview
+- **Total entries processed:** {total}
+- **Successful evaluations:** {succeeded} :white_check_mark:
+- **Failed evaluations:** {failed} {success_icon}
+
+## Detailed Results
+
+| Instance ID | Version | Status | Error Message |
+|-------------|---------|--------|---------------|
+"""
+        for result in results:
+            status_icon = ":white_check_mark:" if result.resolved else ":x:"
+            status_text = f"{status_icon} {'Success' if result.resolved else 'Failed'}"
+            error_msg = result.error_message or ""
+            # Escape pipe characters in error messages to prevent table breaking
+            error_msg = error_msg.replace("|", "\\|")
+            markdown_summary += f"| `{result.instance_id}` | `{result.version}` | {status_text} | {error_msg} |\n"
+
+        _write_github_step_summary(markdown_summary)

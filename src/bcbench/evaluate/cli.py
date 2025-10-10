@@ -9,7 +9,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.core.utils import DATASET_PATH, NAV_REPO_PATH
-from bcbench.core.logger import get_logger
+from bcbench.core.logger import get_logger, github_log_group
 from bcbench.core.git_operations import clean_repo, checkout_commit, apply_patch
 from bcbench.core.bc_operations import build_and_publish_projects, run_tests
 from bcbench.dataset import load_dataset_entries, DatasetEntry
@@ -66,17 +66,18 @@ def evaluate_mini(
             checkout_commit(repo_path, entry.base_commit)
             build_and_publish_projects(repo_path, entry.project_paths, container_name, username, password, entry.environment_setup_version)
 
-            run_mini_agent(
-                dataset_path=DATASET_PATH,
-                entry_id=entry.instance_id,
-                repo_path=repo_path,
-                enable_bc_tools=enable_bc_tools,
-                container_name=container_name,
-                username=username,
-                password=password,
-                step_limit=step_limit,
-                cost_limit=cost_limit,
-            )
+            with github_log_group(f"mini-bc-agent -- Entry: {entry.instance_id}"):
+                run_mini_agent(
+                    dataset_path=DATASET_PATH,
+                    entry_id=entry.instance_id,
+                    repo_path=repo_path,
+                    enable_bc_tools=enable_bc_tools,
+                    container_name=container_name,
+                    username=username,
+                    password=password,
+                    step_limit=step_limit,
+                    cost_limit=cost_limit,
+                )
 
             # TODO: Extract run detailed from agent (metrics to be discussed)
 
@@ -95,7 +96,8 @@ def evaluate_mini(
             result.error_message = str(e)
             logger.error(f"Failed to process {entry.instance_id}: {e}")
 
-        result.save(run_dir)
+        finally:
+            result.save(run_dir, f"instance_results_{version.replace('.', '')}.jsonl")
 
     logger.info(f"{'=' * 80}")
     logger.info("Evaluation complete!")

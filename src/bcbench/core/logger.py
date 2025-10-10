@@ -4,8 +4,9 @@ import logging
 import os
 import re
 import sys
+from contextlib import contextmanager
 
-__all__ = ["setup_logger", "get_logger"]
+__all__ = ["setup_logger", "get_logger", "github_log_group"]
 
 # ANSI color codes for terminal output
 GREY = "\033[90m"
@@ -150,3 +151,17 @@ def get_logger(name: str) -> logging.Logger:
         name = f"bcbench.{name}"
 
     return logging.getLogger(name)
+
+
+@contextmanager
+def github_log_group(title: str):
+    is_github_actions: bool = os.environ.get("GITHUB_ACTIONS") == "true"
+
+    if is_github_actions:
+        print(f"::group::{title}", flush=True)
+
+    try:
+        yield
+    finally:
+        if is_github_actions:
+            print("::endgroup::", flush=True)
