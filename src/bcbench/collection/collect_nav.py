@@ -107,8 +107,21 @@ def get_work_item_info(pr_data: Dict[str, Any]) -> Dict[str, Any]:
         response = requests.get(work_item_url, headers=_get_headers())
         response.raise_for_status()
         return response.json()
+    elif work_item_ref.get("count", 0) > 1:
+        logger.info("Multiple work items found. Please select one:")
+        for idx, item in enumerate(work_item_ref["value"], 1):
+            logger.info(f"{idx}. Work Item #{item.get('id')} - {item.get('url')}")
 
-    raise ValueError("Work item reference count is not 1.")
+        choice: int = typer.prompt("Enter the number of the work item to use", type=int)
+        if choice < 1 or choice > len(work_item_ref["value"]):
+            raise ValueError("Invalid selection.")
+
+        work_item_url = work_item_ref["value"][choice - 1]["url"]
+        response = requests.get(work_item_url, headers=_get_headers())
+        response.raise_for_status()
+        return response.json()
+
+    raise ValueError("No work items found in the reference.")
 
 
 def collect_dataset_entry(pr_number: int) -> DatasetEntry:
