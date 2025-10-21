@@ -209,6 +209,10 @@ function Invoke-DatasetTests {
 
     if ($testEntries.Count -eq 0) {
         Write-Log "No test entries provided, skipping test execution" -Level Warning
+
+        if ($env:CI) {
+            Write-Output "::endgroup::"
+        }
         return
     }
 
