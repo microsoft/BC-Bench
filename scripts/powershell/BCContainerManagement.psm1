@@ -308,6 +308,7 @@ function New-BCContainerAsync {
             auth = $authType
             credential = $credential
             includeTestToolkit = $true
+            includeTestLibrariesOnly = $true
             multitenant = $false
             shortcuts = 'None'
         }
