@@ -45,14 +45,25 @@ __all__ = [
 ]
 
 
-def extract_patches(base_commit_id: str, commit_id: str) -> Tuple[str, str, str]:
-    """Return the gold and fix patch between two commits in the NAV repository."""
+def extract_patches(base_commit_id: str, commit_id: str, diff_path: str = "") -> Tuple[str, str, str]:
+    """Return the gold and fix patch between two commits in the NAV repository.
+
+    Args:
+        base_commit_id: The base commit ID
+        commit_id: The target commit ID
+        diff_path: Optional path filter - only include changes under this path
+    """
     repo_path = NAV_REPO_PATH
     if not repo_path.exists():
         raise FileNotFoundError(f"NAV repository not found at {repo_path}. Adjust NAV_REPO_PATH in constants.py.")
 
+    git_cmd = ["git", "diff", base_commit_id, commit_id]
+    if diff_path:
+        git_cmd.append("--")
+        git_cmd.append(diff_path)
+
     result = subprocess.run(
-        ["git", "diff", base_commit_id, commit_id],
+        git_cmd,
         cwd=repo_path,
         capture_output=True,
         text=True,

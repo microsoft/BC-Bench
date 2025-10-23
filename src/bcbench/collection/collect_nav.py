@@ -21,6 +21,7 @@ def collect_nav_entry(
     pr_number: int,
     output: Path,
     overwrite: bool = False,
+    diff_path: str = "",
 ) -> None:
     try:
         _validate_environment()
@@ -29,7 +30,7 @@ def collect_nav_entry(
         raise typer.Exit(code=1)
 
     try:
-        entry: DatasetEntry = collect_dataset_entry(pr_number)
+        entry: DatasetEntry = collect_dataset_entry(pr_number, diff_path=diff_path)
     except Exception as exc:
         logger.error("Failed to collect dataset entry: %s", exc)
         raise typer.Exit(code=1)
@@ -124,7 +125,7 @@ def get_work_item_info(pr_data: Dict[str, Any]) -> Dict[str, Any]:
     raise ValueError("No work items found in the reference.")
 
 
-def collect_dataset_entry(pr_number: int) -> DatasetEntry:
+def collect_dataset_entry(pr_number: int, diff_path: str = "") -> DatasetEntry:
     """Collect dataset entry for the given pull request number."""
     logger.info("Collecting dataset entry for PR #%s", pr_number)
 
@@ -145,6 +146,7 @@ def collect_dataset_entry(pr_number: int) -> DatasetEntry:
         work_item_data=work_item_data,
         base_commit=base_commit,
         commit=commit_id,
+        diff_path=diff_path,
     )
 
 

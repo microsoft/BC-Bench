@@ -65,10 +65,11 @@ class DatasetEntry:
         work_item_data: Dict[str, Any],
         base_commit: str,
         commit: str,
+        diff_path: str = "",
     ) -> "DatasetEntry":
         """Construct a dataset entry from Azure DevOps artifacts."""
         created_at = _extract_creation_date(pr_data)
-        patch, patch_fix, patch_test = extract_patches(base_commit, commit)
+        patch, patch_fix, patch_test = extract_patches(base_commit, commit, diff_path=diff_path)
         problem_statement = _extract_problem_statement(work_item_data)
         hints = _extract_hints(pr_data, work_item_data)
         version = _determine_environment_setup_version(commit)
