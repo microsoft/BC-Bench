@@ -42,6 +42,8 @@ def validate_entries(dataset_path: Path, schema_path: Path) -> List[ValidationRe
     for line_num, entry in enumerate(entries, 1):
         try:
             validate(instance=entry.to_dict(), schema=schema)
+            if not entry.fail_to_pass:
+                raise ValueError("FAIL_TO_PASS field must not be empty in the dataset entry.")
             results.append(ValidationResult(line_number=line_num, instance_id=entry.instance_id, success=True))
         except ValueError as e:
             error_msg = f"Line {line_num}: Validation error - {str(e)}"
