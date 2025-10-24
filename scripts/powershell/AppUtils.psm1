@@ -43,12 +43,16 @@ function Invoke-AppBuildAndPublish {
         }
 
         [string] $outputPath = Join-Path $appProjectFolder "output"
+        Remove-Item -Path "$outputPath\*" -Force -Recurse -ErrorAction SilentlyContinue
+        [string] $appSymbolsFolder = Join-Path $appProjectFolder ".alpackages"
+        Remove-Item -Path "$appSymbolsFolder\*" -Force -Recurse -ErrorAction SilentlyContinue
 
         $compileParams = @{
             containerName = $containerName
             appProjectFolder = $appProjectFolder
             appOutputFolder = $outputPath
             credential = $credential
+            appSymbolsFolder = $appSymbolsFolder
         }
 
         if ($env:RUNNER_DEBUG -eq '1') { # debug mode
