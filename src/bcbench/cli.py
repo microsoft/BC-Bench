@@ -52,7 +52,9 @@ def collect_nav(
     """
     Collect dataset entry from Azure DevOps NAV pull request.
 
-    Try it out with: bcbench collect nav 210528 --output dataset/bcbench_nav.jsonl --overwrite
+    Try it out with: bcbench collect nav 210528 --output dataset/bcbench_nav.jsonl
+
+    For BaseApp Data, use diff_path: .\\App\\Layers\\W1\\:
     """
     from bcbench.collection.collect_nav import collect_nav_entry
 
