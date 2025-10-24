@@ -436,7 +436,13 @@ function Update-AppProjectVersion {
     Write-Log "Updating versions - Application: $applicationVersion, Platform: $platformVersion" -Level Debug
 
     $appJson.version = $applicationVersion
-    $appJson.application = $applicationVersion
+
+    if ($appJson.PSObject.Properties.Name -contains "application") {
+        $appJson.application = $applicationVersion
+    } else {
+        Write-Log "'application' property does not exist in app.json under $ProjectPath" -Level Warning
+    }
+
     $appJson.platform = $platformVersion
 
     if ($appJson.dependencies) {
