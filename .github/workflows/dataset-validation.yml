@@ -70,14 +70,12 @@ jobs:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
           NAV_REPO_TOKEN: ${{ secrets.NAV_REPO_TOKEN }}
         run: |
-          cd scripts/powershell
-          .\Setup-ContainerAndRepository.ps1 -Entry "${{ matrix.entry }}"
+          .\scripts\Setup-ContainerAndRepository.ps1 -Entry "${{ matrix.entry }}"
         shell: pwsh
 
       - name: Run build and test verification for Entry ${{ matrix.entry }}
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
-          cd scripts/powershell
-          .\Verify-BuildAndTests.ps1 -Entry "${{ matrix.entry }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
+          .\scripts\Verify-BuildAndTests.ps1 -Entry "${{ matrix.entry }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
         shell: pwsh

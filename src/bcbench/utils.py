@@ -32,7 +32,7 @@ _BC_BENCH_ROOT = _get_git_root()
 DATASET_PATH = _BC_BENCH_ROOT / "dataset" / "bcbench_nav.jsonl"
 DATASET_SCHEMA_PATH = _BC_BENCH_ROOT / "dataset" / "schema.json"
 NAV_REPO_PATH = _BC_BENCH_ROOT.parent / "NAV"
-PS_SCRIPT_PATH = _BC_BENCH_ROOT / "scripts" / "powershell"
+PS_SCRIPT_PATH = _BC_BENCH_ROOT / "scripts"
 
 __all__ = ["DATASET_PATH", "DATASET_SCHEMA_PATH", "NAV_REPO_PATH", "PS_SCRIPT_PATH", "find_project_paths_from_patch", "normalize_repo_subpath", "strip_html", "write_github_output"]
 

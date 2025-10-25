@@ -8,7 +8,7 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
 | --- | --- |
 | `dataset/` | Dataset schema and benchmark entries |
 | `src/bcbench/` | Python package with CLI, agent, collection, validation utilities |
-| `scripts/powershell/` | PowerShell modules for environment setup using AL-GO/BCContainerHelper |
+| `scripts/` | PowerShell scripts for environment setup and dataset verification using AL-GO/BCContainerHelper |
 
 ## Quick start
 
