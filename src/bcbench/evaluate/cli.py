@@ -82,7 +82,7 @@ def evaluate_mini(
 
             # TODO: Extract run detailed from agent (metrics to be discussed)
 
-            apply_patch(repo_path, entry.test_patch, entry.instance_id)
+            apply_patch(repo_path, entry.test_patch, f"{entry.instance_id} test patch")
             build_and_publish_projects(repo_path, entry.project_paths, container_name, username, password, entry.environment_setup_version)
             run_tests(entry, container_name, username, password)
 
