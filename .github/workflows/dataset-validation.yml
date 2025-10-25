@@ -34,10 +34,16 @@ jobs:
       - name: Get entries for matrix
         id: get-entries
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            python -m bcbench dataset list --github-output entries
-          } else {
-            python -m bcbench dataset list --github-output entries --modified-only
+          switch ("${{ github.event_name }}") {
+            "workflow_dispatch" {
+              python -m bcbench dataset list --github-output entries
+            }
+            "pull_request" {
+              python -m bcbench dataset list --github-output entries --modified-only
+            }
+            default {
+              python -m bcbench dataset list --github-output entries
+            }
           }
         shell: pwsh
 
@@ -58,7 +64,7 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber
         shell: pwsh
 
-      - name: Setup BC container and clone repository for Entry ${{ matrix.entry }}
+      - name: Setup BC container and repository for Entry ${{ matrix.entry }}
         id: setup-env
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}

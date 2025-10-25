@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from html import unescape
@@ -33,15 +34,7 @@ DATASET_SCHEMA_PATH = _BC_BENCH_ROOT / "dataset" / "schema.json"
 NAV_REPO_PATH = _BC_BENCH_ROOT.parent / "NAV"
 PS_SCRIPT_PATH = _BC_BENCH_ROOT / "scripts" / "powershell"
 
-__all__ = [
-    "DATASET_PATH",
-    "DATASET_SCHEMA_PATH",
-    "NAV_REPO_PATH",
-    "PS_SCRIPT_PATH",
-    "find_project_paths_from_patch",
-    "normalize_repo_subpath",
-    "strip_html",
-]
+__all__ = ["DATASET_PATH", "DATASET_SCHEMA_PATH", "NAV_REPO_PATH", "PS_SCRIPT_PATH", "find_project_paths_from_patch", "normalize_repo_subpath", "strip_html", "write_github_output"]
 
 
 def strip_html(html_text: str) -> str:
@@ -96,3 +89,9 @@ def find_project_paths_from_patch(repo_path: Path, patch: str) -> list[str]:
             current_dir = current_dir.parent
 
     return sorted(project_paths)
+
+
+def write_github_output(key: str, value: str) -> None:
+    """Write a value to GitHub Actions output."""
+    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+        f.write(f"{key}={value}\n")

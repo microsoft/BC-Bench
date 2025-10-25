@@ -1,16 +1,16 @@
 """CLI commands for dataset operations."""
 
 import json
-import os
 from pathlib import Path
 
 import typer
 from typing_extensions import Annotated
 
+from bcbench.dataset import DatasetEntry
 from bcbench.dataset.dataset_loader import load_dataset_entries
 from bcbench.dataset.validate_schema import ValidationResult, validate_entries
 from bcbench.logger import get_logger
-from bcbench.utils import DATASET_PATH, DATASET_SCHEMA_PATH
+from bcbench.utils import DATASET_PATH, DATASET_SCHEMA_PATH, write_github_output
 
 logger = get_logger(__name__)
 
@@ -48,25 +48,39 @@ def list_versions(
         print(f"  - {version}")
 
     if github_output:
-        _write_github_output(github_output, json.dumps(versions))
+        write_github_output(github_output, json.dumps(versions))
 
 
 @dataset_app.command("list")
 def list_entries(
-    version: Annotated[str | None, typer.Option(help="Filter by environment setup version")] = None,
     dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
     github_output: Annotated[str | None, typer.Option("--github-output", help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
+    modified_only: Annotated[bool, typer.Option("--modified-only", help="Only list entries that have been modified in git diff")] = False,
 ):
-    """List dataset entry IDs, optionally filtered by version."""
-    dataset_entries = load_dataset_entries(dataset_path, version=version) if version else load_dataset_entries(dataset_path)
-    entry_ids = [e.instance_id for e in dataset_entries]
+    """List dataset entry IDs."""
+    if modified_only:
+        import subprocess
 
-    print(f"Found {len(entry_ids)} entry(ies){f' for version {version}' if version else ''}:")
+        result = subprocess.run(
+            ["git", "diff", "origin/main", "--unified=0", "--no-color", "--diff-filter=AM", "--", str(dataset_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            cwd=dataset_path.parent,
+        )
+        diff_output: str = result.stdout
+        entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
+    else:
+        dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path)
+        entry_ids: list[str] = [e.instance_id for e in dataset_entries]
+
+    print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")
     for entry_id in entry_ids:
         print(f"  - {entry_id}")
 
     if github_output:
-        _write_github_output(github_output, json.dumps(entry_ids))
+        write_github_output(github_output, json.dumps(entry_ids))
 
 
 @dataset_app.command("view")
@@ -131,7 +145,17 @@ def view_entry(
         console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
 
-def _write_github_output(name: str, value: str) -> None:
-    """Write a value to GitHub Actions output."""
-    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-        f.write(f"{name}={value}\n")
+def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
+    instance_ids = []
+
+    for line in diff_output.splitlines():
+        # Look for added or modified lines (lines starting with +)
+        # Skip the diff header line (+++).
+        if line.startswith("+") and not line.startswith("+++"):
+            # Remove the leading '+' to get the actual content
+            content: str = line[1:]
+
+            entry_data = json.loads(content)
+            instance_ids.append(entry_data["instance_id"])
+
+    return instance_ids
