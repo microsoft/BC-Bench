@@ -49,10 +49,6 @@ def checkout_commit(repo_path: Path, commit: str) -> None:
 
 
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
-    if not patch_content:
-        logger.info(f"No {patch_name} to apply")
-        return
-
     logger.info(f"Applying {patch_name}")
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as f:
@@ -61,14 +57,15 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
 
     try:
         result = subprocess.run(
-            ["git", "apply", patch_file],
+            ["git", "apply", "--whitespace=nowarn", patch_file],
             cwd=repo_path,
             capture_output=True,
             text=True,
         )
 
         if result.returncode != 0:
-            logger.warning(f"{patch_name.capitalize()} application failed (may have merge conflicts): {result.stderr}")
+            logger.error(f"{patch_name.capitalize()} application failed: {result.stderr}")
+            raise ValueError(f"Failed to apply {patch_name}")
         else:
             logger.info(f"{patch_name.capitalize()} applied successfully")
     finally:

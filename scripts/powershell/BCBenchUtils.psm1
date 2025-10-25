@@ -366,9 +366,9 @@ function Invoke-GitApplyPatch {
         $PatchContent | Out-File -FilePath $patchPath -Encoding utf8 -Force
 
         if ($RepositoryPath) {
-            $applyResult = git -C $RepositoryPath apply $patchPath 2>&1
+            $applyResult = git -C $RepositoryPath apply --whitespace=nowarn $patchPath 2>&1
         } else {
-            $applyResult = git apply $patchPath 2>&1
+            $applyResult = git apply --whitespace=nowarn $patchPath 2>&1
         }
 
         if ($LASTEXITCODE -ne 0) {
