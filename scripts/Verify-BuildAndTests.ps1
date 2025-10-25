@@ -4,14 +4,17 @@ using module .\AppUtils.psm1
 using module .\BCContainerManagement.psm1
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$Version,
+
+    [Parameter(Mandatory=$false)]
+    [string]$InstanceId,
 
     [Parameter(Mandatory=$false)]
     [string]$DatasetPath = "$PSScriptRoot\..\..\dataset\bcbench_nav.jsonl",
 
     [Parameter(Mandatory=$false)]
-    [string]$NAVClonePath,
+    [string]$RepoPath,
 
     [Parameter(Mandatory=$false)]
     [string]$Username='admin',
@@ -20,36 +23,27 @@ param(
     [SecureString]$Password
 )
 
+[DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -Version $Version -InstanceId $InstanceId
+if ($InstanceId) {
+    $Version = $entries[0].environment_setup_version
+    Write-Log "Found version $Version for InstanceId $InstanceId" -Level Info
+} else {
+    Write-Log "Found $($entries.Count) dataset entries to process." -Level Info
+}
+
 Write-Log "Verifying projects build and tests run for version $Version, in $DatasetPath ..." -Level Info
 
 [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
-if (-not $NAVClonePath) {
-    $NAVClonePath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
-    Write-Log "Using default NAV repository path: $NAVClonePath" -Level Info
+if (-not $RepoPath) {
+    $RepoPath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
+    Write-Log "Using default NAV repository path: $RepoPath" -Level Info
 } else {
-    Write-Log "Using provided NAV repository path: $NAVClonePath" -Level Info
+    Write-Log "Using provided NAV repository path: $RepoPath" -Level Info
 }
 
-if (-not (Test-Path $NAVClonePath)) {
-    Write-Error "NAV repository not found at: $NAVClonePath. Please run Setup-ContainerAndRepository.ps1 first."
-    exit 1
-}
-
-Write-Log "Loading dataset entries for version $Version..." -Level Info
-try {
-    [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath
-    [DatasetEntry[]] $versionEntries = $entries | Where-Object { $_.environment_setup_version -eq $Version }
-
-    if ($versionEntries.Count -eq 0) {
-        Write-Log "No dataset entries found for version $Version" -Level Warning
-        exit 0
-    }
-
-    Write-Log "Found $($versionEntries.Count) entries for version $Version" -Level Info
-}
-catch {
-    Write-Error "Failed to load dataset entries: $($_.Exception.Message)"
+if (-not (Test-Path $RepoPath)) {
+    Write-Error "NAV repository not found at: $RepoPath. Please run Setup-ContainerAndRepository.ps1 first."
     exit 1
 }
 
@@ -58,11 +52,11 @@ Import-Module BcContainerHelper -Force -DisableNameChecking
 [string] $containerName = Get-StandardContainerName -Version $Version
 [ValidationResult[]]$validationResults = @()
 
-foreach ($entry in $versionEntries) {
+foreach ($entry in $entries) {
     Write-Log "Verifying entry: $($entry.instance_id)" -Level Info
 
     try {
-        Push-Location $NAVClonePath
+        Push-Location $RepoPath
 
         Write-Log "Checking out base commit: $($entry.base_commit)" -Level Info
         $checkoutResult = git checkout $entry.base_commit 2>&1
@@ -75,7 +69,7 @@ foreach ($entry in $versionEntries) {
 
         Write-Log "[Test Patch Only] Building projects for $($entry.instance_id)" -Level Info
         foreach ($projectPath in $entry.project_paths) {
-            [string]$fullProjectPath = Join-Path -Path $NAVClonePath -ChildPath $projectPath
+            [string]$fullProjectPath = Join-Path -Path $RepoPath -ChildPath $projectPath
             Update-AppProjectVersion -ProjectPath $fullProjectPath -Version $Version
             Invoke-AppBuildAndPublish -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential -skipVerification -useDevEndpoint
         }
@@ -93,7 +87,7 @@ foreach ($entry in $versionEntries) {
         Write-Log "[Gold Patch Applied] Building projects for $($entry.instance_id)" -Level Info
         # only need to build the test project
         foreach ($projectPath in $entry.project_paths) {
-            [string]$fullProjectPath = Join-Path -Path $NAVClonePath -ChildPath $projectPath
+            [string]$fullProjectPath = Join-Path -Path $RepoPath -ChildPath $projectPath
             Update-AppProjectVersion -ProjectPath $fullProjectPath -Version $Version
             Invoke-AppBuildAndPublish -containerName $containerName -appProjectFolder $fullProjectPath -credential $credential -skipVerification -useDevEndpoint
         }

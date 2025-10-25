@@ -69,93 +69,52 @@ class DatasetEntry {
 function Get-DatasetEntries {
     [CmdletBinding()]
     [OutputType([DatasetEntry[]])]
-    <#
-    .SYNOPSIS
-    Reads all entries from the BC-Bench dataset file and returns DatasetEntry objects
 
-    .DESCRIPTION
-    Reads the bcbench_nav.jsonl file line by line and returns an array of DatasetEntry class instances
-
-    .PARAMETER DatasetPath
-    Path to the bcbench_nav.jsonl file. Defaults to the dataset folder relative to script location.
-
-    .EXAMPLE
-    $entries = Get-DatasetEntries
-    foreach ($entry in $entries) {
-        Write-Host "Processing instance: $($entry.instance_id)"
-        Write-Host "Environment version: $($entry.GetEnvironmentSetupVersion())"
-    }
-    #>
     param(
         [Parameter(Mandatory = $false)]
-        [string]$DatasetPath = "$PSScriptRoot\..\..\dataset\bcbench_nav.jsonl"
+        [string]$DatasetPath = "$PSScriptRoot\..\..\dataset\bcbench_nav.jsonl",
+
+        [Parameter(Mandatory = $false)]
+        [string]$Version,
+
+        [Parameter(Mandatory = $false)]
+        [string]$InstanceId
     )
 
     if (-not (Test-Path $DatasetPath)) {
         throw "Dataset file not found at: $DatasetPath"
     }
 
-    Write-Verbose "Reading dataset from: $DatasetPath"
+    if ($Version -and $InstanceId) {
+        throw "Please provide either Version or InstanceId, not both."
+    }
 
+    Write-Verbose "Reading dataset from: $DatasetPath"
     [DatasetEntry[]] $entries = @()
 
-    try {
-        # Read the entire file content and split by newlines that contain complete JSON objects
-        $content = Get-Content $DatasetPath -Raw
-        $jsonObjects = $content -split '(?<=})\s*\n(?=\{)' | Where-Object { $_.Trim().Length -gt 0 }
+    $content = Get-Content $DatasetPath -Raw
+    $jsonObjects = $content -split '(?<=})\s*\n(?=\{)' | Where-Object { $_.Trim().Length -gt 0 }
 
-        foreach ($jsonString in $jsonObjects) {
-            try {
-                $jsonObject = $jsonString.Trim() | ConvertFrom-Json
-                $DatasetEntry = [DatasetEntry]::new($jsonObject)
-                $entries += $DatasetEntry
-                Write-Verbose "Loaded entry: $($DatasetEntry.instance_id)"
-            }
-            catch {
-                Write-Warning "Failed to parse JSON object: $_"
-            }
+    foreach ($jsonString in $jsonObjects) {
+        try {
+            $jsonObject = $jsonString.Trim() | ConvertFrom-Json
+            $DatasetEntry = [DatasetEntry]::new($jsonObject)
+            $entries += $DatasetEntry
+            Write-Verbose "Loaded entry: $($DatasetEntry.instance_id)"
+        }
+        catch {
+            Write-Warning "Failed to parse JSON object: $_"
         }
     }
-    catch {
-        Write-Error "Failed to read or parse dataset file: $_"
-        return @()
+
+    if ($Version) {
+        $entries = $entries | Where-Object { $_.environment_setup_version -eq $Version }
+    } elseif ($InstanceId) {
+        $entries = $entries | Where-Object { $_.instance_id -eq $InstanceId }
     }
 
     Write-Verbose "Successfully loaded $($entries.Count) dataset entries"
     return $entries
 }
 
-function Get-DatasetEntry {
-    [CmdletBinding()]
-    [OutputType([DatasetEntry])]
-    <#
-    .SYNOPSIS
-    Gets a specific dataset entry by instance ID
-
-    .DESCRIPTION
-    Searches the dataset for an entry with the specified instance_id and returns a DatasetEntry object
-
-    .PARAMETER InstanceId
-    The instance_id to search for
-
-    .PARAMETER DatasetPath
-    Path to the bcbench_nav.jsonl file
-
-    .EXAMPLE
-    $entry = Get-DatasetEntry -InstanceId "microsoftInternal__NAV-210528"
-    Write-Host $entry.ToString()
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$InstanceId,
-
-        [Parameter(Mandatory = $false)]
-        [string]$DatasetPath = "$PSScriptRoot\..\..\dataset\bcbench_nav.jsonl"
-    )
-
-    $entries = Get-DatasetEntries -DatasetPath $DatasetPath
-    return $entries | Where-Object { $_.instance_id -eq $InstanceId }
-}
-
-# Export functions and classes
-Export-ModuleMember -Function Get-DatasetEntries, Get-DatasetEntry
+Export-ModuleMember -Function Get-DatasetEntries
