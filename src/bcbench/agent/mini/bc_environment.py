@@ -1,10 +1,15 @@
-import subprocess
 import os
+import subprocess
 from dataclasses import dataclass, field
 from typing import Any
+
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
-from bcbench.core.logger import get_logger
-from bcbench.core.bc_operations import build_ps_app_build_and_publish, build_ps_test_script
+
+from bcbench.logger import get_logger
+from bcbench.operations.bc_operations import (
+    build_ps_app_build_and_publish,
+    build_ps_test_script,
+)
 
 logger = get_logger(__name__)
 
@@ -36,10 +41,9 @@ class BCEnvironment(LocalEnvironment):
 
         if command.startswith("bc_build "):
             return self._bc_build(command, cwd, timeout)
-        elif command.startswith("bc_test "):
+        if command.startswith("bc_test "):
             return self._bc_test(command, cwd, timeout)
-        else:
-            return self._execute_powershell(command, cwd, timeout)
+        return self._execute_powershell(command, cwd, timeout)
 
     def _bc_build(self, command: str, cwd: str, timeout: int | None) -> dict[str, Any]:
         parts = command.split(maxsplit=1)
@@ -139,7 +143,7 @@ class BCEnvironment(LocalEnvironment):
         except subprocess.TimeoutExpired as e:
             return {"returncode": -1, "output": f"Command timed out after {timeout} seconds\n{e.stdout or ''}"}
         except Exception as e:
-            return {"returncode": -1, "output": f"Error executing command: {str(e)}"}
+            return {"returncode": -1, "output": f"Error executing command: {e!s}"}
 
     def get_template_vars(self) -> dict[str, Any]:
         """Get template variables for prompt rendering"""

@@ -1,15 +1,14 @@
 """CLI commands for running agents."""
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from typing_extensions import Annotated
 
-from bcbench.core.utils import DATASET_PATH, NAV_REPO_PATH
-from bcbench.core.git_operations import clean_repo
 from bcbench.agent.mini import run_mini_agent
-from bcbench.core.logger import get_logger
+from bcbench.logger import get_logger
+from bcbench.operations.git_operations import clean_repo
+from bcbench.utils import DATASET_PATH, NAV_REPO_PATH
 
 logger = get_logger(__name__)
 
@@ -22,12 +21,12 @@ def run_mini(
     dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
     repo_path: Annotated[Path, typer.Option(help="Path to NAV repository")] = NAV_REPO_PATH,
     enable_bc_tools: Annotated[bool, typer.Option(help="Whether to enable BC tools for the agent (build and test)")] = False,
-    container_name: Annotated[Optional[str], typer.Option(help="BC container name (required if --use-container)")] = None,
+    container_name: Annotated[str | None, typer.Option(help="BC container name (required if --use-container)")] = None,
     username: Annotated[str, typer.Option(help="Username for BC container")] = "admin",
-    password: Annotated[Optional[str], typer.Option(help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)")] = None,
+    password: Annotated[str | None, typer.Option(help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)")] = None,
     step_limit: Annotated[int, typer.Option(help="Maximum number of agent steps")] = 20,
     cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
-    output_dir: Annotated[Optional[Path], typer.Option(help="Directory to save output result")] = None,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save output result")] = None,
 ):
     """
     Run mini-bc-agent on a single dataset entry (for local testing).

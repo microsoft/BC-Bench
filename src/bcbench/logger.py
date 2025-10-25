@@ -5,22 +5,16 @@ import os
 import re
 import sys
 from contextlib import contextmanager
+from typing import ClassVar
 
-__all__ = ["setup_logger", "get_logger", "github_log_group"]
-
-# ANSI color codes for terminal output
-GREY = "\033[90m"
-BLUE = "\033[34m"
-YELLOW = "\033[33m"
-RED = "\033[31m"
-RESET = "\033[0m"
+__all__ = ["get_logger", "github_log_group", "setup_logger"]
 
 
 class SensitiveDataFilter(logging.Filter):
     """Filter that automatically redacts sensitive information from log messages."""
 
     # Patterns for detecting and redacting sensitive data
-    PATTERNS = [
+    PATTERNS: ClassVar = [
         # PowerShell ConvertTo-SecureString password assignments
         # Matches: $password = ConvertTo-SecureString 'secret' -AsPlainText -Force
         (
@@ -85,7 +79,13 @@ class SensitiveDataFilter(logging.Filter):
 class ColoredFormatter(logging.Formatter):
     """Custom formatter with colors for different log levels."""
 
-    FORMATS = {
+    GREY = "\033[90m"
+    BLUE = "\033[34m"
+    YELLOW = "\033[33m"
+    RED = "\033[31m"
+    RESET = "\033[0m"
+
+    FORMATS: ClassVar = {
         logging.DEBUG: GREY + "[%(asctime)s] %(name)s - %(message)s" + RESET,
         logging.INFO: "[%(asctime)s] %(name)s - %(message)s",
         logging.WARNING: YELLOW + "[%(asctime)s] %(name)s - %(message)s" + RESET,

@@ -3,18 +3,17 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import typer
 from typing_extensions import Annotated
 
-from bcbench.core.utils import DATASET_PATH, NAV_REPO_PATH
-from bcbench.core.logger import get_logger, github_log_group
-from bcbench.core.git_operations import clean_repo, checkout_commit, apply_patch
-from bcbench.core.bc_operations import build_and_publish_projects, run_tests
-from bcbench.dataset import load_dataset_entries, DatasetEntry
 from bcbench.agent.mini import run_mini_agent
+from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate.evaluation_result import EvaluationResult, summarize_results
+from bcbench.logger import get_logger, github_log_group
+from bcbench.operations.bc_operations import build_and_publish_projects, run_tests
+from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
+from bcbench.utils import DATASET_PATH, NAV_REPO_PATH
 
 logger = get_logger(__name__)
 
@@ -28,7 +27,7 @@ def evaluate_mini(
     dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
     repo_path: Annotated[Path, typer.Option(help="Path to NAV repository")] = NAV_REPO_PATH,
     username: Annotated[str, typer.Option(help="Username for BC container")] = "admin",
-    password: Annotated[Optional[str], typer.Option(help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)")] = None,
+    password: Annotated[str | None, typer.Option(help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)")] = None,
     step_limit: Annotated[int, typer.Option(help="Maximum number of agent steps")] = 20,
     cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
     output_dir: Annotated[Path, typer.Option(help="Directory to save evaluation results")] = Path("evaluation_results"),

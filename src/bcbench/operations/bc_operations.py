@@ -2,10 +2,9 @@
 
 import subprocess
 from pathlib import Path
-from typing import Optional
 
-from bcbench.core.logger import get_logger
-from bcbench.core.utils import PS_SCRIPT_PATH
+from bcbench.logger import get_logger
+from bcbench.utils import PS_SCRIPT_PATH
 
 logger = get_logger(__name__)
 
@@ -45,7 +44,7 @@ def build_ps_test_script(
     username: str,
     password: str,
     codeunit_id: int,
-    function_names: Optional[list[str]] = None,
+    function_names: list[str] | None = None,
 ) -> str:
     """Build complete PowerShell script for running tests."""
     app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"

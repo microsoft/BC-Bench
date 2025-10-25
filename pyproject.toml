@@ -38,3 +38,26 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 bcbench = ["agent/*.yaml"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+extend-select = [
+    "PLE",   # Pylint errors (includes __all__ validation)
+    "I",     # isort (import sorting)
+    "UP",    # pyupgrade (modernize Python code)
+    "B",     # flake8-bugbear (find likely bugs)
+    "SIM",   # flake8-simplify (simplify code)
+    "C4",    # flake8-comprehensions (better list/dict comprehensions)
+    "PIE",   # flake8-pie (misc lints)
+    "RET",   # flake8-return (simplify return statements)
+    "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
+    "RUF",   # Ruff-specific rules
+]
+
+# Ignore specific rules that might be too aggressive
+ignore = [
+    "UP035",   # deprecated-import (typing.Dict, etc. still valid)
+    "PTH123",  # Allow open() for now, Path.open() migration can be gradual
+]

@@ -3,15 +3,14 @@
 import json
 import os
 from pathlib import Path
-from typing import Optional
 
 import typer
 from typing_extensions import Annotated
 
-from bcbench.core.logger import get_logger
-from bcbench.core.utils import DATASET_PATH, DATASET_SCHEMA_PATH
 from bcbench.dataset.dataset_loader import load_dataset_entries
-from bcbench.dataset.validate_schema import validate_entries, ValidationResult
+from bcbench.dataset.validate_schema import ValidationResult, validate_entries
+from bcbench.logger import get_logger
+from bcbench.utils import DATASET_PATH, DATASET_SCHEMA_PATH
 
 logger = get_logger(__name__)
 
@@ -38,7 +37,7 @@ def validate_dataset(
 @dataset_app.command("versions")
 def list_versions(
     dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
-    github_output: Annotated[Optional[str], typer.Option("--github-output", help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
+    github_output: Annotated[str | None, typer.Option("--github-output", help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
 ):
     """Get unique environment_setup_version values from the dataset."""
     entries = load_dataset_entries(dataset_path)
@@ -54,9 +53,9 @@ def list_versions(
 
 @dataset_app.command("list")
 def list_entries(
-    version: Annotated[Optional[str], typer.Option(help="Filter by environment setup version")] = None,
+    version: Annotated[str | None, typer.Option(help="Filter by environment setup version")] = None,
     dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
-    github_output: Annotated[Optional[str], typer.Option("--github-output", help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
+    github_output: Annotated[str | None, typer.Option("--github-output", help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
 ):
     """List dataset entry IDs, optionally filtered by version."""
     dataset_entries = load_dataset_entries(dataset_path, version=version) if version else load_dataset_entries(dataset_path)
