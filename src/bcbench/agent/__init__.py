@@ -1,5 +1,5 @@
 """Agent module for BC-Bench."""
 
-from bcbench.agent.cli import run_app
+from bcbench.agent.mini import run_mini_agent
 
-__all__ = ["run_app"]
+__all__ = ["run_mini_agent"]

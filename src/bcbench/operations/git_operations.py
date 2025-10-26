@@ -4,7 +4,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from bcbench.core.logger import get_logger
+from unidiff import PatchSet
+
+from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -49,10 +51,6 @@ def checkout_commit(repo_path: Path, commit: str) -> None:
 
 
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
-    if not patch_content:
-        logger.info(f"No {patch_name} to apply")
-        return
-
     logger.info(f"Applying {patch_name}")
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as f:
@@ -61,15 +59,47 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
 
     try:
         result = subprocess.run(
-            ["git", "apply", patch_file],
+            ["git", "apply", "--whitespace=nowarn", patch_file],
             cwd=repo_path,
             capture_output=True,
             text=True,
         )
 
         if result.returncode != 0:
-            logger.warning(f"{patch_name.capitalize()} application failed (may have merge conflicts): {result.stderr}")
-        else:
-            logger.info(f"{patch_name.capitalize()} applied successfully")
+            logger.error(f"{patch_name.capitalize()} application failed: {result.stderr}")
+            raise ValueError(f"Failed to apply {patch_name}")
+        logger.info(f"{patch_name.capitalize()} applied successfully")
     finally:
         Path(patch_file).unlink(missing_ok=True)
+
+
+def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_path: str = "") -> tuple[str, str, str]:
+    """Return the gold and fix patch between two commits in the given repository."""
+    if not repo_path.exists():
+        raise FileNotFoundError(f"Repository not found at {repo_path}.")
+
+    git_cmd = ["git", "diff", base_commit_id, commit_id]
+    if diff_path:
+        git_cmd.append("--")
+        git_cmd.append(diff_path)
+
+    result = subprocess.run(
+        git_cmd,
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    patch = result.stdout
+
+    if not patch:
+        raise ValueError("No patch data found between the specified commits.")
+
+    patch_test: str = ""
+    patch_fix: str = ""
+    for hunk in PatchSet(patch):
+        if any(word in hunk.path.lower() for word in ("test", "tests")):
+            patch_test += str(hunk)
+        else:
+            patch_fix += str(hunk)
+    return patch, patch_fix, patch_test
