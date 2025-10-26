@@ -114,7 +114,7 @@ def evaluate_summarize(
     Example:
         bcbench evaluate summarize mini_test_run
     """
-    run_dir = output_dir / run_id
+    run_dir: Path = output_dir / run_id
 
     if not run_dir.exists():
         logger.error(f"Results directory not found: {run_dir}")

@@ -1,6 +1,7 @@
 import os
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
@@ -17,10 +18,10 @@ logger = get_logger(__name__)
 @dataclass
 class BCEnvironmentConfig(LocalEnvironmentConfig):
     container_name: str = ""
-    nav_repo_path: str = ""
+    nav_repo_path: Path = Path()
     username: str = "admin"
     password: str = ""
-    project_paths: list[str] = field(default_factory=list)
+    project_paths: list[Path] = field(default_factory=list)
     enable_bc_tools: bool = True  # Flag to show/hide BC-specific tools from agent
     version: str = ""
     timeout: int = 120  # build and test commands can take longer, default to 120 seconds
@@ -56,7 +57,7 @@ class BCEnvironment(LocalEnvironment):
         if self.config.project_paths and project_path not in self.config.project_paths:
             return {"returncode": 1, "output": f"Error: Project path '{project_path}' is not in the allowed project_paths list: {self.config.project_paths}"}
 
-        full_project_path = os.path.join(self.config.nav_repo_path, project_path)
+        full_project_path: Path = self.config.nav_repo_path / project_path
 
         ps_script = build_ps_app_build_and_publish(
             container_name=self.config.container_name,
@@ -102,7 +103,7 @@ class BCEnvironment(LocalEnvironment):
         if timeout is None:
             timeout = self.config.timeout
 
-        working_dir: str = cwd or self.config.cwd or os.getcwd()
+        working_dir: str = cwd or self.config.cwd or str(Path.cwd())
 
         if log_command:
             # Sensitive data redaction is now handled automatically by the logging filter

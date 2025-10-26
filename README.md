@@ -12,11 +12,11 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
 
 ## Quick start
 
-```
+```bash
 git clone https://github.com/microsoft/BC-Bench.git
 cd BC-Bench
-pip install -e .
-python -m BCBench --help
+pip install -e ".[dev]"
+python -m bcbench --help
 ```
 
 ### Environment Setup
