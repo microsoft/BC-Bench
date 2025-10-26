@@ -21,7 +21,7 @@ class BCEnvironmentConfig(LocalEnvironmentConfig):
     repo_path: Path | None = None
     username: str = "admin"
     password: str = ""
-    project_paths: list[Path] = field(default_factory=list)
+    project_paths: list[str] = field(default_factory=list)
     enable_bc_tools: bool = True  # Flag to show/hide BC-specific tools from agent
     version: str = ""
     timeout: int = 120  # build and test commands can take longer, default to 120 seconds
@@ -153,7 +153,7 @@ class BCEnvironment(LocalEnvironment):
         vars.update(
             {
                 "container_name": self.config.container_name,
-                "repo_path": self.config.repo_path,
+                "repo_path": str(self.config.repo_path) if self.config.repo_path else None,
                 "project_paths": self.config.project_paths,
                 "bc_tools_enabled": self.config.enable_bc_tools,
                 "version": self.config.version,
