@@ -13,7 +13,7 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$DatasetPath = (Get-BCBenchDatasetPath),
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$true)]
     [string]$RepoPath,
 
     [Parameter(Mandatory=$false)]
@@ -35,12 +35,7 @@ Write-Log "Verifying projects build and tests run for version $Version, in $Data
 
 [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
-if (-not $RepoPath) {
-    $RepoPath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
-    Write-Log "Using default NAV repository path: $RepoPath" -Level Info
-} else {
-    Write-Log "Using provided NAV repository path: $RepoPath" -Level Info
-}
+Write-Log "Using provided repository path: $RepoPath" -Level Debug
 
 if (-not (Test-Path $RepoPath)) {
     Write-Error "NAV repository not found at: $RepoPath. Please run Setup-ContainerAndRepository.ps1 first."

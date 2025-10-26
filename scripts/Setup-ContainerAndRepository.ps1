@@ -21,7 +21,7 @@ param(
     [Parameter(Mandatory=$false)]
     [SecureString]$Password,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$true)]
     [string]$RepoPath
 )
 
@@ -37,12 +37,7 @@ Write-Log "Setting up BC container and repository for version $Version, Dataset 
 
 [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
-if (-not $RepoPath) {
-    $RepoPath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
-    Write-Log "Using default NAV repository clone path: $RepoPath" -Level Info
-} else {
-    Write-Log "Using provided NAV repository clone path: $RepoPath" -Level Info
-}
+Write-Log "Using provided repository path: $RepoPath" -Level Debug
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
