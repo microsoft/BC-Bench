@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import Callable
 
 from bcbench.dataset.dataset_entry import DatasetEntry
 
@@ -11,10 +11,10 @@ __all__ = ["load_dataset_entries"]
 
 def load_dataset_entries(
     dataset_path: Path,
-    entry_id: Optional[str] = None,
-    version: Optional[str] = None,
-    filter_fn: Optional[Callable] = None,
-) -> List[DatasetEntry]:
+    entry_id: str | None = None,
+    version: str | None = None,
+    filter_fn: Callable | None = None,
+) -> list[DatasetEntry]:
     """
     Load dataset entries from a JSONL file with optional filtering.
 
@@ -45,9 +45,9 @@ def load_dataset_entries(
     if not dataset_path.exists():
         raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
 
-    entries: List[DatasetEntry] = []
+    entries: list[DatasetEntry] = []
 
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, encoding="utf-8") as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -73,7 +73,7 @@ def load_dataset_entries(
                 entries.append(entry)
 
             except json.JSONDecodeError as e:
-                raise json.JSONDecodeError(f"Invalid JSON on line {line_num}: {e.msg}", e.doc, e.pos)
+                raise json.JSONDecodeError(f"Invalid JSON on line {line_num}: {e.msg}", e.doc, e.pos) from e
             except Exception as e:
                 # Re-raise with line context
                 raise ValueError(f"Error processing line {line_num}: {e}") from e
@@ -86,7 +86,6 @@ def load_dataset_entries(
     if (version or filter_fn) and not entries:
         if version:
             raise ValueError(f"No entries found for version '{version}'")
-        else:
-            raise ValueError("No entries matched the filter criteria")
+        raise ValueError("No entries matched the filter criteria")
 
     return entries

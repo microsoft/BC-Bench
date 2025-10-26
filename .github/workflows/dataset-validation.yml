@@ -9,11 +9,14 @@ on:
     paths:
       - 'dataset/**'
 
+env:
+  VERIFICATION_RESULTS_DIR: verification_results
+
 jobs:
-  validate-dataset-schema:
+  validate-schema-and-list-entries:
     runs-on: windows-latest
     outputs:
-      versions: ${{ steps.get-versions.outputs.versions }}
+      entries: ${{ steps.get-entries.outputs.entries }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,20 +34,31 @@ jobs:
         run: |
           python -m bcbench dataset validate
 
-      - name: Get unique versions for matrix
-        id: get-versions
+      - name: Get entries for matrix
+        id: get-entries
         run: |
-          python -m bcbench dataset versions --github-output versions
+          switch ("${{ github.event_name }}") {
+            "workflow_dispatch" {
+              python -m bcbench dataset list --github-output entries
+            }
+            "pull_request" {
+              python -m bcbench dataset list --github-output entries --modified-only
+            }
+            default {
+              python -m bcbench dataset list --github-output entries
+            }
+          }
         shell: pwsh
 
   verify-build-and-tests:
     runs-on: windows-latest
-    needs: validate-dataset-schema
-    if: needs.validate-dataset-schema.outputs.versions != '[]'
+    needs: validate-schema-and-list-entries
+    if: needs.validate-schema-and-list-entries.outputs.entries != '[]'
+    name: Verify ${{ matrix.entry }}
     strategy:
       fail-fast: false
       matrix:
-        version: ${{ fromJson(needs.validate-dataset-schema.outputs.versions) }}
+        entry: ${{ fromJson(needs.validate-schema-and-list-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,20 +68,46 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber
         shell: pwsh
 
-      - name: Setup BC container and clone NAV repository for Version ${{ matrix.version }}
+      - name: Setup BC container and repository for ${{ matrix.entry }}
         id: setup-env
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
           NAV_REPO_TOKEN: ${{ secrets.NAV_REPO_TOKEN }}
         run: |
-          cd scripts/powershell
-          .\Setup-ContainerAndRepository.ps1 -Version "${{ matrix.version }}"
+          .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ matrix.entry }}"
         shell: pwsh
 
-      - name: Run build and test verification for Version ${{ matrix.version }}
+      - name: Run build and test verification for ${{ matrix.entry }}
+        timeout-minutes: 60
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
-          cd scripts/powershell
-          .\Verify-BuildAndTests.ps1 -Version "${{ matrix.version }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
+          .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.nav_clone_path }}" -OutputDir "${{ env.VERIFICATION_RESULTS_DIR }}"
+        shell: pwsh
+
+      - name: Upload verification results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-results-${{ github.run_id }}-${{ matrix.entry }}
+          path: "${{ env.VERIFICATION_RESULTS_DIR }}/"
+          retention-days: 30
+
+  summarize-results:
+    runs-on: windows-latest
+    needs: verify-build-and-tests
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all verification results
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ env.VERIFICATION_RESULTS_DIR }}/"
+          merge-multiple: true
+
+      - name: Summarize verification results
+        run: |
+          .\scripts\Summarize-VerificationResults.ps1 -ResultsDir "${{ github.workspace }}\${{ env.VERIFICATION_RESULTS_DIR }}"
         shell: pwsh

@@ -24,7 +24,7 @@ agent:
     {{task}}
 
     ## Environment
-    - Working directory: {{nav_repo_path}}
+    - Working directory: {{repo_path}}
     - Relevant project paths: {{project_paths|join(", ")}}
 
     ## Objective
