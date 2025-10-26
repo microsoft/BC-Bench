@@ -13,7 +13,7 @@ jobs:
   get-entries:
     runs-on: windows-latest
     outputs:
-      entries: ${{ steps.get-entries.outputs.entries }}
+      versions: ${{ steps.get-versions.outputs.versions }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,21 +27,20 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Get entries for matrix
-        id: get-entries
+      - name: Get unique versions for matrix
+        id: get-versions
         run: |
-          python -m bcbench dataset list --github-output entries
+          python -m bcbench dataset versions --github-output versions
         shell: pwsh
 
   evaluate-with-mini-agent:
     runs-on: windows-latest
     needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
-    name: Run mini on ${{ matrix.entry }}
+    if: needs.get-entries.outputs.versions != '[]'
     strategy:
       fail-fast: false
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        version: ${{ fromJson(needs.get-entries.outputs.versions) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,13 +50,14 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber
         shell: pwsh
 
-      - name: Setup BC container and repository for ${{ matrix.entry }}
+      - name: Setup BC container and clone NAV repository for Version ${{ matrix.version }}
         id: setup-env
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
           NAV_REPO_TOKEN: ${{ secrets.NAV_REPO_TOKEN }}
         run: |
-          .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ matrix.entry }}"
+          cd scripts
+          .\Setup-ContainerAndRepository.ps1 -Version "${{ matrix.version }}"
         shell: pwsh
 
       - name: Setup Python 3.13
@@ -69,14 +69,14 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Run mini-bc-agent for entry ${{ matrix.entry }}
+      - name: Run mini-bc-agent for all entries within version ${{ matrix.version }}
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
           AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
           AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
         run: |
-          python -m bcbench evaluate mini "${{ matrix.entry }}" `
+          python -m bcbench evaluate mini "${{ matrix.version }}" `
             --container-name "${{ steps.setup-env.outputs.container_name }}" `
             --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
@@ -89,7 +89,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
+          name: evaluation-results-${{ github.run_id }}-${{ matrix.version }}
           path: "${{ env.EVALUATION_RESULTS_DIR }}/"
           retention-days: 30
 

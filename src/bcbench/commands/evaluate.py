@@ -22,7 +22,7 @@ evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
 
 @evaluate_app.command("mini")
 def evaluate_mini(
-    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    version: Annotated[str, typer.Argument(help="Environment setup version to evaluate")],
     container_name: Annotated[str, typer.Option(help="BC container name")],
     dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
     repo_path: Annotated[Path, typer.Option(help="Path to NAV repository")] = NAV_REPO_PATH,
@@ -35,71 +35,75 @@ def evaluate_mini(
     enable_bc_tools: Annotated[bool, typer.Option(help="Whether to enable BC tools for the agent (build and test)")] = False,
 ):
     """
-    Evaluate mini-bc-agent on single dataset entry.
-
-    To only run the agent to generate a patch without building/testing, use 'bcbench run mini' instead.
+    Evaluate mini-bc-agent on all entries for a specific version.
 
     Example:
-        bcbench evaluate mini microsoftInternal__NAV-210528 --container-name bcserver
+        bcbench evaluate mini 28.0 --container-name bcserver
     """
     if not password:
         password = os.environ.get("BC_CONTAINER_PASSWORD")
         if not password:
             raise ValueError("Password required. Set password or BC_CONTAINER_PASSWORD env var")
 
-    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
-    entry: DatasetEntry = entries[0]
-    logger.info(f"Loaded {entry_id} entry from dataset")
+    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, version=version)
+    logger.info(f"Found {len(entries)} entries for version {version}")
 
-    run_dir: Path = output_dir / run_id
+    run_dir = output_dir / run_id
     if run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
 
-    logger.info(f"Running evaluation on entry {entry_id} with mini-bc-agent")
-    result = EvaluationResult(instance_id=entry_id, version=entry.environment_setup_version)
+    for idx, entry in enumerate(entries, 1):
+        logger.info(f"{'=' * 80}")
+        logger.info(f"Processing entry {idx}/{len(entries)}: {entry.instance_id}")
+        logger.info(f"{'=' * 80}")
 
-    try:
-        clean_repo(repo_path)
-        checkout_commit(repo_path, entry.base_commit)
-        build_and_publish_projects(repo_path, entry.project_paths, container_name, username, password, entry.environment_setup_version)
+        result = EvaluationResult(instance_id=entry.instance_id, version=entry.environment_setup_version)
 
-        with github_log_group(f"mini-bc-agent -- Entry: {entry.instance_id}"):
-            run_mini_agent(
-                dataset_path=DATASET_PATH,
-                entry_id=entry.instance_id,
-                repo_path=repo_path,
-                enable_bc_tools=enable_bc_tools,
-                container_name=container_name,
-                username=username,
-                password=password,
-                step_limit=step_limit,
-                cost_limit=cost_limit,
-                output_dir=run_dir,
-            )
+        try:
+            clean_repo(repo_path)
+            checkout_commit(repo_path, entry.base_commit)
+            build_and_publish_projects(repo_path, entry.project_paths, container_name, username, password, entry.environment_setup_version)
 
-        # TODO: Extract run detailed from agent (metrics to be discussed)
+            with github_log_group(f"mini-bc-agent -- Entry: {entry.instance_id}"):
+                run_mini_agent(
+                    dataset_path=DATASET_PATH,
+                    entry_id=entry.instance_id,
+                    repo_path=repo_path,
+                    enable_bc_tools=enable_bc_tools,
+                    container_name=container_name,
+                    username=username,
+                    password=password,
+                    step_limit=step_limit,
+                    cost_limit=cost_limit,
+                    output_dir=run_dir,
+                )
 
-        apply_patch(repo_path, entry.test_patch, f"{entry.instance_id} test patch")
-        build_and_publish_projects(repo_path, entry.project_paths, container_name, username, password, entry.environment_setup_version)
-        run_tests(entry, container_name, username, password)
+            # TODO: Extract run detailed from agent (metrics to be discussed)
 
-        # TODO: Parse test_results to extract pass/fail counts and resolved status
-        # For now, assume resolved if no exception (error will be thrown when tests fail)
-        result.resolved = True
+            apply_patch(repo_path, entry.test_patch, f"{entry.instance_id} test patch")
+            build_and_publish_projects(repo_path, entry.project_paths, container_name, username, password, entry.environment_setup_version)
+            run_tests(entry, container_name, username, password)
 
-        logger.info(f"Successfully completed {entry.instance_id}")
+            # TODO: Parse test_results to extract pass/fail counts and resolved status
+            # For now, assume resolved if no exception
+            result.resolved = True
 
-    except Exception as e:
-        result.resolved = False
-        result.error_message = str(e)
-        logger.error(f"Failed to process {entry.instance_id}: {e}")
+            logger.info(f"Successfully completed {entry.instance_id}")
 
-    finally:
-        result.save(run_dir, f"instance_results_{entry_id}.jsonl")
+        except Exception as e:
+            result.resolved = False
+            result.error_message = str(e)
+            logger.error(f"Failed to process {entry.instance_id}: {e}")
 
+        finally:
+            result.save(run_dir, f"instance_results_{version.replace('.', '')}.jsonl")
+
+    logger.info(f"{'=' * 80}")
     logger.info("Evaluation complete!")
+    logger.info(f"Total entries: {len(entries)}")
     logger.info(f"Results saved to: {run_dir}")
+    logger.info(f"{'=' * 80}")
 
 
 @evaluate_app.command("summarize")
