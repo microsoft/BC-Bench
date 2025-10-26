@@ -78,6 +78,7 @@ jobs:
         shell: pwsh
 
       - name: Run build and test verification for ${{ matrix.entry }}
+        timeout-minutes: 60
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
