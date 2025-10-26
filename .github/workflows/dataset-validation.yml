@@ -108,8 +108,5 @@ jobs:
 
       - name: Summarize verification results
         run: |
-          using module .\scripts\VerificationResult.psm1
-
-          $results = Read-VerificationResults -ResultsDir "${{ github.workspace }}\${{ env.VERIFICATION_RESULTS_DIR }}"
-          Show-VerificationSummary -Results $results
+          .\scripts\Summarize-VerificationResults.ps1 -ResultsDir "${{ github.workspace }}\${{ env.VERIFICATION_RESULTS_DIR }}"
         shell: pwsh
