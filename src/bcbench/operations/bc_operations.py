@@ -83,7 +83,7 @@ def build_ps_dataset_tests_script(
 
 def build_and_publish_projects(
     repo_path: Path,
-    project_paths: list,
+    project_paths: list[str],
     container_name: str,
     username: str,
     password: str,
