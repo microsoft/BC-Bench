@@ -3,7 +3,6 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 from jsonschema import validate
 
@@ -22,7 +21,7 @@ class ValidationResult:
     error_message: str | None = None
 
 
-def validate_entries(dataset_path: Path, schema_path: Path) -> List[ValidationResult]:
+def validate_entries(dataset_path: Path, schema_path: Path) -> list[ValidationResult]:
     """
     Validate all dataset entries against a JSON schema.
 
@@ -37,17 +36,17 @@ def validate_entries(dataset_path: Path, schema_path: Path) -> List[ValidationRe
         schema = json.load(handle)
 
     entries = load_dataset_entries(dataset_path)
-    results: List[ValidationResult] = []
+    results: list[ValidationResult] = []
 
     for line_num, entry in enumerate(entries, 1):
         try:
             validate(instance=entry.to_dict(), schema=schema)
             results.append(ValidationResult(line_number=line_num, instance_id=entry.instance_id, success=True))
         except ValueError as e:
-            error_msg = f"Line {line_num}: Validation error - {str(e)}"
+            error_msg = f"Line {line_num}: Validation error - {e!s}"
             results.append(ValidationResult(line_number=line_num, instance_id=entry.instance_id, success=False, error_message=error_msg))
         except Exception as e:
-            error_msg = f"Line {line_num}: Unexpected error - {str(e)}"
+            error_msg = f"Line {line_num}: Unexpected error - {e!s}"
             results.append(ValidationResult(line_number=line_num, instance_id=entry.instance_id, success=False, error_message=error_msg))
 
     return results
