@@ -29,12 +29,13 @@ def run_mini(
     output_dir: Annotated[Path | None, typer.Option(help="Directory to save output result")] = None,
 ):
     """
-    Run mini-bc-agent on a single dataset entry (for local testing).
+    Run mini-bc-agent on a single entry to generate a patch (without building/testing).
+
+    For full evaluation including building and running tests, use 'bcbench evaluate' instead.
 
     Example:
         bcbench run mini microsoftInternal__NAV-210528 --step-limit 5
     """
-
     clean_repo(repo_path)
 
     run_mini_agent(
