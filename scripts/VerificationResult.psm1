@@ -163,8 +163,6 @@ function Show-VerificationSummary {
 
         $successIcon = if ($failureCount -eq 0) { ":white_check_mark:" } else { ":x:" }
         $summary = @"
-# Dataset Verification Results
-
 Total entries processed: **$($Results.Count)**
 - Successful verifications: $successCount :white_check_mark:
 - Failed verifications: $failureCount $successIcon
