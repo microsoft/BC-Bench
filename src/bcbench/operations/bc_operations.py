@@ -2,10 +2,9 @@
 
 import subprocess
 from pathlib import Path
-from typing import Optional
 
-from bcbench.core.logger import get_logger
-from bcbench.core.utils import PS_SCRIPT_PATH
+from bcbench.logger import get_logger
+from bcbench.utils import PS_SCRIPT_PATH
 
 logger = get_logger(__name__)
 
@@ -27,7 +26,7 @@ $credential = New-Object System.Management.Automation.PSCredential('{username}',
 """
 
 
-def build_ps_app_build_and_publish(container_name: str, username: str, password: str, project_path: str, version: str) -> str:
+def build_ps_app_build_and_publish(container_name: str, username: str, password: str, project_path: Path, version: str) -> str:
     """Build complete PowerShell script for app build and publish."""
     app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
 
@@ -45,7 +44,7 @@ def build_ps_test_script(
     username: str,
     password: str,
     codeunit_id: int,
-    function_names: Optional[list[str]] = None,
+    function_names: list[str] | None = None,
 ) -> str:
     """Build complete PowerShell script for running tests."""
     app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
@@ -84,7 +83,7 @@ def build_ps_dataset_tests_script(
 
 def build_and_publish_projects(
     repo_path: Path,
-    project_paths: list,
+    project_paths: list[str],
     container_name: str,
     username: str,
     password: str,
@@ -101,7 +100,7 @@ def build_and_publish_projects(
             container_name=container_name,
             username=username,
             password=password,
-            project_path=str(full_project_path),
+            project_path=full_project_path,
             version=version,
         )
 

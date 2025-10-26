@@ -3,14 +3,14 @@
 import os
 import re
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import yaml
 from dotenv import load_dotenv
 
 from bcbench.dataset.dataset_entry import DatasetEntry
 from bcbench.dataset.dataset_loader import load_dataset_entries
-from bcbench.core.logger import get_logger
+from bcbench.logger import get_logger
 
 load_dotenv()
 
@@ -18,6 +18,7 @@ load_dotenv()
 if TYPE_CHECKING:
     from minisweagent.agents.default import DefaultAgent, FormatError  # noqa: F401
     from minisweagent.models.litellm_model import LitellmModel  # noqa: F401
+
     from bcbench.agent.mini.bc_environment import BCEnvironment  # noqa: F401
 
 logger = get_logger(__name__)
@@ -57,9 +58,9 @@ def run_mini_agent(
     entry_id: str,
     repo_path: Path,
     enable_bc_tools: bool = False,
-    container_name: Optional[str] = None,
+    container_name: str | None = None,
     username: str = "admin",
-    password: Optional[str] = None,
+    password: str | None = None,
     step_limit: int = 20,
     cost_limit: float = 1.0,
     output_dir: Path | None = None,
@@ -87,6 +88,7 @@ def run_mini_agent(
     # Lazy import and create agent
     from minisweagent.models.litellm_model import LitellmModel
     from minisweagent.run.utils.save import save_traj
+
     from bcbench.agent.mini.bc_environment import BCEnvironment
 
     BCAgent = _create_bc_agent_class()
@@ -95,7 +97,7 @@ def run_mini_agent(
         LitellmModel(model_name="azure/gpt-4.1"),
         BCEnvironment(
             container_name=container_name,
-            nav_repo_path=str(repo_path),
+            repo_path=str(repo_path),
             username=username,
             password=password,
             project_paths=entry.project_paths,
