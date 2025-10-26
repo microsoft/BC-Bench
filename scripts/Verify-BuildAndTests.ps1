@@ -31,7 +31,7 @@ param(
 if ($InstanceId) {
     $Version = $entries[0].environment_setup_version
     Write-Log "Found version $Version for InstanceId $InstanceId" -Level Info
-    [string]$resultFileName = "instance_$($InstanceId)_results.jsonl"
+    [string]$resultFileName = "$($InstanceId)_results.jsonl"
 } else {
     Write-Log "Found $($entries.Count) dataset entries to process." -Level Info
     [string]$resultFileName = "version_$($Version)_results.jsonl"
@@ -109,12 +109,12 @@ foreach ($entry in $entries) {
         $result = [VerificationResult]::new($entry.instance_id, $Version, "Failed", $_.Exception.Message)
     }
     finally {
-        $result.Save($OutputDir, $resultFileName)
-
         Write-Log "Cleaning up Git state for $($entry.instance_id)" -Level Debug
         git reset --hard HEAD 2>&1 | Out-Null
         git clean -fd 2>&1 | Out-Null
         Pop-Location
+
+        $result.Save($OutputDir, $resultFileName)
     }
 }
 
