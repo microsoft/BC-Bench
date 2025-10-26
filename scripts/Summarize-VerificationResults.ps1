@@ -1,4 +1,4 @@
-using module .\scripts\VerificationResult.psm1
+using module .\VerificationResult.psm1
 
 param(
     [Parameter(Mandatory = $true)]
