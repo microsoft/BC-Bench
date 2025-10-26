@@ -8,29 +8,20 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
 | --- | --- |
 | `dataset/` | Dataset schema and benchmark entries |
 | `src/bcbench/` | Python package with CLI, agent, collection, validation utilities |
-| `scripts/powershell/` | PowerShell modules for environment setup using AL-GO/BCContainerHelper |
-| `vscode-extension/` | Expanding on POC from Thaddeus, a small VS Code extension that helps automation within VSCode |
+| `scripts/` | PowerShell scripts for environment setup and dataset verification using AL-GO/BCContainerHelper |
 
 ## Quick start
 
-```
+```bash
 git clone https://github.com/microsoft/BC-Bench.git
 cd BC-Bench
-pip install -e .
-python -m BCBench --help
+pip install -e ".[dev]"
+python -m bcbench --help
 ```
 
 ### Environment Setup
 
 Create a `.env` file in the root directory with required credentials (needed for data collection and agent runs). See [.env.sample](.env.sample) for the template.
-
-### VS Code Extension
-
-For automation within VS Code:
-```bash
-cd vscode-extension && npm install
-```
-Then install the extension and run **"BC Bench: Start Automation"** from the command palette.
 
 ## Dataset
 
