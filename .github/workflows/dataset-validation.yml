@@ -108,8 +108,7 @@ jobs:
 
       - name: Summarize verification results
         run: |
-          cd scripts
-          using module .\VerificationResult.psm1
+          using module .\scripts\VerificationResult.psm1
 
           $results = Read-VerificationResults -ResultsDir "${{ github.workspace }}\${{ env.VERIFICATION_RESULTS_DIR }}"
           Show-VerificationSummary -Results $results
