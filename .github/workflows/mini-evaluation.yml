@@ -94,6 +94,7 @@ jobs:
           retention-days: 30
 
   summarize-results:
+    name: Results
     runs-on: windows-latest
     needs: evaluate-with-mini-agent
     if: always()
