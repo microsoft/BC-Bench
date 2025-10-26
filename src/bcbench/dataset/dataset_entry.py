@@ -4,17 +4,22 @@ import json
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, TypedDict
-from bcbench.core import NAV_REPO_PATH, extract_patches, find_project_paths_from_patch, strip_html, get_logger
+from typing import Any, Iterable, TypedDict
+
+from bcbench.logger import get_logger
+from bcbench.operations import extract_patches
+from bcbench.utils import (
+    NAV_REPO_PATH,
+    find_project_paths_from_patch,
+    strip_html,
+)
 
 __all__ = ["DatasetEntry"]
 
 
 class TestEntry(TypedDict):
-    """Structure for test entries in FAIL_TO_PASS."""
-
     codeunitID: int
-    functionName: List[str]
+    functionName: list[str]
 
 
 @dataclass(slots=True)
@@ -30,16 +35,16 @@ class DatasetEntry:
     test_patch: str = ""
     problem_statement: str = ""
     environment_setup_version: str = ""
-    fail_to_pass: List[TestEntry] = field(default_factory=list)
-    pass_to_pass: List[TestEntry] = field(default_factory=list)
-    project_paths: List[str] = field(default_factory=list)
+    fail_to_pass: list[TestEntry] = field(default_factory=list)
+    pass_to_pass: list[TestEntry] = field(default_factory=list)
+    project_paths: list[str] = field(default_factory=list)
     commit: str = ""
-    pr_number: Optional[int] = None
-    _raw_pr_data: Optional[Dict[str, Any]] = field(default=None, repr=False)
-    _raw_work_item_data: Optional[Dict[str, Any]] = field(default=None, repr=False)
+    pr_number: int | None = None
+    _raw_pr_data: dict[str, Any] | None = field(default=None, repr=False)
+    _raw_work_item_data: dict[str, Any] | None = field(default=None, repr=False)
 
     @classmethod
-    def from_json(cls, payload: Dict[str, Any]) -> "DatasetEntry":
+    def from_json(cls, payload: dict[str, Any]) -> DatasetEntry:
         """Build an entry from a JSON payload stored in the dataset file."""
         return cls(
             repo=str(payload.get("repo", "microsoftInternal/NAV")),
@@ -61,17 +66,18 @@ class DatasetEntry:
         cls,
         *,
         pr_number: int,
-        pr_data: Dict[str, Any],
-        work_item_data: Dict[str, Any],
+        repo_path: Path,
+        pr_data: dict[str, Any],
+        work_item_data: dict[str, Any],
         base_commit: str,
         commit: str,
         diff_path: str = "",
-    ) -> "DatasetEntry":
+    ) -> DatasetEntry:
         """Construct a dataset entry from Azure DevOps artifacts."""
         created_at = _extract_creation_date(pr_data)
-        patch, patch_fix, patch_test = extract_patches(base_commit, commit, diff_path=diff_path)
+        patch, patch_fix, patch_test = extract_patches(repo_path, base_commit, commit, diff_path=diff_path)
         problem_statement = _extract_problem_statement(work_item_data)
-        hints = _extract_hints(pr_data, work_item_data)
+        hints = ""  # TODO: Extract hints if available, no instance found yet
         version = _determine_environment_setup_version(commit)
 
         return cls(
@@ -85,12 +91,12 @@ class DatasetEntry:
             test_patch=patch_test,
             problem_statement=problem_statement,
             hints_text=hints,
-            project_paths=find_project_paths_from_patch(patch),
+            project_paths=find_project_paths_from_patch(repo_path, patch),
             _raw_pr_data=pr_data,
             _raw_work_item_data=work_item_data,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the dataset entry as a dictionary matching the schema."""
         return {
             "repo": self.repo,
@@ -107,10 +113,10 @@ class DatasetEntry:
             "patch": self.patch,
         }
 
-    def save_to_file(self, filepath: Path | str, *, overwrite: bool = False) -> None:
+    def save_to_file(self, filepath: Path | str) -> None:
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w" if overwrite else "a", encoding="utf-8") as handle:
+        with path.open("a", encoding="utf-8") as handle:
             # For JSONL format, always write compact JSON without indentation
             json.dump(self.to_dict(), handle, ensure_ascii=False)
             handle.write("\n")
@@ -152,16 +158,16 @@ def _determine_environment_setup_version(commit: str) -> str:
     return ""
 
 
-def _ensure_list_of_str(values: Iterable[Any]) -> List[str]:
+def _ensure_list_of_str(values: Iterable[Any]) -> list[str]:
     return [str(value) for value in values]
 
 
-def _parse_test_entries(values: Any) -> List[TestEntry]:
+def _parse_test_entries(values: Any) -> list[TestEntry]:
     """Parse test entries from JSON payload."""
     if not values:
         return []
 
-    result: List[TestEntry] = []
+    result: list[TestEntry] = []
     for entry in values:
         if isinstance(entry, dict):
             result.append(TestEntry(codeunitID=int(entry.get("codeunitID", 0)), functionName=[str(fn) for fn in entry.get("functionName", [])]))
@@ -171,19 +177,14 @@ def _parse_test_entries(values: Any) -> List[TestEntry]:
     return result
 
 
-def _extract_creation_date(pr_data: Dict[str, Any]) -> str:
+def _extract_creation_date(pr_data: dict[str, Any]) -> str:
     creation_date = pr_data.get("creationDate", "")
     if creation_date:
         return creation_date[:10]
     raise ValueError("Creation date not found in PR data.")
 
 
-def _extract_hints(pr_data: Dict[str, Any], work_item_data: Dict[str, Any]) -> str:
-    # Placeholder for future enhancements.
-    return ""
-
-
-def _extract_problem_statement(work_item_data: Dict[str, Any]) -> str:
+def _extract_problem_statement(work_item_data: dict[str, Any]) -> str:
     logger = get_logger(__name__)
     fields = work_item_data.get("fields", {})
     if fields.get("System.CommentCount", 0) > 0:
