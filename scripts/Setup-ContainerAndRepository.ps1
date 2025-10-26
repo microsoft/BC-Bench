@@ -10,7 +10,7 @@ param(
     [string]$InstanceId,
 
     [Parameter(Mandatory=$false)]
-    [string]$DatasetPath = "$PSScriptRoot\..\..\dataset\bcbench_nav.jsonl",
+    [string]$DatasetPath = (Get-BCBenchDatasetPath),
 
     [Parameter(Mandatory=$false)]
     [string]$Country = "w1",

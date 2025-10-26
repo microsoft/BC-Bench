@@ -71,8 +71,8 @@ function Get-DatasetEntries {
     [OutputType([DatasetEntry[]])]
 
     param(
-        [Parameter(Mandatory = $false)]
-        [string]$DatasetPath = "$PSScriptRoot\..\..\dataset\bcbench_nav.jsonl",
+        [Parameter(Mandatory = $true)]
+        [string]$DatasetPath,
 
         [Parameter(Mandatory = $false)]
         [string]$Version,

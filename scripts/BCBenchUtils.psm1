@@ -457,4 +457,16 @@ function Update-AppProjectVersion {
     Write-Log "Successfully updated app.json at: $appJsonPath" -Level Success
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Wait-JobWithProgress, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion
+function Get-BCBenchDatasetPath {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$DatasetName = "bcbench_nav.jsonl"
+    )
+
+    [string] $projectRoot = Split-Path $PSScriptRoot -Parent
+    return Join-Path $projectRoot "dataset" $DatasetName
+}
+
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Wait-JobWithProgress, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath
