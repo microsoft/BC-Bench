@@ -51,6 +51,7 @@ jobs:
     runs-on: windows-latest
     needs: validate-schema-and-list-entries
     if: needs.validate-schema-and-list-entries.outputs.entries != '[]'
+    name: Verify ${{ matrix.entry }}
     strategy:
       fail-fast: false
       matrix:
@@ -64,18 +65,18 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber
         shell: pwsh
 
-      - name: Setup BC container and repository for Entry ${{ matrix.entry }}
+      - name: Setup BC container and repository for ${{ matrix.entry }}
         id: setup-env
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
           NAV_REPO_TOKEN: ${{ secrets.NAV_REPO_TOKEN }}
         run: |
-          .\scripts\Setup-ContainerAndRepository.ps1 -Entry "${{ matrix.entry }}"
+          .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ matrix.entry }}"
         shell: pwsh
 
-      - name: Run build and test verification for Entry ${{ matrix.entry }}
+      - name: Run build and test verification for ${{ matrix.entry }}
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
-          .\scripts\Verify-BuildAndTests.ps1 -Entry "${{ matrix.entry }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
+          .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -NAVClonePath "${{ steps.setup-env.outputs.nav_clone_path }}"
         shell: pwsh
