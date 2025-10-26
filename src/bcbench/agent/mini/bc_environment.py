@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 @dataclass
 class BCEnvironmentConfig(LocalEnvironmentConfig):
     container_name: str = ""
-    repo_path: Path | None = None
+    repo_path: str = ""  # Store as string for JSON serialization
     username: str = "admin"
     password: str = ""
     project_paths: list[str] = field(default_factory=list)
@@ -57,7 +57,7 @@ class BCEnvironment(LocalEnvironment):
         if self.config.project_paths and (project_path not in self.config.project_paths):
             return {"returncode": 1, "output": f"Error: Project path '{project_path}' is not in the allowed project_paths list: {self.config.project_paths}"}
 
-        full_project_path: Path = self.config.repo_path / project_path  # type: ignore
+        full_project_path: Path = Path(self.config.repo_path) / project_path
 
         ps_script = build_ps_app_build_and_publish(
             container_name=self.config.container_name,
@@ -153,7 +153,7 @@ class BCEnvironment(LocalEnvironment):
         vars.update(
             {
                 "container_name": self.config.container_name,
-                "repo_path": str(self.config.repo_path) if self.config.repo_path else None,
+                "repo_path": self.config.repo_path,
                 "project_paths": self.config.project_paths,
                 "bc_tools_enabled": self.config.enable_bc_tools,
                 "version": self.config.version,

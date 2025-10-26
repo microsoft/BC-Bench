@@ -97,7 +97,7 @@ def run_mini_agent(
         LitellmModel(model_name="azure/gpt-4.1"),
         BCEnvironment(
             container_name=container_name,
-            repo_path=repo_path,
+            repo_path=str(repo_path),
             username=username,
             password=password,
             project_paths=entry.project_paths,
