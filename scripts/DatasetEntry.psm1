@@ -11,6 +11,18 @@ class TestEntry {
     }
 }
 
+class ValidationResult {
+    [string]$InstanceId
+    [string]$Status
+    [string]$Message
+
+    ValidationResult([string]$instanceId, [string]$status, [string]$message) {
+        $this.InstanceId = $instanceId
+        $this.Status = $status
+        $this.Message = $message
+    }
+}
+
 class DatasetEntry {
     # Properties based on the dataset schema
     [string]$repo

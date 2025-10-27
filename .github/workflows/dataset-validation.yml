@@ -9,9 +9,6 @@ on:
     paths:
       - 'dataset/**'
 
-env:
-  VERIFICATION_RESULTS_DIR: verification_results
-
 jobs:
   validate-schema-and-list-entries:
     runs-on: windows-latest
@@ -84,32 +81,5 @@ jobs:
         env:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
         run: |
-          .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.nav_clone_path }}" -OutputDir "${{ env.VERIFICATION_RESULTS_DIR }}"
-        shell: pwsh
-
-      - name: Upload verification results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: verification-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: "${{ env.VERIFICATION_RESULTS_DIR }}/"
-          retention-days: 30
-
-  summarize-results:
-    runs-on: windows-latest
-    needs: verify-build-and-tests
-    if: always()
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download all verification results
-        uses: actions/download-artifact@v4
-        with:
-          path: "${{ env.VERIFICATION_RESULTS_DIR }}/"
-          merge-multiple: true
-
-      - name: Summarize verification results
-        run: |
-          .\scripts\Summarize-VerificationResults.ps1 -ResultsDir "${{ github.workspace }}\${{ env.VERIFICATION_RESULTS_DIR }}"
+          .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.nav_clone_path }}"
         shell: pwsh
