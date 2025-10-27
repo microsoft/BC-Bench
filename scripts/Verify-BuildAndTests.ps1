@@ -2,7 +2,6 @@ using module .\DatasetEntry.psm1
 using module .\BCBenchUtils.psm1
 using module .\AppUtils.psm1
 using module .\BCContainerManagement.psm1
-using module .\VerificationResult.psm1
 
 param(
     [Parameter(Mandatory=$false)]
