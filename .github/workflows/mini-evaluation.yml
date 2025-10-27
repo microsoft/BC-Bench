@@ -40,6 +40,7 @@ jobs:
     name: Run mini on ${{ matrix.entry }}
     strategy:
       fail-fast: false
+      max-parallel: 5
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
