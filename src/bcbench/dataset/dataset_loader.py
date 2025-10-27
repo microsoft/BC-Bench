@@ -73,7 +73,9 @@ def load_dataset_entries(
                 entries.append(entry)
 
             except json.JSONDecodeError as e:
-                raise json.JSONDecodeError(f"Invalid JSON on line {line_num}: {e.msg}", e.doc, e.pos) from e
+                raise json.JSONDecodeError(
+                    f"Invalid JSON on line {line_num}: {e.msg}", e.doc, e.pos
+                ) from e
             except Exception as e:
                 # Re-raise with line context
                 raise ValueError(f"Error processing line {line_num}: {e}") from e

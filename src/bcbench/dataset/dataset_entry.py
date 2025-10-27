@@ -75,7 +75,9 @@ class DatasetEntry:
     ) -> DatasetEntry:
         """Construct a dataset entry from Azure DevOps artifacts."""
         created_at = _extract_creation_date(pr_data)
-        patch, patch_fix, patch_test = extract_patches(repo_path, base_commit, commit, diff_path=diff_path)
+        patch, patch_fix, patch_test = extract_patches(
+            repo_path, base_commit, commit, diff_path=diff_path
+        )
         problem_statement = _extract_problem_statement(work_item_data)
         hints = ""  # TODO: Extract hints if available, no instance found yet
         version = _determine_environment_setup_version(commit)
@@ -132,7 +134,13 @@ class DatasetEntry:
 def _determine_environment_setup_version(commit: str) -> str:
     """Determine the appropriate environment setup version based on commit availability in release branches."""
 
-    result = subprocess.run(["git", "show", "master:Directory.App.Props.json"], cwd=NAV_REPO_PATH, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        ["git", "show", "master:Directory.App.Props.json"],
+        cwd=NAV_REPO_PATH,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     props_data = json.loads(result.stdout)
     current_version_str = props_data["variables"]["app_currentVersion"]
     # Extract major version (e.g., "28.0.0.0" -> 28)
@@ -147,10 +155,30 @@ def _determine_environment_setup_version(commit: str) -> str:
             branch_name = f"releases/{major_version}.{minor_version}"
 
             # Check if branch exists
-            branch_check = subprocess.run(["git", "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branch_name}"], cwd=NAV_REPO_PATH, capture_output=True)
+            branch_check = subprocess.run(
+                [
+                    "git",
+                    "show-ref",
+                    "--verify",
+                    "--quiet",
+                    f"refs/remotes/origin/{branch_name}",
+                ],
+                cwd=NAV_REPO_PATH,
+                capture_output=True,
+            )
 
             if branch_check.returncode == 0:  # Branch exists
-                commit_check = subprocess.run(["git", "merge-base", "--is-ancestor", commit, f"origin/{branch_name}"], cwd=NAV_REPO_PATH, capture_output=True)
+                commit_check = subprocess.run(
+                    [
+                        "git",
+                        "merge-base",
+                        "--is-ancestor",
+                        commit,
+                        f"origin/{branch_name}",
+                    ],
+                    cwd=NAV_REPO_PATH,
+                    capture_output=True,
+                )
 
                 if commit_check.returncode != 0:  # Commit doesn't exist in this branch
                     return f"{major_version}.{minor_version}"
@@ -170,7 +198,12 @@ def _parse_test_entries(values: Any) -> list[TestEntry]:
     result: list[TestEntry] = []
     for entry in values:
         if isinstance(entry, dict):
-            result.append(TestEntry(codeunitID=int(entry.get("codeunitID", 0)), functionName=[str(fn) for fn in entry.get("functionName", [])]))
+            result.append(
+                TestEntry(
+                    codeunitID=int(entry.get("codeunitID", 0)),
+                    functionName=[str(fn) for fn in entry.get("functionName", [])],
+                )
+            )
         else:
             raise ValueError(f"Invalid test entry format: {entry}")
 

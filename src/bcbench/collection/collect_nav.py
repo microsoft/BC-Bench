@@ -35,7 +35,9 @@ def collect_nav_entry(
         commit_data: dict[str, Any] = _get_commit_info(commit_id)
         parents: list[str] = commit_data.get("parents", [])
         if len(parents) != 1:
-            raise ValueError("Commit has multiple parents, cannot determine base commit.")
+            raise ValueError(
+                "Commit has multiple parents, cannot determine base commit."
+            )
 
         entry: DatasetEntry = DatasetEntry.from_ado(
             pr_number=pr_number,
@@ -72,7 +74,9 @@ def _get_headers() -> dict[str, str]:
 
 
 def _make_ado_git_request(endpoint: str) -> dict[str, Any]:
-    BASE_URL = "https://dev.azure.com/dynamicssmb2/Dynamics%20SMB/_apis/git/repositories/NAV"
+    BASE_URL = (
+        "https://dev.azure.com/dynamicssmb2/Dynamics%20SMB/_apis/git/repositories/NAV"
+    )
 
     url = f"{BASE_URL}/{endpoint}"
     response = requests.get(url, headers=_get_headers())
@@ -95,7 +99,11 @@ def _get_work_item_info(pr_data: dict[str, Any]) -> dict[str, Any]:
     if not work_items or len(work_items) != 1:
         raise ValueError("PR should be linked to exactly one work item.")
 
-    work_item_url = work_items[0]["href"] if isinstance(work_items, list) else work_items.get("href", "")
+    work_item_url = (
+        work_items[0]["href"]
+        if isinstance(work_items, list)
+        else work_items.get("href", "")
+    )
     if not work_item_url:
         raise ValueError("Unable to determine work item URL from PR data.")
 

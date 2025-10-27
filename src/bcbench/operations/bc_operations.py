@@ -26,7 +26,9 @@ $credential = New-Object System.Management.Automation.PSCredential('{username}',
 """
 
 
-def build_ps_app_build_and_publish(container_name: str, username: str, password: str, project_path: Path, version: str) -> str:
+def build_ps_app_build_and_publish(
+    container_name: str, username: str, password: str, project_path: Path, version: str
+) -> str:
     """Build complete PowerShell script for app build and publish."""
     app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
 

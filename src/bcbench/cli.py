@@ -22,7 +22,9 @@ app.add_typer(evaluate_app, name="evaluate")
 
 @app.callback()
 def logging_callback(
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging")] = False,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Enable debug logging")
+    ] = False,
 ):
     """Setup logging for all commands."""
     setup_logger(verbose)

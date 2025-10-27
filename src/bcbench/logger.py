@@ -60,7 +60,9 @@ class SensitiveDataFilter(logging.Filter):
         # Also redact from args if present
         if record.args:
             if isinstance(record.args, dict):
-                record.args = {key: self._redact_value(value) for key, value in record.args.items()}
+                record.args = {
+                    key: self._redact_value(value) for key, value in record.args.items()
+                }
             elif isinstance(record.args, tuple):
                 record.args = tuple(self._redact_value(arg) for arg in record.args)
 
@@ -90,7 +92,9 @@ class ColoredFormatter(logging.Formatter):
         logging.INFO: "[%(asctime)s] %(name)s - %(message)s",
         logging.WARNING: YELLOW + "[%(asctime)s] %(name)s - %(message)s" + RESET,
         logging.ERROR: RED + "[%(asctime)s] %(name)s - %(message)s" + RESET,
-        logging.CRITICAL: RED + "[%(asctime)s] %(name)s - CRITICAL: %(message)s" + RESET,
+        logging.CRITICAL: RED
+        + "[%(asctime)s] %(name)s - CRITICAL: %(message)s"
+        + RESET,
     }
 
     def format(self, record):

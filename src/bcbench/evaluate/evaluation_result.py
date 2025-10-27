@@ -30,7 +30,9 @@ class EvaluationResult:
     # Metadata
     evaluation_time_seconds: float | None = None
 
-    def save(self, output_dir: Path, result_file: str = "instance_results.jsonl") -> None:
+    def save(
+        self, output_dir: Path, result_file: str = "instance_results.jsonl"
+    ) -> None:
         """Save this evaluation result to a JSONL file in the specified directory."""
 
         output_file = output_dir / result_file
@@ -71,7 +73,9 @@ def summarize_results(results_dir: Path, result_pattern: str) -> None:
     result_files = list(results_dir.rglob(result_pattern))
 
     if not result_files:
-        console.print(f"[red]Error: No results files matching '{result_pattern}' found in {results_dir}[/red]")
+        console.print(
+            f"[red]Error: No results files matching '{result_pattern}' found in {results_dir}[/red]"
+        )
         return
 
     logger.info(f"Found {len(result_files)} result file(s) to process")
@@ -117,7 +121,9 @@ def summarize_results(results_dir: Path, result_pattern: str) -> None:
 
     for result in results:
         status = "[green]Success[/green]" if result.resolved else "[red]Failed[/red]"
-        table.add_row(result.instance_id, result.version, status, result.error_message or "")
+        table.add_row(
+            result.instance_id, result.version, status, result.error_message or ""
+        )
 
     console.print(table)
     console.print()

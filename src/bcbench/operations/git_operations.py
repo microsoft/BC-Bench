@@ -53,7 +53,9 @@ def checkout_commit(repo_path: Path, commit: str) -> None:
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
     logger.info(f"Applying {patch_name}")
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".patch", delete=False, encoding="utf-8"
+    ) as f:
         f.write(patch_content)
         patch_file = f.name
 
@@ -66,14 +68,18 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         )
 
         if result.returncode != 0:
-            logger.error(f"{patch_name.capitalize()} application failed: {result.stderr}")
+            logger.error(
+                f"{patch_name.capitalize()} application failed: {result.stderr}"
+            )
             raise ValueError(f"Failed to apply {patch_name}")
         logger.info(f"{patch_name.capitalize()} applied successfully")
     finally:
         Path(patch_file).unlink(missing_ok=True)
 
 
-def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_path: str = "") -> tuple[str, str, str]:
+def extract_patches(
+    repo_path: Path, base_commit_id: str, commit_id: str, diff_path: str = ""
+) -> tuple[str, str, str]:
     """Return the gold and fix patch between two commits in the given repository."""
     if not repo_path.exists():
         raise FileNotFoundError(f"Repository not found at {repo_path}.")
