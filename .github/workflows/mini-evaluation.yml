@@ -5,6 +5,12 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      bc_tools_enabled:
+        description: 'Allow mini-bc-agent to use BC build and test commands'
+        required: false
+        default: 'true'
+        type: boolean
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -77,13 +83,18 @@ jobs:
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
           AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
         run: |
-          python -m bcbench evaluate mini "${{ matrix.entry }}" `
-            --container-name "${{ steps.setup-env.outputs.container_name }}" `
-            --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            --run-id ${{ github.run_id }} `
-            --step-limit 50 `
-            --enable-bc-tools
+          $args = @(
+            'evaluate', 'mini', "${{ matrix.entry }}",
+            '--container-name', "${{ steps.setup-env.outputs.container_name }}",
+            '--repo-path', "${{ steps.setup-env.outputs.nav_clone_path }}",
+            '--output-dir', "${{ env.EVALUATION_RESULTS_DIR }}",
+            '--run-id', '${{ github.run_id }}',
+            '--step-limit', '50'
+          )
+          if ('${{ github.event.inputs.bc_tools_enabled }}' -eq 'true') {
+            $args += '--enable-bc-tools'
+          }
+          python -m bcbench @args
         shell: pwsh
 
       - name: Upload evaluation results

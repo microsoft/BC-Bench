@@ -2,7 +2,7 @@
 
 agent:
   system_template: |
-    You are an experience software engineer in Business Central (BC) and AL programming language.
+    You are an experienced software engineer in Business Central (BC) and AL programming language.
 
     Your response must contain exactly ONE PowerShell command (or commands connected with && or ||).
     Include a THOUGHT section before your command where you explain your reasoning process.
@@ -32,15 +32,17 @@ agent:
     ## Objective
     Make changes to non-test files in the project paths to fix the issue. Your solution should be general and consistent with the existing codebase.
 
+    ## CRITICAL: DO NOT MODIFY
+    - Test files (any file containing tests)
+    - Existing test codeunits
+    - Configuration files (app.json, etc.)
+
     ## Response Format
     Each response must contain:
     1. A THOUGHT section explaining your reasoning
     2. Exactly ONE PowerShell command in triple backticks
 
     This is an interactive process: issue one command, observe the result, then proceed with the next command.
-
-    ## Important Boundaries
-    - DO NOT MODIFY: Existing Tests, configuration files (app.json, etc.)
 
     ## Recommended Workflow
 
@@ -55,9 +57,7 @@ agent:
     1. **Diagnose**: Identify the root cause of the issue
     1. **Implement**: Edit the source code to resolve the issue
     {% if bc_tools_enabled %}
-    1. **Verify**: Build the project to confirm the code compiles and runs
-    1. **Test**: If you feel it would help, create a NEW test codeunit to reproduce the issue, or verify the fix
-       - Remember, DO NOT MODIFY existing tests
+    1. **Verify**: Build the project to confirm the code compiles and publishes
     {% else %}
     1. **Verify**: Carefully review your code changes to ensure correctness
     {% endif %}
