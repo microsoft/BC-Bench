@@ -110,7 +110,7 @@ def run_mini_agent(
 
     exit_status, result = agent.run(task)
     if output_dir:
-        traj_file: Path = output_dir / f"{entry.instance_id}.json"
+        traj_file: Path = output_dir / f"{entry.instance_id}.traj.json"
         save_traj(agent, traj_file, exit_status=exit_status, result=result)
 
     logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")
