@@ -41,20 +41,14 @@ def _create_bc_agent_class():
             if len(response_content) <= 200:
                 logger.info(f"Agent response:\n{response_content}")
             else:
-                logger.info(
-                    f"Agent response (truncated from {len(response_content)} chars):\n{response_content[:197]}..."
-                )
+                logger.info(f"Agent response (truncated from {len(response_content)} chars):\n{response_content[:197]}...")
 
             logger.debug(f"Full agent response:\n{response_content}")
 
-            actions = re.findall(
-                r"```powershell\s*\n(.*?)\n```", response_content, re.DOTALL
-            )
+            actions = re.findall(r"```powershell\s*\n(.*?)\n```", response_content, re.DOTALL)
             if len(actions) == 1:
                 return {"action": actions[0].strip(), **response}
-            raise FormatError(
-                self.render_template(self.config.format_error_template, actions=actions)
-            )
+            raise FormatError(self.render_template(self.config.format_error_template, actions=actions))
 
     return BCAgent
 
@@ -78,9 +72,7 @@ def run_mini_agent(
     if enable_bc_tools and not password:
         password = os.environ.get("BC_CONTAINER_PASSWORD")
         if not password:
-            raise ValueError(
-                "Password required when use_container is True. Set password or BC_CONTAINER_PASSWORD env var"
-            )
+            raise ValueError("Password required when use_container is True. Set password or BC_CONTAINER_PASSWORD env var")
 
     entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
     logger.info(f"Running mini-bc-agent on: {entry.instance_id}")
@@ -121,6 +113,4 @@ def run_mini_agent(
         traj_file: Path = output_dir / f"{entry.instance_id}.json"
         save_traj(agent, traj_file, exit_status=exit_status, result=result)
 
-    logger.info(
-        f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps"
-    )
+    logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")

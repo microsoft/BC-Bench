@@ -75,9 +75,7 @@ class DatasetEntry:
     ) -> DatasetEntry:
         """Construct a dataset entry from Azure DevOps artifacts."""
         created_at = _extract_creation_date(pr_data)
-        patch, patch_fix, patch_test = extract_patches(
-            repo_path, base_commit, commit, diff_path=diff_path
-        )
+        patch, patch_fix, patch_test = extract_patches(repo_path, base_commit, commit, diff_path=diff_path)
         problem_statement = _extract_problem_statement(work_item_data)
         hints = ""  # TODO: Extract hints if available, no instance found yet
         version = _determine_environment_setup_version(commit)

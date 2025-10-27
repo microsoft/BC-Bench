@@ -24,9 +24,7 @@ class BCEnvironmentConfig(LocalEnvironmentConfig):
     project_paths: list[str] = field(default_factory=list)
     enable_bc_tools: bool = True  # Flag to show/hide BC-specific tools from agent
     version: str = ""
-    timeout: int = (
-        120  # build and test commands can take longer, default to 120 seconds
-    )
+    timeout: int = 120  # build and test commands can take longer, default to 120 seconds
 
 
 class BCEnvironment(LocalEnvironment):
@@ -35,15 +33,11 @@ class BCEnvironment(LocalEnvironment):
         self.config: BCEnvironmentConfig = self.config
 
         if (not self.config.container_name) and self.config.enable_bc_tools:
-            raise ValueError(
-                "container_name is required in BCEnvironmentConfig when enable_bc_tools is True"
-            )
+            raise ValueError("container_name is required in BCEnvironmentConfig when enable_bc_tools is True")
         if not self.config.repo_path:
             raise ValueError("repo_path is required in BCEnvironmentConfig")
 
-    def execute(
-        self, command: str, cwd: str = "", *, timeout: int | None = None
-    ) -> dict[str, Any]:
+    def execute(self, command: str, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         command = command.strip()
 
         if command.startswith("bc_build "):
@@ -63,9 +57,7 @@ class BCEnvironment(LocalEnvironment):
         project_path = parts[1].strip()
         logger.info(f"Building project: {project_path}")
 
-        if self.config.project_paths and (
-            project_path not in self.config.project_paths
-        ):
+        if self.config.project_paths and (project_path not in self.config.project_paths):
             return {
                 "returncode": 1,
                 "output": f"Error: Project path '{project_path}' is not in the allowed project_paths list: {self.config.project_paths}",
@@ -81,9 +73,7 @@ class BCEnvironment(LocalEnvironment):
             version=self.config.version,
         )
 
-        return self._execute_powershell(
-            ps_script, cwd or self.config.cwd, timeout, log_command=False
-        )
+        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout, log_command=False)
 
     def _bc_test(self, command: str, cwd: str, timeout: int | None) -> dict[str, Any]:
         parts = command.split(maxsplit=2)
@@ -106,9 +96,7 @@ class BCEnvironment(LocalEnvironment):
             function_names = [f.strip() for f in parts[2].split(",")]
 
         if function_names:
-            logger.info(
-                f"Running tests: codeunit {codeunit_id}, functions: {', '.join(function_names)}"
-            )
+            logger.info(f"Running tests: codeunit {codeunit_id}, functions: {', '.join(function_names)}")
         else:
             logger.info(f"Running all tests in codeunit {codeunit_id}")
 
@@ -120,13 +108,9 @@ class BCEnvironment(LocalEnvironment):
             function_names=function_names if function_names else None,
         )
 
-        return self._execute_powershell(
-            ps_script, cwd or self.config.cwd, timeout, log_command=False
-        )
+        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout, log_command=False)
 
-    def _execute_powershell(
-        self, command: str, cwd: str, timeout: int | None, log_command: bool = True
-    ) -> dict[str, Any]:
+    def _execute_powershell(self, command: str, cwd: str, timeout: int | None, log_command: bool = True) -> dict[str, Any]:
         """Execute a PowerShell command"""
         if timeout is None:
             timeout = self.config.timeout
@@ -135,9 +119,7 @@ class BCEnvironment(LocalEnvironment):
 
         if log_command:
             # Sensitive data redaction is now handled automatically by the logging filter
-            command_preview: str = (
-                command if len(command) <= 100 else command[:97] + "..."
-            )
+            command_preview: str = command if len(command) <= 100 else command[:97] + "..."
             logger.info(f"Executing:\n{command_preview}")
             if len(command) > 100:
                 logger.debug(f"Full command: {command}")
@@ -166,27 +148,29 @@ class BCEnvironment(LocalEnvironment):
                 logger.error(f"Command failed with exit code {result.returncode}")
                 if line_count > 0:
                     preview_lines = min(3, line_count)
-                    logger.error(
-                        f"Error output (first {preview_lines} lines):\n{'\n'.join(output_lines[:preview_lines])}"
-                    )
+                    logger.error(f"Error output (first {preview_lines} lines):\n{'\n'.join(output_lines[:preview_lines])}")
 
             # At DEBUG level: show full output (truncated if too long)
             if line_count <= 10:
                 logger.debug(f"Full output:\n{output_stripped}")
             else:
-                logger.debug(
-                    f"Full output ({line_count} lines, showing first/last 5):\n{'\n'.join(output_lines[:5])}\n... ({line_count - 10} lines omitted) ...\n{'\n'.join(output_lines[-5:])}"
-                )
+                logger.debug(f"Full output ({line_count} lines, showing first/last 5):\n{'\n'.join(output_lines[:5])}\n... ({line_count - 10} lines omitted) ...\n{'\n'.join(output_lines[-5:])}")
 
             return {"returncode": result.returncode, "output": output_stripped}
 
         except subprocess.TimeoutExpired as e:
+            error_msg = f"Command timed out after {timeout} seconds"
+            logger.error(error_msg)
+            if e.stdout:
+                logger.debug(f"Partial output before timeout:\n{e.stdout}")
             return {
                 "returncode": -1,
-                "output": f"Command timed out after {timeout} seconds\n{e.stdout or ''}",
+                "output": f"{error_msg}\n{e.stdout or ''}",
             }
         except Exception as e:
-            return {"returncode": -1, "output": f"Error executing command: {e!s}"}
+            error_msg = f"Error executing command: {e!s}"
+            logger.error(error_msg)
+            return {"returncode": -1, "output": error_msg}
 
     def get_template_vars(self) -> dict[str, Any]:
         """Get template variables for prompt rendering"""

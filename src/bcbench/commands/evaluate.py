@@ -24,29 +24,17 @@ evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
 def evaluate_mini(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     container_name: Annotated[str, typer.Option(help="BC container name")],
-    dataset_path: Annotated[
-        Path, typer.Option(help="Path to dataset file")
-    ] = DATASET_PATH,
-    repo_path: Annotated[
-        Path, typer.Option(help="Path to NAV repository")
-    ] = NAV_REPO_PATH,
+    dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
+    repo_path: Annotated[Path, typer.Option(help="Path to NAV repository")] = NAV_REPO_PATH,
     username: Annotated[str, typer.Option(help="Username for BC container")] = "admin",
     password: Annotated[
         str | None,
-        typer.Option(
-            help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)"
-        ),
+        typer.Option(help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)"),
     ] = None,
     step_limit: Annotated[int, typer.Option(help="Maximum number of agent steps")] = 20,
-    cost_limit: Annotated[
-        float, typer.Option(help="Maximum cost limit for agent")
-    ] = 1.0,
-    output_dir: Annotated[
-        Path, typer.Option(help="Directory to save evaluation results")
-    ] = Path("evaluation_results"),
-    run_id: Annotated[
-        str, typer.Option(help="Unique identifier for this evaluation run")
-    ] = "mini_test_run",
+    cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
+    output_dir: Annotated[Path, typer.Option(help="Directory to save evaluation results")] = Path("evaluation_results"),
+    run_id: Annotated[str, typer.Option(help="Unique identifier for this evaluation run")] = "mini_test_run",
     enable_bc_tools: Annotated[
         bool,
         typer.Option(help="Whether to enable BC tools for the agent (build and test)"),
@@ -63,9 +51,7 @@ def evaluate_mini(
     if not password:
         password = os.environ.get("BC_CONTAINER_PASSWORD")
         if not password:
-            raise ValueError(
-                "Password required. Set password or BC_CONTAINER_PASSWORD env var"
-            )
+            raise ValueError("Password required. Set password or BC_CONTAINER_PASSWORD env var")
 
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]
@@ -77,9 +63,7 @@ def evaluate_mini(
     run_dir.mkdir(parents=True)
 
     logger.info(f"Running evaluation on entry {entry_id} with mini-bc-agent")
-    result = EvaluationResult(
-        instance_id=entry_id, version=entry.environment_setup_version
-    )
+    result = EvaluationResult(instance_id=entry_id, version=entry.environment_setup_version)
 
     try:
         clean_repo(repo_path)
@@ -144,12 +128,8 @@ def evaluate_summarize(
         str,
         typer.Argument(help="Unique identifier for the evaluation run to summarize"),
     ],
-    output_dir: Annotated[
-        Path, typer.Option(help="Directory containing evaluation results")
-    ] = Path("evaluation_results"),
-    result_pattern: Annotated[
-        str, typer.Option(help="Pattern for the result files")
-    ] = "*.jsonl",
+    output_dir: Annotated[Path, typer.Option(help="Directory containing evaluation results")] = Path("evaluation_results"),
+    result_pattern: Annotated[str, typer.Option(help="Pattern for the result files")] = "*.jsonl",
 ):
     """
     Summarize evaluation results from a completed run.
