@@ -26,6 +26,8 @@ agent:
     ## Environment
     - Working directory: {{repo_path}}
     - Relevant project paths: {{project_paths|join(", ")}}
+    - You have a full Windows PowerShell environment
+    - Avoid interactive tools like notepad or any that require user input
 
     ## Objective
     Make changes to non-test files in the project paths to fix the issue. Your solution should be general and consistent with the existing codebase.
@@ -36,6 +38,9 @@ agent:
     2. Exactly ONE PowerShell command in triple backticks
 
     This is an interactive process: issue one command, observe the result, then proceed with the next command.
+
+    ## Important Boundaries
+    - DO NOT MODIFY: Existing Tests, configuration files (app.json, etc.)
 
     ## Recommended Workflow
 
@@ -51,7 +56,10 @@ agent:
     1. **Implement**: Edit the source code to resolve the issue
     {% if bc_tools_enabled %}
     1. **Verify**: Build the project to confirm the code compiles and runs
-    1. **Test (optional)**: If you feel it would help, create a NEW test file to reproduce the issue
+    1. **Test**: If you feel it would help, create a NEW test codeunit to reproduce the issue, or verify the fix
+       - Remember, DO NOT MODIFY existing tests
+    {% else %}
+    1. **Verify**: Carefully review your code changes to ensure correctness
     {% endif %}
     1. **Submit**: Execute `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` when complete
        - This must be a standalone command
@@ -63,10 +71,6 @@ agent:
        - Use prefixes like `MY_VAR=value cd /path && ...` to set context per command
        - Or persist state by writing/reading from files
 
-    <system_information>
-    {{system}} {{release}} {{version}} {{machine}}
-    </system_information>
-
     ## Formatting your response
 
     Here is an example of a correct response:
@@ -75,7 +79,7 @@ agent:
     THOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
 
     ```powershell
-    ls -la
+    ls
     ```
     </example_response>
 
@@ -93,10 +97,17 @@ agent:
 
     - `bc_test <codeunit_id> [function1,function2,...]`: Execute tests in a codeunit
       - Prerequisites: The test app MUST be built first using `bc_build_and_publish`
-      - Run all tests: `bc_test 123456`
-      - Run specific tests: `bc_test 123456 TestFunction1,TestFunction2`
+      - Run all tests within a codeunit: `bc_test 123456`
+      - Run specific tests within a codeunit: `bc_test 123456 TestFunction1,TestFunction2`
 
     Important: Always run `bc_build_and_publish` before `bc_test` when you create or modify test files.
+
+    {%- else -%}
+    ### Verify changes
+    You do NOT have access to a BC environment, so you cannot build or test BC projects.
+    Verify your changes by ensuring code correctness through careful review.
+
+    Important: DO NOT attempt to build BC projects or run tests.
     {% endif %}
 
     ### Navigate and explore:
