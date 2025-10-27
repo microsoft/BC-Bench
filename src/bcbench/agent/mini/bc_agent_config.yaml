@@ -87,16 +87,16 @@ agent:
 
     Business Central/AL requires compilation before execution. Use these commands:
 
-    - `bc_build <project_path>`: Compile, publish, and install a BC app
+    - `bc_build_and_publish <project_path>`: Compile, publish, and install a BC app
       - REQUIRED before running any code (tests or application logic)
-      - Example: `bc_build Test/MyApp`
+      - Example: `bc_build_and_publish Test/MyApp`
 
     - `bc_test <codeunit_id> [function1,function2,...]`: Execute tests in a codeunit
-      - Prerequisites: The test app MUST be built first using `bc_build`
+      - Prerequisites: The test app MUST be built first using `bc_build_and_publish`
       - Run all tests: `bc_test 123456`
       - Run specific tests: `bc_test 123456 TestFunction1,TestFunction2`
 
-    Important: Always run `bc_build` before `bc_test` when you create or modify test files.
+    Important: Always run `bc_build_and_publish` before `bc_test` when you create or modify test files.
     {% endif %}
 
     ### Navigate and explore:
