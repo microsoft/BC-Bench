@@ -53,7 +53,7 @@ jobs:
     runs-on: windows-latest
     needs: validate-schema-and-list-entries
     if: needs.validate-schema-and-list-entries.outputs.entries != '[]'
-    name: Verify ${{ matrix.entry }}
+    name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
       matrix:

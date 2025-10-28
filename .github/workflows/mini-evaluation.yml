@@ -43,7 +43,7 @@ jobs:
     runs-on: windows-latest
     needs: get-entries
     if: needs.get-entries.outputs.entries != '[]'
-    name: Run mini on ${{ matrix.entry }}
+    name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
       max-parallel: 5
