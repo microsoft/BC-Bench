@@ -56,3 +56,28 @@ def run_mini(
         cost_limit=cost_limit,
         output_dir=output_dir,
     )
+
+
+@run_app.command("mini-inspector")
+def run_mini_inspector(
+    path: Annotated[Path, typer.Argument(help="Directory to search for trajectory files or specific trajectory file")],
+):
+    """
+    Inspect trajectory files (*.traj.json) in the given directory or a specific trajectory file.
+
+    Example:
+        bcbench run mini-inspector ./outputs/mini_agent_runs/
+    """
+    from minisweagent.run.inspector import TrajectoryInspector
+
+    if path.is_file():
+        trajectory_files = [path]
+    elif path.is_dir():
+        trajectory_files = sorted(path.rglob("*.traj.json"))
+        if not trajectory_files:
+            raise typer.BadParameter(f"No trajectory files found in '{path}'")
+    else:
+        raise typer.BadParameter(f"Error: Path '{path}' does not exist")
+
+    inspector = TrajectoryInspector(trajectory_files)
+    inspector.run()
