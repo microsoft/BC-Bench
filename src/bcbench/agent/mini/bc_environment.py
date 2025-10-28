@@ -122,11 +122,8 @@ class BCEnvironment(LocalEnvironment):
         working_dir: str = cwd or self.config.cwd or str(Path.cwd())
 
         if log_command:
-            # Sensitive data redaction is now handled automatically by the logging filter
             command_preview: str = command if len(command) <= 100 else command[:97] + "..."
             logger.info(f"Executing:\n{command_preview}")
-            if len(command) > 100:
-                logger.debug(f"Full command: {command}")
 
         try:
             result = subprocess.run(
@@ -144,29 +141,20 @@ class BCEnvironment(LocalEnvironment):
 
             output_stripped: str = output.strip()
             output_lines: list[str] = output_stripped.split("\n")
-            line_count: int = len(output_lines)
 
             if result.returncode == 0:
                 logger.info("Command succeeded")
             else:
                 logger.error(f"Command failed with exit code {result.returncode}")
-                if line_count > 0:
-                    preview_lines = min(3, line_count)
-                    logger.error(f"Error output (first {preview_lines} lines):\n{'\n'.join(output_lines[:preview_lines])}")
-
-            # At DEBUG level: show full output (truncated if too long)
-            if line_count <= 10:
-                logger.debug(f"Full output:\n{output_stripped}")
-            else:
-                logger.debug(f"Full output ({line_count} lines, showing first/last 5):\n{'\n'.join(output_lines[:5])}\n... ({line_count - 10} lines omitted) ...\n{'\n'.join(output_lines[-5:])}")
+                if output_lines and log_command:
+                    logger.error(f"Error output (first line):\n{output_lines[0]}")
 
             return {"returncode": result.returncode, "output": output_stripped}
 
         except subprocess.TimeoutExpired as e:
             error_msg = f"Command timed out after {timeout} seconds"
             logger.error(error_msg)
-            if e.stdout:
-                logger.debug(f"Partial output before timeout:\n{e.stdout}")
+
             return {
                 "returncode": -1,
                 "output": f"{error_msg}\n{e.stdout or ''}",
