@@ -68,7 +68,7 @@ agent:
     ## Important Rules
     1. Every response must contain exactly ONE action enclosed in triple backticks
     2. Directory/environment changes are not persistent across commands (each runs in a new subshell)
-       - Use prefixes like `MY_VAR=value cd /path && ...` to set context per command
+       - Use prefixes like `$env:MY_VAR='value'; cd \path; ...` to set context per command
        - Or persist state by writing/reading from files
 
     ## Formatting your response
@@ -155,8 +155,8 @@ agent:
     <warning>
     The output of your last command was too long.
     Please try a different command that produces less output.
-    If you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.
-    If you're using grep or find and it produced too much output, you can use a more selective search pattern.
+    If you're looking at a file you can try use Get-Content with -Head or -Tail, or Select-Object to view a smaller number of lines selectively.
+    If you're using Select-String or Get-ChildItem and it produced too much output, you can use a more selective search pattern.
     If you really need to see something from the full command's output, you can redirect output to a file and then search in that file.
     </warning>
     {%- set elided_chars = output.output | length - 10000 -%}
