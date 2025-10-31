@@ -5,6 +5,9 @@ permissions:
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
