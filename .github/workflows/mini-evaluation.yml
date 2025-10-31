@@ -9,7 +9,7 @@ on:
       bc_tools_enabled:
         description: 'Allow mini-bc-agent to use BC build and test commands'
         required: false
-        default: 'true'
+        default: true
         type: boolean
 
 env:
