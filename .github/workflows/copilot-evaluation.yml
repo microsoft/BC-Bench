@@ -1,0 +1,125 @@
+name: Evaluation with GitHub Copilot
+description: Evaluate using GitHub Copilot CLI
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+
+env:
+  EVALUATION_RESULTS_DIR: evaluation_results
+
+jobs:
+  get-entries:
+    runs-on: windows-latest
+    outputs:
+      entries: ${{ steps.get-entries.outputs.entries }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version-file: 'pyproject.toml'
+
+      - name: Install bcbench package
+        run: |
+          pip install -e .
+
+      - name: Get entries for matrix
+        id: get-entries
+        run: |
+          python -m bcbench dataset list --github-output entries
+        shell: pwsh
+
+  evaluate-with-copilot-cli:
+    runs-on: windows-latest
+    needs: get-entries
+    if: needs.get-entries.outputs.entries != '[]'
+    name: ${{ matrix.entry }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install BcContainerHelper module
+        run: |
+          Install-Module -Name BcContainerHelper -Force -AllowClobber
+        shell: pwsh
+
+      - name: Setup BC container and repository for ${{ matrix.entry }}
+        id: setup-env
+        env:
+          BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
+          NAV_REPO_TOKEN: ${{ secrets.NAV_REPO_TOKEN }}
+        run: |
+          .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ matrix.entry }}"
+        shell: pwsh
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version-file: 'pyproject.toml'
+
+      - name: Install bcbench package
+        run: |
+          pip install -e .
+
+      - name: Install GitHub Copilot CLI
+        run: |
+          npm install -g @github/copilot@0.0.351
+        shell: pwsh
+
+      - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+        env:
+          BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+        run: |
+          python -m bcbench evaluate copilot "${{ matrix.entry }}" `
+            --container-name "${{ steps.setup-env.outputs.container_name }}" `
+            --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
+            --run-id "${{ github.run_id }}"
+        shell: pwsh
+
+      - name: Upload evaluation results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
+          path: "${{ env.EVALUATION_RESULTS_DIR }}/"
+          retention-days: 30
+
+  summarize-results:
+    name: Results
+    runs-on: windows-latest
+    needs: evaluate-with-copilot-cli
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version-file: 'pyproject.toml'
+
+      - name: Install bcbench package
+        run: |
+          pip install -e .
+
+      - name: Download all evaluation results
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ env.EVALUATION_RESULTS_DIR }}/"
+          merge-multiple: true
+
+      - name: Summarize evaluation results
+        run: |
+          python -m bcbench evaluate summarize ${{ github.run_id }}
+        shell: pwsh

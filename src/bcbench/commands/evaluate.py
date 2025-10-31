@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
+from bcbench.agent.copilot import run_copilot_agent
 from bcbench.agent.mini import run_mini_agent
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate.evaluation_result import EvaluationResult, summarize_results
@@ -92,6 +93,95 @@ def evaluate_mini(
             )
 
         # TODO: Extract run detailed from agent (metrics to be discussed)
+
+        apply_patch(repo_path, entry.test_patch, f"{entry.instance_id} test patch")
+        build_and_publish_projects(
+            repo_path,
+            entry.project_paths,
+            container_name,
+            username,
+            password,
+            entry.environment_setup_version,
+        )
+        run_tests(entry, container_name, username, password)
+
+        # TODO: Parse test_results to extract pass/fail counts and resolved status
+        # For now, assume resolved if no exception (error will be thrown when tests fail)
+        result.resolved = True
+
+        logger.info(f"Successfully completed {entry.instance_id}")
+
+    except Exception as e:
+        result.resolved = False
+        result.error_message = str(e)
+        logger.error(f"Failed to process {entry.instance_id}: {e}")
+
+    finally:
+        result.save(run_dir, f"instance_results_{entry_id}.jsonl")
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("copilot")
+def evaluate_copilot(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    container_name: Annotated[str, typer.Option(help="BC container name")],
+    dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
+    repo_path: Annotated[Path, typer.Option(help="Path to NAV repository")] = NAV_REPO_PATH,
+    username: Annotated[str, typer.Option(help="Username for BC container")] = "admin",
+    password: Annotated[
+        str | None,
+        typer.Option(help="Password for BC container (or set BC_CONTAINER_PASSWORD env var)"),
+    ] = None,
+    output_dir: Annotated[Path, typer.Option(help="Directory to save evaluation results")] = Path("evaluation_results"),
+    run_id: Annotated[str, typer.Option(help="Unique identifier for this evaluation run")] = "copilot_test_run",
+):
+    """
+    Evaluate GitHub Copilot CLI on single dataset entry.
+
+    To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
+
+    Example:
+        bcbench evaluate copilot microsoftInternal__NAV-210528 --container-name bcserver
+    """
+    if not password:
+        password = os.environ.get("BC_CONTAINER_PASSWORD")
+        if not password:
+            raise ValueError("Password required. Set password or BC_CONTAINER_PASSWORD env var")
+
+    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
+    entry: DatasetEntry = entries[0]
+    logger.info(f"Loaded {entry_id} entry from dataset")
+
+    run_dir: Path = output_dir / run_id
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True)
+
+    logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
+    result = EvaluationResult(instance_id=entry_id, version=entry.environment_setup_version)
+
+    try:
+        clean_repo(repo_path)
+        checkout_commit(repo_path, entry.base_commit)
+        build_and_publish_projects(
+            repo_path,
+            entry.project_paths,
+            container_name,
+            username,
+            password,
+            entry.environment_setup_version,
+        )
+
+        with github_log_group(f"GitHub Copilot CLI -- Entry: {entry.instance_id}"):
+            run_copilot_agent(
+                entry=entry,
+                repo_path=repo_path,
+                output_dir=run_dir,
+            )
+
+        # TODO: Extract run details from agent session logs
 
         apply_patch(repo_path, entry.test_patch, f"{entry.instance_id} test patch")
         build_and_publish_projects(

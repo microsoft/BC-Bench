@@ -5,9 +5,11 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
+from bcbench.agent.copilot import run_copilot_agent
 from bcbench.agent.mini import run_mini_agent
+from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
-from bcbench.operations.git_operations import clean_repo
+from bcbench.operations import checkout_commit, clean_repo
 from bcbench.utils import DATASET_PATH, NAV_REPO_PATH
 
 logger = get_logger(__name__)
@@ -56,6 +58,29 @@ def run_mini(
         cost_limit=cost_limit,
         output_dir=output_dir,
     )
+
+
+@run_app.command("copilot")
+def run_copilot(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = DATASET_PATH,
+    repo_path: Annotated[Path, typer.Option(help="Path to NAV repository")] = NAV_REPO_PATH,
+    output_dir: Annotated[Path | None, typer.Option(help="Directory to save output result")] = None,
+):
+    """
+    Run GitHub Copilot CLI on a single entry to generate a patch (without building/testing).
+
+    For full evaluation including building and running tests, use 'bcbench evaluate' instead.
+
+    Example:
+        bcbench run copilot microsoftInternal__NAV-210528
+    """
+    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+
+    clean_repo(repo_path)
+    checkout_commit(repo_path, entry.base_commit)
+
+    run_copilot_agent(entry=entry, repo_path=repo_path)
 
 
 @run_app.command("mini-inspector")
