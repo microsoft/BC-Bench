@@ -12,6 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Microsoft Corporation"}
 ]
+classifiers = ["Private :: Do Not Upload"]
 dependencies = [
     "jsonschema>=4.0",
     "python-dotenv>=1.0",
