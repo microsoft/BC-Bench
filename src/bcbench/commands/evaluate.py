@@ -80,8 +80,7 @@ def evaluate_mini(
 
         with github_log_group(f"mini-bc-agent -- Entry: {entry.instance_id}"):
             run_mini_agent(
-                dataset_path=DATASET_PATH,
-                entry_id=entry.instance_id,
+                entry=entry,
                 repo_path=repo_path,
                 enable_bc_tools=enable_bc_tools,
                 container_name=container_name,
