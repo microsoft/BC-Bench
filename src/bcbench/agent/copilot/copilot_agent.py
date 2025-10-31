@@ -83,7 +83,6 @@ Task: Fix the issue described below in the projects at: {project_paths}
 
 Important constraints:
 - Do NOT modify any testing logic or test files
-- Use only UTF-8 encoding for all output and logging
 - Focus solely on fixing the reported issue
 - Do NOT try to build or run tests, just provide the code changes needed
 
