@@ -7,8 +7,7 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.mini import run_mini_agent
+from bcbench.agent import run_copilot_agent, run_mini_agent
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate.evaluation_result import EvaluationResult, summarize_results
 from bcbench.logger import get_logger, github_log_group
