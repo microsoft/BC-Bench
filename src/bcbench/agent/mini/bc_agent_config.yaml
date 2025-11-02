@@ -25,12 +25,11 @@ agent:
 
     ## Environment
     - Working directory: {{repo_path}}
-    - Relevant project paths: {{project_paths|join(", ")}}
     - You have a full Windows PowerShell environment
     - Avoid interactive tools like notepad or any that require user input
 
     ## Objective
-    Make changes to non-test files in the project paths to fix the issue. Your solution should be general and consistent with the existing codebase.
+    Make changes to non-test files to fix the issue. Your solution should be general and consistent with the existing codebase.
 
     ## CRITICAL: DO NOT MODIFY
     - Test files (any file containing tests)

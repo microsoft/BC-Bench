@@ -75,11 +75,11 @@ def run_copilot_agent(
 
 
 def _build_prompt(entry: DatasetEntry, repo_path: Path) -> str:
-    project_paths: str = ", ".join(entry.project_paths)
+    # project_paths: str = ", ".join(entry.project_paths)s
 
     return f"""This is a non-interactive session. You are working with a Business Central (AL) code repository at {repo_path}.
 
-Task: Fix the issue described below in the projects at: {project_paths}
+Task: Fix the issue described below
 
 Important constraints:
 - Do NOT modify any testing logic or test files
