@@ -44,11 +44,13 @@ def run_mini(
     Example:
         bcbench run mini microsoftInternal__NAV-210528 --step-limit 5
     """
+    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+
     clean_repo(repo_path)
+    checkout_commit(repo_path, entry.base_commit)
 
     run_mini_agent(
-        dataset_path=dataset_path,
-        entry_id=entry_id,
+        entry=entry,
         repo_path=repo_path,
         enable_bc_tools=enable_bc_tools,
         container_name=container_name,
