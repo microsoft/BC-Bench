@@ -9,10 +9,8 @@ from typing_extensions import Annotated
 
 from bcbench.agent import run_copilot_agent, run_mini_agent
 from bcbench.dataset import DatasetEntry, load_dataset_entries
-from bcbench.evaluate.evaluation_result import EvaluationResult, summarize_results
-from bcbench.logger import get_logger, github_log_group
-from bcbench.operations.bc_operations import build_and_publish_projects, run_tests
-from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
+from bcbench.evaluate import EvaluationContext, run_evaluation_pipeline, summarize_results
+from bcbench.logger import get_logger
 from bcbench.utils import DATASET_PATH, NAV_REPO_PATH
 
 logger = get_logger(__name__)
@@ -63,59 +61,36 @@ def evaluate_mini(
     run_dir.mkdir(parents=True)
 
     logger.info(f"Running evaluation on entry {entry_id} with mini-bc-agent")
-    result = EvaluationResult(instance_id=entry_id, version=entry.environment_setup_version)
 
-    try:
-        clean_repo(repo_path)
-        checkout_commit(repo_path, entry.base_commit)
-        build_and_publish_projects(
-            repo_path,
-            entry.project_paths,
-            container_name,
-            username,
-            password,
-            entry.environment_setup_version,
-        )
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container_name=container_name,
+        username=username,
+        password=password,
+        agent_name="mini-bc-agent",
+        agent_options={
+            "enable_bc_tools": enable_bc_tools,
+            "step_limit": step_limit,
+            "cost_limit": cost_limit,
+        },
+    )
 
-        with github_log_group(f"mini-bc-agent -- Entry: {entry.instance_id}"):
-            run_mini_agent(
-                entry=entry,
-                repo_path=repo_path,
-                enable_bc_tools=enable_bc_tools,
-                container_name=container_name,
-                username=username,
-                password=password,
-                step_limit=step_limit,
-                cost_limit=cost_limit,
-                output_dir=run_dir,
-            )
-
-        # TODO: Extract run detailed from agent (metrics to be discussed)
-
-        apply_patch(repo_path, entry.test_patch, f"{entry.instance_id} test patch")
-        build_and_publish_projects(
-            repo_path,
-            entry.project_paths,
-            container_name,
-            username,
-            password,
-            entry.environment_setup_version,
-        )
-        run_tests(entry, container_name, username, password)
-
-        # TODO: Parse test_results to extract pass/fail counts and resolved status
-        # For now, assume resolved if no exception (error will be thrown when tests fail)
-        result.resolved = True
-
-        logger.info(f"Successfully completed {entry.instance_id}")
-
-    except Exception as e:
-        result.resolved = False
-        result.error_message = str(e)
-        logger.error(f"Failed to process {entry.instance_id}: {e}")
-
-    finally:
-        result.save(run_dir, f"instance_results_{entry_id}.jsonl")
+    run_evaluation_pipeline(
+        context,
+        lambda ctx: run_mini_agent(
+            entry=ctx.entry,
+            repo_path=ctx.repo_path,
+            enable_bc_tools=ctx.get_agent_option("enable_bc_tools", False),
+            container_name=ctx.container_name,
+            username=ctx.username,
+            password=ctx.password,
+            step_limit=ctx.get_agent_option("step_limit", 20),
+            cost_limit=ctx.get_agent_option("cost_limit", 1.0),
+            output_dir=ctx.result_dir,
+        ),
+    )
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -158,53 +133,25 @@ def evaluate_copilot(
     run_dir.mkdir(parents=True)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
-    result = EvaluationResult(instance_id=entry_id, version=entry.environment_setup_version)
 
-    try:
-        clean_repo(repo_path)
-        checkout_commit(repo_path, entry.base_commit)
-        build_and_publish_projects(
-            repo_path,
-            entry.project_paths,
-            container_name,
-            username,
-            password,
-            entry.environment_setup_version,
-        )
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container_name=container_name,
+        username=username,
+        password=password,
+        agent_name="GitHub Copilot CLI",
+    )
 
-        with github_log_group(f"GitHub Copilot CLI -- Entry: {entry.instance_id}"):
-            run_copilot_agent(
-                entry=entry,
-                repo_path=repo_path,
-                output_dir=run_dir,
-            )
-
-        # TODO: Extract run details from agent session logs
-
-        apply_patch(repo_path, entry.test_patch, f"{entry.instance_id} test patch")
-        build_and_publish_projects(
-            repo_path,
-            entry.project_paths,
-            container_name,
-            username,
-            password,
-            entry.environment_setup_version,
-        )
-        run_tests(entry, container_name, username, password)
-
-        # TODO: Parse test_results to extract pass/fail counts and resolved status
-        # For now, assume resolved if no exception (error will be thrown when tests fail)
-        result.resolved = True
-
-        logger.info(f"Successfully completed {entry.instance_id}")
-
-    except Exception as e:
-        result.resolved = False
-        result.error_message = str(e)
-        logger.error(f"Failed to process {entry.instance_id}: {e}")
-
-    finally:
-        result.save(run_dir, f"instance_results_{entry_id}.jsonl")
+    run_evaluation_pipeline(
+        context,
+        lambda ctx: run_copilot_agent(
+            entry=ctx.entry,
+            repo_path=ctx.repo_path,
+            output_dir=ctx.result_dir,
+        ),
+    )
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
