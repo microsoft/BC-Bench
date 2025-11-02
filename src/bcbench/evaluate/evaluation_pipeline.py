@@ -16,7 +16,7 @@ __all__ = ["run_evaluation_pipeline"]
 def run_evaluation_pipeline(
     context: EvaluationContext,
     agent_runner: Callable[[EvaluationContext], None],
-) -> EvaluationResult:
+) -> None:
     """Common evaluation pipeline for all agents.
 
     This function handles the complete evaluation workflow:
@@ -28,9 +28,6 @@ def run_evaluation_pipeline(
     Args:
         context: Evaluation context containing all configuration
         agent_runner: Function that runs the specific agent with the context
-
-    Returns:
-        EvaluationResult with resolved status and metrics
     """
     result = EvaluationResult(
         instance_id=context.entry.instance_id,
@@ -81,5 +78,3 @@ def run_evaluation_pipeline(
 
     finally:
         result.save(context.result_dir, f"instance_results_{context.entry.instance_id}.jsonl")
-
-    return result
