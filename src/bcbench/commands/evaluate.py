@@ -101,6 +101,7 @@ def evaluate_mini(
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    model: Annotated[str, typer.Option(help="Copilot model to use")],
     container_name: Annotated[str, typer.Option(help="BC container name")],
     dataset_path: Annotated[Path, typer.Option(help="Path to dataset file")] = _config.paths.dataset_path,
     repo_path: Annotated[Path, typer.Option(help="Path to NAV repository")] = _config.paths.nav_repo_path,
@@ -149,12 +150,7 @@ def evaluate_copilot(
 
     run_evaluation_pipeline(
         context,
-        lambda ctx: run_copilot_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            include_project_paths=include_project_paths,
-            output_dir=ctx.result_dir,
-        ),
+        lambda ctx: run_copilot_agent(entry=ctx.entry, repo_path=ctx.repo_path, include_project_paths=include_project_paths, output_dir=ctx.result_dir, model=model),
     )
 
     logger.info("Evaluation complete!")

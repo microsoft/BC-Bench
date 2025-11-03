@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 def run_copilot_agent(
     entry: DatasetEntry,
     repo_path: Path,
+    model: str,
     include_project_paths: bool = False,
     output_dir: Path | None = None,
 ) -> None:
@@ -38,6 +39,7 @@ def run_copilot_agent(
                 "--allow-all-tools",  # required for non-interactive mode
                 "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
                 "--disable-builtin-mcps",
+                f"--model={model}",
                 "--no-custom-instructions",
                 "--log-level",
                 "debug",
