@@ -39,7 +39,7 @@ jobs:
       - name: Get entries for matrix
         id: get-entries
         run: |
-          python -m bcbench dataset list --github-output entries
+          uv run bcbench dataset list --github-output entries
         shell: pwsh
 
   evaluate-with-mini-agent:
@@ -100,7 +100,7 @@ jobs:
           if ('${{ github.event.inputs.bc_tools_enabled }}' -eq 'true') {
             $args += '--enable-bc-tools'
           }
-          python -m bcbench @args
+          uv run bcbench @args
         shell: pwsh
 
       - name: Upload evaluation results
@@ -140,5 +140,5 @@ jobs:
 
       - name: Summarize evaluation results
         run: |
-          python -m bcbench evaluate summarize ${{ github.run_id }}
+          uv run bcbench evaluate summarize ${{ github.run_id }}
         shell: pwsh

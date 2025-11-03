@@ -33,7 +33,7 @@ jobs:
       - name: Get entries for matrix
         id: get-entries
         run: |
-          python -m bcbench dataset list --github-output entries
+          uv run bcbench dataset list --github-output entries
         shell: pwsh
 
   evaluate-with-copilot-cli:
@@ -87,7 +87,7 @@ jobs:
           BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
         run: |
-          python -m bcbench evaluate copilot "${{ matrix.entry }}" `
+          uv run bcbench evaluate copilot "${{ matrix.entry }}" `
             --model "${{ matrix.model }}" `
             --container-name "${{ steps.setup-env.outputs.container_name }}" `
             --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
@@ -132,5 +132,5 @@ jobs:
 
       - name: Summarize evaluation results
         run: |
-          python -m bcbench evaluate summarize ${{ github.run_id }}
+          uv run bcbench evaluate summarize ${{ github.run_id }}
         shell: pwsh

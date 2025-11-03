@@ -34,20 +34,20 @@ jobs:
 
       - name: Validate dataset schema
         run: |
-          python -m bcbench dataset validate
+          uv run bcbench dataset validate
 
       - name: Get entries for matrix
         id: get-entries
         run: |
           switch ("${{ github.event_name }}") {
             "workflow_dispatch" {
-              python -m bcbench dataset list --github-output entries
+              uv run bcbench dataset list --github-output entries
             }
             "pull_request" {
-              python -m bcbench dataset list --github-output entries --modified-only
+              uv run bcbench dataset list --github-output entries --modified-only
             }
             default {
-              python -m bcbench dataset list --github-output entries
+              uv run bcbench dataset list --github-output entries
             }
           }
         shell: pwsh
