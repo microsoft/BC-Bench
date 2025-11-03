@@ -71,6 +71,7 @@ def evaluate_mini(
         username=username,
         password=password,
         agent_name="mini-bc-agent",
+        include_project_paths=include_project_paths,
         agent_options={
             "enable_bc_tools": enable_bc_tools,
             "step_limit": step_limit,
@@ -83,7 +84,7 @@ def evaluate_mini(
         lambda ctx: run_mini_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
-            include_project_paths=include_project_paths,
+            include_project_paths=ctx.include_project_paths,
             enable_bc_tools=ctx.get_agent_option("enable_bc_tools", False),
             container_name=ctx.container_name,
             username=ctx.username,
@@ -146,11 +147,12 @@ def evaluate_copilot(
         username=username,
         password=password,
         agent_name="GitHub Copilot CLI",
+        include_project_paths=include_project_paths,
     )
 
     run_evaluation_pipeline(
         context,
-        lambda ctx: run_copilot_agent(entry=ctx.entry, repo_path=ctx.repo_path, include_project_paths=include_project_paths, output_dir=ctx.result_dir, model=model),
+        lambda ctx: run_copilot_agent(entry=ctx.entry, repo_path=ctx.repo_path, include_project_paths=ctx.include_project_paths, output_dir=ctx.result_dir, model=model),
     )
 
     logger.info("Evaluation complete!")

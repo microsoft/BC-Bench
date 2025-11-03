@@ -31,6 +31,7 @@ class EvaluationContext:
 
     # Agent metadata
     agent_name: str = "Agent"
+    include_project_paths: bool = False
 
     # Agent-specific options (stored as dict for flexibility)
     agent_options: dict[str, Any] | None = None
