@@ -1,0 +1,19 @@
+{
+	"name": "BC-Bench Development",
+	"image": "mcr.microsoft.com/devcontainers/python:3.12",
+	"features": {
+		"ghcr.io/devcontainers/features/powershell": {},
+		"ghcr.io/devcontainers-contrib/features/uv": {},
+		"ghcr.io/devcontainers-contrib/features/pre-commit": {}
+	},
+	"postCreateCommand": "uv sync && pre-commit install",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-vscode.powershell",
+				"charliermarsh.ruff"
+			]
+		}
+	}
+}
