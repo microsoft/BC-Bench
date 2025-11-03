@@ -40,13 +40,12 @@ jobs:
     runs-on: windows-latest
     needs: get-entries
     if: needs.get-entries.outputs.entries != '[]'
-    name: ${{ matrix.entry }} - ${{ matrix.model }}
+    name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
       max-parallel: 15
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
-        model: [claude-haiku-4.5, gpt-5, claude-sonnet-4]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -88,7 +87,7 @@ jobs:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
         run: |
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
-            --model "${{ matrix.model }}" `
+            --model "claude-haiku-4.5" `
             --container-name "${{ steps.setup-env.outputs.container_name }}" `
             --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
