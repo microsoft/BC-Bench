@@ -27,6 +27,9 @@ agent:
     - Working directory: {{repo_path}}
     - You have a full Windows PowerShell environment
     - Avoid interactive tools like notepad or any that require user input
+    {% if include_project_paths %}
+    - Focus on the following project paths: {{project_paths | join(", ")}}
+    {% endif %}
 
     ## Objective
     Make changes to non-test files to fix the issue. Your solution should be general and consistent with the existing codebase.

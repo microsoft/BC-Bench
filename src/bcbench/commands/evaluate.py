@@ -37,6 +37,10 @@ def evaluate_mini(
         bool,
         typer.Option(help="Whether to enable BC tools for the agent (build and test)"),
     ] = False,
+    include_project_paths: Annotated[
+        bool,
+        typer.Option(help="Whether to include project paths in the prompt"),
+    ] = False,
 ):
     """
     Evaluate mini-bc-agent on single dataset entry.
@@ -79,6 +83,7 @@ def evaluate_mini(
         lambda ctx: run_mini_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
+            include_project_paths=include_project_paths,
             enable_bc_tools=ctx.get_agent_option("enable_bc_tools", False),
             container_name=ctx.container_name,
             username=ctx.username,
@@ -106,6 +111,10 @@ def evaluate_copilot(
     ] = None,
     output_dir: Annotated[Path, typer.Option(help="Directory to save evaluation results")] = Path("evaluation_results"),
     run_id: Annotated[str, typer.Option(help="Unique identifier for this evaluation run")] = "copilot_test_run",
+    include_project_paths: Annotated[
+        bool,
+        typer.Option(help="Whether to include project paths in the prompt"),
+    ] = False,
 ):
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -143,6 +152,7 @@ def evaluate_copilot(
         lambda ctx: run_copilot_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
+            include_project_paths=include_project_paths,
             output_dir=ctx.result_dir,
         ),
     )

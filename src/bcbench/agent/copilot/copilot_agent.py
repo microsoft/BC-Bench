@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 def run_copilot_agent(
     entry: DatasetEntry,
     repo_path: Path,
+    include_project_paths: bool = False,
     output_dir: Path | None = None,
 ) -> None:
     """Run GitHub Copilot CLI agent on a single dataset entry.
@@ -24,7 +25,7 @@ def run_copilot_agent(
     """
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = _build_prompt(entry, repo_path)
+    prompt: str = _build_prompt(entry, repo_path, include_project_paths)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -79,12 +80,12 @@ def run_copilot_agent(
     logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
 
-def _build_prompt(entry: DatasetEntry, repo_path: Path) -> str:
-    # project_paths: str = ", ".join(entry.project_paths)s
+def _build_prompt(entry: DatasetEntry, repo_path: Path, include_project_paths: bool) -> str:
+    project_paths: str = ", ".join(entry.project_paths)
 
     return f"""This is a non-interactive session. You are working with a Business Central (AL) code repository at {repo_path}.
 
-Task: Fix the issue described below
+Task: Fix the issue described below {"in the following projects: " + project_paths if include_project_paths else ""}
 
 Important constraints:
 - Do NOT modify any testing logic or test files

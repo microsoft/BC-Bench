@@ -22,6 +22,7 @@ class BCEnvironmentConfig(LocalEnvironmentConfig):
     repo_path: str = ""  # Store as string for JSON serialization
     username: str = "admin"
     password: str = ""
+    include_project_paths: bool = False
     project_paths: list[str] = field(default_factory=list)
     enable_bc_tools: bool = True  # Flag to show/hide BC-specific tools from agent
     version: str = ""
@@ -169,6 +170,7 @@ class BCEnvironment(LocalEnvironment):
                 "repo_path": self.config.repo_path,
                 "project_paths": self.config.project_paths,
                 "bc_tools_enabled": self.config.enable_bc_tools,
+                "include_project_paths": self.config.include_project_paths,
                 "version": self.config.version,
             }
         )
