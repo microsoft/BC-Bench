@@ -2,8 +2,8 @@
 
 from collections.abc import Callable
 
-from bcbench.evaluate.evaluation_context import EvaluationContext
-from bcbench.evaluate.evaluation_result import EvaluationResult
+from bcbench.evaluate import EvaluationContext, EvaluationResult
+from bcbench.exceptions import BuildError, PatchApplicationError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations.bc_operations import build_and_publish_projects, run_tests
 from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
@@ -68,12 +68,26 @@ def run_evaluation_pipeline(
         # TODO: Parse test_results to extract pass/fail counts and resolved status
         # For now, assume resolved if no exception (error will be thrown when tests fail)
         result.resolved = True
-
         logger.info(f"Successfully completed {context.entry.instance_id}")
+
+    except PatchApplicationError as e:
+        result.resolved = False
+        result.error_message = f"Failed to apply {e.patch_name}"
+        logger.error(f"Failed to apply test patch for {context.entry.instance_id}: {e}")
+
+    except BuildError as e:
+        result.resolved = False
+        result.error_message = f"Build failed: {e.project_path}"
+        logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
+
+    except TestExecutionError as e:
+        result.resolved = False
+        result.error_message = "Tests failed"
+        logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 
     except Exception as e:
         result.resolved = False
-        result.error_message = str(e)
+        result.error_message = f"Unexpected error: {e}"
         logger.error(f"Failed to process {context.entry.instance_id}: {e}")
 
     finally:
