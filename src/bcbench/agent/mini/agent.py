@@ -1,18 +1,15 @@
 """Mini BC Agent implementation using mini-swe-agent."""
 
-import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
-from dotenv import load_dotenv
 
-from bcbench.dataset.dataset_entry import DatasetEntry
-from bcbench.dataset.dataset_loader import load_dataset_entries
+from bcbench.config import get_config
+from bcbench.dataset import DatasetEntry
+from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
-
-load_dotenv()
 
 # Lazy imports to avoid mini-swe-agent startup message for non-agent commands
 if TYPE_CHECKING:
@@ -52,8 +49,7 @@ def _create_bc_agent_class():
 
 
 def run_mini_agent(
-    dataset_path: Path,
-    entry_id: str,
+    entry: DatasetEntry,
     repo_path: Path,
     enable_bc_tools: bool = False,
     container_name: str | None = None,
@@ -64,15 +60,13 @@ def run_mini_agent(
     output_dir: Path | None = None,
 ) -> None:
     """Run mini-bc-agent on a single dataset entry."""
-    if enable_bc_tools and not container_name:
-        raise ValueError("container_name is required when use_container is True")
+    if enable_bc_tools:
+        if not container_name:
+            raise ConfigurationError("container_name is required when enable_bc_tools is True")
 
-    if enable_bc_tools and not password:
-        password = os.environ.get("BC_CONTAINER_PASSWORD")
-        if not password:
-            raise ValueError("Password required when use_container is True. Set password or BC_CONTAINER_PASSWORD env var")
+        config = get_config()
+        password = config.resolve_password(password)
 
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
     logger.info(f"Running mini-bc-agent on: {entry.instance_id}")
 
     task: str = entry.get_task()

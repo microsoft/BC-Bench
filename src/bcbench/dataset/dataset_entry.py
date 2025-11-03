@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, TypedDict
 
-from bcbench.logger import get_logger
-from bcbench.operations import extract_patches
-from bcbench.utils import (
-    NAV_REPO_PATH,
-    find_project_paths_from_patch,
-    strip_html,
-)
+from bcbench.exceptions import InvalidEntryFormatError
 
 __all__ = ["DatasetEntry"]
 
@@ -46,9 +39,10 @@ class DatasetEntry:
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> DatasetEntry:
         """Build an entry from a JSON payload stored in the dataset file."""
+        instance_id = str(payload.get("instance_id", ""))
         return cls(
             repo=str(payload.get("repo", "microsoftInternal/NAV")),
-            instance_id=str(payload.get("instance_id", "")),
+            instance_id=instance_id,
             patch=str(payload.get("patch", "")),
             base_commit=str(payload.get("base_commit", "")),
             hints_text=str(payload.get("hints_text", "")),
@@ -56,44 +50,9 @@ class DatasetEntry:
             test_patch=str(payload.get("test_patch", "")),
             problem_statement=str(payload.get("problem_statement", "")),
             environment_setup_version=str(payload.get("environment_setup_version", "")),
-            fail_to_pass=_parse_test_entries(payload.get("FAIL_TO_PASS", [])),
-            pass_to_pass=_parse_test_entries(payload.get("PASS_TO_PASS", [])),
+            fail_to_pass=_parse_test_entries(instance_id, payload.get("FAIL_TO_PASS", [])),
+            pass_to_pass=_parse_test_entries(instance_id, payload.get("PASS_TO_PASS", [])),
             project_paths=_ensure_list_of_str(payload.get("project_paths", [])),
-        )
-
-    @classmethod
-    def from_ado(
-        cls,
-        *,
-        pr_number: int,
-        repo_path: Path,
-        pr_data: dict[str, Any],
-        work_item_data: dict[str, Any],
-        base_commit: str,
-        commit: str,
-        diff_path: str = "",
-    ) -> DatasetEntry:
-        """Construct a dataset entry from Azure DevOps artifacts."""
-        created_at = _extract_creation_date(pr_data)
-        patch, patch_fix, patch_test = extract_patches(repo_path, base_commit, commit, diff_path=diff_path)
-        problem_statement = _extract_problem_statement(work_item_data)
-        hints = ""  # TODO: Extract hints if available, no instance found yet
-        version = _determine_environment_setup_version(commit)
-
-        return cls(
-            instance_id=f"microsoftInternal__NAV-{pr_number}",
-            base_commit=base_commit,
-            commit=commit,
-            pr_number=pr_number,
-            created_at=created_at,
-            patch=patch_fix,
-            environment_setup_version=version,
-            test_patch=patch_test,
-            problem_statement=problem_statement,
-            hints_text=hints,
-            project_paths=find_project_paths_from_patch(repo_path, patch),
-            _raw_pr_data=pr_data,
-            _raw_work_item_data=work_item_data,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -129,104 +88,25 @@ class DatasetEntry:
         return task
 
 
-def _determine_environment_setup_version(commit: str) -> str:
-    """Determine the appropriate environment setup version based on commit availability in release branches."""
-
-    result = subprocess.run(
-        ["git", "show", "master:Directory.App.Props.json"],
-        cwd=NAV_REPO_PATH,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    props_data = json.loads(result.stdout)
-    current_version_str = props_data["variables"]["app_currentVersion"]
-    # Extract major version (e.g., "28.0.0.0" -> 28)
-    current_major_version = int(current_version_str.split(".")[0])
-
-    # Start checking from (current_version - 1)
-    start_version = current_major_version - 1
-
-    # Check release branches backwards
-    for major_version in range(start_version, 20, -1):  # Go back to version 20
-        for minor_version in [5, 4, 3, 2, 1, 0]:
-            branch_name = f"releases/{major_version}.{minor_version}"
-
-            # Check if branch exists
-            branch_check = subprocess.run(
-                [
-                    "git",
-                    "show-ref",
-                    "--verify",
-                    "--quiet",
-                    f"refs/remotes/origin/{branch_name}",
-                ],
-                cwd=NAV_REPO_PATH,
-                capture_output=True,
-            )
-
-            if branch_check.returncode == 0:  # Branch exists
-                commit_check = subprocess.run(
-                    [
-                        "git",
-                        "merge-base",
-                        "--is-ancestor",
-                        commit,
-                        f"origin/{branch_name}",
-                    ],
-                    cwd=NAV_REPO_PATH,
-                    capture_output=True,
-                )
-
-                if commit_check.returncode != 0:  # Commit doesn't exist in this branch
-                    return f"{major_version}.{minor_version}"
-
-    return ""
-
-
 def _ensure_list_of_str(values: Iterable[Any]) -> list[str]:
     return [str(value) for value in values]
 
 
-def _parse_test_entries(values: Any) -> list[TestEntry]:
+def _parse_test_entries(instance_id: str, values: Any) -> list[TestEntry]:
     """Parse test entries from JSON payload."""
     if not values:
         return []
 
     result: list[TestEntry] = []
-    for entry in values:
-        if isinstance(entry, dict):
+    for test_entry in values:
+        try:
             result.append(
                 TestEntry(
-                    codeunitID=int(entry.get("codeunitID", 0)),
-                    functionName=[str(fn) for fn in entry.get("functionName", [])],
+                    codeunitID=int(test_entry.get("codeunitID")),
+                    functionName=[str(fn) for fn in test_entry.get("functionName")],
                 )
             )
-        else:
-            raise ValueError(f"Invalid test entry format: {entry}")
+        except Exception as e:
+            raise InvalidEntryFormatError(instance_id, f"Expected dict with codeunitID and functionName: {e}") from None
 
     return result
-
-
-def _extract_creation_date(pr_data: dict[str, Any]) -> str:
-    creation_date = pr_data.get("creationDate", "")
-    if creation_date:
-        return creation_date[:10]
-    raise ValueError("Creation date not found in PR data.")
-
-
-def _extract_problem_statement(work_item_data: dict[str, Any]) -> str:
-    logger = get_logger(__name__)
-    fields = work_item_data.get("fields", {})
-    if fields.get("System.CommentCount", 0) > 0:
-        logger.warning("Work item has comments, additional handling may be required.")
-
-    repro_steps_raw = fields.get("Microsoft.VSTS.TCM.ReproSteps", "")
-    logger.debug("Raw repro steps:\n %s", repro_steps_raw)
-    repro_steps = strip_html(repro_steps_raw)
-
-    description_raw = fields.get("System.Description", "")
-    logger.debug("Raw description:\n %s", description_raw)
-    description = strip_html(description_raw)
-
-    return f"Title: {fields.get('System.Title', '')}\nRepro Steps:\n{repro_steps}\nDescription:\n{description}\n"

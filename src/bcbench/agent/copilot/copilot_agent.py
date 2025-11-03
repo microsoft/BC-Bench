@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from bcbench.dataset import DatasetEntry
+from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -63,13 +64,17 @@ def run_copilot_agent(
             raise subprocess.CalledProcessError(return_code, "copilot")
 
     except subprocess.TimeoutExpired:
-        if process:
-            process.kill()
+        # timeout should not raise an exception, we will evaluate whatever copilot did so far
         logger.error("Copilot CLI timed out after 600 seconds")
-        raise
+    except subprocess.CalledProcessError as e:
+        raise AgentError(f"Copilot CLI execution failed: {e}") from None
     except Exception as e:
-        logger.error(f"Error running Copilot CLI: {e}")
+        logger.error(f"Unexpected error running Copilot CLI: {e}")
         raise
+    finally:
+        if process and process.poll() is None:
+            process.kill()
+            process.wait()
 
     logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 

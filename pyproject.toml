@@ -48,6 +48,7 @@ line-length = 200
 [tool.ruff.lint]
 extend-select = [
     "PLE",   # Pylint errors (includes __all__ validation)
+    "PLW",   # Pylint warnings (includes subprocess.run check requirement)
     "I",     # isort (import sorting)
     "UP",    # pyupgrade (modernize Python code)
     "B",     # flake8-bugbear (find likely bugs)

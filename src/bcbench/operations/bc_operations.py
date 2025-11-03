@@ -3,10 +3,12 @@
 import subprocess
 from pathlib import Path
 
+from bcbench.config import get_config
+from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger
-from bcbench.utils import PS_SCRIPT_PATH
 
 logger = get_logger(__name__)
+_config = get_config()
 
 
 def _build_ps_script_header(app_utils_path: Path) -> str:
@@ -28,7 +30,7 @@ $credential = New-Object System.Management.Automation.PSCredential('{username}',
 
 def build_ps_app_build_and_publish(container_name: str, username: str, password: str, project_path: Path, version: str) -> str:
     """Build complete PowerShell script for app build and publish."""
-    app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
+    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     return (
         _build_ps_script_header(app_utils_path)
@@ -47,7 +49,7 @@ def build_ps_test_script(
     function_names: list[str] | None = None,
 ) -> str:
     """Build complete PowerShell script for running tests."""
-    app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
+    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     if function_names:
         function_array = ", ".join([f"'{fn}'" for fn in function_names])
@@ -71,7 +73,7 @@ def build_ps_dataset_tests_script(
     expectation: str,
 ) -> str:
     """Build complete PowerShell script for running dataset tests."""
-    app_utils_path = PS_SCRIPT_PATH / "AppUtils.psm1"
+    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     return (
         _build_ps_script_header(app_utils_path)
@@ -104,17 +106,18 @@ def build_and_publish_projects(
             version=version,
         )
 
-        result = subprocess.run(
-            ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            logger.error(f"Build failed for {project_path}: {result.stderr}")
-            logger.error(f"Full command output: {result.stdout}")
-            raise RuntimeError(f"Build failed for {project_path}")
+        try:
+            subprocess.run(
+                ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                cwd=repo_path,
+                capture_output=True,
+                check=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Build failed for {project_path}: {e.stderr}")
+            logger.error(f"Full command output: {e.stdout}")
+            raise BuildError(project_path, e.stderr) from None
 
         logger.info(f"Successfully built and published: {project_path}")
 
@@ -159,12 +162,14 @@ def _run_test_suite(
         expectation=expectation,
     )
 
-    result = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
 
-    if result.returncode != 0:
-        logger.error(f"Tests failed: {result.stderr}")
-        raise RuntimeError(f"Tests failed with expectation: {expectation}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Test result did not meet expectation (expected: {expectation}): {e.stderr}")
+        raise TestExecutionError(expectation, e.stderr) from None

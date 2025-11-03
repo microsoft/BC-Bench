@@ -7,6 +7,8 @@ import sys
 from contextlib import contextmanager
 from typing import ClassVar
 
+from bcbench.config import get_config
+
 __all__ = ["get_logger", "github_log_group", "setup_logger"]
 
 
@@ -109,10 +111,12 @@ def setup_logger(verbose: bool = False) -> None:
     Args:
         verbose: If True, set bcbench loggers to DEBUG level, otherwise INFO.
     """
-    global _logging_configured
+    global _logging_configured  # noqa: PLW0603
 
     if _logging_configured:
         return
+
+    config = get_config()
 
     # Suppress mini-swe-agent startup message
     # This prevents encoding errors from emoji characters on Windows
@@ -121,7 +125,7 @@ def setup_logger(verbose: bool = False) -> None:
     bcbench_level = logging.DEBUG if verbose else logging.INFO
 
     # Check for GitHub Actions debug mode
-    if os.environ.get("RUNNER_DEBUG") == "1":
+    if config.env.runner_debug:
         bcbench_level = logging.DEBUG
 
     # Configure root logger (for 3rd party libraries) to WARNING
@@ -155,13 +159,13 @@ def get_logger(name: str) -> logging.Logger:
 
 @contextmanager
 def github_log_group(title: str):
-    is_github_actions: bool = os.environ.get("GITHUB_ACTIONS") == "true"
+    config = get_config()
 
-    if is_github_actions:
+    if config.env.github_actions:
         print(f"::group::{title}", flush=True)
 
     try:
         yield
     finally:
-        if is_github_actions:
+        if config.env.github_actions:
             print("::endgroup::", flush=True)

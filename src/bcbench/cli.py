@@ -1,11 +1,14 @@
 """CLI entry point for bcbench using typer."""
 
 import typer
+from dotenv import load_dotenv
 from typing_extensions import Annotated
 
 from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.collect import collect_app
 from bcbench.logger import setup_logger
+
+load_dotenv()
 
 app = typer.Typer(
     name="bcbench",

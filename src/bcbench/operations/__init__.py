@@ -11,7 +11,6 @@ from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
     clean_repo,
-    extract_patches,
 )
 
 __all__ = [
@@ -22,6 +21,5 @@ __all__ = [
     "build_ps_test_script",
     "checkout_commit",
     "clean_repo",
-    "extract_patches",
     "run_tests",
 ]

@@ -6,7 +6,9 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.collection import collect_nav_entry
-from bcbench.utils import DATASET_PATH, NAV_REPO_PATH
+from bcbench.config import get_config
+
+_config = get_config()
 
 collect_app = typer.Typer(help="Collect dataset entries from various sources")
 
@@ -14,8 +16,8 @@ collect_app = typer.Typer(help="Collect dataset entries from various sources")
 @collect_app.command("nav")
 def collect_nav(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
-    output: Annotated[Path, typer.Option(help="Output file path")] = DATASET_PATH,
-    repo_path: Path = NAV_REPO_PATH,
+    output: Annotated[Path, typer.Option(help="Output file path")] = _config.paths.dataset_path,
+    repo_path: Path = _config.paths.nav_repo_path,
     diff_path: Annotated[str, typer.Option(help="Filter git diff to only show changes under this path")] = "",
 ):
     """

@@ -4,10 +4,12 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from jsonschema import validate
+from jsonschema import SchemaError, ValidationError, validate
 
 from bcbench.dataset.dataset_loader import load_dataset_entries
+from bcbench.logger import get_logger
 
+logger = get_logger(__name__)
 __all__ = ["ValidationResult", "validate_entries"]
 
 
@@ -42,8 +44,10 @@ def validate_entries(dataset_path: Path, schema_path: Path) -> list[ValidationRe
         try:
             validate(instance=entry.to_dict(), schema=schema)
             results.append(ValidationResult(line_number=line_num, instance_id=entry.instance_id, success=True))
-        except ValueError as e:
-            error_msg = f"Line {line_num}: Validation error - {e!s}"
+        except ValidationError as e:
+            error_msg: str = f"Line {line_num}: Validation error - {e!s}"
+            logger.error(error_msg)
+
             results.append(
                 ValidationResult(
                     line_number=line_num,
@@ -52,8 +56,13 @@ def validate_entries(dataset_path: Path, schema_path: Path) -> list[ValidationRe
                     error_message=error_msg,
                 )
             )
+        except SchemaError as e:
+            logger.error(f"Invalid schema in {schema_path}: {e.message}")
+            raise
         except Exception as e:
-            error_msg = f"Line {line_num}: Unexpected error - {e!s}"
+            error_msg: str = f"Line {line_num}: Unexpected error - {e!s}"
+            logger.error(error_msg)
+
             results.append(
                 ValidationResult(
                     line_number=line_num,

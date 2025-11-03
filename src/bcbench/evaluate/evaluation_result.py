@@ -1,11 +1,11 @@
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 
+from bcbench.config import get_config
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -51,9 +51,9 @@ class EvaluationResult:
 
 def _write_github_step_summary(content: str) -> None:
     """Write content to GitHub Actions step summary."""
-    github_step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if github_step_summary:
-        with open(github_step_summary, "a", encoding="utf-8") as f:
+    config = get_config()
+    if config.env.github_step_summary:
+        with open(config.env.github_step_summary, "a", encoding="utf-8") as f:
             f.write(content)
             f.write("\n")
         logger.info("Wrote evaluation summary to GitHub Actions step summary")
@@ -122,7 +122,8 @@ def summarize_results(results_dir: Path, result_pattern: str) -> None:
     console.print(table)
     console.print()
 
-    if os.environ.get("GITHUB_ACTIONS") == "true":
+    config = get_config()
+    if config.env.github_actions:
         success_icon = ":white_check_mark:" if failed == 0 else ":x:"
         markdown_summary = f"""Total entries processed: {total}
 - Successful evaluations: {succeeded} :white_check_mark:

@@ -6,6 +6,7 @@ from typing import Any
 
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
 
+from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
 from bcbench.operations.bc_operations import (
     build_ps_app_build_and_publish,
@@ -32,9 +33,9 @@ class BCEnvironment(LocalEnvironment):
         self.config: BCEnvironmentConfig = self.config
 
         if (not self.config.container_name) and self.config.enable_bc_tools:
-            raise ValueError("container_name is required in BCEnvironmentConfig when enable_bc_tools is True")
+            raise ConfigurationError("container_name is required in BCEnvironmentConfig when enable_bc_tools is True")
         if not self.config.repo_path:
-            raise ValueError("repo_path is required in BCEnvironmentConfig")
+            raise ConfigurationError("repo_path is required in BCEnvironmentConfig")
 
     def execute(self, command: str, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         command = command.strip()
@@ -131,25 +132,12 @@ class BCEnvironment(LocalEnvironment):
                 cwd=working_dir,
                 capture_output=True,
                 text=True,
+                check=True,
                 timeout=timeout,
                 env={**os.environ, **self.config.env},
             )
-
-            output = result.stdout
-            if result.stderr:
-                output += "\n" + result.stderr
-
-            output_stripped: str = output.strip()
-            output_lines: list[str] = output_stripped.split("\n")
-
-            if result.returncode == 0:
-                logger.info("Command succeeded")
-            else:
-                logger.error(f"Command failed with exit code {result.returncode}")
-                if output_lines and log_command:
-                    logger.error(f"Error output (first line):\n{output_lines[0]}")
-
-            return {"returncode": result.returncode, "output": output_stripped}
+            logger.info("Command succeeded")
+            return {"returncode": result.returncode, "output": (result.stdout).strip()}
 
         except subprocess.TimeoutExpired as e:
             error_msg = f"Command timed out after {timeout} seconds"
@@ -159,6 +147,13 @@ class BCEnvironment(LocalEnvironment):
                 "returncode": -1,
                 "output": f"{error_msg}\n{e.stdout or ''}",
             }
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Command failed with exit code {e.returncode}"
+            logger.error(error_msg)
+            if e.stderr and log_command:
+                logger.error(f"Error output (first line):\n{e.stderr.splitlines()[0]}")
+
+            return {"returncode": e.returncode, "output": f"{error_msg}\n{e.stdout or ''}{e.stderr or ''}".strip()}
         except Exception as e:
             error_msg = f"Error executing command: {e!s}"
             logger.error(error_msg)
