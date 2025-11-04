@@ -41,11 +41,9 @@ Write-Log "Setting up BC container and repository for version $Version, Dataset 
 [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
 if (-not $RepoPath) {
-    $RepoPath = Join-Path -Path $env:TEMP -ChildPath "NAV-$Version"
-    Write-Log "Using default NAV repository clone path: $RepoPath" -Level Info
-} else {
-    Write-Log "Using provided NAV repository clone path: $RepoPath" -Level Info
+    $RepoPath = Join-Path -Path $env:TEMP -ChildPath "testbed"
 }
+Write-Log "Using repository path: $RepoPath" -Level Info
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
@@ -100,5 +98,5 @@ if ($containerJob) {
 
 # Set output for GitHub Actions or return path
 if ($env:GITHUB_OUTPUT) {
-    "nav_clone_path=$RepoPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+    "repo_path=$RepoPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 }

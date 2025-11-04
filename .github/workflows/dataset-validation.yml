@@ -45,5 +45,5 @@ jobs:
       - name: Run build and test verification for ${{ matrix.entry }}
         timeout-minutes: 60
         run: |
-          .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.nav_clone_path }}"
+          .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.repo_path }}"
         shell: pwsh

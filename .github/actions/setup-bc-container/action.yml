@@ -10,9 +10,9 @@ inputs:
     required: true
 
 outputs:
-  nav-clone-path:
-    description: Path to the cloned NAV repository
-    value: ${{ steps.setup-env.outputs.nav_clone_path }}
+  repo_path:
+    description: Path to the cloned repository
+    value: ${{ steps.setup.outputs.repo_path }}
 
 runs:
   using: composite
@@ -23,7 +23,7 @@ runs:
       shell: pwsh
 
     - name: Setup BC container and repository for ${{ inputs.instance-id }}
-      id: setup-env
+      id: setup
       env:
         NAV_REPO_TOKEN: ${{ inputs.nav-repo-token }}
       run: |

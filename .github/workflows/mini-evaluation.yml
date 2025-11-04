@@ -57,7 +57,7 @@ jobs:
         run: |
           $args = @(
             'evaluate', 'mini', "${{ matrix.entry }}",
-            '--repo-path', "${{ steps.setup-env.outputs.nav_clone_path }}",
+            '--repo-path', "${{ steps.setup-env.outputs.repo_path }}",
             '--output-dir', "${{ env.EVALUATION_RESULTS_DIR }}",
             '--step-limit', '50'
           )

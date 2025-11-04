@@ -53,7 +53,7 @@ jobs:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
         run: |
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
-            --repo-path "${{ steps.setup-env.outputs.nav_clone_path }}" `
+            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
         shell: pwsh
 
