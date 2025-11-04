@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 import typer
-from typing_extensions import Annotated
+from typing_extensions import Annotated, Literal
 
 from bcbench.agent import run_copilot_agent, run_mini_agent
 from bcbench.cli_options import (
@@ -110,6 +110,7 @@ def evaluate_copilot(
     container_name: ContainerName,
     username: ContainerUsername,
     password: ContainerPassword,
+    model: Annotated[Literal["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"], typer.Option(help="Copilot model to use")] = "claude-haiku-4.5",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.nav_repo_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -155,6 +156,7 @@ def evaluate_copilot(
         lambda ctx: run_copilot_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
+            model=model,
             include_project_paths=include_project_paths,
             output_dir=ctx.result_dir,
         ),
