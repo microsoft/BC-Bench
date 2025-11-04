@@ -1,0 +1,50 @@
+name: Get Dataset Entries
+description: Reusable workflow to get dataset entries for matrix and optional schema validation
+
+on:
+  workflow_call:
+    inputs:
+      modified-only:
+        description: Only return modified entries (for PR contexts)
+        required: false
+        type: boolean
+        default: false
+      validate-schema:
+        description: Run schema validation before getting entries
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      entries:
+        description: JSON array of dataset entries
+        value: ${{ jobs.get-entries.outputs.entries }}
+
+jobs:
+  get-entries:
+    runs-on: windows-latest
+    outputs:
+      entries: ${{ steps.get-entries.outputs.entries }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ inputs.modified-only && 0 || 1 }}
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Validate dataset schema
+        if: inputs.validate-schema
+        run: |
+          uv run bcbench dataset validate
+        shell: pwsh
+
+      - name: Get entries for matrix
+        id: get-entries
+        run: |
+          if ('${{ inputs.modified-only }}' -eq 'true') {
+            uv run bcbench dataset list --github-output entries --modified-only
+          } else {
+            uv run bcbench dataset list --github-output entries
+          }
+        shell: pwsh

@@ -17,30 +17,7 @@ env:
 
 jobs:
   get-entries:
-    runs-on: windows-latest
-    outputs:
-      entries: ${{ steps.get-entries.outputs.entries }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Setup Python
-        run: uv python install
-
-      - name: Install bcbench package
-        run: |
-          uv sync
-
-      - name: Get entries for matrix
-        id: get-entries
-        run: |
-          uv run bcbench dataset list --github-output entries
-        shell: pwsh
+    uses: ./.github/workflows/get-entries.yml
 
   evaluate-with-mini-agent:
     runs-on: windows-latest
@@ -60,30 +37,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install BcContainerHelper module
-        run: |
-          Install-Module -Name BcContainerHelper -Force -AllowClobber
-        shell: pwsh
-
-      - name: Setup BC container and repository for ${{ matrix.entry }}
+      - name: Setup BC container
         id: setup-env
-        env:
-          NAV_REPO_TOKEN: ${{ secrets.NAV_REPO_TOKEN }}
-        run: |
-          .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ matrix.entry }}"
-        shell: pwsh
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: ./.github/actions/setup-bc-container
         with:
-          enable-cache: true
+          instance-id: ${{ matrix.entry }}
+          nav-repo-token: ${{ secrets.NAV_REPO_TOKEN }}
 
-      - name: Setup Python
-        run: uv python install
-
-      - name: Install bcbench package
-        run: |
-          uv sync
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
 
       - name: Run mini-bc-agent for entry ${{ matrix.entry }}
         env:
@@ -114,33 +76,9 @@ jobs:
           retention-days: 30
 
   summarize-results:
-    name: Results
-    runs-on: windows-latest
     needs: evaluate-with-mini-agent
     if: always()
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Setup Python
-        run: uv python install
-
-      - name: Install bcbench package
-        run: |
-          uv sync
-
-      - name: Download all evaluation results
-        uses: actions/download-artifact@v4
-        with:
-          path: "${{ env.EVALUATION_RESULTS_DIR }}/"
-          merge-multiple: true
-
-      - name: Summarize evaluation results
-        run: |
-          uv run bcbench evaluate summarize ${{ github.run_id }}
-        shell: pwsh
+    uses: ./.github/workflows/summarize-results.yml
+    with:
+      run-id: ${{ github.run_id }}
+      results-dir: evaluation_results

@@ -1,0 +1,31 @@
+name: Setup BC Container
+description: Install BcContainerHelper and setup BC container with repository
+
+inputs:
+  instance-id:
+    description: Instance ID for the dataset entry
+    required: true
+  nav-repo-token:
+    description: Token for NAV repository access
+    required: true
+
+outputs:
+  nav-clone-path:
+    description: Path to the cloned NAV repository
+    value: ${{ steps.setup-env.outputs.nav_clone_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install BcContainerHelper module
+      run: |
+        Install-Module -Name BcContainerHelper -Force -AllowClobber
+      shell: pwsh
+
+    - name: Setup BC container and repository for ${{ inputs.instance-id }}
+      id: setup-env
+      env:
+        NAV_REPO_TOKEN: ${{ inputs.nav-repo-token }}
+      run: |
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}"
+      shell: pwsh

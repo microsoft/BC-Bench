@@ -1,0 +1,36 @@
+name: Summarize Evaluation Results
+description: Reusable workflow to download and summarize evaluation results
+
+on:
+  workflow_call:
+    inputs:
+      run-id:
+        description: GitHub run ID for the evaluation
+        required: true
+        type: string
+      results-dir:
+        description: Directory to download results to
+        required: true
+        type: string
+
+jobs:
+  summarize-results:
+    name: Results Summary
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Download all evaluation results
+        uses: actions/download-artifact@v4
+        with:
+          path: "${{ inputs.results-dir }}/"
+          merge-multiple: true
+
+      - name: Summarize evaluation results
+        run: |
+          uv run bcbench evaluate summarize ${{ inputs.run-id }} --results-dir "${{ inputs.results-dir }}"
+        shell: pwsh

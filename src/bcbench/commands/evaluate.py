@@ -165,11 +165,8 @@ def evaluate_copilot(
 
 @evaluate_app.command("summarize")
 def evaluate_summarize(
-    run_id: Annotated[
-        str,
-        typer.Argument(help="Unique identifier for the evaluation run to summarize"),
-    ],
-    output_dir: OutputDir = Path("evaluation_results"),
+    run_id: Annotated[str, typer.Argument(help="Unique identifier for the evaluation run to summarize")],
+    result_dir: OutputDir = Path("evaluation_results"),
     result_pattern: Annotated[str, typer.Option(help="Pattern for the result files")] = "*.jsonl",
 ):
     """
@@ -178,7 +175,7 @@ def evaluate_summarize(
     Example:
         bcbench evaluate summarize mini_test_run
     """
-    run_dir: Path = output_dir / run_id
+    run_dir: Path = result_dir / run_id
 
     if not run_dir.exists():
         logger.error(f"Results directory not found: {run_dir}")
