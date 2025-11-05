@@ -194,7 +194,7 @@ def _create_console_summary(results: list[EvaluationResult], total: int, resolve
 
 def _create_github_job_summary(results: list[EvaluationResult], total: int, resolved: int, failed: int) -> None:
     success_icon = ":white_check_mark:" if failed == 0 else ":x:"
-    markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name}({results[0].model})**
+    markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
 - Successful evaluations: {resolved} :white_check_mark:
 - Failed evaluations: {failed} {success_icon}
 
