@@ -1,32 +1,52 @@
 [
   {
     "agent_name": "GitHub Copilot CLI",
-    "model": "gpt-4o",
+    "model": "claude-sonnet-4",
     "total": 19,
-    "resolved": 5,
-    "average_duration": 200.5,
-    "average_prompt_tokens": 15000.0,
-    "average_completion_tokens": 2500.0,
+    "resolved": 7,
+    "average_duration": 0,
+    "average_prompt_tokens": 0,
+    "average_completion_tokens": 0,
     "date": "2025-11-05"
   },
   {
-    "agent_name": "Mini BC Agent",
-    "model": "gpt-4o-mini",
+    "agent_name": "GitHub Copilot CLI",
+    "model": "claude-sonnet-4.5",
     "total": 19,
-    "resolved": 3,
-    "average_duration": 150.2,
-    "average_prompt_tokens": 12000.0,
-    "average_completion_tokens": 2000.0,
+    "resolved": 9,
+    "average_duration": 0,
+    "average_prompt_tokens": 0,
+    "average_completion_tokens": 0,
     "date": "2025-11-04"
   },
   {
-    "agent_name": "GitHub Copilot VS Code",
-    "model": "gpt-4o",
+    "agent_name": "GitHub Copilot CLI",
+    "model": "claude-haiku-4.5",
     "total": 19,
-    "resolved": 7,
-    "average_duration": 250.8,
-    "average_prompt_tokens": 18000.0,
-    "average_completion_tokens": 3000.0,
-    "date": "2025-11-03"
+    "resolved": 10,
+    "average_duration": 0,
+    "average_prompt_tokens": 0,
+    "average_completion_tokens": 0,
+    "date": "2025-11-04"
+  },
+  {
+    "agent_name": "GitHub Copilot CLI",
+    "model": "gpt-5",
+    "total": 19,
+    "resolved": 5,
+    "average_duration": 0,
+    "average_prompt_tokens": 0,
+    "average_completion_tokens": 0,
+    "date": "2025-11-04"
+  },
+  {
+    "agent_name": "mini-bc-agent",
+    "model": "azure/gpt-4.1",
+    "total": 19,
+    "resolved": 6,
+    "average_duration": 0,
+    "average_prompt_tokens": 0,
+    "average_completion_tokens": 0,
+    "date": "2025-11-05"
   }
 ]
