@@ -15,6 +15,7 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
 
 **Coding Patterns:**
-- Prefer readable code over documentation
+- Prefer readable code over documentation or comments
+- Prefer strong typing and type hints
 - Prefer simple code for fast iteration
 - Prefer modular, testable components
