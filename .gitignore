@@ -266,3 +266,14 @@ dmypy.json
 # Evaluation Result files
 evaluation_results/
 verification_results/
+
+# Jekyll (GitHub Pages) - docs folder
+docs/_site/
+docs/.sass-cache/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+docs/vendor/
+docs/.bundle/
+docs/tmp
+docs/Gemfile
+docs/Gemfile.lock

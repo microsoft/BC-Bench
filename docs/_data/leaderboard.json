@@ -1,0 +1,32 @@
+[
+  {
+    "agent_name": "GitHub Copilot CLI",
+    "model": "gpt-4o",
+    "total": 19,
+    "resolved": 5,
+    "average_duration": 200.5,
+    "average_prompt_tokens": 15000.0,
+    "average_completion_tokens": 2500.0,
+    "date": "2025-11-05"
+  },
+  {
+    "agent_name": "Mini BC Agent",
+    "model": "gpt-4o-mini",
+    "total": 19,
+    "resolved": 3,
+    "average_duration": 150.2,
+    "average_prompt_tokens": 12000.0,
+    "average_completion_tokens": 2000.0,
+    "date": "2025-11-04"
+  },
+  {
+    "agent_name": "GitHub Copilot VS Code",
+    "model": "gpt-4o",
+    "total": 19,
+    "resolved": 7,
+    "average_duration": 250.8,
+    "average_prompt_tokens": 18000.0,
+    "average_completion_tokens": 3000.0,
+    "date": "2025-11-03"
+  }
+]
