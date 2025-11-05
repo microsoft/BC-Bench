@@ -1,6 +1,7 @@
 """Mini BC Agent implementation using mini-swe-agent."""
 
 import re
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -61,8 +62,13 @@ def run_mini_agent(
     step_limit: int = 20,
     cost_limit: float = 1.0,
     output_dir: Path | None = None,
-) -> None:
-    """Run mini-bc-agent on a single dataset entry."""
+) -> dict[str, float | int] | None:
+    """Run mini-bc-agent on a single dataset entry.
+
+    Returns:
+        Dictionary containing metrics (agent_execution_time, prompt_tokens, completion_tokens),
+        or None if metric extraction fails.
+    """
     if enable_bc_tools and (not container_name or not password):
         raise ConfigurationError("container_name and password are required when enable_bc_tools is True")
 
@@ -100,9 +106,49 @@ def run_mini_agent(
         **agent_config,
     )
 
+    start_time = time.time()
     exit_status, result = agent.run(task)
+    execution_time = time.time() - start_time
+
     if output_dir:
         traj_file: Path = output_dir / f"{entry.instance_id}{_config.file_patterns.trajectory_pattern}"
         save_traj(agent, traj_file, exit_status=exit_status, result=result)
 
     logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")
+
+    return _extract_metrics(agent, execution_time)
+
+
+def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | None:
+    """Extract metrics from agent execution.
+
+    Args:
+        agent: The BCAgent instance after execution
+        execution_time: Total execution time in seconds
+
+    Returns:
+        Dictionary with agent_execution_time and optionally prompt_tokens/completion_tokens,
+        or None if extraction fails
+    """
+    try:
+        metrics: dict[str, float | int] = {
+            "agent_execution_time": execution_time,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+        }
+
+        for message in agent.messages:
+            if "role" in message and message["role"] == "assistant":
+                extra = message.get("extra", {})
+                response = extra.get("response", {})
+                usage = response.get("usage", {})
+                if "prompt_tokens" in usage and "completion_tokens" in usage:
+                    metrics["prompt_tokens"] += usage["prompt_tokens"]
+                    metrics["completion_tokens"] += usage["completion_tokens"]
+
+        logger.info(f"Extracted metrics: {metrics}")
+        return metrics
+
+    except Exception as e:
+        logger.warning(f"Failed to extract metrics from agent: {e}")
+        return None

@@ -13,8 +13,6 @@ from bcbench.evaluate.evaluation_pipeline import (
 
 
 class TestCopilotMetricsToResultFlow:
-    """Test the end-to-end flow of metrics from parsing through to evaluation results for GitHub Copilot CLI."""
-
     @pytest.fixture
     def sample_context(self, tmp_path) -> EvaluationContext:
         entry = DatasetEntry(
@@ -206,3 +204,207 @@ class TestCopilotMetricsToResultFlow:
         assert result.resolved is True
         assert result.build is True
         assert result.error_message is None
+
+
+class TestMiniAgentMetricsToResultFlow:
+    @pytest.fixture
+    def sample_entry(self) -> DatasetEntry:
+        return DatasetEntry(
+            instance_id="test__mini-flow-456",
+            repo="test/repo",
+            base_commit="b" * 40,
+            environment_setup_version="26.0",
+            fail_to_pass=[{"codeunitID": 200, "functionName": ["TestFlow"]}],
+            pass_to_pass=[],
+            project_paths=["src/test"],
+        )
+
+    @pytest.fixture
+    def sample_context(self, tmp_path, sample_entry) -> EvaluationContext:
+        return EvaluationContext(
+            entry=sample_entry,
+            repo_path=tmp_path / "repo",
+            result_dir=tmp_path / "results",
+            container_name="test-container",
+            password="test-password",
+            username="test-user",
+            agent_name="mini-bc-agent",
+            model="azure/gpt-4.1",
+        )
+
+    def test_mini_agent_full_metrics_flow_to_success_result(self, sample_context):
+        from unittest.mock import Mock
+
+        mock_agent = Mock()
+        mock_agent.messages = [
+            {
+                "role": "assistant",
+                "content": "response 1",
+                "extra": {
+                    "response": {
+                        "usage": {
+                            "prompt_tokens": 5000,
+                            "completion_tokens": 1000,
+                        }
+                    }
+                },
+            },
+            {
+                "role": "assistant",
+                "content": "response 2",
+                "extra": {
+                    "response": {
+                        "usage": {
+                            "prompt_tokens": 3500,
+                            "completion_tokens": 800,
+                        }
+                    }
+                },
+            },
+        ]
+
+        from bcbench.agent.mini.agent import _extract_metrics
+
+        metrics = _extract_metrics(mock_agent, 245.8)
+        sample_context.agent_metrics = metrics
+
+        result = _create_success_result(sample_context)
+
+        assert result.instance_id == "test__mini-flow-456"
+        assert result.resolved is True
+        assert result.build is True
+        assert result.agent_execution_time == 245.8
+        assert result.prompt_tokens == 8500
+        assert result.completion_tokens == 1800
+        assert result.agent_name == "mini-bc-agent"
+        assert result.model == "azure/gpt-4.1"
+
+    def test_mini_agent_metrics_flow_without_tokens(self, sample_context):
+        from unittest.mock import Mock
+
+        mock_agent = Mock()
+        mock_agent.messages = []  # No messages, no tokens
+
+        from bcbench.agent.mini.agent import _extract_metrics
+
+        metrics = _extract_metrics(mock_agent, 120.0)
+        sample_context.agent_metrics = metrics
+
+        result = _create_success_result(sample_context)
+
+        assert result.agent_execution_time == 120.0
+        assert result.prompt_tokens == 0
+        assert result.completion_tokens == 0
+
+    def test_mini_agent_metrics_flow_to_test_failure(self, sample_context):
+        from unittest.mock import Mock
+
+        mock_agent = Mock()
+        mock_agent.messages = [
+            {
+                "role": "assistant",
+                "content": "response",
+                "extra": {
+                    "response": {
+                        "usage": {
+                            "prompt_tokens": 6000,
+                            "completion_tokens": 1500,
+                        }
+                    }
+                },
+            },
+        ]
+
+        from bcbench.agent.mini.agent import _extract_metrics
+
+        metrics = _extract_metrics(mock_agent, 180.5)
+        sample_context.agent_metrics = metrics
+
+        result = _create_test_failure_result(sample_context)
+
+        assert result.resolved is False
+        assert result.build is True
+        assert result.error_message == "Tests failed"
+        assert result.agent_execution_time == 180.5
+        assert result.prompt_tokens == 6000
+        assert result.completion_tokens == 1500
+
+    def test_mini_agent_metrics_flow_to_build_failure(self, sample_context):
+        from unittest.mock import Mock
+
+        mock_agent = Mock()
+        mock_agent.messages = [
+            {
+                "role": "assistant",
+                "content": "response",
+                "extra": {
+                    "response": {
+                        "usage": {
+                            "prompt_tokens": 4500,
+                            "completion_tokens": 900,
+                        }
+                    }
+                },
+            },
+        ]
+
+        from bcbench.agent.mini.agent import _extract_metrics
+
+        metrics = _extract_metrics(mock_agent, 95.2)
+        sample_context.agent_metrics = metrics
+
+        result = _create_build_failure_result(sample_context, "Build failed: src/test")
+
+        assert result.resolved is False
+        assert result.build is False
+        assert result.error_message == "Build failed: src/test"
+        assert result.agent_execution_time == 95.2
+        assert result.prompt_tokens == 4500
+        assert result.completion_tokens == 900
+
+    def test_mini_agent_with_zero_tokens_preserved_in_result(self, sample_context):
+        from unittest.mock import Mock
+
+        mock_agent = Mock()
+        mock_agent.messages = []
+
+        from bcbench.agent.mini.agent import _extract_metrics
+
+        metrics = _extract_metrics(mock_agent, 60.0)
+        sample_context.agent_metrics = metrics
+
+        result = _create_success_result(sample_context)
+
+        assert result.prompt_tokens == 0
+        assert result.completion_tokens == 0
+        assert result.agent_execution_time == 60.0
+
+    def test_mini_agent_metrics_with_large_token_counts(self, sample_context):
+        from unittest.mock import Mock
+
+        mock_agent = Mock()
+        mock_agent.messages = [
+            {
+                "role": "assistant",
+                "content": "response",
+                "extra": {
+                    "response": {
+                        "usage": {
+                            "prompt_tokens": 125000,
+                            "completion_tokens": 25000,
+                        }
+                    }
+                },
+            },
+        ]
+
+        from bcbench.agent.mini.agent import _extract_metrics
+
+        metrics = _extract_metrics(mock_agent, 450.3)
+        sample_context.agent_metrics = metrics
+
+        result = _create_success_result(sample_context)
+
+        assert result.prompt_tokens == 125000
+        assert result.completion_tokens == 25000
+        assert result.agent_execution_time == 450.3
