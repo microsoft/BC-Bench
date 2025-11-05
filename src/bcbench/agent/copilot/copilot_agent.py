@@ -1,6 +1,8 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import re
 import subprocess
+from collections import deque
 from pathlib import Path
 
 from bcbench.config import get_config
@@ -18,13 +20,16 @@ def run_copilot_agent(
     repo_path: Path,
     include_project_paths: bool = False,
     output_dir: Path | None = None,
-) -> None:
+) -> dict[str, float | int] | None:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Args:
         entry_id: ID of the entry to run
         repo_path: Path to the repository
         output_dir: Optional directory to save output files (unused, kept for API compatibility)
+
+    Returns:
+        Dictionary containing metrics extracted from the CLI output, or None if collection fails
     """
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
@@ -34,6 +39,9 @@ def run_copilot_agent(
     logger.debug(f"Using prompt:\n{prompt}")
 
     process = None
+    # Use collections.deque with maxlen to keep only last few lines for metric parsing
+    output_buffer: deque[str] = deque(maxlen=20)
+
     try:
         process = subprocess.Popen(
             [
@@ -59,6 +67,7 @@ def run_copilot_agent(
         if process.stdout:
             for line in process.stdout:
                 print(line, end="", flush=True)
+                output_buffer.append(line)
 
         return_code = process.wait(timeout=_config.timeout.github_copilot_cli)
 
@@ -83,6 +92,8 @@ def run_copilot_agent(
 
     logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
+    return _parse_metrics(list(output_buffer))
+
 
 def _build_prompt(entry: DatasetEntry, repo_path: Path, include_project_paths: bool) -> str:
     project_paths: str = ", ".join(entry.project_paths)
@@ -99,3 +110,56 @@ Important constraints:
 Issue details:
 {entry.get_task()}
 """
+
+
+def _parse_metrics(output_lines: list[str]) -> dict[str, float | int] | None:
+    """Parse metrics from Copilot CLI output.
+    This is highly delicate and depends on the exact formatting of the CLI output.
+
+    Expected output format at the end:
+        Total usage est:       1 Premium request
+        Total duration (API):  34.5s
+        Total duration (wall): 3m 55.1s
+        Total code changes:    2 lines added, 1 lines removed
+        Usage by model:
+            gpt-5                125.5k input, 3.6k output, 0 cache read, 0 cache write (Est. 1 Premium request)
+    """
+    if not output_lines:
+        logger.warning("No output lines to parse metrics from")
+        return None
+
+    output_text = "".join(output_lines)
+    logger.debug(f"Parsing metrics from output:\n{output_text}")
+
+    metrics: dict[str, float | int] = {}
+
+    try:
+        duration_match = re.search(r"Total duration \(wall\):\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
+        if duration_match:
+            minutes = int(duration_match.group(1)) if duration_match.group(1) else 0
+            seconds = float(duration_match.group(2))
+            metrics["agent_execution_time"] = minutes * 60 + seconds
+
+        usage_match = re.search(r"(\d+(?:\.\d+)?k?)\s+input,\s*(\d+(?:\.\d+)?k?)\s+output", output_text)
+        if usage_match:
+            input_str = usage_match.group(1)
+            output_str = usage_match.group(2)
+
+            def parse_token_count(s: str) -> int:
+                if s.endswith("k"):
+                    return int(float(s[:-1]) * 1000)
+                return int(float(s))
+
+            metrics["prompt_tokens"] = parse_token_count(input_str)
+            metrics["completion_tokens"] = parse_token_count(output_str)
+
+        if metrics:
+            logger.info(f"Parsed metrics: {metrics}")
+            return metrics
+
+        logger.warning("No metrics found in output")
+        return None
+
+    except Exception as e:
+        logger.error(f"Failed to parse metrics from output: {e}")
+        return None

@@ -30,3 +30,11 @@ jobs:
         run: |
           uv run bcbench evaluate summarize --result-dir "${{ inputs.results-dir }}"
         shell: pwsh
+
+      - name: Upload evaluation summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-summary
+          path: ${{ inputs.results-dir }}/evaluation_summary.json
+          if-no-files-found: error
+          retention-days: 30

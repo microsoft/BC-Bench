@@ -77,12 +77,14 @@ class FilePatternConfig:
     """File patterns and naming conventions."""
 
     trajectory_pattern: str
+    patch_pattern: str
 
     @classmethod
     def default(cls) -> FilePatternConfig:
         """Get default file pattern configuration."""
         return cls(
             trajectory_pattern=".traj.json",
+            patch_pattern=".patch",
         )
 
 

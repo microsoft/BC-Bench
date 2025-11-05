@@ -36,6 +36,9 @@ class EvaluationContext:
     # Agent-specific options (stored as dict for flexibility)
     agent_options: dict[str, Any] | None = None
 
+    # Agent metrics collected during execution
+    agent_metrics: dict[str, float | int] | None = None
+
     def get_agent_option(self, key: str, default: Any = None) -> Any:
         """Get an agent-specific option.
 

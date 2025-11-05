@@ -7,14 +7,22 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
 - **Agent Evaluations**: Focuses on mini-BC-agent (baseline), GitHub Copilot CLI, and GitHub Copilot in VS Code
 
-**Key Context:**
+## Key Context
 - Primary language: Python (with AL/Business Central as the target evaluation language)
 - Uses `uv` for dependency management
 - Follows dataset schema defined in `dataset/schema.json`
 - Environment configuration via `.env` file (see `.env.sample`)
 - Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
 
-**Coding Patterns:**
-- Prefer readable code over documentation
+## Coding Patterns
+
+- Prefer strong typing and type hints
 - Prefer simple code for fast iteration
 - Prefer modular, testable components
+
+### Readable code over documentation or comments
+e.g. our test function names are already descriptive, there is no need for additional docstrings like:
+```python
+def test_full_metrics_flow_to_success_result(self, sample_context):
+    """Test parsing metrics, setting them on context, and creating a success result."""
+```
