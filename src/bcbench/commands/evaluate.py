@@ -177,4 +177,4 @@ def evaluate_summarize(
         logger.error(f"Results directory not found: {run_dir}")
         raise typer.Exit(code=1)
 
-    summarize_results(run_dir, result_pattern)
+    summarize_results(run_dir, result_pattern, run_id=run_id)
