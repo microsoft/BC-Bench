@@ -2,6 +2,7 @@
 
 import shutil
 from pathlib import Path
+from typing import Literal
 
 import typer
 from typing_extensions import Annotated
@@ -25,6 +26,7 @@ def evaluate_mini(
     container_name: ContainerName,
     username: ContainerUsername,
     password: ContainerPassword,
+    model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.nav_repo_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -66,6 +68,7 @@ def evaluate_mini(
         container_name=container_name,
         username=username,
         password=password,
+        model=model,
         agent_name="mini-bc-agent",
         agent_options={
             "enable_bc_tools": enable_bc_tools,
@@ -79,6 +82,7 @@ def evaluate_mini(
         lambda ctx: run_mini_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
+            model=ctx.model,
             include_project_paths=include_project_paths,
             enable_bc_tools=ctx.get_agent_option("enable_bc_tools", False),
             container_name=ctx.container_name,
@@ -136,6 +140,7 @@ def evaluate_copilot(
         container_name=container_name,
         username=username,
         password=password,
+        model=model,
         agent_name="GitHub Copilot CLI",
     )
 
@@ -144,7 +149,7 @@ def evaluate_copilot(
         lambda ctx: run_copilot_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
-            model=model,
+            model=ctx.model,
             include_project_paths=include_project_paths,
             output_dir=ctx.result_dir,
         ),

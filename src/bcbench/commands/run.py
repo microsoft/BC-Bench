@@ -1,6 +1,7 @@
 """CLI commands for running agents."""
 
 from pathlib import Path
+from typing import Literal
 
 import typer
 from typing_extensions import Annotated
@@ -33,6 +34,7 @@ def run_mini(
     container_name: ContainerName,
     username: ContainerUsername,
     password: ContainerPassword,
+    model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.nav_repo_path,
     enable_bc_tools: Annotated[
@@ -59,6 +61,7 @@ def run_mini(
     run_mini_agent(
         entry=entry,
         repo_path=repo_path,
+        model=model,
         enable_bc_tools=enable_bc_tools,
         container_name=container_name,
         username=username,

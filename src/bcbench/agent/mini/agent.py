@@ -52,6 +52,7 @@ def _create_bc_agent_class():
 def run_mini_agent(
     entry: DatasetEntry,
     repo_path: Path,
+    model: str,
     enable_bc_tools: bool = False,
     include_project_paths: bool = False,
     container_name: str | None = None,
@@ -84,7 +85,7 @@ def run_mini_agent(
     BCAgent = _create_bc_agent_class()
 
     agent = BCAgent(
-        LitellmModel(model_name="azure/gpt-4.1"),
+        LitellmModel(model_name=model),
         BCEnvironment(
             container_name=container_name,
             repo_path=str(repo_path),

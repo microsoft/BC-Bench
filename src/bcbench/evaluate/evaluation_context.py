@@ -27,10 +27,11 @@ class EvaluationContext:
     # BC Container configuration
     container_name: str
     password: str
-    username: str = "admin"
+    username: str
 
     # Agent metadata
-    agent_name: str = "Agent"
+    agent_name: str
+    model: str
 
     # Agent-specific options (stored as dict for flexibility)
     agent_options: dict[str, Any] | None = None
