@@ -12,6 +12,7 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - Uses `uv` for dependency management
 - Follows dataset schema defined in `dataset/schema.json`
 - Environment configuration via `.env` file (see `.env.sample`)
+- Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
 
 **Coding Patterns:**
 - Prefer readable code over documentation
