@@ -4,10 +4,12 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from bcbench.config import get_config
 from bcbench.exceptions import PatchApplicationError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
+_config = get_config()
 
 
 def clean_repo(repo_path: Path) -> None:
@@ -56,7 +58,7 @@ def checkout_commit(repo_path: Path, commit: str) -> None:
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
     logger.info(f"Applying {patch_name}")
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=_config.file_patterns.patch_pattern, delete=False, encoding="utf-8") as f:
         f.write(patch_content)
         patch_file = f.name
 
@@ -75,3 +77,29 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         raise PatchApplicationError(patch_name, e.stderr) from e
     finally:
         Path(patch_file).unlink(missing_ok=True)
+
+
+def save_git_diff(result_dir: Path, repo_path: Path) -> None:
+    """Save git diff into a patch file in the result directory.
+
+    Args:
+        result_dir: Path to the result directory
+        repo_path: Path to the git repository
+    """
+    try:
+        logger.info("Getting git diff as patch")
+        result = subprocess.run(
+            ["git", "diff"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        logger.debug("Git diff retrieved successfully")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to get git diff: {e.stderr}")
+        return
+
+    patch_file_path: Path = result_dir / f"generated{_config.file_patterns.patch_pattern}"
+    patch_file_path.write_text(result.stdout, encoding="utf-8")
+    logger.info(f"Saved git diff to {patch_file_path}")
