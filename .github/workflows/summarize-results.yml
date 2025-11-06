@@ -28,7 +28,7 @@ jobs:
 
       - name: Summarize evaluation results
         run: |
-          uv run bcbench result summarize --result-dir "${{ inputs.results-dir }}"
+          uv run bcbench result summarize --result-dir "${{ inputs.results-dir }}" --bceval-output "bceval_results.jsonl"
         shell: pwsh
 
       - name: Upload evaluation summary to artifacts
@@ -38,3 +38,19 @@ jobs:
           path: ${{ inputs.results-dir }}/${{ github.run_id }}/evaluation_summary.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload result with bceval to Braintrust
+        env:
+          BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
+          USERNAME: ${{ secrets.USERNAME }}
+        shell: pwsh
+        run: |
+          # Install bc-eval from ADO feed using CLI options (won't touch uv.lock)
+          uv tool install bc-eval --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
+
+          # Upload summary to Braintrust using bc-eval
+          $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/bceval_results.jsonl"
+
+          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions .\evaluator\scores.py --eval-run-name "${{ github.run_id }}"
