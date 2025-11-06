@@ -89,7 +89,7 @@ def save_git_diff(result_dir: Path, repo_path: Path) -> None:
     try:
         logger.info("Getting git diff as patch")
         result = subprocess.run(
-            ["git", "diff", "--", ".", ":!*.docx"],
+            ["git", "diff", "--", ".", ":!*.docx", ":!*.rdl", ":!*.rdlc"],
             cwd=repo_path,
             capture_output=True,
             text=True,

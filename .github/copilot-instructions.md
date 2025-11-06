@@ -21,7 +21,7 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - Prefer modular, testable components
 
 ### Readable code over documentation or comments
-e.g. our test function names are already descriptive, there is no need for additional docstrings like:
+e.g. our test function names are already descriptive, there is NO need for additional docstrings like:
 ```python
 def test_full_metrics_flow_to_success_result(self, sample_context):
     """Test parsing metrics, setting them on context, and creating a success result."""

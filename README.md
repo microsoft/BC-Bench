@@ -9,7 +9,8 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
 | `dataset/` | Dataset schema and benchmark entries |
 | `src/bcbench/` | Python package with CLI, agent, collection, validation utilities |
 | `scripts/` | PowerShell scripts for environment setup and dataset verification using AL-GO/BCContainerHelper |
-| `tests/` | tests for the CLI python package |
+| `tests/` | Tests for the CLI python package |
+| `docs/` | GitHub Pages site for evaluation results |
 
 ## Quick start
 
@@ -21,8 +22,8 @@ cd BC-Bench
 
 # Install uv if you don't have it: https://docs.astral.sh/uv/
 
-# Install dependencies and bcbench
-uv sync
+# Install all dependencies and bcbench
+uv sync --all-extras
 uv run bcbench --help
 ```
 
@@ -43,21 +44,14 @@ See full spec in [`dataset/schema.json`](./dataset/schema.json).
 
 ### mini-BC-agent (Baseline)
 
-A minimal agent loop based on [mini-swe-agent](https://github.com/SWE-agent/mini-SWE-agent). As they noted:
+A minimal agent loop based on [mini-swe-agent](https://github.com/SWE-agent/mini-SWE-agent).
 
-> Currently, top-performing systems represent a wide variety of AI scaffolds; from simple LM agent loops, to RAG systems, to multi-rollout and review type systems.
-
-Its simplicity makes it perfect for establishing baseline performance and getting things up and running. See [mini-BC-agent](src/bcbench/agent/mini/agent.py).
+Its simplicity makes it perfect for getting things up and running and establishing baseline performance. See [mini-bc-agent](src/bcbench/agent/mini/agent.py).
 
 ### GitHub Copilot CLI
 
 The [GitHub Copilot CLI](https://github.com/github/copilot-cli) (public preview Sept 2025) supports MCP servers, tools, and agent mode, closely simulates real developers' workflow (VSCode and Coding Agent), making it a good candidate for automated workflows.
 
-### GitHub Copilot in VS Code
-
-This is where AL developers actually work. Figuring out automation here is important.
-
-**TODO**: Automate evaluation (maybe start with DevBox?)
 
 ## Contributing
 
