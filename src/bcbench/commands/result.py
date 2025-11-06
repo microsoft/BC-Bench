@@ -5,11 +5,10 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from bcbench.cli_options import OutputDir, RunId
+from bcbench.cli_options import DatasetPath, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results import create_console_summary, create_github_job_summary
-from bcbench.results.evaluation_result import EvaluationResult, EvaluationResultSummary
+from bcbench.results import EvaluationResult, EvaluationResultSummary, create_console_summary, create_github_job_summary, write_bceval_results
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -22,6 +21,8 @@ def result_summarize(
     run_id: RunId,
     result_dir: OutputDir = _config.paths.evaluation_results_path,
     result_pattern: Annotated[str, typer.Option(help="Pattern for the result files")] = f"*{_config.file_patterns.result_pattern}",
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+    bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
 ):
     """
     Summarize evaluation results from a completed run.
@@ -63,13 +64,7 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    # combining all job results into a single run result file
-    run_result_file = run_dir / f"{run_id}{_config.file_patterns.result_pattern}"
-    if run_result_file.exists():
-        logger.warning(f"Overwriting existing run result file: {run_result_file}")
-        run_result_file.unlink()
-    for result in results:
-        result.save(run_dir, run_result_file.name)
+    write_bceval_results(results, run_dir, run_id, dataset_path, bceval_output)
 
     if _config.env.github_actions:
         create_github_job_summary(results)
