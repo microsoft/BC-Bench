@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from bcbench.config import get_config
 from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.exceptions import BuildError, PatchApplicationError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
@@ -10,7 +11,7 @@ from bcbench.operations.git_operations import apply_patch, checkout_commit, clea
 from bcbench.results import EvaluationResult
 
 logger = get_logger(__name__)
-
+_config = get_config()
 __all__ = ["run_evaluation_pipeline"]
 
 
@@ -86,7 +87,7 @@ def run_evaluation_pipeline(
 
     finally:
         if result is not None:
-            result.save(context.result_dir, f"instance_results_{context.entry.instance_id}.jsonl")
+            result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
             save_git_diff(context.result_dir, context.repo_path)
         else:
             logger.error(f"No result generated for {context.entry.instance_id}")

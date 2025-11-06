@@ -39,7 +39,7 @@ class EvaluationResult:
             completion_tokens=payload.get("completion_tokens"),
         )
 
-    def save(self, output_dir: Path, result_file: str = "instance_results.jsonl") -> None:
+    def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
         with open(output_file, "a") as f:
             result_dict = {
