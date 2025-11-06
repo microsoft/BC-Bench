@@ -6,6 +6,7 @@ from typing_extensions import Annotated
 
 from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.collect import collect_app
+from bcbench.commands.result import result_app
 from bcbench.config import get_config
 from bcbench.logger import setup_logger
 
@@ -23,6 +24,7 @@ app.add_typer(collect_app, name="collect")
 app.add_typer(run_app, name="run")
 app.add_typer(dataset_app, name="dataset")
 app.add_typer(evaluate_app, name="evaluate")
+app.add_typer(result_app, name="result")
 
 
 @app.callback()

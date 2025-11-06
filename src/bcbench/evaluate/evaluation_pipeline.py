@@ -3,11 +3,11 @@
 from collections.abc import Callable
 
 from bcbench.evaluate.evaluation_context import EvaluationContext
-from bcbench.evaluate.evaluation_result import EvaluationResult
 from bcbench.exceptions import BuildError, PatchApplicationError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations.bc_operations import build_and_publish_projects, run_tests
 from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, save_git_diff
+from bcbench.results import EvaluationResult
 
 logger = get_logger(__name__)
 
