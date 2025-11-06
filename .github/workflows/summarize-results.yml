@@ -53,4 +53,4 @@ jobs:
           # Upload summary to Braintrust using bc-eval
           $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/bceval_results.jsonl"
 
-          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions .\evaluator\scores.py --eval-run-name "${{ github.run_id }}"
+          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "${{ github.run_id }}"
