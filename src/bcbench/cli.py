@@ -6,9 +6,11 @@ from typing_extensions import Annotated
 
 from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.collect import collect_app
+from bcbench.config import get_config
 from bcbench.logger import setup_logger
 
 load_dotenv()
+get_config()
 
 app = typer.Typer(
     name="bcbench",
