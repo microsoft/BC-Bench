@@ -83,3 +83,4 @@ jobs:
     uses: ./.github/workflows/summarize-results.yml
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
+    secrets: inherit

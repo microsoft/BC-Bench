@@ -81,3 +81,4 @@ jobs:
     uses: ./.github/workflows/summarize-results.yml
     with:
       results-dir: ${{ needs.evaluate-with-mini-agent.outputs.results-dir }}
+    secrets: inherit
