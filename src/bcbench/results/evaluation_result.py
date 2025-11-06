@@ -81,6 +81,11 @@ class EvaluationResultSummary:
     def from_results(cls, results: list[EvaluationResult], run_id: str) -> "EvaluationResultSummary":
         total = len(results)
         resolved = sum(r.resolved for r in results)
+
+        durations = [r.agent_execution_time for r in results if r.agent_execution_time is not None]
+        prompt_tokens = [r.prompt_tokens for r in results if r.prompt_tokens is not None]
+        completion_tokens = [r.completion_tokens for r in results if r.completion_tokens is not None]
+
         return cls(
             total=total,
             resolved=resolved,
@@ -89,9 +94,9 @@ class EvaluationResultSummary:
             date=date.today(),
             model=results[0].model,
             agent_name=results[0].agent_name,
-            average_duration=sum(r.agent_execution_time for r in results if r.agent_execution_time is not None) / total,
-            average_prompt_tokens=sum(r.prompt_tokens for r in results if r.prompt_tokens is not None) / total,
-            average_completion_tokens=sum(r.completion_tokens for r in results if r.completion_tokens is not None) / total,
+            average_duration=sum(durations) / len(durations) if durations else 0.0,
+            average_prompt_tokens=sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
+            average_completion_tokens=sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
             github_run_id=run_id,
         )
 
