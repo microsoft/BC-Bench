@@ -114,9 +114,9 @@ class EvaluationResultSummary:
                 "date": self.date.isoformat(),
                 "model": self.model,
                 "agent_name": self.agent_name,
-                "average_duration": self.average_duration,
-                "average_prompt_tokens": self.average_prompt_tokens,
-                "average_completion_tokens": self.average_completion_tokens,
+                "average_duration": round(self.average_duration, 1),
+                "average_prompt_tokens": round(self.average_prompt_tokens, 1),
+                "average_completion_tokens": round(self.average_completion_tokens, 1),
                 "github_run_id": self.github_run_id,
             }
             f.write(json.dumps(summary_dict, indent=4))
