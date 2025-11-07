@@ -135,12 +135,14 @@ def _parse_metrics(output_lines: list[str]) -> dict[str, float | int] | None:
             seconds = float(duration_match.group(2))
             metrics["agent_execution_time"] = minutes * 60 + seconds
 
-        usage_match = re.search(r"(\d+(?:\.\d+)?k?)\s+input,\s*(\d+(?:\.\d+)?k?)\s+output", output_text)
+        usage_match = re.search(r"(\d+(?:\.\d+)?[km]?)\s+input,\s*(\d+(?:\.\d+)?[km]?)\s+output", output_text)
         if usage_match:
             input_str = usage_match.group(1)
             output_str = usage_match.group(2)
 
             def parse_token_count(s: str) -> int:
+                if s.endswith("m"):
+                    return int(float(s[:-1]) * 1000000)
                 if s.endswith("k"):
                     return int(float(s[:-1]) * 1000)
                 return int(float(s))

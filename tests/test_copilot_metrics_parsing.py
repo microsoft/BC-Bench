@@ -1,7 +1,7 @@
 from bcbench.agent.copilot.copilot_agent import _parse_metrics
 
 
-def test_parse_metrics_full_output():
+def test_parse_metrics_full_output_gpt5():
     output_lines = [
         "Some other output\n",
         "Total usage est:       1 Premium request\n",
@@ -18,6 +18,25 @@ def test_parse_metrics_full_output():
     assert result["agent_execution_time"] == 235.1
     assert result["prompt_tokens"] == 125500
     assert result["completion_tokens"] == 3600
+
+
+def test_parse_metrics_full_output_haiku45():
+    output_lines = [
+        "Some other output\n",
+        "Total usage est:       0.33 Premium requests\n",
+        "Total duration (API):  1m 37.1s\n",
+        "Total duration (wall): 29m 25.4s\n",
+        "Total code changes:    2 lines added, 2 lines removed\n",
+        "Usage by model:\n",
+        "    claude-haiku-4.5     1.1m input, 6.6k output, 0 cache read, 0 cache write (Est. 0.33 Premium requests)\n",
+    ]
+
+    result = _parse_metrics(output_lines)
+
+    assert result is not None
+    assert result["agent_execution_time"] == 1765.4
+    assert result["prompt_tokens"] == 1100000
+    assert result["completion_tokens"] == 6600
 
 
 def test_parse_metrics_wall_time_seconds_only():
