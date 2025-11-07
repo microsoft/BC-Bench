@@ -68,31 +68,31 @@ def run_evaluation_pipeline(
         )
         run_tests(context.entry, context.container_name, context.username, context.password)
 
-        result = _create_success_result(context, generated_patch)
+        result = EvaluationResult.create_success(context, generated_patch)
         logger.info(f"Successfully completed {context.entry.instance_id}")
 
     except PatchApplicationError as e:
-        result = _create_build_failure_result(context, f"Failed to apply {e.patch_name}")
+        result = EvaluationResult.create_build_failure(context, f"Failed to apply {e.patch_name}")
         logger.error(f"Failed to apply test patch for {context.entry.instance_id}: {e}")
 
     except BuildError as e:
-        result = _create_build_failure_result(context, f"Build failed: {e.project_path}")
+        result = EvaluationResult.create_build_failure(context, f"Build failed: {e.project_path}")
         logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
     except BuildTimeoutExpired as e:
-        result = _create_build_failure_result(context, f"Build timed out: {e.project_path}")
+        result = EvaluationResult.create_build_failure(context, f"Build timed out: {e.project_path}")
         logger.error(f"Build timed out during evaluation of {context.entry.instance_id}: {e}")
 
     except TestExecutionError as e:
-        result = _create_test_failure_result(context)
+        result = EvaluationResult.create_test_failure(context)
         logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 
     except TestExecutionTimeoutExpired as e:
-        result = _create_test_failure_result(context, "Tests timed out")
+        result = EvaluationResult.create_test_failure(context, "Tests timed out")
         logger.error(f"Tests timed out during evaluation of {context.entry.instance_id}: {e}")
 
     except Exception as e:
-        result = _create_unexpected_error_result(context, e)
+        result = EvaluationResult.create_unexpected_error(context, e)
         logger.error(f"Failed to process {context.entry.instance_id}: {e}")
 
     finally:
@@ -101,39 +101,3 @@ def run_evaluation_pipeline(
         else:
             logger.error(f"No result generated for {context.entry.instance_id}")
             raise RuntimeError(f"No result generated for {context.entry.instance_id}")
-
-
-def _create_result(context: EvaluationContext, resolved: bool, build: bool, error_message: str | None = None, generated_patch: str = "") -> EvaluationResult:
-    metrics = context.agent_metrics or {}
-    prompt_tokens = metrics.get("prompt_tokens")
-    completion_tokens = metrics.get("completion_tokens")
-    project = context.entry.extract_project_name()
-    return EvaluationResult(
-        instance_id=context.entry.instance_id,
-        project=project,
-        resolved=resolved,
-        build=build,
-        model=context.model,
-        agent_name=context.agent_name,
-        generated_patch=generated_patch,
-        error_message=error_message,
-        agent_execution_time=metrics.get("agent_execution_time"),
-        prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
-        completion_tokens=int(completion_tokens) if completion_tokens is not None else None,
-    )
-
-
-def _create_success_result(context: EvaluationContext, generated_patch: str) -> EvaluationResult:
-    return _create_result(context, resolved=True, build=True, generated_patch=generated_patch)
-
-
-def _create_build_failure_result(context: EvaluationContext, error_msg: str) -> EvaluationResult:
-    return _create_result(context, resolved=False, build=False, error_message=error_msg)
-
-
-def _create_test_failure_result(context: EvaluationContext, error_msg: str = "Tests failed") -> EvaluationResult:
-    return _create_result(context, resolved=False, build=True, error_message=error_msg)
-
-
-def _create_unexpected_error_result(context: EvaluationContext, error: Exception) -> EvaluationResult:
-    return _create_result(context, resolved=False, build=False, error_message=f"Unexpected error: {error}")

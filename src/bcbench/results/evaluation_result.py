@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from bcbench.evaluate import EvaluationContext
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +40,42 @@ class EvaluationResult:
             agent_execution_time=payload.get("agent_execution_time"),
             prompt_tokens=payload.get("prompt_tokens"),
             completion_tokens=payload.get("completion_tokens"),
+        )
+
+    @classmethod
+    def create_success(cls, context: "EvaluationContext", generated_patch: str) -> "EvaluationResult":
+        return cls._create(context, resolved=True, build=True, generated_patch=generated_patch)
+
+    @classmethod
+    def create_build_failure(cls, context: "EvaluationContext", error_msg: str) -> "EvaluationResult":
+        return cls._create(context, resolved=False, build=False, error_message=error_msg)
+
+    @classmethod
+    def create_test_failure(cls, context: "EvaluationContext", error_msg: str = "Tests failed") -> "EvaluationResult":
+        return cls._create(context, resolved=False, build=True, error_message=error_msg)
+
+    @classmethod
+    def create_unexpected_error(cls, context: "EvaluationContext", error: Exception) -> "EvaluationResult":
+        return cls._create(context, resolved=False, build=False, error_message=f"Unexpected error: {error}")
+
+    @classmethod
+    def _create(cls, context: "EvaluationContext", resolved: bool, build: bool, error_message: str | None = None, generated_patch: str = "") -> "EvaluationResult":
+        metrics = context.agent_metrics or {}
+        prompt_tokens = metrics.get("prompt_tokens")
+        completion_tokens = metrics.get("completion_tokens")
+        project = context.entry.extract_project_name()
+        return cls(
+            instance_id=context.entry.instance_id,
+            project=project,
+            resolved=resolved,
+            build=build,
+            model=context.model,
+            agent_name=context.agent_name,
+            generated_patch=generated_patch,
+            error_message=error_message,
+            agent_execution_time=metrics.get("agent_execution_time"),
+            prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
+            completion_tokens=int(completion_tokens) if completion_tokens is not None else None,
         )
 
     def save(self, output_dir: Path, result_file: str) -> None:

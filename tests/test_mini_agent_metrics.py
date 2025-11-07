@@ -6,7 +6,7 @@ import pytest
 
 from bcbench.dataset import DatasetEntry
 from bcbench.evaluate.evaluation_context import EvaluationContext
-from bcbench.evaluate.evaluation_pipeline import _create_success_result
+from bcbench.results import EvaluationResult
 
 
 class TestMiniAgentMetricsExtraction:
@@ -119,7 +119,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 1200,
         }
 
-        result = _create_success_result(sample_context, "test_patch")
+        result = EvaluationResult.create_success(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
         assert result.agent_execution_time == 180.5
@@ -134,7 +134,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 0,
         }
 
-        result = _create_success_result(sample_context, "test_patch")
+        result = EvaluationResult.create_success(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
         assert result.agent_execution_time == 180.5
@@ -145,7 +145,7 @@ class TestMiniAgentMetricsExtraction:
     def test_metrics_flow_with_no_metrics(self, sample_context):
         sample_context.agent_metrics = None
 
-        result = _create_success_result(sample_context, "test_patch")
+        result = EvaluationResult.create_success(sample_context, "test_patch")
 
         assert result.agent_execution_time is None
         assert result.prompt_tokens is None
@@ -154,7 +154,7 @@ class TestMiniAgentMetricsExtraction:
     def test_metrics_flow_with_empty_dict(self, sample_context):
         sample_context.agent_metrics = {}
 
-        result = _create_success_result(sample_context, "test_patch")
+        result = EvaluationResult.create_success(sample_context, "test_patch")
 
         assert result.agent_execution_time is None
         assert result.prompt_tokens is None
@@ -211,7 +211,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 800,
         }
 
-        result = _create_success_result(sample_context, "test_patch")
+        result = EvaluationResult.create_success(sample_context, "test_patch")
 
         # Verify metrics
         assert result.agent_execution_time == 95.3
