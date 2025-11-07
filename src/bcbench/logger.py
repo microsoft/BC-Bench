@@ -116,17 +116,17 @@ class GitHubActionsHandler(logging.Handler):
 
             # Escape special characters for GitHub Actions
             # Per GitHub docs: need to escape %, \r, \n
-            msg = msg.replace("%", "%25")
-            msg = msg.replace("\r", "%0D")
-            msg = msg.replace("\n", "%0A")
+            escape_table = str.maketrans({"%": "%25", "\r": "%0D", "\n": "%0A"})
+            msg = msg.translate(escape_table)
 
             # Determine the command type
             command = "error" if record.levelno >= logging.ERROR else "warning"
 
             # Build the annotation command
             # Format: ::warning file={name},line={line},title={title}::{message}
-            # We'll use the logger name as the title
-            annotation = f"::{command} title={record.name}::{msg}"
+            # Escape the logger name as well since it could contain special characters
+            title = record.name.translate(escape_table)
+            annotation = f"::{command} title={title}::{msg}"
 
             # Output to stdout (GitHub Actions reads workflow commands from stdout)
             print(annotation, flush=True)
