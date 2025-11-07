@@ -31,9 +31,9 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
                 "context": "",
                 "metadata": {
                     "model": result.model,
-                    "prompt_tokens": result.prompt_tokens,
-                    "completion_tokens": result.completion_tokens,
-                    "latency": result.agent_execution_time,
+                    "prompt_tokens": result.prompt_tokens or 0,
+                    "completion_tokens": result.completion_tokens or 0,
+                    "latency": result.agent_execution_time or 0,
                     "resolved": result.resolved,
                     "run_id": run_id,
                     "project": result.project,
