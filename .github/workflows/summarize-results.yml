@@ -8,6 +8,14 @@ on:
         description: Directory to download results to
         required: true
         type: string
+      model:
+        description: 'model to use for evaluation'
+        required: true
+        type: string
+      agent:
+        description: 'type of agent used for evaluation'
+        required: true
+        type: string
 
 jobs:
   summarize-results:
@@ -53,4 +61,4 @@ jobs:
           # Upload summary to Braintrust using bc-eval
           $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/bceval_results.jsonl"
 
-          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "${{ github.run_id }}"
+          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "${{ github.event.inputs.agent }} (${{ github.event.inputs.model }})"

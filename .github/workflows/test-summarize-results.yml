@@ -52,4 +52,6 @@ jobs:
     uses: ./.github/workflows/summarize-results.yml
     with:
       results-dir: ${{ needs.generate-mock-results.outputs.results-dir }}
+      model: 'test-model'
+      agent: 'test-agent'
     secrets: inherit
