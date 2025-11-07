@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 @dataclass(slots=True)
 class EvaluationResult:
     instance_id: str
-    version: str
+    project: str
     model: str
     agent_name: str
 
@@ -28,7 +28,7 @@ class EvaluationResult:
     def from_json(cls, payload: dict[str, Any]) -> "EvaluationResult":
         return cls(
             instance_id=str(payload["instance_id"]),
-            version=str(payload["environment_setup_version"]),
+            project=str(payload["project"]),
             model=str(payload["model"]),
             agent_name=str(payload["agent_name"]),
             resolved=bool(payload["resolved"]),
@@ -49,7 +49,7 @@ class EvaluationResult:
                 "agent_name": self.agent_name,
                 "build": self.build,
                 "error_message": self.error_message,
-                "environment_setup_version": self.version,
+                "project": self.project,
                 "agent_execution_time": self.agent_execution_time,
                 "prompt_tokens": self.prompt_tokens,
                 "completion_tokens": self.completion_tokens,

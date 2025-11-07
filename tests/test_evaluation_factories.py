@@ -37,7 +37,7 @@ class TestEvaluationResultFactories:
         result = _create_success_result(sample_context)
 
         assert result.instance_id == "test__repo-123"
-        assert result.version == "25.1"
+        assert result.project == "app"
         assert result.resolved is True
         assert result.build is True
         assert result.model == "test-model"
@@ -49,7 +49,7 @@ class TestEvaluationResultFactories:
         result = _create_build_failure_result(sample_context, error_msg)
 
         assert result.instance_id == "test__repo-123"
-        assert result.version == "25.1"
+        assert result.project == "app"
         assert result.resolved is False
         assert result.build is False
         assert result.model == "test-model"
@@ -60,7 +60,7 @@ class TestEvaluationResultFactories:
         result = _create_test_failure_result(sample_context)
 
         assert result.instance_id == "test__repo-123"
-        assert result.version == "25.1"
+        assert result.project == "app"
         assert result.resolved is False
         assert result.build is True
         assert result.model == "test-model"
@@ -72,7 +72,7 @@ class TestEvaluationResultFactories:
         result = _create_unexpected_error_result(sample_context, error)
 
         assert result.instance_id == "test__repo-123"
-        assert result.version == "25.1"
+        assert result.project == "app"
         assert result.resolved is False
         assert result.build is False
         assert result.model == "test-model"
@@ -103,7 +103,7 @@ class TestEvaluationResultFactories:
         result = _create_success_result(context)
 
         assert result.instance_id == "different__entry-456"
-        assert result.version == "26.2"
+        assert result.project == "different"
         assert result.model == "different-model"
         assert result.agent_name == "different-agent"
 

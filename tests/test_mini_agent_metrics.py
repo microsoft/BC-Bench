@@ -220,7 +220,7 @@ class TestMiniAgentMetricsExtraction:
 
         # Verify other fields are still correctly populated
         assert result.instance_id == "test__mini-metrics-123"
-        assert result.version == "25.1"
+        assert result.project == "app"
         assert result.model == "azure/gpt-4.1"
         assert result.agent_name == "mini-bc-agent"
         assert result.resolved is True

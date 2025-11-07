@@ -106,9 +106,10 @@ def _create_result(context: EvaluationContext, resolved: bool, build: bool, erro
     metrics = context.agent_metrics or {}
     prompt_tokens = metrics.get("prompt_tokens")
     completion_tokens = metrics.get("completion_tokens")
+    project = context.entry.extract_project_name()
     return EvaluationResult(
         instance_id=context.entry.instance_id,
-        version=context.entry.environment_setup_version,
+        project=project,
         resolved=resolved,
         build=build,
         model=context.model,

@@ -87,6 +87,36 @@ class DatasetEntry:
             task += f"\n\n## Additional Hints\n{self.hints_text}"
         return task
 
+    def extract_project_name(self) -> str:
+        """Extract the project name from the first project path.
+
+        Examples:
+            App\\Apps\\W1\\Sustainability\\app -> Sustainability
+            App\\Layers\\W1\\BaseApp -> BaseApp
+            App\\Apps\\W1\\Shopify\\test -> Shopify
+
+        Returns:
+            The extracted project name, or empty string if no project paths.
+        """
+        if not self.project_paths:
+            return ""
+
+        # Take the first project path
+        path = self.project_paths[0]
+
+        # Split by backslash or forward slash
+        parts = path.replace("\\", "/").split("/")
+
+        # Look for the meaningful project name
+        # Pattern: App\Apps\W1\<ProjectName>\app or App\Layers\W1\<ProjectName>
+        if len(parts) >= 4:
+            # For paths like App\Apps\W1\Sustainability\app, return "Sustainability"
+            # For paths like App\Layers\W1\BaseApp, return "BaseApp"
+            return parts[-2] if parts[-1] in ("app", "test") else parts[-1]
+
+        # Fallback to the last meaningful part
+        return parts[-1] if parts else ""
+
 
 def _ensure_list_of_str(values: Iterable[Any]) -> list[str]:
     return [str(value) for value in values]

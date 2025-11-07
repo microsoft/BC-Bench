@@ -49,6 +49,7 @@ class TestCopilotMetricsToResultFlow:
 
         assert result.instance_id == "test__metrics-flow-123"
         assert result.resolved is True
+        assert result.project == "app"
         assert result.build is True
         assert result.agent_execution_time == 225.2
         assert result.prompt_tokens == 100500
@@ -198,7 +199,7 @@ class TestCopilotMetricsToResultFlow:
 
         # Verify other fields are still correctly populated
         assert result.instance_id == "test__metrics-flow-123"
-        assert result.version == "25.1"
+        assert result.project == "app"
         assert result.model == "gpt-4o"
         assert result.agent_name == "copilot-cli"
         assert result.resolved is True

@@ -21,13 +21,13 @@ def create_console_summary(results: list[EvaluationResult]) -> None:
 
     table = Table(title="\nDetailed Results", show_lines=True)
     table.add_column("Instance ID", style="cyan", no_wrap=True)
-    table.add_column("Version", style="magenta", no_wrap=True)
+    table.add_column("Project", style="magenta", no_wrap=True)
     table.add_column("Status", justify="center")
     table.add_column("Error Message", style="dim")
 
     for result in results:
         status = "[green]Success[/green]" if result.resolved else "[red]Failed[/red]"
-        table.add_row(result.instance_id, result.version, status, result.error_message or "")
+        table.add_row(result.instance_id, result.project, status, result.error_message or "")
 
     console.print(table)
     console.print()
@@ -45,7 +45,7 @@ def create_github_job_summary(results: list[EvaluationResult]) -> None:
 
 ## Detailed Results
 
-| Instance ID | Version | Status | Error Message |
+| Instance ID | Project | Status | Error Message |
 |-------------|---------|--------|---------------|
 """
     for result in results:
@@ -53,7 +53,7 @@ def create_github_job_summary(results: list[EvaluationResult]) -> None:
         status_text = f"{status_icon} {'Success' if result.resolved else 'Failed'}"
         error_msg = result.error_message or ""
         error_msg = error_msg.replace("|", "\\|")
-        markdown_summary += f"| `{result.instance_id}` | `{result.version}` | {status_text} | {error_msg} |\n"
+        markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {error_msg} |\n"
 
     _write_github_step_summary(markdown_summary)
 

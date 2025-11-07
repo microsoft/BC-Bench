@@ -66,7 +66,7 @@ class TestFromResults:
         return [
             EvaluationResult(
                 instance_id="test__1",
-                version="25.1",
+                project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
                 resolved=True,
@@ -78,7 +78,7 @@ class TestFromResults:
             ),
             EvaluationResult(
                 instance_id="test__2",
-                version="25.1",
+                project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
                 resolved=True,
@@ -90,7 +90,7 @@ class TestFromResults:
             ),
             EvaluationResult(
                 instance_id="test__3",
-                version="25.1",
+                project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
                 resolved=False,
@@ -128,7 +128,7 @@ class TestFromResults:
         results = [
             EvaluationResult(
                 instance_id="test__1",
-                version="25.1",
+                project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
                 resolved=True,
@@ -140,7 +140,7 @@ class TestFromResults:
             ),
             EvaluationResult(
                 instance_id="test__2",
-                version="25.1",
+                project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
                 resolved=False,
@@ -163,7 +163,7 @@ class TestFromResults:
         results = [
             EvaluationResult(
                 instance_id="test__1",
-                version="25.1",
+                project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
                 resolved=False,
