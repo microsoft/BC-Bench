@@ -80,7 +80,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          $branchName = "update-leaderboard-${{ github.run_id }}"
+          git checkout -b $branchName
+
           git add docs/_data/leaderboard.json
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
+
+          git push origin $branchName
 
           gh pr create --title "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})" --base main --fill
