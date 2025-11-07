@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from bcbench.config import get_config
 from bcbench.evaluate.evaluation_context import EvaluationContext
-from bcbench.exceptions import BuildError, PatchApplicationError, TestExecutionError
+from bcbench.exceptions import BuildError, BuildTimeoutExpired, PatchApplicationError, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations.bc_operations import build_and_publish_projects, run_tests
 from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, save_git_diff
@@ -77,9 +77,17 @@ def run_evaluation_pipeline(
         result = _create_build_failure_result(context, f"Build failed: {e.project_path}")
         logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
+    except BuildTimeoutExpired as e:
+        result = _create_build_failure_result(context, f"Build timed out: {e.project_path}")
+        logger.error(f"Build timed out during evaluation of {context.entry.instance_id}: {e}")
+
     except TestExecutionError as e:
         result = _create_test_failure_result(context)
         logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
+
+    except TestExecutionTimeoutExpired as e:
+        result = _create_test_failure_result(context, "Tests timed out")
+        logger.error(f"Tests timed out during evaluation of {context.entry.instance_id}: {e}")
 
     except Exception as e:
         result = _create_unexpected_error_result(context, e)
@@ -120,8 +128,8 @@ def _create_build_failure_result(context: EvaluationContext, error_msg: str) -> 
     return _create_result(context, resolved=False, build=False, error_message=error_msg)
 
 
-def _create_test_failure_result(context: EvaluationContext) -> EvaluationResult:
-    return _create_result(context, resolved=False, build=True, error_message="Tests failed")
+def _create_test_failure_result(context: EvaluationContext, error_msg: str = "Tests failed") -> EvaluationResult:
+    return _create_result(context, resolved=False, build=True, error_message=error_msg)
 
 
 def _create_unexpected_error_result(context: EvaluationContext, error: Exception) -> EvaluationResult:

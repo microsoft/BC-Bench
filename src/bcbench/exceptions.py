@@ -87,6 +87,16 @@ class BuildError(BCBenchError):
         super().__init__(message)
 
 
+class BuildTimeoutExpired(BCBenchError):
+    """Build and publish operation timed out."""
+
+    def __init__(self, project_path: str, timeout: int):
+        self.project_path = project_path
+        self.timeout = timeout
+        message = f"Build and publish timed out for {project_path} after {timeout} seconds"
+        super().__init__(message)
+
+
 class TestExecutionError(BCBenchError):
     """Test execution failures."""
 
@@ -96,6 +106,16 @@ class TestExecutionError(BCBenchError):
         message = f"Test result did not meet expectation (expected: {expectation})"
         if stderr:
             message += f"\n{stderr}"
+        super().__init__(message)
+
+
+class TestExecutionTimeoutExpired(BCBenchError):
+    """Test execution timed out."""
+
+    def __init__(self, tests: str, timeout: int):
+        self.tests = tests
+        self.timeout = timeout
+        message = f"Test execution timed out (tests: {tests}) after {timeout} seconds"
         super().__init__(message)
 
 

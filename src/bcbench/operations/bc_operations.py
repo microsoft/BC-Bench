@@ -5,7 +5,8 @@ from pathlib import Path
 from string import Template
 
 from bcbench.config import get_config
-from bcbench.exceptions import BuildError, TestExecutionError
+from bcbench.dataset import DatasetEntry, TestEntry
+from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -128,6 +129,9 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
             version=version,
         )
 
+        # Extend timeout for build and publish, especially for BaseApp
+        timeout = _config.timeout.build_baseapp if ("BaseApp" in project_path) else _config.timeout.build_app
+
         try:
             subprocess.run(
                 ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
@@ -135,18 +139,22 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
                 capture_output=True,
                 check=True,
                 text=True,
+                timeout=timeout,
             )
         except subprocess.CalledProcessError as e:
             logger.error(f"Build failed for {project_path}: {e.stderr}")
             logger.error(f"Full command output: {e.stdout}")
             raise BuildError(project_path, e.stderr) from None
+        except subprocess.TimeoutExpired:
+            logger.error(f"Build timed out for {project_path} after {timeout} seconds")
+            raise BuildTimeoutExpired(project_path, timeout) from None
 
         logger.info(f"Successfully built and published: {project_path}")
 
     logger.info("All projects built and published")
 
 
-def run_tests(entry, container_name: str, username: str, password: str) -> None:
+def run_tests(entry: DatasetEntry, container_name: str, username: str, password: str) -> None:
     """Run fail-to-pass and pass-to-pass tests."""
     logger.info("Running tests")
 
@@ -161,7 +169,7 @@ def run_tests(entry, container_name: str, username: str, password: str) -> None:
     logger.info("All tests completed")
 
 
-def _run_test_suite(test_entries: list, expectation: str, container_name: str, username: str, password: str) -> None:
+def _run_test_suite(test_entries: list[TestEntry], expectation: str, container_name: str, username: str, password: str) -> None:
     """Run a suite of tests."""
     test_entries_json = str(test_entries).replace("'", '"')
 
@@ -179,8 +187,11 @@ def _run_test_suite(test_entries: list, expectation: str, container_name: str, u
             capture_output=True,
             check=True,
             text=True,
+            timeout=_config.timeout.test_execution,
         )
-
     except subprocess.CalledProcessError as e:
         logger.error(f"Test result did not meet expectation (expected: {expectation}): {e.stderr}")
         raise TestExecutionError(expectation, e.stderr) from None
+    except subprocess.TimeoutExpired:
+        logger.error(f"Test execution timed out after {_config.timeout.test_execution} seconds")
+        raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
