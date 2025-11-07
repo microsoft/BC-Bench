@@ -36,6 +36,9 @@ bcbench = ["agent/*.yaml"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-v", "--strict-markers"]
+markers = [
+    "integration"
+]
 
 [tool.ruff]
 target-version = "py312"
