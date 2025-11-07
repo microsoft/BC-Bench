@@ -2,7 +2,6 @@
 
 import re
 import subprocess
-from collections import deque
 from pathlib import Path
 
 from bcbench.config import get_config
@@ -33,12 +32,8 @@ def run_copilot_agent(
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    process = None
-    # Use collections.deque with maxlen to keep only last few lines for metric parsing
-    output_buffer: deque[str] = deque(maxlen=20)
-
     try:
-        process = subprocess.Popen(
+        result = subprocess.run(
             [
                 "copilot",
                 "--allow-all-tools",  # required for non-interactive mode
@@ -52,42 +47,26 @@ def run_copilot_agent(
                 prompt.replace("\r", "").replace("\n", " "),
             ],
             cwd=str(repo_path),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            capture_output=True,
             text=True,
-            bufsize=1,
+            timeout=_config.timeout.github_copilot_cli,
+            check=True,
             shell=True,  # Required on Windows to resolve npm global commands
         )
 
-        if process.stdout:
-            for line in process.stdout:
-                print(line, end="", flush=True)
-                output_buffer.append(line)
+        print(result.stdout, flush=True)
+        logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
-        return_code = process.wait(timeout=_config.timeout.github_copilot_cli)
-
-        if return_code == 0:
-            logger.info("Copilot CLI completed successfully")
-        else:
-            logger.warning(f"Copilot CLI exited with code {return_code}")
-            raise subprocess.CalledProcessError(return_code, "copilot")
-
+        return _parse_metrics(result.stdout.strip().splitlines()[-20:])
     except subprocess.TimeoutExpired:
         # timeout should not raise an exception, we will evaluate whatever copilot did so far
         logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
+        return None
     except subprocess.CalledProcessError as e:
         raise AgentError(f"Copilot CLI execution failed: {e}") from None
     except Exception as e:
         logger.error(f"Unexpected error running Copilot CLI: {e}")
         raise
-    finally:
-        if process and process.poll() is None:
-            process.kill()
-            process.wait()
-
-    logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
-
-    return _parse_metrics(list(output_buffer))
 
 
 def _build_prompt(entry: DatasetEntry, repo_path: Path, include_project_paths: bool) -> str:
@@ -135,12 +114,14 @@ def _parse_metrics(output_lines: list[str]) -> dict[str, float | int] | None:
             seconds = float(duration_match.group(2))
             metrics["agent_execution_time"] = minutes * 60 + seconds
 
-        usage_match = re.search(r"(\d+(?:\.\d+)?k?)\s+input,\s*(\d+(?:\.\d+)?k?)\s+output", output_text)
+        usage_match = re.search(r"(\d+(?:\.\d+)?[km]?)\s+input,\s*(\d+(?:\.\d+)?[km]?)\s+output", output_text)
         if usage_match:
             input_str = usage_match.group(1)
             output_str = usage_match.group(2)
 
             def parse_token_count(s: str) -> int:
+                if s.endswith("m"):
+                    return int(float(s[:-1]) * 1000000)
                 if s.endswith("k"):
                     return int(float(s[:-1]) * 1000)
                 return int(float(s))

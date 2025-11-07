@@ -11,7 +11,7 @@ from bcbench.agent import run_copilot_agent, run_mini_agent
 from bcbench.cli_options import ContainerName, ContainerPassword, ContainerUsername, CopilotModel, DatasetPath, OutputDir, RepoPath, RunId
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
-from bcbench.evaluate import EvaluationContext, run_evaluation_pipeline, summarize_results
+from bcbench.evaluate import EvaluationContext, run_evaluation_pipeline
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -157,24 +157,3 @@ def evaluate_copilot(
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
-
-
-@evaluate_app.command("summarize")
-def evaluate_summarize(
-    run_id: RunId,
-    result_dir: OutputDir = _config.paths.evaluation_results_path,
-    result_pattern: Annotated[str, typer.Option(help="Pattern for the result files")] = "*.jsonl",
-):
-    """
-    Summarize evaluation results from a completed run.
-
-    Example:
-        bcbench evaluate summarize mini_test_run
-    """
-    run_dir: Path = result_dir / run_id
-
-    if not run_dir.exists():
-        logger.error(f"Results directory not found: {run_dir}")
-        raise typer.Exit(code=1)
-
-    summarize_results(run_dir, result_pattern, run_id=run_id)

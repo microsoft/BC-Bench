@@ -6,10 +6,17 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      model:
+        description: 'model to use for evaluation'
+        required: false
+        default: 'azure/gpt-4.1'
+        type: choice
+        options:
+          - 'azure/gpt-4.1'
       bc_tools_enabled:
         description: 'Allow mini-bc-agent to use BC build and test commands'
         required: false
-        default: true
+        default: false
         type: boolean
 
 env:
@@ -57,6 +64,7 @@ jobs:
         run: |
           $args = @(
             'evaluate', 'mini', "${{ matrix.entry }}",
+            '--model "${{ github.event.inputs.model }}"',
             '--repo-path', "${{ steps.setup-env.outputs.repo_path }}",
             '--output-dir', "${{ env.EVALUATION_RESULTS_DIR }}",
             '--step-limit', '50'
@@ -81,3 +89,6 @@ jobs:
     uses: ./.github/workflows/summarize-results.yml
     with:
       results-dir: ${{ needs.evaluate-with-mini-agent.outputs.results-dir }}
+      model: ${{ github.event.inputs.model }}
+      agent: 'mini-bc-agent'
+    secrets: inherit

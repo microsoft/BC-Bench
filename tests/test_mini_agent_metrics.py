@@ -119,7 +119,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 1200,
         }
 
-        result = _create_success_result(sample_context)
+        result = _create_success_result(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
         assert result.agent_execution_time == 180.5
@@ -134,7 +134,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 0,
         }
 
-        result = _create_success_result(sample_context)
+        result = _create_success_result(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
         assert result.agent_execution_time == 180.5
@@ -145,7 +145,7 @@ class TestMiniAgentMetricsExtraction:
     def test_metrics_flow_with_no_metrics(self, sample_context):
         sample_context.agent_metrics = None
 
-        result = _create_success_result(sample_context)
+        result = _create_success_result(sample_context, "test_patch")
 
         assert result.agent_execution_time is None
         assert result.prompt_tokens is None
@@ -154,7 +154,7 @@ class TestMiniAgentMetricsExtraction:
     def test_metrics_flow_with_empty_dict(self, sample_context):
         sample_context.agent_metrics = {}
 
-        result = _create_success_result(sample_context)
+        result = _create_success_result(sample_context, "test_patch")
 
         assert result.agent_execution_time is None
         assert result.prompt_tokens is None
@@ -211,7 +211,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 800,
         }
 
-        result = _create_success_result(sample_context)
+        result = _create_success_result(sample_context, "test_patch")
 
         # Verify metrics
         assert result.agent_execution_time == 95.3
@@ -220,7 +220,7 @@ class TestMiniAgentMetricsExtraction:
 
         # Verify other fields are still correctly populated
         assert result.instance_id == "test__mini-metrics-123"
-        assert result.version == "25.1"
+        assert result.project == "app"
         assert result.model == "azure/gpt-4.1"
         assert result.agent_name == "mini-bc-agent"
         assert result.resolved is True

@@ -83,3 +83,6 @@ jobs:
     uses: ./.github/workflows/summarize-results.yml
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
+      model: ${{ github.event.inputs.model }}
+      agent: 'GitHub Copilot CLI'
+    secrets: inherit

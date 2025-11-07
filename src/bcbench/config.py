@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from dataclasses import dataclass
@@ -65,10 +66,10 @@ class TimeoutConfig:
     def default(cls) -> TimeoutConfig:
         """Get default timeout configuration."""
         return cls(
-            build_baseapp=15 * 60,  # 15 minutes for BaseApp compilation
+            build_baseapp=20 * 60,  # 20 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
-            test_execution=2 * 60,  # 2 minutes for test execution
-            github_copilot_cli=10 * 60,  # 10 minutes for GitHub Copilot CLI execution
+            test_execution=3 * 60,  # 3 minutes for test execution
+            github_copilot_cli=20 * 60,  # 20 minutes for GitHub Copilot CLI execution
         )
 
 
@@ -78,13 +79,17 @@ class FilePatternConfig:
 
     trajectory_pattern: str
     patch_pattern: str
+    instance_pattern: str
+    result_pattern: str
 
     @classmethod
-    def default(cls) -> FilePatternConfig:
+    def default(cls, instance_pattern: str) -> FilePatternConfig:
         """Get default file pattern configuration."""
         return cls(
             trajectory_pattern=".traj.json",
             patch_pattern=".patch",
+            instance_pattern=instance_pattern,
+            result_pattern=".jsonl",
         )
 
 
@@ -125,11 +130,18 @@ class Config:
     @classmethod
     def load(cls) -> Config:
         root = _get_git_root()
+        path_config = PathConfig.from_root(root)
+
+        with open(path_config.dataset_schema_path) as f:
+            schema = json.load(f)
+
+        instance_pattern = schema.get("properties", {}).get("instance_id", {}).get("pattern")
+
         return cls(
-            paths=PathConfig.from_root(root),
+            paths=path_config,
             env=EnvironmentConfig.from_environment(),
             timeout=TimeoutConfig.default(),
-            file_patterns=FilePatternConfig.default(),
+            file_patterns=FilePatternConfig.default(instance_pattern),
         )
 
     def resolve_ado_token(self) -> str:

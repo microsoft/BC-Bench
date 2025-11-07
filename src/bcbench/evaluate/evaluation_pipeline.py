@@ -2,15 +2,16 @@
 
 from collections.abc import Callable
 
+from bcbench.config import get_config
 from bcbench.evaluate.evaluation_context import EvaluationContext
-from bcbench.evaluate.evaluation_result import EvaluationResult
-from bcbench.exceptions import BuildError, PatchApplicationError, TestExecutionError
+from bcbench.exceptions import BuildError, BuildTimeoutExpired, PatchApplicationError, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations.bc_operations import build_and_publish_projects, run_tests
-from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, save_git_diff
+from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, get_gernerated_diff
+from bcbench.results import EvaluationResult
 
 logger = get_logger(__name__)
-
+_config = get_config()
 __all__ = ["run_evaluation_pipeline"]
 
 
@@ -53,6 +54,8 @@ def run_evaluation_pipeline(
             agent_metrics = agent_runner(context)
             context.agent_metrics = agent_metrics
 
+        generated_patch: str = get_gernerated_diff(context.repo_path)
+
         # Apply test patch and validate
         apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} test patch")
         build_and_publish_projects(
@@ -65,7 +68,7 @@ def run_evaluation_pipeline(
         )
         run_tests(context.entry, context.container_name, context.username, context.password)
 
-        result = _create_success_result(context)
+        result = _create_success_result(context, generated_patch)
         logger.info(f"Successfully completed {context.entry.instance_id}")
 
     except PatchApplicationError as e:
@@ -76,9 +79,17 @@ def run_evaluation_pipeline(
         result = _create_build_failure_result(context, f"Build failed: {e.project_path}")
         logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
+    except BuildTimeoutExpired as e:
+        result = _create_build_failure_result(context, f"Build timed out: {e.project_path}")
+        logger.error(f"Build timed out during evaluation of {context.entry.instance_id}: {e}")
+
     except TestExecutionError as e:
         result = _create_test_failure_result(context)
         logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
+
+    except TestExecutionTimeoutExpired as e:
+        result = _create_test_failure_result(context, "Tests timed out")
+        logger.error(f"Tests timed out during evaluation of {context.entry.instance_id}: {e}")
 
     except Exception as e:
         result = _create_unexpected_error_result(context, e)
@@ -86,24 +97,25 @@ def run_evaluation_pipeline(
 
     finally:
         if result is not None:
-            result.save(context.result_dir, f"instance_results_{context.entry.instance_id}.jsonl")
-            save_git_diff(context.result_dir, context.repo_path)
+            result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
         else:
             logger.error(f"No result generated for {context.entry.instance_id}")
             raise RuntimeError(f"No result generated for {context.entry.instance_id}")
 
 
-def _create_result(context: EvaluationContext, resolved: bool, build: bool, error_message: str | None = None) -> EvaluationResult:
+def _create_result(context: EvaluationContext, resolved: bool, build: bool, error_message: str | None = None, generated_patch: str = "") -> EvaluationResult:
     metrics = context.agent_metrics or {}
     prompt_tokens = metrics.get("prompt_tokens")
     completion_tokens = metrics.get("completion_tokens")
+    project = context.entry.extract_project_name()
     return EvaluationResult(
         instance_id=context.entry.instance_id,
-        version=context.entry.environment_setup_version,
+        project=project,
         resolved=resolved,
         build=build,
         model=context.model,
         agent_name=context.agent_name,
+        generated_patch=generated_patch,
         error_message=error_message,
         agent_execution_time=metrics.get("agent_execution_time"),
         prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
@@ -111,16 +123,16 @@ def _create_result(context: EvaluationContext, resolved: bool, build: bool, erro
     )
 
 
-def _create_success_result(context: EvaluationContext) -> EvaluationResult:
-    return _create_result(context, resolved=True, build=True)
+def _create_success_result(context: EvaluationContext, generated_patch: str) -> EvaluationResult:
+    return _create_result(context, resolved=True, build=True, generated_patch=generated_patch)
 
 
 def _create_build_failure_result(context: EvaluationContext, error_msg: str) -> EvaluationResult:
     return _create_result(context, resolved=False, build=False, error_message=error_msg)
 
 
-def _create_test_failure_result(context: EvaluationContext) -> EvaluationResult:
-    return _create_result(context, resolved=False, build=True, error_message="Tests failed")
+def _create_test_failure_result(context: EvaluationContext, error_msg: str = "Tests failed") -> EvaluationResult:
+    return _create_result(context, resolved=False, build=True, error_message=error_msg)
 
 
 def _create_unexpected_error_result(context: EvaluationContext, error: Exception) -> EvaluationResult:
