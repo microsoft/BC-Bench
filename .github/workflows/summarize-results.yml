@@ -70,3 +70,17 @@ jobs:
           $evalRunName = "${{ inputs.agent }} (${{ inputs.model }})"
 
           bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName
+
+      - name: Update leaderboard and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/_data/leaderboard.json
+          git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
+
+          gh pr create --title "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})" --base main --fill

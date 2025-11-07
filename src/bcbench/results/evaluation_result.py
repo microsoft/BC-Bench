@@ -47,16 +47,16 @@ class EvaluationResult:
         return cls._create(context, resolved=True, build=True, generated_patch=generated_patch)
 
     @classmethod
-    def create_build_failure(cls, context: "EvaluationContext", error_msg: str) -> "EvaluationResult":
-        return cls._create(context, resolved=False, build=False, error_message=error_msg)
+    def create_build_failure(cls, context: "EvaluationContext", generated_patch: str, error_msg: str) -> "EvaluationResult":
+        return cls._create(context, resolved=False, build=False, error_message=error_msg, generated_patch=generated_patch)
 
     @classmethod
-    def create_test_failure(cls, context: "EvaluationContext", error_msg: str = "Tests failed") -> "EvaluationResult":
-        return cls._create(context, resolved=False, build=True, error_message=error_msg)
+    def create_test_failure(cls, context: "EvaluationContext", generated_patch: str, error_msg: str = "Tests failed") -> "EvaluationResult":
+        return cls._create(context, resolved=False, build=True, error_message=error_msg, generated_patch=generated_patch)
 
     @classmethod
-    def create_unexpected_error(cls, context: "EvaluationContext", error: Exception) -> "EvaluationResult":
-        return cls._create(context, resolved=False, build=False, error_message=f"Unexpected error: {error}")
+    def create_unexpected_error(cls, context: "EvaluationContext", generated_patch: str, error: Exception) -> "EvaluationResult":
+        return cls._create(context, resolved=False, build=False, error_message=f"Unexpected error: {error}", generated_patch=generated_patch)
 
     @classmethod
     def _create(cls, context: "EvaluationContext", resolved: bool, build: bool, error_message: str | None = None, generated_patch: str = "") -> "EvaluationResult":
@@ -140,22 +140,40 @@ class EvaluationResultSummary:
             github_run_id=run_id,
         )
 
+    @classmethod
+    def from_json(cls, payload: dict[str, Any]) -> "EvaluationResultSummary":
+        return cls(
+            total=int(payload["total"]),
+            resolved=int(payload["resolved"]),
+            failed=int(payload["failed"]),
+            build=int(payload["build"]),
+            date=date.fromisoformat(payload["date"]),
+            model=str(payload["model"]),
+            agent_name=str(payload["agent_name"]),
+            average_duration=float(payload["average_duration"]),
+            average_prompt_tokens=float(payload["average_prompt_tokens"]),
+            average_completion_tokens=float(payload["average_completion_tokens"]),
+            github_run_id=payload.get("github_run_id"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total": self.total,
+            "resolved": self.resolved,
+            "failed": self.failed,
+            "build": self.build,
+            "date": self.date.isoformat(),
+            "model": self.model,
+            "agent_name": self.agent_name,
+            "average_duration": round(self.average_duration, 1),
+            "average_prompt_tokens": round(self.average_prompt_tokens, 1),
+            "average_completion_tokens": round(self.average_completion_tokens, 1),
+            "github_run_id": self.github_run_id,
+        }
+
     def save(self, output_dir: Path, summary_file: str) -> None:
         output_file = output_dir / summary_file
         with open(output_file, "w", encoding="utf-8") as f:
-            summary_dict = {
-                "total": self.total,
-                "resolved": self.resolved,
-                "failed": self.failed,
-                "build": self.build,
-                "date": self.date.isoformat(),
-                "model": self.model,
-                "agent_name": self.agent_name,
-                "average_duration": round(self.average_duration, 1),
-                "average_prompt_tokens": round(self.average_prompt_tokens, 1),
-                "average_completion_tokens": round(self.average_completion_tokens, 1),
-                "github_run_id": self.github_run_id,
-            }
-            f.write(json.dumps(summary_dict, indent=4))
+            f.write(json.dumps(self.to_dict(), indent=4))
 
         logger.info(f"Saved evaluation summary to {output_file}")

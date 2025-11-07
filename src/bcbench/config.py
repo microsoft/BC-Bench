@@ -39,6 +39,7 @@ class PathConfig:
     nav_repo_path: Path
     ps_script_path: Path
     evaluation_results_path: Path
+    leaderboard_path: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -50,6 +51,7 @@ class PathConfig:
             nav_repo_path=root.parent / "NAV",
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
+            leaderboard_path=root / "docs" / "_data" / "leaderboard.json",
         )
 
 
@@ -66,7 +68,7 @@ class TimeoutConfig:
     def default(cls) -> TimeoutConfig:
         """Get default timeout configuration."""
         return cls(
-            build_baseapp=20 * 60,  # 20 minutes for BaseApp compilation
+            build_baseapp=25 * 60,  # 25 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
             github_copilot_cli=20 * 60,  # 20 minutes for GitHub Copilot CLI execution

@@ -97,7 +97,7 @@ class TestCopilotMetricsToResultFlow:
         metrics = _parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
-        result = EvaluationResult.create_test_failure(sample_context)
+        result = EvaluationResult.create_test_failure(sample_context, "test_patch")
 
         assert result.resolved is False
         assert result.build is True
@@ -115,7 +115,7 @@ class TestCopilotMetricsToResultFlow:
         metrics = _parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
-        result = EvaluationResult.create_build_failure(sample_context, "Build failed: src/app")
+        result = EvaluationResult.create_build_failure(sample_context, "test_patch", "Build failed: src/app")
 
         assert result.resolved is False
         assert result.build is False
@@ -317,7 +317,7 @@ class TestMiniAgentMetricsToResultFlow:
         metrics = _extract_metrics(mock_agent, 180.5)
         sample_context.agent_metrics = metrics
 
-        result = EvaluationResult.create_test_failure(sample_context)
+        result = EvaluationResult.create_test_failure(sample_context, "test_patch")
 
         assert result.resolved is False
         assert result.build is True
@@ -350,7 +350,7 @@ class TestMiniAgentMetricsToResultFlow:
         metrics = _extract_metrics(mock_agent, 95.2)
         sample_context.agent_metrics = metrics
 
-        result = EvaluationResult.create_build_failure(sample_context, "Build failed: src/test")
+        result = EvaluationResult.create_build_failure(sample_context, "test_patch", "Build failed: src/test")
 
         assert result.resolved is False
         assert result.build is False

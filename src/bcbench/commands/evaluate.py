@@ -209,11 +209,11 @@ def evaluate_mock(
         case "success":
             result = EvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
         case "build-fail":
-            result = EvaluationResult.create_build_failure(context, "Mock build failure")
+            result = EvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
         case "test-fail":
-            result = EvaluationResult.create_test_failure(context, "Mock test failure")
+            result = EvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
         case _:
-            result = EvaluationResult.create_unexpected_error(context, Exception("Invalid scenario"))
+            result = EvaluationResult.create_unexpected_error(context, "MOCK_PATCH_CONTENT", Exception("Invalid scenario"))
 
     result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
 

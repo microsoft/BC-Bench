@@ -11,6 +11,17 @@ from bcbench.results import EvaluationResult
 runner = CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def disable_github_actions(monkeypatch):
+    """Automatically disable GitHub Actions environment for all CLI tests."""
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+    # Reset the config singleton to pick up the environment changes
+    import bcbench.config
+
+    bcbench.config._config = None
+
+
 @pytest.fixture
 def sample_dataset_file(tmp_path):
     dataset_path = tmp_path / "test_dataset.jsonl"

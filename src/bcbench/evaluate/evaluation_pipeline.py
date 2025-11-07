@@ -33,6 +33,7 @@ def run_evaluation_pipeline(
                      Expected metrics keys: agent_execution_time, prompt_tokens, completion_tokens, etc
     """
     result = None
+    generated_patch: str = ""
 
     try:
         # Setup environment
@@ -54,7 +55,7 @@ def run_evaluation_pipeline(
             agent_metrics = agent_runner(context)
             context.agent_metrics = agent_metrics
 
-        generated_patch: str = get_gernerated_diff(context.repo_path)
+        generated_patch = get_gernerated_diff(context.repo_path)
 
         # Apply test patch and validate
         apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} test patch")
@@ -72,27 +73,27 @@ def run_evaluation_pipeline(
         logger.info(f"Successfully completed {context.entry.instance_id}")
 
     except PatchApplicationError as e:
-        result = EvaluationResult.create_build_failure(context, f"Failed to apply {e.patch_name}")
+        result = EvaluationResult.create_build_failure(context, generated_patch, f"Failed to apply {e.patch_name}")
         logger.error(f"Failed to apply test patch for {context.entry.instance_id}: {e}")
 
     except BuildError as e:
-        result = EvaluationResult.create_build_failure(context, f"Build failed: {e.project_path}")
+        result = EvaluationResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
         logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
     except BuildTimeoutExpired as e:
-        result = EvaluationResult.create_build_failure(context, f"Build timed out: {e.project_path}")
+        result = EvaluationResult.create_build_failure(context, generated_patch, f"Build timed out: {e.project_path}")
         logger.error(f"Build timed out during evaluation of {context.entry.instance_id}: {e}")
 
     except TestExecutionError as e:
-        result = EvaluationResult.create_test_failure(context)
+        result = EvaluationResult.create_test_failure(context, generated_patch)
         logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 
     except TestExecutionTimeoutExpired as e:
-        result = EvaluationResult.create_test_failure(context, "Tests timed out")
+        result = EvaluationResult.create_test_failure(context, generated_patch, "Tests timed out")
         logger.error(f"Tests timed out during evaluation of {context.entry.instance_id}: {e}")
 
     except Exception as e:
-        result = EvaluationResult.create_unexpected_error(context, e)
+        result = EvaluationResult.create_unexpected_error(context, generated_patch, e)
         logger.error(f"Failed to process {context.entry.instance_id}: {e}")
 
     finally:

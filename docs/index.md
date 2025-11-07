@@ -17,7 +17,7 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.results | sort: "resolved" | reverse %}
+    {% assign sorted_results = site.data.leaderboard | sort: "resolved" | reverse %}
     {% for result in sorted_results %}
     <tr>
       <td>{{ result.agent_name }}</td>

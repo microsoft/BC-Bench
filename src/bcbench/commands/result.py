@@ -28,13 +28,7 @@ def result_summarize(
     """
     Summarize evaluation results from a completed run.
 
-    Example:
-        bcbench result summarize mini_test_run
-
-    Output:
-        - GitHub/Console summary of evaluation results
-        - A JSONL file with all results from the job
-        - A JSON summary file
+    Aggregates individual instance results, displays job summaries and generates bceval output format.
     """
     run_dir: Path = result_dir / run_id
 
@@ -75,3 +69,45 @@ def result_summarize(
     # Save summary JSON
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
     summary.save(run_dir, summary_output)
+
+
+@result_app.command("update")
+def result_update(
+    evaluation_summary: Annotated[Path, typer.Argument(help="Path to a single evaluation run's summary JSON", exists=True, file_okay=True, dir_okay=False)],
+    leaderboard_path: Annotated[Path, typer.Option(help="Path to the public displayed leaderboard/results JSON", exists=True, file_okay=True, dir_okay=False)] = _config.paths.leaderboard_path,
+):
+    """
+    Update the public leaderboard with a new evaluation summary.
+
+    Takes a single evaluation run's summary and updates the public results file,
+    either replacing an existing agent-model combination or adding a new entry.
+
+    Example:
+        bcbench result update evaluation_results/12345/evaluation_summary.json
+    """
+    logger.info(f"Loading evaluation summary from: {evaluation_summary}")
+    with open(evaluation_summary, encoding="utf-8") as f:
+        new_result = EvaluationResultSummary.from_json(json.load(f))
+
+    logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}'")
+
+    logger.info(f"Loading existing leaderboard from: {leaderboard_path}")
+    with open(leaderboard_path, encoding="utf-8") as f:
+        existing_results = json.load(f)
+
+    updated = False
+    for i, result in enumerate(existing_results):
+        if result["agent_name"] == new_result.agent_name and result["model"] == new_result.model:
+            logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
+            existing_results[i] = new_result.to_dict()
+            updated = True
+            break
+
+    if not updated:
+        logger.info(f"No existing result found for '{new_result.agent_name}' + '{new_result.model}', adding new entry")
+        existing_results.append(new_result.to_dict())
+
+    with open(leaderboard_path, "w", encoding="utf-8") as f:
+        json.dump(existing_results, f, indent=2)
+
+    logger.info(f"Successfully updated leaderboard at: {leaderboard_path}")
