@@ -101,6 +101,40 @@ class ColoredFormatter(logging.Formatter):
         return formatter.format(record)
 
 
+class GitHubActionsHandler(logging.Handler):
+    """Handler that emits GitHub Actions workflow commands for warnings and errors."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Emit a GitHub Actions annotation for warning and error level logs."""
+        try:
+            # Only emit annotations for warnings and errors
+            if record.levelno < logging.WARNING:
+                return
+
+            # Format the message
+            msg = self.format(record)
+
+            # Escape special characters for GitHub Actions
+            # Per GitHub docs: need to escape %, \r, \n
+            msg = msg.replace("%", "%25")
+            msg = msg.replace("\r", "%0D")
+            msg = msg.replace("\n", "%0A")
+
+            # Determine the command type
+            command = "error" if record.levelno >= logging.ERROR else "warning"
+
+            # Build the annotation command
+            # Format: ::warning file={name},line={line},title={title}::{message}
+            # We'll use the logger name as the title
+            annotation = f"::{command} title={record.name}::{msg}"
+
+            # Output to stdout (GitHub Actions reads workflow commands from stdout)
+            print(annotation, flush=True)
+
+        except Exception:
+            self.handleError(record)
+
+
 _logging_configured = False
 
 
@@ -141,6 +175,14 @@ def setup_logger(verbose: bool = False) -> None:
     console_handler.setFormatter(ColoredFormatter())
     console_handler.addFilter(SensitiveDataFilter())
     root_logger.addHandler(console_handler)
+
+    # Add GitHub Actions handler if running in GitHub Actions
+    if config.env.github_actions:
+        github_handler = GitHubActionsHandler()
+        github_handler.setLevel(logging.WARNING)  # Only warnings and errors
+        github_handler.setFormatter(logging.Formatter("%(message)s"))
+        github_handler.addFilter(SensitiveDataFilter())
+        root_logger.addHandler(github_handler)
 
     # Configure bcbench loggers to use the desired level
     bcbench_logger = logging.getLogger("bcbench")
