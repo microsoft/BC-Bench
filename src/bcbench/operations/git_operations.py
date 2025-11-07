@@ -79,27 +79,24 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def save_git_diff(result_dir: Path, repo_path: Path) -> None:
-    """Save git diff into a patch file in the result directory.
+def get_gernerated_diff(repo_path: Path) -> str:
+    """Get agent generated git diff as a string.
 
     Args:
         result_dir: Path to the result directory
         repo_path: Path to the git repository
     """
     try:
-        logger.info("Getting git diff as patch")
+        logger.info("Getting git diff")
         result = subprocess.run(
-            ["git", "diff", "--", ".", ":!*.docx", ":!*.rdl", ":!*.rdlc"],
+            ["git", "diff", "--", ".", ":!*.docx", ":!**/app.json"],
             cwd=repo_path,
             capture_output=True,
             text=True,
             check=True,
         )
         logger.debug("Git diff retrieved successfully")
+        return result.stdout
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to get git diff: {e.stderr}")
-        return
-
-    patch_file_path: Path = result_dir / f"generated{_config.file_patterns.patch_pattern}"
-    patch_file_path.write_text(result.stdout, encoding="utf-8")
-    logger.info(f"Saved git diff to {patch_file_path}")
+        return ""

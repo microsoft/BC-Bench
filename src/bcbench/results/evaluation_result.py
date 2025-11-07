@@ -19,6 +19,7 @@ class EvaluationResult:
     resolved: bool
     build: bool
 
+    generated_patch: str = ""
     error_message: str | None = None
     agent_execution_time: float | None = None
     prompt_tokens: int | None = None
@@ -33,6 +34,7 @@ class EvaluationResult:
             agent_name=str(payload["agent_name"]),
             resolved=bool(payload["resolved"]),
             build=bool(payload["build"]),
+            generated_patch=payload.get("generated_patch", ""),
             error_message=payload.get("error_message"),
             agent_execution_time=payload.get("agent_execution_time"),
             prompt_tokens=payload.get("prompt_tokens"),
@@ -53,6 +55,7 @@ class EvaluationResult:
                 "agent_execution_time": self.agent_execution_time,
                 "prompt_tokens": self.prompt_tokens,
                 "completion_tokens": self.completion_tokens,
+                "generated_patch": self.generated_patch,
             }
             f.write(json.dumps(result_dict) + "\n")
 

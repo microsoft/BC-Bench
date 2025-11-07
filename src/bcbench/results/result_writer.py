@@ -27,7 +27,7 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
                 "id": result.instance_id,
                 "input": dataset_entry.get_task(),
                 "expected": dataset_entry.patch,
-                "output": "",  # TODO: get the generated patch
+                "output": result.generated_patch,
                 "context": "",
                 "metadata": {
                     "model": result.model,
@@ -36,6 +36,7 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
                     "latency": result.agent_execution_time,
                     "resolved": result.resolved,
                     "run_id": run_id,
+                    "project": result.project,
                 },
                 "tags": [],
             }

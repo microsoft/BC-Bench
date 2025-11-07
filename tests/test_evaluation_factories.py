@@ -34,7 +34,7 @@ class TestEvaluationResultFactories:
         )
 
     def test_create_success_result_fills_all_fields_correctly(self, sample_context):
-        result = _create_success_result(sample_context)
+        result = _create_success_result(sample_context, "test_patch")
 
         assert result.instance_id == "test__repo-123"
         assert result.project == "app"
@@ -100,7 +100,7 @@ class TestEvaluationResultFactories:
             model="different-model",
         )
 
-        result = _create_success_result(context)
+        result = _create_success_result(context, "test_patch")
 
         assert result.instance_id == "different__entry-456"
         assert result.project == "different"
