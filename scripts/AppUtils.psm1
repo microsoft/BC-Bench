@@ -48,16 +48,20 @@ function Invoke-AppBuildAndPublish {
         Remove-Item -Path "$appSymbolsFolder\*" -Force -Recurse -ErrorAction SilentlyContinue
 
         $compileParams = @{
-            containerName = $containerName
-            appProjectFolder = $appProjectFolder
-            appOutputFolder = $outputPath
-            credential = $credential
-            appSymbolsFolder = $appSymbolsFolder
+            containerName        = $containerName
+            appProjectFolder     = $appProjectFolder
+            appOutputFolder      = $outputPath
+            credential           = $credential
+            appSymbolsFolder     = $appSymbolsFolder
+            GenerateReportLayout = 'No'
+            gitHubActions        = $false
         }
 
-        if ($env:RUNNER_DEBUG -eq '1') { # debug mode
+        if ($env:RUNNER_DEBUG -eq '1') {
+            # debug mode
             Compile-AppInBcContainer @compileParams
-        } else {
+        }
+        else {
             $compileOutput = Compile-AppInBcContainer @compileParams 2>&1
         }
 
@@ -75,13 +79,13 @@ function Invoke-AppBuildAndPublish {
 
         # Publish the app with ForceSync
         $publishParams = @{
-            containerName = $containerName
-            appFile = $appFile
-            credential = $credential
-            syncMode = 'ForceSync'
+            containerName              = $containerName
+            appFile                    = $appFile
+            credential                 = $credential
+            syncMode                   = 'ForceSync'
             dependencyPublishingOption = 'ignore'
-            sync = $true
-            install = $true
+            sync                       = $true
+            install                    = $true
         }
 
         if ($skipVerification) {
@@ -142,17 +146,18 @@ function Invoke-BCTest {
     if ($functionNames -and $functionNames.Count -gt 0) {
         [string] $combinedFunctions = $functionNames -join '|'
         Write-Log "Running tests for Codeunit $codeunitID with functions: $combinedFunctions" -Level Info
-    } else {
+    }
+    else {
         [string] $combinedFunctions = '*'
         Write-Log "Running all tests for Codeunit $codeunitID" -Level Info
     }
 
     $testParams = @{
-        containerName = $containerName
-        credential = $credential
+        containerName         = $containerName
+        credential            = $credential
         returnTrueIfAllPassed = $true
-        testCodeunitRange = $codeunitID.ToString()
-        testFunction = $combinedFunctions
+        testCodeunitRange     = $codeunitID.ToString()
+        testFunction          = $combinedFunctions
     }
 
     if ($env:RUNNER_DEBUG -eq '1') {
@@ -164,7 +169,8 @@ function Invoke-BCTest {
 
         if ($testPassed) {
             Write-Log "Tests passed for Codeunit $codeunitID" -Level Success
-        } else {
+        }
+        else {
             Write-Log "Tests failed for Codeunit $codeunitID" -Level Error
         }
 
