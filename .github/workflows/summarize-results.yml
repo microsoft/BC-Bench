@@ -60,5 +60,6 @@ jobs:
 
           # Upload summary to Braintrust using bc-eval
           $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/bceval_results.jsonl"
+          $evalRunName = "${{ inputs.agent }} (${{ inputs.model }})"
 
-          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "${{ github.event.inputs.agent }} (${{ github.event.inputs.model }})"
+          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName
