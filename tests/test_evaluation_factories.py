@@ -20,7 +20,7 @@ class TestEvaluationResultFactories:
             environment_setup_version="25.1",
             fail_to_pass=[{"codeunitID": 100, "functionName": ["Test1"]}],
             pass_to_pass=[],
-            project_paths=["src/app"],
+            project_paths=["App\\Apps\\W1\\Shopify\\app"],
         )
         return EvaluationContext(
             entry=entry,
@@ -37,7 +37,7 @@ class TestEvaluationResultFactories:
         result = _create_success_result(sample_context, "test_patch")
 
         assert result.instance_id == "test__repo-123"
-        assert result.project == "app"
+        assert result.project == "Shopify"
         assert result.resolved is True
         assert result.build is True
         assert result.model == "test-model"
@@ -49,7 +49,7 @@ class TestEvaluationResultFactories:
         result = _create_build_failure_result(sample_context, error_msg)
 
         assert result.instance_id == "test__repo-123"
-        assert result.project == "app"
+        assert result.project == "Shopify"
         assert result.resolved is False
         assert result.build is False
         assert result.model == "test-model"
@@ -60,7 +60,7 @@ class TestEvaluationResultFactories:
         result = _create_test_failure_result(sample_context)
 
         assert result.instance_id == "test__repo-123"
-        assert result.project == "app"
+        assert result.project == "Shopify"
         assert result.resolved is False
         assert result.build is True
         assert result.model == "test-model"
@@ -72,7 +72,7 @@ class TestEvaluationResultFactories:
         result = _create_unexpected_error_result(sample_context, error)
 
         assert result.instance_id == "test__repo-123"
-        assert result.project == "app"
+        assert result.project == "Shopify"
         assert result.resolved is False
         assert result.build is False
         assert result.model == "test-model"
@@ -87,7 +87,7 @@ class TestEvaluationResultFactories:
             environment_setup_version="26.2",
             fail_to_pass=[{"codeunitID": 200, "functionName": ["Test2"]}],
             pass_to_pass=[],
-            project_paths=["src/different"],
+            project_paths=["App\\Layers\\W1\\BaseApp"],
         )
         context = EvaluationContext(
             entry=entry,
@@ -103,7 +103,7 @@ class TestEvaluationResultFactories:
         result = _create_success_result(context, "test_patch")
 
         assert result.instance_id == "different__entry-456"
-        assert result.project == "different"
+        assert result.project == "BaseApp"
         assert result.model == "different-model"
         assert result.agent_name == "different-agent"
 
