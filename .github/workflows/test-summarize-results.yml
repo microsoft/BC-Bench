@@ -1,0 +1,55 @@
+name: Test Summarize Results
+
+on:
+  push:
+    branches:
+      - 'features/**'
+      - 'test/**'
+
+jobs:
+  generate-mock-results:
+    name: Generate Mock Results
+    runs-on: ubuntu-latest
+    outputs:
+      results-dir: evaluation_results
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create mock evaluation results
+        run: |
+          RESULTS_DIR="evaluation_results/${{ github.run_id }}"
+          mkdir -p "$RESULTS_DIR"
+
+          # Result 1: Resolved with full tokens
+          cat > "$RESULTS_DIR/microsoftInternal__NAV-188438.jsonl" << 'EOF'
+          {"instance_id": "microsoftInternal__NAV-188438", "resolved": true, "model": "test-model", "agent_name": "test-agent", "build": true, "error_message": null, "project": "W1/Sustainability", "agent_execution_time": 45.5, "prompt_tokens": 125533, "completion_tokens": 1875, "generated_patch": "diff --git a/test1.al b/test1.al\n--- a/test1.al\n+++ b/test1.al\n@@ -1,1 +1,1 @@\n-old line\n+new line\n"}
+          EOF
+
+          # Result 2: Failed with null tokens
+          cat > "$RESULTS_DIR/microsoftInternal__NAV-193649.jsonl" << 'EOF'
+          {"instance_id": "microsoftInternal__NAV-193649", "resolved": false, "model": "test-model", "agent_name": "test-agent", "build": false, "error_message": "Build failed: App/Apps/W1/Shopify", "project": "W1/Shopify", "agent_execution_time": 120.3, "prompt_tokens": null, "completion_tokens": null, "generated_patch": ""}
+          EOF
+
+          # Result 3: Failed with tokens
+          cat > "$RESULTS_DIR/microsoftInternal__NAV-193853.jsonl" << 'EOF'
+          {"instance_id": "microsoftInternal__NAV-193853", "resolved": false, "model": "test-model", "agent_name": "test-agent", "build": true, "error_message": "Tests failed", "project": "W1/EnforcedDigitalVouchers", "agent_execution_time": 89.2, "prompt_tokens": 417146, "completion_tokens": 3871, "generated_patch": "diff --git a/test3.al b/test3.al\n--- a/test3.al\n+++ b/test3.al\n@@ -1,1 +1,2 @@\n line 1\n+line 2\n"}
+          EOF
+
+          echo "Mock results created in $RESULTS_DIR"
+          ls -la "$RESULTS_DIR"
+        shell: bash
+
+      - name: Upload mock evaluation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results-${{ github.run_id }}-test-mock
+          path: evaluation_results/
+          retention-days: 1
+
+  summarize-results:
+    needs: generate-mock-results
+    uses: ./.github/workflows/summarize-results.yml
+    with:
+      results-dir: ${{ needs.generate-mock-results.outputs.results-dir }}
+    secrets: inherit
