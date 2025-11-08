@@ -86,6 +86,8 @@ jobs:
     needs: evaluate-with-mini-agent
     if: always()
     uses: ./.github/workflows/summarize-results.yml
+    permissions:
+      contents: write
     with:
       results-dir: ${{ needs.evaluate-with-mini-agent.outputs.results-dir }}
       model: ${{ github.event.inputs.model }}
