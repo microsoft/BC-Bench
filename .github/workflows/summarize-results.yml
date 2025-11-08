@@ -22,7 +22,6 @@ on:
         type: boolean
         default: false
 
-
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
   SUMMARY_OUTPUT_FILE: evaluation_summary.json
@@ -30,6 +29,8 @@ env:
 jobs:
   summarize-results:
     name: Results
+    permissions:
+      contents: write
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -61,6 +62,7 @@ jobs:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
           USERNAME: ${{ secrets.USERNAME }}
+        if: ${{ !inputs.mock }}
         run: |
           # Install bc-eval from ADO feed using CLI options (won't touch uv.lock)
           uv tool install bc-eval --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
@@ -71,16 +73,21 @@ jobs:
 
           bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName
 
-      - name: Update leaderboard and create PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update leaderboard in a new branch
+        if: ${{ !inputs.mock }}
         run: |
-          uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
+          git fetch origin main
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Create branch from main
+          $branchName = "leaderboard/${{ github.run_id }}"
+          git checkout -b $branchName origin/main
+
+          uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
+
           git add docs/_data/leaderboard.json
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
 
-          gh pr create --title "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})" --base main --fill
+          git push --set-upstream origin $branchName

@@ -78,6 +78,8 @@ jobs:
     needs: evaluate-with-copilot-cli
     if: always()
     uses: ./.github/workflows/summarize-results.yml
+    permissions:
+      contents: write
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ github.event.inputs.model }}
