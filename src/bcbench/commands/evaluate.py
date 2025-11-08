@@ -174,6 +174,7 @@ def evaluate_mock(
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]
     logger.info(f"Loaded {entry_id} entry from dataset")
+    logger.error("Tests")
 
     run_dir: Path = output_dir / run_id
     if run_dir.exists():
