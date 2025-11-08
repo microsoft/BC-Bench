@@ -74,6 +74,7 @@ jobs:
           bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName
 
       - name: Update leaderboard in a new branch
+        if: ${{ !inputs.mock }}
         run: |
           git fetch origin main
 
