@@ -89,6 +89,6 @@ jobs:
           git add docs/_data/leaderboard.json
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
 
-          git push origin $branchName
+          git push --set-upstream origin $branchName
 
           gh pr create --title "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})" --base main --fill
