@@ -29,6 +29,8 @@ env:
 jobs:
   summarize-results:
     name: Results
+    permissions:
+      contents: write
     runs-on: windows-latest
     steps:
       - name: Checkout repository
