@@ -65,6 +65,8 @@ jobs:
     needs: mock-evaluation
     if: always()
     uses: ./.github/workflows/summarize-results.yml
+    permissions:
+      contents: write
     with:
       results-dir: ${{ needs.mock-evaluation.outputs.results-dir }}
       model: ${{ github.run_id }}
