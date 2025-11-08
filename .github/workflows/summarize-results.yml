@@ -83,7 +83,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          $branchName = "update-leaderboard-${{ github.run_id }}"
+          $branchName = "leaderboard/${{ github.run_id }}"
           git checkout -b $branchName
 
           git add docs/_data/leaderboard.json
@@ -91,4 +91,10 @@ jobs:
 
           git push --set-upstream origin $branchName
 
-          gh pr create --title "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})" --base main --fill
+          # Ensure we have the main branch reference
+          git fetch origin main
+
+          $prTitle = "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
+          $prBody = "Automated leaderboard update from evaluation run ${{ github.run_id }}`n`nAgent: ${{ inputs.agent }}`nModel: ${{ inputs.model }}"
+
+          gh pr create --title $prTitle --body $prBody --base main
