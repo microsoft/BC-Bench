@@ -22,22 +22,14 @@ on:
         type: boolean
         default: false
 
-
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
   SUMMARY_OUTPUT_FILE: evaluation_summary.json
-
-permissions:
-  contents: write
-  pull-requests: write
 
 jobs:
   summarize-results:
     name: Results
     runs-on: windows-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -79,9 +71,7 @@ jobs:
 
           bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName
 
-      - name: Update leaderboard and create PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update leaderboard in a new branch
         run: |
           git fetch origin main
 
@@ -98,8 +88,3 @@ jobs:
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
 
           git push --set-upstream origin $branchName
-
-          $prTitle = "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
-          $prBody = "Automated leaderboard update from evaluation run ${{ github.run_id }}`n`nAgent: ${{ inputs.agent }}`nModel: ${{ inputs.model }}"
-
-          gh pr create --title $prTitle --body $prBody --base main

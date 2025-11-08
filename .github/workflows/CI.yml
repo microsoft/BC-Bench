@@ -8,8 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -65,9 +64,6 @@ jobs:
   summarize-results:
     needs: mock-evaluation
     if: always()
-    permissions:
-      contents: write
-      pull-requests: write
     uses: ./.github/workflows/summarize-results.yml
     with:
       results-dir: ${{ needs.mock-evaluation.outputs.results-dir }}
