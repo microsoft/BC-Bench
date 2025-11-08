@@ -79,21 +79,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
+          git fetch origin main
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Create branch from main
           $branchName = "leaderboard/${{ github.run_id }}"
-          git checkout -b $branchName
+          git checkout -b $branchName origin/main
+
+          uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
 
           git add docs/_data/leaderboard.json
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
 
           git push --set-upstream origin $branchName
-
-          # Ensure we have the main branch reference
-          git fetch origin main
 
           $prTitle = "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
           $prBody = "Automated leaderboard update from evaluation run ${{ github.run_id }}`n`nAgent: ${{ inputs.agent }}`nModel: ${{ inputs.model }}"
