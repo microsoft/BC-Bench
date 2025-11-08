@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -65,7 +66,7 @@ jobs:
     needs: mock-evaluation
     if: always()
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
     uses: ./.github/workflows/summarize-results.yml
     with:

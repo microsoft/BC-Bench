@@ -27,12 +27,16 @@ env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
   SUMMARY_OUTPUT_FILE: evaluation_summary.json
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   summarize-results:
     name: Results
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
     steps:
       - name: Checkout repository
