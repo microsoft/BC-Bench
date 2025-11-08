@@ -146,6 +146,10 @@ def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | N
                     metrics["prompt_tokens"] += usage["prompt_tokens"]
                     metrics["completion_tokens"] += usage["completion_tokens"]
 
+        # Warn if token counts are suspiciously low (might indicate parsing/collection issue)
+        if metrics["prompt_tokens"] == 0 and metrics["completion_tokens"] == 0:
+            logger.warning("No token usage found in agent messages - metrics may be incomplete")
+
         logger.info(f"Extracted metrics: {metrics}")
         return metrics
 
