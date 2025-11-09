@@ -23,12 +23,6 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
 
             dataset_entry: DatasetEntry = matching_entries[0]
 
-            # Warn if result has missing metrics that will affect bceval output quality
-            if result.prompt_tokens is None or result.completion_tokens is None:
-                logger.warning(f"Result for {result.instance_id} missing token metrics - bceval metadata will default to 0")
-            if result.agent_execution_time is None:
-                logger.warning(f"Result for {result.instance_id} missing execution time - bceval latency will default to 0")
-
             bceval_result = {
                 "id": result.instance_id,
                 "input": dataset_entry.get_task(),

@@ -113,8 +113,6 @@ def _parse_metrics(output_lines: list[str]) -> dict[str, float | int] | None:
             minutes = int(duration_match.group(1)) if duration_match.group(1) else 0
             seconds = float(duration_match.group(2))
             metrics["agent_execution_time"] = minutes * 60 + seconds
-        else:
-            logger.warning("No duration found in output")
 
         usage_match = re.search(r"(\d+(?:\.\d+)?[km]?)\s+input,\s*(\d+(?:\.\d+)?[km]?)\s+output", output_text)
         if usage_match:
@@ -130,8 +128,6 @@ def _parse_metrics(output_lines: list[str]) -> dict[str, float | int] | None:
 
             metrics["prompt_tokens"] = parse_token_count(input_str)
             metrics["completion_tokens"] = parse_token_count(output_str)
-        else:
-            logger.warning("No token usage found in output")
 
         if metrics:
             logger.info(f"Parsed metrics: {metrics}")

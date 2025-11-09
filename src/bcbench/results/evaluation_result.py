@@ -2,12 +2,10 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from bcbench.evaluate import EvaluationContext
 from bcbench.logger import get_logger
-
-if TYPE_CHECKING:
-    from bcbench.evaluate.evaluation_context import EvaluationContext
 
 logger = get_logger(__name__)
 
@@ -144,15 +142,6 @@ class EvaluationResultSummary:
         durations = [r.agent_execution_time for r in results if r.agent_execution_time is not None]
         prompt_tokens = [r.prompt_tokens for r in results if r.prompt_tokens is not None]
         completion_tokens = [r.completion_tokens for r in results if r.completion_tokens is not None]
-
-        # Warn if significant amount of metric data is missing
-        missing_durations = total - len(durations)
-        missing_tokens = total - len(prompt_tokens)
-
-        if missing_durations > 0:
-            logger.warning(f"Summary calculated with {missing_durations}/{total} results missing agent_execution_time")
-        if missing_tokens > 0:
-            logger.warning(f"Summary calculated with {missing_tokens}/{total} results missing token usage data")
 
         return cls(
             total=total,

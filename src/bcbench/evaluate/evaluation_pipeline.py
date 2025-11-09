@@ -55,10 +55,6 @@ def run_evaluation_pipeline(
             agent_metrics = agent_runner(context)
             context.agent_metrics = agent_metrics
 
-            # Warn if metrics collection failed - affects evaluation result quality
-            if agent_metrics is None:
-                logger.warning(f"No metrics collected for {context.entry.instance_id} - evaluation result will be missing agent performance data")
-
         generated_patch = get_gernerated_diff(context.repo_path)
 
         # Apply test patch and validate
