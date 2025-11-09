@@ -78,7 +78,7 @@ jobs:
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: "${{ env.EVALUATION_RESULTS_DIR }}/"
+          path: ${{ env.EVALUATION_RESULTS_DIR }}
           retention-days: ${{ github.event.inputs.test-run && 1 || 30 }}
 
   summarize-results:
