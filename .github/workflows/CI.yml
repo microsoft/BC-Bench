@@ -32,18 +32,22 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing
 
+  get-entries:
+    uses: ./.github/workflows/get-entries.yml
+    with:
+      test-run: true
+
   mock-evaluation:
     runs-on: ubuntu-latest
+    needs: get-entries
+    if: needs.get-entries.outputs.entries != '[]'
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     strategy:
       fail-fast: false
       matrix:
-        entry:
-          - microsoftInternal__NAV-210528
-          - microsoftInternal__NAV-224009
-          - microsoftInternal__NAV-211710
-    name: ${{ matrix.entry }}
+        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+    name: Test Run for ${{ matrix.entry }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

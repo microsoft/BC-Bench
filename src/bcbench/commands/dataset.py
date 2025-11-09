@@ -36,28 +36,12 @@ def validate_dataset(
         raise typer.Exit(code=1)
 
 
-@dataset_app.command("versions")
-def list_versions(
-    dataset_path: DatasetPath = _config.paths.dataset_path,
-    github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
-):
-    """Get unique environment_setup_version values from the dataset."""
-    entries = load_dataset_entries(dataset_path)
-    versions = sorted({e.environment_setup_version for e in entries if e.environment_setup_version})
-
-    print(f"Found {len(versions)} unique version(s):")
-    for version in versions:
-        print(f"  - {version}")
-
-    if github_output:
-        _write_github_output(github_output, json.dumps(versions))
-
-
 @dataset_app.command("list")
 def list_entries(
     dataset_path: DatasetPath = _config.paths.dataset_path,
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
+    test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
 ):
     """List dataset entry IDs."""
     if modified_only:
@@ -83,7 +67,7 @@ def list_entries(
         diff_output: str = result.stdout
         entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
     else:
-        dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path)
+        dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path, random=2 if test_run else None)
         entry_ids: list[str] = [e.instance_id for e in dataset_entries]
 
     print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")

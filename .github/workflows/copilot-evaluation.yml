@@ -16,6 +16,11 @@ on:
           - 'claude-sonnet-4'
           - 'claude-haiku-4.5'
           - 'gpt-5'
+      test-run:
+        description: 'Indicate this is a test run (with few entries)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -23,6 +28,8 @@ env:
 jobs:
   get-entries:
     uses: ./.github/workflows/get-entries.yml
+    with:
+      test-run: ${{ github.event.inputs.test-run }}
 
   evaluate-with-copilot-cli:
     runs-on: windows-latest
@@ -72,7 +79,7 @@ jobs:
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
           path: "${{ env.EVALUATION_RESULTS_DIR }}/"
-          retention-days: 30
+          retention-days: ${{ github.event.inputs.test-run && 1 || 30 }}
 
   summarize-results:
     needs: evaluate-with-copilot-cli
@@ -84,4 +91,5 @@ jobs:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ github.event.inputs.model }}
       agent: 'GitHub Copilot CLI'
+      mock: ${{ github.event.inputs.test-run }}
     secrets: inherit

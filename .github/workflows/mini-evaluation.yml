@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      test-run:
+        description: 'Indicate this is a test run (with few entries)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -25,6 +30,8 @@ env:
 jobs:
   get-entries:
     uses: ./.github/workflows/get-entries.yml
+    with:
+      test-run: ${{ github.event.inputs.test-run }}
 
   evaluate-with-mini-agent:
     runs-on: windows-latest
@@ -80,7 +87,7 @@ jobs:
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/
-          retention-days: 30
+          retention-days: ${{ github.event.inputs.test-run && 1 || 30 }}
 
   summarize-results:
     needs: evaluate-with-mini-agent
@@ -92,4 +99,5 @@ jobs:
       results-dir: ${{ needs.evaluate-with-mini-agent.outputs.results-dir }}
       model: ${{ github.event.inputs.model }}
       agent: 'mini-bc-agent'
+      mock: ${{ github.event.inputs.test-run }}
     secrets: inherit

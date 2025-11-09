@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: false
+      test-run:
+        description: Indicate this is a test run (with 2 entries)
+        required: false
+        type: boolean
+        default: false
     outputs:
       entries:
         description: JSON array of dataset entries
@@ -21,7 +26,7 @@ on:
 
 jobs:
   get-entries:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     outputs:
       entries: ${{ steps.get-entries.outputs.entries }}
     steps:
@@ -40,8 +45,12 @@ jobs:
       - name: Get entries for matrix
         id: get-entries
         run: |
-          if ('${{ inputs.modified-only }}' -eq 'true') {
-            uv run bcbench dataset list --github-output entries --modified-only
-          } else {
-            uv run bcbench dataset list --github-output entries
-          }
+          cmd="uv run bcbench dataset list --github-output entries"
+
+          if [[ "${{ inputs.modified-only }}" == "true" ]]; then
+            cmd="$cmd --modified-only"
+          elif [[ "${{ inputs.test-run }}" == "true" ]]; then
+            cmd="$cmd --limit 2"
+          fi
+
+          eval "$cmd"
