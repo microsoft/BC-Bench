@@ -78,7 +78,7 @@ def run_evaluation_pipeline(
 
     except BuildError as e:
         result = EvaluationResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
-        logger.debug(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
+        logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
     except BuildTimeoutExpired as e:
         result = EvaluationResult.create_build_failure(context, generated_patch, f"Build timed out: {e.project_path}")
@@ -86,7 +86,7 @@ def run_evaluation_pipeline(
 
     except TestExecutionError as e:
         result = EvaluationResult.create_test_failure(context, generated_patch)
-        logger.debug(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
+        logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 
     except TestExecutionTimeoutExpired as e:
         result = EvaluationResult.create_test_failure(context, generated_patch, "Tests timed out")
