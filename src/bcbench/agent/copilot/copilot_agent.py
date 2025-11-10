@@ -7,6 +7,9 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+import yaml
+from jinja2 import Template
+
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
@@ -21,16 +24,18 @@ def run_copilot_agent(
     model: str,
     repo_path: Path,
     output_dir: Path,
-    include_project_paths: bool = False,
 ) -> dict[str, float | int] | None:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:
         Dictionary containing metrics extracted from the CLI output, or None if collection fails
     """
+    config_file = Path(__file__).parent / "config.yaml"
+    copilot_config = yaml.safe_load(config_file.read_text())
+
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = _build_prompt(entry, repo_path, include_project_paths)
+    prompt: str = _build_prompt(entry, repo_path, copilot_config)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -86,21 +91,18 @@ def run_copilot_agent(
         raise
 
 
-def _build_prompt(entry: DatasetEntry, repo_path: Path, include_project_paths: bool) -> str:
-    project_paths: str = ", ".join(entry.project_paths)
+def _build_prompt(entry: DatasetEntry, repo_path: Path, config: dict) -> str:
+    prompt_config = config.get("agent", {}).get("prompt", {})
+    template_str = prompt_config.get("template")
+    include_project_paths = prompt_config.get("include_project_paths")
 
-    return f"""This is a non-interactive session. You are working with a Business Central (AL) code repository at {repo_path}.
-
-Task: Fix the issue described below {"in the following projects: " + project_paths if include_project_paths else ""}
-
-Important constraints:
-- Do NOT modify any testing logic or test files
-- Focus solely on fixing the reported issue
-- Do NOT try to build or run tests, just provide the code changes needed
-
-Issue details:
-{entry.get_task()}
-"""
+    template = Template(template_str)
+    return template.render(
+        repo_path=repo_path,
+        task=entry.get_task(),
+        project_paths=", ".join(entry.project_paths),
+        include_project_paths=include_project_paths,
+    )
 
 
 def _parse_metrics(output_lines: Sequence[str]) -> dict[str, float | int] | None:

@@ -92,10 +92,6 @@ def evaluate_copilot(
     repo_path: RepoPath = _config.paths.nav_repo_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
-    include_project_paths: Annotated[
-        bool,
-        typer.Option(help="Whether to include project paths in the prompt"),
-    ] = False,
 ):
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -133,7 +129,6 @@ def evaluate_copilot(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
             model=ctx.model,
-            include_project_paths=include_project_paths,
             output_dir=ctx.result_dir,
         ),
     )

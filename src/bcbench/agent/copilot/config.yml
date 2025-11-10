@@ -1,0 +1,15 @@
+prompt:
+  include_project_paths: false
+  template: |
+    This is a non-interactive session. You are working with a Business Central (AL) code repository at {{repo_path}}.
+
+    Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+
+    Important constraints:
+    - Do NOT modify any testing logic or test files
+    - Focus solely on fixing the reported issue
+    - Do NOT try to build or run tests, just provide the code changes needed
+    - Do NOT commit any changes to the repository
+
+    Issue details:
+    {{task}}
