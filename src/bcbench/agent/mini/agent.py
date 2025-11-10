@@ -65,7 +65,7 @@ def run_mini_agent(
         Dictionary containing metrics (agent_execution_time, prompt_tokens, completion_tokens),
         or None if metric extraction fails.
     """
-    config_file = Path(__file__).parent / "bc_agent_config.yaml"
+    config_file = Path(__file__).parent / "config.yaml"
     mini_bc_config = yaml.safe_load(config_file.read_text())
     agent_config = mini_bc_config.get("agent", {})
     env_config = mini_bc_config.get("environment", {})
