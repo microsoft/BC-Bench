@@ -30,14 +30,17 @@
     "date": "2025-11-03"
   },
   {
-    "agent_name": "GitHub Copilot CLI",
-    "model": "gpt-5",
     "total": 19,
-    "resolved": 5,
-    "average_duration": 0,
-    "average_prompt_tokens": 0,
-    "average_completion_tokens": 0,
-    "date": "2025-11-04"
+    "resolved": 6,
+    "failed": 13,
+    "build": 15,
+    "date": "2025-11-10",
+    "model": "gpt-5",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 431.0,
+    "average_prompt_tokens": 352378.9,
+    "average_completion_tokens": 7142.1,
+    "github_run_id": "19227643144"
   },
   {
     "agent_name": "mini-bc-agent",
