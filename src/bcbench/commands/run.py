@@ -37,12 +37,6 @@ def run_mini(
     model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.nav_repo_path,
-    enable_bc_tools: Annotated[
-        bool,
-        typer.Option(help="Whether to enable BC tools for the agent (build and test)"),
-    ] = False,
-    step_limit: Annotated[int, typer.Option(help="Maximum number of agent steps")] = 20,
-    cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
 ):
     """
@@ -62,12 +56,9 @@ def run_mini(
         entry=entry,
         repo_path=repo_path,
         model=model,
-        enable_bc_tools=enable_bc_tools,
         container_name=container_name,
         username=username,
         password=password,
-        step_limit=step_limit,
-        cost_limit=cost_limit,
         output_dir=output_dir,
     )
 

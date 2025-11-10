@@ -33,16 +33,6 @@ def evaluate_mini(
     repo_path: RepoPath = _config.paths.nav_repo_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mini_test_run",
-    step_limit: Annotated[int, typer.Option(help="Maximum number of agent steps")] = 20,
-    cost_limit: Annotated[float, typer.Option(help="Maximum cost limit for agent")] = 1.0,
-    enable_bc_tools: Annotated[
-        bool,
-        typer.Option(help="Whether to enable BC tools for the agent (build and test)"),
-    ] = False,
-    include_project_paths: Annotated[
-        bool,
-        typer.Option(help="Whether to include project paths in the prompt"),
-    ] = False,
 ):
     """
     Evaluate mini-bc-agent on single dataset entry.
@@ -72,11 +62,6 @@ def evaluate_mini(
         password=password,
         model=model,
         agent_name="mini-bc-agent",
-        agent_options={
-            "enable_bc_tools": enable_bc_tools,
-            "step_limit": step_limit,
-            "cost_limit": cost_limit,
-        },
     )
 
     run_evaluation_pipeline(
@@ -85,13 +70,9 @@ def evaluate_mini(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
             model=ctx.model,
-            include_project_paths=include_project_paths,
-            enable_bc_tools=ctx.get_agent_option("enable_bc_tools", False),
             container_name=ctx.container_name,
             username=ctx.username,
             password=ctx.password,
-            step_limit=ctx.get_agent_option("step_limit", 20),
-            cost_limit=ctx.get_agent_option("cost_limit", 1.0),
             output_dir=ctx.result_dir,
         ),
     )

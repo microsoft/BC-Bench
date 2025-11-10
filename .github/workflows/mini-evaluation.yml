@@ -13,11 +13,6 @@ on:
         type: choice
         options:
           - 'azure/gpt-4.1'
-      bc_tools_enabled:
-        description: 'Allow mini-bc-agent to use BC build and test commands'
-        required: false
-        default: false
-        type: boolean
       test-run:
         description: 'Indicate this is a test run (with few entries)'
         required: false
@@ -69,17 +64,10 @@ jobs:
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
           AZURE_API_VERSION: ${{ secrets.AZURE_API_VERSION }}
         run: |
-          $args = @(
-            'evaluate', 'mini', "${{ matrix.entry }}",
-            '--model', "${{ inputs.model }}",
-            '--repo-path', "${{ steps.setup-env.outputs.repo_path }}",
-            '--output-dir', "${{ env.EVALUATION_RESULTS_DIR }}",
-            '--step-limit', '50'
-          )
-          if ('${{ inputs.bc_tools_enabled }}' -eq 'true') {
-            $args += '--enable-bc-tools'
-          }
-          uv run bcbench @args
+          uv run bcbench evaluate mini "${{ matrix.entry }}" `
+            --model "${{ inputs.model }}" `
+            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v4

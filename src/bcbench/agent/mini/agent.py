@@ -54,13 +54,9 @@ def run_mini_agent(
     entry: DatasetEntry,
     repo_path: Path,
     model: str,
-    enable_bc_tools: bool = False,
-    include_project_paths: bool = False,
     container_name: str | None = None,
     username: str = "admin",
     password: str | None = None,
-    step_limit: int = 20,
-    cost_limit: float = 1.0,
     output_dir: Path | None = None,
 ) -> dict[str, float | int] | None:
     """Run mini-bc-agent on a single dataset entry.
@@ -69,18 +65,18 @@ def run_mini_agent(
         Dictionary containing metrics (agent_execution_time, prompt_tokens, completion_tokens),
         or None if metric extraction fails.
     """
+    config_file = Path(__file__).parent / "bc_agent_config.yaml"
+    mini_bc_config = yaml.safe_load(config_file.read_text())
+    agent_config = mini_bc_config.get("agent", {})
+    env_config = mini_bc_config.get("environment", {})
+
+    enable_bc_tools: bool = env_config.get("enable_bc_tools")
     if enable_bc_tools and (not container_name or not password):
         raise ConfigurationError("container_name and password are required when enable_bc_tools is True")
 
     logger.info(f"Running mini-bc-agent on: {entry.instance_id}")
 
     task: str = entry.get_task()
-
-    config_file = Path(__file__).parent / "bc_agent_config.yaml"
-    mini_bc_config = yaml.safe_load(config_file.read_text())
-    agent_config = mini_bc_config.get("agent", {})
-    agent_config["step_limit"] = step_limit
-    agent_config["cost_limit"] = cost_limit
 
     # Lazy import and create agent
     from minisweagent.models.litellm_model import LitellmModel
@@ -99,7 +95,7 @@ def run_mini_agent(
             password=password,
             project_paths=entry.project_paths,
             cwd=str(repo_path),
-            include_project_paths=include_project_paths,
+            include_project_paths=env_config.get("include_project_paths"),
             enable_bc_tools=enable_bc_tools,
             version=entry.environment_setup_version,
         ),
