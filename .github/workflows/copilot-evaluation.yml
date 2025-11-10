@@ -83,7 +83,6 @@ jobs:
 
   summarize-results:
     needs: evaluate-with-copilot-cli
-    if: success() || failure()
     uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write

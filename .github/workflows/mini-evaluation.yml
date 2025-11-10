@@ -79,7 +79,6 @@ jobs:
 
   summarize-results:
     needs: evaluate-with-mini-agent
-    if: success() || failure()
     uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write
