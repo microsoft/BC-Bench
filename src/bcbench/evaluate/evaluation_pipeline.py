@@ -93,8 +93,8 @@ def run_evaluation_pipeline(
         logger.error(f"Tests timed out during evaluation of {context.entry.instance_id}: {e}")
 
     except Exception as e:
-        result = EvaluationResult.create_unexpected_error(context, generated_patch, e)
-        logger.error(f"Failed to process {context.entry.instance_id}: {e}")
+        logger.error(f"Unexpected error during evaluation of {context.entry.instance_id}: {e}")
+        raise
 
     finally:
         if result is not None:
