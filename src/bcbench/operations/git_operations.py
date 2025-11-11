@@ -95,9 +95,12 @@ def get_gernerated_diff(repo_path: Path) -> str:
             text=True,
             check=True,
         )
+        patch: str = result.stdout.strip()
         logger.info("Git diff retrieved successfully")
-        logger.debug(f"Generated diff:\n{result.stdout}")
-        return result.stdout
+        logger.debug(f"Generated diff:\n{patch}")
+        if not patch:
+            logger.warning("Generated diff is empty")
+        return patch
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to get git diff: {e.stderr}")
         return ""
