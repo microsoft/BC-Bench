@@ -88,8 +88,17 @@ def get_gernerated_diff(repo_path: Path) -> str:
     """
     try:
         logger.info("Getting git diff")
+
+        # Stage all changes, so new files can be captured in the diff
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=repo_path,
+            check=True,
+        )
+
+        # Get diff of staged changes against HEAD
         result = subprocess.run(
-            ["git", "diff", "--", ".", ":!*.docx", ":!**/app.json"],
+            ["git", "diff", "--cached", "--", ".", ":!*.docx", ":!**/app.json"],
             cwd=repo_path,
             capture_output=True,
             text=True,
