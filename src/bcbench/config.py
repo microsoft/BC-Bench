@@ -68,7 +68,7 @@ class TimeoutConfig:
     def default(cls) -> TimeoutConfig:
         """Get default timeout configuration."""
         return cls(
-            build_baseapp=25 * 60,  # 25 minutes for BaseApp compilation
+            build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
             github_copilot_cli=20 * 60,  # 20 minutes for GitHub Copilot CLI execution
