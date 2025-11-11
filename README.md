@@ -14,10 +14,16 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
 
 ## Quick start
 
+### GitHub Codespaces
+
+It's recommended to get started with [GitHub Codespaces](https://github.com/features/codespaces), its configuration is maintained [here](.devcontainer/devcontainer.json).
+
 ### Local Development
 
 ```bash
-git clone https://github.com/microsoft/BC-Bench.git
+# Install gh if you don't have it: https://cli.github.com/
+
+gh repo clone microsoft/BC-Bench
 cd BC-Bench
 
 # Install uv if you don't have it: https://docs.astral.sh/uv/
@@ -26,10 +32,6 @@ cd BC-Bench
 uv sync --all-extras
 uv run bcbench --help
 ```
-
-### Environment Setup
-
-Create a `.env` file in the root directory with required credentials and configuration. See [.env.sample](.env.sample) for the template.
 
 ## Dataset
 
