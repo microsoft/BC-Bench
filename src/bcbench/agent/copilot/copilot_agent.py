@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
 import yaml
 from jinja2 import Template
@@ -37,6 +37,7 @@ def run_copilot_agent(
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = _build_prompt(entry, repo_path, copilot_config)
+    mcp_config_json: str | None = _build_mcp_config(copilot_config, repo_path)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -46,30 +47,21 @@ def run_copilot_agent(
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
-    # Build command arguments
-    cmd_args = [
-        copilot_cmd,
-        "--allow-all-tools",
-        "--allow-all-paths",
-        "--disable-builtin-mcps",
-        f"--model={model}",
-        "--no-custom-instructions",
-        "--log-level=debug",
-        f"--log-dir={output_dir.resolve()}",
-    ]
-
-    # Add MCP servers if configured
-    mcp_servers: list[dict] = copilot_config.get("mcp", {}).get("servers", [])
-    mcp_config_json = _build_mcp_config(mcp_servers, repo_path)
-    if mcp_config_json:
-        cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
-        logger.info(f"Using MCP servers: {[s.get('name') for s in mcp_servers]}")
-
-    cmd_args.extend(["-p", prompt.replace("\r", "").replace("\n", " ")])
-
     try:
         result = subprocess.run(
-            cmd_args,
+            [
+                copilot_cmd,
+                "--allow-all-tools",
+                "--allow-all-paths",
+                "--disable-builtin-mcps",
+                f"--model={model}",
+                "--no-custom-instructions",
+                "--log-level=debug",
+                f"--additional-mcp-config={mcp_config_json}" if mcp_config_json else "",
+                f"--log-dir={output_dir.resolve()}",
+                "-p",
+                prompt.replace("\r", "").replace("\n", " "),
+            ],
             cwd=str(repo_path),
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.github_copilot_cli,
@@ -110,8 +102,9 @@ def _build_prompt(entry: DatasetEntry, repo_path: Path, config: dict) -> str:
     )
 
 
-def _build_mcp_config(mcp_servers: list[dict[str, Any]], repo_path: Path) -> str | None:
+def _build_mcp_config(copilot_config: dict, repo_path: Path) -> str | None:
     # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
+    mcp_servers: list[dict] = copilot_config.get("mcp", {}).get("servers", [])
     if not mcp_servers:
         return None
 
@@ -125,25 +118,26 @@ def _build_mcp_config(mcp_servers: list[dict[str, Any]], repo_path: Path) -> str
 
         match server_type:
             case "http":
-                url: str = server["url"]
-
                 mcp_config["mcpServers"][server_name] = {
                     "type": server_type,
-                    "url": url,
+                    "url": server["url"],
                     "tools": tools,
                 }
             case "local":
-                command: str = server["command"]
                 args: list[str] = server["args"]
-                rendered_command = Template(command).render(**template_context)
                 rendered_args = [Template(arg).render(**template_context) for arg in args]
 
                 mcp_config["mcpServers"][server_name] = {
                     "type": server_type,
-                    "command": rendered_command,
+                    "command": server["command"],
                     "args": rendered_args,
                     "tools": tools,
                 }
+            case _:
+                logger.error(f"Unsupported MCP server type: {server_type}, {server}")
+                raise AgentError(f"Unsupported MCP server type: {server_type}")
+
+    logger.info(f"Using MCP servers: {[s.get('name') for s in mcp_servers]}")
 
     return json.dumps(mcp_config, separators=(",", ":"))
 
