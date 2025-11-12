@@ -1,11 +1,12 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import json
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import yaml
 from jinja2 import Template
@@ -45,20 +46,30 @@ def run_copilot_agent(
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
+    # Build command arguments
+    cmd_args = [
+        copilot_cmd,
+        "--allow-all-tools",
+        "--allow-all-paths",
+        "--disable-builtin-mcps",
+        f"--model={model}",
+        "--no-custom-instructions",
+        "--log-level=debug",
+        f"--log-dir={output_dir.resolve()}",
+    ]
+
+    # Add MCP servers if configured
+    mcp_servers: list[dict] = copilot_config.get("mcp", {}).get("servers", [])
+    mcp_config_json = _build_mcp_config(mcp_servers, repo_path)
+    if mcp_config_json:
+        cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
+        logger.info(f"Using MCP servers: {[s.get('name') for s in mcp_servers]}")
+
+    cmd_args.extend(["-p", prompt.replace("\r", "").replace("\n", " ")])
+
     try:
         result = subprocess.run(
-            [
-                copilot_cmd,
-                "--allow-all-tools",  # required for non-interactive mode
-                "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
-                "--disable-builtin-mcps",
-                f"--model={model}",
-                "--no-custom-instructions",
-                "--log-level=debug",
-                f"--log-dir={output_dir.resolve()}",
-                "-p",
-                prompt.replace("\r", "").replace("\n", " "),
-            ],
+            cmd_args,
             cwd=str(repo_path),
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.github_copilot_cli,
@@ -78,6 +89,7 @@ def run_copilot_agent(
         logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
         return None
     except subprocess.CalledProcessError as e:
+        logger.error(f"Copilot CLI execution failed with error {e.stderr}")
         raise AgentError(f"Copilot CLI execution failed: {e}") from None
     except Exception as e:
         logger.exception(f"Unexpected error running Copilot CLI: {e}")
@@ -96,6 +108,44 @@ def _build_prompt(entry: DatasetEntry, repo_path: Path, config: dict) -> str:
         project_paths=", ".join(entry.project_paths),
         include_project_paths=include_project_paths,
     )
+
+
+def _build_mcp_config(mcp_servers: list[dict[str, Any]], repo_path: Path) -> str | None:
+    # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
+    if not mcp_servers:
+        return None
+
+    mcp_config = {"mcpServers": {}}
+    template_context = {"repo_path": str(repo_path.resolve())}
+
+    for server in mcp_servers:
+        server_type: str = server["type"]
+        server_name: str = server["name"]
+        tools: list[str] = server["tools"]
+
+        match server_type:
+            case "http":
+                url: str = server["url"]
+
+                mcp_config["mcpServers"][server_name] = {
+                    "type": server_type,
+                    "url": url,
+                    "tools": tools,
+                }
+            case "local":
+                command: str = server["command"]
+                args: list[str] = server["args"]
+                rendered_command = Template(command).render(**template_context)
+                rendered_args = [Template(arg).render(**template_context) for arg in args]
+
+                mcp_config["mcpServers"][server_name] = {
+                    "type": server_type,
+                    "command": rendered_command,
+                    "args": rendered_args,
+                    "tools": tools,
+                }
+
+    return json.dumps(mcp_config, separators=(",", ":"))
 
 
 def _parse_metrics(output_lines: Sequence[str]) -> dict[str, float | int] | None:
