@@ -85,7 +85,7 @@ def run_copilot_agent(
 
 
 def _build_prompt(entry: DatasetEntry, repo_path: Path, config: dict) -> str:
-    prompt_config = config.get("agent", {}).get("prompt", {})
+    prompt_config = config.get("prompt", {})
     template_str = prompt_config.get("template")
     include_project_paths = prompt_config.get("include_project_paths")
 
