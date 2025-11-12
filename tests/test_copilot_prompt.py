@@ -15,11 +15,9 @@ def test_build_prompt_without_project_paths():
     )
     repo_path = Path("C:/testbed/navapp")
     config = {
-        "agent": {
-            "prompt": {
-                "template": "Working at {{repo_path}}. Task: {{task}}",
-                "include_project_paths": False,
-            }
+        "prompt": {
+            "template": "Working at {{repo_path}}. Task: {{task}}",
+            "include_project_paths": False,
         }
     }
 
@@ -43,11 +41,9 @@ def test_build_prompt_with_project_paths():
     )
     repo_path = Path("/workspace/navapp")
     config = {
-        "agent": {
-            "prompt": {
-                "template": "Repo: {{repo_path}}. {% if include_project_paths %}Projects: {{project_paths}}{% endif %}. Task: {{task}}",
-                "include_project_paths": True,
-            }
+        "prompt": {
+            "template": "Repo: {{repo_path}}. {% if include_project_paths %}Projects: {{project_paths}}{% endif %}. Task: {{task}}",
+            "include_project_paths": True,
         }
     }
 
@@ -68,11 +64,9 @@ def test_build_prompt_empty_project_paths():
     )
     repo_path = Path("/var/repo")
     config = {
-        "agent": {
-            "prompt": {
-                "template": "{% if include_project_paths %}Projects: {{project_paths}}{% endif %}Task: {{task}}",
-                "include_project_paths": True,
-            }
+        "prompt": {
+            "template": "{% if include_project_paths %}Projects: {{project_paths}}{% endif %}Task: {{task}}",
+            "include_project_paths": True,
         }
     }
 
