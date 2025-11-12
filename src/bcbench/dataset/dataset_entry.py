@@ -32,7 +32,6 @@ class DatasetEntry:
     pass_to_pass: list[TestEntry] = field(default_factory=list)
     project_paths: list[str] = field(default_factory=list)
     commit: str = ""
-    pr_number: int | None = None
     _raw_pr_data: dict[str, Any] | None = field(default=None, repr=False)
     _raw_work_item_data: dict[str, Any] | None = field(default=None, repr=False)
 

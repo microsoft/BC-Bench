@@ -30,7 +30,6 @@ def build_dataset_entry_from_ado(
         instance_id=f"microsoftInternal__NAV-{pr_number}",
         base_commit=base_commit,
         commit=commit,
-        pr_number=pr_number,
         created_at=created_at,
         patch=patch_fix,
         environment_setup_version=version,
