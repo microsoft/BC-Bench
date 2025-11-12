@@ -51,8 +51,8 @@ def run_copilot_agent(
         result = subprocess.run(
             [
                 copilot_cmd,
-                "--allow-all-tools",
-                "--allow-all-paths",
+                "--allow-all-tools",  # required for non-interactive mode
+                "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
                 "--disable-builtin-mcps",
                 f"--model={model}",
                 "--no-custom-instructions",
