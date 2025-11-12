@@ -116,7 +116,7 @@ def _build_mcp_config(mcp_servers: list[dict[str, Any]], repo_path: Path) -> str
         return None
 
     mcp_config = {"mcpServers": {}}
-    template_context = {"repo_path": str(repo_path.resolve())}
+    template_context = {"repo_path": str(repo_path)}
 
     for server in mcp_servers:
         server_type: str = server["type"]
