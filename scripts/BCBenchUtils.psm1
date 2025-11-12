@@ -79,12 +79,12 @@ function Get-BCCredential {
     Maximum number of retry attempts (default: 2)
 .PARAMETER RetryDelaySeconds
     Delay between retry attempts in seconds (default: 5)
-.PARAMETER SparseCheckoutPaths
-    Optional list of paths to include via sparse checkout. Enables git sparse checkout when provided.
-.PARAMETER PrefetchCommits
-    Optional list of commit SHAs to prefetch after cloning to warm required objects.
+.PARAMETER CommitSha
+    Optional specific commit SHA to checkout. If provided, performs a shallow clone of that commit.
 .EXAMPLE
     Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -Branch "main" -ClonePath "C:\temp\repo"
+.EXAMPLE
+    Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -Branch "main" -ClonePath "C:\temp\repo" -CommitSha "abc123..."
 #>
 function Invoke-GitCloneWithRetry {
     [CmdletBinding()]
@@ -107,11 +107,8 @@ function Invoke-GitCloneWithRetry {
         [Parameter(Mandatory = $false)]
         [int]$RetryDelaySeconds = 5,
 
-        [Parameter(Mandatory = $false)]
-        [string[]]$SparseCheckoutPaths,
-
-        [Parameter(Mandatory = $false)]
-        [string[]]$PrefetchCommits
+        [Parameter(Mandatory = $true)]
+        [string]$CommitSha
     )
 
     # Remove existing clone if it exists
@@ -132,53 +129,31 @@ function Invoke-GitCloneWithRetry {
         try {
             Write-Log "Attempting repository clone (Attempt $retryCount/$MaxRetries)..." -Level Info
 
-            $cloneArgs = "--single-branch --no-tags"
-            if ($SparseCheckoutPaths -and $SparseCheckoutPaths.Count -gt 0) {
-                $cloneArgs += " --sparse"
-            }
-
-            $cloneCommand = "git clone $cloneArgs -b `"$Branch`" `"$authenticatedUrl`" `"$ClonePath`""
+            Write-Log "Using shallow clone with specific commit: $CommitSha" -Level Debug
+            # Initial shallow clone without checkout
+            $cloneCommand = "git clone --depth 1 --filter=blob:none --no-checkout `"$authenticatedUrl`" `"$ClonePath`""
             $cloneResult = Invoke-Expression $cloneCommand 2>&1
 
-            if ($LASTEXITCODE -eq 0) {
-                $cloneSuccess = $true
-                Write-Log "Repository cloned successfully to $ClonePath" -Level Success
-
-                if ($SparseCheckoutPaths -and $SparseCheckoutPaths.Count -gt 0) {
-                    Write-Log "Configuring sparse checkout for paths: $($SparseCheckoutPaths -join ', ')" -Level Info
-
-                    $sparseInitResult = & git -C $ClonePath sparse-checkout init --cone 2>&1
-                    if ($LASTEXITCODE -ne 0) {
-                        Write-Log "Failed to initialize sparse checkout: $sparseInitResult" -Level Error
-                        return $false
-                    }
-
-                    $sparseSetResult = & git -C $ClonePath sparse-checkout set @SparseCheckoutPaths 2>&1
-                    if ($LASTEXITCODE -ne 0) {
-                        Write-Log "Failed to set sparse checkout paths: $sparseSetResult" -Level Error
-                        return $false
-                    }
-
-                    Write-Log "Sparse checkout configured successfully" -Level Success
-                }
-
-                if ($PrefetchCommits -and $PrefetchCommits.Count -gt 0) {
-                    foreach ($commit in $PrefetchCommits) {
-                        if ([string]::IsNullOrWhiteSpace($commit)) { continue }
-                        Write-Log "Prefetching commit $commit" -Level Info
-                        $fetchResult = & git -C $ClonePath fetch origin $commit 2>&1
-                        if ($LASTEXITCODE -ne 0) {
-                            Write-Log "Failed to prefetch commit $commit\: $fetchResult" -Level Error
-                            return $false
-                        }
-                    }
-
-                    Write-Log "Prefetch completed for specified commits" -Level Success
-                }
-            }
-            else {
+            if ($LASTEXITCODE -ne 0) {
                 throw "Git clone failed with exit code $LASTEXITCODE`: $cloneResult"
             }
+
+            # Fetch the specific commit
+            Write-Log "Fetching specific commit $CommitSha" -Level Debug
+            $fetchResult = & git -C $ClonePath fetch --depth 1 origin $CommitSha 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to fetch commit $CommitSha`: $fetchResult"
+            }
+
+            # Checkout the specific commit
+            Write-Log "Checking out commit $CommitSha" -Level Debug
+            $checkoutResult = & git -C $ClonePath checkout $CommitSha 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to checkout commit $CommitSha`: $checkoutResult"
+            }
+
+            $cloneSuccess = $true
+            Write-Log "Repository cloned and checked out to commit $CommitSha successfully" -Level Success
         }
         catch {
             Write-Log "Clone attempt $retryCount failed: $($_.Exception.Message)" -Level Error
