@@ -60,24 +60,17 @@ def run_copilot_agent(
                 prompt.replace("\r", "").replace("\n", " "),
             ],
             cwd=str(repo_path),
-            capture_output=True,
+            stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.github_copilot_cli,
             check=True,
         )
 
-        # Write directly to stdout buffer as bytes to avoid console encoding issues
-        if result.stdout:
-            sys.stdout.buffer.write(result.stdout)
-            sys.stdout.buffer.flush()
         if result.stderr:
             sys.stdout.buffer.write(result.stderr)
             sys.stdout.buffer.flush()
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
-        # Decode output for metrics parsing
         stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
-
-        # Metrics are typically in stderr
         stderr_lines = stderr.splitlines()
         return _parse_metrics(stderr_lines)
     except subprocess.TimeoutExpired:
