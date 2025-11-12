@@ -13,11 +13,9 @@
 			"extensions": [
 				"ms-python.python",
 				"ms-vscode.powershell",
-				"charliermarsh.ruff"
-			],
-			"settings": {
-				"terminal.integrated.defaultProfile.linux": "pwsh"
-			}
+				"charliermarsh.ruff",
+				"redhat.vscode-yaml"
+			]
 		}
 	}
 }

@@ -79,9 +79,9 @@ else {
     try {
         [string] $navBranch = "releases/$Version"
         [string] $navURL = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
+        [string] $commitSha = $entries[0].base_commit
 
-        Invoke-GitCloneWithRetry -RepoUrl $navURL -Token $env:ADO_TOKEN -Branch $navBranch `
-            -ClonePath $RepoPath -PrefetchCommits ($entries | Select-Object -ExpandProperty base_commit)
+        Invoke-GitCloneWithRetry -RepoUrl $navURL -Token $env:ADO_TOKEN -Branch $navBranch -ClonePath $RepoPath -CommitSha $commitSha
     }
     catch {
         Write-Log "Failed to clone NAV repository: $($_.Exception.Message)" -Level Error

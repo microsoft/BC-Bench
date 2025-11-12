@@ -1,15 +1,14 @@
 name: Dataset Validation and Verification
-description: Validate dataset schema, verify projects can be built and tests pass
 permissions:
   contents: read
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * 0"  # Weekly on Sundays at midnight
+    - cron: "0 0 * * 0" # Weekly on Sundays at midnight
   pull_request:
     paths:
-      - 'dataset/**'
+      - "dataset/**"
 
 jobs:
   validate-schema-and-list-entries:

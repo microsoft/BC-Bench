@@ -1,5 +1,4 @@
 name: Summarize Evaluation Results
-description: Reusable workflow to download and summarize evaluation results
 
 on:
   workflow_call:
@@ -9,15 +8,15 @@ on:
         required: true
         type: string
       model:
-        description: 'model to use for evaluation'
+        description: "model to use for evaluation"
         required: true
         type: string
       agent:
-        description: 'type of agent used for evaluation'
+        description: "type of agent used for evaluation"
         required: true
         type: string
       mock:
-        description: 'whether a mock evaluation was used'
+        description: "whether a mock evaluation was used"
         required: false
         type: boolean
         default: false

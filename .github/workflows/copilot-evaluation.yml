@@ -1,5 +1,4 @@
 name: Evaluation with GitHub Copilot
-description: Evaluate using GitHub Copilot CLI
 permissions:
   contents: read
 
@@ -7,17 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: 'Copilot model to use for evaluation'
+        description: "Copilot model to use for evaluation"
         required: false
-        default: 'claude-haiku-4.5'
+        default: "claude-haiku-4.5"
         type: choice
         options:
-          - 'claude-sonnet-4.5'
-          - 'claude-sonnet-4'
-          - 'claude-haiku-4.5'
-          - 'gpt-5'
+          - "claude-sonnet-4.5"
+          - "claude-sonnet-4"
+          - "claude-haiku-4.5"
+          - "gpt-5"
       test-run:
-        description: 'Indicate this is a test run (with few entries)'
+        description: "Indicate this is a test run (with few entries)"
         required: false
         default: false
         type: boolean
@@ -44,7 +43,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 15
+      max-parallel: 10
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -89,6 +88,6 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: 'GitHub Copilot CLI'
+      agent: "GitHub Copilot CLI"
       mock: ${{ inputs.test-run }}
     secrets: inherit

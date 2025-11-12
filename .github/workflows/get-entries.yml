@@ -1,5 +1,4 @@
 name: Get Dataset Entries
-description: Reusable workflow to get dataset entries for matrix and optional schema validation
 
 on:
   workflow_call:

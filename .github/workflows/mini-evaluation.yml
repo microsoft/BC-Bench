@@ -1,5 +1,4 @@
 name: Evaluation with mini Agent
-description: Evaluate using mini-bc-agent
 permissions:
   contents: read
 
@@ -7,14 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: 'model to use for evaluation'
+        description: "model to use for evaluation"
         required: false
-        default: 'azure/gpt-4.1'
+        default: "azure/gpt-4.1"
         type: choice
         options:
-          - 'azure/gpt-4.1'
+          - "azure/gpt-4.1"
       test-run:
-        description: 'Indicate this is a test run (with few entries)'
+        description: "Indicate this is a test run (with few entries)"
         required: false
         default: false
         type: boolean
@@ -85,6 +84,6 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-mini-agent.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: 'mini-bc-agent'
+      agent: "mini-bc-agent"
       mock: ${{ inputs.test-run }}
     secrets: inherit

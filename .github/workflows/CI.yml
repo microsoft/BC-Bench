@@ -73,6 +73,6 @@ jobs:
     with:
       results-dir: ${{ needs.mock-evaluation.outputs.results-dir }}
       model: ${{ github.run_id }}
-      agent: 'mock-agent'
+      agent: "mock-agent"
       mock: true
     secrets: inherit

@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 from bcbench.config import get_config
-from bcbench.exceptions import PatchApplicationError
+from bcbench.exceptions import EmptyDiffError, PatchApplicationError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -85,6 +85,9 @@ def get_gernerated_diff(repo_path: Path) -> str:
     Args:
         result_dir: Path to the result directory
         repo_path: Path to the git repository
+
+    Raises:
+        EmptyDiffError: If the generated diff is empty (agent made no changes)
     """
     try:
         logger.info("Getting git diff")
@@ -108,8 +111,9 @@ def get_gernerated_diff(repo_path: Path) -> str:
         logger.info("Git diff retrieved successfully")
         logger.debug(f"Generated diff:\n{patch}")
         if not patch:
-            logger.warning("Generated diff is empty")
+            logger.error("Generated diff is empty")
+            raise EmptyDiffError()
         return patch
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to get git diff: {e.stderr}")
-        return ""
+        raise

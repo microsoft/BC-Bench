@@ -11,6 +11,7 @@ __all__ = [
     "CollectionError",
     "ConfigurationError",
     "DatasetError",
+    "EmptyDiffError",
     "EntryNotFoundError",
     "GitOperationError",
     "InvalidEntryFormatError",
@@ -72,6 +73,14 @@ class PatchApplicationError(GitOperationError):
         message = f"Failed to apply {patch_name}"
         if stderr:
             message += f": {stderr}"
+        super().__init__(message)
+
+
+class EmptyDiffError(GitOperationError):
+    """Generated diff is empty."""
+
+    def __init__(self):
+        message = "Generated diff is empty. Agent did not make any changes."
         super().__init__(message)
 
 

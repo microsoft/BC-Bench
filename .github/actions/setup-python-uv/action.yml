@@ -3,10 +3,9 @@ description: Install UV, setup Python, and install bcbench package
 
 inputs:
   all-extras:
-    description: 'Install all optional dependencies'
+    description: "Install all optional dependencies"
     required: false
-    type: boolean
-    default: false
+    default: "false"
 
 runs:
   using: composite
@@ -21,5 +20,5 @@ runs:
       shell: pwsh
 
     - name: Install bcbench package
-      run: uv sync ${{ inputs.all-extras && '--all-extras' || '' }}
+      run: uv sync ${{ inputs.all-extras == 'true' && '--all-extras' || '' }}
       shell: pwsh
