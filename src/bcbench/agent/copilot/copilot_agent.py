@@ -109,7 +109,8 @@ def _build_mcp_config(copilot_config: dict, repo_path: Path) -> str | None:
         return None
 
     mcp_config = {"mcpServers": {}}
-    template_context = {"repo_path": str(repo_path)}
+    template_context = {"repo_path": repo_path}
+    logger.info(f"Template context for MCP config: {template_context}")  # TODO: remove debug log
 
     for server in mcp_servers:
         server_type: str = server["type"]
