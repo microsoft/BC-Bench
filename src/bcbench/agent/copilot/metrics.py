@@ -1,5 +1,3 @@
-"""Parse metrics from GitHub Copilot CLI output."""
-
 import re
 from typing import Sequence
 

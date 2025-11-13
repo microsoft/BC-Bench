@@ -5,9 +5,6 @@ prompt:
 
     Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
 
-    Important:
-     - prioritize utilizing MCP Servers (start with mslearn, then filesystem)
-
     Important constraints:
     - Do NOT modify any testing logic or test files
     - Focus solely on fixing the reported issue
@@ -17,15 +14,15 @@ prompt:
     Issue details:
     {{task}}
 
-mcp:
-  servers:
-    - name: "mslearn"
-      type: "http"
-      url: "https://learn.microsoft.com/api/mcp"
-      tools: ["*"]
+# mcp:
+#   servers:
+#     - name: "mslearn"
+#       type: "http"
+#       url: "https://learn.microsoft.com/api/mcp"
+#       tools: ["*"]
 
-    - name: "filesystem"
-      type: "local"
-      command: "npx"
-      args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
-      tools: ["*"]
+#     - name: "filesystem"
+#       type: "local"
+#       command: "npx"
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
+#       tools: ["*"]

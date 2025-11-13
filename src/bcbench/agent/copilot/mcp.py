@@ -1,5 +1,3 @@
-"""Builds the MCP config for the GitHub Copilot CLI agent."""
-
 import json
 from pathlib import Path
 
@@ -12,7 +10,6 @@ logger = get_logger(__name__)
 
 
 def build_mcp_config(copilot_config: dict, repo_path: Path) -> str | None:
-    """Builds the MCP config for the GitHub Copilot CLI agent."""
     # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
     mcp_servers: list[dict] = copilot_config.get("mcp", {}).get("servers", [])
     if not mcp_servers:
