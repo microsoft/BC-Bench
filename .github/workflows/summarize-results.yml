@@ -63,7 +63,7 @@ jobs:
           USERNAME: ${{ secrets.USERNAME }}
         run: |
           # Install bc-eval from ADO feed using CLI options (won't touch uv.lock)
-          uv tool install bc-eval --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
+          uv tool install bc-eval@latest --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
 
           # Upload summary to Braintrust using bc-eval
           $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}"
