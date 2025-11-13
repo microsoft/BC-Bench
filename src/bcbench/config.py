@@ -8,6 +8,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from bcbench.exceptions import ConfigurationError
 
 __all__ = ["Config", "get_config"]
@@ -160,5 +162,6 @@ def get_config() -> Config:
     """Get the global configuration instance."""
     global _config  # noqa: PLW0603
     if _config is None:
+        load_dotenv()
         _config = Config.load()
     return _config
