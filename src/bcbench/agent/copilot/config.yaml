@@ -14,6 +14,9 @@ prompt:
     Issue details:
     {{task}}
 
+instructions:
+  enabled: false # Toggle custom instructions on/off
+
 # mcp:
 #   servers:
 #     - name: "mslearn"
