@@ -41,20 +41,22 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
     try:
+        cmd_args = [
+            copilot_cmd,
+            "--allow-all-tools",  # required for non-interactive mode
+            "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
+            "--disable-builtin-mcps",
+            f"--model={model}",
+            "--no-custom-instructions",
+            "--log-level=debug",
+            f"--log-dir={output_dir.resolve()}",
+            f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
+        ]
+        if mcp_config_json:
+            cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
+
         result = subprocess.run(
-            [
-                copilot_cmd,
-                "--allow-all-tools",  # required for non-interactive mode
-                "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
-                "--disable-builtin-mcps",
-                f"--model={model}",
-                "--no-custom-instructions",
-                "--log-level=debug",
-                f"--additional-mcp-config={mcp_config_json}" if mcp_config_json else "",
-                f"--log-dir={output_dir.resolve()}",
-                "-p",
-                prompt.replace("\r", "").replace("\n", " "),
-            ],
+            cmd_args,
             cwd=str(repo_path),
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.github_copilot_cli,
