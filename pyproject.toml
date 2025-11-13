@@ -57,6 +57,7 @@ extend-select = [
     "RET",   # flake8-return (simplify return statements)
     "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
     "RUF",   # Ruff-specific rules
+    "TID252", # Ban relative imports
 ]
 
 # Ignore specific rules that might be too aggressive
