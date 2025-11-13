@@ -79,7 +79,7 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def get_gernerated_diff(repo_path: Path) -> str:
+def get_generated_diff(repo_path: Path) -> str:
     """Get agent generated git diff as a string.
 
     Args:

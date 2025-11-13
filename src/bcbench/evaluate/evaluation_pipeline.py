@@ -7,7 +7,7 @@ from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, PatchApplicationError, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations.bc_operations import build_and_publish_projects, run_tests
-from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, get_gernerated_diff
+from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, get_generated_diff
 from bcbench.results import EvaluationResult
 
 logger = get_logger(__name__)
@@ -47,16 +47,15 @@ def run_evaluation_pipeline(
     )
 
     result = None
-    generated_patch: str = ""
+
+    # Run agent (agent-specific)
+    with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
+        agent_metrics = agent_runner(context)
+        context.agent_metrics = agent_metrics
+
+    generated_patch: str = get_generated_diff(context.repo_path)
 
     try:
-        # Run agent (agent-specific)
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            agent_metrics = agent_runner(context)
-            context.agent_metrics = agent_metrics
-
-        generated_patch = get_gernerated_diff(context.repo_path)
-
         # Apply test patch and validate
         apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} test patch")
         build_and_publish_projects(
