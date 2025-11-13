@@ -14,7 +14,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.operations.instruction_operations import setup_instructions_from_config
+from bcbench.operations import setup_instructions_from_config
 
 logger = get_logger(__name__)
 _config = get_config()

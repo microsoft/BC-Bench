@@ -29,8 +29,8 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
 
     if instructions_enabled:
         try:
-            instructions_path = get_instructions_path(entry.repo, agent_dir)
-            created_path = setup_custom_instructions(repo_path, instructions_path)
+            instructions_path = _get_instructions_path(entry.repo, agent_dir)
+            created_path = _setup_custom_instructions(repo_path, instructions_path)
             if created_path:
                 logger.info(f"Custom instructions enabled: {created_path}")
             else:
@@ -42,7 +42,7 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     return instructions_enabled
 
 
-def setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Path | None:
+def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Path | None:
     """
     Copy custom instructions file to repo's .github directory.
 
@@ -65,7 +65,7 @@ def setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Pat
     return target_path
 
 
-def get_instructions_path(repo_name: str, agent_dir: Path) -> Path:
+def _get_instructions_path(repo_name: str, agent_dir: Path) -> Path:
     """
     Get path to instruction template for a repository.
 

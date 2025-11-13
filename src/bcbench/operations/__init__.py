@@ -12,6 +12,7 @@ from bcbench.operations.git_operations import (
     checkout_commit,
     clean_repo,
 )
+from bcbench.operations.instruction_operations import setup_instructions_from_config
 
 __all__ = [
     "apply_patch",
@@ -22,4 +23,5 @@ __all__ = [
     "checkout_commit",
     "clean_repo",
     "run_tests",
+    "setup_instructions_from_config",
 ]
