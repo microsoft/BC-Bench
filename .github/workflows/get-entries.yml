@@ -32,7 +32,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: ${{ inputs.modified-only && 0 || 1 }}
+          fetch-depth: ${{ inputs.modified-only && '0' || '1' }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
