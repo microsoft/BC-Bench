@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bcbench.agent.copilot.copilot_agent import _build_prompt
+from bcbench.agent.copilot.prompt import build_prompt
 from bcbench.dataset import DatasetEntry
 
 
@@ -21,7 +21,7 @@ def test_build_prompt_without_project_paths():
         }
     }
 
-    result = _build_prompt(entry, repo_path, config)
+    result = build_prompt(entry, repo_path, config)
 
     assert "Working at C:" in result or "Working at C:/" in result
     assert "testbed" in result
@@ -47,7 +47,7 @@ def test_build_prompt_with_project_paths():
         }
     }
 
-    result = _build_prompt(entry, repo_path, config)
+    result = build_prompt(entry, repo_path, config)
 
     assert "workspace" in result and "navapp" in result
     assert "App/Apps/W1/Sales/app, App/Apps/W1/Inventory/app" in result
@@ -70,7 +70,7 @@ def test_build_prompt_empty_project_paths():
         }
     }
 
-    result = _build_prompt(entry, repo_path, config)
+    result = build_prompt(entry, repo_path, config)
 
     assert "Task: Fix issue" in result
     assert "Projects:" in result
