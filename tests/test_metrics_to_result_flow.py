@@ -2,7 +2,7 @@
 
 import pytest
 
-from bcbench.agent.copilot.copilot_agent import _parse_metrics
+from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.dataset import DatasetEntry
 from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.results import EvaluationResult
@@ -37,7 +37,7 @@ class TestCopilotMetricsToResultFlow:
             "Usage by model:\n",
             "    gpt-4o    100.5k input, 2.3k output\n",
         ]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
 
         sample_context.agent_metrics = metrics
 
@@ -57,7 +57,7 @@ class TestCopilotMetricsToResultFlow:
             "Usage by model:\n",
             "    gpt-4o    50k input, 1k output\n",
         ]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
         result = EvaluationResult.create_success(sample_context, "test_patch")
@@ -68,7 +68,7 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_flow_with_partial_metrics(self, sample_context):
         output_lines = ["Total duration (wall): 1m 30s\n"]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
         result = EvaluationResult.create_success(sample_context, "test_patch")
@@ -79,7 +79,7 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_flow_with_no_metrics(self, sample_context):
         output_lines = ["Some output without metrics\n"]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
         result = EvaluationResult.create_success(sample_context, "test_patch")
@@ -94,7 +94,7 @@ class TestCopilotMetricsToResultFlow:
             "Usage by model:\n",
             "    gpt-4o    75.2k input, 1.8k output\n",
         ]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
         result = EvaluationResult.create_test_failure(sample_context, "test_patch")
@@ -112,7 +112,7 @@ class TestCopilotMetricsToResultFlow:
             "Usage by model:\n",
             "    gpt-4o    200k input, 5k output\n",
         ]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
         result = EvaluationResult.create_build_failure(sample_context, "test_patch", "Build failed: src/app")
@@ -137,7 +137,7 @@ class TestCopilotMetricsToResultFlow:
             "  Usage by model:\n",
             "      gpt-4o    125.5k input, 3.6k output, 0 cache read, 0 cache write\n",
         ]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
         result = EvaluationResult.create_success(sample_context, "test_patch")
@@ -183,7 +183,7 @@ class TestCopilotMetricsToResultFlow:
             "Usage by model:\n",
             "    gpt-4o    10k input, 500 output\n",
         ]
-        metrics = _parse_metrics(output_lines)
+        metrics = parse_metrics(output_lines)
         sample_context.agent_metrics = metrics
 
         result = EvaluationResult.create_success(sample_context, "test_patch")

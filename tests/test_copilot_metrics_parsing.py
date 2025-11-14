@@ -1,4 +1,4 @@
-from bcbench.agent.copilot.copilot_agent import _parse_metrics
+from bcbench.agent.copilot.metrics import parse_metrics
 
 
 def test_parse_metrics_full_output_gpt5():
@@ -12,7 +12,7 @@ def test_parse_metrics_full_output_gpt5():
         "    gpt-5                125.5k input, 3.6k output, 0 cache read, 0 cache write (Est. 1 Premium request)\n",
     ]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["agent_execution_time"] == 235.1
@@ -31,7 +31,7 @@ def test_parse_metrics_full_output_haiku45():
         "    claude-haiku-4.5     1.1m input, 6.6k output, 0 cache read, 0 cache write (Est. 0.33 Premium requests)\n",
     ]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["agent_execution_time"] == 1765.4
@@ -42,7 +42,7 @@ def test_parse_metrics_full_output_haiku45():
 def test_parse_metrics_wall_time_seconds_only():
     output_lines = ["Total duration (wall): 45.7s\n"]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["agent_execution_time"] == 45.7
@@ -51,7 +51,7 @@ def test_parse_metrics_wall_time_seconds_only():
 def test_parse_metrics_wall_time_minutes_and_seconds():
     output_lines = ["Total duration (wall): 5m 12.3s\n"]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["agent_execution_time"] == 312.3
@@ -60,7 +60,7 @@ def test_parse_metrics_wall_time_minutes_and_seconds():
 def test_parse_metrics_token_counts_without_k():
     output_lines = ["Usage by model:\n", "    model-name    1234 input, 567 output\n"]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["prompt_tokens"] == 1234
@@ -70,7 +70,7 @@ def test_parse_metrics_token_counts_without_k():
 def test_parse_metrics_token_counts_with_k():
     output_lines = ["Usage by model:\n", "    model-name    12.5k input, 3.2k output\n"]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["prompt_tokens"] == 12500
@@ -78,7 +78,7 @@ def test_parse_metrics_token_counts_with_k():
 
 
 def test_parse_metrics_empty_output():
-    result = _parse_metrics([])
+    result = parse_metrics([])
 
     assert result is None
 
@@ -86,7 +86,7 @@ def test_parse_metrics_empty_output():
 def test_parse_metrics_no_matching_patterns():
     output_lines = ["Some random output\n", "With no matching patterns\n"]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is None
 
@@ -94,7 +94,7 @@ def test_parse_metrics_no_matching_patterns():
 def test_parse_metrics_partial_data():
     output_lines = ["Total duration (wall): 1m 30s\n", "Some other text\n"]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["agent_execution_time"] == 90.0
@@ -107,7 +107,7 @@ def test_parse_metrics_partial_data():
 def test_parse_metrics_malformed_token_count():
     output_lines = ["Usage by model:\n", "    model-name    invalid input, 100 output\n"]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is None
 
@@ -140,7 +140,7 @@ def test_parse_metrics_with_command_output():
         "      gpt-5                125.5k input, 3.6k output, 0 cache read, 0 cache write (Est. 1 Premium request)\n",
     ]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["agent_execution_time"] == 235.1
@@ -156,7 +156,7 @@ def test_parse_metrics_minimal_real_output():
         "      gpt-4o               50.2k input, 1.5k output\n",
     ]
 
-    result = _parse_metrics(output_lines)
+    result = parse_metrics(output_lines)
 
     assert result is not None
     assert result["agent_execution_time"] == 135.3
