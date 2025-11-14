@@ -15,7 +15,7 @@ prompt:
     {{task}}
 
 instructions:
-  enabled: false # Toggle custom instructions on/off
+  enabled: true # Toggle custom instructions on/off
 
 # mcp:
 #   servers:
