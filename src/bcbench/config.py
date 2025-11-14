@@ -73,7 +73,7 @@ class TimeoutConfig:
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
-            github_copilot_cli=20 * 60,  # 20 minutes for GitHub Copilot CLI execution
+            github_copilot_cli=30 * 60,  # 30 minutes for GitHub Copilot CLI execution
         )
 
 
