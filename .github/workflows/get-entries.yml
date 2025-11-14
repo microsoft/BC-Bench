@@ -1,4 +1,6 @@
 name: Get Dataset Entries
+permissions:
+  contents: read
 
 on:
   workflow_call:
