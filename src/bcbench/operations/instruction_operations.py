@@ -31,7 +31,7 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
         try:
             source_instructions_path = _get_source_instructions_path(entry.repo, agent_dir)
             _setup_custom_instructions(repo_path, source_instructions_path)
-            logger.info(f"Custom instructions enabled: {repo_path / '.github' / 'copilot-instructions.md'}")
+            logger.info(f"Custom instructions enabled: copied from {source_instructions_path} to {repo_path / '.github' / 'copilot-instructions.md'}")
         except FileNotFoundError as e:
             logger.error(str(e))
             raise AgentError(f"Custom instructions enabled but template not found for repo: {entry.repo}") from None
