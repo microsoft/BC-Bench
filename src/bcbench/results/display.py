@@ -42,7 +42,8 @@ def create_github_job_summary(results: list[EvaluationResult]) -> None:
 
     success_icon = ":white_check_mark:" if failed == 0 else ":x:"
     mcp_servers = ", ".join(results[0].mcp_servers) if results[0].mcp_servers else "None"
-    markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model}) with MCP servers: {mcp_servers}**
+    markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
+- MCP Servers used: {mcp_servers}
 - Successful evaluations: {resolved} :white_check_mark:
 - Failed evaluations: {failed} {success_icon}
 
