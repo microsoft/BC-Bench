@@ -5,13 +5,13 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
-- **Agent Evaluations**: Focuses on mini-BC-agent (baseline), GitHub Copilot CLI, and GitHub Copilot in VS Code
+- **Agent Evaluations**: Focuses on mini-BC-agent (baseline), GitHub Copilot CLI
+- **Expieriments**: Various MCP Servers, custom intructions and their performance on the benchmark
 
 ## Key Context
 - Primary language: Python (with AL/Business Central as the target evaluation language)
-- Uses `uv` for dependency management
+- Uses `uv` for dependency management: `uv add <package>` to add packages, `uv run <command>` to run commands
 - Follows dataset schema defined in `dataset/schema.json`
-- Environment configuration via `.env` file (see `.env.sample`)
 - Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
 
 ## Coding Patterns

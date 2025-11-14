@@ -58,7 +58,7 @@ def run_mini_agent(
     username: str = "admin",
     password: str | None = None,
     output_dir: Path | None = None,
-) -> dict[str, float | int] | None:
+) -> tuple[dict[str, float | int] | None, None]:
     """Run mini-bc-agent on a single dataset entry.
 
     Returns:
@@ -112,7 +112,7 @@ def run_mini_agent(
 
     logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")
 
-    return _extract_metrics(agent, execution_time)
+    return _extract_metrics(agent, execution_time), None
 
 
 def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | None:
