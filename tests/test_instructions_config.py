@@ -17,9 +17,3 @@ def test_config_has_instructions_section():
     assert "enabled" in config["instructions"], "Instructions should have enabled field"
     assert isinstance(config["instructions"]["enabled"], bool), "Enabled should be a boolean"
     print(f"✓ Config has instructions section: {config['instructions']}")
-
-
-if __name__ == "__main__":
-    print("Running config integration test...\n")
-    test_config_has_instructions_section()
-    print("\n✅ Config integration test passed!")
