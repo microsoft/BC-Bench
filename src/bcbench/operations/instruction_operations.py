@@ -1,11 +1,13 @@
 from pathlib import Path
 from shutil import copy2, rmtree
 
+from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
+_config = get_config()
 
 
 def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_dir: Path) -> bool:
@@ -56,13 +58,13 @@ def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Pa
     github_dir = repo_path / ".github"
     github_dir.mkdir(parents=True, exist_ok=True)
 
-    target_path = github_dir / "copilot-instructions.md"
+    target_path = github_dir / _config.file_patterns.copilot_instruction_naming
     copy2(instructions_source, target_path)
 
     # Copy path-specific instructions folder if present
-    source_instructions_dir = instructions_source.parent / "instructions"
+    source_instructions_dir = instructions_source.parent / _config.file_patterns.copilot_instructions_dirname
     if source_instructions_dir.exists() and source_instructions_dir.is_dir():
-        target_instructions_dir = github_dir / "instructions"
+        target_instructions_dir = github_dir / _config.file_patterns.copilot_instructions_dirname
 
         # Remove existing instructions folder if present
         if target_instructions_dir.exists():
@@ -70,7 +72,7 @@ def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Pa
 
         # Copy all *.instructions.md files (flattened)
         target_instructions_dir.mkdir(parents=True, exist_ok=True)
-        instruction_files = list(source_instructions_dir.rglob("*.instructions.md"))
+        instruction_files = list(source_instructions_dir.rglob(_config.file_patterns.copilot_instructions_pattern))
 
         if instruction_files:
             for file in instruction_files:
@@ -92,7 +94,7 @@ def _get_source_instructions_path(repo_name: str, agent_dir: Path) -> Path:
         FileNotFoundError: If instruction file doesn't exist
     """
     sanitized_name = repo_name.replace("/", "-")
-    instructions_path = agent_dir / "instructions" / sanitized_name / "copilot-instructions.md"
+    instructions_path = agent_dir / _config.file_patterns.copilot_instructions_dirname / sanitized_name / _config.file_patterns.copilot_instruction_naming
 
     if not instructions_path.exists():
         raise FileNotFoundError(f"Instruction file not found: {instructions_path}\nExpected for repository: {repo_name}")
