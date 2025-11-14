@@ -101,7 +101,7 @@ def get_generated_diff(repo_path: Path) -> str:
 
         # Get diff of staged changes against HEAD
         result = subprocess.run(
-            ["git", "diff", "--cached", "--", ".", ":!*.docx", ":!**/app.json"],
+            ["git", "diff", "--cached", "--", ".", ":!*.docx", ":!**/app.json", ":!*.md"],
             cwd=repo_path,
             capture_output=True,
             text=True,
