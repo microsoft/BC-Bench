@@ -15,6 +15,9 @@ on:
           - "claude-sonnet-4"
           - "claude-haiku-4.5"
           - "gpt-5"
+          - "gpt-5.1"
+          - "gpt-5.1-codex-mini"
+          - "gpt-5.1-codex"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
