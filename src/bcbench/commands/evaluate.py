@@ -40,7 +40,7 @@ def evaluate_mini(
     To only run the agent to generate a patch without building/testing, use 'bcbench run mini' instead.
 
     Example:
-        bcbench evaluate mini microsoftInternal__NAV-210528 --container-name bcserver
+        uv run bcbench evaluate mini microsoftInternal__NAV-211710 --container-name bcserver
     """
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]
@@ -99,7 +99,7 @@ def evaluate_copilot(
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
 
     Example:
-        bcbench evaluate copilot microsoftInternal__NAV-210528 --container-name bcserver
+        uv run bcbench evaluate copilot microsoftInternal__NAV-211710 --container-name bcserver
     """
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]

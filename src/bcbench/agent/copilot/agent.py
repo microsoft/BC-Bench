@@ -58,6 +58,8 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
         if mcp_config_json:
             cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
 
+        logger.debug(f"Copilot command args: {cmd_args}")
+
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
