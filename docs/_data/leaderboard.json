@@ -11,14 +11,17 @@
     "mcp_servers": null
   },
   {
-    "agent_name": "GitHub Copilot CLI",
+    "total": 22,
+    "resolved": 13,
+    "failed": 9,
+    "build": 21,
+    "date": "2025-11-14",
     "model": "claude-sonnet-4.5",
-    "total": 19,
-    "resolved": 9,
-    "average_duration": 0,
-    "average_prompt_tokens": 0,
-    "average_completion_tokens": 0,
-    "date": "2025-11-03",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 183.3,
+    "average_prompt_tokens": 918931.8,
+    "average_completion_tokens": 6240.9,
+    "github_run_id": "19369038959",
     "mcp_servers": null
   },
   {
