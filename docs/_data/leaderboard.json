@@ -7,7 +7,8 @@
     "average_duration": 0,
     "average_prompt_tokens": 0,
     "average_completion_tokens": 0,
-    "date": "2025-11-05"
+    "date": "2025-11-05",
+    "mcp_servers": null
   },
   {
     "agent_name": "GitHub Copilot CLI",
@@ -17,17 +18,22 @@
     "average_duration": 0,
     "average_prompt_tokens": 0,
     "average_completion_tokens": 0,
-    "date": "2025-11-03"
+    "date": "2025-11-03",
+    "mcp_servers": null
   },
   {
-    "agent_name": "GitHub Copilot CLI",
+    "total": 22,
+    "resolved": 13,
+    "failed": 9,
+    "build": 19,
+    "date": "2025-11-13",
     "model": "claude-haiku-4.5",
-    "total": 19,
-    "resolved": 10,
-    "average_duration": 0,
-    "average_prompt_tokens": 0,
-    "average_completion_tokens": 0,
-    "date": "2025-11-03"
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 154.9,
+    "average_prompt_tokens": 2191345.4,
+    "average_completion_tokens": 8677.3,
+    "github_run_id": "19342348130",
+    "mcp_servers": null
   },
   {
     "total": 19,
@@ -40,7 +46,8 @@
     "average_duration": 431.0,
     "average_prompt_tokens": 352378.9,
     "average_completion_tokens": 7142.1,
-    "github_run_id": "19227643144"
+    "github_run_id": "19227643144",
+    "mcp_servers": null
   },
   {
     "agent_name": "mini-bc-agent",
@@ -50,6 +57,7 @@
     "average_duration": 0,
     "average_prompt_tokens": 0,
     "average_completion_tokens": 0,
-    "date": "2025-11-05"
+    "date": "2025-11-05",
+    "mcp_servers": null
   }
 ]

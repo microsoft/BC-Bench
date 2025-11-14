@@ -364,3 +364,228 @@ def test_dataset_list_verifies_entry_format(sample_dataset_file):
     assert result.exit_code == 0
     # Should contain instance_id of first entry
     assert "test__entry-1" in result.stdout
+
+
+@pytest.fixture
+def sample_leaderboard_and_summary(tmp_path):
+    """Fixture that creates a leaderboard with multiple entries and a new summary."""
+    leaderboard_path = tmp_path / "leaderboard.json"
+    summary_path = tmp_path / "summary.json"
+
+    # Create initial leaderboard with 3 entries
+    leaderboard_data = [
+        {
+            "total": 10,
+            "resolved": 6,
+            "failed": 4,
+            "build": 9,
+            "date": "2025-01-10",
+            "model": "gpt-4o",
+            "agent_name": "copilot",
+            "average_duration": 120.5,
+            "average_prompt_tokens": 5000.0,
+            "average_completion_tokens": 1500.0,
+            "github_run_id": "run_001",
+            "mcp_servers": "server1, server2",
+        },
+        {
+            "total": 10,
+            "resolved": 5,
+            "failed": 5,
+            "build": 8,
+            "date": "2025-01-11",
+            "model": "gpt-4-turbo",
+            "agent_name": "copilot",
+            "average_duration": 110.0,
+            "average_prompt_tokens": 4500.0,
+            "average_completion_tokens": 1200.0,
+            "github_run_id": "run_002",
+            "mcp_servers": None,
+        },
+        {
+            "total": 10,
+            "resolved": 7,
+            "failed": 3,
+            "build": 10,
+            "date": "2025-01-12",
+            "model": "gpt-4o",
+            "agent_name": "mini",
+            "average_duration": 95.0,
+            "average_prompt_tokens": 3500.0,
+            "average_completion_tokens": 1000.0,
+            "github_run_id": "run_003",
+            "mcp_servers": None,
+        },
+    ]
+
+    with open(leaderboard_path, "w") as f:
+        json.dump(leaderboard_data, f, indent=2)
+
+    # Create a new summary to update (updated copilot + gpt-4o + server1, server2)
+    new_summary = {
+        "total": 10,
+        "resolved": 8,  # Improved from 6 to 8
+        "failed": 2,
+        "build": 10,  # Improved from 9 to 10
+        "date": "2025-01-15",
+        "model": "gpt-4o",
+        "agent_name": "copilot",
+        "average_duration": 125.0,
+        "average_prompt_tokens": 5200.0,
+        "average_completion_tokens": 1600.0,
+        "github_run_id": "run_004",
+        "mcp_servers": "server1, server2",
+    }
+
+    with open(summary_path, "w") as f:
+        json.dump(new_summary, f, indent=2)
+
+    return leaderboard_path, summary_path
+
+
+@pytest.mark.integration
+def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
+    leaderboard_path, summary_path = sample_leaderboard_and_summary
+
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-path",
+            str(leaderboard_path),
+        ],
+    )
+
+    assert result.exit_code == 0, f"Command failed:\nstdout: {result.stdout}\nstderr: {result.stderr}\nexception: {result.exception}"
+
+    # Verify leaderboard still has 3 entries (not 4)
+    with open(leaderboard_path) as f:
+        updated_leaderboard = json.load(f)
+
+    assert len(updated_leaderboard) == 3, "Should still have 3 entries (replaced, not added)"
+
+    # Find the updated entry and verify it matches
+    updated_entry = None
+    for entry in updated_leaderboard:
+        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and entry["mcp_servers"] == "server1, server2":
+            updated_entry = entry
+            break
+
+    assert updated_entry is not None, "Should find the updated copilot + gpt-4o + server1, server2 entry"
+    assert updated_entry["resolved"] == 8, "Should have updated resolved count"
+    assert updated_entry["build"] == 10, "Should have updated build count"
+    assert updated_entry["average_prompt_tokens"] == 5200.0, "Should have updated average_prompt_tokens"
+    assert updated_entry["github_run_id"] == "run_004", "Should have updated github_run_id"
+
+
+@pytest.mark.integration
+def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
+    leaderboard_path, _ = sample_leaderboard_and_summary
+    summary_path = leaderboard_path.parent / "new_agent_summary.json"
+
+    # Create a new summary for a different agent
+    new_summary = {
+        "total": 10,
+        "resolved": 9,
+        "failed": 1,
+        "build": 10,
+        "date": "2025-01-16",
+        "model": "gpt-4o",
+        "agent_name": "new-agent",
+        "average_duration": 100.0,
+        "average_prompt_tokens": 4800.0,
+        "average_completion_tokens": 1400.0,
+        "github_run_id": "run_005",
+        "mcp_servers": None,
+    }
+
+    with open(summary_path, "w") as f:
+        json.dump(new_summary, f, indent=2)
+
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-path",
+            str(leaderboard_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    # Verify leaderboard now has 4 entries
+    with open(leaderboard_path) as f:
+        updated_leaderboard = json.load(f)
+
+    assert len(updated_leaderboard) == 4, "Should now have 4 entries (added new)"
+
+    # Find the new entry
+    new_entry = None
+    for entry in updated_leaderboard:
+        if entry["agent_name"] == "new-agent" and entry["model"] == "gpt-4o":
+            new_entry = entry
+            break
+
+    assert new_entry is not None, "Should find the new entry for new-agent"
+    assert new_entry["resolved"] == 9, "Should have correct resolved count"
+
+
+@pytest.mark.integration
+def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summary):
+    leaderboard_path, _ = sample_leaderboard_and_summary
+    summary_path = leaderboard_path.parent / "copilot_different_mcp_summary.json"
+
+    # Create a new summary for copilot + gpt-4o but WITHOUT mcp_servers (different from existing)
+    new_summary = {
+        "total": 10,
+        "resolved": 7,
+        "failed": 3,
+        "build": 9,
+        "date": "2025-01-17",
+        "model": "gpt-4o",
+        "agent_name": "copilot",
+        "average_duration": 115.0,
+        "average_prompt_tokens": 4900.0,
+        "average_completion_tokens": 1350.0,
+        "github_run_id": "run_006",
+        "mcp_servers": None,  # Different from existing "server1, server2"
+    }
+
+    with open(summary_path, "w") as f:
+        json.dump(new_summary, f, indent=2)
+
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-path",
+            str(leaderboard_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    # Verify leaderboard now has 4 entries (not replaced because mcp_servers differ)
+    with open(leaderboard_path) as f:
+        updated_leaderboard = json.load(f)
+
+    assert len(updated_leaderboard) == 4, "Should have 4 entries (added new because mcp_servers differ)"
+
+    # Verify both copilot + gpt-4o entries exist
+    copilot_gpt4o_entries = [e for e in updated_leaderboard if e["agent_name"] == "copilot" and e["model"] == "gpt-4o"]
+
+    assert len(copilot_gpt4o_entries) == 2, "Should have 2 different copilot + gpt-4o entries"
+
+    # Find each by mcp_servers
+    with_servers = next((e for e in copilot_gpt4o_entries if e["mcp_servers"] == "server1, server2"), None)
+    without_servers = next((e for e in copilot_gpt4o_entries if e["mcp_servers"] is None), None)
+
+    assert with_servers is not None and without_servers is not None
+    assert with_servers["resolved"] == 6, "Original entry should be unchanged"
+    assert without_servers["resolved"] == 7, "New entry should have new values"

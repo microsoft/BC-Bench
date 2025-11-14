@@ -42,7 +42,7 @@ Write-Log "Setting up BC container and repository for version $Version, Dataset 
 [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
 if (-not $RepoPath) {
-    $RepoPath = Join-Path -Path $env:TEMP -ChildPath "testbed"
+    $RepoPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "testbed"
 }
 Write-Log "Using repository path: $RepoPath" -Level Info
 

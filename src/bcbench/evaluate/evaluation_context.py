@@ -34,3 +34,6 @@ class EvaluationContext:
 
     # Agent metrics collected during execution
     agent_metrics: dict[str, float | int] | None = None
+
+    # MCP server names used in experiment (if any)
+    mcp_servers: list[str] | None = None
