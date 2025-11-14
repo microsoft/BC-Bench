@@ -72,10 +72,27 @@ def test_nonexistent_instructions():
         print(f"✓ Correct error for missing instructions: {e}")
 
 
-if __name__ == "__main__":
-    print("Running custom instructions verification tests...\n")
-    test_get_instructions_path()
-    test_setup_custom_instructions()
-    test_sanitization()
-    test_nonexistent_instructions()
-    print("\n✅ All verification tests passed!")
+def test_overwrite_existing_instructions():
+    """Test that existing instruction files get overwritten."""
+    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+
+        # Create initial instruction file with different content
+        github_dir = repo_path / ".github"
+        github_dir.mkdir(parents=True, exist_ok=True)
+        target_path = github_dir / "copilot-instructions.md"
+        original_content = "# Original instructions\nThis should be overwritten"
+        target_path.write_text(original_content)
+
+        # Setup instructions (should overwrite)
+        created_path = _setup_custom_instructions(repo_path, instructions_source)
+
+        # Verify file was overwritten
+        assert created_path.exists(), "Instruction file should exist"
+        new_content = created_path.read_text()
+        assert new_content != original_content, "Content should be overwritten"
+        assert new_content == instructions_source.read_text(), "Content should match source"
+        print(f"✓ Existing instructions overwritten at: {created_path}")

@@ -39,9 +39,12 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     return instructions_enabled
 
 
-def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> None:
+def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Path:
     """
     Copy custom instructions file to repo's .github directory.
+
+    Returns:
+        Path to the created instruction file
 
     Raises:
         FileNotFoundError: If instruction file doesn't exist
@@ -54,6 +57,7 @@ def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> No
 
     target_path = github_dir / "copilot-instructions.md"
     copy2(instructions_source, target_path)
+    return target_path
 
 
 def _get_source_instructions_path(repo_name: str, agent_dir: Path) -> Path:
