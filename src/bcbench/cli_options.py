@@ -23,4 +23,4 @@ ContainerUsername = Annotated[str, typer.Option(envvar="BC_CONTAINER_USERNAME", 
 
 ContainerPassword = Annotated[str, typer.Option(envvar="BC_CONTAINER_PASSWORD", help="Password for BC container")]
 
-CopilotModel = Annotated[Literal["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"], typer.Option(help="Copilot model to use")]
+CopilotModel = Annotated[Literal["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5", "gpt-5.1", "gpt-5.1-codex-mini", "gpt-5.1-codex"], typer.Option(help="Copilot model to use")]
