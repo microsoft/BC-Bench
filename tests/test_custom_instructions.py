@@ -6,26 +6,27 @@ Verifies that instruction files get created without invoking the copilot agent.
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from bcbench.config import get_config
 from bcbench.operations.instruction_operations import (
     _get_source_instructions_path,
     _setup_custom_instructions,
 )
 
+_config = get_config()
+
 
 def test_get_instructions_path():
-    """Test that instruction path resolution works correctly."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
 
     # Test with microsoftInternal/NAV
     path = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
     assert path.exists(), f"Instruction file should exist: {path}"
-    assert path.name == "copilot-instructions.md"
+    assert path.name == _config.file_patterns.copilot_instruction_naming
     assert "microsoftInternal-NAV" in str(path)
     print(f"✓ Found instruction file: {path}")
 
 
 def test_setup_custom_instructions():
-    """Test that instructions get copied to .github directory."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
     instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
 
@@ -39,7 +40,7 @@ def test_setup_custom_instructions():
         assert created_path is not None, "Should return created path"
         assert created_path.exists(), "Instruction file should be created"
         assert created_path.parent.name == ".github", "Should be in .github directory"
-        assert created_path.name == "copilot-instructions.md", "Should be named correctly"
+        assert created_path.name == _config.file_patterns.copilot_instruction_naming, "Should be named correctly"
 
         # Verify content was copied
         assert created_path.read_text() == instructions_source.read_text()
@@ -47,7 +48,6 @@ def test_setup_custom_instructions():
 
 
 def test_sanitization():
-    """Test that repo names with slashes get sanitized correctly."""
     test_cases = [
         ("microsoftInternal/NAV", "microsoftInternal-NAV"),
         ("org/repo", "org-repo"),
@@ -61,7 +61,6 @@ def test_sanitization():
 
 
 def test_nonexistent_instructions():
-    """Test error handling for missing instruction files."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
 
     try:
@@ -73,7 +72,6 @@ def test_nonexistent_instructions():
 
 
 def test_overwrite_existing_instructions():
-    """Test that existing instruction files get overwritten."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
     instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
 
@@ -83,7 +81,7 @@ def test_overwrite_existing_instructions():
         # Create initial instruction file with different content
         github_dir = repo_path / ".github"
         github_dir.mkdir(parents=True, exist_ok=True)
-        target_path = github_dir / "copilot-instructions.md"
+        target_path = github_dir / _config.file_patterns.copilot_instruction_naming
         original_content = "# Original instructions\nThis should be overwritten"
         target_path.write_text(original_content)
 
@@ -99,7 +97,6 @@ def test_overwrite_existing_instructions():
 
 
 def test_path_specific_instructions_copied():
-    """Test that path-specific instructions folder gets copied."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
     instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
 
@@ -107,7 +104,7 @@ def test_path_specific_instructions_copied():
         repo_path = Path(tmpdir)
 
         # Create a mock instructions folder with some .instructions.md files
-        source_instructions_dir = instructions_source.parent / "instructions"
+        source_instructions_dir = instructions_source.parent / _config.file_patterns.copilot_instructions_dirname
         source_instructions_dir.mkdir(exist_ok=True)
 
         # Create test instruction files
@@ -124,7 +121,7 @@ def test_path_specific_instructions_copied():
             _setup_custom_instructions(repo_path, instructions_source)
 
             # Verify path-specific instructions were copied
-            target_instructions_dir = repo_path / ".github" / "instructions"
+            target_instructions_dir = repo_path / ".github" / _config.file_patterns.copilot_instructions_dirname
             assert target_instructions_dir.exists(), "Instructions folder should be created"
 
             for filename, expected_content in test_files.items():
@@ -141,7 +138,6 @@ def test_path_specific_instructions_copied():
 
 
 def test_path_specific_instructions_removed_before_copy():
-    """Test that existing instructions folder is removed before copying."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
     instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
 
@@ -151,13 +147,13 @@ def test_path_specific_instructions_removed_before_copy():
         # Create existing instructions folder with old files
         github_dir = repo_path / ".github"
         github_dir.mkdir(parents=True, exist_ok=True)
-        old_instructions_dir = github_dir / "instructions"
+        old_instructions_dir = github_dir / _config.file_patterns.copilot_instructions_dirname
         old_instructions_dir.mkdir(exist_ok=True)
         old_file = old_instructions_dir / "old.instructions.md"
         old_file.write_text("# Old instruction that should be removed")
 
         # Create source instructions folder
-        source_instructions_dir = instructions_source.parent / "instructions"
+        source_instructions_dir = instructions_source.parent / _config.file_patterns.copilot_instructions_dirname
         source_instructions_dir.mkdir(exist_ok=True)
         new_file_path = source_instructions_dir / "new.instructions.md"
         new_file_path.write_text("# New instruction")
@@ -167,7 +163,7 @@ def test_path_specific_instructions_removed_before_copy():
             _setup_custom_instructions(repo_path, instructions_source)
 
             # Verify old file was removed and new file was added
-            target_instructions_dir = repo_path / ".github" / "instructions"
+            target_instructions_dir = repo_path / ".github" / _config.file_patterns.copilot_instructions_dirname
             assert not (target_instructions_dir / "old.instructions.md").exists(), "Old file should be removed"
             assert (target_instructions_dir / "new.instructions.md").exists(), "New file should be present"
             print("✓ Existing instructions folder removed before copy")
@@ -178,7 +174,6 @@ def test_path_specific_instructions_removed_before_copy():
 
 
 def test_no_path_specific_instructions_warning():
-    """Test that missing instructions folder triggers a warning (but doesn't fail)."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
     instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
 
@@ -186,7 +181,7 @@ def test_no_path_specific_instructions_warning():
         repo_path = Path(tmpdir)
 
         # Ensure no instructions folder exists
-        source_instructions_dir = instructions_source.parent / "instructions"
+        source_instructions_dir = instructions_source.parent / _config.file_patterns.copilot_instructions_dirname
         if source_instructions_dir.exists():
             # Temporarily rename it
             temp_name = source_instructions_dir.with_suffix(".tmp")
@@ -206,7 +201,6 @@ def test_no_path_specific_instructions_warning():
 
 
 def test_empty_instructions_folder_warning():
-    """Test that empty instructions folder triggers a warning."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
     instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
 
@@ -214,7 +208,7 @@ def test_empty_instructions_folder_warning():
         repo_path = Path(tmpdir)
 
         # Create empty instructions folder
-        source_instructions_dir = instructions_source.parent / "instructions"
+        source_instructions_dir = instructions_source.parent / _config.file_patterns.copilot_instructions_dirname
         source_instructions_dir.mkdir(exist_ok=True)
 
         # Create a non-.instructions.md file
@@ -226,9 +220,9 @@ def test_empty_instructions_folder_warning():
             assert created_path.exists(), "Repository-level instructions should still be created"
 
             # Verify instructions folder was created but is empty
-            target_instructions_dir = repo_path / ".github" / "instructions"
+            target_instructions_dir = repo_path / ".github" / _config.file_patterns.copilot_instructions_dirname
             assert target_instructions_dir.exists(), "Instructions folder should be created"
-            instruction_files = list(target_instructions_dir.glob("*.instructions.md"))
+            instruction_files = list(target_instructions_dir.glob(_config.file_patterns.copilot_instructions_pattern))
             assert len(instruction_files) == 0, "No instruction files should be copied"
 
             print("✓ Empty instructions folder handled with warning")
