@@ -46,7 +46,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 15
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
