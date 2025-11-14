@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from bcbench.operations.instruction_operations import (
-    _get_instructions_path,
+    _get_source_instructions_path,
     _setup_custom_instructions,
 )
 
@@ -17,7 +17,7 @@ def test_get_instructions_path():
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
 
     # Test with microsoftInternal/NAV
-    path = _get_instructions_path("microsoftInternal/NAV", agent_dir)
+    path = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
     assert path.exists(), f"Instruction file should exist: {path}"
     assert path.name == "copilot-instructions.md"
     assert "microsoftInternal-NAV" in str(path)
@@ -27,7 +27,7 @@ def test_get_instructions_path():
 def test_setup_custom_instructions():
     """Test that instructions get copied to .github directory."""
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
@@ -65,7 +65,7 @@ def test_nonexistent_instructions():
     agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
 
     try:
-        _get_instructions_path("nonexistent/repo", agent_dir)
+        _get_source_instructions_path("nonexistent/repo", agent_dir)
         raise AssertionError("Should raise FileNotFoundError")
     except FileNotFoundError as e:
         assert "nonexistent/repo" in str(e)

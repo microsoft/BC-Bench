@@ -24,17 +24,14 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     Raises:
         AgentError: If instructions are enabled but template not found
     """
-    instructions_config = copilot_config.get("instructions", {})
-    instructions_enabled = instructions_config.get("enabled", False)
+    instructions_config: dict = copilot_config["instructions"]
+    instructions_enabled: bool = instructions_config["enabled"]
 
     if instructions_enabled:
         try:
-            instructions_path = _get_instructions_path(entry.repo, agent_dir)
-            created_path = _setup_custom_instructions(repo_path, instructions_path)
-            if created_path:
-                logger.info(f"Custom instructions enabled: {created_path}")
-            else:
-                logger.warning(f"Failed to setup custom instructions from {instructions_path}")
+            source_instructions_path = _get_source_instructions_path(entry.repo, agent_dir)
+            _setup_custom_instructions(repo_path, source_instructions_path)
+            logger.info(f"Custom instructions enabled: {repo_path / '.github' / 'copilot-instructions.md'}")
         except FileNotFoundError as e:
             logger.error(str(e))
             raise AgentError(f"Custom instructions enabled but template not found for repo: {entry.repo}") from None
@@ -42,19 +39,15 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     return instructions_enabled
 
 
-def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Path | None:
+def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> None:
     """
     Copy custom instructions file to repo's .github directory.
 
-    Args:
-        repo_path: Path to repository (e.g., C:/bc/nav)
-        instructions_source: Path to instruction template file
-
-    Returns:
-        Path to created instructions file, or None if not created
+    Raises:
+        FileNotFoundError: If instruction file doesn't exist
     """
     if not instructions_source.exists():
-        return None
+        raise FileNotFoundError(f"Instruction file not found: {instructions_source}")
 
     github_dir = repo_path / ".github"
     github_dir.mkdir(parents=True, exist_ok=True)
@@ -62,19 +55,10 @@ def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Pa
     target_path = github_dir / "copilot-instructions.md"
     copy2(instructions_source, target_path)
 
-    return target_path
 
-
-def _get_instructions_path(repo_name: str, agent_dir: Path) -> Path:
+def _get_source_instructions_path(repo_name: str, agent_dir: Path) -> Path:
     """
-    Get path to instruction template for a repository.
-
-    Args:
-        repo_name: Repository name (e.g., "microsoftInternal/NAV")
-        agent_dir: Path to copilot agent directory
-
-    Returns:
-        Path to instruction template file
+    Get path to source instruction file for a repository.
 
     Raises:
         FileNotFoundError: If instruction file doesn't exist
