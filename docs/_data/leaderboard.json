@@ -118,5 +118,19 @@
     "average_completion_tokens": 9409.1,
     "github_run_id": "19386826797",
     "mcp_servers": "mslearn"
+  },
+  {
+    "total": 22,
+    "resolved": 9,
+    "failed": 13,
+    "build": 19,
+    "date": "2025-11-15",
+    "model": "gpt-5.1",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 217.1,
+    "average_prompt_tokens": 1109352.6,
+    "average_completion_tokens": 2323.5,
+    "github_run_id": "19388071339",
+    "mcp_servers": null
   }
 ]
