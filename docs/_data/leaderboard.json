@@ -90,5 +90,19 @@
     "average_completion_tokens": 8707.7,
     "github_run_id": "19378708759",
     "mcp_servers": null
+  },
+  {
+    "total": 22,
+    "resolved": 13,
+    "failed": 9,
+    "build": 21,
+    "date": "2025-11-15",
+    "model": "gpt-5.1-codex",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 893.3,
+    "average_prompt_tokens": 931820.0,
+    "average_completion_tokens": 8615.0,
+    "github_run_id": "19385408839",
+    "mcp_servers": null
   }
 ]
