@@ -53,14 +53,17 @@
     "mcp_servers": null
   },
   {
-    "agent_name": "mini-bc-agent",
+    "total": 22,
+    "resolved": 3,
+    "failed": 19,
+    "build": 9,
+    "date": "2025-11-15",
     "model": "azure/gpt-4.1",
-    "total": 19,
-    "resolved": 6,
-    "average_duration": 0,
-    "average_prompt_tokens": 0,
-    "average_completion_tokens": 0,
-    "date": "2025-11-05",
+    "agent_name": "mini-bc-agent",
+    "average_duration": 328.4,
+    "average_prompt_tokens": 478451.0,
+    "average_completion_tokens": 3884.3,
+    "github_run_id": "19391198996",
     "mcp_servers": null
   },
   {
