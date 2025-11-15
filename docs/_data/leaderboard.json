@@ -104,5 +104,19 @@
     "average_completion_tokens": 8615.0,
     "github_run_id": "19385408839",
     "mcp_servers": null
+  },
+  {
+    "total": 22,
+    "resolved": 11,
+    "failed": 11,
+    "build": 20,
+    "date": "2025-11-15",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 184.1,
+    "average_prompt_tokens": 2711195.4,
+    "average_completion_tokens": 9409.1,
+    "github_run_id": "19386826797",
+    "mcp_servers": "mslearn"
   }
 ]
