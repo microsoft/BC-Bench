@@ -17,7 +17,7 @@ __all__ = ["run_evaluation_pipeline"]
 
 def run_evaluation_pipeline(
     context: EvaluationContext,
-    agent_runner: Callable[[EvaluationContext], tuple[dict[str, float | int] | None, list[str] | None]],
+    agent_runner: Callable[[EvaluationContext], tuple[dict[str, float | int] | None, list[str] | None, bool]],
 ) -> None:
     """Common evaluation pipeline for all agents.
 
@@ -31,7 +31,7 @@ def run_evaluation_pipeline(
         context: Evaluation context containing all configuration
         agent_runner: Function that runs the specific agent and returns metrics dict or None
             Expected metrics keys: agent_execution_time, prompt_tokens, completion_tokens, etc
-            Also returns a list of MCP server names or None
+            Also returns a list of MCP server names or None, and a boolean for custom instructions
     """
     # Setup environment
     clean_repo(context.repo_path)
@@ -51,7 +51,7 @@ def run_evaluation_pipeline(
 
     # Run agent (agent-specific)
     with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-        context.agent_metrics, context.mcp_servers = agent_runner(context)
+        context.agent_metrics, context.mcp_servers, context.custom_instructions = agent_runner(context)
 
     generated_patch: str = get_generated_diff(context.repo_path)
 

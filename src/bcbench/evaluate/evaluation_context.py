@@ -37,3 +37,6 @@ class EvaluationContext:
 
     # MCP server names used in experiment (if any)
     mcp_servers: list[str] | None = None
+
+    # Custom instructions enabled in experiment
+    custom_instructions: bool | None = None

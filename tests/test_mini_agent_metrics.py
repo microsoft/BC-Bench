@@ -191,7 +191,7 @@ class TestMiniAgentMetricsExtraction:
             mock_env_class.return_value = mock_env
 
             # Run the agent
-            metrics, _ = run_mini_agent(
+            metrics, _, _ = run_mini_agent(
                 entry=entry,
                 repo_path=tmp_path / "repo",
                 model="azure/gpt-4.1",
