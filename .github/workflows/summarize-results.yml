@@ -61,6 +61,7 @@ jobs:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
           USERNAME: ${{ secrets.USERNAME }}
+        if: ${{ !inputs.mock }}
         run: |
           # Install bc-eval from ADO feed using CLI options (won't touch uv.lock)
           uv tool install bc-eval --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
