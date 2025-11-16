@@ -55,16 +55,15 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) (public preview 
 
 ## How to experiment with GitHub Copilot CLI
 
-The Copilot agent run with `--no-custom-instructions` and no MCP Serveres by default.
+By default, Copilot CLI runs with `--no-custom-instructions` and no MCP Serveres (`--disable-builtin-mcps`).
 
 Steps for an experiment:
-1. Create branch: `git checkout -b experiment/<meaningful-name>`
+1. Create a new branch: `git checkout -b experiment/<meaningful-name>`
 2. Edit `src/bcbench/agent/copilot/config.yaml` and optionally modify instruction markdown under `src/bcbench/agent/copilot/instructions/<sanitized-repo>/` (see below)
 3. Locally run one entry: `uv run bcbench run copilot <entry_id>` to ensure everything is setup correctly
-4. Push branch
-5. In GitHub Actions: run workflow "copilot-evaluation" selecting your branch & model
-6. Start with **Test Run** (2 entries) → verify the changes are picked up in logs
-7. Run full evaluation
+4. In GitHub Actions: run workflow `copilot-evaluation` after selecting your branch & model
+5. Start with **Test Run** (2 entries) → verify the changes are picked up in logs
+6. Run full evaluation
 
 > Test runs are faster (~1–2h) and help confirm MCP reachability & instruction copying before a longer full run.
 
@@ -90,7 +89,7 @@ instructions:
   enabled: true
 ```
 
-Create a custom instruction following the guidelines [repository custom instructions for GitHub Copilot](https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions). Once you are ready, replace the files below:
+Replace the files below with your instructions:
 ```
 src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
     copilot-instructions.md
@@ -108,7 +107,7 @@ How it works (take `NAV` repo as example):
 ### Results & Metrics
 
 You can find all results in the GitHub Action (workflow: `copilot-evaluation`) directly:
-- Logs: find the step called `Run GitHub Copilot CLI ...`, and see how copilot solve an issue
+- Logs: select one instance, find the step called `Run GitHub Copilot CLI ...`, and see how copilot solve an issue
 - Artifacts:
     - per-entry result JSONL (with all metics)
     - Copilot CLI logs
