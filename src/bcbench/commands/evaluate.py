@@ -167,7 +167,9 @@ def evaluate_mock(
         {"prompt_tokens": 500, "completion_tokens": 100},
     ]
     agent_metrics = random.choice(metrics_scenarios)
+    mcp_servers = random.choice([["magic-mcp"], None])
     logger.info(f"Using agent metrics: {agent_metrics if agent_metrics else 'None'}")
+    logger.info(f"Using MCP servers: {mcp_servers}")
 
     context = EvaluationContext(
         entry=entry,
@@ -179,6 +181,7 @@ def evaluate_mock(
         model="mock-model",
         agent_name="mock-agent",
         agent_metrics=agent_metrics if agent_metrics else None,
+        mcp_servers=mcp_servers,
     )
 
     match random.choice(["success", "build-fail", "test-fail"]):

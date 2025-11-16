@@ -15,6 +15,9 @@ on:
           - "claude-sonnet-4"
           - "claude-haiku-4.5"
           - "gpt-5"
+          - "gpt-5.1"
+          - "gpt-5.1-codex-mini"
+          - "gpt-5.1-codex"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -43,7 +46,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 15
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -61,7 +64,7 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.355
+        run: npm install -g @github/copilot@0.0.358
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         env:
