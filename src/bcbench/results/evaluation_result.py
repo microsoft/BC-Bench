@@ -26,6 +26,7 @@ class EvaluationResult:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     mcp_servers: list[str] | None = None
+    custom_instructions: bool | None = None
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "EvaluationResult":
@@ -42,6 +43,7 @@ class EvaluationResult:
             prompt_tokens=payload.get("prompt_tokens"),
             completion_tokens=payload.get("completion_tokens"),
             mcp_servers=payload.get("mcp_servers"),
+            custom_instructions=payload.get("custom_instructions"),
         )
 
     @classmethod
@@ -92,6 +94,7 @@ class EvaluationResult:
             prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
             completion_tokens=int(completion_tokens) if completion_tokens is not None else None,
             mcp_servers=context.mcp_servers,
+            custom_instructions=context.custom_instructions,
         )
 
     def save(self, output_dir: Path, result_file: str) -> None:
@@ -110,6 +113,7 @@ class EvaluationResult:
                 "completion_tokens": self.completion_tokens,
                 "generated_patch": self.generated_patch,
                 "mcp_servers": self.mcp_servers,
+                "custom_instructions": self.custom_instructions,
             }
             f.write(json.dumps(result_dict) + "\n")
 
@@ -134,6 +138,7 @@ class EvaluationResultSummary:
 
     github_run_id: str | None = None
     mcp_servers: str | None = None
+    custom_instructions: bool | None = None
 
     @classmethod
     def from_results(cls, results: list[EvaluationResult], run_id: str) -> "EvaluationResultSummary":
@@ -144,7 +149,7 @@ class EvaluationResultSummary:
         prompt_tokens = [r.prompt_tokens for r in results if r.prompt_tokens is not None]
         completion_tokens = [r.completion_tokens for r in results if r.completion_tokens is not None]
 
-        # Extract MCP servers from first result (all should be same in a run)
+        # Extract MCP servers and custom instructions from first result (all should be same in a run)
         first_result = results[0]
         mcp_servers_list = first_result.mcp_servers if first_result and first_result.mcp_servers else None
         mcp_servers_str = ", ".join(mcp_servers_list) if mcp_servers_list else None
@@ -162,6 +167,7 @@ class EvaluationResultSummary:
             average_completion_tokens=sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
             github_run_id=run_id,
             mcp_servers=mcp_servers_str,
+            custom_instructions=first_result.custom_instructions,
         )
 
     @classmethod
@@ -179,6 +185,7 @@ class EvaluationResultSummary:
             average_completion_tokens=float(payload["average_completion_tokens"]),
             github_run_id=payload.get("github_run_id"),
             mcp_servers=payload.get("mcp_servers"),
+            custom_instructions=payload.get("custom_instructions"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -195,6 +202,7 @@ class EvaluationResultSummary:
             "average_completion_tokens": round(self.average_completion_tokens, 1),
             "github_run_id": self.github_run_id,
             "mcp_servers": self.mcp_servers,
+            "custom_instructions": self.custom_instructions,
         }
 
     def save(self, output_dir: Path, summary_file: str) -> None:
