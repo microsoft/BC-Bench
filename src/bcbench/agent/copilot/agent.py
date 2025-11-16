@@ -20,12 +20,13 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_dir: Path) -> tuple[dict[str, float | int] | None, list[str] | None]:
+def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_dir: Path) -> tuple[dict[str, float | int] | None, list[str] | None, bool]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:
         Dictionary containing metrics extracted from the CLI output, or None if collection fails
         List of MCP server names used in the experiment, or None if no MCP servers configured
+        Boolean indicating if custom instructions were enabled
     """
     config_file = Path(__file__).parent / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
@@ -76,11 +77,11 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
 
         stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
         stderr_lines = stderr.splitlines()
-        return parse_metrics(stderr_lines), mcp_server_names
+        return parse_metrics(stderr_lines), mcp_server_names, instructions_enabled
     except subprocess.TimeoutExpired:
         # timeout should not raise an exception, we will evaluate whatever copilot did so far
         logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
-        return None, mcp_server_names
+        return None, mcp_server_names, instructions_enabled
     except subprocess.CalledProcessError as e:
         logger.error(f"Copilot CLI execution failed with error {e.stderr}")
         raise AgentError(f"Copilot CLI execution failed: {e}") from None

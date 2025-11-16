@@ -168,8 +168,10 @@ def evaluate_mock(
     ]
     agent_metrics = random.choice(metrics_scenarios)
     mcp_servers = random.choice([["magic-mcp"], None])
+    custom_instructions = random.choice([True, False])
     logger.info(f"Using agent metrics: {agent_metrics if agent_metrics else 'None'}")
     logger.info(f"Using MCP servers: {mcp_servers}")
+    logger.info(f"Using custom instructions: {custom_instructions}")
 
     context = EvaluationContext(
         entry=entry,
@@ -182,6 +184,7 @@ def evaluate_mock(
         agent_name="mock-agent",
         agent_metrics=agent_metrics if agent_metrics else None,
         mcp_servers=mcp_servers,
+        custom_instructions=custom_instructions,
     )
 
     match random.choice(["success", "build-fail", "test-fail"]):
