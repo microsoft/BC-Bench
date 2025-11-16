@@ -145,5 +145,20 @@
     "github_run_id": "19388071339",
     "mcp_servers": null,
     "custom_instructions": false
+  },
+  {
+    "total": 22,
+    "resolved": 12,
+    "failed": 10,
+    "build": 19,
+    "date": "2025-11-16",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 164.0,
+    "average_prompt_tokens": 2374900.0,
+    "average_completion_tokens": 8768.2,
+    "github_run_id": "19411736858",
+    "mcp_servers": null,
+    "custom_instructions": true
   }
 ]
