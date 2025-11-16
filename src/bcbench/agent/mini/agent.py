@@ -58,12 +58,14 @@ def run_mini_agent(
     username: str = "admin",
     password: str | None = None,
     output_dir: Path | None = None,
-) -> tuple[dict[str, float | int] | None, None]:
+) -> tuple[dict[str, float | int] | None, None, bool]:
     """Run mini-bc-agent on a single dataset entry.
 
     Returns:
         Dictionary containing metrics (agent_execution_time, prompt_tokens, completion_tokens),
         or None if metric extraction fails.
+        None (no MCP servers for mini-bc-agent)
+        Boolean indicating if custom instructions were enabled (always False for mini-bc-agent)
     """
     config_file = Path(__file__).parent / "config.yaml"
     mini_bc_config = yaml.safe_load(config_file.read_text())
@@ -112,7 +114,7 @@ def run_mini_agent(
 
     logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")
 
-    return _extract_metrics(agent, execution_time), None
+    return _extract_metrics(agent, execution_time), None, False
 
 
 def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | None:
