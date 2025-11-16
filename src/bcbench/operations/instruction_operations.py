@@ -1,5 +1,5 @@
 from pathlib import Path
-from shutil import copy2, rmtree
+from shutil import copytree, rmtree
 
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
@@ -41,62 +41,30 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     return instructions_enabled
 
 
-def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> Path:
+def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> None:
     """
-    Copy custom instructions file to repo's .github directory.
-    Also copies path-specific instructions folder if present.
-
-    Returns:
-        Path to the created instruction file
-
-    Raises:
-        FileNotFoundError: If instruction file doesn't exist
+    Copy all files from instructions_source to repo's .github directory.
+    Removes existing .github directory if present.
     """
-    if not instructions_source.exists():
-        raise FileNotFoundError(f"Instruction file not found: {instructions_source}")
-
     github_dir = repo_path / ".github"
-    github_dir.mkdir(parents=True, exist_ok=True)
+    if github_dir.exists():
+        rmtree(github_dir)
 
-    target_path = github_dir / _config.file_patterns.copilot_instruction_naming
-    copy2(instructions_source, target_path)
-
-    # Copy path-specific instructions folder if present
-    source_instructions_dir = instructions_source.parent / _config.file_patterns.copilot_instructions_dirname
-    if source_instructions_dir.exists() and source_instructions_dir.is_dir():
-        target_instructions_dir = github_dir / _config.file_patterns.copilot_instructions_dirname
-
-        # Remove existing instructions folder if present
-        if target_instructions_dir.exists():
-            rmtree(target_instructions_dir)
-
-        # Copy all *.instructions.md files (flattened)
-        target_instructions_dir.mkdir(parents=True, exist_ok=True)
-        instruction_files = list(source_instructions_dir.rglob(_config.file_patterns.copilot_instructions_pattern))
-
-        if instruction_files:
-            for file in instruction_files:
-                copy2(file, target_instructions_dir / file.name)
-            logger.info(f"Copied {len(instruction_files)} path-specific instruction file(s) to {target_instructions_dir}")
-        else:
-            logger.warning(f"Instructions folder exists at {source_instructions_dir} but contains no *.instructions.md files")
-    else:
-        logger.warning(f"No path-specific instructions folder found at {source_instructions_dir}")
-
-    return target_path
+    copytree(instructions_source, github_dir)
+    logger.debug(f"Successfully copied all contents from {instructions_source} to {github_dir}")
 
 
 def _get_source_instructions_path(repo_name: str, agent_dir: Path) -> Path:
     """
-    Get path to source instruction file for a repository.
+    Get path to source instruction folder for a repository.
 
     Raises:
         FileNotFoundError: If instruction file doesn't exist
     """
     sanitized_name = repo_name.replace("/", "-")
-    instructions_path = agent_dir / _config.file_patterns.copilot_instructions_dirname / sanitized_name / _config.file_patterns.copilot_instruction_naming
+    instructions_path = agent_dir / _config.file_patterns.copilot_instructions_dirname / sanitized_name
 
     if not instructions_path.exists():
-        raise FileNotFoundError(f"Instruction file not found: {instructions_path}\nExpected for repository: {repo_name}")
+        raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for repository: {repo_name}")
 
     return instructions_path
