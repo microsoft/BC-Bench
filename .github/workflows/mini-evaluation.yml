@@ -12,6 +12,14 @@ on:
         type: choice
         options:
           - "azure/gpt-4.1"
+      category:
+        description: "Evaluation category to run"
+        required: false
+        default: "bug-fix"
+        type: choice
+        options:
+          - "bug-fix"
+          - "test-generation"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -65,6 +73,7 @@ jobs:
         run: |
           uv run bcbench evaluate mini "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
+            --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 

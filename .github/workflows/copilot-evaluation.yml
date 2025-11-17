@@ -18,6 +18,14 @@ on:
           - "gpt-5.1"
           - "gpt-5.1-codex-mini"
           - "gpt-5.1-codex"
+      category:
+        description: "Evaluation category to run"
+        required: false
+        default: "bug-fix"
+        type: choice
+        options:
+          - "bug-fix"
+          - "test-generation"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -72,6 +80,7 @@ jobs:
         run: |
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
+            --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
