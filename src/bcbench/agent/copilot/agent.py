@@ -35,7 +35,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config)
+    prompt: str = build_prompt(entry, repo_path, copilot_config, category)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, repo_path)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, Path(__file__).parent)
 
