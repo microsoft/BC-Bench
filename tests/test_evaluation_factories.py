@@ -1,5 +1,6 @@
 import pytest
 
+from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
 from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.results import EvaluationResult
@@ -26,6 +27,7 @@ class TestEvaluationResultFactories:
             username="test-user",
             agent_name="test-agent",
             model="test-model",
+            category=EvaluationCategory.BUG_FIX,
         )
 
     def test_create_success_result_fills_all_fields_correctly(self, sample_context):
@@ -81,6 +83,7 @@ class TestEvaluationResultFactories:
             username="different-user",
             agent_name="different-agent",
             model="different-model",
+            category=EvaluationCategory.BUG_FIX,
         )
 
         result = EvaluationResult.create_success(context, "test_patch")

@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
 from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.results import EvaluationResult
@@ -30,6 +31,7 @@ class TestMiniAgentMetricsExtraction:
             username="test-user",
             agent_name="mini-bc-agent",
             model="azure/gpt-4.1",
+            category=EvaluationCategory.BUG_FIX,
         )
 
     def test_metrics_extraction_with_execution_time_only(self):
@@ -195,6 +197,7 @@ class TestMiniAgentMetricsExtraction:
                 entry=entry,
                 repo_path=tmp_path / "repo",
                 model="azure/gpt-4.1",
+                category=EvaluationCategory.BUG_FIX,
                 container_name="test",
                 password="test",
             )

@@ -10,6 +10,7 @@ import yaml
 from bcbench.agent.copilot.mcp import build_mcp_config
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.copilot.prompt import build_prompt
+from bcbench.cli_options import EvaluationCategory
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
@@ -20,7 +21,7 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_dir: Path) -> tuple[dict[str, float | int] | None, list[str] | None, bool]:
+def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> tuple[dict[str, float | int] | None, list[str] | None, bool]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:
@@ -28,6 +29,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
         List of MCP server names used in the experiment, or None if no MCP servers configured
         Boolean indicating if custom instructions were enabled
     """
+    # TODO: implement different agent logic basing on category
     config_file = Path(__file__).parent / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
 

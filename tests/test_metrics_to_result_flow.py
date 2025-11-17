@@ -3,6 +3,7 @@
 import pytest
 
 from bcbench.agent.copilot.metrics import parse_metrics
+from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
 from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.results import EvaluationResult
@@ -29,6 +30,7 @@ class TestCopilotMetricsToResultFlow:
             username="test-user",
             agent_name="copilot-cli",
             model="gpt-4o",
+            category=EvaluationCategory.BUG_FIX,
         )
 
     def test_full_metrics_flow_to_success_result(self, sample_context):
@@ -227,6 +229,7 @@ class TestMiniAgentMetricsToResultFlow:
             username="test-user",
             agent_name="mini-bc-agent",
             model="azure/gpt-4.1",
+            category=EvaluationCategory.BUG_FIX,
         )
 
     def test_mini_agent_full_metrics_flow_to_success_result(self, sample_context):

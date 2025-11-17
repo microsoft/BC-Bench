@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
 
 __all__ = ["EvaluationContext"]
@@ -31,6 +32,9 @@ class EvaluationContext:
     # Agent metadata
     agent_name: str
     model: str
+
+    # Evaluation category
+    category: EvaluationCategory
 
     # Agent metrics collected during execution
     agent_metrics: dict[str, float | int] | None = None
