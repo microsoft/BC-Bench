@@ -8,7 +8,8 @@
     "average_prompt_tokens": 0,
     "average_completion_tokens": 0,
     "date": "2025-11-05",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -22,7 +23,8 @@
     "average_prompt_tokens": 918931.8,
     "average_completion_tokens": 6240.9,
     "github_run_id": "19369038959",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -36,7 +38,8 @@
     "average_prompt_tokens": 2191345.4,
     "average_completion_tokens": 8677.3,
     "github_run_id": "19342348130",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
   },
   {
     "total": 19,
@@ -50,7 +53,8 @@
     "average_prompt_tokens": 352378.9,
     "average_completion_tokens": 7142.1,
     "github_run_id": "19227643144",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -64,7 +68,8 @@
     "average_prompt_tokens": 478451.0,
     "average_completion_tokens": 3884.3,
     "github_run_id": "19391198996",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -78,7 +83,8 @@
     "average_prompt_tokens": 1924450.0,
     "average_completion_tokens": 6827.3,
     "github_run_id": "19364189001",
-    "mcp_servers": "filesystem"
+    "mcp_servers": "filesystem",
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -92,7 +98,8 @@
     "average_prompt_tokens": 830300.0,
     "average_completion_tokens": 8707.7,
     "github_run_id": "19378708759",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -106,7 +113,8 @@
     "average_prompt_tokens": 931820.0,
     "average_completion_tokens": 8615.0,
     "github_run_id": "19385408839",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -120,7 +128,8 @@
     "average_prompt_tokens": 2711195.4,
     "average_completion_tokens": 9409.1,
     "github_run_id": "19386826797",
-    "mcp_servers": "mslearn"
+    "mcp_servers": "mslearn",
+    "custom_instructions": false
   },
   {
     "total": 22,
@@ -134,6 +143,22 @@
     "average_prompt_tokens": 1109352.6,
     "average_completion_tokens": 2323.5,
     "github_run_id": "19388071339",
-    "mcp_servers": null
+    "mcp_servers": null,
+    "custom_instructions": false
+  },
+  {
+    "total": 22,
+    "resolved": 12,
+    "failed": 10,
+    "build": 19,
+    "date": "2025-11-16",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 164.0,
+    "average_prompt_tokens": 2374900.0,
+    "average_completion_tokens": 8768.2,
+    "github_run_id": "19411736858",
+    "mcp_servers": null,
+    "custom_instructions": true
   }
 ]

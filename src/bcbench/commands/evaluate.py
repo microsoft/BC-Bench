@@ -40,7 +40,7 @@ def evaluate_mini(
     To only run the agent to generate a patch without building/testing, use 'bcbench run mini' instead.
 
     Example:
-        bcbench evaluate mini microsoftInternal__NAV-210528 --container-name bcserver
+        uv run bcbench evaluate mini microsoftInternal__NAV-211710 --container-name bcserver
     """
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]
@@ -99,7 +99,7 @@ def evaluate_copilot(
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
 
     Example:
-        bcbench evaluate copilot microsoftInternal__NAV-210528 --container-name bcserver
+        uv run bcbench evaluate copilot microsoftInternal__NAV-211710 --container-name bcserver
     """
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]
@@ -168,8 +168,10 @@ def evaluate_mock(
     ]
     agent_metrics = random.choice(metrics_scenarios)
     mcp_servers = random.choice([["magic-mcp"], None])
+    custom_instructions = random.choice([True, False])
     logger.info(f"Using agent metrics: {agent_metrics if agent_metrics else 'None'}")
     logger.info(f"Using MCP servers: {mcp_servers}")
+    logger.info(f"Using custom instructions: {custom_instructions}")
 
     context = EvaluationContext(
         entry=entry,
@@ -182,6 +184,7 @@ def evaluate_mock(
         agent_name="mock-agent",
         agent_metrics=agent_metrics if agent_metrics else None,
         mcp_servers=mcp_servers,
+        custom_instructions=custom_instructions,
     )
 
     match random.choice(["success", "build-fail", "test-fail"]):

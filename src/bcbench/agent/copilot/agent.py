@@ -14,17 +14,19 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
+from bcbench.operations import setup_instructions_from_config
 
 logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_dir: Path) -> tuple[dict[str, float | int] | None, list[str] | None]:
+def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_dir: Path) -> tuple[dict[str, float | int] | None, list[str] | None, bool]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:
         Dictionary containing metrics extracted from the CLI output, or None if collection fails
         List of MCP server names used in the experiment, or None if no MCP servers configured
+        Boolean indicating if custom instructions were enabled
     """
     config_file = Path(__file__).parent / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
@@ -33,6 +35,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
 
     prompt: str = build_prompt(entry, repo_path, copilot_config)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, repo_path)
+    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, Path(__file__).parent)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -48,13 +51,16 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
             "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
             "--disable-builtin-mcps",
             f"--model={model}",
-            "--no-custom-instructions",
             "--log-level=debug",
             f"--log-dir={output_dir.resolve()}",
             f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
+        if not instructions_enabled:
+            cmd_args.append("--no-custom-instructions")
         if mcp_config_json:
             cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
+
+        logger.debug(f"Copilot command args: {cmd_args}")
 
         result = subprocess.run(
             cmd_args,
@@ -71,11 +77,11 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
 
         stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
         stderr_lines = stderr.splitlines()
-        return parse_metrics(stderr_lines), mcp_server_names
+        return parse_metrics(stderr_lines), mcp_server_names, instructions_enabled
     except subprocess.TimeoutExpired:
         # timeout should not raise an exception, we will evaluate whatever copilot did so far
         logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
-        return None, mcp_server_names
+        return None, mcp_server_names, instructions_enabled
     except subprocess.CalledProcessError as e:
         logger.error(f"Copilot CLI execution failed with error {e.stderr}")
         raise AgentError(f"Copilot CLI execution failed: {e}") from None

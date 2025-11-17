@@ -14,6 +14,8 @@ prompt:
     Issue details:
     {{task}}
 
+instructions:
+  enabled: false
 # mcp:
 #   servers:
 #     - name: "mslearn"

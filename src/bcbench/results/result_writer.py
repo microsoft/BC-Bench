@@ -35,6 +35,7 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
                     "completion_tokens": result.completion_tokens or 0,
                     "latency": result.agent_execution_time or 0,
                     "resolved": result.resolved,
+                    "build": result.build,
                     "run_id": run_id,
                     "project": result.project,
                 },

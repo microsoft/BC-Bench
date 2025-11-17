@@ -45,7 +45,7 @@ def run_mini(
     For full evaluation including building and running tests, use 'bcbench evaluate' instead.
 
     Example:
-        bcbench run mini microsoftInternal__NAV-210528 --step-limit 5
+        uv run bcbench run mini microsoftInternal__NAV-211710 --step-limit 5
     """
     entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
@@ -77,7 +77,7 @@ def run_copilot(
     For full evaluation including building and running tests, use 'bcbench evaluate' instead.
 
     Example:
-        bcbench run copilot microsoftInternal__NAV-210528
+        uv run bcbench run copilot microsoftInternal__NAV-211710
     """
     entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
@@ -96,7 +96,7 @@ def run_mini_inspector(
     Inspect trajectory files in the given directory or a specific trajectory file.
 
     Example:
-        bcbench run mini-inspector ./outputs/mini_agent_runs/
+        uv run bcbench run mini-inspector ./outputs/mini_agent_runs/
     """
     from minisweagent.run.inspector import TrajectoryInspector
 

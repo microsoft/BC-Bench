@@ -97,7 +97,12 @@ def result_update(
 
     updated = False
     for i, result in enumerate(existing_results):
-        if result["agent_name"] == new_result.agent_name and result["model"] == new_result.model and result["mcp_servers"] == new_result.mcp_servers:
+        if (
+            result["agent_name"] == new_result.agent_name
+            and result["model"] == new_result.model
+            and result["mcp_servers"] == new_result.mcp_servers
+            and result.get("custom_instructions") == new_result.custom_instructions
+        ):
             logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
             existing_results[i] = new_result.to_dict()
             updated = True

@@ -387,6 +387,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_completion_tokens": 1500.0,
             "github_run_id": "run_001",
             "mcp_servers": "server1, server2",
+            "custom_instructions": True,
         },
         {
             "total": 10,
@@ -401,6 +402,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_completion_tokens": 1200.0,
             "github_run_id": "run_002",
             "mcp_servers": None,
+            "custom_instructions": False,
         },
         {
             "total": 10,
@@ -415,6 +417,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_completion_tokens": 1000.0,
             "github_run_id": "run_003",
             "mcp_servers": None,
+            "custom_instructions": False,
         },
     ]
 
@@ -435,6 +438,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "average_completion_tokens": 1600.0,
         "github_run_id": "run_004",
         "mcp_servers": "server1, server2",
+        "custom_instructions": True,
     }
 
     with open(summary_path, "w") as f:
@@ -469,7 +473,7 @@ def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
     # Find the updated entry and verify it matches
     updated_entry = None
     for entry in updated_leaderboard:
-        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and entry["mcp_servers"] == "server1, server2":
+        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and entry["mcp_servers"] == "server1, server2" and entry.get("custom_instructions") is True:
             updated_entry = entry
             break
 
@@ -499,6 +503,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "average_completion_tokens": 1400.0,
         "github_run_id": "run_005",
         "mcp_servers": None,
+        "custom_instructions": False,
     }
 
     with open(summary_path, "w") as f:
@@ -553,6 +558,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "average_completion_tokens": 1350.0,
         "github_run_id": "run_006",
         "mcp_servers": None,  # Different from existing "server1, server2"
+        "custom_instructions": False,  # Different from existing True
     }
 
     with open(summary_path, "w") as f:

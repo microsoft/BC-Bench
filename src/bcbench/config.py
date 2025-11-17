@@ -85,6 +85,9 @@ class FilePatternConfig:
     patch_pattern: str
     instance_pattern: str
     result_pattern: str
+    copilot_instruction_naming: str
+    copilot_instructions_dirname: str
+    copilot_instructions_pattern: str
 
     @classmethod
     def default(cls, instance_pattern: str) -> FilePatternConfig:
@@ -94,6 +97,9 @@ class FilePatternConfig:
             patch_pattern=".patch",
             instance_pattern=instance_pattern,
             result_pattern=".jsonl",
+            copilot_instruction_naming="copilot-instructions.md",
+            copilot_instructions_dirname="instructions",
+            copilot_instructions_pattern="*.instructions.md",
         )
 
 
