@@ -37,7 +37,7 @@ jobs:
     with:
       test-run: true
 
-  mock-evaluation-bug-fix:
+  mock-evaluation:
     runs-on: ubuntu-latest
     needs: get-entries
     if: needs.get-entries.outputs.entries != '[]'
@@ -56,35 +56,7 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Run mock evaluation for ${{ matrix.entry }}
-        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category bug-fix --output-dir evaluation_results --run-id ${{ github.run_id }}
-
-      - name: Upload mock evaluation results
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/
-          retention-days: 1
-
-  mock-evaluation-test-generation:
-    runs-on: ubuntu-latest
-    needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
-    outputs:
-      results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    strategy:
-      fail-fast: false
-      matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
-    name: Test Run for ${{ matrix.entry }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
-
-      - name: Run mock evaluation for ${{ matrix.entry }}
-        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category test-generation --output-dir evaluation_results --run-id ${{ github.run_id }}
+        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --output-dir evaluation_results --run-id ${{ github.run_id }}
 
       - name: Upload mock evaluation results
         uses: actions/upload-artifact@v4
@@ -94,24 +66,12 @@ jobs:
           retention-days: 1
 
   summarize-results:
-    needs: mock-evaluation-bug-fix
+    needs: mock-evaluation
     uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write
     with:
-      results-dir: ${{ needs.mock-evaluation-bug-fix.outputs.results-dir }}
-      model: ${{ github.run_id }}
-      agent: "mock-agent"
-      mock: true
-    secrets: inherit
-
-  summarize-results-test-generation:
-    needs: mock-evaluation-test-generation
-    uses: ./.github/workflows/summarize-results.yml
-    permissions:
-      contents: write
-    with:
-      results-dir: ${{ needs.mock-evaluation-test-generation.outputs.results-dir }}
+      results-dir: ${{ needs.mock-evaluation.outputs.results-dir }}
       model: ${{ github.run_id }}
       agent: "mock-agent"
       mock: true
