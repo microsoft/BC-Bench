@@ -69,7 +69,7 @@ Steps for an experiment:
 
 ### Experimenting with MCP Servers
 
-Uncomment the `mcp:` section in [config.yaml](src\bcbench\agent\copilot\config.yaml), and replace the example MCP Servers with yours:
+Uncomment the `mcp:` section in [config.yaml](src/bcbench/agent/copilot/config.yaml), and replace the example MCP Servers with yours:
 
 ```yaml
 mcp:
@@ -82,7 +82,7 @@ mcp:
 
 ### Experimenting with Custom Instructions
 
-Enable instruction in the [config.yaml](src\bcbench\agent\copilot\config.yaml):
+Enable instruction in the [config.yaml](src/bcbench/agent/copilot/config.yaml):
 
 ```yaml
 instructions:
