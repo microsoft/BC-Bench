@@ -47,7 +47,8 @@ jobs:
       fail-fast: false
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
-    name: Test Run for ${{ matrix.entry }}
+        category: [bug-fix, test-generation]
+    name: Test Run for ${{ matrix.entry }} (${{ matrix.category }})
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,12 +57,12 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Run mock evaluation for ${{ matrix.entry }}
-        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category bug-fix --output-dir evaluation_results --run-id ${{ github.run_id }}
+        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ matrix.category }} --output-dir evaluation_results --run-id ${{ github.run_id }}
 
       - name: Upload mock evaluation results
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.entry }}
+          name: ${{ matrix.entry }}-${{ matrix.category }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/
           retention-days: 1
 
