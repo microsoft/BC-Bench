@@ -128,6 +128,14 @@ class TestExecutionTimeoutExpired(BCBenchError):
         super().__init__(message)
 
 
+class NoTestsExtractedError(BCBenchError):
+    """No tests extracted from the generated patch."""
+
+    def __init__(self):
+        message = "No tests extracted from the generated patch."
+        super().__init__(message)
+
+
 class AgentError(BCBenchError):
     """Agent execution errors."""
 

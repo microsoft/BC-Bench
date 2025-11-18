@@ -9,14 +9,8 @@ from bcbench.exceptions import (
     TestExecutionTimeoutExpired,
 )
 from bcbench.logger import get_logger, github_log_group
-from bcbench.operations import (
-    apply_patch,
-    build_and_publish_projects,
-    checkout_commit,
-    clean_repo,
-    get_generated_diff,
-    run_tests,
-)
+from bcbench.operations import apply_patch, build_and_publish_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
+from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results import EvaluationResult
 
 logger = get_logger(__name__)
@@ -61,12 +55,11 @@ class TestGenerationPipeline(EvaluationPipeline):
         Creates and saves appropriate result based on validation outcome.
         """
         generated_patch = get_generated_diff(context.repo_path)
+        generated_tests = extract_tests_from_patch(generated_patch, context.repo_path)
         result = None
 
         try:
-            # For test generation: apply generated tests instead of test_patch
-
-            build_and_publish_projects(
+            build_and_publish_projects(  # TODO: only need to build test app
                 context.repo_path,
                 context.entry.project_paths,
                 context.container_name,
@@ -74,12 +67,19 @@ class TestGenerationPipeline(EvaluationPipeline):
                 context.password,
                 context.entry.environment_setup_version,
             )
-            # TODO: Extract generated tests from agent output
-            # TODO: Validate tests fail on before patch, pass on after patch
+            run_test_suite(generated_tests, "Fail", context.container_name, context.username, context.password)
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
-            # TODO: Implement test validation with reversed expectation
-            run_tests(context.entry, context.container_name, context.username, context.password)
+
+            build_and_publish_projects(  # TODO: only need to build function app
+                context.repo_path,
+                context.entry.project_paths,
+                context.container_name,
+                context.username,
+                context.password,
+                context.entry.environment_setup_version,
+            )
+            run_test_suite(generated_tests, "Pass", context.container_name, context.username, context.password)
 
             result = EvaluationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
