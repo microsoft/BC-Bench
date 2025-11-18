@@ -20,9 +20,10 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
-from bcbench.evaluate import EvaluationContext, create_pipeline
+from bcbench.evaluate import create_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import EvaluationResult
+from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 _config = get_config()

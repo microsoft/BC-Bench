@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.exceptions import (
     BuildError,
     BuildTimeoutExpired,
@@ -18,6 +17,7 @@ from bcbench.operations import (
     run_tests,
 )
 from bcbench.results import EvaluationResult
+from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 
@@ -55,7 +55,7 @@ class BugFixPipeline(EvaluationPipeline):
         Creates and saves appropriate result based on validation outcome.
         """
         generated_patch = get_generated_diff(context.repo_path)
-        result = None
+        result: EvaluationResult | None = None
 
         try:
             apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} test patch")

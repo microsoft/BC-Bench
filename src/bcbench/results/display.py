@@ -16,6 +16,7 @@ def create_console_summary(results: list[EvaluationResult]) -> None:
 
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
     console.print(f"Total Processed: [bold]{total}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
+    console.print(f"Category: [bold]{results[0].category}[/bold]")
     console.print(f"Resolved: [bold green]{resolved}[/bold green]")
     console.print(f"Failed: [bold red]{failed}[/bold red]")
 
@@ -46,6 +47,7 @@ def create_github_job_summary(results: list[EvaluationResult]) -> None:
     mcp_servers = ", ".join(results[0].mcp_servers) if results[0].mcp_servers else "None"
     custom_instructions = "Yes" if results[0].custom_instructions else "No"
     markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
+- Category: {results[0].category}
 - MCP Servers used: {mcp_servers}
 - Custom Instructions: {custom_instructions}
 - Successful evaluations: {resolved} :white_check_mark:

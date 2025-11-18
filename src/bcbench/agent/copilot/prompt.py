@@ -2,8 +2,8 @@ from pathlib import Path
 
 from jinja2 import Template
 
-from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
+from bcbench.types import EvaluationCategory
 
 
 def build_prompt(entry: DatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory) -> str:

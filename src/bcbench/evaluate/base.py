@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
-from bcbench.cli_options import EvaluationCategory
-from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.logger import get_logger
+from bcbench.results import EvaluationResult
+from bcbench.types import EvaluationCategory, EvaluationContext
 
 logger = get_logger(__name__)
 
@@ -74,7 +74,7 @@ class EvaluationPipeline(ABC):
         self.run_agent(context, agent_runner)
         self.evaluate(context)
 
-    def save_result(self, context: EvaluationContext, result) -> None:
+    def save_result(self, context: EvaluationContext, result: EvaluationResult) -> None:
         """Save result directly using result object.
 
         Args:

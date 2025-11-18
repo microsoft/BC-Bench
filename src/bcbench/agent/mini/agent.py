@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from bcbench.cli_options import EvaluationCategory
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
+from bcbench.types import EvaluationCategory
 
 # Lazy imports to avoid mini-swe-agent startup message for non-agent commands
 if TYPE_CHECKING:

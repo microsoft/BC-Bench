@@ -10,12 +10,12 @@ import yaml
 from bcbench.agent.copilot.mcp import build_mcp_config
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.copilot.prompt import build_prompt
-from bcbench.cli_options import EvaluationCategory
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_instructions_from_config
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()

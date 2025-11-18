@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from bcbench.agent.copilot.prompt import build_prompt
-from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
+from bcbench.types import EvaluationCategory
 
 
 def test_build_prompt_without_project_paths():

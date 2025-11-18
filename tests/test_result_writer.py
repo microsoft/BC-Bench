@@ -5,6 +5,7 @@ import pytest
 from bcbench.dataset import DatasetEntry
 from bcbench.results.evaluation_result import EvaluationResult
 from bcbench.results.result_writer import write_bceval_results
+from bcbench.types import EvaluationCategory
 
 
 class TestWriteBcevalResults:
@@ -45,6 +46,7 @@ class TestWriteBcevalResults:
             project="app",
             model="gpt-4o",
             agent_name="copilot-cli",
+            category=EvaluationCategory.BUG_FIX,
             resolved=True,
             build=True,
             generated_patch="diff --git a/test.al b/test.al\n--- a/test.al\n+++ b/test.al\n@@ -1 +1 @@\n-old\n+new",
@@ -61,6 +63,7 @@ class TestWriteBcevalResults:
             project="app",
             model="gpt-4o",
             agent_name="copilot-cli",
+            category=EvaluationCategory.TEST_GENERATION,
             resolved=False,
             build=False,
             generated_patch="",
@@ -181,6 +184,7 @@ class TestWriteBcevalResults:
             project="app",
             model="gpt-4o",
             agent_name="copilot-cli",
+            category=EvaluationCategory.BUG_FIX,
             resolved=False,
             build=False,
             prompt_tokens=1000,
@@ -211,6 +215,7 @@ class TestWriteBcevalResults:
             project="app",
             model="gpt-4o",
             agent_name="copilot-cli",
+            category=EvaluationCategory.BUG_FIX,
             resolved=True,
             build=True,
             agent_execution_time=100.0,

@@ -4,10 +4,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
-from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.results import EvaluationResult
+from bcbench.types import EvaluationCategory, EvaluationContext
 
 
 class TestMiniAgentMetricsExtraction:

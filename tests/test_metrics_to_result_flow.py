@@ -1,12 +1,11 @@
-"""Test the complete flow from metrics parsing to evaluation result creation."""
+"""Test the complete metrics flow from parsing to result creation."""
 
 import pytest
 
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.cli_options import EvaluationCategory
 from bcbench.dataset import DatasetEntry
-from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.results import EvaluationResult
+from bcbench.types import EvaluationCategory, EvaluationContext
 
 
 class TestCopilotMetricsToResultFlow:

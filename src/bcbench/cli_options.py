@@ -1,10 +1,11 @@
 """Reusable CLI option definitions for typer commands."""
 
-from enum import Enum
 from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
+
+from bcbench.types import EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
@@ -25,13 +26,6 @@ ContainerUsername = Annotated[str, typer.Option(envvar="BC_CONTAINER_USERNAME", 
 ContainerPassword = Annotated[str, typer.Option(envvar="BC_CONTAINER_PASSWORD", help="Password for BC container")]
 
 CopilotModel = Annotated[Literal["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5", "gpt-5.1", "gpt-5.1-codex-mini", "gpt-5.1-codex"], typer.Option(help="Copilot model to use")]
-
-
-class EvaluationCategory(str, Enum):
-    BUG_FIX = "bug-fix"
-    TEST_GENERATION = "test-generation"
-    # CODE_REVIEW = "code-review"
-    # EVENT_REQUEST = "event-request"
 
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]

@@ -4,6 +4,7 @@ from datetime import date
 import pytest
 
 from bcbench.results.evaluation_result import EvaluationResult, EvaluationResultSummary
+from bcbench.types import EvaluationCategory
 
 
 class TestEvaluationResultSummary:
@@ -15,6 +16,7 @@ class TestEvaluationResultSummary:
             build=9,
             date=date(2025, 1, 15),
             model="gpt-4o",
+            category="bug-fix",
             agent_name="copilot-cli",
             average_duration=120.5,
             average_prompt_tokens=5000.0,
@@ -49,6 +51,7 @@ class TestEvaluationResultSummary:
             build=5,
             date=date(2025, 1, 20),
             model="gpt-4",
+            category="test-generation",
             agent_name="mini-bc-agent",
             average_duration=90.0,
             average_prompt_tokens=3000.0,
@@ -70,6 +73,7 @@ class TestFromResults:
                 project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
+                category=EvaluationCategory.BUG_FIX,
                 resolved=True,
                 build=True,
                 error_message=None,
@@ -82,6 +86,7 @@ class TestFromResults:
                 project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
+                category=EvaluationCategory.BUG_FIX,
                 resolved=True,
                 build=True,
                 error_message=None,
@@ -94,6 +99,7 @@ class TestFromResults:
                 project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
+                category=EvaluationCategory.BUG_FIX,
                 resolved=False,
                 build=False,
                 error_message="Build failed",
@@ -132,6 +138,7 @@ class TestFromResults:
                 project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
+                category=EvaluationCategory.BUG_FIX,
                 resolved=True,
                 build=True,
                 error_message=None,
@@ -144,6 +151,7 @@ class TestFromResults:
                 project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
+                category=EvaluationCategory.BUG_FIX,
                 resolved=False,
                 build=False,
                 error_message="Error",
@@ -167,6 +175,7 @@ class TestFromResults:
                 project="app",
                 model="gpt-4o",
                 agent_name="copilot-cli",
+                category=EvaluationCategory.TEST_GENERATION,
                 resolved=False,
                 build=False,
                 error_message="Error",

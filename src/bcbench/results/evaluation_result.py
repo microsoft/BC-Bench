@@ -4,8 +4,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from bcbench.evaluate import EvaluationContext
 from bcbench.logger import get_logger
+from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 
@@ -16,6 +16,7 @@ class EvaluationResult:
     project: str
     model: str
     agent_name: str
+    category: str
 
     resolved: bool
     build: bool
@@ -35,6 +36,7 @@ class EvaluationResult:
             project=str(payload["project"]),
             model=str(payload["model"]),
             agent_name=str(payload["agent_name"]),
+            category=str(payload["category"]),
             resolved=bool(payload["resolved"]),
             build=bool(payload["build"]),
             generated_patch=payload.get("generated_patch", ""),
@@ -87,6 +89,7 @@ class EvaluationResult:
             resolved=resolved,
             build=build,
             model=context.model,
+            category=context.category,
             agent_name=context.agent_name,
             generated_patch=generated_patch,
             error_message=error_message,
@@ -104,6 +107,7 @@ class EvaluationResult:
                 "instance_id": self.instance_id,
                 "resolved": self.resolved,
                 "model": self.model,
+                "category": self.category,
                 "agent_name": self.agent_name,
                 "build": self.build,
                 "error_message": self.error_message,
@@ -131,6 +135,7 @@ class EvaluationResultSummary:
 
     model: str
     agent_name: str
+    category: str
 
     average_duration: float
     average_prompt_tokens: float
@@ -160,6 +165,7 @@ class EvaluationResultSummary:
             failed=total - resolved,
             build=sum(r.build for r in results),
             date=date.today(),
+            category=first_result.category,
             model=first_result.model,
             agent_name=first_result.agent_name,
             average_duration=sum(durations) / len(durations) if durations else 0.0,
@@ -179,6 +185,7 @@ class EvaluationResultSummary:
             build=int(payload["build"]),
             date=date.fromisoformat(payload["date"]),
             model=str(payload["model"]),
+            category=str(payload["category"]),
             agent_name=str(payload["agent_name"]),
             average_duration=float(payload["average_duration"]),
             average_prompt_tokens=float(payload["average_prompt_tokens"]),
@@ -196,6 +203,7 @@ class EvaluationResultSummary:
             "build": self.build,
             "date": self.date.isoformat(),
             "model": self.model,
+            "category": self.category,
             "agent_name": self.agent_name,
             "average_duration": round(self.average_duration, 1),
             "average_prompt_tokens": round(self.average_prompt_tokens, 1),

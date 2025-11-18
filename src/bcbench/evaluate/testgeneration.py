@@ -2,7 +2,6 @@ from collections.abc import Callable
 
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.exceptions import (
     BuildError,
     BuildTimeoutExpired,
@@ -13,6 +12,7 @@ from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import apply_patch, build_and_publish_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results import EvaluationResult
+from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 
@@ -47,7 +47,7 @@ class TestGenerationPipeline(EvaluationPipeline):
     def evaluate(self, context: EvaluationContext) -> None:
         generated_patch: str = get_generated_diff(context.repo_path)
         generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
-        result = None
+        result: EvaluationResult | None = None
 
         test_projects: list[str] = [project for project in context.entry.project_paths if "test" in project.lower()]
         app_projects: list[str] = [project for project in context.entry.project_paths if project not in test_projects]
