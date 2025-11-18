@@ -156,9 +156,6 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
 
 
 def run_tests(entry: DatasetEntry, container_name: str, username: str, password: str) -> None:
-    """Run fail-to-pass and pass-to-pass tests."""
-    logger.info("Running tests")
-
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
         run_test_suite(entry.fail_to_pass, "Pass", container_name, username, password)
@@ -183,6 +180,8 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
     )
 
     try:
+        logger.info(f"Running test suite with expectation: {expectation}")
+        logger.debug(f"Tests to run: {test_entries_json}")
         subprocess.run(
             ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
             capture_output=True,
@@ -190,6 +189,7 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
             text=True,
             timeout=_config.timeout.test_execution,
         )
+        logger.info(f"Test suite completed with expectation met: {expectation}")
     except subprocess.CalledProcessError as e:
         logger.debug(f"Test result did not meet expectation (expected: {expectation}): {e.stderr}")
         raise TestExecutionError(expectation, e.stderr) from None
