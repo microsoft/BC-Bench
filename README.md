@@ -2,7 +2,7 @@
 
 A benchmark for evaluating AI coding agents on Business Central (AL) development tasks, inspired by [SWE-Bench](https://github.com/swe-bench/SWE-bench).
 
-BC-Bench provides reproducible evaluation process so we can:
+BC-Bench provides a reproducible evaluation process so we can:
 - Measure different models on real AL issues
 - Quantify impact of tooling changes (e.g. MCP servers, custom instructions)
 - Track progress with transparent, comparable metrics over time
