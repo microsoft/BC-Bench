@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.exceptions import (
@@ -24,10 +25,7 @@ class TestGenerationPipeline(EvaluationPipeline):
     Workflow:
     1. Setup: clean repo, checkout base commit, build
     2. Run agent: execute agent to generate test code
-    3. Evaluate: apply generated tests, build, validate with reversed expectations
-
-    Note: Full test generation logic is not yet implemented.
-    Currently uses placeholder test_patch.
+    3. Evaluate: build, run tests with expected failures, then apply original patch, build, run tests with expected passes
     """
 
     def setup(self, context: EvaluationContext) -> None:
@@ -47,21 +45,17 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.agent_metrics, context.mcp_servers, context.custom_instructions = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext) -> None:
-        """Apply generated tests, build, and validate with reversed expectations.
-
-        TODO: Extract generated tests from agent output
-        TODO: Validate tests fail on bad code, pass on good code
-
-        Creates and saves appropriate result based on validation outcome.
-        """
-        generated_patch = get_generated_diff(context.repo_path)
-        generated_tests = extract_tests_from_patch(generated_patch, context.repo_path)
+        generated_patch: str = get_generated_diff(context.repo_path)
+        generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
         result = None
 
+        test_projects: list[str] = [project for project in context.entry.project_paths if "test" in project.lower()]
+        app_projects: list[str] = [project for project in context.entry.project_paths if project not in test_projects]
+
         try:
-            build_and_publish_projects(  # TODO: only need to build test app
+            build_and_publish_projects(
                 context.repo_path,
-                context.entry.project_paths,
+                test_projects,
                 context.container_name,
                 context.username,
                 context.password,
@@ -71,9 +65,9 @@ class TestGenerationPipeline(EvaluationPipeline):
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
 
-            build_and_publish_projects(  # TODO: only need to build function app
+            build_and_publish_projects(
                 context.repo_path,
-                context.entry.project_paths,
+                app_projects,
                 context.container_name,
                 context.username,
                 context.password,
