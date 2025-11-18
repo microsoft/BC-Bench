@@ -64,7 +64,7 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.358
+        run: npm install -g @github/copilot@0.0.360
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         env:
