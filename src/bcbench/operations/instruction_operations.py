@@ -10,6 +10,44 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
+def get_instructions_path(bc_bench_root: Path | str | None = None) -> Path:
+    """Get the path to the instructions.md file.
+
+    Args:
+        bc_bench_root: Root of the BC-Bench repository. If None, uses config root.
+
+    Returns:
+        Path to instructions.md file
+    """
+    if bc_bench_root is None:
+        bc_bench_root = _config.paths.bc_bench_root
+    else:
+        bc_bench_root = Path(bc_bench_root)
+
+    return bc_bench_root / "dataset" / "instructions.md"
+
+
+def load_instructions_template(bc_bench_root: Path | str | None = None) -> str:
+    """Load the instructions template from instructions.md.
+
+    Args:
+        bc_bench_root: Root of the BC-Bench repository. If None, uses config root.
+
+    Returns:
+        Content of instructions.md as string
+
+    Raises:
+        FileNotFoundError: If instructions.md does not exist
+    """
+    path = get_instructions_path(bc_bench_root)
+
+    if not path.exists():
+        raise FileNotFoundError(f"Instructions template not found at {path}")
+
+    with path.open("r", encoding="utf-8") as f:
+        return f.read()
+
+
 def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_dir: Path) -> bool:
     """
     Setup custom instructions from config if enabled.

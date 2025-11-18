@@ -2,9 +2,13 @@
 
 from bcbench.dataset.dataset_entry import DatasetEntry, TestEntry
 from bcbench.dataset.dataset_loader import load_dataset_entries
+from bcbench.dataset.pr_dataset_entry import PRDatasetEntry, TargetComment, load_pr_dataset_entries
 
 __all__ = [
     "DatasetEntry",
     "TestEntry",
     "load_dataset_entries",
+    "PRDatasetEntry",
+    "TargetComment",
+    "load_pr_dataset_entries",
 ]
