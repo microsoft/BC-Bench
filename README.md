@@ -2,7 +2,7 @@
 
 A benchmark for evaluating AI coding agents on Business Central (AL) development tasks, inspired by [SWE-Bench](https://github.com/swe-bench/SWE-bench).
 
-BC-Bench provides reproducible evaluation process so we can:
+BC-Bench provides a reproducible evaluation process so we can:
 - Measure different models on real AL issues
 - Quantify impact of tooling changes (e.g. MCP servers, custom instructions)
 - Track progress with transparent, comparable metrics over time
@@ -55,7 +55,7 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) (public preview 
 
 ## How to experiment with GitHub Copilot CLI
 
-By default, Copilot CLI runs with `--no-custom-instructions` and no MCP Serveres (`--disable-builtin-mcps`).
+By default, Copilot CLI runs with `--no-custom-instructions` and no MCP Servers (`--disable-builtin-mcps`).
 
 Steps for an experiment:
 1. Create a new branch: `git checkout -b experiment/<meaningful-name>`
@@ -109,5 +109,5 @@ How it works (take `NAV` repo as example):
 You can find all results in the GitHub Action (workflow: `copilot-evaluation`) directly:
 - Logs: select one instance, find the step called `Run GitHub Copilot CLI ...`, and see how copilot solve an issue
 - Artifacts:
-    - per-entry result JSONL (with all metics)
+    - per-entry result JSONL (with all metrics)
     - Copilot CLI logs
