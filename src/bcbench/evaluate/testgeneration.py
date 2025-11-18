@@ -1,5 +1,3 @@
-"""Test-generation evaluation pipeline implementation."""
-
 from collections.abc import Callable
 
 from bcbench.evaluate.base import EvaluationPipeline
@@ -7,7 +5,6 @@ from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.exceptions import (
     BuildError,
     BuildTimeoutExpired,
-    PatchApplicationError,
     TestExecutionError,
     TestExecutionTimeoutExpired,
 )
@@ -33,14 +30,13 @@ class TestGenerationPipeline(EvaluationPipeline):
     Workflow:
     1. Setup: clean repo, checkout base commit, build
     2. Run agent: execute agent to generate test code
-    3. Validate: apply generated tests, build, validate with reversed expectations
+    3. Evaluate: apply generated tests, build, validate with reversed expectations
 
     Note: Full test generation logic is not yet implemented.
     Currently uses placeholder test_patch.
     """
 
     def setup(self, context: EvaluationContext) -> None:
-        """Setup environment: clean repo, checkout, build."""
         clean_repo(context.repo_path)
         checkout_commit(context.repo_path, context.entry.base_commit)
         build_and_publish_projects(
@@ -53,7 +49,6 @@ class TestGenerationPipeline(EvaluationPipeline):
         )
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
-        """Run the agent and capture metrics."""
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.agent_metrics, context.mcp_servers, context.custom_instructions = agent_runner(context)
 
@@ -70,9 +65,7 @@ class TestGenerationPipeline(EvaluationPipeline):
 
         try:
             # For test generation: apply generated tests instead of test_patch
-            # TODO: Extract generated tests from agent output
-            # TODO: Validate tests fail on bad code, pass on good code
-            apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} generated tests")
+
             build_and_publish_projects(
                 context.repo_path,
                 context.entry.project_paths,
@@ -81,15 +74,15 @@ class TestGenerationPipeline(EvaluationPipeline):
                 context.password,
                 context.entry.environment_setup_version,
             )
+            # TODO: Extract generated tests from agent output
+            # TODO: Validate tests fail on bad code, pass on good code
+
+            apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
             # TODO: Implement test validation with reversed expectation
             run_tests(context.entry, context.container_name, context.username, context.password)
 
             result = EvaluationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
-
-        except PatchApplicationError as e:
-            result = EvaluationResult.create_build_failure(context, generated_patch, f"Failed to apply {e.patch_name}")
-            logger.error(f"Failed to apply test patch for {context.entry.instance_id}: {e}")
 
         except BuildError as e:
             result = EvaluationResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")

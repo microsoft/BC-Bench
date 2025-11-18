@@ -5,7 +5,6 @@ from bcbench.evaluate.evaluation_context import EvaluationContext
 from bcbench.exceptions import (
     BuildError,
     BuildTimeoutExpired,
-    PatchApplicationError,
     TestExecutionError,
     TestExecutionTimeoutExpired,
 )
@@ -31,7 +30,7 @@ class BugFixPipeline(EvaluationPipeline):
     Workflow:
     1. Setup: clean repo, checkout base commit, build
     2. Run agent: execute agent to generate fix patch
-    3. Validate: apply test patch, build, run tests
+    3. evaluate: apply test patch, build, run tests
     """
 
     def setup(self, context: EvaluationContext) -> None:
@@ -72,10 +71,6 @@ class BugFixPipeline(EvaluationPipeline):
 
             result = EvaluationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
-
-        except PatchApplicationError as e:
-            result = EvaluationResult.create_build_failure(context, generated_patch, f"Failed to apply {e.patch_name}")
-            logger.error(f"Failed to apply test patch for {context.entry.instance_id}: {e}")
 
         except BuildError as e:
             result = EvaluationResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
