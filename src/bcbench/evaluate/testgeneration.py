@@ -75,7 +75,7 @@ class TestGenerationPipeline(EvaluationPipeline):
                 context.entry.environment_setup_version,
             )
             # TODO: Extract generated tests from agent output
-            # TODO: Validate tests fail on bad code, pass on good code
+            # TODO: Validate tests fail on before patch, pass on after patch
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
             # TODO: Implement test validation with reversed expectation
