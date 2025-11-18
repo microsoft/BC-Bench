@@ -55,7 +55,7 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) (public preview 
 
 ## How to experiment with GitHub Copilot CLI
 
-By default, Copilot CLI runs with `--no-custom-instructions` and no MCP Serveres (`--disable-builtin-mcps`).
+By default, Copilot CLI runs with `--no-custom-instructions` and no MCP Servers (`--disable-builtin-mcps`).
 
 Steps for an experiment:
 1. Create a new branch: `git checkout -b experiment/<meaningful-name>`
