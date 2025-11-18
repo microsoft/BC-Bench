@@ -109,5 +109,5 @@ How it works (take `NAV` repo as example):
 You can find all results in the GitHub Action (workflow: `copilot-evaluation`) directly:
 - Logs: select one instance, find the step called `Run GitHub Copilot CLI ...`, and see how copilot solve an issue
 - Artifacts:
-    - per-entry result JSONL (with all metics)
+    - per-entry result JSONL (with all metrics)
     - Copilot CLI logs
