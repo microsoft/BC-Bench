@@ -27,7 +27,7 @@ class EvaluationPipeline(ABC):
         Raises:
             Exception: If setup fails (build, checkout, etc.)
         """
-        ...
+        raise NotImplementedError()
 
     @abstractmethod
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
@@ -40,7 +40,7 @@ class EvaluationPipeline(ABC):
         Raises:
             Exception: If agent execution fails
         """
-        ...
+        raise NotImplementedError()
 
     @abstractmethod
     def evaluate(self, context: EvaluationContext) -> None:
@@ -54,7 +54,7 @@ class EvaluationPipeline(ABC):
         Raises:
             Exception: If evaluation fails (patch application, build, tests)
         """
-        ...
+        raise NotImplementedError()
 
     def execute(
         self,
@@ -101,3 +101,4 @@ def create_pipeline(category: EvaluationCategory) -> EvaluationPipeline:
             return TestGenerationPipeline()
         case _:
             raise ValueError(f"Unknown evaluation category: {category}")
+    raise RuntimeError("Unreachable: no pipeline returned")

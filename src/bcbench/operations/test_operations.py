@@ -3,6 +3,9 @@ from pathlib import Path
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import NoTestsExtractedError
+from bcbench.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def _extract_codeunit_id_from_file(repo_path: Path, file_path: str) -> int | None:
@@ -16,20 +19,18 @@ def _extract_codeunit_id_from_file(repo_path: Path, file_path: str) -> int | Non
     Returns:
         Codeunit ID if found, None otherwise
     """
-    try:
-        full_path = repo_path / file_path
-        if not full_path.exists():
-            return None
+    full_path = repo_path / file_path
+    if not full_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
 
-        content = full_path.read_text(encoding="utf-8")
-        # Pattern to match codeunit declarations: codeunit <ID> "<Name>"
-        codeunit_pattern = r'codeunit\s+(\d+)\s+"[^"]*"'
-        match = re.search(codeunit_pattern, content)
-        if match:
-            return int(match.group(1))
-    except Exception:
-        pass
-    return None
+    content = full_path.read_text(encoding="utf-8")
+    # Pattern to match codeunit declarations: codeunit <ID> "<Name>"
+    codeunit_pattern = r'codeunit\s+(\d+)\s+"[^"]*"'
+    match = re.search(codeunit_pattern, content)
+    if match:
+        return int(match.group(1))
+
+    raise ValueError(f"No codeunit ID found in {file_path}")
 
 
 def extract_tests_from_patch(generated_patch: str, repo_path: Path) -> list[TestEntry]:
