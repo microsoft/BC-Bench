@@ -11,6 +11,7 @@ from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
     clean_repo,
+    get_generated_diff,
 )
 from bcbench.operations.instruction_operations import setup_instructions_from_config
 
@@ -22,6 +23,7 @@ __all__ = [
     "build_ps_test_script",
     "checkout_commit",
     "clean_repo",
+    "get_generated_diff",
     "run_tests",
     "setup_instructions_from_config",
 ]
