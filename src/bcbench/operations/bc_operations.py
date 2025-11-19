@@ -3,6 +3,7 @@
 import subprocess
 from pathlib import Path
 from string import Template
+from typing import Literal
 
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, TestEntry
@@ -100,7 +101,7 @@ def build_ps_test_script(container_name: str, username: str, password: str, code
     )
 
 
-def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, expectation: str) -> str:
+def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, expectation: Literal["Pass", "Fail"]) -> str:
     app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     return _DATASET_TESTS_TEMPLATE.substitute(
@@ -169,7 +170,7 @@ def run_tests(entry: DatasetEntry, container_name: str, username: str, password:
     logger.info("All tests completed")
 
 
-def _run_test_suite(test_entries: list[TestEntry], expectation: str, container_name: str, username: str, password: str) -> None:
+def _run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container_name: str, username: str, password: str) -> None:
     """Run a suite of tests."""
     test_entries_json = str(test_entries).replace("'", '"')
 
