@@ -2,12 +2,7 @@ from collections.abc import Callable
 
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import (
-    BuildError,
-    BuildTimeoutExpired,
-    TestExecutionError,
-    TestExecutionTimeoutExpired,
-)
+from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import apply_patch, build_and_publish_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
 from bcbench.operations.bc_operations import run_test_suite
@@ -82,17 +77,9 @@ class TestGenerationPipeline(EvaluationPipeline):
             result = EvaluationResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
             logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
-        except BuildTimeoutExpired as e:
-            result = EvaluationResult.create_build_failure(context, generated_patch, f"Build timed out: {e.project_path}")
-            logger.error(f"Build timed out during evaluation of {context.entry.instance_id}: {e}")
-
         except TestExecutionError as e:
             result = EvaluationResult.create_test_failure(context, generated_patch)
             logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
-
-        except TestExecutionTimeoutExpired as e:
-            result = EvaluationResult.create_test_failure(context, generated_patch, "Tests timed out")
-            logger.error(f"Tests timed out during evaluation of {context.entry.instance_id}: {e}")
 
         finally:
             if result is not None:
