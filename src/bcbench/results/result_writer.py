@@ -3,7 +3,8 @@ from pathlib import Path
 
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
-from bcbench.results.evaluation_result import EvaluationResult
+from bcbench.results import EvaluationResult
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 
@@ -21,12 +22,12 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
                 logger.error(f"No matching dataset entry found for instance_id: {result.instance_id}")
                 continue
 
-            dataset_entry: DatasetEntry = matching_entries[0]
+            input, expected = get_info_from_dataset_entry(matching_entries[0], result.category)
 
             bceval_result = {
                 "id": result.instance_id,
-                "input": dataset_entry.get_task(),
-                "expected": dataset_entry.patch,
+                "input": input,
+                "expected": expected,
                 "output": result.generated_patch,
                 "context": "",
                 "metadata": {
@@ -44,3 +45,22 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
             f.write(json.dumps(bceval_result) + "\n")
 
     logger.info(f"Wrote bceval results to: {output_file}")
+
+
+def get_info_from_dataset_entry(entry: DatasetEntry, category: EvaluationCategory) -> tuple[str, str]:
+    """
+    Extract relevant info from DatasetEntry for bceval results.
+
+    Args:
+        entry: The DatasetEntry instance
+        category: The evaluation category
+    Returns:
+        A tuple of (input, expected output)
+    """
+    match category:
+        case EvaluationCategory.BUG_FIX:
+            return entry.get_task(), entry.patch
+        case EvaluationCategory.TEST_GENERATION:
+            return entry.get_task(), entry.test_patch
+        case _:
+            raise ValueError(f"Unsupported evaluation category: {category}")

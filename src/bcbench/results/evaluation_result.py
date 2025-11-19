@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from bcbench.logger import get_logger
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationCategory, EvaluationContext
 
 logger = get_logger(__name__)
 
@@ -16,7 +16,7 @@ class EvaluationResult:
     project: str
     model: str
     agent_name: str
-    category: str
+    category: EvaluationCategory
 
     resolved: bool
     build: bool
@@ -36,7 +36,7 @@ class EvaluationResult:
             project=str(payload["project"]),
             model=str(payload["model"]),
             agent_name=str(payload["agent_name"]),
-            category=str(payload["category"]),
+            category=EvaluationCategory(payload["category"]),
             resolved=bool(payload["resolved"]),
             build=bool(payload["build"]),
             generated_patch=payload.get("generated_patch", ""),
@@ -107,7 +107,7 @@ class EvaluationResult:
                 "instance_id": self.instance_id,
                 "resolved": self.resolved,
                 "model": self.model,
-                "category": self.category,
+                "category": self.category.value,
                 "agent_name": self.agent_name,
                 "build": self.build,
                 "error_message": self.error_message,
@@ -135,7 +135,7 @@ class EvaluationResultSummary:
 
     model: str
     agent_name: str
-    category: str
+    category: EvaluationCategory
 
     average_duration: float
     average_prompt_tokens: float
@@ -185,7 +185,7 @@ class EvaluationResultSummary:
             build=int(payload["build"]),
             date=date.fromisoformat(payload["date"]),
             model=str(payload["model"]),
-            category=str(payload["category"]),
+            category=EvaluationCategory(payload["category"]),
             agent_name=str(payload["agent_name"]),
             average_duration=float(payload["average_duration"]),
             average_prompt_tokens=float(payload["average_prompt_tokens"]),
@@ -203,7 +203,7 @@ class EvaluationResultSummary:
             "build": self.build,
             "date": self.date.isoformat(),
             "model": self.model,
-            "category": self.category,
+            "category": self.category.value,
             "agent_name": self.agent_name,
             "average_duration": round(self.average_duration, 1),
             "average_prompt_tokens": round(self.average_prompt_tokens, 1),

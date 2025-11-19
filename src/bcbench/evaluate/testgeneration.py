@@ -50,6 +50,10 @@ class TestGenerationPipeline(EvaluationPipeline):
         test_projects: list[str] = [project for project in context.entry.project_paths if "test" in project.lower()]
         app_projects: list[str] = [project for project in context.entry.project_paths if project not in test_projects]
 
+        if not test_projects or not app_projects:
+            logger.error(f"Project categorization failed for entry {context.entry.instance_id}. Test projects: {test_projects}, App projects: {app_projects}")
+            raise RuntimeError(f"Project categorization failed for entry {context.entry.instance_id}.")
+
         try:
             build_and_publish_projects(
                 context.repo_path,

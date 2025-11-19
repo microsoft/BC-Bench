@@ -14,7 +14,7 @@ class TestCategorySerialization:
             project="app",
             model="gpt-4o",
             agent_name="copilot-cli",
-            category=EvaluationCategory.BUG_FIX.value,
+            category=EvaluationCategory.BUG_FIX,
             resolved=True,
             build=True,
             generated_patch="patch content",
@@ -30,7 +30,7 @@ class TestCategorySerialization:
             project="app",
             model="gpt-4o",
             agent_name="copilot-cli",
-            category=EvaluationCategory.TEST_GENERATION.value,
+            category=EvaluationCategory.TEST_GENERATION,
             resolved=False,
             build=True,
             generated_patch="test patch content",
@@ -40,7 +40,6 @@ class TestCategorySerialization:
         )
 
     def test_bug_fix_category_saves_as_string(self, tmp_path, sample_result_bug_fix):
-        """Test that BUG_FIX enum saves as 'bug-fix' string in JSON."""
         output_file = tmp_path / "result.jsonl"
         sample_result_bug_fix.save(tmp_path, "result.jsonl")
 
@@ -51,7 +50,6 @@ class TestCategorySerialization:
         assert isinstance(data["category"], str)
 
     def test_test_generation_category_saves_as_string(self, tmp_path, sample_result_test_gen):
-        """Test that TEST_GENERATION enum saves as 'test-generation' string in JSON."""
         output_file = tmp_path / "result.jsonl"
         sample_result_test_gen.save(tmp_path, "result.jsonl")
 
@@ -62,7 +60,6 @@ class TestCategorySerialization:
         assert isinstance(data["category"], str)
 
     def test_bug_fix_category_loads_from_string(self):
-        """Test that 'bug-fix' string loads as BUG_FIX enum."""
         payload = {
             "instance_id": "test__instance",
             "project": "app",
@@ -76,7 +73,7 @@ class TestCategorySerialization:
 
         result = EvaluationResult.from_json(payload)
 
-        assert result.category == EvaluationCategory.BUG_FIX.value
+        assert result.category == EvaluationCategory.BUG_FIX
 
     def test_test_generation_category_loads_from_string(self):
         payload = {
@@ -92,7 +89,7 @@ class TestCategorySerialization:
 
         result = EvaluationResult.from_json(payload)
 
-        assert result.category == EvaluationCategory.TEST_GENERATION.value
+        assert result.category == EvaluationCategory.TEST_GENERATION
 
     def test_round_trip_bug_fix(self, tmp_path):
         original = EvaluationResult(
@@ -100,7 +97,7 @@ class TestCategorySerialization:
             project="test-project",
             model="test-model",
             agent_name="test-agent",
-            category=EvaluationCategory.BUG_FIX.value,
+            category=EvaluationCategory.BUG_FIX,
             resolved=True,
             build=True,
         )
@@ -115,7 +112,7 @@ class TestCategorySerialization:
         loaded = EvaluationResult.from_json(data)
 
         assert loaded.category == original.category
-        assert loaded.category == EvaluationCategory.BUG_FIX.value
+        assert loaded.category == EvaluationCategory.BUG_FIX
 
     def test_round_trip_test_generation(self, tmp_path):
         original = EvaluationResult(
@@ -123,7 +120,7 @@ class TestCategorySerialization:
             project="test-project",
             model="test-model",
             agent_name="test-agent",
-            category=EvaluationCategory.TEST_GENERATION.value,
+            category=EvaluationCategory.TEST_GENERATION,
             resolved=False,
             build=True,
         )
@@ -138,7 +135,7 @@ class TestCategorySerialization:
         loaded = EvaluationResult.from_json(data)
 
         assert loaded.category == original.category
-        assert loaded.category == EvaluationCategory.TEST_GENERATION.value
+        assert loaded.category == EvaluationCategory.TEST_GENERATION
 
     def test_summary_category_saves_as_string(self, sample_result_bug_fix, tmp_path):
         summary = EvaluationResultSummary.from_results([sample_result_bug_fix], "test_run")
