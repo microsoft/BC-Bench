@@ -26,3 +26,7 @@ e.g. our test function names are already descriptive, there is NO need for addit
 def test_full_metrics_flow_to_success_result(self, sample_context):
     """Test parsing metrics, setting them on context, and creating a success result."""
 ```
+
+## Addtional Information
+- Do NOT worry about backward compatibility unless explicitly stated
+- Follow existing code patterns unless there is a strong reason to deviate
