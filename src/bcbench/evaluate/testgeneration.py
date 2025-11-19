@@ -78,7 +78,7 @@ class TestGenerationPipeline(EvaluationPipeline):
             logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
         except TestExecutionError as e:
-            result = EvaluationResult.create_test_failure(context, generated_patch)
+            result = EvaluationResult.create_test_failure(context, generated_patch, error_msg=str(e))
             logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 
         finally:
