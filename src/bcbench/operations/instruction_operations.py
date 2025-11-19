@@ -53,6 +53,19 @@ def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> No
     copytree(instructions_source, github_dir)
     logger.debug(f"Successfully copied all contents from {instructions_source} to {github_dir}")
 
+def setup_custom_agent(repo_path: Path, repo_name: str, agent_dir: Path) -> None:
+    """
+    Setup custom agent instructions in the repository if available.
+
+    Args:
+        repo_path: Path to the repository where instructions will be copied
+        repo_name: Name of the repository (e.g., "org/repo")
+        agent_dir: Path to copilot agent directory containing instruction templates
+    """
+    source_instructions_path = _get_source_instructions_path(repo_name, agent_dir)  # Will raise FileNotFoundError if not found
+    custom_agentpath = source_instructions_path / "agents"
+    copytree(custom_agentpath, repo_path / ".github" / "agents")
+
 
 def _get_source_instructions_path(repo_name: str, agent_dir: Path) -> Path:
     """

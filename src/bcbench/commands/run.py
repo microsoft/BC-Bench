@@ -22,6 +22,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
 from bcbench.operations import checkout_commit, clean_repo
+from bcbench.operations.instruction_operations import setup_custom_agent
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -87,6 +88,7 @@ def run_copilot(
 
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
+    setup_custom_agent(repo_path, entry.repo, Path(__file__).parent.parent / "agent" / "copilot")
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir)
 

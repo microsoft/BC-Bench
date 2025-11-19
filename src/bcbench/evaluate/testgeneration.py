@@ -6,6 +6,7 @@ from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import apply_patch, build_and_publish_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
 from bcbench.operations.bc_operations import run_test_suite
+from bcbench.operations.instruction_operations import setup_custom_agent
 from bcbench.results import EvaluationResult
 from bcbench.types import EvaluationContext
 
@@ -34,8 +35,8 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.password,
             context.entry.environment_setup_version,
         )
-        # TODO: setup the custom agent instructions if any
-        # similiar to instructions_operation, but only copy the .github/agents/ folder
+        setup_custom_agent(context.repo_path, context.entry.repo, context.agent_dir)
+
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):

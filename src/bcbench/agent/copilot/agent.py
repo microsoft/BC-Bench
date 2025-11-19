@@ -60,8 +60,11 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
             cmd_args.append("--no-custom-instructions")
         if mcp_config_json:
             cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
+
         # TODO: implement different agent logic basing on category
         # it should be someting like: --agent="AL test"
+        if category == EvaluationCategory.TEST_GENERATION:
+           cmd_args.append('--agent="AL test"')
 
         logger.debug(f"Copilot command args: {cmd_args}")
 
