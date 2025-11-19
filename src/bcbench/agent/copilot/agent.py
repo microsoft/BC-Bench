@@ -15,6 +15,7 @@ from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_instructions_from_config
+from bcbench.operations.instruction_operations import setup_custom_agent
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
@@ -37,6 +38,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     prompt: str = build_prompt(entry, repo_path, copilot_config, category)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, repo_path)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
+    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -60,11 +62,8 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
             cmd_args.append("--no-custom-instructions")
         if mcp_config_json:
             cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
-
-        # TODO: implement different agent logic basing on category
-        # it should be someting like: --agent="AL test"
-        if category == EvaluationCategory.TEST_GENERATION:
-            cmd_args.append('--agent="AL test"')
+        if custom_agent:
+            cmd_args.append(f"--agent={custom_agent}")
 
         logger.debug(f"Copilot command args: {cmd_args}")
 

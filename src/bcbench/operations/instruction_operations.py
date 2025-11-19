@@ -3,7 +3,6 @@ from shutil import copytree, rmtree
 
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
-from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -21,50 +20,38 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
 
     Returns:
         True if instructions are enabled, False otherwise
-
-    Raises:
-        AgentError: If instructions are enabled but template not found
     """
     instructions_config: dict = copilot_config["instructions"]
     instructions_enabled: bool = instructions_config["enabled"]
 
     if instructions_enabled:
-        try:
-            source_instructions_path = _get_source_instructions_path(entry.repo)
-            _setup_custom_instructions(repo_path, source_instructions_path)
-            logger.info(f"Custom instructions enabled: copied instructions from {source_instructions_path}")
-        except FileNotFoundError as e:
-            logger.error(str(e))
-            raise AgentError(f"Custom instructions enabled but template not found for repo: {entry.repo}") from None
+        source_instructions: Path = _get_source_instructions_path(entry.repo)
+        github_dir: Path = repo_path / ".github"
+
+        logger.info(f"Setting up custom instructions for repository: {entry.repo}")
+        if github_dir.exists():
+            rmtree(github_dir)
+        copytree(source_instructions, github_dir)
+        logger.info(f".github dir is overwritten with {source_instructions}")
 
     return instructions_enabled
 
 
-def _setup_custom_instructions(repo_path: Path, instructions_source: Path) -> None:
+def setup_custom_agent(copilot_config: dict, entry: DatasetEntry, repo_path: Path) -> str | None:
     """
-    Copy all files from instructions_source to repo's .github directory.
-    Removes existing .github directory if present.
+    Setup custom agents in the repository if available.
     """
-    github_dir = repo_path / ".github"
-    if github_dir.exists():
-        rmtree(github_dir)
+    custom_agent_config: dict = copilot_config["agents"]
 
-    copytree(instructions_source, github_dir)
-    logger.debug(f"Successfully copied all contents from {instructions_source} to {github_dir}")
+    if custom_agent_config["enabled"]:
+        source_instructions: Path = _get_source_instructions_path(entry.repo)
+        github_dir: Path = repo_path / ".github"
+        copytree(source_instructions / "agents", github_dir / "agents", dirs_exist_ok=True)
 
+        logger.info(f"Custom agents are set up from {source_instructions / 'agents'}")
+        return custom_agent_config.get("name")
 
-def setup_custom_agent(repo_path: Path, repo_name: str) -> None:
-    """
-    Setup custom agent instructions in the repository if available.
-    Assumptions: They will not be automatically loaded unless specified, so we can copy them by default.
-
-    Args:
-        repo_path: Path to the repository where instructions will be copied
-        repo_name: Name of the repository (e.g., "org/repo")
-    """
-    logger.info(f"Setting up custom agents for repository: {repo_name}")
-    source_instructions_path = _get_source_instructions_path(repo_name)
-    copytree(source_instructions_path / "agents", repo_path / ".github" / "agents", dirs_exist_ok=True)
+    return None
 
 
 def _get_source_instructions_path(repo_name: str) -> Path:
