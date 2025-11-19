@@ -62,6 +62,7 @@ def setup_custom_agent(repo_path: Path, repo_name: str) -> None:
         repo_path: Path to the repository where instructions will be copied
         repo_name: Name of the repository (e.g., "org/repo")
     """
+    logger.info(f"Setting up custom agents for repository: {repo_name}")
     source_instructions_path = _get_source_instructions_path(repo_name)
     copytree(source_instructions_path / "agents", repo_path / ".github" / "agents", dirs_exist_ok=True)
 
