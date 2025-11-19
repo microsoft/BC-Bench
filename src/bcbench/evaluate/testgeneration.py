@@ -34,6 +34,8 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.password,
             context.entry.environment_setup_version,
         )
+        # TODO: setup the custom agent instructions if any
+        # similiar to instructions_operation, but only copy the .github/agents/ folder
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
