@@ -42,6 +42,7 @@ class PathConfig:
     ps_script_path: Path
     evaluation_results_path: Path
     leaderboard_path: Path
+    agent_dir: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -54,6 +55,7 @@ class PathConfig:
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
             leaderboard_path=root / "docs" / "_data" / "leaderboard.json",
+            agent_dir=root / "src" / "bcbench" / "agent" / "copilot",
         )
 
 

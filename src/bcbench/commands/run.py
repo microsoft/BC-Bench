@@ -88,7 +88,7 @@ def run_copilot(
 
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
-    setup_custom_agent(repo_path, entry.repo, Path(__file__).parent.parent / "agent" / "copilot")
+    setup_custom_agent(repo_path, entry.repo)
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir)
 

@@ -35,8 +35,7 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.password,
             context.entry.environment_setup_version,
         )
-        setup_custom_agent(context.repo_path, context.entry.repo, context.agent_dir)
-
+        setup_custom_agent(context.repo_path, context.entry.repo)
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):

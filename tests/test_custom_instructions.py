@@ -16,17 +16,14 @@ _config = get_config()
 
 
 def test_get_instructions_path():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-
     # Test with microsoftInternal/NAV
-    path = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    path = _get_source_instructions_path("microsoftInternal/NAV")
     assert path.exists(), f"Instruction file should exist: {path}"
     assert path.name == "microsoftInternal-NAV"
 
 
 def test_setup_custom_instructions():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
@@ -68,18 +65,15 @@ def test_sanitization():
 
 
 def test_nonexistent_instructions():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-
     try:
-        _get_source_instructions_path("nonexistent/repo", agent_dir)
+        _get_source_instructions_path("nonexistent/repo")
         raise AssertionError("Should raise FileNotFoundError")
     except FileNotFoundError as e:
         assert "nonexistent/repo" in str(e)
 
 
 def test_overwrite_existing_instructions():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
@@ -103,8 +97,7 @@ def test_overwrite_existing_instructions():
 
 
 def test_path_specific_instructions_copied():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
@@ -122,8 +115,7 @@ def test_path_specific_instructions_copied():
 
 
 def test_path_specific_instructions_removed_before_copy():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
@@ -145,8 +137,7 @@ def test_path_specific_instructions_removed_before_copy():
 
 
 def test_no_path_specific_instructions_warning():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
@@ -161,8 +152,7 @@ def test_no_path_specific_instructions_warning():
 
 
 def test_empty_instructions_folder_warning():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)

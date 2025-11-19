@@ -36,7 +36,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, repo_path)
-    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, Path(__file__).parent)
+    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -64,7 +64,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
         # TODO: implement different agent logic basing on category
         # it should be someting like: --agent="AL test"
         if category == EvaluationCategory.TEST_GENERATION:
-           cmd_args.append('--agent="AL test"')
+            cmd_args.append('--agent="AL test"')
 
         logger.debug(f"Copilot command args: {cmd_args}")
 
