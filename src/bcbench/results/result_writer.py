@@ -47,7 +47,7 @@ def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id:
     logger.info(f"Wrote bceval results to: {output_file}")
 
 
-def get_info_from_dataset_entry(entry: DatasetEntry, category: str) -> tuple[str, str]:
+def get_info_from_dataset_entry(entry: DatasetEntry, category: EvaluationCategory) -> tuple[str, str]:
     """
     Extract relevant info from DatasetEntry for bceval results.
 

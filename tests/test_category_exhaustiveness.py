@@ -19,7 +19,7 @@ def test_all_categories_handled_in_get_info_from_dataset_entry():
     )
 
     for category in EvaluationCategory:
-        input_text, expected_output = get_info_from_dataset_entry(sample_entry, category.value)
+        input_text, expected_output = get_info_from_dataset_entry(sample_entry, category)
         assert isinstance(input_text, str)
         assert isinstance(expected_output, str)
         assert len(expected_output) > 0
