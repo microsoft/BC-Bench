@@ -31,10 +31,11 @@ class PRDatasetEntry:
         """Build an entry from a JSON payload."""
         target_comments = []
         for comment_data in payload.get("target_comments", []):
+            line_value = comment_data.get("line", 0)
             target_comments.append(
                 TargetComment(
                     comment=str(comment_data.get("comment", "")),
-                    line=int(comment_data.get("line", 0)),
+                    line=int(line_value) if line_value is not None else 0,
                 )
             )
 
