@@ -18,6 +18,7 @@ on:
           - "gpt-5.1"
           - "gpt-5.1-codex-mini"
           - "gpt-5.1-codex"
+          - "gemini-3-pro-preview"
       category:
         description: "Evaluation category to run"
         required: false
@@ -42,7 +43,7 @@ jobs:
       test-run: ${{ inputs.test-run }}
 
   evaluate-with-copilot-cli:
-    runs-on: windows-latest
+    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
@@ -72,7 +73,7 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.360
+        run: npm install -g @github/copilot@0.0.361
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         env:
