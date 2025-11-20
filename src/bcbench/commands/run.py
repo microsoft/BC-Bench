@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 import typer
+from colorama import Fore, Style, init
 from typing_extensions import Annotated
 
 from bcbench.agent.copilot import run_copilot_agent
@@ -22,6 +23,9 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
 from bcbench.operations import checkout_commit, clean_repo
+
+# Initialize colorama for Windows support
+init(autoreset=True)
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -297,7 +301,8 @@ def run_pr_review_evals(
 
                 if show_prompts:
                     print(f"Output: {actual_output[:200]}..." if len(actual_output) > 200 else f"Output: {actual_output}")
-                    print(f"Result: {'✓ PASS' if passed else '✗ FAIL'}\n")
+                    result_text = f"{Fore.GREEN}✓ PASS{Style.RESET_ALL}" if passed else f"{Fore.RED}✗ FAIL{Style.RESET_ALL}"
+                    print(f"Result: {result_text}\n")
 
             except subprocess.TimeoutExpired:
                 logger.warning(f"Timeout for PR: {pr_entry.name}")
@@ -358,13 +363,21 @@ def run_pr_review_evals(
         print("\nDetailed Results:")
         print("-" * 80)
         for result in results:
-            status = "✓ PASS" if result.passed else "✗ FAIL"
+            status = f"{Fore.GREEN}✓ PASS{Style.RESET_ALL}" if result.passed else f"{Fore.RED}✗ FAIL{Style.RESET_ALL}"
             print(f"{status} | {result.pr_name}")
             if result.judge_reason:
                 print(f"  Judge reason: {result.judge_reason}")
             if result.error_message:
                 print(f"  Error: {result.error_message}")
             print()
+
+        # Final colorful summary
+        print("=" * 80)
+        print(f"{Fore.GREEN}✓ PASSED: {passed}{Style.RESET_ALL} | {Fore.RED}✗ FAILED: {failed}{Style.RESET_ALL} | Total: {total}")
+        success_rate = (passed / total * 100) if total > 0 else 0
+        rate_color = Fore.GREEN if success_rate >= 80 else Fore.YELLOW if success_rate >= 50 else Fore.RED
+        print(f"Success Rate: {rate_color}{success_rate:.1f}%{Style.RESET_ALL}")
+        print("=" * 80 + "\n")
 
     except Exception as e:
         logger.exception(f"Error running PR review evaluations: {e}")
