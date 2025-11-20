@@ -86,6 +86,252 @@ def run_copilot(
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, output_dir=output_dir)
 
+@run_app.command("pr-review-evals")
+def run_pr_review_evals(
+    output_file: Annotated[Path | None, typer.Option(help="Save results to file")] = None,
+    model: CopilotModel = "claude-haiku-4.5",
+    show_prompts: Annotated[bool, typer.Option(help="Display prompts and outputs")] = False,
+):
+    """
+    Run PR security review evaluation on all PR entries in the dataset.
+
+    This will:
+    1. Load all PR entries from prdataset.jsonl
+    2. Run Copilot CLI on each entry
+    3. Use Copilot CLI as LLM judge to evaluate if actual comments cover expected concerns
+    4. Write results to a file
+
+    Example:
+        uv run bcbench run pr-review-evals
+        uv run bcbench run pr-review-evals --output-file results.jsonl
+        uv run bcbench run pr-review-evals --show-prompts
+    """
+    import json
+    import shutil
+    import subprocess
+    from dataclasses import asdict, dataclass
+
+    from bcbench.agent.pr_security_review_helper import build_pr_security_review_prompt, load_pr_dataset
+
+    @dataclass
+    class PRReviewResult:
+        pr_name: str
+        pr_description: str
+        output: str
+        expected_output: list[dict[str, str | int]]
+        passed: bool
+        judge_reason: str | None = None
+        error_message: str | None = None
+
+    try:
+        # Check if Copilot CLI is available
+        copilot_cmd = shutil.which("copilot")
+        if not copilot_cmd:
+            logger.error("Copilot CLI not found. Install with: npm install -g @github/copilot")
+            raise typer.Exit(1)
+
+        # Load judge prompt template
+        judge_prompt_path = _config.paths.bc_bench_root / "dataset" / "judge_prompt.md"
+        if not judge_prompt_path.exists():
+            logger.error(f"Judge prompt template not found: {judge_prompt_path}")
+            raise typer.Exit(1)
+
+        judge_prompt_template = judge_prompt_path.read_text(encoding="utf-8")
+        logger.info(f"Loaded judge prompt template from: {judge_prompt_path}")
+
+        # Load PR dataset
+        logger.info("Loading PR dataset...")
+        pr_entries = load_pr_dataset()
+
+        if not pr_entries:
+            logger.error("No PR entries found in dataset!")
+            raise typer.Exit(1)
+
+        logger.info(f"Found {len(pr_entries)} PR entries to evaluate")
+
+        # Create output directory
+        output_dir = _config.paths.evaluation_results_path / "pr_review"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Process each PR entry
+        results: list[PRReviewResult] = []
+
+        for idx, pr_entry in enumerate(pr_entries):
+            logger.info(f"Processing PR {idx + 1}/{len(pr_entries)}: {pr_entry.name}")
+
+            # Build prompt
+            prompt = build_pr_security_review_prompt(pr_entry)
+
+            if show_prompts:
+                print("\n" + "=" * 80)
+                print(f"PR {idx + 1}: {pr_entry.name}")
+                print("=" * 80)
+                print(prompt[:500] + "..." if len(prompt) > 500 else prompt)
+                print("=" * 80 + "\n")
+
+            # Run Copilot CLI
+            try:
+                cmd_args = [
+                    copilot_cmd,
+                    "--allow-all-tools",
+                    "--allow-all-paths",
+                    f"--model={model}",
+                    "--log-level=error",  # Reduce noise
+                    f"--log-dir={output_dir.resolve()}",
+                ]
+
+                result = subprocess.run(
+                    cmd_args,
+                    input=prompt,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=_config.timeout.github_copilot_cli,
+                    text=True,
+                    check=False,
+                )
+
+                actual_output = result.stdout or ""
+
+                # LLM-based evaluation: Use Copilot CLI as judge
+                passed = False
+                judge_reason = None
+                if actual_output.strip():
+                    # Build judge prompt from template
+                    expected_comments_json = json.dumps(
+                        [{"line": tc["line"], "comment": tc["comment"]} for tc in pr_entry.target_comments],
+                        indent=2
+                    )
+                    judge_prompt = judge_prompt_template.format(
+                        expected_comments=expected_comments_json,
+                        actual_comments=actual_output
+                    )
+
+                    try:
+                        judge_result = subprocess.run(
+                            [copilot_cmd, f"--model={model}"],
+                            input=judge_prompt,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=60,  # Short timeout for judge
+                            text=True,
+                            check=False,
+                        )
+                        judge_output = judge_result.stdout.strip()
+
+                        # Try to parse JSON response
+                        try:
+                            import re
+                            # Extract JSON from output (in case there's extra text)
+                            json_match = re.search(r'\{.*"passed".*"reason".*\}', judge_output, re.DOTALL)
+                            if json_match:
+                                judge_data = json.loads(json_match.group(0))
+                                passed = judge_data.get("passed", False)
+                                judge_reason = judge_data.get("reason", "No reason provided")
+                            else:
+                                # Fallback to simple true/false check
+                                passed = "true" in judge_output.lower()
+                                judge_reason = "Failed to parse judge response as JSON"
+                        except json.JSONDecodeError:
+                            # Fallback to simple true/false check
+                            passed = "true" in judge_output.lower()
+                            judge_reason = f"Invalid JSON response: {judge_output[:100]}"
+
+                        if show_prompts:
+                            print(f"Judge response: {judge_output}")
+                            print(f"Parsed - Passed: {passed}, Reason: {judge_reason}")
+                    except Exception as judge_error:
+                        logger.warning(f"LLM judge failed, defaulting to false: {judge_error}")
+                        passed = False
+                        judge_reason = f"Judge error: {str(judge_error)}"
+
+                # Create result
+                pr_result = PRReviewResult(
+                    pr_name=pr_entry.name,
+                    pr_description=pr_entry.description,
+                    output=actual_output,
+                    expected_output=[
+                        {"line": tc["line"], "comment": tc["comment"]} for tc in pr_entry.target_comments
+                    ],
+                    passed=passed,
+                    judge_reason=judge_reason,
+                    error_message=None if result.returncode == 0 else f"Exit code: {result.returncode}",
+                )
+
+                if show_prompts:
+                    print(f"Output: {actual_output[:200]}..." if len(actual_output) > 200 else f"Output: {actual_output}")
+                    print(f"Result: {'✓ PASS' if passed else '✗ FAIL'}\n")
+
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Timeout for PR: {pr_entry.name}")
+                pr_result = PRReviewResult(
+                    pr_name=pr_entry.name,
+                    pr_description=pr_entry.description,
+                    output="",
+                    expected_output=[
+                        {"line": tc["line"], "comment": tc["comment"]} for tc in pr_entry.target_comments
+                    ],
+                    passed=False,
+                    judge_reason="Timeout before evaluation",
+                    error_message=f"Timeout after {_config.timeout.github_copilot_cli}s",
+                )
+            except Exception as e:
+                logger.error(f"Error processing PR {pr_entry.name}: {e}")
+                pr_result = PRReviewResult(
+                    pr_name=pr_entry.name,
+                    pr_description=pr_entry.description,
+                    output="",
+                    expected_output=[
+                        {"line": tc["line"], "comment": tc["comment"]} for tc in pr_entry.target_comments
+                    ],
+                    passed=False,
+                    judge_reason="Error before evaluation",
+                    error_message=str(e),
+                )
+
+            results.append(pr_result)
+
+        # Calculate summary statistics
+        total = len(results)
+        passed = sum(1 for r in results if r.passed)
+        failed = total - passed
+
+        # Display summary
+        print("\n" + "=" * 80)
+        print("EVALUATION SUMMARY (LLM Judge)")
+        print("=" * 80)
+        print(f"Total PRs evaluated: {total}")
+        print(f"Passed (covers expected concerns): {passed}")
+        print(f"Failed (missing expected concerns): {failed}")
+        print(f"Success rate: {(passed / total * 100):.1f}%")
+        print("=" * 80 + "\n")
+
+        # Write results to file
+        if output_file is None:
+            output_file = output_dir / "pr_review_results.jsonl"
+
+        with output_file.open("w", encoding="utf-8") as f:
+            for result in results:
+                f.write(json.dumps(asdict(result)) + "\n")
+
+        logger.info(f"Results written to: {output_file}")
+        print(f"Results saved to: {output_file}")
+
+        # Print detailed results
+        print("\nDetailed Results:")
+        print("-" * 80)
+        for result in results:
+            status = "✓ PASS" if result.passed else "✗ FAIL"
+            print(f"{status} | {result.pr_name}")
+            if result.judge_reason:
+                print(f"  Judge reason: {result.judge_reason}")
+            if result.error_message:
+                print(f"  Error: {result.error_message}")
+            print()
+
+    except Exception as e:
+        logger.exception(f"Error running PR review evaluations: {e}")
+        raise typer.Exit(1)
+
 
 @run_app.command("pr-review")
 def run_pr_review(
