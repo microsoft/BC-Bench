@@ -1,5 +1,6 @@
 """CLI commands for running agents."""
 
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -192,63 +193,100 @@ def run_pr_review_evals(
 
                 actual_output = result.stdout or ""
 
+                # Extract contents between ```json and ``` in result
+                json_match = re.search(r"```json\s*(.*?)\s*```", actual_output, re.DOTALL)
+                if json_match:
+                    actual_output = json_match.group(1)
+                else:
+                    logger.warning("No JSON content found in agent output")
+
                 # LLM-based evaluation: Use Copilot CLI as judge
                 passed = False
                 judge_reason = None
                 if actual_output.strip():
-                    # Build judge prompt from template
-                    expected_comments_json = json.dumps(
-                        [{"line": tc["line"], "comment": tc["comment"]} for tc in pr_entry.target_comments],
-                        indent=2
-                    )
-                    judge_prompt = judge_prompt_template.format(
-                        expected_comments=expected_comments_json,
-                        actual_comments=actual_output
-                    )
-
                     try:
-                        judge_result = subprocess.run(
-                            [copilot_cmd, f"--model={model}"],
-                            input=judge_prompt,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            timeout=60,  # Short timeout for judge
-                            text=True,
-                            check=False,
+                        actual_comments_json = json.dumps(json.loads(actual_output), indent=2)
+                    except json.JSONDecodeError as e:
+                        actual_comments_json = actual_output
+                        print(f"Failed to parse actual output as JSON: {e}")
+
+                    # Evaluate each expected comment individually
+                    all_passed = True
+                    reasons = []
+
+                    for tc in pr_entry.target_comments:
+                        expected_comment_json = json.dumps(
+                            [{"line": tc["line"], "comment": tc["comment"]}],
+                            indent=2
                         )
-                        judge_output = judge_result.stdout.strip()
 
-                        # Try to parse JSON response
+                        judge_prompt = (
+                            judge_prompt_template
+                            .replace("{expected_comment}", expected_comment_json)
+                            .replace("{actual_comments}", actual_comments_json)
+                        )
+
                         try:
-                            import re
-                            # Extract JSON from output (in case there's extra text)
-                            json_match = re.search(r'\{.*"passed".*"reason".*\}', judge_output, re.DOTALL)
-                            if json_match:
-                                judge_data = json.loads(json_match.group(0))
-                                passed = judge_data.get("passed", False)
-                                judge_reason = judge_data.get("reason", "No reason provided")
-                            else:
-                                # Fallback to simple true/false check
-                                passed = "true" in judge_output.lower()
-                                judge_reason = "Failed to parse judge response as JSON"
-                        except json.JSONDecodeError:
-                            # Fallback to simple true/false check
-                            passed = "true" in judge_output.lower()
-                            judge_reason = f"Invalid JSON response: {judge_output[:100]}"
+                            judge_result = subprocess.run(
+                                [copilot_cmd, f"--model={model}"],
+                                input=judge_prompt,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                timeout=60,  # Short timeout for judge
+                                text=True,
+                                check=False,
+                            )
+                            judge_output = judge_result.stdout.strip()
 
-                        if show_prompts:
-                            print(f"Judge response: {judge_output}")
-                            print(f"Parsed - Passed: {passed}, Reason: {judge_reason}")
-                    except Exception as judge_error:
-                        logger.warning(f"LLM judge failed, defaulting to false: {judge_error}")
-                        passed = False
-                        judge_reason = f"Judge error: {str(judge_error)}"
+                            # Try to parse JSON response
+                            tc_passed = False
+                            tc_reason = "No reason provided"
+                            try:
+                                # Extract JSON from output (in case there's extra text)
+                                json_match = re.search(r'\{.*"passed".*"reason".*\}', judge_output, re.DOTALL)
+                                if json_match:
+                                    judge_data = json.loads(json_match.group(0))
+                                    tc_passed = judge_data.get("passed", False)
+                                    tc_reason = judge_data.get("reason", "No reason provided")
+                                else:
+                                    # Fallback to simple true/false check
+                                    tc_passed = "true" in judge_output.lower()
+                                    tc_reason = "Failed to parse judge response as JSON"
+                            except json.JSONDecodeError:
+                                # Fallback to simple true/false check
+                                tc_passed = "true" in judge_output.lower()
+                                tc_reason = f"Invalid JSON response: {judge_output[:100]}"
+
+                            if not tc_passed:
+                                all_passed = False
+                                reasons.append(f"Line {tc['line']}: {tc_reason}")
+
+                            if show_prompts:
+                                print(f"Judge response (Line {tc['line']}): {judge_output}")
+                                print(f"Parsed - Passed: {tc_passed}, Reason: {tc_reason}")
+                        except Exception as judge_error:
+                            logger.warning(f"LLM judge failed for line {tc['line']}, defaulting to false: {judge_error}")
+                            all_passed = False
+                            reasons.append(f"Line {tc['line']}: Judge error: {str(judge_error)}")
+
+                    passed = all_passed
+                    # Calculate stats
+                    num_generated = 0
+                    try:
+                        gen_data = json.loads(actual_output)
+                        if isinstance(gen_data, list):
+                            num_generated = len(gen_data)
+                    except Exception:
+                        pass
+
+                    base_reason = "; ".join(reasons) if reasons else "All expected comments found"
+                    judge_reason = f"{base_reason} (Generated: {num_generated}, Expected: {len(pr_entry.target_comments)}), Passed: {len(pr_entry.target_comments) - len(reasons)}"
 
                 # Create result
                 pr_result = PRReviewResult(
                     pr_name=pr_entry.name,
                     pr_description=pr_entry.description,
-                    output=actual_output,
+                    output=json.loads(actual_output),
                     expected_output=[
                         {"line": tc["line"], "comment": tc["comment"]} for tc in pr_entry.target_comments
                     ],

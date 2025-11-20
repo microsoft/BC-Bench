@@ -1,12 +1,12 @@
-You are evaluating if the actual comments cover the expected comments.
+You are evaluating if the actual comments cover the expected comment.
 
 Expected Comments:
-{expected_comments}
+{expected_comment}
 
 Actual Comments:
 {actual_comments}
 
-Task: Does the actual output mention at least the key points from the expected comments?
+Task: Does the actual comments contain the expected comment?
 
-Respond in the following JSON format (no additional text):
+Respond in the following JSON format (no additional text) matching the expected comment:
 {{"passed": true/false, "reason": "brief explanation of why it passed or failed"}}
