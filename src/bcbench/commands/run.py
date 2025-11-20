@@ -6,7 +6,8 @@ from typing import Literal
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent.copilot import run_copilot_agent
+import bcbench.agent.copilot
+import bcbench.agent.extensibility_copilot
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
     ContainerName,
@@ -84,7 +85,27 @@ def run_copilot(
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
 
-    run_copilot_agent(entry=entry, repo_path=repo_path, model=model, output_dir=output_dir)
+    bcbench.agent.copilot.run_copilot_agent(entry=entry, repo_path=repo_path, model=model, output_dir=output_dir)
+
+@run_app.command("extensibility-copilot")
+def run_extensibility_copilot(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    model: CopilotModel = "claude-haiku-4.5",
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+    repo_path: RepoPath = _config.paths.nav_repo_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+):
+    """
+    Run GitHub Copilot CLI on a single entry to generate extensibility output.
+
+    For full evaluation including building and running tests, use 'bcbench evaluate' instead.
+
+    Example:
+        uv run bcbench run extensibility-copilot issue-29403
+    """
+    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+
+    bcbench.agent.extensibility_copilot.run_copilot_agent(entry=entry, repo_path=repo_path, model=model, output_dir=output_dir)
 
 
 @run_app.command("mini-inspector")

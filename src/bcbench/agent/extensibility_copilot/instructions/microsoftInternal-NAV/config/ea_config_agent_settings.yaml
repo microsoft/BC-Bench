@@ -1,0 +1,126 @@
+# Extensibility Agent - Global Configuration
+# Version: 1.0
+# Last Updated: November 18, 2025
+
+# Repository Configuration
+repository:
+  github:
+    owner: "microsoft"
+    repo: "ALAppExtensions"
+    issue_type_filter: "Task"
+
+# Processing Configuration
+processing:
+  mode: "instance_isolation"
+  concurrency: "parallel_instances_allowed"
+  
+  assignment_modes:
+    - "single_issue"
+    - "multiple_issues"
+    - "unlabeled_issues"
+    - "updated_issues"
+
+  max_comment_iterations_per_type:
+    event_request_ishandled: 5
+    event_request_regular: 3
+    request_for_external: 3
+    enum_request: 3
+    extensibility_enhancement: 3
+    bug: 0  # No iterations for bugs
+
+  iteration_tracking:
+    reset_on_new_issue: true
+    reset_on_type_change: true
+    allow_manual_reset: true
+
+  codebase_analysis:
+    layer_priority: ["W1", "Local"]
+    search_patterns: ["**/{layer}/**/*.al"]
+    timeout_seconds: 60
+    fuzzy_match_threshold: 0.70  # For procedure name matching
+
+# Label Configuration
+labels:
+  status:
+    missing_info: "missing-info"
+    not_processable: "agent-not-processable"
+    analyzed: "agent-analyzed"
+    max_iterations: "agent-max-iterations"
+  
+  type_labels:
+    event_request: "event-request"
+    request_for_external: "request-for-external"
+    enum_request: "enum-request"
+    extensibility_enhancement: "extensibility-enhancement"
+    bug: "bug"
+  
+  team_labels:
+    - "Finance"
+    - "SCM"
+    - "Integration"
+
+# Label Application
+label_application:
+  order: ["team", "type", "status"]
+  simultaneous_application: false
+  retry_mechanism:
+    max_retries: 3
+    retry_delay_seconds: 5
+    retry_on_errors: ["GitHubAPIError", "RateLimitError"]
+
+# Error Handling
+error_handling:
+  strategy: "silent_skip_and_continue"
+  
+  api_errors:
+    action: "retry_then_skip"
+    max_retries: 3
+    retry_delay_seconds: 30
+    user_notification: false
+  
+  codebase_errors:
+    action: "mark_not_processable_skip"
+    user_notification: false
+  
+  configuration_errors:
+    action: "use_defaults_continue"
+    user_notification: false
+  
+  timeout_errors:
+    timeout_seconds: 60
+    action: "mark_not_processable_skip"
+    user_notification: false
+  
+  logging: true
+  internal_logging_only: true
+
+# Communication Configuration
+communication:
+  language: "english"
+  translation_enabled: true
+  language_detection: true
+  
+  comment_style:
+    concise_reasoning: true
+    show_code_examples: true
+    avoid_examples_for_requirements: true
+    include_external_links: true
+  
+  comment_organization:
+    approach: "simple_sequential"
+    no_comment_editing: true
+    no_comment_threading: true
+    new_comment_per_iteration: true
+
+# Documentation Links
+documentation:
+  extensibility_guidelines: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-contribute-extensibility"
+  events_overview: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-events-overview"
+  implement_events: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-implement-events"
+
+# Configuration Files
+config_files:
+  requirements: "config/requirements/"
+  implementation_rules: "config/implementation-rules/"
+  team_mapping: "config/team-configuration/team-namespace-mapping.yaml"
+  agent_settings: "config/ea_config_agent_settings.yaml"

@@ -2,14 +2,17 @@
 
 import json
 from pathlib import Path
+from typing import Union
 
-from bcbench.dataset.dataset_entry import DatasetEntry
+import yaml
+
+from bcbench.dataset.dataset_entry import DatasetEntry, DatasetEntryV2, Dataset
 from bcbench.exceptions import EntryNotFoundError
 
 __all__ = ["load_dataset_entries"]
 
 
-def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[DatasetEntry]:
+def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> Union[list[DatasetEntry], Dataset]:
     """
     Load dataset entries from a JSONL file.
 
@@ -26,20 +29,28 @@ def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random
     entries: list[DatasetEntry] = []
 
     with open(dataset_path, encoding="utf-8") as file:
-        for line in file:
-            striped_line = line.strip()
-            if not striped_line:
-                continue
+        if dataset_path.suffix.lower() == ".jsonl":
+            for line in file:
+                striped_line = line.strip()
+                if not striped_line:
+                    continue
 
-            entry = DatasetEntry.from_json(json.loads(striped_line))
+                entry = DatasetEntry.from_json(json.loads(striped_line))
 
-            # If searching for specific entry_id, return immediately when found
-            if entry_id:
-                if entry.instance_id == entry_id:
-                    return [entry]
-                continue
+                # If searching for specific entry_id, return immediately when found
+                if entry_id:
+                    if entry.instance_id == entry_id:
+                        return [entry]
+                    continue
 
-            entries.append(entry)
+                entries.append(entry)
+        else:
+            entries: list[DatasetEntryV2] = Dataset(**yaml.safe_load(file)).entries
+            for entry in entries:
+                if entry_id:
+                    if entry.instance_id == entry_id:
+                        return [entry]
+                    continue
 
     if entry_id:
         raise EntryNotFoundError(entry_id)

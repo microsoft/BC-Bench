@@ -13,7 +13,7 @@ get_config()
 
 app = typer.Typer(
     name="bcbench",
-    help="BC-Bench: Benchmarking tool for Business Central (AL) ecosystem",
+    help="BC-Bench: Benchmarking tool for the Business Central (AL) ecosystem",
     no_args_is_help=True,
     add_completion=True,
 )

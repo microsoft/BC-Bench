@@ -23,10 +23,13 @@ class EvaluationResult:
     generated_patch: str = ""
     error_message: str | None = None
     agent_execution_time: float | None = None
+    agent_premium_requests: float | None = None
+    number_of_steps: int | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     mcp_servers: list[str] | None = None
     custom_instructions: bool | None = None
+    json_output: str | None = None
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "EvaluationResult":
@@ -40,10 +43,13 @@ class EvaluationResult:
             generated_patch=payload.get("generated_patch", ""),
             error_message=payload.get("error_message"),
             agent_execution_time=payload.get("agent_execution_time"),
+            agent_premium_requests=payload.get("agent_premium_requests"),
+            number_of_steps=payload.get("number_of_steps"),
             prompt_tokens=payload.get("prompt_tokens"),
             completion_tokens=payload.get("completion_tokens"),
             mcp_servers=payload.get("mcp_servers"),
             custom_instructions=payload.get("custom_instructions"),
+            json_output=payload.get("json_output", None),
         )
 
     @classmethod
@@ -63,7 +69,10 @@ class EvaluationResult:
         metrics = context.agent_metrics or {}
         prompt_tokens = metrics.get("prompt_tokens")
         completion_tokens = metrics.get("completion_tokens")
+        agent_premium_requests = metrics.get("agent_premium_requests")
+        number_of_steps = metrics.get("number_of_steps")
         agent_execution_time = metrics.get("agent_execution_time")
+        json_output = metrics.get("json_output", None)
 
         # Warn about missing critical metrics that affect result quality
         if context.agent_metrics is None:
@@ -76,6 +85,10 @@ class EvaluationResult:
                 missing_metrics.append("prompt_tokens")
             if completion_tokens is None:
                 missing_metrics.append("completion_tokens")
+            if agent_premium_requests is None:
+                missing_metrics.append("agent_premium_requests")
+            if number_of_steps is None:
+                missing_metrics.append("number_of_steps")
 
             if missing_metrics:
                 logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
@@ -91,10 +104,13 @@ class EvaluationResult:
             generated_patch=generated_patch,
             error_message=error_message,
             agent_execution_time=agent_execution_time,
+            agent_premium_requests=agent_premium_requests,
+            number_of_steps=number_of_steps,
             prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
             completion_tokens=int(completion_tokens) if completion_tokens is not None else None,
             mcp_servers=context.mcp_servers,
             custom_instructions=context.custom_instructions,
+            json_output=json_output,
         )
 
     def save(self, output_dir: Path, result_file: str) -> None:
@@ -109,11 +125,14 @@ class EvaluationResult:
                 "error_message": self.error_message,
                 "project": self.project,
                 "agent_execution_time": self.agent_execution_time,
+                "agent_premium_requests": self.agent_premium_requests,
+                "number_of_steps": self.number_of_steps,
                 "prompt_tokens": self.prompt_tokens,
                 "completion_tokens": self.completion_tokens,
                 "generated_patch": self.generated_patch,
                 "mcp_servers": self.mcp_servers,
                 "custom_instructions": self.custom_instructions,
+                "json_output": self.json_output,
             }
             f.write(json.dumps(result_dict) + "\n")
 

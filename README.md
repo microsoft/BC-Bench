@@ -102,12 +102,12 @@ src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
 How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
 2. All files under `microsoftInternal-NAV` will be copied into `NAV/.github/` (overwrite if exists)
-3. If `enabled: false` a `--no-custom-instructions` flag is passed instead.
+3. If `enabled: false`, a `--no-custom-instructions` flag is passed instead.
 
 ### Results & Metrics
 
 You can find all results in the GitHub Action (workflow: `copilot-evaluation`) directly:
 - Logs: select one instance, find the step called `Run GitHub Copilot CLI ...`, and see how copilot solve an issue
 - Artifacts:
-    - per-entry result JSONL (with all metics)
+    - per-entry result JSONL (with all metrics)
     - Copilot CLI logs

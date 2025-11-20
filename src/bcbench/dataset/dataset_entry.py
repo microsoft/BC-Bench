@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, TypedDict
 
+from pydantic import BaseModel
+
 from bcbench.exceptions import InvalidEntryFormatError
 
 __all__ = ["DatasetEntry"]
@@ -14,6 +16,26 @@ class TestEntry(TypedDict):
     codeunitID: int
     functionName: list[str]
 
+
+class Dataset(BaseModel):
+    entries: list[DatasetEntryV2]
+
+class DatasetEntryV2(BaseModel):
+    """Representation of a Business Central benchmark dataset entry."""
+    repo: str = "microsoftInternal/NAV"
+    base_commit: str = None
+    instance_id: str
+    input: dict
+    expected: dict
+
+    def get_task(self) -> str:
+        """Get the full task description including hints."""
+        task = json.dumps(self.input)
+
+        return task
+
+    def extract_project_name(self) -> str:
+        return ""
 
 @dataclass(slots=True)
 class DatasetEntry:

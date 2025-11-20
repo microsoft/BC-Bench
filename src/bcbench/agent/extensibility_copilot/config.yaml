@@ -1,0 +1,31 @@
+prompt:
+  include_project_paths: false
+  template: |
+    Process this issue for which the details are already fetched from microsoft/ALAppExtensions: {{task}}
+
+    Only complete step 2 and 3. You may analyze code, but accept the event request even if the event exists (even with IsHandled).
+
+    Reply in the following JSON format only:
+
+    ```json
+    {
+      "accepted": true|false,
+      "labels": ["<classification>", "<team>", ...],
+      "comment": "Optional comment to the issue author"
+    }
+    ```
+
+instructions:
+  enabled: true
+# mcp:
+#   servers:
+#     - name: "mslearn"
+#       type: "http"
+#       url: "https://learn.microsoft.com/api/mcp"
+#       tools: ["*"]
+
+#     - name: "filesystem"
+#       type: "local"
+#       command: "npx"
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
+#       tools: ["*"]

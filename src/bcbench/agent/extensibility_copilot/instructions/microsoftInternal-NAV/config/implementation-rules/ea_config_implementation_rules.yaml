@@ -1,0 +1,268 @@
+# Implementation Rules Configuration
+# Defines absolute and conditional restrictions for feasibility analysis
+# Version: 1.0
+
+implementation_rules:
+
+  absolute_restrictions:
+    description: "Auto-stop conditions. If ANY applies, request cannot be implemented."
+
+    - id: obsolete_code
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Target code marked as obsolete"
+      check_method: "pattern_matching"
+      check_patterns: ["[Obsolete", "ObsoleteState", "ObsoleteReason"]
+      action: "auto_reject"
+      rejection_reason: "The target code is marked as obsolete and cannot be modified"
+      documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-obsolete-code"
+
+    - id: protected_code
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Code protected by NOT CLEAN tags or system protection"
+      check_method: "pattern_matching"
+      check_patterns: ["NOT CLEAN", "#region", "#endregion", "protected"]
+      action: "auto_reject"
+      rejection_reason: "The target code is protected and cannot be modified"
+      documentation_link: ""
+
+    - id: public_signature_change
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Requires public procedure signature change"
+      check_method: "code_analysis"
+      check_conditions: ["public_procedure", "signature_modification"]
+      action: "auto_reject"
+      rejection_reason: "Implementation would require changing a public procedure signature, which may break existing code"
+      documentation_link: ""
+
+    - id: merge_conflicts
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Merge conflicts exist in target file"
+      check_method: "file_analysis"
+      check_patterns: ["<<<<<<<", "=======", ">>>>>>>"]
+      action: "auto_reject"
+      rejection_reason: "The target file has merge conflicts that must be resolved first"
+      documentation_link: ""
+
+    - id: procedure_not_found
+      applies_to: ["event-request"]
+      severity: "blocking"
+      description: "Target procedure/trigger not found in expected location"
+      check_method: "codebase_search"
+      action: "request_clarification"
+      rejection_reason: "The specified procedure/trigger was not found in the codebase"
+      suggestion: "The procedure may have been refactored or renamed. Please verify the correct location."
+      documentation_link: ""
+
+    - id: recordref_parameter_in_event
+      applies_to: ["event-request"]
+      severity: "blocking"
+      description: "RecordRef parameter used in event signature"
+      check_method: "parameter_analysis"
+      check_patterns: ["RecordRef"]
+      action: "auto_reject"
+      rejection_reason: "RecordRef parameters should never be added to events. Use specific typed record parameters instead."
+      detailed_explanation: |
+        RecordRef is a dynamic reference type that should not be used as event parameters because:
+        - Reduces type safety and IntelliSense support for subscribers
+        - Makes subscribers more complex (requires dynamic type casting)
+        - Creates maintenance burden when table structures change
+        - Weakens compile-time validation
+
+        Instead, use the specific record type(s) involved in the operation.
+
+        ❌ Wrong:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeTestDirectModifyPermission(var RecRef: RecordRef; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+
+        ✅ Correct:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeTestDirectModifyPermission(var TargetRecord: Record "Target Table Name"; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+      documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-implement-events"
+
+  conditional_restrictions:
+    description: "Analysis required. May block or require modification based on context."
+
+    - id: similar_events_exist
+      applies_to: ["event-request"]
+      severity: "warning"
+      description: "Similar events already available nearby"
+      check_method: "code_pattern_analysis"
+      analysis_required: true
+      action: "suggest_alternative"
+      suggestion_template: "A similar event exists at this location: {event_name}. Consider adding parameters to the existing event instead of creating a new one."
+      requires_confirmation: true
+      documentation_link: ""
+
+    - id: events_in_loops
+      applies_to: ["event-request"]
+      severity: "warning"
+      description: "Event placement inside loops (performance impact)"
+      check_method: "code_structure_analysis"
+      analysis_required: true
+      action: "request_justification"
+      warning_message: "The proposed event location is inside a loop, which may cause performance issues if subscribers perform heavy operations."
+      requires_confirmation: true
+      documentation_link: ""
+
+    - id: ishandled_in_loops
+      applies_to: ["event-request/ishandled"]
+      severity: "critical"
+      description: "IsHandled event placement inside loops"
+      check_method: "code_structure_analysis"
+      analysis_required: true
+      action: "suggest_alternative"
+      warning_message: "IsHandled events inside loops can cause severe performance degradation as the bypass logic is evaluated on every iteration."
+      suggestion_template: |
+        Instead of placing an IsHandled event inside the loop, consider adding a regular event **before the loop** after all filtering is complete.
+
+        **Recommended approach:**
+        1. Apply all necessary filters to the record (e.g., `DetailedVendorLedgEntry.SetRange(...)`)
+        2. Add a regular IntegrationEvent AFTER filtering, before the loop starts
+        3. Subscribers can then modify the filtered set without bypassing critical code inside the loop
+
+        **Example:**
+        ```al
+        DetailedVendorLedgEntry.SetRange("Vendor No.", "No.");
+        DetailedVendorLedgEntry.SetRange("Posting Date", CalcDate('<+1D>', EndDate), DMY2Date(31, 12, 9999));
+
+        // Regular event BEFORE loop - allows subscribers to adjust filters
+        OnAfterDetailedVendorLedgEntrySetFilters(DetailedVendorLedgEntry, VendorLedgerEntry, TempVendorLedgerEntry);
+
+        if DetailedVendorLedgEntry.FindSet() then
+          repeat
+            // Loop body without IsHandled event
+          until DetailedVendorLedgEntry.Next() = 0;
+        ```
+
+        This approach:
+        - ✅ Avoids repeated IsHandled checks in the loop
+        - ✅ Allows extensions to modify filtering logic
+        - ✅ Maintains performance (event fires once, not per iteration)
+        - ✅ Achieves the same extensibility goal
+      requires_confirmation: true
+      documentation_link: ""
+
+    - id: ishandled_unsafe_code_block
+      applies_to: ["event-request/ishandled"]
+      severity: "critical"
+      description: "IsHandled event with unsafe/critical code block"
+      check_method: "code_block_safety_analysis"
+      analysis_required: true
+      action: "suggest_standard_event"
+      safety_checks:
+        - "database_operations_without_bypass"
+        - "unhandled_side_effects"
+        - "critical_error_handling"
+        - "data_consistency_requirements"
+      warning_message: "The code block that would be bypassed contains critical operations that cannot be safely skipped."
+      suggestion_template: "Consider using a standard event instead of IsHandled for this scenario, or redesign to make the block safely skippable."
+      requires_confirmation: true
+      documentation_link: ""
+
+    - id: sensitive_data_exposure
+      applies_to: ["request-for-external"]
+      severity: "critical"
+      description: "Making procedure public would expose sensitive data"
+      check_method: "code_analysis"
+      analysis_required: true
+      action: "auto_reject"
+      rejection_reason: "The procedure accesses or handles sensitive/private data that should not be exposed publicly"
+      documentation_link: ""
+
+    - id: internal_procedure_exposure
+      applies_to: ["request-for-external"]
+      severity: "warning"
+      description: "Making internal procedure public"
+      check_method: "code_analysis"
+      analysis_required: true
+      action: "request_justification"
+      warning_message: "This is an internal procedure. Making it public may create API stability concerns."
+      requires_confirmation: true
+      documentation_link: ""
+
+    - id: integration_event_include_sender_true
+      applies_to: ["event-request"]
+      severity: "critical"
+      description: "IntegrationEvent with IncludeSender=true (first parameter is true)"
+      check_method: "code_pattern_analysis"
+      check_patterns: ["IntegrationEvent(true"]
+      analysis_required: true
+      action: "request_justification"
+      warning_message: "The event signature has IncludeSender set to true. This requires detailed justification."
+      detailed_explanation: |
+        Setting IncludeSender to true in an IntegrationEvent means the event publisher will be passed as a parameter to all subscribers.
+
+        **When used correctly:** Allows subscribers to know which object raised the event (useful for performance tracking, conditional logic based on caller).
+
+        **Risks if not justified:**
+        - Creates hidden dependency on publisher object implementation
+        - Subscribers might have unintended access to publisher's private state
+        - Makes the event coupling stronger and more fragile
+
+        **Required from author:**
+        1. Clear business/functional reason why subscribers MUST know the publisher
+        2. Explanation of how subscribers will use this information
+        3. Confirmation that no alternative (event parameters, context fields) would work
+
+        **Proper use case example:**
+        ```al
+        // ✅ Justified - Need to track which module called this
+        [IntegrationEvent(true, false)]
+        local procedure OnBeforePostInvoice(var SalesInvoiceHeader: Record "Sales Invoice Header"; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+
+        **Anti-pattern example:**
+        ```al
+        // ❌ Not justified - Just passing RecordRef as context
+        [IntegrationEvent(true, false)]
+        local procedure OnProcessRecord(var RecRef: RecordRef; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+      requires_confirmation: true
+      confirmation_required_message: "Please provide detailed justification for why IncludeSender=true is necessary for this event."
+      documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-implement-events"
+
+  multi_change_policy:
+    enabled: true
+    description: "All-or-nothing rule for requests with multiple changes"
+    behavior: "all_or_nothing"
+    rule: "If ANY proposed change is blocked or infeasible, REJECT ALL changes in the request"
+    explanation: "Prevents partial implementation of interdependent changes"
+
+# Feasibility Outcome Templates
+feasibility_outcomes:
+
+  can_implement:
+    label: "agent-analyzed"
+    action: "approve_and_assign_team"
+    comment_template: "request_approved_ready_for_implementation"
+
+  cannot_implement:
+    label: "agent-not-processable"
+    action: "add_comment_stop"
+    comment_template: "cannot_implement_blocking_issues"
+
+  needs_modification:
+    label: "missing-info"
+    action: "request_confirmation"
+    comment_template: "implementation_differs_suggest_alternative"
+
+  needs_clarification:
+    label: "missing-info"
+    action: "request_clarification"
+    comment_template: "procedure_not_found_ask_verify"

@@ -8,11 +8,13 @@ from typing import Literal
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import run_copilot_agent, run_mini_agent
+import bcbench.agent
+import bcbench.agent.extensibility_copilot
 from bcbench.cli_options import ContainerName, ContainerPassword, ContainerUsername, CopilotModel, DatasetPath, OutputDir, RepoPath, RunId
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate import EvaluationContext, run_evaluation_pipeline
+from bcbench.evaluate.extensibility_evaluation_pipeline import run_extensibility_evaluation_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import EvaluationResult
 
@@ -66,7 +68,7 @@ def evaluate_mini(
 
     run_evaluation_pipeline(
         context,
-        lambda ctx: run_mini_agent(
+        lambda ctx: bcbench.agent.run_mini_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
             model=ctx.model,
@@ -125,7 +127,7 @@ def evaluate_copilot(
 
     run_evaluation_pipeline(
         context,
-        lambda ctx: run_copilot_agent(
+        lambda ctx: bcbench.agent.run_copilot_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
             model=ctx.model,
@@ -136,6 +138,60 @@ def evaluate_copilot(
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
 
+@evaluate_app.command("extensibility-copilot")
+def evaluate_copilot(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    #container_name: ContainerName,
+    #username: ContainerUsername,
+    #password: ContainerPassword,
+    model: CopilotModel = "claude-haiku-4.5",
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+    repo_path: RepoPath = _config.paths.nav_repo_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    run_id: RunId = "copilot_test_run",
+):
+    """
+    Evaluate GitHub Copilot CLI on single dataset entry.
+
+    To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
+
+    Example:
+        uv run bcbench evaluate copilot microsoftInternal__NAV-211710 --container-name bcserver
+    """
+    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
+    entry: DatasetEntry = entries[0]
+    logger.info(f"Loaded {entry_id} entry from dataset")
+
+    run_dir: Path = output_dir / run_id
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True)
+
+    logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container_name=None,
+        username=None,
+        password=None,
+        model=model,
+        agent_name="GitHub Copilot CLI",
+    )
+
+    run_extensibility_evaluation_pipeline(
+        context,
+        lambda ctx: bcbench.agent.extensibility_copilot.run_copilot_agent(
+            entry=ctx.entry,
+            repo_path=ctx.repo_path,
+            model=ctx.model,
+            output_dir=ctx.result_dir,
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
 
 @evaluate_app.command("mock", hidden=True)
 def evaluate_mock(

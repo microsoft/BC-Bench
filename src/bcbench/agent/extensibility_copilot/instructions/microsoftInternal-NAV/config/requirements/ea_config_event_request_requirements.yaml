@@ -1,0 +1,98 @@
+# Event Request Requirements Configuration
+# Defines minimum requirements for event-request type issues
+# Version: 1.0
+
+event_request:
+  enabled: true
+  description: "Event publisher/subscriber requests"
+  detection_keywords: ["publisher", "subscriber", "IntegrationEvent", "event", "OnBefore", "OnAfter"]
+  
+  subtypes:
+    ishandled:
+      enabled: true
+      description: "IsHandled event requests with bypass functionality"
+      detection_patterns: ["IsHandled", "is handled", "bypass", "skip"]
+      max_iterations: 5
+      
+      requirements:
+        - id: problem_statement
+          name: "Problem Statement"
+          description: "Clear description of functional gap and what cannot be done today"
+          mandatory: true
+          validation_hints: ["problem", "gap", "need", "requirement", "cannot", "today"]
+          documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-contribute-extensibility"
+        
+        - id: proposed_code_change
+          name: "Proposed Code Change"
+          description: "Exact code addition/modification with surrounding context (5-10 lines)"
+          mandatory: true
+          validation_hints: ["code", "procedure", "trigger", "event", "publisher", "context"]
+          documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-implement-events"
+        
+        - id: invocation_example
+          name: "Invocation Example (recommended)"
+          description: "How event will be raised and sample subscriber implementation"
+          mandatory: false
+          validation_hints: ["invoke", "subscriber", "example", "sample", "usage"]
+        
+        - id: alternatives_evaluated
+          name: "Alternatives Evaluated"
+          description: "Which existing events/patterns were tried and why insufficient"
+          mandatory: true
+          validation_hints: ["alternative", "tried", "existing", "evaluated", "why not"]
+        
+        - id: justification_for_ishandled
+          name: "Justification for IsHandled"
+          description: "Why standard event/redesign/contribution isn't feasible"
+          mandatory: true
+          validation_hints: ["justify", "why", "ishandled", "necessary", "bypass"]
+        
+        - id: performance_considerations
+          name: "Performance Considerations"
+          description: "Expected execution frequency and potential impact assessment"
+          mandatory: true
+          validation_hints: ["performance", "frequency", "impact", "execution", "load"]
+        
+        - id: data_sensitivity_review
+          name: "Data Sensitivity Review"
+          description: "Confirmation of no sensitive data exposure or rationale if necessary"
+          mandatory: true
+          validation_hints: ["sensitive", "data", "security", "exposure", "private"]
+        
+        - id: multi_extension_interaction
+          name: "Multi-Extension Interaction"
+          description: "Risks if multiple extensions subscribe and conflict mitigation"
+          mandatory: true
+          validation_hints: ["multi", "extension", "conflict", "subscribe", "risk"]
+
+    regular:
+      enabled: true
+      description: "Regular event requests without IsHandled"
+      max_iterations: 3
+      
+      requirements:
+        - id: problem_statement
+          name: "Problem Statement"
+          description: "Clear description of extensibility need"
+          mandatory: true
+          validation_hints: ["problem", "need", "extensibility", "gap"]
+          documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-contribute-extensibility"
+        
+        - id: proposed_code_change
+          name: "Proposed Code Change"
+          description: "Event location, parameters, and placement context"
+          mandatory: true
+          validation_hints: ["code", "event", "location", "parameter", "procedure"]
+          documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-implement-events"
+        
+        - id: use_case_example
+          name: "Use Case Example"
+          description: "How event will be used and business scenario"
+          mandatory: false
+          validation_hints: ["use case", "example", "scenario", "business", "how"]
+
+# Requirement Validation Messages
+validation_messages:
+  insufficient_detail: "The provided information is insufficient for processing. Please add:"
+  requirement_reference: "For more details, see our Extensibility Guidelines: {link}"
+  resubmit_after_update: "Please update the issue with the missing details. We'll automatically re-analyze once updated."
