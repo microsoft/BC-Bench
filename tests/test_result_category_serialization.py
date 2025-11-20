@@ -2,14 +2,17 @@ import json
 
 import pytest
 
-from bcbench.results.evaluation_result import EvaluationResult, EvaluationResultSummary
+from bcbench.results.base import create_result_from_json
+from bcbench.results.bugfix import BugFixResult
+from bcbench.results.evaluation_result import EvaluationResultSummary
+from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 
 
 class TestCategorySerialization:
     @pytest.fixture
     def sample_result_bug_fix(self):
-        return EvaluationResult(
+        return BugFixResult(
             instance_id="test__bug-fix-1",
             project="app",
             model="gpt-4o",
@@ -25,7 +28,7 @@ class TestCategorySerialization:
 
     @pytest.fixture
     def sample_result_test_gen(self):
-        return EvaluationResult(
+        return TestGenerationResult(
             instance_id="test__test-gen-1",
             project="app",
             model="gpt-4o",
@@ -71,7 +74,7 @@ class TestCategorySerialization:
             "generated_patch": "patch",
         }
 
-        result = EvaluationResult.from_json(payload)
+        result = create_result_from_json(payload)
 
         assert result.category == EvaluationCategory.BUG_FIX
 
@@ -87,12 +90,12 @@ class TestCategorySerialization:
             "generated_patch": "test patch",
         }
 
-        result = EvaluationResult.from_json(payload)
+        result = create_result_from_json(payload)
 
         assert result.category == EvaluationCategory.TEST_GENERATION
 
     def test_round_trip_bug_fix(self, tmp_path):
-        original = EvaluationResult(
+        original = BugFixResult(
             instance_id="round-trip-test",
             project="test-project",
             model="test-model",
@@ -109,13 +112,13 @@ class TestCategorySerialization:
         with open(tmp_path / "test.jsonl") as f:
             data = json.loads(f.readline())
 
-        loaded = EvaluationResult.from_json(data)
+        loaded = create_result_from_json(data)
 
         assert loaded.category == original.category
         assert loaded.category == EvaluationCategory.BUG_FIX
 
     def test_round_trip_test_generation(self, tmp_path):
-        original = EvaluationResult(
+        original = TestGenerationResult(
             instance_id="round-trip-test-gen",
             project="test-project",
             model="test-model",
@@ -132,7 +135,7 @@ class TestCategorySerialization:
         with open(tmp_path / "test.jsonl") as f:
             data = json.loads(f.readline())
 
-        loaded = EvaluationResult.from_json(data)
+        loaded = create_result_from_json(data)
 
         assert loaded.category == original.category
         assert loaded.category == EvaluationCategory.TEST_GENERATION

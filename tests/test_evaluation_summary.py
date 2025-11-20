@@ -3,7 +3,9 @@ from datetime import date
 
 import pytest
 
-from bcbench.results.evaluation_result import EvaluationResult, EvaluationResultSummary
+from bcbench.results.bugfix import BugFixResult
+from bcbench.results.evaluation_result import EvaluationResultSummary
+from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 
 
@@ -68,7 +70,7 @@ class TestFromResults:
     @pytest.fixture
     def sample_results(self):
         return [
-            EvaluationResult(
+            BugFixResult(
                 instance_id="test__1",
                 project="app",
                 model="gpt-4o",
@@ -81,7 +83,7 @@ class TestFromResults:
                 prompt_tokens=5000,
                 completion_tokens=1000,
             ),
-            EvaluationResult(
+            BugFixResult(
                 instance_id="test__2",
                 project="app",
                 model="gpt-4o",
@@ -94,7 +96,7 @@ class TestFromResults:
                 prompt_tokens=6000,
                 completion_tokens=1500,
             ),
-            EvaluationResult(
+            BugFixResult(
                 instance_id="test__3",
                 project="app",
                 model="gpt-4o",
@@ -133,7 +135,7 @@ class TestFromResults:
 
     def test_from_results_handles_none_values_in_metrics(self):
         results = [
-            EvaluationResult(
+            BugFixResult(
                 instance_id="test__1",
                 project="app",
                 model="gpt-4o",
@@ -146,7 +148,7 @@ class TestFromResults:
                 prompt_tokens=5000,
                 completion_tokens=1000,
             ),
-            EvaluationResult(
+            BugFixResult(
                 instance_id="test__2",
                 project="app",
                 model="gpt-4o",
@@ -170,7 +172,7 @@ class TestFromResults:
 
     def test_from_results_with_all_none_metrics_returns_zero(self):
         results = [
-            EvaluationResult(
+            TestGenerationResult(
                 instance_id="test__1",
                 project="app",
                 model="gpt-4o",

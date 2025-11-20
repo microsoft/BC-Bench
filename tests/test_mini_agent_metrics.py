@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from bcbench.dataset import DatasetEntry
-from bcbench.results import EvaluationResult
+from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationCategory, EvaluationContext
 
 
@@ -120,7 +120,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 1200,
         }
 
-        result = EvaluationResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
         assert result.agent_execution_time == 180.5
@@ -135,7 +135,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 0,
         }
 
-        result = EvaluationResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
         assert result.agent_execution_time == 180.5
@@ -146,7 +146,7 @@ class TestMiniAgentMetricsExtraction:
     def test_metrics_flow_with_no_metrics(self, sample_context):
         sample_context.agent_metrics = None
 
-        result = EvaluationResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, "test_patch")
 
         assert result.agent_execution_time is None
         assert result.prompt_tokens is None
@@ -155,7 +155,7 @@ class TestMiniAgentMetricsExtraction:
     def test_metrics_flow_with_empty_dict(self, sample_context):
         sample_context.agent_metrics = {}
 
-        result = EvaluationResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, "test_patch")
 
         assert result.agent_execution_time is None
         assert result.prompt_tokens is None
@@ -213,7 +213,7 @@ class TestMiniAgentMetricsExtraction:
             "completion_tokens": 800,
         }
 
-        result = EvaluationResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, "test_patch")
 
         # Verify metrics
         assert result.agent_execution_time == 95.3

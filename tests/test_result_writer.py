@@ -3,8 +3,9 @@ import json
 import pytest
 
 from bcbench.dataset import DatasetEntry
-from bcbench.results.evaluation_result import EvaluationResult
+from bcbench.results.bugfix import BugFixResult
 from bcbench.results.result_writer import write_bceval_results
+from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 
 
@@ -41,7 +42,7 @@ class TestWriteBcevalResults:
 
     @pytest.fixture
     def result_with_all_fields(self):
-        return EvaluationResult(
+        return BugFixResult(
             instance_id="test__instance-1",
             project="app",
             model="gpt-4o",
@@ -58,7 +59,7 @@ class TestWriteBcevalResults:
 
     @pytest.fixture
     def result_with_none_metrics(self):
-        return EvaluationResult(
+        return TestGenerationResult(
             instance_id="test__instance-1",
             project="app",
             model="gpt-4o",
@@ -179,7 +180,7 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        non_matching_result = EvaluationResult(
+        non_matching_result = BugFixResult(
             instance_id="test__nonexistent",
             project="app",
             model="gpt-4o",
@@ -210,7 +211,7 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        result = EvaluationResult(
+        result = BugFixResult(
             instance_id="test__instance-1",
             project="app",
             model="gpt-4o",

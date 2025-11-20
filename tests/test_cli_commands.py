@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
-from bcbench.results import EvaluationResult
+from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationCategory
 
 runner = CliRunner()
@@ -83,7 +83,7 @@ def sample_results_directory(tmp_path, sample_dataset_file):
     results_dir.mkdir(parents=True)
 
     # Create sample results
-    result1 = EvaluationResult(
+    result1 = BugFixResult(
         instance_id="test__entry-1",
         project="W1/TestApp",
         model="gpt-4o",
@@ -98,7 +98,7 @@ def sample_results_directory(tmp_path, sample_dataset_file):
     )
     result1.save(results_dir, f"{result1.instance_id}.jsonl")
 
-    result2 = EvaluationResult(
+    result2 = BugFixResult(
         instance_id="test__entry-2",
         project="W1/AnotherApp",
         model="gpt-4o",
@@ -113,7 +113,7 @@ def sample_results_directory(tmp_path, sample_dataset_file):
     )
     result2.save(results_dir, f"{result2.instance_id}.jsonl")
 
-    result3 = EvaluationResult(
+    result3 = BugFixResult(
         instance_id="test__entry-3",
         project="W1/ThirdApp",
         model="gpt-4o",

@@ -8,7 +8,7 @@ from typing_extensions import Annotated
 from bcbench.cli_options import DatasetPath, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results import EvaluationResult, EvaluationResultSummary, create_console_summary, create_github_job_summary, write_bceval_results
+from bcbench.results import BaseEvaluationResult, EvaluationResultSummary, create_console_summary, create_github_job_summary, create_result_from_json, write_bceval_results
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -49,11 +49,11 @@ def result_summarize(
         logger.error(f"No instance-specific result files found in {run_dir}")
         raise typer.Exit(code=1)
 
-    results: list[EvaluationResult] = []
+    results: list[BaseEvaluationResult] = []
     for results_path in result_files:
         logger.info(f"Reading results from: {results_path}")
         with open(results_path) as f:
-            results.extend(EvaluationResult.from_json(json.loads(line)) for line in f if line.strip())
+            results.extend(create_result_from_json(json.loads(line)) for line in f if line.strip())
 
     if not results:
         logger.error("No results found in the result files")
