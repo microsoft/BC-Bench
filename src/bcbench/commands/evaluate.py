@@ -81,7 +81,7 @@ def evaluate_mini(
         lambda ctx: run_mini_agent(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
-            category=ctx.category,
+            category=category,
             model=ctx.model,
             container_name=ctx.container_name,
             username=ctx.username,

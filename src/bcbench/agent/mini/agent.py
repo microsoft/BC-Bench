@@ -69,7 +69,9 @@ def run_mini_agent(
         None (no MCP servers for mini-bc-agent)
         Boolean indicating if custom instructions were enabled (always False for mini-bc-agent)
     """
-    # TODO: support category
+    if category != EvaluationCategory.BUG_FIX:
+        raise ConfigurationError(f"mini-bc-agent currently only supports BUG_FIX category, got: {category}")
+
     config_file = Path(__file__).parent / "config.yaml"
     mini_bc_config = yaml.safe_load(config_file.read_text())
     agent_config = mini_bc_config.get("agent", {})
