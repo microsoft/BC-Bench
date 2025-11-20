@@ -3,13 +3,13 @@ from rich.table import Table
 
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results.evaluation_result import EvaluationResult
+from bcbench.results.evaluation_result import BaseEvaluationResult
 
 logger = get_logger(__name__)
 console = Console()
 
 
-def create_console_summary(results: list[EvaluationResult]) -> None:
+def create_console_summary(results: list[BaseEvaluationResult]) -> None:
     total = len(results)
     resolved = sum(r.resolved for r in results)
     failed = total - resolved
@@ -38,7 +38,7 @@ def create_console_summary(results: list[EvaluationResult]) -> None:
     console.print()
 
 
-def create_github_job_summary(results: list[EvaluationResult]) -> None:
+def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
     total = len(results)
     resolved = sum(r.resolved for r in results)
     failed = total - resolved

@@ -22,7 +22,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate import create_pipeline
 from bcbench.logger import get_logger
-from bcbench.results import EvaluationResult
+from bcbench.results import BaseEvaluationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -208,11 +208,11 @@ def evaluate_mock(
 
     match random.choice(["success", "build-fail", "test-fail"]):
         case "success":
-            result = EvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
+            result = BaseEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
         case "build-fail":
-            result = EvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+            result = BaseEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
         case "test-fail":
-            result = EvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
+            result = BaseEvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
         case _:
             raise ValueError("Invalid mock scenario, this should not happen")
 

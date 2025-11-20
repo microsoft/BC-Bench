@@ -5,123 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from bcbench.logger import get_logger
-from bcbench.types import EvaluationCategory, EvaluationContext
+from bcbench.results.base import BaseEvaluationResult
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
-
-
-@dataclass(slots=True)
-class EvaluationResult:
-    instance_id: str
-    project: str
-    model: str
-    agent_name: str
-    category: EvaluationCategory
-
-    resolved: bool
-    build: bool
-
-    generated_patch: str = ""
-    error_message: str | None = None
-    agent_execution_time: float | None = None
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-    mcp_servers: list[str] | None = None
-    custom_instructions: bool | None = None
-
-    @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "EvaluationResult":
-        return cls(
-            instance_id=str(payload["instance_id"]),
-            project=str(payload["project"]),
-            model=str(payload["model"]),
-            agent_name=str(payload["agent_name"]),
-            category=EvaluationCategory(payload["category"]),
-            resolved=bool(payload["resolved"]),
-            build=bool(payload["build"]),
-            generated_patch=payload.get("generated_patch", ""),
-            error_message=payload.get("error_message"),
-            agent_execution_time=payload.get("agent_execution_time"),
-            prompt_tokens=payload.get("prompt_tokens"),
-            completion_tokens=payload.get("completion_tokens"),
-            mcp_servers=payload.get("mcp_servers"),
-            custom_instructions=payload.get("custom_instructions"),
-        )
-
-    @classmethod
-    def create_success(cls, context: "EvaluationContext", generated_patch: str) -> "EvaluationResult":
-        return cls._create(context, resolved=True, build=True, generated_patch=generated_patch)
-
-    @classmethod
-    def create_build_failure(cls, context: "EvaluationContext", generated_patch: str, error_msg: str) -> "EvaluationResult":
-        return cls._create(context, resolved=False, build=False, error_message=error_msg, generated_patch=generated_patch)
-
-    @classmethod
-    def create_test_failure(cls, context: "EvaluationContext", generated_patch: str, error_msg: str = "Tests failed") -> "EvaluationResult":
-        return cls._create(context, resolved=False, build=True, error_message=error_msg, generated_patch=generated_patch)
-
-    @classmethod
-    def _create(cls, context: "EvaluationContext", resolved: bool, build: bool, error_message: str | None = None, generated_patch: str = "") -> "EvaluationResult":
-        metrics = context.agent_metrics or {}
-        prompt_tokens = metrics.get("prompt_tokens")
-        completion_tokens = metrics.get("completion_tokens")
-        agent_execution_time = metrics.get("agent_execution_time")
-
-        # Warn about missing critical metrics that affect result quality
-        if context.agent_metrics is None:
-            logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        else:
-            missing_metrics = []
-            if agent_execution_time is None:
-                missing_metrics.append("agent_execution_time")
-            if prompt_tokens is None:
-                missing_metrics.append("prompt_tokens")
-            if completion_tokens is None:
-                missing_metrics.append("completion_tokens")
-
-            if missing_metrics:
-                logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
-
-        project = context.entry.extract_project_name()
-        return cls(
-            instance_id=context.entry.instance_id,
-            project=project,
-            resolved=resolved,
-            build=build,
-            model=context.model,
-            category=context.category,
-            agent_name=context.agent_name,
-            generated_patch=generated_patch,
-            error_message=error_message,
-            agent_execution_time=agent_execution_time,
-            prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
-            completion_tokens=int(completion_tokens) if completion_tokens is not None else None,
-            mcp_servers=context.mcp_servers,
-            custom_instructions=context.custom_instructions,
-        )
-
-    def save(self, output_dir: Path, result_file: str) -> None:
-        output_file = output_dir / result_file
-        with open(output_file, "a") as f:
-            result_dict = {
-                "instance_id": self.instance_id,
-                "resolved": self.resolved,
-                "model": self.model,
-                "category": self.category.value,
-                "agent_name": self.agent_name,
-                "build": self.build,
-                "error_message": self.error_message,
-                "project": self.project,
-                "agent_execution_time": self.agent_execution_time,
-                "prompt_tokens": self.prompt_tokens,
-                "completion_tokens": self.completion_tokens,
-                "generated_patch": self.generated_patch,
-                "mcp_servers": self.mcp_servers,
-                "custom_instructions": self.custom_instructions,
-            }
-            f.write(json.dumps(result_dict) + "\n")
-
-        logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")
 
 
 @dataclass(slots=True)
@@ -146,7 +33,7 @@ class EvaluationResultSummary:
     custom_instructions: bool | None = None
 
     @classmethod
-    def from_results(cls, results: list[EvaluationResult], run_id: str) -> "EvaluationResultSummary":
+    def from_results(cls, results: list[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
         total = len(results)
         resolved = sum(r.resolved for r in results)
 
@@ -195,6 +82,7 @@ class EvaluationResultSummary:
             custom_instructions=payload.get("custom_instructions"),
         )
 
+    # TODO: handle test-generation category
     def to_dict(self) -> dict[str, Any]:
         return {
             "total": self.total,

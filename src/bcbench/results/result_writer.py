@@ -3,13 +3,15 @@ from pathlib import Path
 
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
-from bcbench.results import EvaluationResult
+from bcbench.results import BaseEvaluationResult
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 
+# TODO: handle test-generation category
 
-def write_bceval_results(results: list[EvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str) -> None:
+
+def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str) -> None:
     """Write results into a JSONL file for bceval consumption."""
     dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path)
 

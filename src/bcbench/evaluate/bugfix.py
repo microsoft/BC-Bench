@@ -11,7 +11,7 @@ from bcbench.operations import (
     get_generated_diff,
     run_tests,
 )
-from bcbench.results import EvaluationResult
+from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -50,7 +50,7 @@ class BugFixPipeline(EvaluationPipeline):
         Creates and saves appropriate result based on validation outcome.
         """
         generated_patch = get_generated_diff(context.repo_path)
-        result: EvaluationResult | None = None
+        result: BugFixResult | None = None
 
         try:
             apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} test patch")
@@ -64,15 +64,15 @@ class BugFixPipeline(EvaluationPipeline):
             )
             run_tests(context.entry, context.container_name, context.username, context.password)
 
-            result = EvaluationResult.create_success(context, generated_patch)
+            result = BugFixResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
 
         except BuildError as e:
-            result = EvaluationResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
+            result = BugFixResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
             logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
         except TestExecutionError as e:
-            result = EvaluationResult.create_test_failure(context, generated_patch)
+            result = BugFixResult.create_test_failure(context, generated_patch)
             logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 
         finally:
