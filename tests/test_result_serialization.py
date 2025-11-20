@@ -170,3 +170,26 @@ class TestCategorySerialization:
         # Note: from_json receives string and assigns directly to category
         # The current implementation stores it as the enum's value string
         assert summary.category == "test-generation"
+
+    def test_test_generation_pre_patch_failed_in_jsonl(self, tmp_path):
+        result = TestGenerationResult(
+            instance_id="test__pre-patch",
+            project="app",
+            model="gpt-4o",
+            agent_name="copilot-cli",
+            category=EvaluationCategory.TEST_GENERATION,
+            resolved=True,
+            build=True,
+            generated_patch="test content",
+            pre_patch_failed=True,
+            post_patch_passed=True,
+        )
+
+        output_file = tmp_path / "result.jsonl"
+        result.save(tmp_path, "result.jsonl")
+
+        with open(output_file) as f:
+            data = json.loads(f.readline())
+
+        assert "pre_patch_failed" in data
+        assert data["pre_patch_failed"] is True
