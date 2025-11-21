@@ -14,8 +14,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_instructions_from_config
-from bcbench.operations.instruction_operations import setup_custom_agent
+from bcbench.operations import setup_custom_agent, setup_instructions_from_config
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
