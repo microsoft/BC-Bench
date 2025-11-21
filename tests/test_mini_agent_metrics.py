@@ -192,7 +192,7 @@ class TestMiniAgentMetricsExtraction:
             mock_env_class.return_value = mock_env
 
             # Run the agent
-            metrics, _, _ = run_mini_agent(
+            experiment_config = run_mini_agent(
                 entry=entry,
                 repo_path=tmp_path / "repo",
                 model="azure/gpt-4.1",
@@ -202,9 +202,9 @@ class TestMiniAgentMetricsExtraction:
             )
 
             # Verify metrics
-            assert metrics is not None
-            assert "agent_execution_time" in metrics
-            assert metrics["agent_execution_time"] == 123.5  # 223.5 - 100.0
+            assert experiment_config.agent_metrics is not None
+            assert "agent_execution_time" in experiment_config.agent_metrics
+            assert experiment_config.agent_metrics["agent_execution_time"] == 123.5  # 223.5 - 100.0
 
     def test_result_preserves_other_fields_with_mini_metrics(self, sample_context):
         sample_context.agent_metrics = {

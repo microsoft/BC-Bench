@@ -14,7 +14,7 @@ __all__ = ["EvaluationContext", "ExperimentConfiguration"]
 @dataclass
 class ExperimentConfiguration:
     """Configuration and metrics collected during agent experiment execution.
-    
+
     This encapsulates all experiment-related data that agents return,
     making it easier to add new configuration options without changing function signatures.
     """
