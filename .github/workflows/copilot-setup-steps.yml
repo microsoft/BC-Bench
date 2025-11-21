@@ -27,21 +27,17 @@ jobs:
 
       - name: Setup Python
         run: uv python install 3.12
-        shell: bash
 
       - name: Install bcbench package with all dependencies
         run: uv sync --all-extras
-        shell: bash
 
       - name: Install pre-commit hooks
         run: |
           uv run pre-commit install
           uv run pre-commit install-hooks
-        shell: bash
 
       - name: Verify installation
         run: |
           uv run bcbench --help
           uv run pytest --version
           uv run ruff --version
-        shell: bash
