@@ -53,6 +53,7 @@ jobs:
     steps:
       - name: Generate random container password
         run: |
+          # Generate a 32-character random password using ASCII ranges: digits (48-57), uppercase (65-90), lowercase (97-122)
           $password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
           "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
         shell: pwsh
