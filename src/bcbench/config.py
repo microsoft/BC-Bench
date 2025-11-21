@@ -90,6 +90,7 @@ class FilePatternConfig:
     copilot_instruction_naming: str
     copilot_instructions_dirname: str
     copilot_instructions_pattern: str
+    test_project_identifiers: tuple[str, ...]
 
     @classmethod
     def default(cls, instance_pattern: str) -> FilePatternConfig:
@@ -102,6 +103,7 @@ class FilePatternConfig:
             copilot_instruction_naming="copilot-instructions.md",
             copilot_instructions_dirname="instructions",
             copilot_instructions_pattern="*.instructions.md",
+            test_project_identifiers=("test", "tests"),
         )
 
 

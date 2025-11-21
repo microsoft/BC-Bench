@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
@@ -10,6 +11,7 @@ from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
+_config = get_config()
 
 __all__ = ["TestGenerationPipeline"]
 
@@ -44,7 +46,10 @@ class TestGenerationPipeline(EvaluationPipeline):
         generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
         result: TestGenerationResult | None = None
 
-        test_projects: list[str] = [project for project in context.entry.project_paths if "test" in project.lower()]
+        test_identifiers = _config.file_patterns.test_project_identifiers
+        test_projects: list[str] = [
+            project for project in context.entry.project_paths if any(f"/{identifier}" in project.lower() or f"\\{identifier}" in project.lower() for identifier in test_identifiers)
+        ]
         app_projects: list[str] = [project for project in context.entry.project_paths if project not in test_projects]
 
         if not test_projects or not app_projects:

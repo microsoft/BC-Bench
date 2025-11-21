@@ -8,7 +8,7 @@ from bcbench.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _extract_codeunit_id_from_file(repo_path: Path, file_path: str) -> int | None:
+def _extract_codeunit_id_from_file(repo_path: Path, file_path: str) -> int:
     """
     Extract codeunit ID from an AL file by reading its content.
 
@@ -17,7 +17,7 @@ def _extract_codeunit_id_from_file(repo_path: Path, file_path: str) -> int | Non
         file_path: Relative file path from repo root (e.g., 'App/Apps/W1/Test.al')
 
     Returns:
-        Codeunit ID if found, None otherwise
+        Codeunit ID (always returns int, raises exception if not found)
     """
     full_path = repo_path / file_path
     if not full_path.exists():
@@ -47,6 +47,8 @@ def extract_tests_from_patch(generated_patch: str, repo_path: Path) -> list[Test
 
     Raises:
         NoTestsExtractedError: If no test entries are found in the patch
+        FileNotFoundError: If a file referenced in the patch doesn't exist
+        ValueError: If a file doesn't contain a codeunit ID
     """
     test_entries: list[TestEntry] = []
     current_file_path: str | None = None
