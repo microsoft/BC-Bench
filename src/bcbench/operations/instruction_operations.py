@@ -42,8 +42,9 @@ def setup_custom_agent(copilot_config: dict, entry: DatasetEntry, repo_path: Pat
     Setup custom agents in the repository if available.
     """
     custom_agent_config: dict = copilot_config["agents"]
+    custom_agent_enabled: bool = custom_agent_config["enabled"]
 
-    if custom_agent_config["enabled"]:
+    if custom_agent_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.repo)
         github_dir: Path = repo_path / ".github"
         copytree(source_instructions / "agents", github_dir / "agents", dirs_exist_ok=True)
