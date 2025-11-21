@@ -39,7 +39,10 @@ class TestGenerationPipeline(EvaluationPipeline):
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.agent_metrics, context.mcp_servers, context.custom_instructions = agent_runner(context)
+            experiment_config = agent_runner(context)
+            context.agent_metrics = experiment_config.agent_metrics
+            context.mcp_servers = experiment_config.mcp_servers
+            context.custom_instructions = experiment_config.custom_instructions
 
     def evaluate(self, context: EvaluationContext) -> None:
         generated_patch: str = get_generated_diff(context.repo_path)

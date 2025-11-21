@@ -11,7 +11,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
-from bcbench.types import EvaluationCategory
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 # Lazy imports to avoid mini-swe-agent startup message for non-agent commands
 if TYPE_CHECKING:
@@ -60,14 +60,11 @@ def run_mini_agent(
     username: str = "admin",
     password: str | None = None,
     output_dir: Path | None = None,
-) -> tuple[dict[str, float | int] | None, None, bool]:
+) -> ExperimentConfiguration:
     """Run mini-bc-agent on a single dataset entry.
 
     Returns:
-        Dictionary containing metrics (agent_execution_time, prompt_tokens, completion_tokens),
-        or None if metric extraction fails.
-        None (no MCP servers for mini-bc-agent)
-        Boolean indicating if custom instructions were enabled (always False for mini-bc-agent)
+        ExperimentConfiguration containing metrics and configuration used during the experiment
     """
     if category != EvaluationCategory.BUG_FIX:
         raise ConfigurationError(f"mini-bc-agent currently only supports BUG_FIX category, got: {category}")
@@ -119,7 +116,12 @@ def run_mini_agent(
 
     logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")
 
-    return _extract_metrics(agent, execution_time), None, False
+    return ExperimentConfiguration(
+        agent_metrics=_extract_metrics(agent, execution_time),
+        mcp_servers=None,
+        custom_instructions=False,
+        custom_agent=None,
+    )
 
 
 def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | None:

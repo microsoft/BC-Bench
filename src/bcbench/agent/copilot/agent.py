@@ -15,19 +15,17 @@ from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_custom_agent, setup_instructions_from_config
-from bcbench.types import EvaluationCategory
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> tuple[dict[str, float | int] | None, list[str] | None, bool]:
+def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> ExperimentConfiguration:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:
-        Dictionary containing metrics extracted from the CLI output, or None if collection fails
-        List of MCP server names used in the experiment, or None if no MCP servers configured
-        Boolean indicating if custom instructions were enabled
+        ExperimentConfiguration containing metrics and configuration used during the experiment
     """
     config_file = Path(__file__).parent / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
@@ -82,10 +80,20 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
 
         stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
         stderr_lines = stderr.splitlines()
-        return parse_metrics(stderr_lines), mcp_server_names, instructions_enabled
+        return ExperimentConfiguration(
+            agent_metrics=parse_metrics(stderr_lines),
+            mcp_servers=mcp_server_names,
+            custom_instructions=instructions_enabled,
+            custom_agent=custom_agent,
+        )
     except subprocess.TimeoutExpired:
         logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
-        raise AgentTimeoutError("Copilot CLI timed out", mcp_servers=mcp_server_names, custom_instructions=instructions_enabled) from None
+        config = ExperimentConfiguration(
+            mcp_servers=mcp_server_names,
+            custom_instructions=instructions_enabled,
+            custom_agent=custom_agent,
+        )
+        raise AgentTimeoutError("Copilot CLI timed out", experiment_config=config) from None
     except subprocess.CalledProcessError as e:
         logger.error(f"Copilot CLI execution failed with error {e.stderr}")
         raise AgentError(f"Copilot CLI execution failed: {e}") from None
