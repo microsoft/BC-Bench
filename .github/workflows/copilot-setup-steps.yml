@@ -41,7 +41,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          uv run bcbench --version
+          uv run bcbench --help
           uv run pytest --version
           uv run ruff --version
         shell: bash
