@@ -26,7 +26,7 @@ jobs:
           enable-cache: true
 
       - name: Setup Python
-        run: uv python install
+        run: uv python install 3.12
         shell: bash
 
       - name: Install bcbench package with all dependencies
