@@ -145,9 +145,7 @@ def _extract_metrics(agent, execution_time: float) -> AgentMetrics | None:
                     prompt_tokens += usage["prompt_tokens"]
                     completion_tokens += usage["completion_tokens"]
 
-        metrics = AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-        logger.info(f"Extracted metrics: execution_time={execution_time}, prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}")
-        return metrics
+        return AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
 
     except Exception as e:
         logger.warning(f"Failed to extract metrics from agent: {e}")

@@ -53,9 +53,7 @@ def parse_metrics(output_lines: Sequence[str]) -> AgentMetrics | None:
             completion_tokens = parse_token_count(output_str)
 
         if execution_time is not None or prompt_tokens is not None or completion_tokens is not None:
-            metrics = AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-            logger.info(f"Parsed metrics: execution_time={execution_time}, prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}")
-            return metrics
+            return AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
 
         logger.warning("No metrics found in output")
         return None
