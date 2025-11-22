@@ -40,9 +40,8 @@ addopts = ["-v", "--strict-markers"]
 markers = [
     "integration"
 ]
-filterwarnings = [
-    "ignore::pytest.PytestCollectionWarning:.*testgeneration.*"
-]
+# Don't collect test classes from imported modules outside testpaths
+collect_imported_tests = false
 
 [tool.ruff]
 target-version = "py312"
