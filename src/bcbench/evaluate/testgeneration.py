@@ -5,7 +5,7 @@ from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
-from bcbench.operations import apply_patch, build_and_publish_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
+from bcbench.operations import apply_patch, build_and_publish_projects, categorize_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
@@ -46,15 +46,7 @@ class TestGenerationPipeline(EvaluationPipeline):
         generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
         result: TestGenerationResult | None = None
 
-        test_identifiers = _config.file_patterns.test_project_identifiers
-        test_projects: list[str] = [
-            project for project in context.entry.project_paths if any(f"/{identifier}" in project.lower() or f"\\{identifier}" in project.lower() for identifier in test_identifiers)
-        ]
-        app_projects: list[str] = [project for project in context.entry.project_paths if project not in test_projects]
-
-        if not test_projects or not app_projects:
-            logger.error(f"Project categorization failed for entry {context.entry.instance_id}. Test projects: {test_projects}, App projects: {app_projects}")
-            raise RuntimeError(f"Project categorization failed for entry {context.entry.instance_id}.")
+        test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
         try:
             build_and_publish_projects(
