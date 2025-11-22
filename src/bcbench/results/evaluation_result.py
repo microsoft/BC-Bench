@@ -1,8 +1,9 @@
 import json
-from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
@@ -11,8 +12,9 @@ from bcbench.types import EvaluationCategory
 logger = get_logger(__name__)
 
 
-@dataclass(slots=True)
-class EvaluationResultSummary:
+class EvaluationResultSummary(BaseModel):
+    """Summary of evaluation results using Pydantic for better validation and serialization."""
+
     total: int
     resolved: int
     failed: int
@@ -35,6 +37,7 @@ class EvaluationResultSummary:
 
     @classmethod
     def from_results(cls, results: list[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
+        """Create a summary from a list of evaluation results."""
         total = len(results)
         resolved = sum(r.resolved for r in results)
 
@@ -65,47 +68,19 @@ class EvaluationResultSummary:
             custom_agent=first_result.custom_agent,
         )
 
-    @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "EvaluationResultSummary":
-        return cls(
-            total=int(payload["total"]),
-            resolved=int(payload["resolved"]),
-            failed=int(payload["failed"]),
-            build=int(payload["build"]),
-            date=date.fromisoformat(payload["date"]),
-            model=str(payload["model"]),
-            category=EvaluationCategory(payload["category"]),
-            agent_name=str(payload["agent_name"]),
-            average_duration=float(payload["average_duration"]),
-            average_prompt_tokens=float(payload["average_prompt_tokens"]),
-            average_completion_tokens=float(payload["average_completion_tokens"]),
-            github_run_id=payload.get("github_run_id"),
-            mcp_servers=payload.get("mcp_servers"),
-            custom_instructions=payload.get("custom_instructions"),
-            custom_agent=payload.get("custom_agent"),
-        )
-
-    # TODO: handle test-generation category
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "total": self.total,
-            "resolved": self.resolved,
-            "failed": self.failed,
-            "build": self.build,
-            "date": self.date.isoformat(),
-            "model": self.model,
-            "category": self.category.value,
-            "agent_name": self.agent_name,
-            "average_duration": round(self.average_duration, 1),
-            "average_prompt_tokens": round(self.average_prompt_tokens, 1),
-            "average_completion_tokens": round(self.average_completion_tokens, 1),
-            "github_run_id": self.github_run_id,
-            "mcp_servers": self.mcp_servers,
-            "custom_instructions": self.custom_instructions,
-            "custom_agent": self.custom_agent,
-        }
+        """Convert summary to dictionary with proper formatting for JSON serialization."""
+        data = self.model_dump(mode="json")
+        # Ensure category is serialized as string value
+        data["category"] = self.category.value
+        # Round numeric values for readability
+        data["average_duration"] = round(data["average_duration"], 1)
+        data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)
+        data["average_completion_tokens"] = round(data["average_completion_tokens"], 1)
+        return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:
+        """Save the summary to a JSON file."""
         output_file = output_dir / summary_file
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(json.dumps(self.to_dict(), indent=4))

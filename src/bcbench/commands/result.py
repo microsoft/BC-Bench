@@ -74,33 +74,45 @@ def result_summarize(
 @result_app.command("update")
 def result_update(
     evaluation_summary: Annotated[Path, typer.Argument(help="Path to a single evaluation run's summary JSON", exists=True, file_okay=True, dir_okay=False)],
-    leaderboard_path: Annotated[Path, typer.Option(help="Path to the public displayed leaderboard/results JSON", exists=True, file_okay=True, dir_okay=False)] = _config.paths.leaderboard_path,
+    leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_path.parent,
 ):
     """
     Update the public leaderboard with a new evaluation summary.
 
-    Takes a single evaluation run's summary and updates the public results file,
-    either replacing an existing agent-model combination or adding a new entry.
+    Takes a single evaluation run's summary and updates the appropriate category-specific
+    leaderboard file (bugfix.json or testgeneration.json), either replacing an existing
+    agent-model combination or adding a new entry.
 
     Example:
         bcbench result update evaluation_results/12345/evaluation_summary.json
     """
     logger.info(f"Loading evaluation summary from: {evaluation_summary}")
     with open(evaluation_summary, encoding="utf-8") as f:
-        new_result = EvaluationResultSummary.from_json(json.load(f))
+        new_result = EvaluationResultSummary.model_validate_json(f.read())
 
-    logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}'")
+    logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}' in category '{new_result.category.value}'")
 
-    logger.info(f"Loading existing leaderboard from: {leaderboard_path}")
-    with open(leaderboard_path, encoding="utf-8") as f:
-        existing_results = json.load(f)
+    # Determine the appropriate leaderboard file based on category
+    category_filename = f"{new_result.category.value}.json"
+    leaderboard_path = leaderboard_dir / category_filename
+
+    logger.info(f"Using leaderboard file: {leaderboard_path}")
+
+    # Load or create leaderboard file
+    if leaderboard_path.exists():
+        logger.info(f"Loading existing leaderboard from: {leaderboard_path}")
+        with open(leaderboard_path, encoding="utf-8") as f:
+            existing_results = json.load(f)
+    else:
+        logger.info(f"Creating new leaderboard file: {leaderboard_path}")
+        existing_results = []
 
     updated = False
     for i, result in enumerate(existing_results):
         if (
             result["agent_name"] == new_result.agent_name
             and result["model"] == new_result.model
-            and result["mcp_servers"] == new_result.mcp_servers
+            and result.get("mcp_servers") == new_result.mcp_servers
             and result.get("custom_instructions") == new_result.custom_instructions
         ):
             logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")

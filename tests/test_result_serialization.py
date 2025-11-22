@@ -6,7 +6,7 @@ from bcbench.results.base import create_result_from_json
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.evaluation_result import EvaluationResultSummary
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory
 
 
 class TestCategorySerialization:
@@ -21,9 +21,11 @@ class TestCategorySerialization:
             resolved=True,
             build=True,
             generated_patch="patch content",
-            agent_execution_time=100.0,
-            prompt_tokens=1000,
-            completion_tokens=500,
+            metrics=AgentMetrics(
+                execution_time=100.0,
+                prompt_tokens=1000,
+                completion_tokens=500,
+            ),
         )
 
     @pytest.fixture
@@ -37,9 +39,11 @@ class TestCategorySerialization:
             resolved=False,
             build=True,
             generated_patch="test patch content",
-            agent_execution_time=150.0,
-            prompt_tokens=2000,
-            completion_tokens=800,
+            metrics=AgentMetrics(
+                execution_time=150.0,
+                prompt_tokens=2000,
+                completion_tokens=800,
+            ),
         )
 
     def test_bug_fix_category_saves_as_string(self, tmp_path, sample_result_bug_fix):
@@ -165,11 +169,10 @@ class TestCategorySerialization:
             "average_completion_tokens": 600.0,
         }
 
-        summary = EvaluationResultSummary.from_json(payload)
+        summary = EvaluationResultSummary.model_validate(payload)
 
-        # Note: from_json receives string and assigns directly to category
-        # The current implementation stores it as the enum's value string
-        assert summary.category == "test-generation"
+        # Pydantic handles the enum conversion automatically
+        assert summary.category == EvaluationCategory.TEST_GENERATION
 
     def test_test_generation_pre_patch_failed_in_jsonl(self, tmp_path):
         result = TestGenerationResult(

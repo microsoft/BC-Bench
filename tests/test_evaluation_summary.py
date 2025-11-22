@@ -6,7 +6,7 @@ import pytest
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.evaluation_result import EvaluationResultSummary
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory
 
 
 class TestEvaluationResultSummary:
@@ -79,9 +79,11 @@ class TestFromResults:
                 resolved=True,
                 build=True,
                 error_message=None,
-                agent_execution_time=100.0,
-                prompt_tokens=5000,
-                completion_tokens=1000,
+                metrics=AgentMetrics(
+                    execution_time=100.0,
+                    prompt_tokens=5000,
+                    completion_tokens=1000,
+                ),
             ),
             BugFixResult(
                 instance_id="test__2",
@@ -92,9 +94,11 @@ class TestFromResults:
                 resolved=True,
                 build=True,
                 error_message=None,
-                agent_execution_time=150.0,
-                prompt_tokens=6000,
-                completion_tokens=1500,
+                metrics=AgentMetrics(
+                    execution_time=150.0,
+                    prompt_tokens=6000,
+                    completion_tokens=1500,
+                ),
             ),
             BugFixResult(
                 instance_id="test__3",
@@ -105,9 +109,11 @@ class TestFromResults:
                 resolved=False,
                 build=False,
                 error_message="Build failed",
-                agent_execution_time=80.0,
-                prompt_tokens=4000,
-                completion_tokens=800,
+                metrics=AgentMetrics(
+                    execution_time=80.0,
+                    prompt_tokens=4000,
+                    completion_tokens=800,
+                ),
             ),
         ]
 
@@ -144,9 +150,11 @@ class TestFromResults:
                 resolved=True,
                 build=True,
                 error_message=None,
-                agent_execution_time=100.0,
-                prompt_tokens=5000,
-                completion_tokens=1000,
+                metrics=AgentMetrics(
+                    execution_time=100.0,
+                    prompt_tokens=5000,
+                    completion_tokens=1000,
+                ),
             ),
             BugFixResult(
                 instance_id="test__2",
@@ -157,9 +165,7 @@ class TestFromResults:
                 resolved=False,
                 build=False,
                 error_message="Error",
-                agent_execution_time=None,
-                prompt_tokens=None,
-                completion_tokens=None,
+                metrics=None,
             ),
         ]
 
@@ -181,9 +187,7 @@ class TestFromResults:
                 resolved=False,
                 build=False,
                 error_message="Error",
-                agent_execution_time=None,
-                prompt_tokens=None,
-                completion_tokens=None,
+                metrics=None,
             ),
         ]
 

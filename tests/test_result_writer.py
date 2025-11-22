@@ -6,7 +6,7 @@ from bcbench.dataset import DatasetEntry
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.result_writer import write_bceval_results
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory
 
 
 class TestWriteBcevalResults:
@@ -52,9 +52,11 @@ class TestWriteBcevalResults:
             build=True,
             generated_patch="diff --git a/test.al b/test.al\n--- a/test.al\n+++ b/test.al\n@@ -1 +1 @@\n-old\n+new",
             error_message=None,
-            agent_execution_time=120.5,
-            prompt_tokens=5000,
-            completion_tokens=1200,
+            metrics=AgentMetrics(
+                execution_time=120.5,
+                prompt_tokens=5000,
+                completion_tokens=1200,
+            ),
         )
 
     @pytest.fixture
@@ -69,9 +71,7 @@ class TestWriteBcevalResults:
             build=False,
             generated_patch="",
             error_message="Failed to build",
-            agent_execution_time=None,
-            prompt_tokens=None,
-            completion_tokens=None,
+            metrics=None,
         )
 
     def test_writes_bceval_results_with_all_fields(self, tmp_path, sample_dataset_file, result_with_all_fields):
@@ -188,8 +188,10 @@ class TestWriteBcevalResults:
             category=EvaluationCategory.BUG_FIX,
             resolved=False,
             build=False,
-            prompt_tokens=1000,
-            completion_tokens=200,
+            metrics=AgentMetrics(
+                prompt_tokens=1000,
+                completion_tokens=200,
+            ),
         )
 
         write_bceval_results(
@@ -219,9 +221,11 @@ class TestWriteBcevalResults:
             category=EvaluationCategory.BUG_FIX,
             resolved=True,
             build=True,
-            agent_execution_time=100.0,
-            prompt_tokens=None,  # Only prompt_tokens is None
-            completion_tokens=1500,
+            metrics=AgentMetrics(
+                execution_time=100.0,
+                prompt_tokens=None,  # Only prompt_tokens is None
+                completion_tokens=1500,
+            ),
         )
 
         write_bceval_results(
