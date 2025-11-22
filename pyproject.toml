@@ -40,7 +40,6 @@ addopts = ["-v", "--strict-markers"]
 markers = [
     "integration"
 ]
-# Don't collect test classes from imported modules outside testpaths
 collect_imported_tests = false
 
 [tool.ruff]
