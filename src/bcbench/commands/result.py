@@ -114,5 +114,6 @@ def result_update(
 
     with open(leaderboard_path, "w", encoding="utf-8") as f:
         json.dump(existing_results, f, indent=2)
+        f.write("\n")
 
     logger.info(f"Successfully updated leaderboard at: {leaderboard_path}")
