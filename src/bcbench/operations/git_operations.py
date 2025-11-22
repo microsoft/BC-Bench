@@ -103,9 +103,10 @@ def get_generated_diff(repo_path: Path, project_paths: list[str] | None = None) 
         logger.info("Getting git diff")
 
         if project_paths:
-            # Stage only *.al files in specified project paths
+            # Stage only *.al files in specified project paths (recursively)
             for project_path in project_paths:
-                subprocess.run(["git", "add", f"{project_path}/*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+                # Use -- to separate pathspec from options
+                subprocess.run(["git", "add", "--", f"{project_path}"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
             # Clean any unstaged changes (revert unintended changes to other projects)
             subprocess.run(["git", "checkout", "--", "."], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
