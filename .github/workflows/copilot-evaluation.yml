@@ -72,6 +72,7 @@ jobs:
         run: npm install -g @github/copilot@0.0.361
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+        timeout-minutes: 90
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
         run: |
