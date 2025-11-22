@@ -221,7 +221,7 @@ profile_default/
 ipython_config.py
 
 # pyenv
-.python-version
+# .python-version
 
 # pipenv
 Pipfile.lock

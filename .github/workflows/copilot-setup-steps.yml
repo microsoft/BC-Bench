@@ -26,18 +26,13 @@ jobs:
           enable-cache: true
 
       - name: Setup Python
-        run: uv python install 3.12
+        run: uv python install
 
       - name: Install bcbench package with all dependencies
         run: uv sync --all-extras
 
       - name: Install pre-commit hooks
-        run: |
-          uv run pre-commit install
-          uv run pre-commit install-hooks
+        run: uv run pre-commit install
 
       - name: Verify installation
-        run: |
-          uv run bcbench --help
-          uv run pytest --version
-          uv run ruff --version
+        run: uv run bcbench --help
