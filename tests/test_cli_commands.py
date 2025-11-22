@@ -628,3 +628,50 @@ def test_result_update_ensures_newline_at_end_of_file(sample_leaderboard_and_sum
     with open(leaderboard_path, "rb") as f:
         content = f.read()
         assert content.endswith(b"\n"), "Leaderboard file should end with a newline character"
+
+
+@pytest.mark.integration
+def test_result_update_does_not_add_multiple_newlines_when_run_twice(sample_leaderboard_and_summary):
+    leaderboard_path, summary_path = sample_leaderboard_and_summary
+
+    # Run update command first time
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-path",
+            str(leaderboard_path),
+        ],
+    )
+    assert result.exit_code == 0
+
+    # Read file after first update
+    with open(leaderboard_path, "rb") as f:
+        content_after_first = f.read()
+
+    # Count trailing newlines after first update
+    trailing_newlines_first = len(content_after_first) - len(content_after_first.rstrip(b"\n"))
+    assert trailing_newlines_first == 1, "File should have exactly 1 trailing newline after first update"
+
+    # Run update command second time with same summary
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-path",
+            str(leaderboard_path),
+        ],
+    )
+    assert result.exit_code == 0
+
+    # Read file after second update
+    with open(leaderboard_path, "rb") as f:
+        content_after_second = f.read()
+
+    # Count trailing newlines after second update
+    trailing_newlines_second = len(content_after_second) - len(content_after_second.rstrip(b"\n"))
+    assert trailing_newlines_second == 1, "File should still have exactly 1 trailing newline after second update, not 2"
