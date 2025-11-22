@@ -10,9 +10,8 @@ from bcbench.operations.bc_operations import (
 from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
-    clean_project_paths,
     clean_repo,
-    get_generated_diff,
+    stage_and_get_diff,
 )
 from bcbench.operations.instruction_operations import setup_custom_agent, setup_instructions_from_config
 from bcbench.operations.project_operations import categorize_projects
@@ -26,11 +25,10 @@ __all__ = [
     "build_ps_test_script",
     "categorize_projects",
     "checkout_commit",
-    "clean_project_paths",
     "clean_repo",
     "extract_tests_from_patch",
-    "get_generated_diff",
     "run_tests",
     "setup_custom_agent",
     "setup_instructions_from_config",
+    "stage_and_get_diff",
 ]

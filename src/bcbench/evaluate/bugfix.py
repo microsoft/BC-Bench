@@ -9,8 +9,8 @@ from bcbench.operations import (
     categorize_projects,
     checkout_commit,
     clean_repo,
-    get_generated_diff,
     run_tests,
+    stage_and_get_diff,
 )
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
@@ -53,7 +53,7 @@ class BugFixPipeline(EvaluationPipeline):
         # Categorize projects and stage only app project changes
         # This prevents test project changes from being included in the diff
         _test_projects, app_projects = categorize_projects(context.entry.project_paths)
-        generated_patch = get_generated_diff(context.repo_path, app_projects)
+        generated_patch = stage_and_get_diff(context.repo_path, app_projects)
         result: BugFixResult | None = None
 
         try:
