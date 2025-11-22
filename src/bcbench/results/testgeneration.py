@@ -1,7 +1,7 @@
 from bcbench.results.base import BaseEvaluationResult
 
 
-class TestGenerationResult(BaseEvaluationResult):
+class GeneratedTestResult(BaseEvaluationResult):
     """Result class for test-generation evaluation category.
 
     Inherits all shared metrics from BaseEvaluationResult.

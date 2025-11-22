@@ -5,7 +5,7 @@ import pytest
 from bcbench.results.base import create_result_from_json
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.evaluation_result import EvaluationResultSummary
-from bcbench.results.testgeneration import TestGenerationResult
+from bcbench.results.testgeneration import GeneratedTestResult
 from bcbench.types import EvaluationCategory
 
 
@@ -28,7 +28,7 @@ class TestCategorySerialization:
 
     @pytest.fixture
     def sample_result_test_gen(self):
-        return TestGenerationResult(
+        return GeneratedTestResult(
             instance_id="test__test-gen-1",
             project="app",
             model="gpt-4o",
@@ -118,7 +118,7 @@ class TestCategorySerialization:
         assert loaded.category == EvaluationCategory.BUG_FIX
 
     def test_round_trip_test_generation(self, tmp_path):
-        original = TestGenerationResult(
+        original = GeneratedTestResult(
             instance_id="round-trip-test-gen",
             project="test-project",
             model="test-model",
@@ -172,7 +172,7 @@ class TestCategorySerialization:
         assert summary.category == "test-generation"
 
     def test_test_generation_pre_patch_failed_in_jsonl(self, tmp_path):
-        result = TestGenerationResult(
+        result = GeneratedTestResult(
             instance_id="test__pre-patch",
             project="app",
             model="gpt-4o",

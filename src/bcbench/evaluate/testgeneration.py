@@ -7,7 +7,7 @@ from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import apply_patch, build_and_publish_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
 from bcbench.operations.bc_operations import run_test_suite
-from bcbench.results.testgeneration import TestGenerationResult
+from bcbench.results.testgeneration import GeneratedTestResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -44,7 +44,7 @@ class TestGenerationPipeline(EvaluationPipeline):
     def evaluate(self, context: EvaluationContext) -> None:
         generated_patch: str = get_generated_diff(context.repo_path)
         generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
-        result: TestGenerationResult | None = None
+        result: GeneratedTestResult | None = None
 
         test_identifiers = _config.file_patterns.test_project_identifiers
         test_projects: list[str] = [
@@ -79,18 +79,18 @@ class TestGenerationPipeline(EvaluationPipeline):
             )
             run_test_suite(generated_tests, "Pass", context.container_name, context.username, context.password)
 
-            result = TestGenerationResult.create_success(context, generated_patch, pre_patch_failed=True, post_patch_passed=True)
+            result = GeneratedTestResult.create_success(context, generated_patch, pre_patch_failed=True, post_patch_passed=True)
             logger.info(f"Successfully completed {context.entry.instance_id}")
 
         except BuildError as e:
-            result = TestGenerationResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
+            result = GeneratedTestResult.create_build_failure(context, generated_patch, f"Build failed: {e.project_path}")
             logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
         except TestExecutionError as e:
             if e.expectation == "Fail":
-                result = TestGenerationResult.create_test_failure(context, generated_patch, "Generated tests Passed pre-patch", pre_patch_failed=False)
+                result = GeneratedTestResult.create_test_failure(context, generated_patch, "Generated tests Passed pre-patch", pre_patch_failed=False)
             else:
-                result = TestGenerationResult.create_test_failure(context, generated_patch, "Generated tests Failed post-patch", pre_patch_failed=True, post_patch_passed=False)
+                result = GeneratedTestResult.create_test_failure(context, generated_patch, "Generated tests Failed post-patch", pre_patch_failed=True, post_patch_passed=False)
 
             logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 

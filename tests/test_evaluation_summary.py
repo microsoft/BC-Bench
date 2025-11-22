@@ -5,7 +5,7 @@ import pytest
 
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.evaluation_result import EvaluationResultSummary
-from bcbench.results.testgeneration import TestGenerationResult
+from bcbench.results.testgeneration import GeneratedTestResult
 from bcbench.types import EvaluationCategory
 
 
@@ -172,7 +172,7 @@ class TestFromResults:
 
     def test_from_results_with_all_none_metrics_returns_zero(self):
         results = [
-            TestGenerationResult(
+            GeneratedTestResult(
                 instance_id="test__1",
                 project="app",
                 model="gpt-4o",
