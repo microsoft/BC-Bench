@@ -1,5 +1,7 @@
 # BC-Bench
 
+[![Dataset Validation and Verification](https://github.com/microsoft/BC-Bench/actions/workflows/dataset-validation.yml/badge.svg?event=schedule)](https://github.com/microsoft/BC-Bench/actions/workflows/dataset-validation.yml)
+
 A benchmark for evaluating AI coding agents on Business Central (AL) development tasks, inspired by [SWE-Bench](https://github.com/swe-bench/SWE-bench).
 
 BC-Bench provides a reproducible evaluation process so we can:
@@ -20,6 +22,9 @@ Prerequisites:
 
 gh repo clone microsoft/BC-Bench
 cd BC-Bench
+
+# Install python
+uv python install
 
 # Install dependencies
 uv sync --all-extras

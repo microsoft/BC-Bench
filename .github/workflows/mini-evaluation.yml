@@ -23,7 +23,7 @@ on:
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
-        default: false
+        default: true
         type: boolean
 
 env:
@@ -40,10 +40,6 @@ jobs:
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    env:
-      BC_CONTAINER_NAME: bcbench
-      BC_CONTAINER_USERNAME: admin
-      BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
     if: needs.get-entries.outputs.entries != '[]'
     name: ${{ matrix.entry }}
     strategy:

@@ -37,4 +37,5 @@ def test_full_metrics_flow_to_success_result(self, sample_context):
 
 ## Addtional Information
 - Do NOT worry about backward compatibility unless explicitly stated
+- Do NOT worry about breaking changes
 - Follow existing code patterns unless there is a strong reason to deviate
