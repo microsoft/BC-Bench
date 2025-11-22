@@ -5,7 +5,7 @@ import pytest
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.dataset import DatasetEntry
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext
 
 
 class TestCopilotMetricsToResultFlow:
@@ -40,7 +40,7 @@ class TestCopilotMetricsToResultFlow:
         ]
         metrics = parse_metrics(output_lines)
 
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -59,7 +59,7 @@ class TestCopilotMetricsToResultFlow:
             "    gpt-4o    50k input, 1k output\n",
         ]
         metrics = parse_metrics(output_lines)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -70,7 +70,7 @@ class TestCopilotMetricsToResultFlow:
     def test_metrics_flow_with_partial_metrics(self, sample_context):
         output_lines = ["Total duration (wall): 1m 30s\n"]
         metrics = parse_metrics(output_lines)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -81,7 +81,7 @@ class TestCopilotMetricsToResultFlow:
     def test_metrics_flow_with_no_metrics(self, sample_context):
         output_lines = ["Some output without metrics\n"]
         metrics = parse_metrics(output_lines)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -96,7 +96,7 @@ class TestCopilotMetricsToResultFlow:
             "    gpt-4o    75.2k input, 1.8k output\n",
         ]
         metrics = parse_metrics(output_lines)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_test_failure(sample_context, "test_patch")
 
@@ -114,7 +114,7 @@ class TestCopilotMetricsToResultFlow:
             "    gpt-4o    200k input, 5k output\n",
         ]
         metrics = parse_metrics(output_lines)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_build_failure(sample_context, "test_patch", "Build failed: src/app")
 
@@ -139,7 +139,7 @@ class TestCopilotMetricsToResultFlow:
             "      gpt-4o    125.5k input, 3.6k output, 0 cache read, 0 cache write\n",
         ]
         metrics = parse_metrics(output_lines)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -155,7 +155,7 @@ class TestCopilotMetricsToResultFlow:
         assert result.completion_tokens is None
 
     def test_context_with_empty_metrics_dict(self, sample_context):
-        sample_context.agent_metrics = {}
+        sample_context.metrics = AgentMetrics()
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -165,11 +165,11 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_with_non_integer_tokens_are_converted(self, sample_context):
         # Simulate metrics with float values (from k conversion)
-        sample_context.agent_metrics = {
-            "agent_execution_time": 150.5,
-            "prompt_tokens": 12500.0,  # Float from 12.5k
-            "completion_tokens": 3200.0,  # Float from 3.2k
-        }
+        sample_context.metrics = AgentMetrics(
+            execution_time=150.5,
+            prompt_tokens=12500,  # Int from 12.5k
+            completion_tokens=3200,  # Int from 3.2k
+        )
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -185,7 +185,7 @@ class TestCopilotMetricsToResultFlow:
             "    gpt-4o    10k input, 500 output\n",
         ]
         metrics = parse_metrics(output_lines)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -265,7 +265,7 @@ class TestMiniAgentMetricsToResultFlow:
         from bcbench.agent.mini.agent import _extract_metrics
 
         metrics = _extract_metrics(mock_agent, 245.8)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -287,7 +287,7 @@ class TestMiniAgentMetricsToResultFlow:
         from bcbench.agent.mini.agent import _extract_metrics
 
         metrics = _extract_metrics(mock_agent, 120.0)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -317,7 +317,7 @@ class TestMiniAgentMetricsToResultFlow:
         from bcbench.agent.mini.agent import _extract_metrics
 
         metrics = _extract_metrics(mock_agent, 180.5)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_test_failure(sample_context, "test_patch")
 
@@ -350,7 +350,7 @@ class TestMiniAgentMetricsToResultFlow:
         from bcbench.agent.mini.agent import _extract_metrics
 
         metrics = _extract_metrics(mock_agent, 95.2)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_build_failure(sample_context, "test_patch", "Build failed: src/test")
 
@@ -370,7 +370,7 @@ class TestMiniAgentMetricsToResultFlow:
         from bcbench.agent.mini.agent import _extract_metrics
 
         metrics = _extract_metrics(mock_agent, 60.0)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -400,7 +400,7 @@ class TestMiniAgentMetricsToResultFlow:
         from bcbench.agent.mini.agent import _extract_metrics
 
         metrics = _extract_metrics(mock_agent, 450.3)
-        sample_context.agent_metrics = metrics
+        sample_context.metrics = metrics
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 

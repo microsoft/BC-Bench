@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from bcbench.types import ExperimentConfiguration
+from bcbench.types import AgentMetrics, ExperimentConfiguration
 
 __all__ = [
     "AgentError",
@@ -148,8 +145,9 @@ class AgentError(BCBenchError):
 class AgentTimeoutError(BCBenchError):
     """Agent execution timeout errors."""
 
-    def __init__(self, message: str, experiment_config: ExperimentConfiguration | None = None):
-        self.experiment_config = experiment_config
+    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None):
+        self.metrics = metrics
+        self.config = config
         super().__init__(message)
 
 

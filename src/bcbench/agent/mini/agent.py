@@ -11,7 +11,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
-from bcbench.types import EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 
 # Lazy imports to avoid mini-swe-agent startup message for non-agent commands
 if TYPE_CHECKING:
@@ -60,11 +60,11 @@ def run_mini_agent(
     username: str = "admin",
     password: str | None = None,
     output_dir: Path | None = None,
-) -> ExperimentConfiguration:
+) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run mini-bc-agent on a single dataset entry.
 
     Returns:
-        ExperimentConfiguration containing metrics and configuration used during the experiment
+        Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
     """
     if category != EvaluationCategory.BUG_FIX:
         raise ConfigurationError(f"mini-bc-agent currently only supports BUG_FIX category, got: {category}")
@@ -116,15 +116,12 @@ def run_mini_agent(
 
     logger.info(f"mini-bc-agent run complete for: {entry.instance_id} after {agent.model.n_calls} steps")
 
-    return ExperimentConfiguration(
-        agent_metrics=_extract_metrics(agent, execution_time),
-        mcp_servers=None,
-        custom_instructions=False,
-        custom_agent=None,
-    )
+    metrics = _extract_metrics(agent, execution_time)
+    config = ExperimentConfiguration()
+    return metrics, config
 
 
-def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | None:
+def _extract_metrics(agent, execution_time: float) -> AgentMetrics | None:
     """Extract metrics from agent execution.
 
     Args:
@@ -132,15 +129,12 @@ def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | N
         execution_time: Total execution time in seconds
 
     Returns:
-        Dictionary with agent_execution_time and optionally prompt_tokens/completion_tokens,
+        AgentMetrics object with execution_time and optionally prompt_tokens/completion_tokens,
         or None if extraction fails
     """
     try:
-        metrics: dict[str, float | int] = {
-            "agent_execution_time": execution_time,
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-        }
+        prompt_tokens = 0
+        completion_tokens = 0
 
         for message in agent.messages:
             if "role" in message and message["role"] == "assistant":
@@ -148,10 +142,11 @@ def _extract_metrics(agent, execution_time: float) -> dict[str, float | int] | N
                 response = extra.get("response", {})
                 usage = response.get("usage", {})
                 if "prompt_tokens" in usage and "completion_tokens" in usage:
-                    metrics["prompt_tokens"] += usage["prompt_tokens"]
-                    metrics["completion_tokens"] += usage["completion_tokens"]
+                    prompt_tokens += usage["prompt_tokens"]
+                    completion_tokens += usage["completion_tokens"]
 
-        logger.info(f"Extracted metrics: {metrics}")
+        metrics = AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+        logger.info(f"Extracted metrics: execution_time={execution_time}, prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}")
         return metrics
 
     except Exception as e:
