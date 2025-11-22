@@ -8,7 +8,11 @@ _config = get_config()
 
 
 def _is_test_project(project_path: str, test_identifiers: tuple[str, ...]) -> bool:
-    """Check if a project path is a test project based on configured identifiers.
+    r"""Check if a project path is a test project based on configured identifiers.
+
+    The function checks if any test identifier appears as a complete path component
+    by looking for the identifier preceded by a path separator (/ or \).
+    This ensures that 'src/contest' does not match 'test', but 'src/test' does.
 
     Args:
         project_path: The project path to check
