@@ -5,10 +5,52 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from bcbench.dataset import DatasetEntry
+from bcbench.logger import get_logger
 
-__all__ = ["EvaluationContext"]
+if TYPE_CHECKING:
+    from bcbench.dataset import DatasetEntry
+
+__all__ = ["AgentMetrics", "EvaluationContext", "ExperimentConfiguration"]
+
+logger = get_logger(__name__)
+
+
+@dataclass
+class AgentMetrics:
+    """Metrics collected during agent execution.
+
+    Separates runtime execution data from experiment configuration.
+    """
+
+    # Total execution time in seconds
+    execution_time: float | None = None
+
+    # Token usage from LLM calls
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+    def __post_init__(self):
+        logger.info(f"AgentMetrics: {self}")
+
+
+@dataclass
+class ExperimentConfiguration:
+    """Configuration for agent experiment execution.
+
+    This encapsulates experiment-related configuration that agents use,
+    making it easier to add new configuration options without changing function signatures.
+    """
+
+    # MCP server names used in experiment (if any)
+    mcp_servers: list[str] | None = None
+
+    # Custom instructions enabled in experiment
+    custom_instructions: bool = False
+
+    # Custom agent name used in experiment (if any)
+    custom_agent: str | None = None
 
 
 @dataclass
@@ -36,14 +78,11 @@ class EvaluationContext:
     # Evaluation category
     category: EvaluationCategory
 
-    # Agent metrics collected during execution
-    agent_metrics: dict[str, float | int] | None = None
+    # Agent execution metrics
+    metrics: AgentMetrics | None = None
 
-    # MCP server names used in experiment (if any)
-    mcp_servers: list[str] | None = None
-
-    # Custom instructions enabled in experiment
-    custom_instructions: bool | None = None
+    # Experiment configuration
+    experiment: ExperimentConfiguration | None = None
 
 
 class EvaluationCategory(str, Enum):

@@ -6,7 +6,7 @@ import pytest
 
 from bcbench.dataset import DatasetEntry
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext
 
 
 class TestMiniAgentMetricsExtraction:
@@ -42,9 +42,9 @@ class TestMiniAgentMetricsExtraction:
         metrics = _extract_metrics(mock_agent, 120.5)
 
         assert metrics is not None
-        assert metrics["agent_execution_time"] == 120.5
-        assert metrics["prompt_tokens"] == 0
-        assert metrics["completion_tokens"] == 0
+        assert metrics.execution_time == 120.5
+        assert metrics.prompt_tokens == 0
+        assert metrics.completion_tokens == 0
 
     def test_metrics_extraction_with_token_usage(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -84,9 +84,9 @@ class TestMiniAgentMetricsExtraction:
         metrics = _extract_metrics(mock_agent, 120.5)
 
         assert metrics is not None
-        assert metrics["agent_execution_time"] == 120.5
-        assert metrics["prompt_tokens"] == 350  # 150 + 200
-        assert metrics["completion_tokens"] == 125  # 50 + 75
+        assert metrics.execution_time == 120.5
+        assert metrics.prompt_tokens == 350  # 150 + 200
+        assert metrics.completion_tokens == 125  # 50 + 75
 
     def test_metrics_extraction_handles_missing_attributes(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -114,11 +114,11 @@ class TestMiniAgentMetricsExtraction:
 
     def test_metrics_flow_to_result_with_tokens(self, sample_context):
         # Simulate metrics returned from mini-agent
-        sample_context.agent_metrics = {
-            "agent_execution_time": 180.5,
-            "prompt_tokens": 5000,
-            "completion_tokens": 1200,
-        }
+        sample_context.metrics = AgentMetrics(
+            execution_time=180.5,
+            prompt_tokens=5000,
+            completion_tokens=1200,
+        )
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -129,11 +129,11 @@ class TestMiniAgentMetricsExtraction:
 
     def test_metrics_flow_to_result_without_tokens(self, sample_context):
         # Simulate metrics returned from mini-agent with zero tokens
-        sample_context.agent_metrics = {
-            "agent_execution_time": 180.5,
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-        }
+        sample_context.metrics = AgentMetrics(
+            execution_time=180.5,
+            prompt_tokens=0,
+            completion_tokens=0,
+        )
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -144,7 +144,7 @@ class TestMiniAgentMetricsExtraction:
         assert result.completion_tokens == 0
 
     def test_metrics_flow_with_no_metrics(self, sample_context):
-        sample_context.agent_metrics = None
+        sample_context.metrics = None
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -153,7 +153,7 @@ class TestMiniAgentMetricsExtraction:
         assert result.completion_tokens is None
 
     def test_metrics_flow_with_empty_dict(self, sample_context):
-        sample_context.agent_metrics = {}
+        sample_context.metrics = AgentMetrics()
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -192,7 +192,7 @@ class TestMiniAgentMetricsExtraction:
             mock_env_class.return_value = mock_env
 
             # Run the agent
-            metrics, _, _ = run_mini_agent(
+            agent_metrics, _ = run_mini_agent(
                 entry=entry,
                 repo_path=tmp_path / "repo",
                 model="azure/gpt-4.1",
@@ -202,16 +202,15 @@ class TestMiniAgentMetricsExtraction:
             )
 
             # Verify metrics
-            assert metrics is not None
-            assert "agent_execution_time" in metrics
-            assert metrics["agent_execution_time"] == 123.5  # 223.5 - 100.0
+            assert agent_metrics is not None
+            assert agent_metrics.execution_time == 123.5  # 223.5 - 100.0
 
     def test_result_preserves_other_fields_with_mini_metrics(self, sample_context):
-        sample_context.agent_metrics = {
-            "agent_execution_time": 95.3,
-            "prompt_tokens": 3500,
-            "completion_tokens": 800,
-        }
+        sample_context.metrics = AgentMetrics(
+            execution_time=95.3,
+            prompt_tokens=3500,
+            completion_tokens=800,
+        )
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
@@ -260,9 +259,9 @@ class TestMiniAgentMetricsExtraction:
         metrics = _extract_metrics(mock_agent, 45.0)
 
         assert metrics is not None
-        assert metrics["agent_execution_time"] == 45.0
-        assert metrics["prompt_tokens"] == 100
-        assert metrics["completion_tokens"] == 25
+        assert metrics.execution_time == 45.0
+        assert metrics.prompt_tokens == 100
+        assert metrics.completion_tokens == 25
 
     def test_metrics_extraction_ignores_non_assistant_messages(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -298,5 +297,5 @@ class TestMiniAgentMetricsExtraction:
         metrics = _extract_metrics(mock_agent, 30.0)
 
         assert metrics is not None
-        assert metrics["prompt_tokens"] == 100
-        assert metrics["completion_tokens"] == 50
+        assert metrics.prompt_tokens == 100
+        assert metrics.completion_tokens == 50

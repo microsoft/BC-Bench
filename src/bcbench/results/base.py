@@ -30,12 +30,14 @@ class BaseEvaluationResult(BaseModel):
 
     generated_patch: str = ""
     error_message: str | None = None
+
     agent_execution_time: float | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 
     mcp_servers: list[str] | None = None
     custom_instructions: bool | None = None
+    custom_agent: str | None = None
 
     @classmethod
     def _create_from_context(
@@ -60,18 +62,32 @@ class BaseEvaluationResult(BaseModel):
         Returns:
             Result instance (base or category-specific subclass)
         """
-        metrics: dict[str, float | int] = context.agent_metrics or {}
-        prompt_tokens = metrics.get("prompt_tokens")
-        completion_tokens = metrics.get("completion_tokens")
-        agent_execution_time = metrics.get("agent_execution_time")
+        prompt_tokens = None
+        completion_tokens = None
+        agent_execution_time = None
+        mcp_servers = None
+        custom_instructions = None
+        custom_agent = None
+
+        # Extract metrics from AgentMetrics object
+        if context.metrics:
+            agent_execution_time = context.metrics.execution_time
+            prompt_tokens = context.metrics.prompt_tokens
+            completion_tokens = context.metrics.completion_tokens
+
+        # Extract experiment configuration
+        if context.experiment:
+            mcp_servers = context.experiment.mcp_servers
+            custom_instructions = context.experiment.custom_instructions
+            custom_agent = context.experiment.custom_agent
 
         # Warn about missing critical metrics that affect result quality
-        if context.agent_metrics is None:
+        if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
         else:
             missing_metrics = []
             if agent_execution_time is None:
-                missing_metrics.append("agent_execution_time")
+                missing_metrics.append("execution_time")
             if prompt_tokens is None:
                 missing_metrics.append("prompt_tokens")
             if completion_tokens is None:
@@ -94,8 +110,9 @@ class BaseEvaluationResult(BaseModel):
             agent_execution_time=agent_execution_time,
             prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
             completion_tokens=int(completion_tokens) if completion_tokens is not None else None,
-            mcp_servers=context.mcp_servers,
-            custom_instructions=context.custom_instructions,
+            mcp_servers=mcp_servers,
+            custom_instructions=custom_instructions,
+            custom_agent=custom_agent,
             **kwargs,
         )
 

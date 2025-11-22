@@ -5,7 +5,7 @@ from bcbench.config import get_config
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -62,7 +62,7 @@ class EvaluationPipeline(ABC):
     def execute(
         self,
         context: EvaluationContext,
-        agent_runner: Callable[[EvaluationContext], tuple[dict[str, float | int] | None, list[str] | None, bool]],
+        agent_runner: Callable[[EvaluationContext], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 
@@ -71,16 +71,15 @@ class EvaluationPipeline(ABC):
 
         Args:
             context: Evaluation context with configuration
-            agent_runner: Function that runs the specific agent and returns (metrics, mcp_servers, custom_instructions)
+            agent_runner: Function that runs the specific agent and returns (AgentMetrics, ExperimentConfiguration)
         """
         self.setup(context)
 
         try:
             self.run_agent(context, agent_runner)
         except AgentTimeoutError as e:
-            context.agent_metrics = {"agent_execution_time": _config.timeout.github_copilot_cli}
-            context.mcp_servers = e.mcp_servers
-            context.custom_instructions = e.custom_instructions
+            context.metrics = e.metrics
+            context.experiment = e.config
             result = BaseEvaluationResult.create_agent_timeout_failure(context)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
