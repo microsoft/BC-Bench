@@ -19,14 +19,14 @@ runs:
   steps:
     - name: Generate BC container credentials
       run: |
-        # Generate a 32-character cryptographically secure random password
-        # Using .NET's RandomNumberGenerator for cryptographically secure randomness
-        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-        $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-        $bytes = New-Object byte[] 32
-        $rng.GetBytes($bytes)
-        $password = -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
-        "BC_CONTAINER_NAME=bcbench" | Out-File -FilePath $env:GITHUB_ENV -Append
+        # Generate a 32-character random password using Get-Random
+        # The password is short-lived and only used for the duration of the workflow
+        $password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+
+        # Mask the password in GitHub Actions logs
+        Write-Output "::add-mask::$password"
+
+        "BC_CONTAINER_NAME=bcbench-${{ inputs.instance-id }}" | Out-File -FilePath $env:GITHUB_ENV -Append
         "BC_CONTAINER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
         "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
       shell: pwsh
