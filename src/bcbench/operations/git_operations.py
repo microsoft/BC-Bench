@@ -27,6 +27,37 @@ def clean_repo(repo_path: Path) -> None:
         raise
 
 
+def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
+    """Clean specific project paths by discarding all changes in those directories.
+
+    This is useful when agents make unintended changes to specific projects
+    that should be reverted before applying patches.
+
+    Args:
+        repo_path: Path to the git repository
+        project_paths: List of relative project paths to clean
+    """
+    if not project_paths:
+        logger.warning("No project paths provided to clean")
+        return
+
+    logger.info(f"Cleaning project paths: {project_paths}")
+
+    try:
+        # Reset changes in specified paths
+        for project_path in project_paths:
+            subprocess.run(["git", "checkout", "HEAD", "--", project_path], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+
+        # Clean untracked files in specified paths
+        for project_path in project_paths:
+            subprocess.run(["git", "clean", "-fd", project_path], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+
+        logger.info(f"Project paths cleaned successfully: {project_paths}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to clean project paths: {e.stderr}")
+        raise
+
+
 def checkout_commit(repo_path: Path, commit: str) -> None:
     logger.info(f"Checking out commit: {commit}")
     try:

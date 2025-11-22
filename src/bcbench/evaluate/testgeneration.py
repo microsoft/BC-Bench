@@ -5,7 +5,7 @@ from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
-from bcbench.operations import apply_patch, build_and_publish_projects, categorize_projects, checkout_commit, clean_repo, extract_tests_from_patch, get_generated_diff
+from bcbench.operations import apply_patch, build_and_publish_projects, categorize_projects, checkout_commit, clean_project_paths, clean_repo, extract_tests_from_patch, get_generated_diff
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
@@ -58,6 +58,9 @@ class TestGenerationPipeline(EvaluationPipeline):
                 context.entry.environment_setup_version,
             )
             run_test_suite(generated_tests, "Fail", context.container_name, context.username, context.password)
+
+            # Clean app projects to revert any unintended agent changes before applying original patch
+            clean_project_paths(context.repo_path, app_projects)
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
 

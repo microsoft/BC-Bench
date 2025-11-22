@@ -6,7 +6,9 @@ from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
+    categorize_projects,
     checkout_commit,
+    clean_project_paths,
     clean_repo,
     get_generated_diff,
     run_tests,
@@ -53,6 +55,10 @@ class BugFixPipeline(EvaluationPipeline):
         result: BugFixResult | None = None
 
         try:
+            # Clean test projects to revert any unintended agent changes before applying test patch
+            test_projects, _app_projects = categorize_projects(context.entry.project_paths)
+            clean_project_paths(context.repo_path, test_projects)
+
             apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} test patch")
             build_and_publish_projects(
                 context.repo_path,
