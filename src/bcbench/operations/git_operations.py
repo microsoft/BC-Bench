@@ -44,11 +44,10 @@ def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
     logger.info(f"Cleaning project paths: {project_paths}")
 
     try:
-        # Reset changes in specified paths
-        for project_path in project_paths:
-            subprocess.run(["git", "checkout", "HEAD", "--", project_path], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        # Reset changes in all specified paths with a single git command
+        subprocess.run(["git", "checkout", "HEAD", "--", *project_paths], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
-        # Clean untracked files in specified paths
+        # Clean untracked files in all specified paths with a single git command
         for project_path in project_paths:
             subprocess.run(["git", "clean", "-fd", project_path], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
