@@ -23,7 +23,7 @@ from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate import create_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import EvaluationContext
+from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -201,9 +201,13 @@ def evaluate_mock(
         model="mock-model",
         agent_name="mock-agent",
         category=category,
-        agent_metrics=agent_metrics if agent_metrics else None,
-        mcp_servers=mcp_servers,
-        custom_instructions=custom_instructions,
+        metrics=AgentMetrics() if agent_metrics else None,
+        experiment=ExperimentConfiguration(
+            mcp_servers=mcp_servers,
+            custom_instructions=custom_instructions,
+        )
+        if mcp_servers or custom_instructions
+        else None,
     )
 
     match random.choice(["success", "build-fail", "test-fail"]):

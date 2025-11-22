@@ -31,6 +31,7 @@ class EvaluationResultSummary:
     github_run_id: str | None = None
     mcp_servers: str | None = None
     custom_instructions: bool | None = None
+    custom_agent: str | None = None
 
     @classmethod
     def from_results(cls, results: list[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
@@ -61,6 +62,7 @@ class EvaluationResultSummary:
             github_run_id=run_id,
             mcp_servers=mcp_servers_str,
             custom_instructions=first_result.custom_instructions,
+            custom_agent=first_result.custom_agent,
         )
 
     @classmethod
@@ -80,6 +82,7 @@ class EvaluationResultSummary:
             github_run_id=payload.get("github_run_id"),
             mcp_servers=payload.get("mcp_servers"),
             custom_instructions=payload.get("custom_instructions"),
+            custom_agent=payload.get("custom_agent"),
         )
 
     # TODO: handle test-generation category
@@ -99,6 +102,7 @@ class EvaluationResultSummary:
             "github_run_id": self.github_run_id,
             "mcp_servers": self.mcp_servers,
             "custom_instructions": self.custom_instructions,
+            "custom_agent": self.custom_agent,
         }
 
     def save(self, output_dir: Path, summary_file: str) -> None:
