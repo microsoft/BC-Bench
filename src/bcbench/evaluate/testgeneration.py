@@ -42,7 +42,7 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext) -> None:
-        test_projects, _app_projects = categorize_projects(context.entry.project_paths)
+        test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
         # Stage only test project changes - this prevents app project changes from being included in the diff
         generated_patch: str = get_generated_diff(context.repo_path, test_projects)
@@ -62,8 +62,6 @@ class TestGenerationPipeline(EvaluationPipeline):
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
 
-            # Use categorize_projects again to get app_projects for building after patch
-            _test_projects_unused, app_projects = categorize_projects(context.entry.project_paths)
             build_and_publish_projects(
                 context.repo_path,
                 app_projects,
