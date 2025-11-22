@@ -62,7 +62,7 @@ class EvaluationPipeline(ABC):
     def execute(
         self,
         context: EvaluationContext,
-        agent_runner: Callable[[EvaluationContext], tuple[AgentMetrics | None, ExperimentConfiguration]],
+        agent_runner: Callable[[EvaluationContext], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 
