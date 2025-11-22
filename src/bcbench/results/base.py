@@ -132,11 +132,11 @@ def create_result_from_json(payload: dict[str, Any]) -> BaseEvaluationResult:
         payload: Dictionary containing result data
 
     Returns:
-        BugFixResult or GeneratedTestResult instance based on category
+        BugFixResult or TestGenerationResult instance based on category
     """
     # Import here to avoid circular dependencies
     from bcbench.results.bugfix import BugFixResult
-    from bcbench.results.testgeneration import GeneratedTestResult
+    from bcbench.results.testgeneration import TestGenerationResult
 
     category = EvaluationCategory(payload["category"])
 
@@ -144,6 +144,6 @@ def create_result_from_json(payload: dict[str, Any]) -> BaseEvaluationResult:
         case EvaluationCategory.BUG_FIX:
             return BugFixResult.model_validate(payload)
         case EvaluationCategory.TEST_GENERATION:
-            return GeneratedTestResult.model_validate(payload)
+            return TestGenerationResult.model_validate(payload)
         case _:
             raise ValueError(f"Unknown evaluation category: {category}")

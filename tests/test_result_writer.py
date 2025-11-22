@@ -5,7 +5,7 @@ import pytest
 from bcbench.dataset import DatasetEntry
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.result_writer import write_bceval_results
-from bcbench.results.testgeneration import GeneratedTestResult
+from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 
 
@@ -59,7 +59,7 @@ class TestWriteBcevalResults:
 
     @pytest.fixture
     def result_with_none_metrics(self):
-        return GeneratedTestResult(
+        return TestGenerationResult(
             instance_id="test__instance-1",
             project="app",
             model="gpt-4o",
