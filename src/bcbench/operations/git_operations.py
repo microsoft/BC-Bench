@@ -38,7 +38,7 @@ def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
         project_paths: List of relative project paths to clean
     """
     if not project_paths:
-        logger.warning("No project paths provided to clean")
+        logger.debug("No project paths provided to clean")
         return
 
     logger.info(f"Cleaning project paths: {project_paths}")
@@ -47,7 +47,9 @@ def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
         # Reset changes in all specified paths with a single git command
         subprocess.run(["git", "checkout", "HEAD", "--", *project_paths], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
-        # Clean untracked files in all specified paths with a single git command
+        # Clean untracked files in all specified paths
+        # Note: git clean doesn't support multiple paths in a single command efficiently,
+        # so we need to call it for each path
         for project_path in project_paths:
             subprocess.run(["git", "clean", "-fd", project_path], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
