@@ -2,7 +2,29 @@
 
 import pytest
 
-from bcbench.operations.project_operations import categorize_projects
+from bcbench.operations.project_operations import _is_test_project, categorize_projects
+
+
+class TestIsTestProject:
+    """Test suite for _is_test_project helper function."""
+
+    def test_is_test_project_with_test_identifier(self):
+        assert _is_test_project("src/test", ("test", "tests")) is True
+
+    def test_is_test_project_with_tests_identifier(self):
+        assert _is_test_project("src/tests", ("test", "tests")) is True
+
+    def test_is_test_project_with_windows_separator(self):
+        assert _is_test_project("src\\test", ("test", "tests")) is True
+
+    def test_is_test_project_case_insensitive(self):
+        assert _is_test_project("src/Test", ("test", "tests")) is True
+
+    def test_is_test_project_substring_not_path_component(self):
+        assert _is_test_project("src/contest", ("test", "tests")) is False
+
+    def test_is_test_project_without_identifier(self):
+        assert _is_test_project("src/app", ("test", "tests")) is False
 
 
 class TestCategorizeProjects:
@@ -61,7 +83,7 @@ class TestCategorizeProjects:
             categorize_projects(project_paths)
 
     def test_categorize_projects_with_test_substring_in_app_project(self):
-        """Test that projects with 'test' as substring but not in path are not categorized as test projects."""
+        """Verify projects with 'test' as substring in the name (not as a path component) are categorized as app projects."""
         project_paths = ["src/latest-app", "src/contest", "src/test"]
         test_projects, app_projects = categorize_projects(project_paths)
 
