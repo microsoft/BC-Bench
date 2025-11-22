@@ -17,6 +17,20 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Generate BC container credentials
+      run: |
+        # Generate a 32-character cryptographically secure random password
+        # Using .NET's RandomNumberGenerator for cryptographically secure randomness
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+        $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        $bytes = New-Object byte[] 32
+        $rng.GetBytes($bytes)
+        $password = -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
+        "BC_CONTAINER_NAME=bcbench" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_CONTAINER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
+      shell: pwsh
+
     - name: Install BcContainerHelper module
       run: Install-Module -Name BcContainerHelper -Force -AllowClobber
       shell: pwsh

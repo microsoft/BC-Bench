@@ -47,9 +47,6 @@ jobs:
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    env:
-      BC_CONTAINER_NAME: bcbench
-      BC_CONTAINER_USERNAME: admin
     if: needs.get-entries.outputs.entries != '[]'
     name: ${{ matrix.entry }}
     strategy:
@@ -58,18 +55,6 @@ jobs:
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
-      - name: Generate random container password
-        run: |
-          # Generate a 32-character cryptographically secure random password
-          # Using .NET's RandomNumberGenerator for cryptographically secure randomness
-          $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-          $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-          $bytes = New-Object byte[] 32
-          $rng.GetBytes($bytes)
-          $password = -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
-          "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
-        shell: pwsh
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
