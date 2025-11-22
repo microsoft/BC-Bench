@@ -87,12 +87,14 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def get_generated_diff(repo_path: Path) -> str:
+def get_generated_diff(repo_path: Path, project_paths: list[str] | None = None) -> str:
     """Get agent generated git diff as a string.
 
     Args:
-        result_dir: Path to the result directory
         repo_path: Path to the git repository
+        project_paths: Optional list of project paths to include in diff. If provided,
+                      only changes in these paths will be staged and included in the diff.
+                      Other paths will be cleaned to revert unintended changes.
 
     Raises:
         EmptyDiffError: If the generated diff is empty (agent made no changes)
@@ -100,9 +102,18 @@ def get_generated_diff(repo_path: Path) -> str:
     try:
         logger.info("Getting git diff")
 
-        # Stage all changes, so new files can be captured in the diff
-        # only focus on *.al files for now
-        subprocess.run(["git", "add", "*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        if project_paths:
+            # Stage only *.al files in specified project paths
+            for project_path in project_paths:
+                subprocess.run(["git", "add", f"{project_path}/*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+
+            # Clean any unstaged changes (revert unintended changes to other projects)
+            subprocess.run(["git", "checkout", "--", "."], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+            subprocess.run(["git", "clean", "-fd"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        else:
+            # Stage all changes, so new files can be captured in the diff
+            # only focus on *.al files for now
+            subprocess.run(["git", "add", "*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
         # Get diff of staged changes against HEAD
         result = subprocess.run(
