@@ -1,6 +1,6 @@
 """Test mini-agent metrics extraction."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
@@ -160,50 +160,6 @@ class TestMiniAgentMetricsExtraction:
         assert result.agent_execution_time is None
         assert result.prompt_tokens is None
         assert result.completion_tokens is None
-
-    @pytest.mark.skip(reason="Complex mocking of lazy imports - covered by integration tests")
-    @patch("time.time")
-    def test_run_mini_agent_tracks_execution_time(self, mock_time, tmp_path):
-        from bcbench.agent.mini.agent import run_mini_agent
-
-        # Mock time.time() to return predictable values
-        mock_time.side_effect = [100.0, 223.5]  # start and end times
-
-        entry = DatasetEntry(
-            instance_id="test_entry",
-            repo="test/repo",
-            base_commit="a" * 40,
-            environment_setup_version="25.1",
-            fail_to_pass=[{"codeunitID": 100, "functionName": ["Test"]}],
-            pass_to_pass=[],
-            project_paths=["src"],
-        )
-
-        # Mock the agent and its dependencies
-        with patch("bcbench.agent.mini.agent._create_bc_agent_class") as mock_agent_class, patch("bcbench.agent.mini.agent.BCEnvironment") as mock_env_class:
-            # Setup mocks
-            mock_agent_instance = Mock()
-            mock_agent_instance.run.return_value = ("Submitted", "Success")
-            mock_agent_instance.model.n_calls = 3
-            mock_agent_instance.model.cost = 0.05
-            mock_agent_class.return_value = mock_agent_instance
-
-            mock_env = Mock()
-            mock_env_class.return_value = mock_env
-
-            # Run the agent
-            agent_metrics, _ = run_mini_agent(
-                entry=entry,
-                repo_path=tmp_path / "repo",
-                model="azure/gpt-4.1",
-                category=EvaluationCategory.BUG_FIX,
-                container_name="test",
-                password="test",
-            )
-
-            # Verify metrics
-            assert agent_metrics is not None
-            assert agent_metrics.execution_time == 123.5  # 223.5 - 100.0
 
     def test_result_preserves_other_fields_with_mini_metrics(self, sample_context):
         sample_context.metrics = AgentMetrics(

@@ -40,6 +40,7 @@ addopts = ["-v", "--strict-markers"]
 markers = [
     "integration"
 ]
+collect_imported_tests = false
 
 [tool.ruff]
 target-version = "py312"
