@@ -21,6 +21,9 @@ Prerequisites:
 gh repo clone microsoft/BC-Bench
 cd BC-Bench
 
+# Install python
+uv python install
+
 # Install dependencies
 uv sync --all-extras
 
