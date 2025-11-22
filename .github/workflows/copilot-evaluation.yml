@@ -30,7 +30,7 @@ on:
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
-        default: false
+        default: true
         type: boolean
 
 env:
