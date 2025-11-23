@@ -8,6 +8,7 @@ from bcbench.operations import (
     build_and_publish_projects,
     categorize_projects,
     checkout_commit,
+    clean_project_paths,
     clean_repo,
     run_tests,
     stage_and_get_diff,
@@ -50,9 +51,13 @@ class BugFixPipeline(EvaluationPipeline):
 
         Creates and saves appropriate result based on validation outcome.
         """
-        # Keep only app project changes - this prevents conflicts when applying the test patch
-        _test_projects, app_projects = categorize_projects(context.entry.project_paths)
-        generated_patch = stage_and_get_diff(context.repo_path, app_projects)
+        # Clean test projects to revert any unintended agent changes before capturing diff
+        # Agents should not modify test code in bugfix tasks
+        test_projects, _app_projects = categorize_projects(context.entry.project_paths)
+        clean_project_paths(context.repo_path, test_projects)
+
+        # Stage all changes and get diff - only app project changes should remain after cleaning
+        generated_patch = stage_and_get_diff(context.repo_path)
         result: BugFixResult | None = None
 
         try:

@@ -27,6 +27,62 @@ def clean_repo(repo_path: Path) -> None:
         raise
 
 
+def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
+    """Clean specific project paths by unstaging and discarding all changes in those directories.
+
+    This function first unstages any staged changes in the specified paths, then reverts
+    modified files and removes untracked files. This is useful when agents make unintended
+    changes to projects they shouldn't touch (e.g., test files in bugfix, app files in testgen).
+
+    Args:
+        repo_path: Path to the git repository
+        project_paths: List of relative project paths to clean
+
+    Raises:
+        subprocess.CalledProcessError: If git operations fail
+    """
+    if not project_paths:
+        logger.debug("No project paths provided to clean")
+        return
+
+    logger.info(f"Cleaning project paths: {project_paths}")
+
+    try:
+        # First, unstage any staged changes in these paths
+        for project_path in project_paths:
+            subprocess.run(
+                ["git", "reset", "HEAD", "--", project_path],
+                cwd=repo_path,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+
+        # Then revert modified files in these paths
+        subprocess.run(
+            ["git", "checkout", "HEAD", "--", *project_paths],
+            cwd=repo_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+        # Finally, remove untracked files in these paths
+        for project_path in project_paths:
+            subprocess.run(
+                ["git", "clean", "-fd", project_path],
+                cwd=repo_path,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+
+        logger.info(f"Project paths cleaned successfully: {project_paths}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to clean project paths: {e.stderr}")
+        raise
+
+
 def checkout_commit(repo_path: Path, commit: str) -> None:
     logger.info(f"Checking out commit: {commit}")
     try:
@@ -55,60 +111,51 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         Path(patch_file).unlink(missing_ok=True)
 
 
-def stage_and_get_diff(repo_path: Path, project_paths: list[str]) -> str:
-    """Stage changes (*.al only) under specified projects and get git diff, changes outside these projects are reverted to avoid conflicts when applying patches.
+def stage_and_get_diff(repo_path: Path) -> str:
+    """Stage all *.al file changes and get the git diff.
 
-    Note:
-        This function do NOT stage changes for app.json, as we do not have dataset including app.json changes yet.
-        app.json will be changed when we build and publish the projects, probably need special handling in future (e.g. commit).
+    This function stages all *.al files in the repository and returns the diff.
+    It does NOT stage app.json files as dataset doesn't include app.json changes yet.
+
+    Args:
+        repo_path: Path to the git repository
 
     Returns:
         String containing the git diff patch
 
     Raises:
-        EmptyDiffError: If the generated diff is empty (agent made no changes in specified paths)
-        RuntimeError: If there are pre-staged changes that conflict with the operation
+        EmptyDiffError: If the generated diff is empty (agent made no changes)
     """
-    logger.info("Staging changes and getting git diff")
+    try:
+        logger.info("Staging *.al file changes and getting git diff")
 
-    # Check for pre-staged changes that might conflict with our operation
-    result = subprocess.run(
-        ["git", "diff", "--cached", "--name-only"],
-        cwd=repo_path,
-        capture_output=True,
-        encoding="utf-8",
-        text=True,
-        check=True,
-    )
-    pre_staged_files = result.stdout.strip()
-    if pre_staged_files:
-        logger.warning(f"Found pre-staged files: {pre_staged_files}")
-        # Unstage all pre-staged files to avoid conflicts
-        subprocess.run(["git", "reset", "HEAD"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
-        logger.info("Unstaged pre-staged files")
+        # Stage all *.al files
+        subprocess.run(
+            ["git", "add", "*.al"],
+            cwd=repo_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
 
-    logger.info(f"Staging only *.al file changes in project paths: {project_paths}")
-    for project_path in project_paths:
-        subprocess.run(["git", "add", "--", f"{project_path}", "*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        # Get diff of staged changes against HEAD
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--", ".", ":!*.docx", ":!**/app.json", ":!*.md"],
+            cwd=repo_path,
+            capture_output=True,
+            encoding="utf-8",
+            text=True,
+            check=True,
+        )
+        patch: str = result.stdout.strip()
+        logger.info("Git diff retrieved successfully")
+        logger.debug(f"Generated diff:\n{patch}")
 
-    subprocess.run(["git", "checkout", "--", "."], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
-    subprocess.run(["git", "clean", "-fd"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
-    logger.info("Cleaned unstaged changes in other project paths")
+        if not patch:
+            logger.error("Generated diff is empty - agent made no changes")
+            raise EmptyDiffError()
 
-    result = subprocess.run(
-        ["git", "diff", "--cached", "--", ".", ":!*.docx", ":!**/app.json", ":!*.md"],
-        cwd=repo_path,
-        capture_output=True,
-        encoding="utf-8",
-        text=True,
-        check=True,
-    )
-    patch: str = result.stdout.strip()
-    logger.info("Git diff retrieved successfully")
-    logger.debug(f"Generated diff:\n{patch}")
-
-    if not patch:
-        logger.error("Generated diff is empty - agent made no changes in specified paths")
-        raise EmptyDiffError()
-
-    return patch
+        return patch
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to stage and get git diff: {e.stderr}")
+        raise

@@ -5,7 +5,7 @@ from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
-from bcbench.operations import apply_patch, build_and_publish_projects, categorize_projects, checkout_commit, clean_repo, extract_tests_from_patch, stage_and_get_diff
+from bcbench.operations import apply_patch, build_and_publish_projects, categorize_projects, checkout_commit, clean_project_paths, clean_repo, extract_tests_from_patch, stage_and_get_diff
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
@@ -44,8 +44,12 @@ class TestGenerationPipeline(EvaluationPipeline):
     def evaluate(self, context: EvaluationContext) -> None:
         test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
-        # Keep only test project changes - this prevents conflicts when applying the original patch
-        generated_patch: str = stage_and_get_diff(context.repo_path, test_projects)
+        # Clean app projects to revert any unintended agent changes before capturing diff
+        # Agents should not modify app code in test generation tasks
+        clean_project_paths(context.repo_path, app_projects)
+
+        # Stage all changes and get diff - only test project changes should remain after cleaning
+        generated_patch: str = stage_and_get_diff(context.repo_path)
         generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
         result: TestGenerationResult | None = None
 
