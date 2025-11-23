@@ -8,7 +8,6 @@ from bcbench.operations.test_operations import extract_tests_from_patch
 
 @pytest.fixture
 def mock_repo_path(tmp_path: Path) -> Path:
-    """Create a temporary repo path for tests."""
     return tmp_path
 
 
@@ -273,7 +272,6 @@ def test_patch_with_no_codeunit_id(mock_repo_path: Path):
 
 
 def test_context_lines_without_plus_marker(mock_repo_path: Path):
-    """Test that existing tests (without +) are not extracted."""
     # Create mock AL file with codeunit declaration
     file_path = mock_repo_path / "App" / "ContextTest.Codeunit.al"
     file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -308,7 +306,6 @@ index abc..def 100644
 
 
 def test_multiple_files_touched(mock_repo_path: Path):
-    """Test patch with multiple files, each adding test procedures."""
     # Create mock AL files with codeunit declarations
     file1 = mock_repo_path / "App" / "Test1.Codeunit.al"
     file1.parent.mkdir(parents=True, exist_ok=True)
