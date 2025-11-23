@@ -107,14 +107,9 @@ def stage_and_get_diff(repo_path: Path) -> str:
     try:
         logger.info("Staging *.al file changes and getting git diff")
 
-        # Stage all *.al files
-        subprocess.run(
-            ["git", "add", "*.al"],
-            cwd=repo_path,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
+        # Stage all changes, so new files can be captured in the diff
+        # only focus on *.al files for now
+        subprocess.run(["git", "add", "*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
         # Get diff of staged changes against HEAD
         result = subprocess.run(
