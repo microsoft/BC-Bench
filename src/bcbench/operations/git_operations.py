@@ -42,45 +42,23 @@ def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
         subprocess.CalledProcessError: If git operations fail
     """
     if not project_paths:
-        logger.debug("No project paths provided to clean")
-        return
+        logger.error("No project paths provided to clean")
+        raise ValueError("No project paths provided to clean")
 
     logger.info(f"Cleaning project paths: {project_paths}")
 
-    try:
-        # First, unstage any staged changes in these paths
-        for project_path in project_paths:
-            subprocess.run(
-                ["git", "reset", "HEAD", "--", project_path],
-                cwd=repo_path,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                check=True,
-            )
+    # First, unstage any staged changes in these paths
+    for project_path in project_paths:
+        subprocess.run(["git", "reset", "HEAD", "--", project_path], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
-        # Then revert modified files in these paths
-        subprocess.run(
-            ["git", "checkout", "HEAD", "--", *project_paths],
-            cwd=repo_path,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
+    # Then revert modified files in these paths
+    subprocess.run(["git", "checkout", "HEAD", "--", *project_paths], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
-        # Finally, remove untracked files in these paths
-        for project_path in project_paths:
-            subprocess.run(
-                ["git", "clean", "-fd", project_path],
-                cwd=repo_path,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                check=True,
-            )
+    # Finally, remove untracked files in these paths
+    for project_path in project_paths:
+        subprocess.run(["git", "clean", "-fd", project_path], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
-        logger.info(f"Project paths cleaned successfully: {project_paths}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to clean project paths: {e.stderr}")
-        raise
+    logger.info(f"Project paths cleaned successfully: {project_paths}")
 
 
 def checkout_commit(repo_path: Path, commit: str) -> None:
