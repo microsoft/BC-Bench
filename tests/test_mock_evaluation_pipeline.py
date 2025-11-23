@@ -36,27 +36,35 @@ class TestMockEvaluationPipeline:
         pipeline = MockEvaluationPipeline()
         pipeline.setup(sample_context)
 
-    def test_run_agent_sets_context_metrics(self, sample_context):
+    def test_run_agent_modifies_context_metrics(self, sample_context):
         pipeline = MockEvaluationPipeline()
 
         def mock_agent(ctx):
             return (None, None)
 
+        # Store initial state
+        initial_metrics = sample_context.metrics
+
         pipeline.run_agent(sample_context, mock_agent)
 
-        # Metrics might be None (one of the scenarios)
-        assert sample_context.metrics is not None or sample_context.metrics is None
+        # Verify that run_agent has modified the metrics field (even if to None)
+        # The point is that the pipeline assigns a value from its random scenarios
+        assert sample_context.metrics != initial_metrics or sample_context.metrics is None
 
-    def test_run_agent_sets_context_experiment(self, sample_context):
+    def test_run_agent_modifies_context_experiment(self, sample_context):
         pipeline = MockEvaluationPipeline()
 
         def mock_agent(ctx):
             return (None, None)
 
+        # Store initial state
+        initial_experiment = sample_context.experiment
+
         pipeline.run_agent(sample_context, mock_agent)
 
-        # Experiment config might be None (one of the scenarios)
-        assert sample_context.experiment is not None or sample_context.experiment is None
+        # Verify that run_agent has modified the experiment field (even if to None)
+        # The point is that the pipeline assigns a value from its random scenarios
+        assert sample_context.experiment != initial_experiment or sample_context.experiment is None
 
     def test_evaluate_saves_result_file(self, sample_context, tmp_path):
         sample_context.result_dir = tmp_path
@@ -93,6 +101,10 @@ class TestMockEvaluationPipeline:
         sample_context.result_dir = tmp_path
         sample_context.result_dir.mkdir(parents=True, exist_ok=True)
 
+        # Store initial state
+        initial_metrics = sample_context.metrics
+        initial_experiment = sample_context.experiment
+
         pipeline = MockEvaluationPipeline()
 
         def mock_agent(ctx):
@@ -104,6 +116,6 @@ class TestMockEvaluationPipeline:
         result_files = list(tmp_path.glob("*.jsonl"))
         assert len(result_files) == 1
 
-        # Verify metrics and experiment were set
-        assert sample_context.metrics is not None or sample_context.metrics is None
-        assert sample_context.experiment is not None or sample_context.experiment is None
+        # Verify metrics and experiment were modified by the pipeline
+        assert sample_context.metrics != initial_metrics or sample_context.metrics is None
+        assert sample_context.experiment != initial_experiment or sample_context.experiment is None
