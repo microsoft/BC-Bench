@@ -45,10 +45,9 @@ class TestGenerationPipeline(EvaluationPipeline):
         test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
         # Clean app projects to revert any unintended agent changes before capturing diff
-        # Agents should not modify app code in test generation tasks
+        # Evaluation focuses on valid changes (test code), treating unintended modifications as out-of-scope noise
         clean_project_paths(context.repo_path, app_projects)
 
-        # Stage all changes and get diff - only test project changes should remain after cleaning
         generated_patch: str = stage_and_get_diff(context.repo_path)
         generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
         result: TestGenerationResult | None = None

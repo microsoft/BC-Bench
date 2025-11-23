@@ -51,12 +51,12 @@ class BugFixPipeline(EvaluationPipeline):
 
         Creates and saves appropriate result based on validation outcome.
         """
-        # Clean test projects to revert any unintended agent changes before capturing diff
-        # Agents should not modify test code in bugfix tasks
         test_projects, _app_projects = categorize_projects(context.entry.project_paths)
+
+        # Clean test projects to revert any unintended agent changes before capturing diff
+        # Evaluation focuses on valid changes (app code), treating unintended modifications as out-of-scope noise
         clean_project_paths(context.repo_path, test_projects)
 
-        # Stage all changes and get diff - only app project changes should remain after cleaning
         generated_patch = stage_and_get_diff(context.repo_path)
         result: BugFixResult | None = None
 
