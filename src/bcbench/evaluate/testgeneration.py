@@ -44,7 +44,7 @@ class TestGenerationPipeline(EvaluationPipeline):
     def evaluate(self, context: EvaluationContext) -> None:
         test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
-        # Stage only test project changes - this prevents app project changes from being included in the diff
+        # Keep only test project changes - this prevents conflicts when applying the original patch
         generated_patch: str = stage_and_get_diff(context.repo_path, test_projects)
         generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
         result: TestGenerationResult | None = None

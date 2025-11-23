@@ -50,8 +50,7 @@ class BugFixPipeline(EvaluationPipeline):
 
         Creates and saves appropriate result based on validation outcome.
         """
-        # Categorize projects and stage only app project changes
-        # This prevents test project changes from being included in the diff
+        # Keep only app project changes - this prevents conflicts when applying the test patch
         _test_projects, app_projects = categorize_projects(context.entry.project_paths)
         generated_patch = stage_and_get_diff(context.repo_path, app_projects)
         result: BugFixResult | None = None
