@@ -6,10 +6,12 @@ from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
+    categorize_projects,
     checkout_commit,
+    clean_project_paths,
     clean_repo,
-    get_generated_diff,
     run_tests,
+    stage_and_get_diff,
 )
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
@@ -49,7 +51,13 @@ class BugFixPipeline(EvaluationPipeline):
 
         Creates and saves appropriate result based on validation outcome.
         """
-        generated_patch = get_generated_diff(context.repo_path)
+        test_projects, _app_projects = categorize_projects(context.entry.project_paths)
+
+        # Clean test projects to revert any unintended agent changes before capturing diff
+        # Evaluation focuses on valid changes (app code), treating unintended modifications as out-of-scope noise
+        clean_project_paths(context.repo_path, test_projects)
+
+        generated_patch = stage_and_get_diff(context.repo_path)
         result: BugFixResult | None = None
 
         try:
