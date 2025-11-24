@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
@@ -30,22 +30,6 @@ class EvaluationResultSummary(BaseModel):
 
     github_run_id: str | None = None
     experiment: ExperimentConfiguration | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def handle_legacy_format(cls, data: Any) -> Any:
-        """Convert legacy flat format to nested experiment structure."""
-        if isinstance(data, dict) and "experiment" not in data and any(k in data for k in ["mcp_servers", "custom_instructions", "custom_agent"]):
-            mcp_servers_str = data.pop("mcp_servers", None)
-            # Convert comma-separated string back to list
-            mcp_servers_list = [s.strip() for s in mcp_servers_str.split(",")] if mcp_servers_str else None
-
-            data["experiment"] = {
-                "mcp_servers": mcp_servers_list,
-                "custom_instructions": data.pop("custom_instructions", False),
-                "custom_agent": data.pop("custom_agent", None),
-            }
-        return data
 
     @classmethod
     def from_results(cls, results: list[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
@@ -84,18 +68,6 @@ class EvaluationResultSummary(BaseModel):
         data["average_duration"] = round(data["average_duration"], 1)
         data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)
         data["average_completion_tokens"] = round(data["average_completion_tokens"], 1)
-
-        # Flatten experiment fields for backward compatibility with leaderboard format
-        if data.get("experiment"):
-            exp = data.pop("experiment")
-            data["mcp_servers"] = ", ".join(exp["mcp_servers"]) if exp.get("mcp_servers") else None
-            data["custom_instructions"] = exp.get("custom_instructions")
-            data["custom_agent"] = exp.get("custom_agent")
-        else:
-            data["mcp_servers"] = None
-            data["custom_instructions"] = None
-            data["custom_agent"] = None
-
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:

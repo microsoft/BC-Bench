@@ -398,8 +398,11 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_prompt_tokens": 5000.0,
             "average_completion_tokens": 1500.0,
             "github_run_id": "run_001",
-            "mcp_servers": "server1, server2",
-            "custom_instructions": True,
+            "experiment": {
+                "mcp_servers": ["server1", "server2"],
+                "custom_instructions": True,
+                "custom_agent": None,
+            },
         },
         {
             "total": 10,
@@ -414,8 +417,11 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_prompt_tokens": 3500.0,
             "average_completion_tokens": 1000.0,
             "github_run_id": "run_003",
-            "mcp_servers": None,
-            "custom_instructions": False,
+            "experiment": {
+                "mcp_servers": None,
+                "custom_instructions": False,
+                "custom_agent": None,
+            },
         },
     ]
 
@@ -434,8 +440,11 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_prompt_tokens": 4500.0,
             "average_completion_tokens": 1200.0,
             "github_run_id": "run_002",
-            "mcp_servers": None,
-            "custom_instructions": False,
+            "experiment": {
+                "mcp_servers": None,
+                "custom_instructions": False,
+                "custom_agent": None,
+            },
         },
     ]
 
@@ -459,8 +468,11 @@ def sample_leaderboard_and_summary(tmp_path):
         "average_prompt_tokens": 5200.0,
         "average_completion_tokens": 1600.0,
         "github_run_id": "run_004",
-        "mcp_servers": "server1, server2",
-        "custom_instructions": True,
+        "experiment": {
+            "mcp_servers": ["server1", "server2"],
+            "custom_instructions": True,
+            "custom_agent": None,
+        },
     }
 
     with open(summary_path, "w") as f:
@@ -496,7 +508,8 @@ def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
     # Find the updated entry and verify it matches
     updated_entry = None
     for entry in updated_leaderboard:
-        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and entry["mcp_servers"] == "server1, server2" and entry.get("custom_instructions") is True:
+        exp = entry.get("experiment", {})
+        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and exp.get("mcp_servers") == ["server1", "server2"] and exp.get("custom_instructions") is True:
             updated_entry = entry
             break
 
@@ -526,8 +539,11 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "average_prompt_tokens": 4800.0,
         "average_completion_tokens": 1400.0,
         "github_run_id": "run_005",
-        "mcp_servers": None,
-        "custom_instructions": False,
+        "experiment": {
+            "mcp_servers": None,
+            "custom_instructions": False,
+            "custom_agent": None,
+        },
     }
 
     with open(summary_path, "w") as f:
@@ -582,8 +598,11 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "average_prompt_tokens": 4900.0,
         "average_completion_tokens": 1350.0,
         "github_run_id": "run_006",
-        "mcp_servers": None,  # Different from existing "server1, server2"
-        "custom_instructions": False,  # Different from existing True
+        "experiment": {
+            "mcp_servers": None,  # Different from existing ["server1", "server2"]
+            "custom_instructions": False,  # Different from existing True
+            "custom_agent": None,
+        },
     }
 
     with open(summary_path, "w") as f:
@@ -614,9 +633,9 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
 
     assert len(copilot_gpt4o_entries) == 2, "Should have 2 different copilot + gpt-4o entries"
 
-    # Find each by mcp_servers
-    with_servers = next((e for e in copilot_gpt4o_entries if e["mcp_servers"] == "server1, server2"), None)
-    without_servers = next((e for e in copilot_gpt4o_entries if e["mcp_servers"] is None), None)
+    # Find each by experiment.mcp_servers
+    with_servers = next((e for e in copilot_gpt4o_entries if e.get("experiment", {}).get("mcp_servers") == ["server1", "server2"]), None)
+    without_servers = next((e for e in copilot_gpt4o_entries if e.get("experiment", {}).get("mcp_servers") is None), None)
 
     assert with_servers is not None and without_servers is not None
     assert with_servers["resolved"] == 6, "Original entry should be unchanged"
