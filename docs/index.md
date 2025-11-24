@@ -18,7 +18,7 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.leaderboard | sort: "resolved" | reverse %}
+    {% assign sorted_results = site.data.bug-fix | sort: "resolved" | reverse %}
     {% for result in sorted_results %}
       {% if result.mcp_servers == null and result.custom_instructions == false %}
     <tr>
@@ -48,7 +48,7 @@ Comparing experimental configurations against baseline for **claude-haiku-4.5**.
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.leaderboard | sort: "resolved" | reverse %}
+    {% assign sorted_results = site.data.bug-fix | sort: "resolved" | reverse %}
     {% for result in sorted_results %}
       {% if result.model == "claude-haiku-4.5" %}
     <tr>
