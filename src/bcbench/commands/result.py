@@ -114,6 +114,7 @@ def result_update(
             and result["model"] == new_result.model
             and result.get("mcp_servers") == new_result.mcp_servers
             and result.get("custom_instructions") == new_result.custom_instructions
+            and result.get("custom_agent") == new_result.custom_agent
         ):
             logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
             existing_results[i] = new_result.to_dict()

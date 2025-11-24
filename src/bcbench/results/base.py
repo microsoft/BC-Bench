@@ -31,7 +31,6 @@ class BaseEvaluationResult(BaseModel):
     generated_patch: str = ""
     error_message: str | None = None
 
-    # Nested objects for better structure
     metrics: AgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
 
@@ -58,7 +57,7 @@ class BaseEvaluationResult(BaseModel):
         Returns:
             Result instance (base or category-specific subclass)
         """
-        # Validate metrics - warn about missing critical data
+        # Warn about missing critical data
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
         elif context.metrics:
@@ -106,7 +105,6 @@ class BaseEvaluationResult(BaseModel):
         return cls._create_from_context(context, resolved=False, build=False, timeout=True, error_message="Agent timed out", **kwargs)
 
     def save(self, output_dir: Path, result_file: str) -> None:
-        """Save the result to a JSONL file with proper serialization of nested objects."""
         output_file = output_dir / result_file
         with open(output_file, "a", encoding="utf-8") as f:
             result_dict = self.model_dump(mode="json")
