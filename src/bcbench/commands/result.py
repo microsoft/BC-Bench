@@ -74,13 +74,15 @@ def result_summarize(
 @result_app.command("update")
 def result_update(
     evaluation_summary: Annotated[Path, typer.Argument(help="Path to a single evaluation run's summary JSON", exists=True, file_okay=True, dir_okay=False)],
-    leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_path.parent,
+    leaderboard_dir: Annotated[
+        Path, typer.Option(help="Path to the directory containing category-specific leaderboard files", exists=True, file_okay=False, dir_okay=True)
+    ] = _config.paths.leaderboard_dir,
 ):
     """
     Update the public leaderboard with a new evaluation summary.
 
     Takes a single evaluation run's summary and updates the appropriate category-specific
-    leaderboard file (bugfix.json or testgeneration.json), either replacing an existing
+    leaderboard file (e.g. bugfix.json), either replacing an existing
     agent-model combination or adding a new entry.
 
     Example:

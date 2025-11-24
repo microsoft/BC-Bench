@@ -41,7 +41,7 @@ class PathConfig:
     nav_repo_path: Path
     ps_script_path: Path
     evaluation_results_path: Path
-    leaderboard_path: Path
+    leaderboard_dir: Path
     agent_dir: Path
 
     @classmethod
@@ -54,7 +54,7 @@ class PathConfig:
             nav_repo_path=root.parent / "NAV",
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
-            leaderboard_path=root / "docs" / "_data" / "leaderboard.json",
+            leaderboard_dir=root / "docs" / "_data",
             agent_dir=root / "src" / "bcbench" / "agent" / "copilot",
         )
 
