@@ -80,7 +80,7 @@ def result_update(
     Update the public leaderboard with a new evaluation summary.
 
     Takes a single evaluation run's summary and updates the appropriate category-specific
-    leaderboard file (e.g. bugfix.json), either replacing an existing
+    leaderboard file (e.g. bug-fix.json), either replacing an existing
     agent-model combination or adding a new entry.
 
     Example:
@@ -93,8 +93,7 @@ def result_update(
     logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}' in category '{new_result.category.value}'")
 
     # Determine the appropriate leaderboard file based on category
-    category_filename = f"{new_result.category.value}.json"
-    leaderboard_path = leaderboard_dir / category_filename
+    leaderboard_path = leaderboard_dir / f"{new_result.category.value}.json"
 
     logger.info(f"Using leaderboard file: {leaderboard_path}")
 
