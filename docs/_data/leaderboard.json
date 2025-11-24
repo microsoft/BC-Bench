@@ -1,15 +1,20 @@
 [
   {
-    "agent_name": "GitHub Copilot CLI",
+    "total": 25,
+    "resolved": 11,
+    "failed": 14,
+    "build": 22,
+    "date": "2025-11-23",
     "model": "claude-sonnet-4",
-    "total": 19,
-    "resolved": 7,
-    "average_duration": 0,
-    "average_prompt_tokens": 0,
-    "average_completion_tokens": 0,
-    "date": "2025-11-05",
+    "category": "bug-fix",
+    "agent_name": "GitHub Copilot CLI",
+    "average_duration": 133.9,
+    "average_prompt_tokens": 1959740.0,
+    "average_completion_tokens": 6056.0,
+    "github_run_id": "19614090363",
     "mcp_servers": null,
-    "custom_instructions": false
+    "custom_instructions": false,
+    "custom_agent": null
   },
   {
     "total": 22,

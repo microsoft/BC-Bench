@@ -32,10 +32,6 @@ class AgentMetrics(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        logger.info(f"AgentMetrics: {self}")
-
 
 class ExperimentConfiguration(BaseModel):
     """Configuration for agent experiment execution.

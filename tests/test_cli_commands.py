@@ -14,7 +14,6 @@ runner = CliRunner()
 
 @pytest.fixture(autouse=True)
 def disable_github_actions(monkeypatch):
-    """Automatically disable GitHub Actions environment for all CLI tests."""
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
 
     # Reset the config singleton to pick up the environment changes
@@ -202,7 +201,6 @@ def test_result_summarize_verifies_summary_calculations(sample_results_directory
 
 @pytest.mark.integration
 def test_result_summarize_missing_directory_fails_gracefully(tmp_path):
-    """Integration test: result summarize fails gracefully when run_id doesn't exist."""
     result = runner.invoke(
         app,
         [

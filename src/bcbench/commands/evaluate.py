@@ -176,20 +176,29 @@ def evaluate_mock(
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")
 
-    # Randomize agent metrics to test different scenarios
-    metrics_scenarios: list[dict[str, float | int]] = [
-        {"agent_execution_time": 0.1, "prompt_tokens": 100, "completion_tokens": 50},
-        {"agent_execution_time": 0.2, "prompt_tokens": 250},
-        {"agent_execution_time": 0.15},
-        {},  # No metrics
-        {"prompt_tokens": 500, "completion_tokens": 100},
+    # Randomize agent metrics and experiment configurations to test different scenarios
+    metrics_scenarios: list[AgentMetrics | None] = [
+        AgentMetrics(execution_time=0.1, prompt_tokens=100, completion_tokens=50),
+        AgentMetrics(execution_time=0.2, prompt_tokens=250),
+        AgentMetrics(execution_time=0.15),
+        AgentMetrics(),
+        None,
+        AgentMetrics(prompt_tokens=500, completion_tokens=100),
     ]
     agent_metrics = random.choice(metrics_scenarios)
-    mcp_servers = random.choice([["magic-mcp"], None])
-    custom_instructions = random.choice([True, False])
+
+    experiment_config_scenarios: list[ExperimentConfiguration | None] = [
+        ExperimentConfiguration(mcp_servers=["magic-mcp"], custom_instructions=True, custom_agent="custom-agent-v1"),
+        ExperimentConfiguration(mcp_servers=["magic-mcp"]),
+        ExperimentConfiguration(custom_instructions=True),
+        None,
+        ExperimentConfiguration(),
+        ExperimentConfiguration(custom_agent="custom-agent-v1"),
+    ]
+    experiment_config = random.choice(experiment_config_scenarios)
+
     logger.info(f"Using agent metrics: {agent_metrics if agent_metrics else 'None'}")
-    logger.info(f"Using MCP servers: {mcp_servers}")
-    logger.info(f"Using custom instructions: {custom_instructions}")
+    logger.info(f"Using experiment configuration: {experiment_config if experiment_config else 'None'}")
 
     context = EvaluationContext(
         entry=entry,
@@ -201,13 +210,8 @@ def evaluate_mock(
         model="mock-model",
         agent_name="mock-agent",
         category=category,
-        metrics=AgentMetrics() if agent_metrics else None,
-        experiment=ExperimentConfiguration(
-            mcp_servers=mcp_servers,
-            custom_instructions=custom_instructions,
-        )
-        if mcp_servers or custom_instructions
-        else None,
+        metrics=agent_metrics,
+        experiment=experiment_config,
     )
 
     match random.choice(["success", "build-fail", "test-fail"]):

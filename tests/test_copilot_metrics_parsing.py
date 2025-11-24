@@ -111,7 +111,6 @@ def test_parse_metrics_malformed_token_count():
 
 
 def test_parse_metrics_with_command_output():
-    """Test parsing metrics from real output with command executions and checkmarks."""
     output_lines = [
         "  ✓ Count AL files\n",
         "     $ Get-ChildItem -Path C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\testbed\\App -Recurse -Filter *.al |\n",
@@ -147,7 +146,6 @@ def test_parse_metrics_with_command_output():
 
 
 def test_parse_metrics_minimal_real_output():
-    """Test parsing with just the metrics section from real output."""
     output_lines = [
         "  Total duration (wall): 2m 15.3s\n",
         "  Usage by model:\n",

@@ -84,6 +84,9 @@ class EvaluationPipeline(ABC):
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
             return
+        finally:
+            logger.info(f"Agent metrics: {context.metrics}")
+            logger.info(f"Experiment configuration: {context.experiment}")
 
         self.evaluate(context)
 
