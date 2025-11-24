@@ -60,7 +60,7 @@ class BaseEvaluationResult(BaseModel):
         # Warn about missing critical data
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        elif context.metrics:
+        else:
             missing_metrics = []
             if context.metrics.execution_time is None:
                 missing_metrics.append("execution_time")

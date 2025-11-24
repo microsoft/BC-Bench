@@ -34,9 +34,9 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 "context": "",
                 "metadata": {
                     "model": result.model,
-                    "prompt_tokens": result.metrics.prompt_tokens if result.metrics and result.metrics.prompt_tokens is not None else 0,
-                    "completion_tokens": result.metrics.completion_tokens if result.metrics and result.metrics.completion_tokens is not None else 0,
-                    "latency": result.metrics.execution_time if result.metrics and result.metrics.execution_time is not None else 0,
+                    "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
+                    "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
+                    "latency": (result.metrics.execution_time if result.metrics else None) or 0,
                     "resolved": result.resolved,
                     "build": result.build,
                     "run_id": run_id,

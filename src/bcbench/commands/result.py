@@ -109,15 +109,17 @@ def result_update(
 
     updated = False
     for i, result in enumerate(existing_results):
+        # Compare using nested experiment structure
+        new_result_dict = new_result.to_dict()
         if (
             result["agent_name"] == new_result.agent_name
             and result["model"] == new_result.model
-            and result.get("mcp_servers") == new_result.mcp_servers
-            and result.get("custom_instructions") == new_result.custom_instructions
-            and result.get("custom_agent") == new_result.custom_agent
+            and result.get("mcp_servers") == new_result_dict.get("mcp_servers")
+            and result.get("custom_instructions") == new_result_dict.get("custom_instructions")
+            and result.get("custom_agent") == new_result_dict.get("custom_agent")
         ):
             logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
-            existing_results[i] = new_result.to_dict()
+            existing_results[i] = new_result_dict
             updated = True
             break
 
