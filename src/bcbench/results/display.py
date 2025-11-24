@@ -3,7 +3,7 @@ from rich.table import Table
 
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results.evaluation_result import BaseEvaluationResult
+from bcbench.results.base import BaseEvaluationResult
 
 logger = get_logger(__name__)
 console = Console()

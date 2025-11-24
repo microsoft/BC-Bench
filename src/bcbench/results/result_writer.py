@@ -3,7 +3,7 @@ from pathlib import Path
 
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult
+from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
