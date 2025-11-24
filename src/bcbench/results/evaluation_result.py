@@ -62,8 +62,6 @@ class EvaluationResultSummary(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         data = self.model_dump(mode="json")
-        # Ensure category is serialized as string value
-        data["category"] = self.category.value
         # Round numeric values for readability
         data["average_duration"] = round(data["average_duration"], 1)
         data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)

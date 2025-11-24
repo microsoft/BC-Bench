@@ -101,32 +101,27 @@ def result_update(
     if leaderboard_path.exists():
         logger.info(f"Loading existing leaderboard from: {leaderboard_path}")
         with open(leaderboard_path, encoding="utf-8") as f:
-            existing_results = json.load(f)
+            existing_results: list[EvaluationResultSummary] = [EvaluationResultSummary.model_validate(entry) for entry in json.load(f)]
     else:
         logger.info(f"Creating new leaderboard file: {leaderboard_path}")
         existing_results = []
 
+    # Check if result already exists for this agent+model+experiment combination
     updated = False
     for i, result in enumerate(existing_results):
-        # Compare experiments by checking nested structure
-        new_result_dict = new_result.to_dict()
-        result_experiment = result.get("experiment")
-        new_experiment = new_result_dict.get("experiment")
-
-        experiments_match = result_experiment == new_experiment
-
-        if result["agent_name"] == new_result.agent_name and result["model"] == new_result.model and experiments_match:
+        if result.agent_name == new_result.agent_name and result.model == new_result.model and result.experiment == new_result.experiment:
             logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
-            existing_results[i] = new_result_dict
+            existing_results[i] = new_result
             updated = True
             break
 
     if not updated:
         logger.info(f"No existing result found for '{new_result.agent_name}' + '{new_result.model}', adding new entry")
-        existing_results.append(new_result.to_dict())
+        existing_results.append(new_result)
 
+    # Write back as list of dicts
     with open(leaderboard_path, "w", encoding="utf-8") as f:
-        json.dump(existing_results, f, indent=2)
+        json.dump([result.to_dict() for result in existing_results], f, indent=2)
         f.write("\n")
 
     logger.info(f"Successfully updated leaderboard at: {leaderboard_path}")

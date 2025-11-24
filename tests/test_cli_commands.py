@@ -376,7 +376,6 @@ def test_dataset_list_verifies_entry_format(sample_dataset_file):
 
 @pytest.fixture
 def sample_leaderboard_and_summary(tmp_path):
-    """Fixture that creates category-specific leaderboards and a new summary."""
     leaderboard_dir = tmp_path / "_data"
     leaderboard_dir.mkdir()
     bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
