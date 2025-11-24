@@ -16,12 +16,7 @@ T = TypeVar("T", bound="BaseEvaluationResult")
 
 
 class BaseEvaluationResult(BaseModel):
-    """Base class for all evaluation results with shared metrics across categories.
-
-    This class now stores AgentMetrics and ExperimentConfiguration as nested objects
-    instead of flattening their fields, providing better separation of concerns and
-    making it easier to extend these structures independently.
-    """
+    """Base class for all evaluation results with shared metrics across categories."""
 
     instance_id: str
     project: str  # TODO: move to category-specific subclasses?

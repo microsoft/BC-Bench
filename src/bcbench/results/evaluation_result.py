@@ -13,8 +13,6 @@ logger = get_logger(__name__)
 
 
 class EvaluationResultSummary(BaseModel):
-    """Summary of evaluation results using Pydantic for better validation and serialization."""
-
     total: int
     resolved: int
     failed: int
@@ -37,7 +35,6 @@ class EvaluationResultSummary(BaseModel):
 
     @classmethod
     def from_results(cls, results: list[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
-        """Create a summary from a list of evaluation results."""
         total = len(results)
         resolved = sum(r.resolved for r in results)
 
@@ -69,7 +66,6 @@ class EvaluationResultSummary(BaseModel):
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert summary to dictionary with proper formatting for JSON serialization."""
         data = self.model_dump(mode="json")
         # Ensure category is serialized as string value
         data["category"] = self.category.value
@@ -80,7 +76,6 @@ class EvaluationResultSummary(BaseModel):
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:
-        """Save the summary to a JSON file."""
         output_file = output_dir / summary_file
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(json.dumps(self.to_dict(), indent=4))
