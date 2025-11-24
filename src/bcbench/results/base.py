@@ -35,32 +35,6 @@ class BaseEvaluationResult(BaseModel):
     metrics: AgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
 
-    # Backward compatibility: flatten metrics and experiment for serialization
-    # These are computed properties that match the old flat structure
-    @property
-    def agent_execution_time(self) -> float | None:
-        return self.metrics.execution_time if self.metrics else None
-
-    @property
-    def prompt_tokens(self) -> int | None:
-        return self.metrics.prompt_tokens if self.metrics else None
-
-    @property
-    def completion_tokens(self) -> int | None:
-        return self.metrics.completion_tokens if self.metrics else None
-
-    @property
-    def mcp_servers(self) -> list[str] | None:
-        return self.experiment.mcp_servers if self.experiment else None
-
-    @property
-    def custom_instructions(self) -> bool | None:
-        return self.experiment.custom_instructions if self.experiment else None
-
-    @property
-    def custom_agent(self) -> str | None:
-        return self.experiment.custom_agent if self.experiment else None
-
     @classmethod
     def _create_from_context(
         cls: type[T],
@@ -137,16 +111,6 @@ class BaseEvaluationResult(BaseModel):
         with open(output_file, "a", encoding="utf-8") as f:
             result_dict = self.model_dump(mode="json")
             result_dict["category"] = self.category.value
-
-            # Serialize nested objects - they should already be serialized by pydantic
-            # but we ensure they're in the correct format
-            if result_dict.get("metrics"):
-                # Pydantic already handles this, but we can validate the structure
-                pass
-            if result_dict.get("experiment"):
-                # Pydantic already handles this
-                pass
-
             f.write(json.dumps(result_dict) + "\n")
 
         logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")
@@ -154,9 +118,6 @@ class BaseEvaluationResult(BaseModel):
 
 def create_result_from_json(payload: dict[str, Any]) -> BaseEvaluationResult:
     """Create appropriate result instance from JSON payload based on category.
-
-    Handles both the new nested format (with 'metrics' and 'experiment' objects)
-    and the old flat format (with individual metric fields) for backward compatibility.
 
     Args:
         payload: Dictionary containing result data
@@ -169,23 +130,6 @@ def create_result_from_json(payload: dict[str, Any]) -> BaseEvaluationResult:
     from bcbench.results.testgeneration import TestGenerationResult
 
     category = EvaluationCategory(payload["category"])
-
-    # Handle backward compatibility: if metrics/experiment aren't nested, create them
-    if "metrics" not in payload and any(k in payload for k in ["agent_execution_time", "prompt_tokens", "completion_tokens"]):
-        # Old flat format - convert to nested
-        payload["metrics"] = {
-            "execution_time": payload.pop("agent_execution_time", None),
-            "prompt_tokens": payload.pop("prompt_tokens", None),
-            "completion_tokens": payload.pop("completion_tokens", None),
-        }
-
-    if "experiment" not in payload and any(k in payload for k in ["mcp_servers", "custom_instructions", "custom_agent"]):
-        # Old flat format - convert to nested
-        payload["experiment"] = {
-            "mcp_servers": payload.pop("mcp_servers", None),
-            "custom_instructions": payload.pop("custom_instructions", False),
-            "custom_agent": payload.pop("custom_agent", None),
-        }
 
     match category:
         case EvaluationCategory.BUG_FIX:

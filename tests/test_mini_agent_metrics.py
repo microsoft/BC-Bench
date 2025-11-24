@@ -123,9 +123,9 @@ class TestMiniAgentMetricsExtraction:
         result = BugFixResult.create_success(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
-        assert result.agent_execution_time == 180.5
-        assert result.prompt_tokens == 5000
-        assert result.completion_tokens == 1200
+        assert result.metrics.execution_time == 180.5
+        assert result.metrics.prompt_tokens == 5000
+        assert result.metrics.completion_tokens == 1200
 
     def test_metrics_flow_to_result_without_tokens(self, sample_context):
         # Simulate metrics returned from mini-agent with zero tokens
@@ -138,28 +138,26 @@ class TestMiniAgentMetricsExtraction:
         result = BugFixResult.create_success(sample_context, "test_patch")
 
         assert result.instance_id == "test__mini-metrics-123"
-        assert result.agent_execution_time == 180.5
+        assert result.metrics.execution_time == 180.5
         # Zero tokens should be converted to None in the result
-        assert result.prompt_tokens == 0
-        assert result.completion_tokens == 0
+        assert result.metrics.prompt_tokens == 0
+        assert result.metrics.completion_tokens == 0
 
     def test_metrics_flow_with_no_metrics(self, sample_context):
         sample_context.metrics = None
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time is None
-        assert result.prompt_tokens is None
-        assert result.completion_tokens is None
+        assert result.metrics is None
 
     def test_metrics_flow_with_empty_dict(self, sample_context):
         sample_context.metrics = AgentMetrics()
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time is None
-        assert result.prompt_tokens is None
-        assert result.completion_tokens is None
+        assert result.metrics.execution_time is None
+        assert result.metrics.prompt_tokens is None
+        assert result.metrics.completion_tokens is None
 
     def test_result_preserves_other_fields_with_mini_metrics(self, sample_context):
         sample_context.metrics = AgentMetrics(
@@ -171,9 +169,9 @@ class TestMiniAgentMetricsExtraction:
         result = BugFixResult.create_success(sample_context, "test_patch")
 
         # Verify metrics
-        assert result.agent_execution_time == 95.3
-        assert result.prompt_tokens == 3500
-        assert result.completion_tokens == 800
+        assert result.metrics.execution_time == 95.3
+        assert result.metrics.prompt_tokens == 3500
+        assert result.metrics.completion_tokens == 800
 
         # Verify other fields are still correctly populated
         assert result.instance_id == "test__mini-metrics-123"

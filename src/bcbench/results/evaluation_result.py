@@ -38,13 +38,13 @@ class EvaluationResultSummary(BaseModel):
         total = len(results)
         resolved = sum(r.resolved for r in results)
 
-        durations = [r.agent_execution_time for r in results if r.agent_execution_time is not None]
-        prompt_tokens = [r.prompt_tokens for r in results if r.prompt_tokens is not None]
-        completion_tokens = [r.completion_tokens for r in results if r.completion_tokens is not None]
+        durations = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
+        prompt_tokens = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
+        completion_tokens = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
 
         # Extract MCP servers and custom instructions from first result (all should be same in a run)
         first_result = results[0]
-        mcp_servers_list = first_result.mcp_servers if first_result and first_result.mcp_servers else None
+        mcp_servers_list = first_result.experiment.mcp_servers if first_result.experiment and first_result.experiment.mcp_servers else None
         mcp_servers_str = ", ".join(mcp_servers_list) if mcp_servers_list else None
 
         return cls(
@@ -61,8 +61,8 @@ class EvaluationResultSummary(BaseModel):
             average_completion_tokens=sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
             github_run_id=run_id,
             mcp_servers=mcp_servers_str,
-            custom_instructions=first_result.custom_instructions,
-            custom_agent=first_result.custom_agent,
+            custom_instructions=first_result.experiment.custom_instructions if first_result.experiment else None,
+            custom_agent=first_result.experiment.custom_agent if first_result.experiment else None,
         )
 
     def to_dict(self) -> dict[str, Any]:

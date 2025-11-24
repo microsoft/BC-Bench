@@ -48,9 +48,9 @@ class TestCopilotMetricsToResultFlow:
         assert result.resolved is True
         assert result.project == "app"
         assert result.build is True
-        assert result.agent_execution_time == 225.2
-        assert result.prompt_tokens == 100500
-        assert result.completion_tokens == 2300
+        assert result.metrics.execution_time == 225.2
+        assert result.metrics.prompt_tokens == 100500
+        assert result.metrics.completion_tokens == 2300
 
     def test_metrics_flow_with_seconds_only_wall_time(self, sample_context):
         output_lines = [
@@ -63,9 +63,9 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time == 45.7
-        assert result.prompt_tokens == 50000
-        assert result.completion_tokens == 1000
+        assert result.metrics.execution_time == 45.7
+        assert result.metrics.prompt_tokens == 50000
+        assert result.metrics.completion_tokens == 1000
 
     def test_metrics_flow_with_partial_metrics(self, sample_context):
         output_lines = ["Total duration (wall): 1m 30s\n"]
@@ -74,9 +74,9 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time == 90.0
-        assert result.prompt_tokens is None
-        assert result.completion_tokens is None
+        assert result.metrics.execution_time == 90.0
+        assert result.metrics.prompt_tokens is None
+        assert result.metrics.completion_tokens is None
 
     def test_metrics_flow_with_no_metrics(self, sample_context):
         output_lines = ["Some output without metrics\n"]
@@ -85,9 +85,7 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time is None
-        assert result.prompt_tokens is None
-        assert result.completion_tokens is None
+        assert result.metrics is None
 
     def test_metrics_flow_to_test_failure_result(self, sample_context):
         output_lines = [
@@ -103,9 +101,9 @@ class TestCopilotMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is True
         assert result.error_message == "Tests failed"
-        assert result.agent_execution_time == 135.5
-        assert result.prompt_tokens == 75200
-        assert result.completion_tokens == 1800
+        assert result.metrics.execution_time == 135.5
+        assert result.metrics.prompt_tokens == 75200
+        assert result.metrics.completion_tokens == 1800
 
     def test_metrics_flow_to_build_failure_result(self, sample_context):
         output_lines = [
@@ -121,9 +119,9 @@ class TestCopilotMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is False
         assert result.error_message == "Build failed: src/app"
-        assert result.agent_execution_time == 310.3
-        assert result.prompt_tokens == 200000
-        assert result.completion_tokens == 5000
+        assert result.metrics.execution_time == 310.3
+        assert result.metrics.prompt_tokens == 200000
+        assert result.metrics.completion_tokens == 5000
 
     def test_metrics_flow_with_real_copilot_output(self, sample_context):
         output_lines = [
@@ -143,25 +141,23 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time == 272.8
-        assert result.prompt_tokens == 125500
-        assert result.completion_tokens == 3600
+        assert result.metrics.execution_time == 272.8
+        assert result.metrics.prompt_tokens == 125500
+        assert result.metrics.completion_tokens == 3600
 
     def test_context_without_agent_metrics_set(self, sample_context):
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time is None
-        assert result.prompt_tokens is None
-        assert result.completion_tokens is None
+        assert result.metrics is None
 
     def test_context_with_empty_metrics_dict(self, sample_context):
         sample_context.metrics = AgentMetrics()
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time is None
-        assert result.prompt_tokens is None
-        assert result.completion_tokens is None
+        assert result.metrics.execution_time is None
+        assert result.metrics.prompt_tokens is None
+        assert result.metrics.completion_tokens is None
 
     def test_metrics_with_non_integer_tokens_are_converted(self, sample_context):
         # Simulate metrics with float values (from k conversion)
@@ -173,10 +169,10 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert isinstance(result.prompt_tokens, int)
-        assert isinstance(result.completion_tokens, int)
-        assert result.prompt_tokens == 12500
-        assert result.completion_tokens == 3200
+        assert isinstance(result.metrics.prompt_tokens, int)
+        assert isinstance(result.metrics.completion_tokens, int)
+        assert result.metrics.prompt_tokens == 12500
+        assert result.metrics.completion_tokens == 3200
 
     def test_metrics_flow_preserves_other_result_fields(self, sample_context):
         output_lines = [
@@ -190,9 +186,9 @@ class TestCopilotMetricsToResultFlow:
         result = BugFixResult.create_success(sample_context, "test_patch")
 
         # Verify metrics are present
-        assert result.agent_execution_time == 60.0
-        assert result.prompt_tokens == 10000
-        assert result.completion_tokens == 500
+        assert result.metrics.execution_time == 60.0
+        assert result.metrics.prompt_tokens == 10000
+        assert result.metrics.completion_tokens == 500
 
         # Verify other fields are still correctly populated
         assert result.instance_id == "test__metrics-flow-123"
@@ -272,9 +268,9 @@ class TestMiniAgentMetricsToResultFlow:
         assert result.instance_id == "test__mini-flow-456"
         assert result.resolved is True
         assert result.build is True
-        assert result.agent_execution_time == 245.8
-        assert result.prompt_tokens == 8500
-        assert result.completion_tokens == 1800
+        assert result.metrics.execution_time == 245.8
+        assert result.metrics.prompt_tokens == 8500
+        assert result.metrics.completion_tokens == 1800
         assert result.agent_name == "mini-bc-agent"
         assert result.model == "azure/gpt-4.1"
 
@@ -291,9 +287,9 @@ class TestMiniAgentMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.agent_execution_time == 120.0
-        assert result.prompt_tokens == 0
-        assert result.completion_tokens == 0
+        assert result.metrics.execution_time == 120.0
+        assert result.metrics.prompt_tokens == 0
+        assert result.metrics.completion_tokens == 0
 
     def test_mini_agent_metrics_flow_to_test_failure(self, sample_context):
         from unittest.mock import Mock
@@ -324,9 +320,9 @@ class TestMiniAgentMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is True
         assert result.error_message == "Tests failed"
-        assert result.agent_execution_time == 180.5
-        assert result.prompt_tokens == 6000
-        assert result.completion_tokens == 1500
+        assert result.metrics.execution_time == 180.5
+        assert result.metrics.prompt_tokens == 6000
+        assert result.metrics.completion_tokens == 1500
 
     def test_mini_agent_metrics_flow_to_build_failure(self, sample_context):
         from unittest.mock import Mock
@@ -357,9 +353,9 @@ class TestMiniAgentMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is False
         assert result.error_message == "Build failed: src/test"
-        assert result.agent_execution_time == 95.2
-        assert result.prompt_tokens == 4500
-        assert result.completion_tokens == 900
+        assert result.metrics.execution_time == 95.2
+        assert result.metrics.prompt_tokens == 4500
+        assert result.metrics.completion_tokens == 900
 
     def test_mini_agent_with_zero_tokens_preserved_in_result(self, sample_context):
         from unittest.mock import Mock
@@ -374,9 +370,9 @@ class TestMiniAgentMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.prompt_tokens == 0
-        assert result.completion_tokens == 0
-        assert result.agent_execution_time == 60.0
+        assert result.metrics.prompt_tokens == 0
+        assert result.metrics.completion_tokens == 0
+        assert result.metrics.execution_time == 60.0
 
     def test_mini_agent_metrics_with_large_token_counts(self, sample_context):
         from unittest.mock import Mock
@@ -404,6 +400,6 @@ class TestMiniAgentMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.prompt_tokens == 125000
-        assert result.completion_tokens == 25000
-        assert result.agent_execution_time == 450.3
+        assert result.metrics.prompt_tokens == 125000
+        assert result.metrics.completion_tokens == 25000
+        assert result.metrics.execution_time == 450.3
