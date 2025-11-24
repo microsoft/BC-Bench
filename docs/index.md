@@ -20,7 +20,7 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
   <tbody>
     {% assign sorted_results = site.data.bug-fix | sort: "resolved" | reverse %}
     {% for result in sorted_results %}
-      {% if result.mcp_servers == null and result.custom_instructions == false %}
+      {% if result.experiment.mcp_servers == null and result.experiment.custom_instructions == false and result.experiment.custom_agent == null %}
     <tr>
       <td>{{ result.agent_name }}</td>
       <td>{{ result.model }}</td>
@@ -42,6 +42,7 @@ Comparing experimental configurations against baseline for **claude-haiku-4.5**.
     <tr>
       <th>MCP Servers</th>
       <th>Custom Instructions</th>
+      <th>Custom Agent</th>
       <th>% Resolved</th>
       <th>Avg Duration (s)</th>
       <th>Date</th>
@@ -52,8 +53,9 @@ Comparing experimental configurations against baseline for **claude-haiku-4.5**.
     {% for result in sorted_results %}
       {% if result.model == "claude-haiku-4.5" %}
     <tr>
-      <td>{% if result.mcp_servers %}{{ result.mcp_servers }}{% else %}None{% endif %}</td>
-      <td>{% if result.custom_instructions %}Yes{% else %}No{% endif %}</td>
+      <td>{% if result.experiment.mcp_servers %}{{ result.experiment.mcp_servers }}{% else %}None{% endif %}</td>
+      <td>{% if result.experiment.custom_instructions %}Yes{% else %}No{% endif %}</td>
+      <td>{% if result.experiment.custom_agent %}{{ result.experiment.custom_agent }}{% else %}None{% endif %}</td>
       <td>{{ result.resolved }} / {{ result.total }} ({{ result.resolved | times: 100.0 | divided_by: result.total | round: 1 }}%)</td>
       <td>{% if result.average_duration %}{{ result.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
       <td>{{ result.date }}</td>
