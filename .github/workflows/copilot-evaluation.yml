@@ -19,6 +19,9 @@ on:
           - "gpt-5.1-codex-mini"
           - "gpt-5.1-codex"
           - "gemini-3-pro-preview"
+          - "claude-opus-4.5"
+          - "gpt-5-mini"
+          - "gpt-4.1"
       category:
         description: "Evaluation category to run"
         required: false
@@ -69,7 +72,7 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.362
+        run: npm install -g @github/copilot@0.0.363
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 90
