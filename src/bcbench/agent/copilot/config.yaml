@@ -1,6 +1,6 @@
 prompt:
   include_project_paths: false
-  template: |
+  bug-fix-template: |
     This is a non-interactive session. You are working with a Business Central (AL) code repository at {{repo_path}}.
 
     Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
@@ -14,8 +14,34 @@ prompt:
     Issue details:
     {{task}}
 
+  test-generation-template: |
+    This is a non-interactive session. You are working with a Business Central (AL) code repository at {{repo_path}}.
+
+    Task: Generate ONE test case that reproduce the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+      The tests should fail against the current codebase (unfixed) and should pass once the issue is fixed.
+
+    Important constraints:
+    - Do NOT modify any production code files
+    - Focus solely on generating tests for the reported issue
+    - Do NOT try to build or run tests, just provide the code changes needed
+    - Do NOT commit any changes to the repository
+    - Do NOT generate more than ONE test case
+
+    Issue details:
+    {{task}}
+
+# controls:
+# 1. whether to copy custom instructions (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/`) into the repo
+# 2. whether to pass --disable-custom-instructions to copilot
 instructions:
   enabled: false
+
+# controls:
+# 1. whether to copy custom agents (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/agents/`) into the repo
+# 2. whether to pass --agent=<agent-name> to copilot
+agents:
+  enabled: false
+  name: ALTest
 # mcp:
 #   servers:
 #     - name: "mslearn"

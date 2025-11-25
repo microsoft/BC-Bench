@@ -3,6 +3,7 @@
 import subprocess
 from pathlib import Path
 from string import Template
+from typing import Literal
 
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, TestEntry
@@ -100,7 +101,7 @@ def build_ps_test_script(container_name: str, username: str, password: str, code
     )
 
 
-def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, expectation: str) -> str:
+def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, expectation: Literal["Pass", "Fail"]) -> str:
     app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     return _DATASET_TESTS_TEMPLATE.substitute(
@@ -155,21 +156,18 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
 
 
 def run_tests(entry: DatasetEntry, container_name: str, username: str, password: str) -> None:
-    """Run fail-to-pass and pass-to-pass tests."""
-    logger.info("Running tests")
-
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
-        _run_test_suite(entry.fail_to_pass, "Pass", container_name, username, password)
+        run_test_suite(entry.fail_to_pass, "Pass", container_name, username, password)
 
     if entry.pass_to_pass:
         logger.info(f"Running {len(entry.pass_to_pass)} pass-to-pass tests")
-        _run_test_suite(entry.pass_to_pass, "Pass", container_name, username, password)
+        run_test_suite(entry.pass_to_pass, "Pass", container_name, username, password)
 
     logger.info("All tests completed")
 
 
-def _run_test_suite(test_entries: list[TestEntry], expectation: str, container_name: str, username: str, password: str) -> None:
+def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container_name: str, username: str, password: str) -> None:
     """Run a suite of tests."""
     test_entries_json = str(test_entries).replace("'", '"')
 
@@ -182,6 +180,8 @@ def _run_test_suite(test_entries: list[TestEntry], expectation: str, container_n
     )
 
     try:
+        logger.info(f"Running test suite with expectation: {expectation}")
+        logger.info(f"Tests to run: {test_entries_json}")
         subprocess.run(
             ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
             capture_output=True,
@@ -189,6 +189,7 @@ def _run_test_suite(test_entries: list[TestEntry], expectation: str, container_n
             text=True,
             timeout=_config.timeout.test_execution,
         )
+        logger.info(f"Test suite completed with expectation met: {expectation}")
     except subprocess.CalledProcessError as e:
         logger.debug(f"Test result did not meet expectation (expected: {expectation}): {e.stderr}")
         raise TestExecutionError(expectation, e.stderr) from None

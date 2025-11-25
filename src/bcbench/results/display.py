@@ -3,19 +3,20 @@ from rich.table import Table
 
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results.evaluation_result import EvaluationResult
+from bcbench.results.base import BaseEvaluationResult
 
 logger = get_logger(__name__)
 console = Console()
 
 
-def create_console_summary(results: list[EvaluationResult]) -> None:
+def create_console_summary(results: list[BaseEvaluationResult]) -> None:
     total = len(results)
     resolved = sum(r.resolved for r in results)
     failed = total - resolved
 
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
     console.print(f"Total Processed: [bold]{total}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
+    console.print(f"Category: [bold]{results[0].category.value}[/bold]")
     console.print(f"Resolved: [bold green]{resolved}[/bold green]")
     console.print(f"Failed: [bold red]{failed}[/bold red]")
 
@@ -29,25 +30,31 @@ def create_console_summary(results: list[EvaluationResult]) -> None:
 
     for result in results:
         status = "[green]Success[/green]" if result.resolved else "[red]Failed[/red]"
-        mcp_servers = ", ".join(result.mcp_servers) if result.mcp_servers else "N/A"
-        custom_instructions = "Yes" if result.custom_instructions else "No"
-        table.add_row(result.instance_id, result.project, status, mcp_servers, custom_instructions, result.error_message or "")
+        mcp_servers = ", ".join(result.experiment.mcp_servers) if result.experiment and result.experiment.mcp_servers else "N/A"
+        custom_instructions = "Yes" if result.experiment and result.experiment.custom_instructions else "No"
+        custom_agent = result.experiment.custom_agent if result.experiment and result.experiment.custom_agent else "N/A"
+        table.add_row(result.instance_id, result.project, status, mcp_servers, custom_instructions, custom_agent, result.error_message or "")
 
     console.print(table)
     console.print()
 
 
-def create_github_job_summary(results: list[EvaluationResult]) -> None:
+def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
     total = len(results)
     resolved = sum(r.resolved for r in results)
     failed = total - resolved
 
     success_icon = ":white_check_mark:" if failed == 0 else ":x:"
-    mcp_servers = ", ".join(results[0].mcp_servers) if results[0].mcp_servers else "None"
-    custom_instructions = "Yes" if results[0].custom_instructions else "No"
+
+    mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
+    custom_instructions = "Yes" if results[0].experiment and results[0].experiment.custom_instructions else "No"
+    custom_agent = results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else "N/A"
+
     markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
+- Category: `{results[0].category.value}`
 - MCP Servers used: {mcp_servers}
 - Custom Instructions: {custom_instructions}
+- Custom Agent: {custom_agent}
 - Successful evaluations: {resolved} :white_check_mark:
 - Failed evaluations: {failed} {success_icon}
 

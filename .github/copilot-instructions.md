@@ -6,7 +6,7 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
 - **Agent Evaluations**: Focuses on mini-BC-agent (baseline), GitHub Copilot CLI
-- **Expieriments**: Various MCP Servers, custom intructions and their performance on the benchmark
+- **Expieriments**: Various MCP Servers, custom intructions, custom agent and their performance on the benchmark
 
 ## Key Context
 - Primary language: Python (with AL/Business Central as the target evaluation language)
@@ -21,8 +21,20 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - Prefer modular, testable components
 
 ### Readable code over documentation or comments
-e.g. our test function names are already descriptive, there is NO need for additional docstrings like:
+Test function names should be self-explanatory. Do NOT add docstrings to test functions.
+
+Bad:
 ```python
 def test_full_metrics_flow_to_success_result(self, sample_context):
     """Test parsing metrics, setting them on context, and creating a success result."""
 ```
+
+Good:
+```python
+def test_full_metrics_flow_to_success_result(self, sample_context):
+    # No docstring needed - the name says it all
+```
+
+## Backward compatibility
+- Do NOT worry about backward compatibility unless explicitly stated
+- Do NOT worry about breaking changes

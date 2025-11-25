@@ -2,6 +2,7 @@ from pathlib import Path
 
 from bcbench.agent.copilot.prompt import build_prompt
 from bcbench.dataset import DatasetEntry
+from bcbench.types import EvaluationCategory
 
 
 def test_build_prompt_without_project_paths():
@@ -16,12 +17,12 @@ def test_build_prompt_without_project_paths():
     repo_path = Path("C:/testbed/navapp")
     config = {
         "prompt": {
-            "template": "Working at {{repo_path}}. Task: {{task}}",
+            "bug-fix-template": "Working at {{repo_path}}. Task: {{task}}",
             "include_project_paths": False,
         }
     }
 
-    result = build_prompt(entry, repo_path, config)
+    result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
 
     assert "Working at C:" in result or "Working at C:/" in result
     assert "testbed" in result
@@ -42,12 +43,12 @@ def test_build_prompt_with_project_paths():
     repo_path = Path("/workspace/navapp")
     config = {
         "prompt": {
-            "template": "Repo: {{repo_path}}. {% if include_project_paths %}Projects: {{project_paths}}{% endif %}. Task: {{task}}",
+            "bug-fix-template": "Repo: {{repo_path}}. {% if include_project_paths %}Projects: {{project_paths}}{% endif %}. Task: {{task}}",
             "include_project_paths": True,
         }
     }
 
-    result = build_prompt(entry, repo_path, config)
+    result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
 
     assert "workspace" in result and "navapp" in result
     assert "App/Apps/W1/Sales/app, App/Apps/W1/Inventory/app" in result
@@ -65,12 +66,12 @@ def test_build_prompt_empty_project_paths():
     repo_path = Path("/var/repo")
     config = {
         "prompt": {
-            "template": "{% if include_project_paths %}Projects: {{project_paths}}{% endif %}Task: {{task}}",
+            "bug-fix-template": "{% if include_project_paths %}Projects: {{project_paths}}{% endif %}Task: {{task}}",
             "include_project_paths": True,
         }
     }
 
-    result = build_prompt(entry, repo_path, config)
+    result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
 
     assert "Task: Fix issue" in result
     assert "Projects:" in result

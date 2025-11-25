@@ -5,10 +5,12 @@ from pathlib import Path
 
 from unidiff import PatchSet
 
+from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
+_config = get_config()
 
 
 def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_path: str = "") -> tuple[str, str, str]:
@@ -39,8 +41,9 @@ def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_p
 
     patch_test: str = ""
     patch_fix: str = ""
+    test_identifiers = _config.file_patterns.test_project_identifiers
     for hunk in PatchSet(patch):
-        if any(word in hunk.path.lower() for word in ("test", "tests")):
+        if any(identifier in hunk.path.lower() for identifier in test_identifiers):
             patch_test += str(hunk)
         else:
             patch_fix += str(hunk)

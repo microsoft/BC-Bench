@@ -299,6 +299,20 @@ function Write-Log {
 
         # Using Console.Out preserves ANSI escape sequences in GitHub Actions logs
         [Console]::Out.WriteLine("$($config.AnsiColor)$formattedMessage$resetColor")
+
+        # Emit GitHub Actions workflow commands for warnings and error
+        if ($env:GITHUB_ACTIONS -eq "true" -and ($Level -eq "Warning" -or $Level -eq "Error")) {
+            # Escape special characters for GitHub Actions
+            # Per GitHub docs: need to escape %, \r, \n
+            $escapedMessage = $Message -replace '%', '%25' -replace '\r', '%0D' -replace '\n', '%0A'
+
+            # Determine the command type
+            $command = if ($Level -eq "Error") { "error" } else { "warning" }
+
+            # Output GitHub Actions annotation to stdout
+            # Format: ::warning title={title}::{message}
+            [Console]::Out.WriteLine("::$command title=BCBench::$escapedMessage")
+        }
     }
     else {
         # Local execution - write with color

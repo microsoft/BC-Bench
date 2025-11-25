@@ -1,8 +1,8 @@
 import pytest
 
 from bcbench.dataset import DatasetEntry
-from bcbench.evaluate.evaluation_context import EvaluationContext
-from bcbench.results import EvaluationResult
+from bcbench.results.bugfix import BugFixResult
+from bcbench.types import EvaluationCategory, EvaluationContext
 
 
 class TestEvaluationResultFactories:
@@ -26,10 +26,11 @@ class TestEvaluationResultFactories:
             username="test-user",
             agent_name="test-agent",
             model="test-model",
+            category=EvaluationCategory.BUG_FIX,
         )
 
     def test_create_success_result_fills_all_fields_correctly(self, sample_context):
-        result = EvaluationResult.create_success(sample_context, "test_patch")
+        result = BugFixResult.create_success(sample_context, "test_patch")
 
         assert result.instance_id == "test__repo-123"
         assert result.project == "Shopify"
@@ -41,7 +42,7 @@ class TestEvaluationResultFactories:
 
     def test_create_build_failure_result_fills_all_fields_correctly(self, sample_context):
         error_msg = "Build failed: src/app"
-        result = EvaluationResult.create_build_failure(sample_context, "test_patch", error_msg)
+        result = BugFixResult.create_build_failure(sample_context, "test_patch", error_msg)
 
         assert result.instance_id == "test__repo-123"
         assert result.project == "Shopify"
@@ -52,7 +53,7 @@ class TestEvaluationResultFactories:
         assert result.error_message == error_msg
 
     def test_create_test_failure_result_fills_all_fields_correctly(self, sample_context):
-        result = EvaluationResult.create_test_failure(sample_context, "test_patch")
+        result = BugFixResult.create_test_failure(sample_context, "test_patch")
 
         assert result.instance_id == "test__repo-123"
         assert result.project == "Shopify"
@@ -81,9 +82,10 @@ class TestEvaluationResultFactories:
             username="different-user",
             agent_name="different-agent",
             model="different-model",
+            category=EvaluationCategory.BUG_FIX,
         )
 
-        result = EvaluationResult.create_success(context, "test_patch")
+        result = BugFixResult.create_success(context, "test_patch")
 
         assert result.instance_id == "different__entry-456"
         assert result.project == "BaseApp"
@@ -92,12 +94,12 @@ class TestEvaluationResultFactories:
 
     def test_build_failure_with_patch_application_error_message(self, sample_context):
         error_msg = "Failed to apply custom_fix.patch"
-        result = EvaluationResult.create_build_failure(sample_context, "test_patch", error_msg)
+        result = BugFixResult.create_build_failure(sample_context, "test_patch", error_msg)
 
         assert result.error_message == error_msg
 
     def test_build_failure_with_different_project_path(self, sample_context):
         error_msg = "Build failed: src/components/module1"
-        result = EvaluationResult.create_build_failure(sample_context, "test_patch", error_msg)
+        result = BugFixResult.create_build_failure(sample_context, "test_patch", error_msg)
 
         assert result.error_message == error_msg
