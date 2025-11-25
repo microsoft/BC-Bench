@@ -14,6 +14,7 @@ from bcbench.cli_options import (
     ContainerUsername,
     CopilotModel,
     DatasetPath,
+    EvaluationCategoryOption,
     OutputDir,
     RepoPath,
 )
@@ -34,6 +35,7 @@ def run_mini(
     container_name: ContainerName,
     username: ContainerUsername,
     password: ContainerPassword,
+    category: EvaluationCategoryOption,
     model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.nav_repo_path,
@@ -55,6 +57,7 @@ def run_mini(
     run_mini_agent(
         entry=entry,
         repo_path=repo_path,
+        category=category,
         model=model,
         container_name=container_name,
         username=username,
@@ -66,6 +69,7 @@ def run_mini(
 @run_app.command("copilot")
 def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    category: EvaluationCategoryOption,
     model: CopilotModel = "claude-haiku-4.5",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.nav_repo_path,
@@ -84,7 +88,7 @@ def run_copilot(
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
 
-    run_copilot_agent(entry=entry, repo_path=repo_path, model=model, output_dir=output_dir)
+    run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir)
 
 
 @run_app.command("mini-inspector")

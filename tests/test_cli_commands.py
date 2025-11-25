@@ -6,14 +6,14 @@ import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
-from bcbench.results import EvaluationResult
+from bcbench.results.bugfix import BugFixResult
+from bcbench.types import AgentMetrics, EvaluationCategory
 
 runner = CliRunner()
 
 
 @pytest.fixture(autouse=True)
 def disable_github_actions(monkeypatch):
-    """Automatically disable GitHub Actions environment for all CLI tests."""
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
 
     # Reset the config singleton to pick up the environment changes
@@ -81,46 +81,55 @@ def sample_results_directory(tmp_path, sample_dataset_file):
     results_dir = tmp_path / run_id
     results_dir.mkdir(parents=True)
 
-    # Create sample results
-    result1 = EvaluationResult(
+    # Create sample results with nested metrics
+    result1 = BugFixResult(
         instance_id="test__entry-1",
         project="W1/TestApp",
         model="gpt-4o",
         agent_name="test-agent",
+        category=EvaluationCategory.BUG_FIX,
         resolved=True,
         build=True,
         generated_patch="diff --git a/test.al b/test.al\n+fixed line",
-        agent_execution_time=120.0,
-        prompt_tokens=5000,
-        completion_tokens=1000,
+        metrics=AgentMetrics(
+            execution_time=120.0,
+            prompt_tokens=5000,
+            completion_tokens=1000,
+        ),
     )
     result1.save(results_dir, f"{result1.instance_id}.jsonl")
 
-    result2 = EvaluationResult(
+    result2 = BugFixResult(
         instance_id="test__entry-2",
         project="W1/AnotherApp",
         model="gpt-4o",
         agent_name="test-agent",
+        category=EvaluationCategory.BUG_FIX,
         resolved=False,
         build=True,
         error_message="Test failed",
-        agent_execution_time=80.0,
-        prompt_tokens=3000,
-        completion_tokens=500,
+        metrics=AgentMetrics(
+            execution_time=80.0,
+            prompt_tokens=3000,
+            completion_tokens=500,
+        ),
     )
     result2.save(results_dir, f"{result2.instance_id}.jsonl")
 
-    result3 = EvaluationResult(
+    result3 = BugFixResult(
         instance_id="test__entry-3",
         project="W1/ThirdApp",
         model="gpt-4o",
         agent_name="test-agent",
+        category=EvaluationCategory.BUG_FIX,
         resolved=True,
         build=True,
         generated_patch="diff --git a/test3.al b/test3.al\n+another fix",
-        agent_execution_time=95.0,
-        prompt_tokens=4200,
-        completion_tokens=800,
+        metrics=AgentMetrics(
+            execution_time=95.0,
+            prompt_tokens=4200,
+            completion_tokens=800,
+        ),
     )
     result3.save(results_dir, f"{result3.instance_id}.jsonl")
 
@@ -192,7 +201,6 @@ def test_result_summarize_verifies_summary_calculations(sample_results_directory
 
 @pytest.mark.integration
 def test_result_summarize_missing_directory_fails_gracefully(tmp_path):
-    """Integration test: result summarize fails gracefully when run_id doesn't exist."""
     result = runner.invoke(
         app,
         [
@@ -368,12 +376,14 @@ def test_dataset_list_verifies_entry_format(sample_dataset_file):
 
 @pytest.fixture
 def sample_leaderboard_and_summary(tmp_path):
-    """Fixture that creates a leaderboard with multiple entries and a new summary."""
-    leaderboard_path = tmp_path / "leaderboard.json"
+    leaderboard_dir = tmp_path / "_data"
+    leaderboard_dir.mkdir()
+    bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
+    testgen_leaderboard_path = leaderboard_dir / "test-generation.json"
     summary_path = tmp_path / "summary.json"
 
-    # Create initial leaderboard with 3 entries
-    leaderboard_data = [
+    # Create bug-fix leaderboard with 2 entries
+    bugfix_data = [
         {
             "total": 10,
             "resolved": 6,
@@ -381,28 +391,17 @@ def sample_leaderboard_and_summary(tmp_path):
             "build": 9,
             "date": "2025-01-10",
             "model": "gpt-4o",
+            "category": "bug-fix",
             "agent_name": "copilot",
             "average_duration": 120.5,
             "average_prompt_tokens": 5000.0,
             "average_completion_tokens": 1500.0,
             "github_run_id": "run_001",
-            "mcp_servers": "server1, server2",
-            "custom_instructions": True,
-        },
-        {
-            "total": 10,
-            "resolved": 5,
-            "failed": 5,
-            "build": 8,
-            "date": "2025-01-11",
-            "model": "gpt-4-turbo",
-            "agent_name": "copilot",
-            "average_duration": 110.0,
-            "average_prompt_tokens": 4500.0,
-            "average_completion_tokens": 1200.0,
-            "github_run_id": "run_002",
-            "mcp_servers": None,
-            "custom_instructions": False,
+            "experiment": {
+                "mcp_servers": ["server1", "server2"],
+                "custom_instructions": True,
+                "custom_agent": None,
+            },
         },
         {
             "total": 10,
@@ -411,18 +410,48 @@ def sample_leaderboard_and_summary(tmp_path):
             "build": 10,
             "date": "2025-01-12",
             "model": "gpt-4o",
+            "category": "bug-fix",
             "agent_name": "mini",
             "average_duration": 95.0,
             "average_prompt_tokens": 3500.0,
             "average_completion_tokens": 1000.0,
             "github_run_id": "run_003",
-            "mcp_servers": None,
-            "custom_instructions": False,
+            "experiment": {
+                "mcp_servers": None,
+                "custom_instructions": False,
+                "custom_agent": None,
+            },
         },
     ]
 
-    with open(leaderboard_path, "w") as f:
-        json.dump(leaderboard_data, f, indent=2)
+    # Create test-generation leaderboard with 1 entry
+    testgen_data = [
+        {
+            "total": 10,
+            "resolved": 5,
+            "failed": 5,
+            "build": 8,
+            "date": "2025-01-11",
+            "model": "gpt-4-turbo",
+            "category": "test-generation",
+            "agent_name": "copilot",
+            "average_duration": 110.0,
+            "average_prompt_tokens": 4500.0,
+            "average_completion_tokens": 1200.0,
+            "github_run_id": "run_002",
+            "experiment": {
+                "mcp_servers": None,
+                "custom_instructions": False,
+                "custom_agent": None,
+            },
+        },
+    ]
+
+    with open(bugfix_leaderboard_path, "w") as f:
+        json.dump(bugfix_data, f, indent=2)
+
+    with open(testgen_leaderboard_path, "w") as f:
+        json.dump(testgen_data, f, indent=2)
 
     # Create a new summary to update (updated copilot + gpt-4o + server1, server2)
     new_summary = {
@@ -432,24 +461,29 @@ def sample_leaderboard_and_summary(tmp_path):
         "build": 10,  # Improved from 9 to 10
         "date": "2025-01-15",
         "model": "gpt-4o",
+        "category": "bug-fix",
         "agent_name": "copilot",
-        "average_duration": 125.0,
+        "average_duration": 130.0,
         "average_prompt_tokens": 5200.0,
         "average_completion_tokens": 1600.0,
         "github_run_id": "run_004",
-        "mcp_servers": "server1, server2",
-        "custom_instructions": True,
+        "experiment": {
+            "mcp_servers": ["server1", "server2"],
+            "custom_instructions": True,
+            "custom_agent": None,
+        },
     }
 
     with open(summary_path, "w") as f:
         json.dump(new_summary, f, indent=2)
 
-    return leaderboard_path, summary_path
+    return leaderboard_dir, summary_path
 
 
 @pytest.mark.integration
 def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
-    leaderboard_path, summary_path = sample_leaderboard_and_summary
+    leaderboard_dir, summary_path = sample_leaderboard_and_summary
+    bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
 
     result = runner.invoke(
         app,
@@ -457,23 +491,24 @@ def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
             "result",
             "update",
             str(summary_path),
-            "--leaderboard-path",
-            str(leaderboard_path),
+            "--leaderboard-dir",
+            str(leaderboard_dir),
         ],
     )
 
     assert result.exit_code == 0, f"Command failed:\nstdout: {result.stdout}\nstderr: {result.stderr}\nexception: {result.exception}"
 
-    # Verify leaderboard still has 3 entries (not 4)
-    with open(leaderboard_path) as f:
+    # Verify bug-fix leaderboard still has 2 entries (not 3)
+    with open(bugfix_leaderboard_path) as f:
         updated_leaderboard = json.load(f)
 
-    assert len(updated_leaderboard) == 3, "Should still have 3 entries (replaced, not added)"
+    assert len(updated_leaderboard) == 2, "Should still have 2 entries (replaced, not added)"
 
     # Find the updated entry and verify it matches
     updated_entry = None
     for entry in updated_leaderboard:
-        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and entry["mcp_servers"] == "server1, server2" and entry.get("custom_instructions") is True:
+        exp = entry.get("experiment", {})
+        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and exp.get("mcp_servers") == ["server1", "server2"] and exp.get("custom_instructions") is True:
             updated_entry = entry
             break
 
@@ -486,8 +521,8 @@ def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
 
 @pytest.mark.integration
 def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
-    leaderboard_path, _ = sample_leaderboard_and_summary
-    summary_path = leaderboard_path.parent / "new_agent_summary.json"
+    leaderboard_dir, _ = sample_leaderboard_and_summary
+    summary_path = leaderboard_dir.parent / "new_agent_summary.json"
 
     # Create a new summary for a different agent
     new_summary = {
@@ -497,13 +532,17 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "build": 10,
         "date": "2025-01-16",
         "model": "gpt-4o",
+        "category": "test-generation",
         "agent_name": "new-agent",
         "average_duration": 100.0,
         "average_prompt_tokens": 4800.0,
         "average_completion_tokens": 1400.0,
         "github_run_id": "run_005",
-        "mcp_servers": None,
-        "custom_instructions": False,
+        "experiment": {
+            "mcp_servers": None,
+            "custom_instructions": False,
+            "custom_agent": None,
+        },
     }
 
     with open(summary_path, "w") as f:
@@ -515,18 +554,18 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
             "result",
             "update",
             str(summary_path),
-            "--leaderboard-path",
-            str(leaderboard_path),
+            "--leaderboard-dir",
+            str(leaderboard_dir),
         ],
     )
 
     assert result.exit_code == 0
 
-    # Verify leaderboard now has 4 entries
-    with open(leaderboard_path) as f:
+    # Verify leaderboard now has 2 entries in test-generation
+    with open(leaderboard_dir / "test-generation.json") as f:
         updated_leaderboard = json.load(f)
 
-    assert len(updated_leaderboard) == 4, "Should now have 4 entries (added new)"
+    assert len(updated_leaderboard) == 2, "Should now have 2 entries (added new in test-generation)"
 
     # Find the new entry
     new_entry = None
@@ -541,8 +580,8 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
 
 @pytest.mark.integration
 def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summary):
-    leaderboard_path, _ = sample_leaderboard_and_summary
-    summary_path = leaderboard_path.parent / "copilot_different_mcp_summary.json"
+    leaderboard_dir, _ = sample_leaderboard_and_summary
+    summary_path = leaderboard_dir.parent / "copilot_different_mcp_summary.json"
 
     # Create a new summary for copilot + gpt-4o but WITHOUT mcp_servers (different from existing)
     new_summary = {
@@ -552,13 +591,17 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "build": 9,
         "date": "2025-01-17",
         "model": "gpt-4o",
+        "category": "bug-fix",
         "agent_name": "copilot",
         "average_duration": 115.0,
         "average_prompt_tokens": 4900.0,
         "average_completion_tokens": 1350.0,
         "github_run_id": "run_006",
-        "mcp_servers": None,  # Different from existing "server1, server2"
-        "custom_instructions": False,  # Different from existing True
+        "experiment": {
+            "mcp_servers": None,  # Different from existing ["server1", "server2"]
+            "custom_instructions": False,  # Different from existing True
+            "custom_agent": None,
+        },
     }
 
     with open(summary_path, "w") as f:
@@ -570,28 +613,99 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
             "result",
             "update",
             str(summary_path),
-            "--leaderboard-path",
-            str(leaderboard_path),
+            "--leaderboard-dir",
+            str(leaderboard_dir),
         ],
     )
 
     assert result.exit_code == 0
 
-    # Verify leaderboard now has 4 entries (not replaced because mcp_servers differ)
-    with open(leaderboard_path) as f:
+    # Verify bug-fix leaderboard now has 3 entries (not replaced because mcp_servers differ)
+    bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
+    with open(bugfix_leaderboard_path) as f:
         updated_leaderboard = json.load(f)
 
-    assert len(updated_leaderboard) == 4, "Should have 4 entries (added new because mcp_servers differ)"
+    assert len(updated_leaderboard) == 3, "Should have 3 entries in bug-fix (added new because mcp_servers differ)"
 
     # Verify both copilot + gpt-4o entries exist
     copilot_gpt4o_entries = [e for e in updated_leaderboard if e["agent_name"] == "copilot" and e["model"] == "gpt-4o"]
 
     assert len(copilot_gpt4o_entries) == 2, "Should have 2 different copilot + gpt-4o entries"
 
-    # Find each by mcp_servers
-    with_servers = next((e for e in copilot_gpt4o_entries if e["mcp_servers"] == "server1, server2"), None)
-    without_servers = next((e for e in copilot_gpt4o_entries if e["mcp_servers"] is None), None)
+    # Find each by experiment.mcp_servers
+    with_servers = next((e for e in copilot_gpt4o_entries if e.get("experiment", {}).get("mcp_servers") == ["server1", "server2"]), None)
+    without_servers = next((e for e in copilot_gpt4o_entries if e.get("experiment", {}).get("mcp_servers") is None), None)
 
     assert with_servers is not None and without_servers is not None
     assert with_servers["resolved"] == 6, "Original entry should be unchanged"
     assert without_servers["resolved"] == 7, "New entry should have new values"
+
+
+@pytest.mark.integration
+def test_result_update_ensures_newline_at_end_of_file(sample_leaderboard_and_summary):
+    leaderboard_dir, summary_path = sample_leaderboard_and_summary
+
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-dir",
+            str(leaderboard_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    # Verify file ends with newline
+    with open(leaderboard_dir / "bug-fix.json", "rb") as f:
+        content = f.read()
+        assert content.endswith(b"\n"), "Leaderboard file should end with a newline character"
+
+
+@pytest.mark.integration
+def test_result_update_does_not_add_multiple_newlines_when_run_twice(sample_leaderboard_and_summary):
+    leaderboard_dir, summary_path = sample_leaderboard_and_summary
+
+    # Run update command first time
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-dir",
+            str(leaderboard_dir),
+        ],
+    )
+    assert result.exit_code == 0
+
+    # Read file after first update
+    with open(leaderboard_dir / "bug-fix.json", "rb") as f:
+        content_after_first = f.read()
+
+    # Count trailing newlines after first update
+    trailing_newlines_first = len(content_after_first) - len(content_after_first.rstrip(b"\n"))
+    assert trailing_newlines_first == 1, "File should have exactly 1 trailing newline after first update"
+
+    # Run update command second time with same summary
+    result = runner.invoke(
+        app,
+        [
+            "result",
+            "update",
+            str(summary_path),
+            "--leaderboard-dir",
+            str(leaderboard_dir),
+        ],
+    )
+    assert result.exit_code == 0
+
+    # Read file after second update
+    with open(leaderboard_dir / "bug-fix.json", "rb") as f:
+        content_after_second = f.read()
+
+    # Count trailing newlines after second update
+    trailing_newlines_second = len(content_after_second) - len(content_after_second.rstrip(b"\n"))
+    assert trailing_newlines_second == 1, "File should still have exactly 1 trailing newline after second update, not 2"

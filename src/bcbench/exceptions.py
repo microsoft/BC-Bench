@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bcbench.types import AgentMetrics, ExperimentConfiguration
+
 __all__ = [
     "AgentError",
     "BCBenchError",
@@ -128,8 +133,25 @@ class TestExecutionTimeoutExpired(BCBenchError):
         super().__init__(message)
 
 
+class NoTestsExtractedError(BCBenchError):
+    """No tests extracted from the generated patch."""
+
+    def __init__(self):
+        message = "No tests extracted from the generated patch."
+        super().__init__(message)
+
+
 class AgentError(BCBenchError):
     """Agent execution errors."""
+
+
+class AgentTimeoutError(BCBenchError):
+    """Agent execution timeout errors."""
+
+    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None):
+        self.metrics = metrics
+        self.config = config
+        super().__init__(message)
 
 
 class ConfigurationError(BCBenchError):

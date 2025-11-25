@@ -173,7 +173,6 @@ class TestPowerShellScriptGeneration:
             assert "-credential" in script.lower()
 
     def test_path_with_spaces(self):
-        """Test script generation with paths containing spaces."""
         script = bc_operations.build_ps_app_build_and_publish(
             container_name="bcserver",
             username="admin",
@@ -186,7 +185,6 @@ class TestPowerShellScriptGeneration:
         assert "Program Files" in script and "NAV" in script and "App" in script
 
     def test_version_is_not_quoted(self):
-        """Test that version numbers are not quoted in generated scripts."""
         script = bc_operations.build_ps_app_build_and_publish(
             container_name="bcserver",
             username="admin",
