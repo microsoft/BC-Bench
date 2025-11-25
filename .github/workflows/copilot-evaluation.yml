@@ -14,11 +14,26 @@ on:
           - "claude-sonnet-4.5"
           - "claude-sonnet-4"
           - "claude-haiku-4.5"
+          - "claude-opus-4.5"
           - "gpt-5"
+          - "gpt-5-mini"
+          - "gpt-5.1"
+          - "gpt-5.1-codex-mini"
+          - "gpt-5.1-codex"
+          - "gpt-4.1"
+          - "gemini-3-pro-preview"
+      category:
+        description: "Evaluation category to run"
+        required: false
+        default: "bug-fix"
+        type: choice
+        options:
+          - "bug-fix"
+          - "test-generation"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
-        default: false
+        default: true
         type: boolean
 
 env:
@@ -31,19 +46,15 @@ jobs:
       test-run: ${{ inputs.test-run }}
 
   evaluate-with-copilot-cli:
-    runs-on: windows-latest
+    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    env:
-      BC_CONTAINER_NAME: bcbench
-      BC_CONTAINER_USERNAME: admin
-      BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
     if: needs.get-entries.outputs.entries != '[]'
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 15
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -61,14 +72,16 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.355
+        run: npm install -g @github/copilot@0.0.363
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+        timeout-minutes: 90
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
         run: |
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
+            --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 

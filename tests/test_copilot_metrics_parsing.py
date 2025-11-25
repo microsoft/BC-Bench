@@ -15,9 +15,9 @@ def test_parse_metrics_full_output_gpt5():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["agent_execution_time"] == 235.1
-    assert result["prompt_tokens"] == 125500
-    assert result["completion_tokens"] == 3600
+    assert result.execution_time == 235.1
+    assert result.prompt_tokens == 125500
+    assert result.completion_tokens == 3600
 
 
 def test_parse_metrics_full_output_haiku45():
@@ -34,9 +34,9 @@ def test_parse_metrics_full_output_haiku45():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["agent_execution_time"] == 1765.4
-    assert result["prompt_tokens"] == 1100000
-    assert result["completion_tokens"] == 6600
+    assert result.execution_time == 1765.4
+    assert result.prompt_tokens == 1100000
+    assert result.completion_tokens == 6600
 
 
 def test_parse_metrics_wall_time_seconds_only():
@@ -45,7 +45,7 @@ def test_parse_metrics_wall_time_seconds_only():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["agent_execution_time"] == 45.7
+    assert result.execution_time == 45.7
 
 
 def test_parse_metrics_wall_time_minutes_and_seconds():
@@ -54,7 +54,7 @@ def test_parse_metrics_wall_time_minutes_and_seconds():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["agent_execution_time"] == 312.3
+    assert result.execution_time == 312.3
 
 
 def test_parse_metrics_token_counts_without_k():
@@ -63,8 +63,8 @@ def test_parse_metrics_token_counts_without_k():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["prompt_tokens"] == 1234
-    assert result["completion_tokens"] == 567
+    assert result.prompt_tokens == 1234
+    assert result.completion_tokens == 567
 
 
 def test_parse_metrics_token_counts_with_k():
@@ -73,8 +73,8 @@ def test_parse_metrics_token_counts_with_k():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["prompt_tokens"] == 12500
-    assert result["completion_tokens"] == 3200
+    assert result.prompt_tokens == 12500
+    assert result.completion_tokens == 3200
 
 
 def test_parse_metrics_empty_output():
@@ -97,11 +97,9 @@ def test_parse_metrics_partial_data():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["agent_execution_time"] == 90.0
-    assert "prompt_tokens" not in result
-    assert "completion_tokens" not in result
-    assert "lines_added" not in result
-    assert "lines_removed" not in result
+    assert result.execution_time == 90.0
+    assert result.prompt_tokens is None
+    assert result.completion_tokens is None
 
 
 def test_parse_metrics_malformed_token_count():
@@ -113,7 +111,6 @@ def test_parse_metrics_malformed_token_count():
 
 
 def test_parse_metrics_with_command_output():
-    """Test parsing metrics from real output with command executions and checkmarks."""
     output_lines = [
         "  ✓ Count AL files\n",
         "     $ Get-ChildItem -Path C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\testbed\\App -Recurse -Filter *.al |\n",
@@ -143,13 +140,12 @@ def test_parse_metrics_with_command_output():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["agent_execution_time"] == 235.1
-    assert result["prompt_tokens"] == 125500
-    assert result["completion_tokens"] == 3600
+    assert result.execution_time == 235.1
+    assert result.prompt_tokens == 125500
+    assert result.completion_tokens == 3600
 
 
 def test_parse_metrics_minimal_real_output():
-    """Test parsing with just the metrics section from real output."""
     output_lines = [
         "  Total duration (wall): 2m 15.3s\n",
         "  Usage by model:\n",
@@ -159,6 +155,6 @@ def test_parse_metrics_minimal_real_output():
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result["agent_execution_time"] == 135.3
-    assert result["prompt_tokens"] == 50200
-    assert result["completion_tokens"] == 1500
+    assert result.execution_time == 135.3
+    assert result.prompt_tokens == 50200
+    assert result.completion_tokens == 1500

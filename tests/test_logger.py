@@ -10,7 +10,6 @@ from bcbench.logger import GitHubActionsHandler, SensitiveDataFilter
 class TestSensitiveDataFilter:
     @pytest.fixture
     def filter_instance(self):
-        """Create a SensitiveDataFilter instance for testing."""
         return SensitiveDataFilter()
 
     def test_redact_value_with_password(self, filter_instance):

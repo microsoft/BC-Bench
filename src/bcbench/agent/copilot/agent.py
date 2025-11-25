@@ -12,26 +12,31 @@ from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.copilot.prompt import build_prompt
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
-from bcbench.exceptions import AgentError
+from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
+from bcbench.operations import setup_custom_agent, setup_instructions_from_config
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_dir: Path) -> dict[str, float | int] | None:
+def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:
-        Dictionary containing metrics extracted from the CLI output, or None if collection fails
+        Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
     """
     config_file = Path(__file__).parent / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config)
-    mcp_config_json: str | None = build_mcp_config(copilot_config, repo_path)
+    prompt: str = build_prompt(entry, repo_path, copilot_config, category)
+    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, repo_path)
+    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
+    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
+    config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -47,13 +52,19 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
             "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
             "--disable-builtin-mcps",
             f"--model={model}",
-            "--no-custom-instructions",
             "--log-level=debug",
+            "--disable-parallel-tools-execution",
             f"--log-dir={output_dir.resolve()}",
             f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
+        if not instructions_enabled:
+            cmd_args.append("--no-custom-instructions")
         if mcp_config_json:
             cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
+        if custom_agent:
+            cmd_args.append(f"--agent={custom_agent}")
+
+        logger.debug(f"Copilot command args: {cmd_args}")
 
         result = subprocess.run(
             cmd_args,
@@ -70,11 +81,12 @@ def run_copilot_agent(entry: DatasetEntry, model: str, repo_path: Path, output_d
 
         stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
         stderr_lines = stderr.splitlines()
-        return parse_metrics(stderr_lines)
+        metrics = parse_metrics(stderr_lines)
+        return metrics, config
     except subprocess.TimeoutExpired:
-        # timeout should not raise an exception, we will evaluate whatever copilot did so far
         logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
-        return None
+        metrics = AgentMetrics(execution_time=_config.timeout.github_copilot_cli)
+        raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.error(f"Copilot CLI execution failed with error {e.stderr}")
         raise AgentError(f"Copilot CLI execution failed: {e}") from None

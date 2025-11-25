@@ -18,12 +18,8 @@ jobs:
       validate-schema: true
 
   verify-build-and-tests:
-    runs-on: windows-latest
+    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
     needs: validate-schema-and-list-entries
-    env:
-      BC_CONTAINER_NAME: bcbench
-      BC_CONTAINER_USERNAME: admin
-      BC_CONTAINER_PASSWORD: ${{ secrets.BC_CONTAINER_PASSWORD }}
     if: needs.validate-schema-and-list-entries.outputs.entries != '[]'
     name: ${{ matrix.entry }}
     strategy:

@@ -9,21 +9,22 @@ from bcbench.logger import get_logger
 logger = get_logger(__name__)
 
 
-def build_mcp_config(copilot_config: dict, repo_path: Path) -> str | None:
+def build_mcp_config(copilot_config: dict, repo_path: Path) -> tuple[str | None, list[str] | None]:
     # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
     mcp_servers: list[dict] = copilot_config.get("mcp", {}).get("servers", [])
     if not mcp_servers:
-        return None
+        return None, None
 
     mcp_config = {"mcpServers": {}}
     template_context = {"repo_path": repo_path}
-    logger.info(f"Template context for MCP config: {template_context}")  # TODO: remove debug log
 
+    mcp_server_names: list[str] = []
     for server in mcp_servers:
         server_type: str = server["type"]
         server_name: str = server["name"]
         tools: list[str] = server["tools"]
 
+        mcp_server_names.append(server_name)
         match server_type:
             case "http":
                 mcp_config["mcpServers"][server_name] = {
@@ -45,6 +46,6 @@ def build_mcp_config(copilot_config: dict, repo_path: Path) -> str | None:
                 logger.error(f"Unsupported MCP server type: {server_type}, {server}")
                 raise AgentError(f"Unsupported MCP server type: {server_type}")
 
-    logger.info(f"Using MCP servers: {[s.get('name') for s in mcp_servers]}")
+    logger.info(f"Using MCP servers: {mcp_server_names}")
 
-    return json.dumps(mcp_config, separators=(",", ":"))
+    return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names

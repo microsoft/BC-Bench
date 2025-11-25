@@ -1,0 +1,215 @@
+[
+  {
+    "total": 25,
+    "resolved": 11,
+    "failed": 14,
+    "build": 22,
+    "date": "2025-11-23",
+    "model": "claude-sonnet-4",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 133.9,
+    "average_prompt_tokens": 1959740.0,
+    "average_completion_tokens": 6056.0,
+    "github_run_id": "19614090363",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 13,
+    "failed": 9,
+    "build": 21,
+    "date": "2025-11-14",
+    "model": "claude-sonnet-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 183.3,
+    "average_prompt_tokens": 918931.8,
+    "average_completion_tokens": 6240.9,
+    "github_run_id": "19369038959",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 13,
+    "failed": 9,
+    "build": 19,
+    "date": "2025-11-13",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 154.9,
+    "average_prompt_tokens": 2191345.4,
+    "average_completion_tokens": 8677.3,
+    "github_run_id": "19342348130",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 19,
+    "resolved": 6,
+    "failed": 13,
+    "build": 15,
+    "date": "2025-11-10",
+    "model": "gpt-5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 431.0,
+    "average_prompt_tokens": 352378.9,
+    "average_completion_tokens": 7142.1,
+    "github_run_id": "19227643144",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 3,
+    "failed": 19,
+    "build": 9,
+    "date": "2025-11-15",
+    "model": "azure/gpt-4.1",
+    "agent_name": "mini-bc-agent",
+    "category": "bug-fix",
+    "average_duration": 328.4,
+    "average_prompt_tokens": 478451.0,
+    "average_completion_tokens": 3884.3,
+    "github_run_id": "19391198996",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 11,
+    "failed": 11,
+    "build": 19,
+    "date": "2025-11-14",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 190.6,
+    "average_prompt_tokens": 1924450.0,
+    "average_completion_tokens": 6827.3,
+    "github_run_id": "19364189001",
+    "experiment": {
+      "mcp_servers": [
+        "filesystem"
+      ],
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 10,
+    "failed": 12,
+    "build": 20,
+    "date": "2025-11-15",
+    "model": "gpt-5.1-codex-mini",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 853.2,
+    "average_prompt_tokens": 830300.0,
+    "average_completion_tokens": 8707.7,
+    "github_run_id": "19378708759",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 13,
+    "failed": 9,
+    "build": 21,
+    "date": "2025-11-15",
+    "model": "gpt-5.1-codex",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 893.3,
+    "average_prompt_tokens": 931820.0,
+    "average_completion_tokens": 8615.0,
+    "github_run_id": "19385408839",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 11,
+    "failed": 11,
+    "build": 20,
+    "date": "2025-11-15",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 184.1,
+    "average_prompt_tokens": 2711195.4,
+    "average_completion_tokens": 9409.1,
+    "github_run_id": "19386826797",
+    "experiment": {
+      "mcp_servers": [
+        "mslearn"
+      ],
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 9,
+    "failed": 13,
+    "build": 19,
+    "date": "2025-11-15",
+    "model": "gpt-5.1",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 217.1,
+    "average_prompt_tokens": 1109352.6,
+    "average_completion_tokens": 2323.5,
+    "github_run_id": "19388071339",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 22,
+    "resolved": 12,
+    "failed": 10,
+    "build": 19,
+    "date": "2025-11-16",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 164.0,
+    "average_prompt_tokens": 2374900.0,
+    "average_completion_tokens": 8768.2,
+    "github_run_id": "19411736858",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": true,
+      "custom_agent": null
+    }
+  }
+]

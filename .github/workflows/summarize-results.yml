@@ -69,7 +69,7 @@ jobs:
           $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}"
           $evalRunName = "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}"
 
-          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName --tags "${{ inputs.agent }},${{ inputs.model }}"
+          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName --tags "${{ inputs.agent }},${{ inputs.model }}"
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock }}

@@ -41,7 +41,8 @@ class PathConfig:
     nav_repo_path: Path
     ps_script_path: Path
     evaluation_results_path: Path
-    leaderboard_path: Path
+    leaderboard_dir: Path
+    agent_dir: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -53,7 +54,8 @@ class PathConfig:
             nav_repo_path=root.parent / "NAV",
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
-            leaderboard_path=root / "docs" / "_data" / "leaderboard.json",
+            leaderboard_dir=root / "docs" / "_data",
+            agent_dir=root / "src" / "bcbench" / "agent" / "copilot",
         )
 
 
@@ -73,7 +75,7 @@ class TimeoutConfig:
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
-            github_copilot_cli=20 * 60,  # 20 minutes for GitHub Copilot CLI execution
+            github_copilot_cli=30 * 60,  # 30 minutes for GitHub Copilot CLI execution
         )
 
 
@@ -85,6 +87,10 @@ class FilePatternConfig:
     patch_pattern: str
     instance_pattern: str
     result_pattern: str
+    copilot_instruction_naming: str
+    copilot_instructions_dirname: str
+    copilot_instructions_pattern: str
+    test_project_identifiers: tuple[str, ...]
 
     @classmethod
     def default(cls, instance_pattern: str) -> FilePatternConfig:
@@ -94,6 +100,10 @@ class FilePatternConfig:
             patch_pattern=".patch",
             instance_pattern=instance_pattern,
             result_pattern=".jsonl",
+            copilot_instruction_naming="copilot-instructions.md",
+            copilot_instructions_dirname="instructions",
+            copilot_instructions_pattern="*.instructions.md",
+            test_project_identifiers=("test", "tests"),
         )
 
 
