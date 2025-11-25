@@ -1,0 +1,38 @@
+name: "Copilot Setup Steps"
+
+# This workflow configures the environment for GitHub Copilot coding agent
+# See: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/copilot-setup-steps.yml"]
+  pull_request:
+    paths: [".github/workflows/copilot-setup-steps.yml"]
+
+jobs:
+  copilot-setup-steps:  # The job MUST be called this
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # Needed for checkout
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        run: uv python install
+
+      - name: Install bcbench package with all dependencies
+        run: uv sync --all-extras
+
+      - name: Install pre-commit hooks
+        run: uv run pre-commit install
+
+      - name: Verify installation
+        run: uv run bcbench --help

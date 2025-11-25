@@ -5,34 +5,37 @@ Verifies that instruction files get created without invoking the copilot agent.
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock
 
 from bcbench.config import get_config
+from bcbench.dataset import DatasetEntry
 from bcbench.operations.instruction_operations import (
     _get_source_instructions_path,
-    _setup_custom_instructions,
+    setup_instructions_from_config,
 )
 
 _config = get_config()
 
 
 def test_get_instructions_path():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-
     # Test with microsoftInternal/NAV
-    path = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    path = _get_source_instructions_path("microsoftInternal/NAV")
     assert path.exists(), f"Instruction file should exist: {path}"
     assert path.name == "microsoftInternal-NAV"
 
 
 def test_setup_custom_instructions():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
+        entry = MagicMock(spec=DatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        _setup_custom_instructions(repo_path, instructions_source)
+        result = setup_instructions_from_config(config, entry, repo_path)
+        assert result is True
 
         # Verify
         target_path = repo_path / ".github"
@@ -68,21 +71,21 @@ def test_sanitization():
 
 
 def test_nonexistent_instructions():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-
     try:
-        _get_source_instructions_path("nonexistent/repo", agent_dir)
+        _get_source_instructions_path("nonexistent/repo")
         raise AssertionError("Should raise FileNotFoundError")
     except FileNotFoundError as e:
         assert "nonexistent/repo" in str(e)
 
 
 def test_overwrite_existing_instructions():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
+        entry = MagicMock(spec=DatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"instructions": {"enabled": True}}
 
         # Create initial instruction file with different content
         github_dir = repo_path / ".github"
@@ -92,7 +95,7 @@ def test_overwrite_existing_instructions():
         target_path.write_text(original_content)
 
         # Setup instructions (should overwrite)
-        _setup_custom_instructions(repo_path, instructions_source)
+        setup_instructions_from_config(config, entry, repo_path)
 
         # Verify file was overwritten
         assert target_path.exists(), "Instruction file should exist"
@@ -103,14 +106,14 @@ def test_overwrite_existing_instructions():
 
 
 def test_path_specific_instructions_copied():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
-
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
+        entry = MagicMock(spec=DatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        _setup_custom_instructions(repo_path, instructions_source)
+        setup_instructions_from_config(config, entry, repo_path)
 
         # Verify path-specific instructions were copied
         target_instructions_dir = repo_path / ".github" / _config.file_patterns.copilot_instructions_dirname
@@ -122,11 +125,11 @@ def test_path_specific_instructions_copied():
 
 
 def test_path_specific_instructions_removed_before_copy():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
-
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
+        entry = MagicMock(spec=DatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"instructions": {"enabled": True}}
 
         # Create existing .github directory with old files
         github_dir = repo_path / ".github"
@@ -135,7 +138,7 @@ def test_path_specific_instructions_removed_before_copy():
         old_file.write_text("# Old instruction that should be removed")
 
         # Setup instructions (should remove existing .github and copy new one)
-        _setup_custom_instructions(repo_path, instructions_source)
+        setup_instructions_from_config(config, entry, repo_path)
 
         # Verify old file was removed
         assert not (github_dir / "old.md").exists(), "Old file should be removed"
@@ -145,14 +148,14 @@ def test_path_specific_instructions_removed_before_copy():
 
 
 def test_no_path_specific_instructions_warning():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
-
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
+        entry = MagicMock(spec=DatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        _setup_custom_instructions(repo_path, instructions_source)
+        setup_instructions_from_config(config, entry, repo_path)
 
         # Verify repository-level instructions were created
         github_dir = repo_path / ".github"
@@ -161,14 +164,14 @@ def test_no_path_specific_instructions_warning():
 
 
 def test_empty_instructions_folder_warning():
-    agent_dir = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "copilot"
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV", agent_dir)
-
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
+        entry = MagicMock(spec=DatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        _setup_custom_instructions(repo_path, instructions_source)
+        setup_instructions_from_config(config, entry, repo_path)
 
         # Verify .github directory was created
         github_dir = repo_path / ".github"

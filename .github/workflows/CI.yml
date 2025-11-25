@@ -37,9 +37,22 @@ jobs:
     with:
       test-run: true
 
+  select-category:
+    runs-on: ubuntu-latest
+    outputs:
+      category: ${{ steps.random.outputs.category }}
+    steps:
+      - name: Select random category
+        id: random
+        shell: pwsh
+        run: |
+          $categories = @("bug-fix", "test-generation")
+          $selected = $categories | Get-Random
+          echo "category=$selected" >> $env:GITHUB_OUTPUT
+
   mock-evaluation:
     runs-on: ubuntu-latest
-    needs: get-entries
+    needs: [get-entries, select-category]
     if: needs.get-entries.outputs.entries != '[]'
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
@@ -56,7 +69,7 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       - name: Run mock evaluation for ${{ matrix.entry }}
-        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --output-dir evaluation_results --run-id ${{ github.run_id }}
+        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ needs.select-category.outputs.category }} --output-dir evaluation_results --run-id ${{ github.run_id }}
 
       - name: Upload mock evaluation results
         uses: actions/upload-artifact@v4

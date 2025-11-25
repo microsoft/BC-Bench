@@ -8,7 +8,7 @@ from typing_extensions import Annotated
 from bcbench.cli_options import DatasetPath, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results import EvaluationResult, EvaluationResultSummary, create_console_summary, create_github_job_summary, write_bceval_results
+from bcbench.results import BaseEvaluationResult, EvaluationResultSummary, create_console_summary, create_github_job_summary, create_result_from_json, write_bceval_results
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -49,11 +49,11 @@ def result_summarize(
         logger.error(f"No instance-specific result files found in {run_dir}")
         raise typer.Exit(code=1)
 
-    results: list[EvaluationResult] = []
+    results: list[BaseEvaluationResult] = []
     for results_path in result_files:
         logger.info(f"Reading results from: {results_path}")
         with open(results_path) as f:
-            results.extend(EvaluationResult.from_json(json.loads(line)) for line in f if line.strip())
+            results.extend(create_result_from_json(json.loads(line)) for line in f if line.strip())
 
     if not results:
         logger.error("No results found in the result files")
@@ -74,45 +74,54 @@ def result_summarize(
 @result_app.command("update")
 def result_update(
     evaluation_summary: Annotated[Path, typer.Argument(help="Path to a single evaluation run's summary JSON", exists=True, file_okay=True, dir_okay=False)],
-    leaderboard_path: Annotated[Path, typer.Option(help="Path to the public displayed leaderboard/results JSON", exists=True, file_okay=True, dir_okay=False)] = _config.paths.leaderboard_path,
+    leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_dir,
 ):
     """
     Update the public leaderboard with a new evaluation summary.
 
-    Takes a single evaluation run's summary and updates the public results file,
-    either replacing an existing agent-model combination or adding a new entry.
+    Takes a single evaluation run's summary and updates the appropriate category-specific
+    leaderboard file (e.g. bug-fix.json), either replacing an existing
+    agent-model combination or adding a new entry.
 
     Example:
         bcbench result update evaluation_results/12345/evaluation_summary.json
     """
     logger.info(f"Loading evaluation summary from: {evaluation_summary}")
     with open(evaluation_summary, encoding="utf-8") as f:
-        new_result = EvaluationResultSummary.from_json(json.load(f))
+        new_result = EvaluationResultSummary.model_validate_json(f.read())
 
-    logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}'")
+    logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}' in category '{new_result.category.value}'")
 
-    logger.info(f"Loading existing leaderboard from: {leaderboard_path}")
-    with open(leaderboard_path, encoding="utf-8") as f:
-        existing_results = json.load(f)
+    # Determine the appropriate leaderboard file based on category
+    leaderboard_path = leaderboard_dir / f"{new_result.category.value}.json"
 
+    logger.info(f"Using leaderboard file: {leaderboard_path}")
+
+    # Load or create leaderboard file
+    if leaderboard_path.exists():
+        logger.info(f"Loading existing leaderboard from: {leaderboard_path}")
+        with open(leaderboard_path, encoding="utf-8") as f:
+            existing_results: list[EvaluationResultSummary] = [EvaluationResultSummary.model_validate(entry) for entry in json.load(f)]
+    else:
+        logger.info(f"Creating new leaderboard file: {leaderboard_path}")
+        existing_results = []
+
+    # Check if result already exists for this agent+model+experiment combination
     updated = False
     for i, result in enumerate(existing_results):
-        if (
-            result["agent_name"] == new_result.agent_name
-            and result["model"] == new_result.model
-            and result["mcp_servers"] == new_result.mcp_servers
-            and result.get("custom_instructions") == new_result.custom_instructions
-        ):
+        if result.agent_name == new_result.agent_name and result.model == new_result.model and result.experiment == new_result.experiment:
             logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
-            existing_results[i] = new_result.to_dict()
+            existing_results[i] = new_result
             updated = True
             break
 
     if not updated:
         logger.info(f"No existing result found for '{new_result.agent_name}' + '{new_result.model}', adding new entry")
-        existing_results.append(new_result.to_dict())
+        existing_results.append(new_result)
 
+    # Write back as list of dicts
     with open(leaderboard_path, "w", encoding="utf-8") as f:
-        json.dump(existing_results, f, indent=2)
+        json.dump([result.to_dict() for result in existing_results], f, indent=2)
+        f.write("\n")
 
     logger.info(f"Successfully updated leaderboard at: {leaderboard_path}")
