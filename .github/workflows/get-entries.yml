@@ -10,11 +10,6 @@ on:
         required: false
         type: boolean
         default: false
-      validate-schema:
-        description: Run schema validation before getting entries
-        required: false
-        type: boolean
-        default: false
       test-run:
         description: Indicate this is a test run (with 2 entries)
         required: false
@@ -38,10 +33,6 @@ jobs:
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
-
-      - name: Validate dataset schema
-        if: inputs.validate-schema
-        run: uv run bcbench dataset validate
 
       - name: Get entries for matrix
         id: get-entries

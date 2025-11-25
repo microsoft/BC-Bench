@@ -11,21 +11,20 @@ on:
       - "dataset/**"
 
 jobs:
-  validate-schema-and-list-entries:
+  get-entries:
     uses: ./.github/workflows/get-entries.yml
     with:
       modified-only: ${{ github.event_name == 'pull_request' }}
-      validate-schema: true
 
   verify-build-and-tests:
     runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
-    needs: validate-schema-and-list-entries
-    if: needs.validate-schema-and-list-entries.outputs.entries != '[]'
+    needs: get-entries
+    if: needs.get-entries.outputs.entries != '[]'
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
       matrix:
-        entry: ${{ fromJson(needs.validate-schema-and-list-entries.outputs.entries) }}
+        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

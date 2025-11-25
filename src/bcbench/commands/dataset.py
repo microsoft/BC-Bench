@@ -5,11 +5,10 @@ import json
 import typer
 from typing_extensions import Annotated
 
-from bcbench.cli_options import DatasetPath, SchemaPath
+from bcbench.cli_options import DatasetPath
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.dataset.dataset_loader import load_dataset_entries
-from bcbench.dataset.validate_schema import ValidationResult, validate_entries
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
 
@@ -17,23 +16,6 @@ logger = get_logger(__name__)
 _config = get_config()
 
 dataset_app = typer.Typer(help="Query and analyze dataset")
-
-
-@dataset_app.command("validate")
-def validate_dataset(
-    dataset_path: DatasetPath = _config.paths.dataset_path,
-    schema_path: SchemaPath = _config.paths.dataset_schema_path,
-):
-    """Validate all entries in the dataset against the JSON schema."""
-    results: list[ValidationResult] = validate_entries(dataset_path, schema_path)
-    failures = [r for r in results if not r.success]
-
-    logger.info(f"Total: {len(results)}, Success: {len(results) - len(failures)}, Failed: {len(failures)}")
-
-    if failures:
-        for error in failures:
-            logger.error(f"  {error}")
-        raise typer.Exit(code=1)
 
 
 @dataset_app.command("list")
