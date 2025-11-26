@@ -36,7 +36,7 @@ jobs:
       test-run: ${{ inputs.test-run }}
 
   evaluate-with-mini-agent:
-    runs-on: windows-latest
+    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
