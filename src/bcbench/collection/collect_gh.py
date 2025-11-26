@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from unidiff import PatchSet
+from unidiff.errors import UnidiffParseError
 
 from bcbench.collection.gh_client import GHClient
 from bcbench.config import get_config
@@ -14,6 +16,9 @@ from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Default BC environment setup version for GitHub-sourced entries
+DEFAULT_ENVIRONMENT_VERSION = "26.0"
+
 
 def _extract_patches_from_diff(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
     """Extract patches from diff, separating test and fix patches.
@@ -21,8 +26,6 @@ def _extract_patches_from_diff(diff: str, test_identifiers: tuple[str, ...]) -> 
     Returns:
         tuple: (full_patch, fix_patch, test_patch)
     """
-    from unidiff import PatchSet
-
     if not diff:
         raise CollectionError("No diff data found for the PR")
 
@@ -46,15 +49,13 @@ def _find_project_paths_from_diff(diff: str) -> list[str]:
     - App/Apps/W1/<ProjectName>/test/
     - App/Layers/W1/<ProjectName>/
     """
-    from unidiff import PatchSet
-
     if not diff or not str(diff).strip():
         raise CollectionError("Diff data is empty or None")
 
     try:
         patch_set = PatchSet(str(diff))
-    except Exception:
-        raise CollectionError("Failed to parse diff data") from None
+    except UnidiffParseError as e:
+        raise CollectionError(f"Failed to parse diff data: {e}") from None
 
     project_paths: set[str] = set()
 
@@ -233,7 +234,7 @@ def collect_gh_entry(
             base_commit=base_commit,
             created_at=created_at,
             patch=patch_fix,
-            environment_setup_version="26.0",  # Default version, can be overridden
+            environment_setup_version=DEFAULT_ENVIRONMENT_VERSION,
             test_patch=patch_test,
             fail_to_pass=fail_to_pass,
             project_paths=project_paths,
