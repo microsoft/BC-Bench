@@ -71,4 +71,4 @@ def determine_environment_setup_version(commit: str) -> str:
             return f"{major_version}.{minor_version}"
 
     logger.warning(f"Could not determine environment setup version for commit {commit}")
-    return ""
+    return "27.0"
