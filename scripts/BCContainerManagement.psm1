@@ -306,6 +306,7 @@ function New-BCContainerAsync {
             includeTestLibrariesOnly = $true
             multitenant              = $false
             shortcuts                = 'None'
+            memoryLimit              = "16G"
         }
 
         if ($acceptEula) {
