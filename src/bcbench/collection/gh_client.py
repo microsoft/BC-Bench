@@ -4,11 +4,6 @@ import json
 import subprocess
 from typing import Any
 
-from bcbench.exceptions import CollectionError
-from bcbench.logger import get_logger
-
-logger = get_logger(__name__)
-
 
 class GHClient:
     def __init__(self, repo: str):
@@ -29,10 +24,8 @@ class GHClient:
             ],
             capture_output=True,
             text=True,
-            check=False,
+            check=True,
         )
-        if result.returncode != 0:
-            raise CollectionError(f"Failed to get PR info: {result.stderr}")
         return json.loads(result.stdout)
 
     def get_commit_info(self, commit: str) -> dict[str, Any]:
@@ -45,10 +38,8 @@ class GHClient:
             ],
             capture_output=True,
             text=True,
-            check=False,
+            check=True,
         )
-        if result.returncode != 0:
-            raise CollectionError(f"Failed to get commit info: {result.stderr}")
         return json.loads(result.stdout)
 
     def get_pr_diff(self, pr_number: int) -> str:
@@ -64,10 +55,8 @@ class GHClient:
             ],
             capture_output=True,
             text=True,
-            check=False,
+            check=True,
         )
-        if result.returncode != 0:
-            raise CollectionError(f"Failed to get PR diff: {result.stderr}")
         return result.stdout
 
     def get_file_content(self, file_path: str, ref: str) -> str:
@@ -84,8 +73,6 @@ class GHClient:
             ],
             capture_output=True,
             text=True,
-            check=False,
+            check=True,
         )
-        if result.returncode != 0:
-            raise CollectionError(f"Failed to get file content for {file_path}: {result.stderr}")
         return result.stdout

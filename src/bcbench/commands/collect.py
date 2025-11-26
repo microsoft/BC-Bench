@@ -26,12 +26,7 @@ def collect_nav(
 
     For BaseApp Data, use diff_path: .\\App\\Layers\\W1\\:
     """
-    collect_nav_entry(
-        pr_number=pr_number,
-        output=output,
-        repo_path=repo_path,
-        diff_path=diff_path,
-    )
+    collect_nav_entry(pr_number=pr_number, output=output, repo_path=repo_path, diff_path=diff_path)
 
 
 @collect_app.command("gh")
@@ -41,7 +36,7 @@ def collect_gh(
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/bcapps",
 ):
     """
-    Collect dataset entry from a GitHub pull request.
+    Collect dataset entry from public GitHub repositories.
 
     Example usage:
 
@@ -51,8 +46,4 @@ def collect_gh(
     # Collect from custom repo
     bcbench collect gh 12345 --repo microsoft/AL
     """
-    collect_gh_entry(
-        pr_number=pr_number,
-        output=output,
-        repo=repo,
-    )
+    collect_gh_entry(pr_number=pr_number, output=output, repo=repo)

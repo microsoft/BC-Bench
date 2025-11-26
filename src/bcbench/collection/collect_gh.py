@@ -171,11 +171,7 @@ def _extract_tests_from_patch_with_gh(generated_patch: str, gh_client: GHClient,
     return test_entries
 
 
-def collect_gh_entry(
-    pr_number: int,
-    output: Path,
-    repo: str = "microsoft/bcapps",
-) -> None:
+def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps") -> None:
     """Collect a dataset entry from a GitHub pull request."""
     config = get_config()
     gh_client = GHClient(repo)
