@@ -103,4 +103,5 @@ jobs:
       model: ${{ inputs.model }}
       agent: "GitHub Copilot CLI"
       mock: ${{ inputs.test-run }}
+      category: ${{ inputs.category }}
     secrets: inherit

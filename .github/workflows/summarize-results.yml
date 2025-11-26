@@ -20,6 +20,10 @@ on:
         required: false
         type: boolean
         default: false
+      category:
+        description: "Evaluation category"
+        required: false
+        type: string
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
@@ -88,4 +92,4 @@ jobs:
           $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}"
           $evalRunName = "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}"
 
-          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName --tags "${{ inputs.agent }},${{ inputs.model }}" --upload-results
+          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName --tags "${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}" --upload-results
