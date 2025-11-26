@@ -22,6 +22,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
 from bcbench.operations import checkout_commit, clean_repo
+from bcbench.operations.instruction_operations import copy_problem_statement_folder
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -53,6 +54,7 @@ def run_mini(
 
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
+    copy_problem_statement_folder(entry, repo_path)
 
     run_mini_agent(
         entry=entry,
@@ -87,6 +89,7 @@ def run_copilot(
 
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
+    copy_problem_statement_folder(entry, repo_path)
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir)
 
