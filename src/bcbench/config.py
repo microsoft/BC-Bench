@@ -51,7 +51,7 @@ class PathConfig:
             bc_bench_root=root,
             dataset_dir=root / "dataset",
             dataset_path=root / "dataset" / "bcbench_nav.jsonl",
-            problem_statement_dir=root / "dataset" / "problemstatements",
+            problem_statement_dir=root / "dataset" / "problemstatement",
             nav_repo_path=root.parent / "NAV",
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",

@@ -90,11 +90,8 @@ def view_entry(
 
     console.print(Panel(info_table, title="[bold]Entry Information[/bold]", border_style="blue"))
 
-    console.print("\n[bold cyan]Problem Statement:[/bold cyan]")
-    console.print(Panel(entry.problem_statement or "[dim]Empty[/dim]", border_style="green"))
-
-    console.print("\n[bold cyan]Hints:[/bold cyan]")
-    console.print(Panel(entry.hints_text or "[dim]Empty[/dim]", border_style="yellow"))
+    console.print("\n[bold cyan]Problem Statement with Hints:[/bold cyan]")
+    console.print(Panel(entry.get_task() or "[dim]Empty[/dim]", border_style="green"))
 
     if show_patch:
         console.print("\n[bold cyan]Patch:[/bold cyan]")
@@ -108,10 +105,7 @@ def view_entry(
         test_table.add_column("Codeunit ID", style="magenta")
         test_table.add_column("Functions", style="yellow")
         for test in entry.fail_to_pass:
-            test_table.add_row(
-                str(test.get("codeunitID", "N/A")),
-                ", ".join(test.get("functionName", [])),
-            )
+            test_table.add_row(str(test.codeunitID), ", ".join(test.functionName))
         console.print(test_table)
     else:
         console.print("[dim]No FAIL_TO_PASS tests[/dim]")
@@ -123,8 +117,8 @@ def view_entry(
         test_table.add_column("Functions", style="yellow")
         for test in entry.pass_to_pass:
             test_table.add_row(
-                str(test.get("codeunitID", "N/A")),
-                ", ".join(test.get("functionName", [])),
+                str(test.codeunitID),
+                ", ".join(test.functionName),
             )
         console.print(test_table)
     else:
