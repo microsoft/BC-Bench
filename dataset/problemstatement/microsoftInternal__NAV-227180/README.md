@@ -1,0 +1,4 @@
+Title: [master] [ALL-E] The Customer email and phone number do not copy from the Customer Card when the client creates a new Ship-to-Address
+Repro Steps:
+1) Create a new Customer or open one of the defaults. 2) Make sure the Address section is filled. 3) Shipping > Ship-to Code > New. 4) All the details are filled automatically from the address except for the 'Email' & 'Phone number'. Expected Outcome: The customer expects the e-mail & phone number to populate automatically when creating a new 'Ship-to' from the customer card.Actual Outcome: The e-mail & phone number don't populate automatically when creating a new 'Ship-to' from the customer card.Troubleshooting Actions Taken: Tried the same flow in an extension free environment and got the same outcome.Did the partner reproduce the issue in a Sandbox without extensions? Yes
+Description:
