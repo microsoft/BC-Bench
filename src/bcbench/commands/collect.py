@@ -4,7 +4,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.cli_options import DatasetPath, RepoPath
-from bcbench.collection import collect_nav_entry
+from bcbench.collection import collect_gh_entry, collect_nav_entry
 from bcbench.config import get_config
 
 _config = get_config()
@@ -31,4 +31,28 @@ def collect_nav(
         output=output,
         repo_path=repo_path,
         diff_path=diff_path,
+    )
+
+
+@collect_app.command("gh")
+def collect_gh(
+    pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
+    output: DatasetPath = _config.paths.dataset_path,
+    repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/bcapps",
+):
+    """
+    Collect dataset entry from a GitHub pull request.
+
+    Example usage:
+
+    # Collect from default repo (microsoft/bcapps)
+    bcbench collect gh 12345
+
+    # Collect from custom repo
+    bcbench collect gh 12345 --repo microsoft/AL
+    """
+    collect_gh_entry(
+        pr_number=pr_number,
+        output=output,
+        repo=repo,
     )

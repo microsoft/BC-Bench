@@ -1,0 +1,272 @@
+"""Collection module for gathering dataset entries from GitHub PRs."""
+
+import re
+from pathlib import Path
+from typing import Any
+
+import typer
+
+from bcbench.collection.gh_client import GHClient
+from bcbench.config import get_config
+from bcbench.dataset import DatasetEntry, TestEntry
+from bcbench.exceptions import CollectionError, NoTestsExtractedError
+from bcbench.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def _extract_patches_from_diff(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
+    """Extract patches from diff, separating test and fix patches.
+
+    Returns:
+        tuple: (full_patch, fix_patch, test_patch)
+    """
+    from unidiff import PatchSet
+
+    if not diff:
+        raise CollectionError("No diff data found for the PR")
+
+    patch_test: str = ""
+    patch_fix: str = ""
+    for hunk in PatchSet(diff):
+        if any(identifier in hunk.path.lower() for identifier in test_identifiers):
+            patch_test += str(hunk)
+        else:
+            patch_fix += str(hunk)
+
+    return diff, patch_fix, patch_test
+
+
+def _find_project_paths_from_diff(diff: str) -> list[str]:
+    """Find project paths from a diff based on file path patterns.
+
+    Since we don't have the repo locally, we infer project paths from the diff paths.
+    BC projects typically have paths like:
+    - App/Apps/W1/<ProjectName>/app/
+    - App/Apps/W1/<ProjectName>/test/
+    - App/Layers/W1/<ProjectName>/
+    """
+    from unidiff import PatchSet
+
+    if not diff or not str(diff).strip():
+        raise CollectionError("Diff data is empty or None")
+
+    try:
+        patch_set = PatchSet(str(diff))
+    except Exception:
+        raise CollectionError("Failed to parse diff data") from None
+
+    project_paths: set[str] = set()
+
+    for patched_file in patch_set:
+        if not patched_file.path:
+            continue
+
+        # Extract the directory containing the file
+        path_parts = patched_file.path.replace("\\", "/").split("/")
+
+        # Look for 'app' or 'test' directory to find the project root
+        # Skip the first component since paths often start with 'App' (capital A)
+        for i in range(1, len(path_parts)):
+            part = path_parts[i]
+            if part.lower() in ("app", "test"):
+                # Take path up to and including this directory
+                project_path = "/".join(path_parts[: i + 1])
+                if project_path:
+                    project_paths.add(project_path)
+                break
+
+    return sorted(project_paths)
+
+
+def _extract_codeunit_id_from_content(content: str, file_path: str) -> int:
+    """Extract codeunit ID from AL file content.
+
+    Args:
+        content: The content of the AL file
+        file_path: File path for error reporting
+
+    Returns:
+        Codeunit ID (always returns int, raises exception if not found)
+    """
+    codeunit_pattern = r'codeunit\s+(\d+)\s+"[^"]*"'
+    match = re.search(codeunit_pattern, content)
+    if match:
+        return int(match.group(1))
+    raise ValueError(f"No codeunit ID found in {file_path}")
+
+
+def _extract_tests_from_patch_with_gh(generated_patch: str, gh_client: GHClient, ref: str) -> list[TestEntry]:
+    """Extract test entries from an AL code patch using GitHub API to fetch file contents.
+
+    Args:
+        generated_patch: A git diff patch containing AL code with test procedures
+        gh_client: GitHub client for fetching file contents
+        ref: The git ref to fetch file contents from
+
+    Returns:
+        List of TestEntry dicts with codeunitID and functionName
+
+    Raises:
+        NoTestsExtractedError: If no test entries are found in the patch
+    """
+    test_entries: list[TestEntry] = []
+    current_file_path: str | None = None
+    current_codeunit_id: int | None = None
+
+    # Pattern to match test procedure declarations that are ADDED (have + marker)
+    procedure_pattern = r"^\+\s*procedure\s+(\w+)\s*\("
+
+    # Pattern to match [Test] attribute that is ADDED (have + marker)
+    test_attribute_pattern = r"^\+\s*\[Test\]"
+
+    # Pattern to match diff file headers: diff --git a/<path> b/<path>
+    file_header_pattern = r"^diff --git a/(.+) b/(.+)$"
+
+    lines = generated_patch.split("\n")
+    found_test_attribute = False
+
+    for line in lines:
+        file_header_match = re.match(file_header_pattern, line)
+        if file_header_match:
+            current_file_path = file_header_match.group(2)
+            if current_file_path:
+                try:
+                    file_content = gh_client.get_file_content(current_file_path, ref)
+                    current_codeunit_id = _extract_codeunit_id_from_content(file_content, current_file_path)
+                except Exception as e:
+                    logger.warning("Failed to get codeunit ID for %s: %s", current_file_path, e)
+                    current_codeunit_id = None
+            continue
+
+        if re.match(test_attribute_pattern, line):
+            found_test_attribute = True
+            continue
+
+        if found_test_attribute and current_codeunit_id is not None:
+            procedure_match = re.match(procedure_pattern, line)
+            if procedure_match:
+                function_name = procedure_match.group(1)
+
+                existing_entry = None
+                for entry in test_entries:
+                    if entry.codeunitID == current_codeunit_id:
+                        existing_entry = entry
+                        break
+
+                if existing_entry:
+                    if function_name not in existing_entry.functionName:
+                        existing_entry.functionName.add(function_name)
+                else:
+                    test_entries.append(TestEntry(codeunitID=current_codeunit_id, functionName={function_name}))
+
+                found_test_attribute = False
+            elif not line.startswith("+"):
+                found_test_attribute = False
+
+    if not test_entries:
+        raise NoTestsExtractedError()
+
+    return test_entries
+
+
+def collect_gh_entry(
+    pr_number: int,
+    output: Path,
+    repo: str = "microsoft/bcapps",
+) -> None:
+    """Collect a dataset entry from a GitHub pull request."""
+    config = get_config()
+    gh_client = GHClient(repo)
+
+    try:
+        logger.info("Collecting dataset entry for PR #%s from %s", pr_number, repo)
+
+        pr_data: dict[str, Any] = gh_client.get_pr_info(pr_number)
+
+        # Get the diff for the PR
+        diff = gh_client.get_pr_diff(pr_number)
+
+        # Extract patches
+        test_identifiers = config.file_patterns.test_project_identifiers
+        patch, patch_fix, patch_test = _extract_patches_from_diff(diff, test_identifiers)
+
+        # Extract problem statement from PR
+        title = pr_data.get("title", "")
+        body = pr_data.get("body", "") or ""
+        problem_statement = f"# {title}\n\n{body}" if body else f"# {title}"
+
+        # Get commit info
+        merge_commit = pr_data.get("mergeCommit", {})
+        commit_id = merge_commit.get("oid", "") if merge_commit else pr_data.get("headRefOid", "")
+
+        base_commit = pr_data.get("baseRefOid", "")
+
+        if not commit_id or not base_commit:
+            raise CollectionError("Unable to determine commit IDs from PR data")
+
+        # Extract creation date
+        created_at = pr_data.get("createdAt", "")
+
+        # Find project paths from diff
+        project_paths = _find_project_paths_from_diff(patch)
+
+        # Extract tests from the test patch using GitHub API
+        fail_to_pass = _extract_tests_from_patch_with_gh(patch_test, gh_client, commit_id)
+
+        # Generate instance ID
+        repo_name = repo.replace("/", "__")
+        instance_id = f"{repo_name}-{pr_number}"
+
+        # Save problem statement
+        _save_problem_statement(
+            problem_statement_dir=config.paths.problem_statement_dir,
+            instance_id=instance_id,
+            problem_statement=problem_statement,
+            hints="",
+            filename=config.file_patterns.problem_statement_readme,
+        )
+
+        entry = DatasetEntry(
+            repo=repo,
+            instance_id=instance_id,
+            base_commit=base_commit,
+            created_at=created_at,
+            patch=patch_fix,
+            environment_setup_version="26.0",  # Default version, can be overridden
+            test_patch=patch_test,
+            fail_to_pass=fail_to_pass,
+            project_paths=project_paths,
+        )
+
+    except Exception as exc:
+        logger.error("Failed to collect dataset entry: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    try:
+        entry.save_to_file(output)
+    except OSError as exc:
+        logger.error("Failed to write dataset entry: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    logger.info(f"Saved dataset entry {entry.instance_id} to {output}")
+
+
+def _save_problem_statement(
+    *,
+    problem_statement_dir: Path,
+    instance_id: str,
+    problem_statement: str,
+    hints: str,
+    filename: str,
+) -> None:
+    """Save the problem statement to a file."""
+    output_dir = problem_statement_dir / instance_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    content = problem_statement
+    if hints:
+        content += f"\n\n## Hints\n\n{hints}"
+
+    readme_path = output_dir / filename
+    readme_path.write_text(content, encoding="utf-8")
