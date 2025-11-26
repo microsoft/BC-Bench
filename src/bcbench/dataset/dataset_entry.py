@@ -27,13 +27,13 @@ class DatasetEntry(BaseModel):
     repo: str = Field(default="microsoftInternal/NAV", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
     base_commit: str = Field(pattern=r"^[a-fA-F0-9]{40}$")
-    environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
-    fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
-    project_paths: Annotated[list[str], Field(min_length=2)]
-    patch: Annotated[str, Field(min_length=1)]
-    test_patch: Annotated[str, Field(min_length=1)]
     created_at: Annotated[str, Field(min_length=1)]
+    environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
+    project_paths: Annotated[list[str], Field(min_length=2)]
+    fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
     pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
+    test_patch: Annotated[str, Field(min_length=1)]
+    patch: Annotated[str, Field(min_length=1)]
 
     @property
     def problem_statement_dir(self) -> Path:

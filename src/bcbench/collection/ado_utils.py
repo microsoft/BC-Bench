@@ -18,9 +18,12 @@ def extract_creation_date(pr_data: dict[str, Any]) -> str:
     raise CollectionError("Creation date not found in PR data.")
 
 
-def extract_problem_statement(work_item_data: dict[str, Any]) -> str:
-    """Extract problem statement from ADO work item data."""
+def extract_problem_statement(work_item_data: dict[str, Any]) -> tuple[str, str]:
+    """Extract problem statement and hints from ADO work item data.
 
+    Returns:
+        Tuple of (problem_statement, hints_text).
+    """
     fields = work_item_data.get("fields", {})
     if fields.get("System.CommentCount", 0) > 0:
         logger.warning("Work item has comments, additional handling may be required.")
@@ -33,7 +36,10 @@ def extract_problem_statement(work_item_data: dict[str, Any]) -> str:
     logger.debug("Raw description:\n %s", description_raw)
     description = _strip_html(description_raw)
 
-    return f"Title: {fields.get('System.Title', '')}\nRepro Steps:\n{repro_steps}\nDescription:\n{description}\n"
+    problem_statement = f"Title: {fields.get('System.Title', '')}\nRepro Steps:\n{repro_steps}\nDescription:\n{description}\n"
+    hints = ""
+
+    return problem_statement, hints
 
 
 def _strip_html(html_text: str) -> str:
