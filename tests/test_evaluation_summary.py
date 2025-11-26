@@ -3,10 +3,9 @@ from datetime import date
 
 import pytest
 
-from bcbench.results.bugfix import BugFixResult
 from bcbench.results.evaluation_result import EvaluationResultSummary
-from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory
+from tests.conftest import create_bugfix_result, create_testgen_result
 
 
 class TestEvaluationResultSummary:
@@ -70,50 +69,25 @@ class TestFromResults:
     @pytest.fixture
     def sample_results(self):
         return [
-            BugFixResult(
+            create_bugfix_result(
                 instance_id="test__1",
                 project="app",
-                model="gpt-4o",
-                agent_name="copilot-cli",
-                category=EvaluationCategory.BUG_FIX,
                 resolved=True,
-                build=True,
-                error_message=None,
-                metrics=AgentMetrics(
-                    execution_time=100.0,
-                    prompt_tokens=5000,
-                    completion_tokens=1000,
-                ),
+                metrics=AgentMetrics(execution_time=100.0, prompt_tokens=5000, completion_tokens=1000),
             ),
-            BugFixResult(
+            create_bugfix_result(
                 instance_id="test__2",
                 project="app",
-                model="gpt-4o",
-                agent_name="copilot-cli",
-                category=EvaluationCategory.BUG_FIX,
                 resolved=True,
-                build=True,
-                error_message=None,
-                metrics=AgentMetrics(
-                    execution_time=150.0,
-                    prompt_tokens=6000,
-                    completion_tokens=1500,
-                ),
+                metrics=AgentMetrics(execution_time=150.0, prompt_tokens=6000, completion_tokens=1500),
             ),
-            BugFixResult(
+            create_bugfix_result(
                 instance_id="test__3",
                 project="app",
-                model="gpt-4o",
-                agent_name="copilot-cli",
-                category=EvaluationCategory.BUG_FIX,
                 resolved=False,
                 build=False,
                 error_message="Build failed",
-                metrics=AgentMetrics(
-                    execution_time=80.0,
-                    prompt_tokens=4000,
-                    completion_tokens=800,
-                ),
+                metrics=AgentMetrics(execution_time=80.0, prompt_tokens=4000, completion_tokens=800),
             ),
         ]
 
@@ -141,27 +115,15 @@ class TestFromResults:
 
     def test_from_results_handles_none_values_in_metrics(self):
         results = [
-            BugFixResult(
+            create_bugfix_result(
                 instance_id="test__1",
                 project="app",
-                model="gpt-4o",
-                agent_name="copilot-cli",
-                category=EvaluationCategory.BUG_FIX,
                 resolved=True,
-                build=True,
-                error_message=None,
-                metrics=AgentMetrics(
-                    execution_time=100.0,
-                    prompt_tokens=5000,
-                    completion_tokens=1000,
-                ),
+                metrics=AgentMetrics(execution_time=100.0, prompt_tokens=5000, completion_tokens=1000),
             ),
-            BugFixResult(
+            create_bugfix_result(
                 instance_id="test__2",
                 project="app",
-                model="gpt-4o",
-                agent_name="copilot-cli",
-                category=EvaluationCategory.BUG_FIX,
                 resolved=False,
                 build=False,
                 error_message="Error",
@@ -178,12 +140,9 @@ class TestFromResults:
 
     def test_from_results_with_all_none_metrics_returns_zero(self):
         results = [
-            TestGenerationResult(
+            create_testgen_result(
                 instance_id="test__1",
                 project="app",
-                model="gpt-4o",
-                agent_name="copilot-cli",
-                category=EvaluationCategory.TEST_GENERATION,
                 resolved=False,
                 build=False,
                 error_message="Error",

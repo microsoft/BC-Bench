@@ -4,34 +4,15 @@ from unittest.mock import Mock
 
 import pytest
 
-from bcbench.dataset import DatasetEntry
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics
+from tests.conftest import create_evaluation_context
 
 
 class TestMiniAgentMetricsExtraction:
     @pytest.fixture
-    def sample_context(self, tmp_path) -> EvaluationContext:
-        entry = DatasetEntry(
-            instance_id="test__mini-metrics-123",
-            repo="test/repo",
-            base_commit="a" * 40,
-            environment_setup_version="25.1",
-            fail_to_pass=[{"codeunitID": 100, "functionName": ["TestMetrics"]}],
-            pass_to_pass=[],
-            project_paths=["src/app"],
-        )
-        return EvaluationContext(
-            entry=entry,
-            repo_path=tmp_path / "repo",
-            result_dir=tmp_path / "results",
-            container_name="test-container",
-            password="test-password",
-            username="test-user",
-            agent_name="mini-bc-agent",
-            model="azure/gpt-4.1",
-            category=EvaluationCategory.BUG_FIX,
-        )
+    def sample_context(self, tmp_path):
+        return create_evaluation_context(tmp_path, agent_name="mini-bc-agent", model="azure/gpt-4.1")
 
     def test_metrics_extraction_with_execution_time_only(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -113,7 +94,6 @@ class TestMiniAgentMetricsExtraction:
         assert metrics is None
 
     def test_metrics_flow_to_result_with_tokens(self, sample_context):
-        # Simulate metrics returned from mini-agent
         sample_context.metrics = AgentMetrics(
             execution_time=180.5,
             prompt_tokens=5000,
@@ -122,13 +102,13 @@ class TestMiniAgentMetricsExtraction:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.instance_id == "test__mini-metrics-123"
+        assert result.instance_id == sample_context.entry.instance_id
+        assert result.metrics is not None
         assert result.metrics.execution_time == 180.5
         assert result.metrics.prompt_tokens == 5000
         assert result.metrics.completion_tokens == 1200
 
     def test_metrics_flow_to_result_without_tokens(self, sample_context):
-        # Simulate metrics returned from mini-agent with zero tokens
         sample_context.metrics = AgentMetrics(
             execution_time=180.5,
             prompt_tokens=0,
@@ -137,7 +117,8 @@ class TestMiniAgentMetricsExtraction:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.instance_id == "test__mini-metrics-123"
+        assert result.instance_id == sample_context.entry.instance_id
+        assert result.metrics is not None
         assert result.metrics.execution_time == 180.5
         # Zero tokens should be converted to None in the result
         assert result.metrics.prompt_tokens == 0
@@ -155,6 +136,7 @@ class TestMiniAgentMetricsExtraction:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.execution_time is None
         assert result.metrics.prompt_tokens is None
         assert result.metrics.completion_tokens is None
@@ -169,13 +151,14 @@ class TestMiniAgentMetricsExtraction:
         result = BugFixResult.create_success(sample_context, "test_patch")
 
         # Verify metrics
+        assert result.metrics is not None
         assert result.metrics.execution_time == 95.3
         assert result.metrics.prompt_tokens == 3500
         assert result.metrics.completion_tokens == 800
 
         # Verify other fields are still correctly populated
-        assert result.instance_id == "test__mini-metrics-123"
-        assert result.project == "app"
+        assert result.instance_id == sample_context.entry.instance_id
+        assert result.project == "Shopify"
         assert result.model == "azure/gpt-4.1"
         assert result.agent_name == "mini-bc-agent"
         assert result.resolved is True

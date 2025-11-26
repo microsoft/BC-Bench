@@ -1,7 +1,7 @@
 import json
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from pydantic import BaseModel
 
@@ -32,7 +32,7 @@ class EvaluationResultSummary(BaseModel):
     experiment: ExperimentConfiguration | None = None
 
     @classmethod
-    def from_results(cls, results: list[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
+    def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
         total = len(results)
         resolved = sum(r.resolved for r in results)
 

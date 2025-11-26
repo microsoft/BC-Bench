@@ -3,34 +3,15 @@
 import pytest
 
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.dataset import DatasetEntry
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics
+from tests.conftest import create_dataset_entry, create_evaluation_context
 
 
 class TestCopilotMetricsToResultFlow:
     @pytest.fixture
-    def sample_context(self, tmp_path) -> EvaluationContext:
-        entry = DatasetEntry(
-            instance_id="test__metrics-flow-123",
-            repo="test/repo",
-            base_commit="a" * 40,
-            environment_setup_version="25.1",
-            fail_to_pass=[{"codeunitID": 100, "functionName": ["TestMetrics"]}],
-            pass_to_pass=[],
-            project_paths=["src/app"],
-        )
-        return EvaluationContext(
-            entry=entry,
-            repo_path=tmp_path / "repo",
-            result_dir=tmp_path / "results",
-            container_name="test-container",
-            password="test-password",
-            username="test-user",
-            agent_name="copilot-cli",
-            model="gpt-4o",
-            category=EvaluationCategory.BUG_FIX,
-        )
+    def sample_context(self, tmp_path):
+        return create_evaluation_context(tmp_path, agent_name="copilot-cli", model="gpt-4o")
 
     def test_full_metrics_flow_to_success_result(self, sample_context):
         output_lines = [
@@ -44,10 +25,11 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.instance_id == "test__metrics-flow-123"
+        assert result.instance_id == sample_context.entry.instance_id
         assert result.resolved is True
-        assert result.project == "app"
+        assert result.project == "Shopify"
         assert result.build is True
+        assert result.metrics is not None
         assert result.metrics.execution_time == 225.2
         assert result.metrics.prompt_tokens == 100500
         assert result.metrics.completion_tokens == 2300
@@ -63,6 +45,7 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.execution_time == 45.7
         assert result.metrics.prompt_tokens == 50000
         assert result.metrics.completion_tokens == 1000
@@ -74,6 +57,7 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.execution_time == 90.0
         assert result.metrics.prompt_tokens is None
         assert result.metrics.completion_tokens is None
@@ -101,6 +85,7 @@ class TestCopilotMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is True
         assert result.error_message == "Tests failed"
+        assert result.metrics is not None
         assert result.metrics.execution_time == 135.5
         assert result.metrics.prompt_tokens == 75200
         assert result.metrics.completion_tokens == 1800
@@ -119,6 +104,7 @@ class TestCopilotMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is False
         assert result.error_message == "Build failed: src/app"
+        assert result.metrics is not None
         assert result.metrics.execution_time == 310.3
         assert result.metrics.prompt_tokens == 200000
         assert result.metrics.completion_tokens == 5000
@@ -141,6 +127,7 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.execution_time == 272.8
         assert result.metrics.prompt_tokens == 125500
         assert result.metrics.completion_tokens == 3600
@@ -155,6 +142,7 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.execution_time is None
         assert result.metrics.prompt_tokens is None
         assert result.metrics.completion_tokens is None
@@ -169,6 +157,7 @@ class TestCopilotMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert isinstance(result.metrics.prompt_tokens, int)
         assert isinstance(result.metrics.completion_tokens, int)
         assert result.metrics.prompt_tokens == 12500
@@ -186,13 +175,14 @@ class TestCopilotMetricsToResultFlow:
         result = BugFixResult.create_success(sample_context, "test_patch")
 
         # Verify metrics are present
+        assert result.metrics is not None
         assert result.metrics.execution_time == 60.0
         assert result.metrics.prompt_tokens == 10000
         assert result.metrics.completion_tokens == 500
 
         # Verify other fields are still correctly populated
-        assert result.instance_id == "test__metrics-flow-123"
-        assert result.project == "app"
+        assert result.instance_id == sample_context.entry.instance_id
+        assert result.project == "Shopify"
         assert result.model == "gpt-4o"
         assert result.agent_name == "copilot-cli"
         assert result.resolved is True
@@ -202,30 +192,9 @@ class TestCopilotMetricsToResultFlow:
 
 class TestMiniAgentMetricsToResultFlow:
     @pytest.fixture
-    def sample_entry(self) -> DatasetEntry:
-        return DatasetEntry(
-            instance_id="test__mini-flow-456",
-            repo="test/repo",
-            base_commit="b" * 40,
-            environment_setup_version="26.0",
-            fail_to_pass=[{"codeunitID": 200, "functionName": ["TestFlow"]}],
-            pass_to_pass=[],
-            project_paths=["src/test"],
-        )
-
-    @pytest.fixture
-    def sample_context(self, tmp_path, sample_entry) -> EvaluationContext:
-        return EvaluationContext(
-            entry=sample_entry,
-            repo_path=tmp_path / "repo",
-            result_dir=tmp_path / "results",
-            container_name="test-container",
-            password="test-password",
-            username="test-user",
-            agent_name="mini-bc-agent",
-            model="azure/gpt-4.1",
-            category=EvaluationCategory.BUG_FIX,
-        )
+    def sample_context(self, tmp_path):
+        entry = create_dataset_entry(instance_id="microsoftInternal__NAV-456")
+        return create_evaluation_context(tmp_path, entry=entry, agent_name="mini-bc-agent", model="azure/gpt-4.1")
 
     def test_mini_agent_full_metrics_flow_to_success_result(self, sample_context):
         from unittest.mock import Mock
@@ -265,9 +234,10 @@ class TestMiniAgentMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
-        assert result.instance_id == "test__mini-flow-456"
+        assert result.instance_id == "microsoftInternal__NAV-456"
         assert result.resolved is True
         assert result.build is True
+        assert result.metrics is not None
         assert result.metrics.execution_time == 245.8
         assert result.metrics.prompt_tokens == 8500
         assert result.metrics.completion_tokens == 1800
@@ -287,6 +257,7 @@ class TestMiniAgentMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.execution_time == 120.0
         assert result.metrics.prompt_tokens == 0
         assert result.metrics.completion_tokens == 0
@@ -320,6 +291,7 @@ class TestMiniAgentMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is True
         assert result.error_message == "Tests failed"
+        assert result.metrics is not None
         assert result.metrics.execution_time == 180.5
         assert result.metrics.prompt_tokens == 6000
         assert result.metrics.completion_tokens == 1500
@@ -353,6 +325,7 @@ class TestMiniAgentMetricsToResultFlow:
         assert result.resolved is False
         assert result.build is False
         assert result.error_message == "Build failed: src/test"
+        assert result.metrics is not None
         assert result.metrics.execution_time == 95.2
         assert result.metrics.prompt_tokens == 4500
         assert result.metrics.completion_tokens == 900
@@ -370,6 +343,7 @@ class TestMiniAgentMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.prompt_tokens == 0
         assert result.metrics.completion_tokens == 0
         assert result.metrics.execution_time == 60.0
@@ -400,6 +374,7 @@ class TestMiniAgentMetricsToResultFlow:
 
         result = BugFixResult.create_success(sample_context, "test_patch")
 
+        assert result.metrics is not None
         assert result.metrics.prompt_tokens == 125000
         assert result.metrics.completion_tokens == 25000
         assert result.metrics.execution_time == 450.3

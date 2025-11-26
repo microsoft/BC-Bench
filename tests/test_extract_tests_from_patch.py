@@ -39,8 +39,8 @@ index ff9b7640fa2..07bfdfa1233 100644
     result = extract_tests_from_patch(patch, mock_repo_path)
 
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 148187
-    assert result[0]["functionName"] == ["VerifyEmissionFieldsMustBeEnabledWhenEnableValueChainTrackingIsEnabled"]
+    assert result[0].codeunitID == 148187
+    assert result[0].functionName == {"VerifyEmissionFieldsMustBeEnabledWhenEnableValueChainTrackingIsEnabled"}
 
 
 def test_multiple_tests_same_codeunit(mock_repo_path: Path):
@@ -72,10 +72,10 @@ index abc..def 100644
     result = extract_tests_from_patch(patch, mock_repo_path)
 
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 137045
-    assert len(result[0]["functionName"]) == 2
-    assert "TestOne" in result[0]["functionName"]
-    assert "TestTwo" in result[0]["functionName"]
+    assert result[0].codeunitID == 137045
+    assert len(result[0].functionName) == 2
+    assert "TestOne" in result[0].functionName
+    assert "TestTwo" in result[0].functionName
 
 
 def test_test_with_handler_functions(mock_repo_path: Path):
@@ -105,8 +105,8 @@ index abc..def 100644
     result = extract_tests_from_patch(patch, mock_repo_path)
 
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 139648
-    assert result[0]["functionName"] == ["UnitTestSuggestShopifyPaymentsFailedTransaction"]
+    assert result[0].codeunitID == 139648
+    assert result[0].functionName == {"UnitTestSuggestShopifyPaymentsFailedTransaction"}
 
 
 def test_no_tests_in_patch(mock_repo_path: Path):
@@ -149,8 +149,8 @@ index abc..def 100644
     result = extract_tests_from_patch(patch, mock_repo_path)
 
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 148187
-    assert result[0]["functionName"] == ["MyTestFunction"]
+    assert result[0].codeunitID == 148187
+    assert result[0].functionName == {"MyTestFunction"}
 
 
 def test_procedure_without_test_attribute(mock_repo_path: Path):
@@ -180,8 +180,8 @@ index abc..def 100644
     result = extract_tests_from_patch(patch, mock_repo_path)
 
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 148187
-    assert result[0]["functionName"] == ["ActualTestFunction"]
+    assert result[0].codeunitID == 148187
+    assert result[0].functionName == {"ActualTestFunction"}
 
 
 def test_complex_real_world_patch(mock_repo_path: Path):
@@ -218,8 +218,8 @@ index bfcb627e6e5..f8db5ec3cf2 100644
     result = extract_tests_from_patch(patch, mock_repo_path)
 
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 137045
-    assert result[0]["functionName"] == ["CheckTrackingReservationEntriesUpdatedWheLotNoAllocated"]
+    assert result[0].codeunitID == 137045
+    assert result[0].functionName == {"CheckTrackingReservationEntriesUpdatedWheLotNoAllocated"}
 
 
 def test_indented_test_procedure(mock_repo_path: Path):
@@ -248,8 +248,8 @@ index abc..def 100644
     result = extract_tests_from_patch(patch, mock_repo_path)
 
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 137045
-    assert result[0]["functionName"] == ["TestWithIndentation"]
+    assert result[0].codeunitID == 137045
+    assert result[0].functionName == {"TestWithIndentation"}
 
 
 def test_empty_patch(mock_repo_path: Path):
@@ -300,9 +300,9 @@ index abc..def 100644
 
     # Only the new test should be extracted
     assert len(result) == 1
-    assert result[0]["codeunitID"] == 139648
-    assert result[0]["functionName"] == ["NewTestFunction"]
-    assert "ExistingTestFunction" not in result[0]["functionName"]
+    assert result[0].codeunitID == 139648
+    assert result[0].functionName == {"NewTestFunction"}
+    assert "ExistingTestFunction" not in result[0].functionName
 
 
 def test_multiple_files_touched(mock_repo_path: Path):
@@ -357,14 +357,14 @@ index ghi789..jkl012 100644
     assert len(result) == 2
 
     # Find entries for each codeunit
-    entry1 = next((e for e in result if e["codeunitID"] == 148100), None)
-    entry2 = next((e for e in result if e["codeunitID"] == 148200), None)
+    entry1 = next((e for e in result if e.codeunitID == 148100), None)
+    entry2 = next((e for e in result if e.codeunitID == 148200), None)
 
     assert entry1 is not None
-    assert len(entry1["functionName"]) == 2
-    assert "FirstTestInFile1" in entry1["functionName"]
-    assert "SecondTestInFile1" in entry1["functionName"]
+    assert len(entry1.functionName) == 2
+    assert "FirstTestInFile1" in entry1.functionName
+    assert "SecondTestInFile1" in entry1.functionName
 
     assert entry2 is not None
-    assert len(entry2["functionName"]) == 1
-    assert "TestInFile2" in entry2["functionName"]
+    assert len(entry2.functionName) == 1
+    assert "TestInFile2" in entry2.functionName

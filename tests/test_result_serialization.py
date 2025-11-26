@@ -3,47 +3,27 @@ import json
 import pytest
 
 from bcbench.results.base import create_result_from_json
-from bcbench.results.bugfix import BugFixResult
 from bcbench.results.evaluation_result import EvaluationResultSummary
-from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory
+from tests.conftest import create_bugfix_result, create_testgen_result
 
 
 class TestCategorySerialization:
     @pytest.fixture
     def sample_result_bug_fix(self):
-        return BugFixResult(
+        return create_bugfix_result(
             instance_id="test__bug-fix-1",
             project="app",
-            model="gpt-4o",
-            agent_name="copilot-cli",
-            category=EvaluationCategory.BUG_FIX,
-            resolved=True,
-            build=True,
-            generated_patch="patch content",
-            metrics=AgentMetrics(
-                execution_time=100.0,
-                prompt_tokens=1000,
-                completion_tokens=500,
-            ),
+            metrics=AgentMetrics(execution_time=100.0, prompt_tokens=1000, completion_tokens=500),
         )
 
     @pytest.fixture
     def sample_result_test_gen(self):
-        return TestGenerationResult(
+        return create_testgen_result(
             instance_id="test__test-gen-1",
             project="app",
-            model="gpt-4o",
-            agent_name="copilot-cli",
-            category=EvaluationCategory.TEST_GENERATION,
             resolved=False,
-            build=True,
-            generated_patch="test patch content",
-            metrics=AgentMetrics(
-                execution_time=150.0,
-                prompt_tokens=2000,
-                completion_tokens=800,
-            ),
+            metrics=AgentMetrics(execution_time=150.0, prompt_tokens=2000, completion_tokens=800),
         )
 
     def test_bug_fix_category_saves_as_string(self, tmp_path, sample_result_bug_fix):
@@ -99,15 +79,7 @@ class TestCategorySerialization:
         assert result.category == EvaluationCategory.TEST_GENERATION
 
     def test_round_trip_bug_fix(self, tmp_path):
-        original = BugFixResult(
-            instance_id="round-trip-test",
-            project="test-project",
-            model="test-model",
-            agent_name="test-agent",
-            category=EvaluationCategory.BUG_FIX,
-            resolved=True,
-            build=True,
-        )
+        original = create_bugfix_result(instance_id="round-trip-test", project="test-project", model="test-model", agent_name="test-agent")
 
         # Save to file
         original.save(tmp_path, "test.jsonl")
@@ -122,15 +94,7 @@ class TestCategorySerialization:
         assert loaded.category == EvaluationCategory.BUG_FIX
 
     def test_round_trip_test_generation(self, tmp_path):
-        original = TestGenerationResult(
-            instance_id="round-trip-test-gen",
-            project="test-project",
-            model="test-model",
-            agent_name="test-agent",
-            category=EvaluationCategory.TEST_GENERATION,
-            resolved=False,
-            build=True,
-        )
+        original = create_testgen_result(instance_id="round-trip-test-gen", project="test-project", model="test-model", agent_name="test-agent", resolved=False)
 
         # Save to file
         original.save(tmp_path, "test.jsonl")
@@ -175,15 +139,10 @@ class TestCategorySerialization:
         assert summary.category == EvaluationCategory.TEST_GENERATION
 
     def test_test_generation_pre_patch_failed_in_jsonl(self, tmp_path):
-        result = TestGenerationResult(
+        result = create_testgen_result(
             instance_id="test__pre-patch",
             project="app",
-            model="gpt-4o",
-            agent_name="copilot-cli",
-            category=EvaluationCategory.TEST_GENERATION,
             resolved=True,
-            build=True,
-            generated_patch="test content",
             pre_patch_failed=True,
             post_patch_passed=True,
         )
