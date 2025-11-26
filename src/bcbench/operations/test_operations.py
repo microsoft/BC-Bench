@@ -85,15 +85,15 @@ def extract_tests_from_patch(generated_patch: str, repo_path: Path) -> list[Test
 
                 existing_entry = None
                 for entry in test_entries:
-                    if entry["codeunitID"] == current_codeunit_id:
+                    if entry.codeunitID == current_codeunit_id:
                         existing_entry = entry
                         break
 
                 if existing_entry:
-                    if function_name not in existing_entry["functionName"]:
-                        existing_entry["functionName"].append(function_name)
+                    if function_name not in existing_entry.functionName:
+                        existing_entry.functionName.add(function_name)
                 else:
-                    test_entries.append(TestEntry(codeunitID=current_codeunit_id, functionName=[function_name]))
+                    test_entries.append(TestEntry(codeunitID=current_codeunit_id, functionName={function_name}))
 
                 found_test_attribute = False
             elif not line.startswith("+"):

@@ -1,90 +1,70 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+import re
 from pathlib import Path
-from typing import Any, Iterable, TypedDict
+from typing import Annotated
 
-from bcbench.exceptions import InvalidEntryFormatError
+from pydantic import BaseModel, ConfigDict, Field
 
-__all__ = ["DatasetEntry"]
+from bcbench.config import get_config
+
+_config = get_config()
+
+__all__ = ["DatasetEntry", "TestEntry"]
 
 
-class TestEntry(TypedDict):
+class TestEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     codeunitID: int
-    functionName: list[str]
+    functionName: Annotated[set[str], Field(min_length=1)]
 
 
-@dataclass(slots=True)
-class DatasetEntry:
-    """Representation of a Business Central benchmark dataset entry."""
+class DatasetEntry(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
 
-    repo: str = "microsoftInternal/NAV"
-    instance_id: str = ""
-    patch: str = ""
-    base_commit: str = ""
-    hints_text: str = ""
-    created_at: str = ""
-    test_patch: str = ""
-    problem_statement: str = ""
-    environment_setup_version: str = ""
-    fail_to_pass: list[TestEntry] = field(default_factory=list)
-    pass_to_pass: list[TestEntry] = field(default_factory=list)
-    project_paths: list[str] = field(default_factory=list)
-    commit: str = ""
-    _raw_pr_data: dict[str, Any] | None = field(default=None, repr=False)
-    _raw_work_item_data: dict[str, Any] | None = field(default=None, repr=False)
+    repo: str = Field(default="microsoftInternal/NAV", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
+    instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
+    base_commit: str = Field(pattern=r"^[a-fA-F0-9]{40}$")
+    environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
+    fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
+    project_paths: Annotated[list[str], Field(min_length=2)]
+    patch: Annotated[str, Field(min_length=1)]
+    test_patch: Annotated[str, Field(min_length=1)]
+    created_at: Annotated[str, Field(min_length=1)]
+    pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
 
-    @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> DatasetEntry:
-        """Build an entry from a JSON payload stored in the dataset file."""
-        instance_id = str(payload.get("instance_id", ""))
-        return cls(
-            repo=str(payload.get("repo", "microsoftInternal/NAV")),
-            instance_id=instance_id,
-            patch=str(payload.get("patch", "")),
-            base_commit=str(payload.get("base_commit", "")),
-            hints_text=str(payload.get("hints_text", "")),
-            created_at=str(payload.get("created_at", "")),
-            test_patch=str(payload.get("test_patch", "")),
-            problem_statement=str(payload.get("problem_statement", "")),
-            environment_setup_version=str(payload.get("environment_setup_version", "")),
-            fail_to_pass=_parse_test_entries(instance_id, payload.get("FAIL_TO_PASS", [])),
-            pass_to_pass=_parse_test_entries(instance_id, payload.get("PASS_TO_PASS", [])),
-            project_paths=_ensure_list_of_str(payload.get("project_paths", [])),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the dataset entry as a dictionary matching the schema."""
-        return {
-            "repo": self.repo,
-            "instance_id": self.instance_id,
-            "base_commit": self.base_commit,
-            "created_at": self.created_at,
-            "environment_setup_version": self.environment_setup_version,
-            "project_paths": list(self.project_paths),
-            "hints_text": self.hints_text,
-            "FAIL_TO_PASS": list(self.fail_to_pass),
-            "PASS_TO_PASS": list(self.pass_to_pass),
-            "problem_statement": self.problem_statement,
-            "test_patch": self.test_patch,
-            "patch": self.patch,
-        }
+    @property
+    def problem_statement_dir(self) -> Path:
+        return _config.paths.problem_statement_dir / self.instance_id
 
     def save_to_file(self, filepath: Path | str) -> None:
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             # For JSONL format, always write compact JSON without indentation
-            json.dump(self.to_dict(), handle, ensure_ascii=False)
+            json.dump(self.model_dump(by_alias=True, mode="json"), handle, ensure_ascii=False)
             handle.write("\n")
 
-    def get_task(self) -> str:
-        """Get the full task description including hints."""
-        task = self.problem_statement
-        if self.hints_text:
-            task += f"\n\n## Additional Hints\n{self.hints_text}"
-        return task
+    def get_task(self, transform_image_paths: bool = False) -> str:
+        """Get the task description.
+
+        problem_statment and hints_text stored in the README.md file under the problem statement directory.
+
+        Args:
+            transform_image_paths: Whether to transform relative image paths to include the problem statement directory. Needed when passing to Agents.
+        """
+        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
+
+        content: str = readme_path.read_text(encoding="utf-8")
+
+        if not transform_image_paths:
+            return content
+
+        # Transform relative image paths: ![alt text](./diagram.png) -> ![alt text](problem/diagram.png)
+        dest_dir = _config.file_patterns.problem_statement_dest_dir
+        return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
     def extract_project_name(self) -> str:
         """Extract the project name from the first project path.
@@ -115,27 +95,3 @@ class DatasetEntry:
 
         # Fallback to the last meaningful part
         return parts[-1] if parts else ""
-
-
-def _ensure_list_of_str(values: Iterable[Any]) -> list[str]:
-    return [str(value) for value in values]
-
-
-def _parse_test_entries(instance_id: str, values: Any) -> list[TestEntry]:
-    """Parse test entries from JSON payload."""
-    if not values:
-        return []
-
-    result: list[TestEntry] = []
-    for test_entry in values:
-        try:
-            result.append(
-                TestEntry(
-                    codeunitID=int(test_entry.get("codeunitID")),
-                    functionName=[str(fn) for fn in test_entry.get("functionName")],
-                )
-            )
-        except Exception as e:
-            raise InvalidEntryFormatError(instance_id, f"Expected dict with codeunitID and functionName: {e}") from None
-
-    return result

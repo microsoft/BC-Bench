@@ -10,6 +10,7 @@ from bcbench.operations import (
     checkout_commit,
     clean_project_paths,
     clean_repo,
+    copy_problem_statement_folder,
     run_tests,
     stage_and_get_diff,
 )
@@ -25,7 +26,7 @@ class BugFixPipeline(EvaluationPipeline):
     """Pipeline for bug-fix evaluation category.
 
     Workflow:
-    1. Setup: clean repo, checkout base commit, build
+    1. Setup: clean repo, checkout base commit, copy problem statement, build
     2. Run agent: execute agent to generate fix patch
     3. evaluate: apply test patch, build, run tests
     """
@@ -33,6 +34,8 @@ class BugFixPipeline(EvaluationPipeline):
     def setup(self, context: EvaluationContext) -> None:
         clean_repo(context.repo_path)
         checkout_commit(context.repo_path, context.entry.base_commit)
+        copy_problem_statement_folder(context.entry, context.repo_path)
+
         build_and_publish_projects(
             context.repo_path,
             context.entry.project_paths,

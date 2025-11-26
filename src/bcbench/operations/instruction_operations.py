@@ -69,3 +69,23 @@ def _get_source_instructions_path(repo_name: str) -> Path:
         raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for repository: {repo_name}")
 
     return instructions_path
+
+
+def copy_problem_statement_folder(entry: DatasetEntry, repo_path: Path) -> None:
+    """
+    Copy problem statement folder to the testbed repository root.
+
+    This makes the problem statement (including any screenshots) accessible to Copilot during evaluation.
+
+    Args:
+        entry: Dataset entry containing problem_statement path
+        repo_path: Path to testbed repository where folder will be copied
+    """
+    source_dir: Path = entry.problem_statement_dir
+    dest_dir: Path = repo_path / _config.file_patterns.problem_statement_dest_dir
+
+    if dest_dir.exists():
+        rmtree(dest_dir)
+
+    copytree(source_dir, dest_dir)
+    logger.info(f"Copied problem statement folder from {source_dir} to {dest_dir}")

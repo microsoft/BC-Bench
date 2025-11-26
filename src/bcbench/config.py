@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 from dataclasses import dataclass
@@ -37,7 +36,8 @@ class PathConfig:
 
     bc_bench_root: Path
     dataset_path: Path
-    dataset_schema_path: Path
+    dataset_dir: Path
+    problem_statement_dir: Path
     nav_repo_path: Path
     ps_script_path: Path
     evaluation_results_path: Path
@@ -49,8 +49,9 @@ class PathConfig:
         """Create path configuration from repository root."""
         return cls(
             bc_bench_root=root,
+            dataset_dir=root / "dataset",
             dataset_path=root / "dataset" / "bcbench_nav.jsonl",
-            dataset_schema_path=root / "dataset" / "schema.json",
+            problem_statement_dir=root / "dataset" / "problemstatements",
             nav_repo_path=root.parent / "NAV",
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
@@ -91,19 +92,23 @@ class FilePatternConfig:
     copilot_instructions_dirname: str
     copilot_instructions_pattern: str
     test_project_identifiers: tuple[str, ...]
+    problem_statement_readme: str
+    problem_statement_dest_dir: str
 
     @classmethod
-    def default(cls, instance_pattern: str) -> FilePatternConfig:
+    def default(cls) -> FilePatternConfig:
         """Get default file pattern configuration."""
         return cls(
             trajectory_pattern=".traj.json",
             patch_pattern=".patch",
-            instance_pattern=instance_pattern,
+            instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
             result_pattern=".jsonl",
             copilot_instruction_naming="copilot-instructions.md",
             copilot_instructions_dirname="instructions",
             copilot_instructions_pattern="*.instructions.md",
             test_project_identifiers=("test", "tests"),
+            problem_statement_readme="README.md",
+            problem_statement_dest_dir="problem",
         )
 
 
@@ -146,16 +151,11 @@ class Config:
         root = _get_git_root()
         path_config = PathConfig.from_root(root)
 
-        with open(path_config.dataset_schema_path) as f:
-            schema = json.load(f)
-
-        instance_pattern = schema.get("properties", {}).get("instance_id", {}).get("pattern")
-
         return cls(
             paths=path_config,
             env=EnvironmentConfig.from_environment(),
             timeout=TimeoutConfig.default(),
-            file_patterns=FilePatternConfig.default(instance_pattern),
+            file_patterns=FilePatternConfig.default(),
         )
 
     def resolve_ado_token(self) -> str:

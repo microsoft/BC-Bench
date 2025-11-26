@@ -80,7 +80,7 @@ def run_mini_agent(
 
     logger.info(f"Running mini-bc-agent on: {entry.instance_id}")
 
-    task: str = entry.get_task()
+    task: str = entry.get_task(transform_image_paths=True)
 
     # Lazy import and create agent
     from minisweagent.models.litellm_model import LitellmModel

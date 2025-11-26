@@ -14,7 +14,7 @@ def build_prompt(entry: DatasetEntry, repo_path: Path, config: dict, category: E
     template = Template(template_str)
     return template.render(
         repo_path=repo_path,
-        task=entry.get_task(),
+        task=entry.get_task(transform_image_paths=True),
         project_paths=", ".join(entry.project_paths),
         include_project_paths=include_project_paths,
     )

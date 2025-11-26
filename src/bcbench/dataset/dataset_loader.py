@@ -1,6 +1,5 @@
 """Utilities for loading dataset entries from JSONL files."""
 
-import json
 from pathlib import Path
 
 from bcbench.dataset.dataset_entry import DatasetEntry
@@ -31,7 +30,7 @@ def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random
             if not striped_line:
                 continue
 
-            entry = DatasetEntry.from_json(json.loads(striped_line))
+            entry = DatasetEntry.model_validate_json(striped_line)
 
             # If searching for specific entry_id, return immediately when found
             if entry_id:
