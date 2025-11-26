@@ -5,6 +5,8 @@ from pathlib import Path
 from string import Template
 from typing import Literal
 
+from pydantic import TypeAdapter
+
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, TestEntry
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
@@ -169,7 +171,7 @@ def run_tests(entry: DatasetEntry, container_name: str, username: str, password:
 
 def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container_name: str, username: str, password: str) -> None:
     """Run a suite of tests."""
-    test_entries_json = str(test_entries).replace("'", '"')
+    test_entries_json: str = TypeAdapter(list[TestEntry]).dump_json(test_entries).decode()
 
     ps_script = build_ps_dataset_tests_script(
         container_name=container_name,

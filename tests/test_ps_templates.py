@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from bcbench.config import get_config
+from bcbench.dataset import TestEntry
 from bcbench.operations import bc_operations
 
 _config = get_config()
@@ -198,3 +201,62 @@ class TestPowerShellScriptGeneration:
         # Should not have quotes around version
         assert "'27.0'" not in script
         assert '"27.0"' not in script
+
+
+class TestRunTestSuite:
+    @pytest.fixture
+    def mock_subprocess(self, monkeypatch):
+        import subprocess
+
+        calls = []
+
+        def mock_run(*args, **kwargs):
+            calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+        return calls
+
+    def test_test_entries_serialized_as_json(self, mock_subprocess):
+        test_entries = [
+            TestEntry(codeunitID=137404, functionName={"ExchangeProductionBOMItemShouldSetEndingDate"}),
+        ]
+
+        bc_operations.run_test_suite(
+            test_entries=test_entries,
+            expectation="Pass",
+            container_name="bcserver",
+            username="admin",
+            password="Test123",
+        )
+
+        assert len(mock_subprocess) == 1
+        command = mock_subprocess[0][0][0][-1]  # Get the PowerShell command string
+
+        # Should contain valid JSON format, not Python repr
+        assert '"codeunitID":137404' in command
+        assert '"functionName":["ExchangeProductionBOMItemShouldSetEndingDate"]' in command
+        # Should NOT contain Python repr format
+        assert "TestEntry(" not in command
+
+    def test_multiple_test_entries_serialized_as_json(self, mock_subprocess):
+        test_entries = [
+            TestEntry(codeunitID=100, functionName={"TestA", "TestB"}),
+            TestEntry(codeunitID=200, functionName={"TestC"}),
+        ]
+
+        bc_operations.run_test_suite(
+            test_entries=test_entries,
+            expectation="Pass",
+            container_name="bcserver",
+            username="admin",
+            password="Test123",
+        )
+
+        assert len(mock_subprocess) == 1
+        command = mock_subprocess[0][0][0][-1]
+
+        assert '"codeunitID":100' in command
+        assert '"codeunitID":200' in command
+        assert '"functionName":' in command
+        assert "TestEntry(" not in command

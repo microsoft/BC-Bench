@@ -92,4 +92,5 @@ jobs:
       model: ${{ inputs.model }}
       agent: "mini-bc-agent"
       mock: ${{ inputs.test-run }}
+      category: ${{ inputs.category }}
     secrets: inherit
