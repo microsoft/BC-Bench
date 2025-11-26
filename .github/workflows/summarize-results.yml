@@ -34,7 +34,7 @@ jobs:
     name: Results
     permissions:
       contents: write
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Create branch from main
-          $branchName = "leaderboard/${{ github.run_id }}"
+          branchName="leaderboard/${{ github.run_id }}"
           git checkout -b $branchName origin/main
 
           uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
@@ -89,8 +89,8 @@ jobs:
           uv tool install bc-eval==0.1.2 --python 3.11 --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
 
           # Upload summary to Braintrust using bc-eval
-          $bcevalResultsFile = "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}"
-          $evalRunName = "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}"
-          $tags = "${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}"
+          bcevalResultsFile="${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}"
+          evalRunName="${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}"
+          tags="${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}"
 
-          bceval metrics calculate --input-file $bcevalResultsFile --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name $evalRunName --tags $tags --upload-results
+          bceval metrics calculate --input-file "$bcevalResultsFile" --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "$evalRunName" --tags "$tags" --upload-results
