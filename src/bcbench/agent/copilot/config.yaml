@@ -42,7 +42,14 @@ instructions:
 agents:
   enabled: false
   name: ALTest
-# mcp:
+
+mcp:
+  servers:
+    - name: "altool"
+      type: "local"
+      command: "al"
+      args: ["launchMcpServer", "--projects", "{{project_path}}"]
+      tools: ["*"]
 #   servers:
 #     - name: "mslearn"
 #       type: "http"
