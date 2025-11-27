@@ -179,5 +179,24 @@
       "custom_instructions": true,
       "custom_agent": null
     }
+  },
+  {
+    "total": 28,
+    "resolved": 16,
+    "failed": 12,
+    "build": 27,
+    "date": "2025-11-27",
+    "model": "claude-opus-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 109.2,
+    "average_prompt_tokens": 1009642.9,
+    "average_completion_tokens": 4452.8,
+    "github_run_id": "19730168417",
+    "experiment": {
+      "mcp_servers": null,
+      "custom_instructions": false,
+      "custom_agent": null
+    }
   }
 ]
