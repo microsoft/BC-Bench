@@ -56,9 +56,14 @@ def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]
         file_header_match = re.match(file_header_pattern, line)
         if file_header_match:
             current_file_path = file_header_match.group(2)
-            if current_file_path and current_file_path in file_contents:
-                content = file_contents[current_file_path]
-                current_codeunit_id = extract_codeunit_id_from_content(content, current_file_path)
+            # Only process codeunit files (*.Codeunit.al, case-insensitive)
+            if current_file_path and current_file_path.lower().endswith(".codeunit.al"):
+                if current_file_path in file_contents:
+                    content = file_contents[current_file_path]
+                    current_codeunit_id = extract_codeunit_id_from_content(content, current_file_path)
+            else:
+                # Reset codeunit ID for non-codeunit files
+                current_codeunit_id = None
 
             continue
 

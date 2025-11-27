@@ -282,6 +282,41 @@ index abc..def 100644
     assert "ExistingTestFunction" not in result[0].functionName
 
 
+def test_non_codeunit_files_are_skipped():
+    file_contents = {
+        "App/Test.Codeunit.al": 'codeunit 148100 "Test Codeunit" { }',
+        "App/NoSeriesTest.PermissionSet.al": 'permissionset 139480 "NoSeriesTest" { }',
+    }
+
+    patch = """
+diff --git a/App/NoSeriesTest.PermissionSet.al b/App/NoSeriesTest.PermissionSet.al
+index abc..def 100644
+--- a/App/NoSeriesTest.PermissionSet.al
++++ b/App/NoSeriesTest.PermissionSet.al
+@@ -1,5 +1,10 @@ permissionset 139480 "NoSeriesTest"
+{
++    Permissions = tabledata "No. Series" = RIMD;
+}
+diff --git a/App/Test.Codeunit.al b/App/Test.Codeunit.al
+index abc..def 100644
+--- a/App/Test.Codeunit.al
++++ b/App/Test.Codeunit.al
+@@ -5,6 +5,11 @@ codeunit 148100 "Test Codeunit"
+{
++    [Test]
++    procedure ActualTest()
++    begin
++    end;
+}
+    """
+
+    result = extract_tests_from_patch(patch, file_contents)
+
+    assert len(result) == 1
+    assert result[0].codeunitID == 148100
+    assert result[0].functionName == {"ActualTest"}
+
+
 def test_multiple_files_touched():
     file_contents = {
         "App/Test1.Codeunit.al": 'codeunit 148100 "Test Codeunit One" { }',
