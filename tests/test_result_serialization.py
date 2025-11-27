@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from bcbench.commands.result import _experiments_equal
 from bcbench.results.base import create_result_from_json
 from bcbench.results.evaluation_result import EvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
@@ -179,3 +180,49 @@ class TestCategorySerialization:
         assert data["experiment"]["custom_agent"] == "custom-agent"
         assert data["experiment"]["custom_instructions"] is True
         assert data["experiment"]["mcp_servers"] is None
+
+
+class TestExperimentsEqual:
+    def test_both_none_are_equal(self):
+        assert _experiments_equal(None, None) is True
+
+    def test_none_and_empty_config_are_equal(self):
+        empty = ExperimentConfiguration()
+        assert _experiments_equal(None, empty) is True
+        assert _experiments_equal(empty, None) is True
+
+    def test_none_and_explicit_empty_config_are_equal(self):
+        empty = ExperimentConfiguration(mcp_servers=None, custom_instructions=False, custom_agent=None)
+        assert _experiments_equal(None, empty) is True
+        assert _experiments_equal(empty, None) is True
+
+    def test_two_empty_configs_are_equal(self):
+        empty1 = ExperimentConfiguration()
+        empty2 = ExperimentConfiguration(mcp_servers=None, custom_instructions=False, custom_agent=None)
+        assert _experiments_equal(empty1, empty2) is True
+
+    def test_non_empty_config_not_equal_to_none(self):
+        config = ExperimentConfiguration(mcp_servers=["pylance"])
+        assert _experiments_equal(None, config) is False
+        assert _experiments_equal(config, None) is False
+
+    def test_non_empty_config_not_equal_to_empty(self):
+        config = ExperimentConfiguration(custom_instructions=True)
+        empty = ExperimentConfiguration()
+        assert _experiments_equal(config, empty) is False
+        assert _experiments_equal(empty, config) is False
+
+    def test_same_non_empty_configs_are_equal(self):
+        config1 = ExperimentConfiguration(mcp_servers=["pylance"], custom_instructions=True)
+        config2 = ExperimentConfiguration(mcp_servers=["pylance"], custom_instructions=True)
+        assert _experiments_equal(config1, config2) is True
+
+    def test_different_non_empty_configs_are_not_equal(self):
+        config1 = ExperimentConfiguration(mcp_servers=["pylance"])
+        config2 = ExperimentConfiguration(mcp_servers=["filesystem"])
+        assert _experiments_equal(config1, config2) is False
+
+    def test_config_with_custom_agent_not_equal_to_none(self):
+        config = ExperimentConfiguration(custom_agent="my-agent")
+        assert _experiments_equal(None, config) is False
+        assert _experiments_equal(config, None) is False

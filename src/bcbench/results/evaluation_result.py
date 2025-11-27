@@ -42,7 +42,7 @@ class EvaluationResultSummary(BaseModel):
 
         # Extract experiment configuration from first result (all should be same in a run)
         first_result = results[0]
-        experiment = first_result.experiment
+        experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
 
         return cls(
             total=total,
