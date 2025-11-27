@@ -9,8 +9,23 @@ from bcbench.cli_options import DatasetPath, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, EvaluationResultSummary, create_console_summary, create_github_job_summary, create_result_from_json, write_bceval_results
+from bcbench.types import ExperimentConfiguration
 
 logger = get_logger(__name__)
+
+
+def _experiments_equal(exp1: ExperimentConfiguration | None, exp2: ExperimentConfiguration | None) -> bool:
+    """Compare two experiment configurations, treating None as equivalent to an empty config.
+
+    This handles the case where JSON has "experiment": null but the pipeline creates
+    an ExperimentConfiguration with all default values.
+    """
+    # Normalize None to empty config for comparison
+    exp1_normalized = exp1 if exp1 is not None and not exp1.is_empty() else None
+    exp2_normalized = exp2 if exp2 is not None and not exp2.is_empty() else None
+    return exp1_normalized == exp2_normalized
+
+
 _config = get_config()
 
 result_app = typer.Typer(help="Process and display evaluation results")
@@ -109,7 +124,7 @@ def result_update(
     # Check if result already exists for this agent+model+experiment combination
     updated = False
     for i, result in enumerate(existing_results):
-        if result.agent_name == new_result.agent_name and result.model == new_result.model and result.experiment == new_result.experiment:
+        if result.agent_name == new_result.agent_name and result.model == new_result.model and _experiments_equal(result.experiment, new_result.experiment):
             logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
             existing_results[i] = new_result
             updated = True
