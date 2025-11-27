@@ -59,6 +59,24 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
+      - name: Upload result with bceval to Braintrust
+        env:
+          BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
+          USERNAME: ${{ secrets.USERNAME }}
+        run: |
+          # Install bc-eval from ADO feed using Python 3.11 (bc-eval's private feed only has cp311 wheels)
+          uv tool install bc-eval==0.1.3 --python 3.11 --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
+
+          # Upload summary to Braintrust using bc-eval
+          bcevalResultsFile="${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}"
+          evalRunName="${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}"
+          tags="${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}"
+          uploadFlag="${{ !inputs.mock && '--upload-results' || '' }}"
+
+          bceval metrics calculate --input-file "$bcevalResultsFile" --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "$evalRunName" --tags "$tags" $uploadFlag
+
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock }}
         run: |
@@ -77,21 +95,3 @@ jobs:
           git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
 
           git push --set-upstream origin $branchName
-
-      - name: Upload result with bceval to Braintrust
-        env:
-          BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
-          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-          ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
-          USERNAME: ${{ secrets.USERNAME }}
-        run: |
-          # Install bc-eval from ADO feed using Python 3.11 (bc-eval's private feed only has cp311 wheels)
-          uv tool install bc-eval==0.1.3 --python 3.11 --index "https://${{ env.USERNAME }}:${{ env.ADO_TOKEN }}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
-
-          # Upload summary to Braintrust using bc-eval
-          bcevalResultsFile="${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}"
-          evalRunName="${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}"
-          tags="${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}"
-          uploadFlag="${{ !inputs.mock && '--upload-results' || '' }}"
-
-          bceval metrics calculate --input-file "$bcevalResultsFile" --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "$evalRunName" --tags "$tags" $uploadFlag
