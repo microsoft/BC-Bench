@@ -15,6 +15,7 @@ from bcbench.exceptions import CollectionError, NoTestsExtractedError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
+_config = get_config()
 
 # Default BC environment setup version for GitHub-sourced entries
 DEFAULT_ENVIRONMENT_VERSION = "26.0"
@@ -172,8 +173,6 @@ def _extract_tests_from_patch_with_gh(generated_patch: str, gh_client: GHClient,
 
 
 def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps") -> None:
-    """Collect a dataset entry from a GitHub pull request."""
-    config = get_config()
     gh_client = GHClient(repo)
 
     try:
@@ -181,19 +180,15 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps
 
         pr_data: dict[str, Any] = gh_client.get_pr_info(pr_number)
 
-        # Get the diff for the PR
         diff = gh_client.get_pr_diff(pr_number)
 
-        # Extract patches
-        test_identifiers = config.file_patterns.test_project_identifiers
-        patch, patch_fix, patch_test = _extract_patches_from_diff(diff, test_identifiers)
+        patch, patch_fix, patch_test = _extract_patches_from_diff(diff, _config.file_patterns.test_project_identifiers)
 
         # Extract problem statement from PR
         title = pr_data.get("title", "")
         body = pr_data.get("body", "") or ""
         problem_statement = f"# {title}\n\n{body}" if body else f"# {title}"
 
-        # Get commit info
         merge_commit = pr_data.get("mergeCommit", {})
         commit_id = merge_commit.get("oid", "") if merge_commit else pr_data.get("headRefOid", "")
 
@@ -202,33 +197,19 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps
         if not commit_id or not base_commit:
             raise CollectionError("Unable to determine commit IDs from PR data")
 
-        # Extract creation date
-        created_at = pr_data.get("createdAt", "")
-
-        # Find project paths from diff
         project_paths = _find_project_paths_from_diff(patch)
 
-        # Extract tests from the test patch using GitHub API
         fail_to_pass = _extract_tests_from_patch_with_gh(patch_test, gh_client, commit_id)
 
-        # Generate instance ID
-        repo_name = repo.replace("/", "__")
-        instance_id = f"{repo_name}-{pr_number}"
+        instance_id = f"{repo.replace('/', '__')}-{pr_number}"
 
-        # Save problem statement
-        _save_problem_statement(
-            problem_statement_dir=config.paths.problem_statement_dir,
-            instance_id=instance_id,
-            problem_statement=problem_statement,
-            hints="",
-            filename=config.file_patterns.problem_statement_readme,
-        )
+        _save_problem_statement(instance_id=instance_id, problem_statement=problem_statement)
 
         entry = DatasetEntry(
             repo=repo,
             instance_id=instance_id,
             base_commit=base_commit,
-            created_at=created_at,
+            created_at=pr_data.get("createdAt", ""),
             patch=patch_fix,
             environment_setup_version=DEFAULT_ENVIRONMENT_VERSION,
             test_patch=patch_test,
@@ -251,11 +232,11 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps
 
 def _save_problem_statement(
     *,
-    problem_statement_dir: Path,
+    problem_statement_dir: Path = _config.paths.problem_statement_dir,
     instance_id: str,
     problem_statement: str,
-    hints: str,
-    filename: str,
+    hints: str = "",
+    filename: str = _config.file_patterns.problem_statement_readme,
 ) -> None:
     """Save the problem statement to a file."""
     output_dir = problem_statement_dir / instance_id

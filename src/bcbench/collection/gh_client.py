@@ -1,5 +1,3 @@
-"""GitHub CLI client for fetching PR and commit data."""
-
 import json
 import subprocess
 from typing import Any
@@ -11,7 +9,6 @@ class GHClient:
         self.repo = repo
 
     def get_pr_info(self, pr_number: int) -> dict[str, Any]:
-        """Get pull request information using gh CLI."""
         result = subprocess.run(
             [
                 "gh",
@@ -30,7 +27,6 @@ class GHClient:
         return json.loads(result.stdout)
 
     def get_commit_info(self, commit: str) -> dict[str, Any]:
-        """Get commit information using gh CLI."""
         result = subprocess.run(
             [
                 "gh",
@@ -44,7 +40,6 @@ class GHClient:
         return json.loads(result.stdout)
 
     def get_pr_diff(self, pr_number: int) -> str:
-        """Get the diff for a pull request using gh CLI."""
         result = subprocess.run(
             [
                 "gh",
@@ -61,7 +56,6 @@ class GHClient:
         return result.stdout
 
     def get_file_content(self, file_path: str, ref: str) -> str:
-        """Get file content from GitHub at a specific ref using gh CLI."""
         # URL-encode the file path to handle spaces and special characters
         encoded_path = quote(file_path, safe="/")
         result = subprocess.run(
