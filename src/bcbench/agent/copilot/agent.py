@@ -33,7 +33,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category)
-    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, repo_path)
+    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
     config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent)

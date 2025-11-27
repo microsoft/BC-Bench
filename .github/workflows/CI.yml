@@ -90,11 +90,3 @@ jobs:
       mock: true
       category: "delete"
     secrets: inherit
-
-  test-dotnet:
-    runs-on: windows-latest
-    steps:
-      - name: Try donet with version
-        run: |
-          dotnet --version
-          dotnet tool --help
