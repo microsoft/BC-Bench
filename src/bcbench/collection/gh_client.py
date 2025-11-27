@@ -3,6 +3,7 @@
 import json
 import subprocess
 from typing import Any
+from urllib.parse import quote
 
 
 class GHClient:
@@ -61,15 +62,15 @@ class GHClient:
 
     def get_file_content(self, file_path: str, ref: str) -> str:
         """Get file content from GitHub at a specific ref using gh CLI."""
+        # URL-encode the file path to handle spaces and special characters
+        encoded_path = quote(file_path, safe="/")
         result = subprocess.run(
             [
                 "gh",
                 "api",
-                f"/repos/{self.repo}/contents/{file_path}",
+                f"/repos/{self.repo}/contents/{encoded_path}?ref={ref}",
                 "-H",
                 "Accept: application/vnd.github.raw+json",
-                "-f",
-                f"ref={ref}",
             ],
             capture_output=True,
             text=True,

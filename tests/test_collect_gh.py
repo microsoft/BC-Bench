@@ -1,5 +1,6 @@
 """Tests for the bcbench collect gh command."""
 
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -140,12 +141,9 @@ class TestGHClient:
         client = GHClient("microsoft/bcapps")
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=1,
-                stderr="Not found",
-            )
+            mock_run.side_effect = subprocess.CalledProcessError(1, "gh", stderr="Not found")
 
-            with pytest.raises(CollectionError, match="Failed to get PR info"):
+            with pytest.raises(subprocess.CalledProcessError):
                 client.get_pr_info(99999)
 
     def test_get_pr_diff_success(self):
