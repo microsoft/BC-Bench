@@ -88,5 +88,5 @@ jobs:
       model: ${{ github.run_id }}
       agent: "mock-agent"
       mock: true
-      category: "delete"
+      category: "bug-fix"
     secrets: inherit
