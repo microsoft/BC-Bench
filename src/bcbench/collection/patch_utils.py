@@ -13,6 +13,33 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
+def separate_patches(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
+    """Separate a diff into full, fix, and test patches.
+
+    Args:
+        diff: The full diff string
+        test_identifiers: Tuple of identifiers to detect test files (e.g., "test", "tests")
+
+    Returns:
+        tuple: (full_patch, fix_patch, test_patch)
+
+    Raises:
+        CollectionError: If the diff is empty
+    """
+    if not diff:
+        raise CollectionError("No diff data found")
+
+    patch_test: str = ""
+    patch_fix: str = ""
+    for hunk in PatchSet(diff):
+        if any(identifier in hunk.path.lower() for identifier in test_identifiers):
+            patch_test += str(hunk)
+        else:
+            patch_fix += str(hunk)
+
+    return diff, patch_fix, patch_test
+
+
 def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_path: str = "") -> tuple[str, str, str]:
     """Extract patches between two commits, separating test and fix patches.
 
@@ -39,16 +66,7 @@ def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_p
     if not patch:
         raise CollectionError("No patch data found between the specified commits")
 
-    patch_test: str = ""
-    patch_fix: str = ""
-    test_identifiers = _config.file_patterns.test_project_identifiers
-    for hunk in PatchSet(patch):
-        if any(identifier in hunk.path.lower() for identifier in test_identifiers):
-            patch_test += str(hunk)
-        else:
-            patch_fix += str(hunk)
-
-    return patch, patch_fix, patch_test
+    return separate_patches(patch, _config.file_patterns.test_project_identifiers)
 
 
 def find_project_paths_from_patch(repo_path: Path, patch: str) -> list[str]:

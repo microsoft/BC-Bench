@@ -8,37 +8,20 @@ import typer
 from unidiff import PatchSet
 from unidiff.errors import UnidiffParseError
 
+from bcbench.collection.build_entry import save_problem_statement
 from bcbench.collection.gh_client import GHClient
+from bcbench.collection.patch_utils import separate_patches
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, TestEntry
 from bcbench.exceptions import CollectionError, NoTestsExtractedError
 from bcbench.logger import get_logger
+from bcbench.operations.test_operations import extract_codeunit_id_from_content
 
 logger = get_logger(__name__)
 _config = get_config()
 
 # Default BC environment setup version for GitHub-sourced entries
 DEFAULT_ENVIRONMENT_VERSION = "26.0"
-
-
-def _extract_patches_from_diff(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
-    """Extract patches from diff, separating test and fix patches.
-
-    Returns:
-        tuple: (full_patch, fix_patch, test_patch)
-    """
-    if not diff:
-        raise CollectionError("No diff data found for the PR")
-
-    patch_test: str = ""
-    patch_fix: str = ""
-    for hunk in PatchSet(diff):
-        if any(identifier in hunk.path.lower() for identifier in test_identifiers):
-            patch_test += str(hunk)
-        else:
-            patch_fix += str(hunk)
-
-    return diff, patch_fix, patch_test
 
 
 def _find_project_paths_from_diff(diff: str) -> list[str]:
@@ -81,24 +64,7 @@ def _find_project_paths_from_diff(diff: str) -> list[str]:
     return sorted(project_paths)
 
 
-def _extract_codeunit_id_from_content(content: str, file_path: str) -> int:
-    """Extract codeunit ID from AL file content.
-
-    Args:
-        content: The content of the AL file
-        file_path: File path for error reporting
-
-    Returns:
-        Codeunit ID (always returns int, raises exception if not found)
-    """
-    codeunit_pattern = r'codeunit\s+(\d+)\s+"[^"]*"'
-    match = re.search(codeunit_pattern, content)
-    if match:
-        return int(match.group(1))
-    raise ValueError(f"No codeunit ID found in {file_path}")
-
-
-def _extract_tests_from_patch_with_gh(generated_patch: str, gh_client: GHClient, ref: str) -> list[TestEntry]:
+def _extract_tests_from_patch(generated_patch: str, gh_client: GHClient, ref: str) -> list[TestEntry]:
     """Extract test entries from an AL code patch using GitHub API to fetch file contents.
 
     Args:
@@ -107,13 +73,12 @@ def _extract_tests_from_patch_with_gh(generated_patch: str, gh_client: GHClient,
         ref: The git ref to fetch file contents from
 
     Returns:
-        List of TestEntry dicts with codeunitID and functionName
+        List of TestEntry with codeunitID and functionName
 
     Raises:
         NoTestsExtractedError: If no test entries are found in the patch
     """
     test_entries: list[TestEntry] = []
-    current_file_path: str | None = None
     current_codeunit_id: int | None = None
 
     # Pattern to match test procedure declarations that are ADDED (have + marker)
@@ -134,8 +99,8 @@ def _extract_tests_from_patch_with_gh(generated_patch: str, gh_client: GHClient,
             current_file_path = file_header_match.group(2)
             if current_file_path:
                 try:
-                    file_content = gh_client.get_file_content(current_file_path, ref)
-                    current_codeunit_id = _extract_codeunit_id_from_content(file_content, current_file_path)
+                    content = gh_client.get_file_content(current_file_path, ref)
+                    current_codeunit_id = extract_codeunit_id_from_content(content, current_file_path)
                 except Exception as e:
                     logger.warning("Failed to get codeunit ID for %s: %s", current_file_path, e)
                     current_codeunit_id = None
@@ -182,7 +147,7 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps
 
         diff = gh_client.get_pr_diff(pr_number)
 
-        patch, patch_fix, patch_test = _extract_patches_from_diff(diff, _config.file_patterns.test_project_identifiers)
+        patch, patch_fix, patch_test = separate_patches(diff, _config.file_patterns.test_project_identifiers)
 
         # Extract problem statement from PR
         title = pr_data.get("title", "")
@@ -199,11 +164,11 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps
 
         project_paths = _find_project_paths_from_diff(patch)
 
-        fail_to_pass = _extract_tests_from_patch_with_gh(patch_test, gh_client, commit_id)
+        fail_to_pass = _extract_tests_from_patch(patch_test, gh_client, commit_id)
 
         instance_id = f"{repo.replace('/', '__')}-{pr_number}"
 
-        _save_problem_statement(instance_id=instance_id, problem_statement=problem_statement)
+        save_problem_statement(instance_id=instance_id, problem_statement=problem_statement)
 
         entry = DatasetEntry(
             repo=repo,
@@ -228,23 +193,3 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps
         raise typer.Exit(code=1) from exc
 
     logger.info(f"Saved dataset entry {entry.instance_id} to {output}")
-
-
-def _save_problem_statement(
-    *,
-    problem_statement_dir: Path = _config.paths.problem_statement_dir,
-    instance_id: str,
-    problem_statement: str,
-    hints: str = "",
-    filename: str = _config.file_patterns.problem_statement_readme,
-) -> None:
-    """Save the problem statement to a file."""
-    output_dir = problem_statement_dir / instance_id
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    content = problem_statement
-    if hints:
-        content += f"\n\n## Hints\n\n{hints}"
-
-    readme_path = output_dir / filename
-    readme_path.write_text(content, encoding="utf-8")
