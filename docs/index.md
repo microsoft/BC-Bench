@@ -20,7 +20,7 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
   <tbody>
     {% assign sorted_results = site.data.bug-fix | sort: "resolved" | reverse %}
     {% for result in sorted_results %}
-      {% if result.experiment.mcp_servers == null and result.experiment.custom_instructions == false and result.experiment.custom_agent == null %}
+      {% if result.experiment == null %}
     <tr>
       <td>{{ result.agent_name }}</td>
       <td>{{ result.model }}</td>

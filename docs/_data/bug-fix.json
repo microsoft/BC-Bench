@@ -12,11 +12,7 @@
     "average_prompt_tokens": 1959740.0,
     "average_completion_tokens": 6056.0,
     "github_run_id": "19614090363",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 22,
@@ -31,11 +27,7 @@
     "average_prompt_tokens": 918931.8,
     "average_completion_tokens": 6240.9,
     "github_run_id": "19369038959",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 22,
@@ -50,11 +42,7 @@
     "average_prompt_tokens": 2191345.4,
     "average_completion_tokens": 8677.3,
     "github_run_id": "19342348130",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 19,
@@ -69,11 +57,7 @@
     "average_prompt_tokens": 352378.9,
     "average_completion_tokens": 7142.1,
     "github_run_id": "19227643144",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 22,
@@ -88,11 +72,7 @@
     "average_prompt_tokens": 478451.0,
     "average_completion_tokens": 3884.3,
     "github_run_id": "19391198996",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 22,
@@ -128,11 +108,7 @@
     "average_prompt_tokens": 830300.0,
     "average_completion_tokens": 8707.7,
     "github_run_id": "19378708759",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 22,
@@ -147,11 +123,7 @@
     "average_prompt_tokens": 931820.0,
     "average_completion_tokens": 8615.0,
     "github_run_id": "19385408839",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 22,
@@ -187,11 +159,7 @@
     "average_prompt_tokens": 1109352.6,
     "average_completion_tokens": 2323.5,
     "github_run_id": "19388071339",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   },
   {
     "total": 22,

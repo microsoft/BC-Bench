@@ -4,7 +4,7 @@ import pytest
 
 from bcbench.results.base import create_result_from_json
 from bcbench.results.evaluation_result import EvaluationResultSummary
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_testgen_result
 
 
@@ -155,3 +155,27 @@ class TestCategorySerialization:
 
         assert "pre_patch_failed" in data
         assert data["pre_patch_failed"] is True
+
+    def test_no_experiment_saves_as_none(self, tmp_path, sample_result_bug_fix):
+        output_file = tmp_path / "result.jsonl"
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        with open(output_file) as f:
+            data = json.loads(f.readline())
+
+        assert data["experiment"] is None
+
+    def test_some_experiment_saves_as_dict(self, tmp_path, sample_result_bug_fix):
+        sample_result_bug_fix.experiment = ExperimentConfiguration(custom_agent="custom-agent", custom_instructions=True)
+
+        output_file = tmp_path / "result.jsonl"
+        sample_result_bug_fix.save(tmp_path, "result.jsonl")
+
+        with open(output_file) as f:
+            data = json.loads(f.readline())
+
+        assert data["experiment"] is not None
+        assert isinstance(data["experiment"], dict)
+        assert data["experiment"]["custom_agent"] == "custom-agent"
+        assert data["experiment"]["custom_instructions"] is True
+        assert data["experiment"]["mcp_servers"] is None
