@@ -193,10 +193,6 @@
     "average_prompt_tokens": 1009642.9,
     "average_completion_tokens": 4452.8,
     "github_run_id": "19730168417",
-    "experiment": {
-      "mcp_servers": null,
-      "custom_instructions": false,
-      "custom_agent": null
-    }
+    "experiment": null
   }
 ]
