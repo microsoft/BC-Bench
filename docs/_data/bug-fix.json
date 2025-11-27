@@ -30,18 +30,18 @@
     "experiment": null
   },
   {
-    "total": 22,
-    "resolved": 13,
+    "total": 28,
+    "resolved": 19,
     "failed": 9,
-    "build": 19,
-    "date": "2025-11-13",
+    "build": 24,
+    "date": "2025-11-27",
     "model": "claude-haiku-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 154.9,
-    "average_prompt_tokens": 2191345.4,
-    "average_completion_tokens": 8677.3,
-    "github_run_id": "19342348130",
+    "average_duration": 162.5,
+    "average_prompt_tokens": 2093992.9,
+    "average_completion_tokens": 9525.0,
+    "github_run_id": "19740511358",
     "experiment": null
   },
   {
