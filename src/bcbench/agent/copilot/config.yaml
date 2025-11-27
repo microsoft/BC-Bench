@@ -47,8 +47,8 @@ mcp:
   servers:
     - name: "altool"
       type: "local"
-      command: "al"
-      args: ["launchMcpServer", "--projects", "{{project_path}}"]
+      command: "al LaunchMcpServer"
+      args: ["--projects", "{{project_path}}", "--port", "54321"]
       tools: ["*"]
 #   servers:
 #     - name: "mslearn"
