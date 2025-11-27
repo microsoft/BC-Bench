@@ -4,10 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from bcbench.collection.ado_utils import extract_creation_date, extract_problem_statement
-from bcbench.collection.patch_utils import extract_patches, find_project_paths_from_patch
+from bcbench.collection.patch_utils import extract_file_paths_from_patch, extract_patches, find_project_paths_from_diff
 from bcbench.collection.version_resolver import determine_environment_setup_version
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
+from bcbench.operations.git_operations import checkout_commit
 from bcbench.operations.test_operations import extract_tests_from_patch
 
 _config = get_config()
@@ -55,7 +56,14 @@ def build_dataset_entry_from_ado(
     patch, patch_fix, patch_test = extract_patches(repo_path, base_commit, commit, diff_path=diff_path)
     problem_statement, hints = extract_problem_statement(work_item_data)
     version = determine_environment_setup_version(commit)
-    fail_to_pass = extract_tests_from_patch(patch_test, repo_path)
+    checkout_commit(repo_path, commit)
+
+    file_contents: dict[str, str] = {}
+    for file_path in extract_file_paths_from_patch(patch_test):
+        full_path = repo_path / file_path
+        file_contents[file_path] = full_path.read_text(encoding="utf-8")
+
+    fail_to_pass = extract_tests_from_patch(patch_test, file_contents)
 
     instance_id: str = f"microsoftInternal__NAV-{pr_number}"
 
@@ -73,5 +81,5 @@ def build_dataset_entry_from_ado(
         environment_setup_version=version,
         test_patch=patch_test,
         fail_to_pass=fail_to_pass,
-        project_paths=find_project_paths_from_patch(repo_path, patch),
+        project_paths=find_project_paths_from_diff(patch),
     )

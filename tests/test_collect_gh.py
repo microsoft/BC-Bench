@@ -5,13 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bcbench.collection.collect_gh import (
-    _extract_codeunit_id_from_content,
-    _extract_patches_from_diff,
-    _find_project_paths_from_diff,
-)
 from bcbench.collection.gh_client import GHClient
+from bcbench.collection.patch_utils import find_project_paths_from_diff, separate_patches
 from bcbench.exceptions import CollectionError
+from bcbench.operations.test_operations import extract_codeunit_id_from_content
 
 
 class TestExtractCodeunitIdFromContent:
@@ -23,21 +20,21 @@ class TestExtractCodeunitIdFromContent:
     begin
     end;
 }"""
-        result = _extract_codeunit_id_from_content(content, "test.al")
+        result = extract_codeunit_id_from_content(content, "test.al")
         assert result == 12345
 
     def test_extracts_codeunit_id_with_spaces(self):
         content = 'codeunit  139500  "My Test Codeunit"'
-        result = _extract_codeunit_id_from_content(content, "test.al")
+        result = extract_codeunit_id_from_content(content, "test.al")
         assert result == 139500
 
     def test_raises_value_error_when_no_codeunit_found(self):
         content = "procedure TestFunction() begin end;"
         with pytest.raises(ValueError, match="No codeunit ID found"):
-            _extract_codeunit_id_from_content(content, "test.al")
+            extract_codeunit_id_from_content(content, "test.al")
 
 
-class TestExtractPatchesFromDiff:
+class TestSeparatePatches:
     def test_separates_test_and_fix_patches(self):
         diff = """diff --git a/src/app/Code.al b/src/app/Code.al
 --- a/src/app/Code.al
@@ -57,7 +54,7 @@ diff --git a/src/test/Test.al b/src/test/Test.al
  end;
 """
         test_identifiers = ("test",)
-        full, fix, test = _extract_patches_from_diff(diff, test_identifiers)
+        full, fix, test = separate_patches(diff, test_identifiers)
 
         assert "Fix code" in fix
         assert "Test code" in test
@@ -66,7 +63,7 @@ diff --git a/src/test/Test.al b/src/test/Test.al
 
     def test_raises_collection_error_on_empty_diff(self):
         with pytest.raises(CollectionError, match="No diff data found"):
-            _extract_patches_from_diff("", ("test",))
+            separate_patches("", ("test",))
 
     def test_handles_diff_with_no_test_files(self):
         diff = """diff --git a/src/app/Code.al b/src/app/Code.al
@@ -78,7 +75,7 @@ diff --git a/src/test/Test.al b/src/test/Test.al
  begin
  end;
 """
-        _full, fix, test = _extract_patches_from_diff(diff, ("test",))
+        _full, fix, test = separate_patches(diff, ("test",))
         assert "Fix code" in fix
         assert test == ""
 
@@ -94,7 +91,7 @@ class TestFindProjectPathsFromDiff:
  begin
  end;
 """
-        paths = _find_project_paths_from_diff(diff)
+        paths = find_project_paths_from_diff(diff)
         assert len(paths) == 1
         assert "App/Apps/W1/Sustainability/app" in paths
 
@@ -108,13 +105,13 @@ class TestFindProjectPathsFromDiff:
  begin
  end;
 """
-        paths = _find_project_paths_from_diff(diff)
+        paths = find_project_paths_from_diff(diff)
         assert len(paths) == 1
         assert "App/Apps/W1/Sustainability/test" in paths
 
     def test_raises_collection_error_on_empty_diff(self):
-        with pytest.raises(CollectionError, match="Diff data is empty"):
-            _find_project_paths_from_diff("")
+        with pytest.raises(CollectionError, match="Patch data is empty or None"):
+            find_project_paths_from_diff("")
 
 
 class TestGHClient:

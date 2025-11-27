@@ -69,8 +69,24 @@ def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_p
     return separate_patches(patch, _config.file_patterns.test_project_identifiers)
 
 
-def find_project_paths_from_patch(repo_path: Path, patch: str) -> list[str]:
-    """Find project paths (directories containing app.json) from a patch."""
+def find_project_paths_from_diff(patch: str) -> list[str]:
+    """Find project paths from a diff based on file path patterns.
+
+    Infers project paths from the diff paths without needing local filesystem access.
+    BC projects typically have paths like:
+    - App/Apps/W1/<ProjectName>/app/
+    - App/Apps/W1/<ProjectName>/test/
+    - App/Layers/W1/<ProjectName>/
+
+    Args:
+        patch: The diff/patch string to analyze
+
+    Returns:
+        Sorted list of project paths
+
+    Raises:
+        CollectionError: If the patch is empty or cannot be parsed
+    """
     if not patch or not str(patch).strip():
         raise CollectionError("Patch data is empty or None")
 
@@ -85,24 +101,38 @@ def find_project_paths_from_patch(repo_path: Path, patch: str) -> list[str]:
         if not patched_file.path:
             continue
 
-        current_dir = (repo_path / patched_file.path).parent
+        # Extract the directory containing the file
+        path_parts = patched_file.path.replace("\\", "/").split("/")
 
-        while True:
-            try:
-                relative_dir = current_dir.relative_to(repo_path)
-            except ValueError:
+        # Look for 'app' or 'test' directory to find the project root
+        # Skip the first component since paths often start with 'App' (capital A)
+        for i in range(1, len(path_parts)):
+            part = path_parts[i]
+            if part.lower() in ("app", "test"):
+                # Take path up to and including this directory
+                project_path = "/".join(path_parts[: i + 1])
+                if project_path:
+                    project_paths.add(project_path)
                 break
-
-            app_json_path = current_dir / "app.json"
-            if app_json_path.is_file():
-                normalized = str(relative_dir).strip().lstrip("/\\")
-                if normalized:
-                    project_paths.add(normalized)
-                break
-
-            if current_dir == repo_path:
-                break
-
-            current_dir = current_dir.parent
 
     return sorted(project_paths)
+
+
+def extract_file_paths_from_patch(patch: str) -> list[str]:
+    """Extract file paths from a patch.
+
+    Args:
+        patch: The diff/patch string to analyze
+
+    Returns:
+        List of file paths referenced in the patch
+    """
+    if not patch:
+        return []
+
+    try:
+        patch_set = PatchSet(str(patch))
+    except Exception:
+        return []
+
+    return [patched_file.path for patched_file in patch_set if patched_file.path]

@@ -1,5 +1,4 @@
 import re
-from pathlib import Path
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import NoTestsExtractedError
@@ -25,23 +24,20 @@ def extract_codeunit_id_from_content(content: str, file_path: str) -> int:
     raise ValueError(f"No codeunit ID found in {file_path}")
 
 
-def extract_tests_from_patch(generated_patch: str, repo_path: Path) -> list[TestEntry]:
+def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]) -> list[TestEntry]:
     """Extract test entries from an AL code patch by finding NEW test procedures.
 
     Args:
         generated_patch: A git diff patch containing AL code with test procedures
-        repo_path: Path to the repository root to read file contents if needed
+        file_contents: Dict mapping file paths to their content
 
     Returns:
         List of TestEntry dicts with codeunitID and functionName
 
     Raises:
         NoTestsExtractedError: If no test entries are found in the patch
-        FileNotFoundError: If a file referenced in the patch doesn't exist
-        ValueError: If a file doesn't contain a codeunit ID
     """
     test_entries: list[TestEntry] = []
-    current_file_path: str | None = None
     current_codeunit_id: int | None = None
 
     # Pattern to match test procedure declarations that are ADDED (have + marker)
@@ -60,12 +56,10 @@ def extract_tests_from_patch(generated_patch: str, repo_path: Path) -> list[Test
         file_header_match = re.match(file_header_pattern, line)
         if file_header_match:
             current_file_path = file_header_match.group(2)
-            if current_file_path:
-                full_path = repo_path / current_file_path
-                if not full_path.exists():
-                    raise FileNotFoundError(f"File not found: {current_file_path}")
-                content = full_path.read_text(encoding="utf-8")
+            if current_file_path and current_file_path in file_contents:
+                content = file_contents[current_file_path]
                 current_codeunit_id = extract_codeunit_id_from_content(content, current_file_path)
+
             continue
 
         if re.match(test_attribute_pattern, line):
