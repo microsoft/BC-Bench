@@ -60,7 +60,6 @@ jobs:
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
       - name: Update leaderboard in a new branch
-        if: ${{ !inputs.mock }}
         run: |
           git fetch origin main
 
