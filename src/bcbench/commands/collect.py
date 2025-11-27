@@ -33,14 +33,14 @@ def collect_nav(
 def collect_gh(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
     output: DatasetPath = _config.paths.dataset_path,
-    repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/bcapps",
+    repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
 ):
     """
     Collect dataset entry from public GitHub repositories.
 
     Example usage:
 
-    # Collect from default repo (microsoft/bcapps)
+    # Collect from default repo (microsoft/BCApps)
     bcbench collect gh 12345
 
     # Collect from custom repo

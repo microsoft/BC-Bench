@@ -21,7 +21,7 @@ _config = get_config()
 DEFAULT_ENVIRONMENT_VERSION = "26.0"
 
 
-def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/bcapps") -> None:
+def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/BCApps") -> None:
     gh_client = GHClient(repo)
 
     try:
