@@ -38,7 +38,7 @@ class PathConfig:
     dataset_path: Path
     dataset_dir: Path
     problem_statement_dir: Path
-    nav_repo_path: Path
+    testbed_path: Path
     ps_script_path: Path
     evaluation_results_path: Path
     leaderboard_dir: Path
@@ -52,7 +52,7 @@ class PathConfig:
             dataset_dir=root / "dataset",
             dataset_path=root / "dataset" / "bcbench.jsonl",
             problem_statement_dir=root / "dataset" / "problemstatement",
-            nav_repo_path=root.parent / "NAV",
+            testbed_path=root.parent / "NAV",
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
             leaderboard_dir=root / "docs" / "_data",

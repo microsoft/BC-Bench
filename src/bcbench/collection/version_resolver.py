@@ -16,7 +16,7 @@ def determine_environment_setup_version(commit: str) -> str:
     try:
         result = subprocess.run(
             ["git", "show", "master:Directory.App.Props.json"],
-            cwd=config.paths.nav_repo_path,
+            cwd=config.paths.testbed_path,
             capture_output=True,
             text=True,
             check=True,
@@ -43,7 +43,7 @@ def determine_environment_setup_version(commit: str) -> str:
                         "--verify",
                         f"refs/remotes/origin/{branch_name}",
                     ],
-                    cwd=config.paths.nav_repo_path,
+                    cwd=config.paths.testbed_path,
                     capture_output=True,
                     check=True,
                 )
@@ -60,7 +60,7 @@ def determine_environment_setup_version(commit: str) -> str:
                         commit,
                         f"origin/{branch_name}",
                     ],
-                    cwd=config.paths.nav_repo_path,
+                    cwd=config.paths.testbed_path,
                     capture_output=True,
                     check=True,
                 )

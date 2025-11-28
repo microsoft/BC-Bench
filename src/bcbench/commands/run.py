@@ -39,7 +39,7 @@ def run_mini(
     category: EvaluationCategoryOption,
     model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
     dataset_path: DatasetPath = _config.paths.dataset_path,
-    repo_path: RepoPath = _config.paths.nav_repo_path,
+    repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
 ):
     """
@@ -74,7 +74,7 @@ def run_copilot(
     category: EvaluationCategoryOption,
     model: CopilotModel = "claude-haiku-4.5",
     dataset_path: DatasetPath = _config.paths.dataset_path,
-    repo_path: RepoPath = _config.paths.nav_repo_path,
+    repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
 ):
     """
