@@ -13,6 +13,33 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
+def separate_patches(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
+    """Separate a diff into full, fix, and test patches.
+
+    Args:
+        diff: The full diff string
+        test_identifiers: Tuple of identifiers to detect test files (e.g., "test", "tests")
+
+    Returns:
+        tuple: (full_patch, fix_patch, test_patch)
+
+    Raises:
+        CollectionError: If the diff is empty
+    """
+    if not diff:
+        raise CollectionError("No diff data found")
+
+    patch_test: str = ""
+    patch_fix: str = ""
+    for hunk in PatchSet(diff):
+        if any(identifier in hunk.path.lower() for identifier in test_identifiers):
+            patch_test += str(hunk)
+        else:
+            patch_fix += str(hunk)
+
+    return diff, patch_fix, patch_test
+
+
 def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_path: str = "") -> tuple[str, str, str]:
     """Extract patches between two commits, separating test and fix patches.
 
@@ -39,22 +66,32 @@ def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_p
     if not patch:
         raise CollectionError("No patch data found between the specified commits")
 
-    patch_test: str = ""
-    patch_fix: str = ""
-    test_identifiers = _config.file_patterns.test_project_identifiers
-    for hunk in PatchSet(patch):
-        if any(identifier in hunk.path.lower() for identifier in test_identifiers):
-            patch_test += str(hunk)
-        else:
-            patch_fix += str(hunk)
-
-    return patch, patch_fix, patch_test
+    return separate_patches(patch, _config.file_patterns.test_project_identifiers)
 
 
-def find_project_paths_from_patch(repo_path: Path, patch: str) -> list[str]:
-    """Find project paths (directories containing app.json) from a patch."""
+def find_project_paths_from_diff(patch: str) -> list[str]:
+    """Find project paths from a diff based on file path patterns.
+
+    Infers project paths from the diff paths without needing local filesystem access.
+    BC projects typically have paths like:
+    - App/Apps/W1/<ProjectName>/app/
+    - App/Apps/W1/<ProjectName>/test/
+    - App/Layers/W1/<ProjectName>/ (e.g., App/Layers/W1/BaseApp)
+    - App/Layers/W1/Tests/<TestCategory>/ (e.g., App/Layers/W1/Tests/ERM)
+
+    Args:
+        patch: The diff/patch string to analyze
+
+    Returns:
+        Sorted list of project paths
+
+    Raises:
+        CollectionError: If the patch is empty or cannot be parsed
+    """
     if not patch or not str(patch).strip():
         raise CollectionError("Patch data is empty or None")
+
+    logger.debug(f"Patch data: {patch}")
 
     try:
         patch_set = PatchSet(str(patch))
@@ -67,24 +104,52 @@ def find_project_paths_from_patch(repo_path: Path, patch: str) -> list[str]:
         if not patched_file.path:
             continue
 
-        current_dir = (repo_path / patched_file.path).parent
+        # Extract the directory containing the file
+        path_parts = patched_file.path.replace("\\", "/").split("/")
 
-        while True:
-            try:
-                relative_dir = current_dir.relative_to(repo_path)
-            except ValueError:
+        # Handle Layers structure: App/Layers/W1/<ProjectName or Tests>/<...>
+        # For Layers, the project path is App/Layers/W1/<ProjectName> or App/Layers/W1/Tests/<TestCategory>
+        if len(path_parts) >= 4 and path_parts[1].lower() == "layers":
+            # Check if it's a test project: App/Layers/W1/Tests/<TestCategory>/...
+            if len(path_parts) >= 5 and path_parts[3].lower() == "tests":
+                # Test project: App/Layers/W1/Tests/<TestCategory>
+                project_path = "\\".join(path_parts[:5])
+                project_paths.add(project_path)
+            else:
+                # App project: App/Layers/W1/<ProjectName>
+                project_path = "\\".join(path_parts[:4])
+                project_paths.add(project_path)
+            continue
+
+        # Handle Apps structure: Look for 'app' or 'test' directory to find the project root
+        # Skip the first component since paths often start with 'App' (capital A)
+        for i in range(1, len(path_parts)):
+            part = path_parts[i]
+            if part.lower() in ("app", "test"):
+                # Take path up to and including this directory
+                project_path = "\\".join(path_parts[: i + 1])
+                if project_path:
+                    project_paths.add(project_path)
                 break
-
-            app_json_path = current_dir / "app.json"
-            if app_json_path.is_file():
-                normalized = str(relative_dir).strip().lstrip("/\\")
-                if normalized:
-                    project_paths.add(normalized)
-                break
-
-            if current_dir == repo_path:
-                break
-
-            current_dir = current_dir.parent
 
     return sorted(project_paths)
+
+
+def extract_file_paths_from_patch(patch: str) -> list[str]:
+    """Extract file paths from a patch.
+
+    Args:
+        patch: The diff/patch string to analyze
+
+    Returns:
+        List of file paths referenced in the patch
+    """
+    if not patch:
+        return []
+
+    try:
+        patch_set = PatchSet(str(patch))
+    except Exception:
+        return []
+
+    return [patched_file.path for patched_file in patch_set if patched_file.path]

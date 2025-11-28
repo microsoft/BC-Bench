@@ -42,7 +42,7 @@ Write-Log "Verifying projects build and tests run for version $Version, in $Data
 Write-Log "Using provided repository path: $RepoPath" -Level Debug
 
 if (-not (Test-Path $RepoPath)) {
-    Write-Error "NAV repository not found at: $RepoPath. Please run Setup-ContainerAndRepository.ps1 first."
+    Write-Error "Repository not found at: $RepoPath. Please run Setup-ContainerAndRepository.ps1 first."
     exit 1
 }
 

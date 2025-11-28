@@ -80,11 +80,9 @@ function Get-BCCredential {
 .PARAMETER RetryDelaySeconds
     Delay between retry attempts in seconds (default: 5)
 .PARAMETER CommitSha
-    Optional specific commit SHA to checkout. If provided, performs a shallow clone of that commit.
+    Specific commit SHA to checkout. Performs a shallow clone of that commit.
 .EXAMPLE
-    Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -Branch "main" -ClonePath "C:\temp\repo"
-.EXAMPLE
-    Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -Branch "main" -ClonePath "C:\temp\repo" -CommitSha "abc123..."
+    Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -ClonePath "C:\temp\repo" -CommitSha "abc123..."
 #>
 function Invoke-GitCloneWithRetry {
     [CmdletBinding()]
@@ -94,9 +92,6 @@ function Invoke-GitCloneWithRetry {
 
         [Parameter(Mandatory = $true)]
         [string]$Token,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Branch,
 
         [Parameter(Mandatory = $true)]
         [string]$ClonePath,
@@ -452,16 +447,50 @@ function Update-AppProjectVersion {
     Write-Log "Successfully updated app.json at: $appJsonPath" -Level Success
 }
 
+<#
+.SYNOPSIS
+    Gets clone information based on the repository type (GitHub or ADO)
+.PARAMETER Entry
+    A DatasetEntry object containing the repo field
+.OUTPUTS
+    Hashtable with Url and Token properties
+#>
+function Get-RepoCloneInfo {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [DatasetEntry]$Entry
+    )
+
+    [string[]] $repoParts = $Entry.repo -split '/'
+    [bool] $isGitHub = $repoParts[0].ToLower() -ne 'microsoftinternal'
+
+    if ($isGitHub) {
+        return @{
+            Url   = "https://github.com/$($Entry.repo).git"
+            Token = $env:GITHUB_TOKEN
+        }
+    }
+    else {
+        # ADO internal NAV repository
+        return @{
+            Url   = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
+            Token = $env:ADO_TOKEN
+        }
+    }
+}
+
 function Get-BCBenchDatasetPath {
     [CmdletBinding()]
     [OutputType([string])]
     param(
         [Parameter(Mandatory = $false)]
-        [string]$DatasetName = "bcbench_nav.jsonl"
+        [string]$DatasetName = "bcbench.jsonl"
     )
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent
     return Join-Path $projectRoot "dataset" $DatasetName
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Wait-JobWithProgress, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Wait-JobWithProgress, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo

@@ -1,7 +1,7 @@
 prompt:
   include_project_paths: false
   bug-fix-template: |
-    This is a non-interactive session. You are working with a Business Central (AL) code repository at {{repo_path}}.
+    You are working with a Business Central (AL) code repository at {{repo_path}}.
 
     Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
 
@@ -15,7 +15,7 @@ prompt:
     {{task}}
 
   test-generation-template: |
-    This is a non-interactive session. You are working with a Business Central (AL) code repository at {{repo_path}}.
+    You are working with a Business Central (AL) code repository at {{repo_path}}.
 
     Task: Generate ONE test case that reproduce the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
       The tests should fail against the current codebase (unfixed) and should pass once the issue is fixed.

@@ -68,6 +68,8 @@ class BaseEvaluationResult(BaseModel):
                 missing_metrics.append("prompt_tokens")
             if context.metrics.completion_tokens is None:
                 missing_metrics.append("completion_tokens")
+            if context.metrics.tool_usage is None:
+                missing_metrics.append("tool_usage")
 
             if missing_metrics:
                 logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")

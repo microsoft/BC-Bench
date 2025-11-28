@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from bcbench.agent.copilot.tool_usage_parser import ToolUsage
 from bcbench.commands.result import _experiments_equal
 from bcbench.results.base import create_result_from_json
 from bcbench.results.evaluation_result import EvaluationResultSummary
@@ -180,6 +181,72 @@ class TestCategorySerialization:
         assert data["experiment"]["custom_agent"] == "custom-agent"
         assert data["experiment"]["custom_instructions"] is True
         assert data["experiment"]["mcp_servers"] is None
+
+    def test_tool_usage_saves_as_dict(self, tmp_path):
+        tool_usage = ToolUsage(tool_counts={"bash": 5, "view": 3, "search": 2})
+        result = create_bugfix_result(
+            instance_id="test__tool-usage",
+            project="app",
+            metrics=AgentMetrics(execution_time=100.0, tool_usage=tool_usage),
+        )
+
+        output_file = tmp_path / "result.jsonl"
+        result.save(tmp_path, "result.jsonl")
+
+        with open(output_file) as f:
+            data = json.loads(f.readline())
+
+        assert data["metrics"]["tool_usage"] is not None
+        assert isinstance(data["metrics"]["tool_usage"], dict)
+        assert data["metrics"]["tool_usage"]["tool_counts"] == {"bash": 5, "view": 3, "search": 2}
+
+    def test_tool_usage_loads_from_json(self):
+        payload = {
+            "instance_id": "test__instance",
+            "project": "app",
+            "model": "gpt-4o",
+            "agent_name": "copilot-cli",
+            "category": "bug-fix",
+            "resolved": True,
+            "build": True,
+            "generated_patch": "patch",
+            "metrics": {
+                "execution_time": 100.0,
+                "prompt_tokens": 5000,
+                "completion_tokens": 1000,
+                "tool_usage": {"tool_counts": {"bash": 5, "view": 3}},
+            },
+        }
+
+        result = create_result_from_json(payload)
+
+        assert result.metrics is not None
+        assert result.metrics.tool_usage is not None
+        assert result.metrics.tool_usage.tool_counts["bash"] == 5
+        assert result.metrics.tool_usage.tool_counts["view"] == 3
+
+    def test_tool_usage_round_trip(self, tmp_path):
+        tool_usage = ToolUsage(tool_counts={"bash": 10, "view": 5})
+        original = create_bugfix_result(
+            instance_id="round-trip-tool-usage",
+            project="test-project",
+            model="test-model",
+            agent_name="test-agent",
+            metrics=AgentMetrics(execution_time=120.0, tool_usage=tool_usage),
+        )
+
+        # Save to file
+        original.save(tmp_path, "test.jsonl")
+
+        # Load from file
+        with open(tmp_path / "test.jsonl") as f:
+            data = json.loads(f.readline())
+
+        loaded = create_result_from_json(data)
+
+        assert loaded.metrics is not None
+        assert loaded.metrics.tool_usage is not None
+        assert loaded.metrics.tool_usage.tool_counts == original.metrics.tool_usage.tool_counts
 
 
 class TestExperimentsEqual:

@@ -8,6 +8,9 @@ inputs:
   ado-token:
     description: Token for cloning the NAV repository
     required: true
+  github-token:
+    description: GitHub token for accessing public repositories
+    required: true
 
 outputs:
   repo_path:
@@ -39,5 +42,6 @@ runs:
       id: setup
       env:
         ADO_TOKEN: ${{ inputs.ado-token }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
       run: .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}"
       shell: pwsh

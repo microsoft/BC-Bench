@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
@@ -61,7 +62,15 @@ class TestGenerationPipeline(EvaluationPipeline):
         clean_project_paths(context.repo_path, app_projects)
 
         generated_patch: str = stage_and_get_diff(context.repo_path)
-        generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, context.repo_path)
+
+        # Read file contents from the local repo for test extraction
+        file_contents: dict[str, str] = {}
+        for file_path in extract_file_paths_from_patch(generated_patch):
+            full_path = context.repo_path / file_path
+            if full_path.exists():
+                file_contents[file_path] = full_path.read_text(encoding="utf-8")
+
+        generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, file_contents)
         result: TestGenerationResult | None = None
 
         try:

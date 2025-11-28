@@ -41,7 +41,6 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    # Prefer copilot.cmd (npm) over copilot (which may have issues with JSON args)
     copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")

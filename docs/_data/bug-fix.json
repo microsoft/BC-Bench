@@ -15,33 +15,33 @@
     "experiment": null
   },
   {
-    "total": 22,
-    "resolved": 13,
-    "failed": 9,
-    "build": 21,
-    "date": "2025-11-14",
+    "total": 32,
+    "resolved": 16,
+    "failed": 16,
+    "build": 30,
+    "date": "2025-11-28",
     "model": "claude-sonnet-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 183.3,
-    "average_prompt_tokens": 918931.8,
-    "average_completion_tokens": 6240.9,
-    "github_run_id": "19369038959",
+    "average_duration": 136.9,
+    "average_prompt_tokens": 990575.0,
+    "average_completion_tokens": 5543.8,
+    "github_run_id": "19745030800",
     "experiment": null
   },
   {
-    "total": 22,
-    "resolved": 13,
+    "total": 28,
+    "resolved": 19,
     "failed": 9,
-    "build": 19,
-    "date": "2025-11-13",
+    "build": 24,
+    "date": "2025-11-27",
     "model": "claude-haiku-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 154.9,
-    "average_prompt_tokens": 2191345.4,
-    "average_completion_tokens": 8677.3,
-    "github_run_id": "19342348130",
+    "average_duration": 162.5,
+    "average_prompt_tokens": 2093992.9,
+    "average_completion_tokens": 9525.0,
+    "github_run_id": "19740511358",
     "experiment": null
   },
   {
@@ -179,5 +179,20 @@
       "custom_instructions": true,
       "custom_agent": null
     }
+  },
+  {
+    "total": 28,
+    "resolved": 16,
+    "failed": 12,
+    "build": 27,
+    "date": "2025-11-27",
+    "model": "claude-opus-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 109.2,
+    "average_prompt_tokens": 1009642.9,
+    "average_completion_tokens": 4452.8,
+    "github_run_id": "19730168417",
+    "experiment": null
   }
 ]
