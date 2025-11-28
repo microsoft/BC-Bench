@@ -118,3 +118,33 @@ def run_mini_inspector(
 
     inspector = TrajectoryInspector(trajectory_files)
     inspector.run()
+
+
+@run_app.command("copilot-tool-analyzer")
+def run_copilot_tool_analyzer(
+    path: Annotated[Path, typer.Argument(help="Directory to search for log files or specific log file")],
+    pattern: Annotated[str, typer.Option(help="File pattern to match log files")] = "*.log",
+):
+    """
+    Analyze tool usage from Copilot CLI log files.
+
+    Parses log files to extract and summarize tool call statistics,
+    displaying results sorted by usage count.
+
+    Example:
+        uv run bcbench run copilot-tool-analyzer ./evaluation_results/
+    """
+    from bcbench.agent.copilot.tool_usage_parser import (
+        parse_tool_usage_from_directory,
+        parse_tool_usage_from_log,
+    )
+
+    if path.is_file():
+        usage = parse_tool_usage_from_log(path)
+    elif path.is_dir():
+        usage = parse_tool_usage_from_directory(path, pattern)
+    else:
+        raise typer.BadParameter(f"Error: Path '{path}' does not exist")
+
+    # Output sorted by usage (default __str__ serialization)
+    typer.echo(usage)
