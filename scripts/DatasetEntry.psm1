@@ -1,5 +1,5 @@
 # DatasetReader.psm1 - Module for reading BC-Bench dataset
-# Provides classes and functions to read and parse the bcbench_nav.jsonl dataset
+# Provides classes and functions to read and parse the bcbench.jsonl dataset
 
 class TestEntry {
     [int]$codeunitID

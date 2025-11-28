@@ -50,7 +50,7 @@ class PathConfig:
         return cls(
             bc_bench_root=root,
             dataset_dir=root / "dataset",
-            dataset_path=root / "dataset" / "bcbench_nav.jsonl",
+            dataset_path=root / "dataset" / "bcbench.jsonl",
             problem_statement_dir=root / "dataset" / "problemstatement",
             nav_repo_path=root.parent / "NAV",
             ps_script_path=root / "scripts",

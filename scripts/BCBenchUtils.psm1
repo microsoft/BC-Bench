@@ -457,7 +457,7 @@ function Get-BCBenchDatasetPath {
     [OutputType([string])]
     param(
         [Parameter(Mandatory = $false)]
-        [string]$DatasetName = "bcbench_nav.jsonl"
+        [string]$DatasetName = "bcbench.jsonl"
     )
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent
