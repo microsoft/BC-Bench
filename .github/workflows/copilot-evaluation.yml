@@ -66,6 +66,7 @@ jobs:
         uses: ./.github/actions/setup-bc-container
         with:
           instance-id: ${{ matrix.entry }}
+          ado-token: ${{ secrets.ADO_TOKEN }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv

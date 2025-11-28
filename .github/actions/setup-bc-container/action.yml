@@ -5,6 +5,9 @@ inputs:
   instance-id:
     description: Instance ID for the dataset entry
     required: true
+  ado-token:
+    description: Token for cloning the NAV repository
+    required: true
 
 outputs:
   repo_path:
@@ -35,7 +38,6 @@ runs:
     - name: Setup BC container and repository for ${{ inputs.instance-id }}
       id: setup
       env:
-        ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ADO_TOKEN: ${{ inputs.ado-token }}
       run: .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}"
       shell: pwsh
