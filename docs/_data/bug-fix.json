@@ -11,6 +11,7 @@
     "average_duration": 133.9,
     "average_prompt_tokens": 1959740.0,
     "average_completion_tokens": 6056.0,
+    "average_tool_usage": null,
     "github_run_id": "19614090363",
     "experiment": null
   },
@@ -26,6 +27,7 @@
     "average_duration": 136.9,
     "average_prompt_tokens": 990575.0,
     "average_completion_tokens": 5543.8,
+    "average_tool_usage": null,
     "github_run_id": "19745030800",
     "experiment": null
   },
@@ -41,6 +43,7 @@
     "average_duration": 162.5,
     "average_prompt_tokens": 2093992.9,
     "average_completion_tokens": 9525.0,
+    "average_tool_usage": null,
     "github_run_id": "19740511358",
     "experiment": null
   },
@@ -56,6 +59,7 @@
     "average_duration": 431.0,
     "average_prompt_tokens": 352378.9,
     "average_completion_tokens": 7142.1,
+    "average_tool_usage": null,
     "github_run_id": "19227643144",
     "experiment": null
   },
@@ -71,6 +75,7 @@
     "average_duration": 328.4,
     "average_prompt_tokens": 478451.0,
     "average_completion_tokens": 3884.3,
+    "average_tool_usage": null,
     "github_run_id": "19391198996",
     "experiment": null
   },
@@ -86,6 +91,7 @@
     "average_duration": 190.6,
     "average_prompt_tokens": 1924450.0,
     "average_completion_tokens": 6827.3,
+    "average_tool_usage": null,
     "github_run_id": "19364189001",
     "experiment": {
       "mcp_servers": [
@@ -107,6 +113,7 @@
     "average_duration": 853.2,
     "average_prompt_tokens": 830300.0,
     "average_completion_tokens": 8707.7,
+    "average_tool_usage": null,
     "github_run_id": "19378708759",
     "experiment": null
   },
@@ -122,6 +129,7 @@
     "average_duration": 893.3,
     "average_prompt_tokens": 931820.0,
     "average_completion_tokens": 8615.0,
+    "average_tool_usage": null,
     "github_run_id": "19385408839",
     "experiment": null
   },
@@ -137,6 +145,7 @@
     "average_duration": 184.1,
     "average_prompt_tokens": 2711195.4,
     "average_completion_tokens": 9409.1,
+    "average_tool_usage": null,
     "github_run_id": "19386826797",
     "experiment": {
       "mcp_servers": [
@@ -158,6 +167,7 @@
     "average_duration": 217.1,
     "average_prompt_tokens": 1109352.6,
     "average_completion_tokens": 2323.5,
+    "average_tool_usage": null,
     "github_run_id": "19388071339",
     "experiment": null
   },
@@ -173,6 +183,7 @@
     "average_duration": 164.0,
     "average_prompt_tokens": 2374900.0,
     "average_completion_tokens": 8768.2,
+    "average_tool_usage": null,
     "github_run_id": "19411736858",
     "experiment": {
       "mcp_servers": null,
@@ -181,18 +192,29 @@
     }
   },
   {
-    "total": 28,
-    "resolved": 16,
-    "failed": 12,
-    "build": 27,
-    "date": "2025-11-27",
+    "total": 34,
+    "resolved": 23,
+    "failed": 11,
+    "build": 34,
+    "date": "2025-11-28",
     "model": "claude-opus-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 109.2,
-    "average_prompt_tokens": 1009642.9,
-    "average_completion_tokens": 4452.8,
-    "github_run_id": "19730168417",
+    "average_duration": 98.1,
+    "average_prompt_tokens": 818252.9,
+    "average_completion_tokens": 4210.6,
+    "average_tool_usage": {
+      "tool_counts": {
+        "report_intent": 2,
+        "grep": 6,
+        "view": 8,
+        "edit": 3,
+        "glob": 0,
+        "powershell": 0,
+        "create": 0
+      }
+    },
+    "github_run_id": "19772828731",
     "experiment": null
   }
 ]
