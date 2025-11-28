@@ -15,18 +15,18 @@
     "experiment": null
   },
   {
-    "total": 22,
-    "resolved": 13,
-    "failed": 9,
-    "build": 21,
-    "date": "2025-11-14",
+    "total": 32,
+    "resolved": 16,
+    "failed": 16,
+    "build": 30,
+    "date": "2025-11-28",
     "model": "claude-sonnet-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 183.3,
-    "average_prompt_tokens": 918931.8,
-    "average_completion_tokens": 6240.9,
-    "github_run_id": "19369038959",
+    "average_duration": 136.9,
+    "average_prompt_tokens": 990575.0,
+    "average_completion_tokens": 5543.8,
+    "github_run_id": "19745030800",
     "experiment": null
   },
   {
