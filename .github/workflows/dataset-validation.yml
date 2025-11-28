@@ -35,6 +35,7 @@ jobs:
         with:
           instance-id: ${{ matrix.entry }}
           ado-token: ${{ secrets.ADO_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run build and test verification for ${{ matrix.entry }}
         timeout-minutes: 60
