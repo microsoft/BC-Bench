@@ -24,7 +24,7 @@ from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate import EvaluationPipeline, create_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration, ToolUsage
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -212,12 +212,12 @@ class MockEvaluationPipeline(EvaluationPipeline):
 
         # Randomize agent metrics to test different scenarios
         metrics_scenarios: list[AgentMetrics | None] = [
-            AgentMetrics(execution_time=0.1, prompt_tokens=100, completion_tokens=50),
-            AgentMetrics(execution_time=0.2, prompt_tokens=250),
-            AgentMetrics(execution_time=0.15),
+            AgentMetrics(execution_time=0.1, prompt_tokens=100, completion_tokens=50, tool_usage=ToolUsage(tool_counts={"bash": 5, "view": 3, "edit": 2})),
+            AgentMetrics(execution_time=0.2, prompt_tokens=250, tool_usage=ToolUsage(tool_counts={"bash": 10, "search": 4})),
+            AgentMetrics(execution_time=0.15, tool_usage=ToolUsage(tool_counts={"view": 8})),
             AgentMetrics(),
             None,
-            AgentMetrics(prompt_tokens=500, completion_tokens=100),
+            AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage=ToolUsage(tool_counts={"bash": 3, "view": 2, "edit": 1, "search": 5})),
         ]
         context.metrics = random.choice(metrics_scenarios)
 

@@ -7,6 +7,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.agent.copilot import run_copilot_agent
+from bcbench.agent.copilot.tool_usage_parser import parse_tool_usage_from_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
     ContainerName,
@@ -118,3 +119,27 @@ def run_mini_inspector(
 
     inspector = TrajectoryInspector(trajectory_files)
     inspector.run()
+
+
+@run_app.command("copilot-tool-analyzer")
+def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directory to search for log files or specific log file", exists=True, file_okay=True, dir_okay=False)]):
+    """
+    Analyze tool usage from Copilot CLI log files.
+
+    Parses log files to extract and summarize tool call statistics,
+    displaying results sorted by usage count.
+
+    Example:
+        uv run bcbench run copilot-tool-analyzer ./evaluation_results/
+    """
+
+    usage = parse_tool_usage_from_log(path)
+
+    print("Tool Usage Summary:")
+    print("-" * 40)
+
+    for tool_name, count in sorted(usage.tool_counts.items(), key=lambda x: (-x[1], x[0])):
+        print(f"  {tool_name}: {count}")
+
+    print("-" * 40)
+    print(f"Total tool calls: {sum(usage.tool_counts.values())}")
