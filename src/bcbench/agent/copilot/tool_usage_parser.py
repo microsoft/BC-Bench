@@ -19,9 +19,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from bcbench.logger import get_logger
 from bcbench.types import ToolUsage
-
 
 __all__ = ["ToolUsage", "parse_tool_usage_from_log"]
 
