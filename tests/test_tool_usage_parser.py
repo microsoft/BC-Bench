@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from bcbench.agent.copilot.tool_usage_parser import (
@@ -45,45 +44,76 @@ class TestToolUsage:
 
 
 class TestParseToolUsageFromLog:
-    def test_parses_tool_calls_from_jsonl(self, tmp_path: Path):
+    def test_parses_tool_calls_from_copilot_log_format(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
-        log_file.write_text(json.dumps({"tool": "bash"}) + "\n" + json.dumps({"tool": "bash"}) + "\n" + json.dumps({"tool": "view"}) + "\n")
+        # Actual Copilot CLI log format with tool calls
+        log_content = """
+2025-01-01T00:00:00.000Z [DEBUG] data:
+{
+  "tool_calls": [
+    {"function": {"name": "bash", "arguments": "{}"}},
+    {"function": {"name": "bash", "arguments": "{}"}}
+  ]
+}
+2025-01-01T00:00:01.000Z [DEBUG] data:
+{
+  "tool_calls": [
+    {"function": {"name": "view", "arguments": "{\\"path\\": \\"/tmp\\"}"}}
+  ]
+}
+"""
+        log_file.write_text(log_content)
 
         usage = parse_tool_usage_from_log(log_file)
 
         assert usage.tool_counts["bash"] == 2
         assert usage.tool_counts["view"] == 1
 
-    def test_parses_tool_name_field(self, tmp_path: Path):
+    def test_ignores_tool_definitions(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
-        log_file.write_text(json.dumps({"tool_name": "read_file"}) + "\n")
+        # Tool definitions have "description" not "arguments"
+        log_content = """
+2025-01-01T00:00:00.000Z [DEBUG] Tools:
+[
+  {"type": "function", "function": {"name": "view", "description": "View files", "parameters": {}}}
+]
+"""
+        log_file.write_text(log_content)
 
         usage = parse_tool_usage_from_log(log_file)
 
-        assert usage.tool_counts["read_file"] == 1
+        assert usage.tool_counts["view"] == 0
+        assert usage.total_calls == 0
 
-    def test_parses_openai_tool_calls_format(self, tmp_path: Path):
+    def test_parses_mixed_tool_calls_and_definitions(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
-        entry = {"tool_calls": [{"function": {"name": "search"}}, {"function": {"name": "write"}}]}
-        log_file.write_text(json.dumps(entry) + "\n")
+        log_content = """
+2025-01-01T00:00:00.000Z [DEBUG] Tools:
+[
+  {"type": "function", "function": {"name": "view", "description": "View files"}}
+]
+2025-01-01T00:00:01.000Z [DEBUG] data:
+{
+  "tool_calls": [
+    {"function": {"name": "view", "arguments": "{\\"path\\": \\"/tmp\\"}"}}
+  ]
+}
+"""
+        log_file.write_text(log_content)
 
         usage = parse_tool_usage_from_log(log_file)
 
-        assert usage.tool_counts["search"] == 1
-        assert usage.tool_counts["write"] == 1
-
-    def test_parses_function_call_format(self, tmp_path: Path):
-        log_file = tmp_path / "test.log"
-        entry = {"function_call": {"name": "execute_code"}}
-        log_file.write_text(json.dumps(entry) + "\n")
-
-        usage = parse_tool_usage_from_log(log_file)
-
-        assert usage.tool_counts["execute_code"] == 1
+        # Should only count the actual tool call, not the definition
+        assert usage.tool_counts["view"] == 1
 
     def test_skips_non_json_lines(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
-        log_file.write_text("Not JSON\n" + json.dumps({"tool": "bash"}) + "\nAnother non-JSON line\n")
+        log_content = """Not JSON line
+2025-01-01T00:00:00.000Z [LOG] Some log message
+{"function": {"name": "bash", "arguments": "{}"}}
+Another non-JSON line
+"""
+        log_file.write_text(log_content)
 
         usage = parse_tool_usage_from_log(log_file)
 
@@ -103,29 +133,24 @@ class TestParseToolUsageFromLog:
 
         assert usage.total_calls == 0
 
-    def test_parses_nested_content_tool(self, tmp_path: Path):
+    def test_parses_mcp_tool_names(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
-        entry = {"content": {"tool": "nested_tool"}}
-        log_file.write_text(json.dumps(entry) + "\n")
+        log_content = """
+{"function": {"name": "bc-code-intelligence-find_bc_knowledge", "arguments": "{\\"query\\": \\"test\\"}"}}
+{"function": {"name": "bc-code-intelligence-ask_bc_expert", "arguments": "{}"}}
+"""
+        log_file.write_text(log_content)
 
         usage = parse_tool_usage_from_log(log_file)
 
-        assert usage.tool_counts["nested_tool"] == 1
-
-    def test_parses_role_tool_entries(self, tmp_path: Path):
-        log_file = tmp_path / "test.log"
-        entry = {"role": "tool", "name": "tool_result"}
-        log_file.write_text(json.dumps(entry) + "\n")
-
-        usage = parse_tool_usage_from_log(log_file)
-
-        assert usage.tool_counts["tool_result"] == 1
+        assert usage.tool_counts["bc-code-intelligence-find_bc_knowledge"] == 1
+        assert usage.tool_counts["bc-code-intelligence-ask_bc_expert"] == 1
 
 
 class TestParseToolUsageFromDirectory:
     def test_aggregates_from_multiple_files(self, tmp_path: Path):
-        (tmp_path / "log1.log").write_text(json.dumps({"tool": "bash"}) + "\n")
-        (tmp_path / "log2.log").write_text(json.dumps({"tool": "bash"}) + "\n" + json.dumps({"tool": "view"}) + "\n")
+        (tmp_path / "log1.log").write_text('{"function": {"name": "bash", "arguments": "{}"}}\n')
+        (tmp_path / "log2.log").write_text('{"function": {"name": "bash", "arguments": "{}"}}\n{"function": {"name": "view", "arguments": "{}"}}\n')
 
         usage = parse_tool_usage_from_directory(tmp_path, "*.log")
 
@@ -147,7 +172,7 @@ class TestParseToolUsageFromDirectory:
     def test_searches_recursively(self, tmp_path: Path):
         subdir = tmp_path / "subdir"
         subdir.mkdir()
-        (subdir / "nested.log").write_text(json.dumps({"tool": "deep_tool"}) + "\n")
+        (subdir / "nested.log").write_text('{"function": {"name": "deep_tool", "arguments": "{}"}}\n')
 
         usage = parse_tool_usage_from_directory(tmp_path, "*.log")
 

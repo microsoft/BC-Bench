@@ -1,8 +1,22 @@
-"""Tool usage parser for GitHub Copilot CLI log files."""
+"""Tool usage parser for GitHub Copilot CLI log files.
+
+Parses timestamped log files containing embedded JSON responses from the Copilot API.
+Extracts tool call information from the nested response structure.
+
+Log format example:
+    2025-11-28T14:26:41.178Z [DEBUG] data:
+    {
+      "choices": [{
+        "message": {
+          "tool_calls": [{"function": {"name": "view", ...}}]
+        }
+      }]
+    }
+"""
 
 from __future__ import annotations
 
-import json
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,6 +24,14 @@ from pathlib import Path
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Regex to find tool call function names in the log content
+# Matches tool calls (with "arguments") but NOT tool definitions (with "description")
+# Pattern: "function": {"name": "tool_name", "arguments": ...}
+TOOL_CALL_PATTERN = re.compile(
+    r'"function"\s*:\s*\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"',
+    re.MULTILINE,
+)
 
 
 @dataclass
@@ -44,8 +66,8 @@ class ToolUsage:
 def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
     """Parse tool usage from a single Copilot CLI log file.
 
-    The log file format is expected to be newline-delimited JSON (NDJSON/JSONL)
-    where each line contains a log entry with potential tool call information.
+    The log file format is timestamped text with embedded JSON responses.
+    Tool calls appear in response JSON under choices[].message.tool_calls[].
 
     Args:
         log_path: Path to the Copilot CLI log file
@@ -65,107 +87,14 @@ def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
         logger.error(f"Failed to read log file {log_path}: {e}")
         return ToolUsage(tool_counts=tool_counts)
 
-    for line_num, raw_line in enumerate(content.splitlines(), 1):
-        line = raw_line.strip()
-        if not line:
-            continue
+    # Strategy 1: Use regex to find all tool call function names directly
+    # This is more reliable than trying to parse multi-line JSON from logs
+    matches = TOOL_CALL_PATTERN.findall(content)
+    for tool_name in matches:
+        tool_counts[tool_name] += 1
 
-        try:
-            entry = json.loads(line)
-            _extract_tool_calls(entry, tool_counts)
-        except json.JSONDecodeError:
-            # Skip non-JSON lines (common in log files)
-            continue
-        except Exception as e:
-            logger.debug(f"Failed to parse line {line_num} in {log_path}: {e}")
-            continue
+    # Strategy 2: Try to extract and parse JSON blocks for more structured data
+    # TODO: Consider implementing JSON block extraction for richer analysis
+    # (e.g., extracting arguments, timestamps, success/failure status)
 
     return ToolUsage(tool_counts=tool_counts)
-
-
-def _extract_tool_calls(entry: dict, tool_counts: Counter[str]) -> None:
-    """Extract tool calls from a log entry and update the counter.
-
-    Handles various log entry formats from Copilot CLI.
-    """
-    # Handle direct tool call entries
-    if "tool" in entry:
-        tool_name = entry.get("tool")
-        if tool_name:
-            tool_counts[tool_name] += 1
-            return
-
-    # Handle tool_name field
-    if "tool_name" in entry:
-        tool_name = entry.get("tool_name")
-        if tool_name:
-            tool_counts[tool_name] += 1
-            return
-
-    # Handle nested tool calls in message content
-    if "content" in entry and isinstance(entry["content"], dict):
-        content = entry["content"]
-        if "tool" in content:
-            tool_counts[content["tool"]] += 1
-            return
-        if "tool_name" in content:
-            tool_counts[content["tool_name"]] += 1
-            return
-
-    # Handle function_call format (OpenAI style)
-    if "function_call" in entry:
-        func = entry["function_call"]
-        if isinstance(func, dict) and "name" in func:
-            tool_counts[func["name"]] += 1
-            return
-
-    # Handle tool_calls array (OpenAI style)
-    if "tool_calls" in entry:
-        tool_calls = entry.get("tool_calls", [])
-        if isinstance(tool_calls, list):
-            for tc in tool_calls:
-                if isinstance(tc, dict):
-                    # Standard OpenAI format
-                    func = tc.get("function", {})
-                    if isinstance(func, dict) and "name" in func:
-                        tool_counts[func["name"]] += 1
-                    # Direct name format
-                    elif "name" in tc:
-                        tool_counts[tc["name"]] += 1
-
-    # Handle message with role=tool or type=tool
-    if entry.get("role") == "tool" or entry.get("type") == "tool":
-        tool_name = entry.get("name") or entry.get("tool")
-        if tool_name:
-            tool_counts[tool_name] += 1
-
-
-def parse_tool_usage_from_directory(directory: Path, pattern: str = "*.log") -> ToolUsage:
-    """Parse tool usage from all matching log files in a directory.
-
-    Args:
-        directory: Directory to search for log files
-        pattern: Glob pattern to match log files
-
-    Returns:
-        Aggregated ToolUsage from all matching files
-    """
-    if not directory.exists():
-        logger.warning(f"Directory not found: {directory}")
-        return ToolUsage()
-
-    log_files = list(directory.rglob(pattern))
-    if not log_files:
-        logger.warning(f"No log files matching '{pattern}' found in {directory}")
-        return ToolUsage()
-
-    logger.info(f"Found {len(log_files)} log file(s) to analyze")
-
-    aggregated = ToolUsage()
-    for log_file in log_files:
-        logger.debug(f"Parsing: {log_file}")
-        usage = parse_tool_usage_from_log(log_file)
-        aggregated = aggregated.merge(usage)
-        # TODO: Consider tracking per-file statistics for more detailed analysis
-
-    return aggregated

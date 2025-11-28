@@ -7,6 +7,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.agent.copilot import run_copilot_agent
+from bcbench.agent.copilot.tool_usage_parser import parse_tool_usage_from_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
     ContainerName,
@@ -121,10 +122,7 @@ def run_mini_inspector(
 
 
 @run_app.command("copilot-tool-analyzer")
-def run_copilot_tool_analyzer(
-    path: Annotated[Path, typer.Argument(help="Directory to search for log files or specific log file")],
-    pattern: Annotated[str, typer.Option(help="File pattern to match log files")] = "*.log",
-):
+def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directory to search for log files or specific log file", exists=True, file_okay=True, dir_okay=False)]):
     """
     Analyze tool usage from Copilot CLI log files.
 
@@ -134,17 +132,7 @@ def run_copilot_tool_analyzer(
     Example:
         uv run bcbench run copilot-tool-analyzer ./evaluation_results/
     """
-    from bcbench.agent.copilot.tool_usage_parser import (
-        parse_tool_usage_from_directory,
-        parse_tool_usage_from_log,
-    )
 
-    if path.is_file():
-        usage = parse_tool_usage_from_log(path)
-    elif path.is_dir():
-        usage = parse_tool_usage_from_directory(path, pattern)
-    else:
-        raise typer.BadParameter(f"Error: Path '{path}' does not exist")
+    usage = parse_tool_usage_from_log(path)
 
-    # Output sorted by usage (default __str__ serialization)
-    typer.echo(usage)
+    print(usage)
