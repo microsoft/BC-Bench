@@ -73,18 +73,18 @@ else {
 }
 
 if (Test-Path $RepoPath) {
-    Write-Log "NAV repository already exists at $RepoPath, skipping clone." -Level Warning
+    Write-Log "Repository already exists at $RepoPath, skipping clone." -Level Warning
 }
 else {
     try {
-        [string] $navBranch = "releases/$Version"
-        [string] $navURL = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
+        [hashtable] $cloneInfo = Get-RepoCloneInfo -Entry $entries[0]
         [string] $commitSha = $entries[0].base_commit
 
-        Invoke-GitCloneWithRetry -RepoUrl $navURL -Token $env:ADO_TOKEN -Branch $navBranch -ClonePath $RepoPath -CommitSha $commitSha
+        Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
+        Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha
     }
     catch {
-        Write-Log "Failed to clone NAV repository: $($_.Exception.Message)" -Level Error
+        Write-Log "Failed to clone repository ($($entries[0].repo)): $($_.Exception.Message)" -Level Error
         if ($containerJob) { Stop-Job $containerJob; Remove-Job $containerJob }
         exit 1
     }
