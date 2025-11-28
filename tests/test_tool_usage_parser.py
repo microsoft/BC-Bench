@@ -1,46 +1,21 @@
 from pathlib import Path
 
-from bcbench.agent.copilot.tool_usage_parser import (
-    ToolUsage,
-    parse_tool_usage_from_directory,
-    parse_tool_usage_from_log,
-)
+from bcbench.agent.copilot.tool_usage_parser import ToolUsage, parse_tool_usage_from_log
 
 
 class TestToolUsage:
-    def test_str_empty_tool_counts_returns_no_usage_message(self):
-        usage = ToolUsage()
-        assert str(usage) == "No tool usage found."
+    def test_serialization_to_dict(self):
+        usage = ToolUsage(tool_counts={"bash": 5, "view": 3})
+        data = usage.model_dump()
 
-    def test_str_formats_tool_counts_sorted_by_usage(self):
-        from collections import Counter
+        assert data["tool_counts"] == {"bash": 5, "view": 3}
 
-        usage = ToolUsage(tool_counts=Counter({"tool_a": 5, "tool_b": 10, "tool_c": 3}))
-        result = str(usage)
+    def test_deserialization_from_dict(self):
+        data = {"tool_counts": {"bash": 5, "view": 3}}
+        usage = ToolUsage.model_validate(data)
 
-        assert "tool_b: 10" in result
-        assert "tool_a: 5" in result
-        assert "tool_c: 3" in result
-        # Verify descending order
-        assert result.index("tool_b") < result.index("tool_a") < result.index("tool_c")
-
-    def test_total_calls_returns_sum_of_all_counts(self):
-        from collections import Counter
-
-        usage = ToolUsage(tool_counts=Counter({"tool_a": 5, "tool_b": 10}))
-        assert usage.total_calls == 15
-
-    def test_merge_combines_tool_counts(self):
-        from collections import Counter
-
-        usage1 = ToolUsage(tool_counts=Counter({"tool_a": 5, "tool_b": 3}))
-        usage2 = ToolUsage(tool_counts=Counter({"tool_b": 2, "tool_c": 7}))
-
-        merged = usage1.merge(usage2)
-
-        assert merged.tool_counts["tool_a"] == 5
-        assert merged.tool_counts["tool_b"] == 5
-        assert merged.tool_counts["tool_c"] == 7
+        assert usage.tool_counts["bash"] == 5
+        assert usage.tool_counts["view"] == 3
 
 
 class TestParseToolUsageFromLog:
@@ -82,8 +57,7 @@ class TestParseToolUsageFromLog:
 
         usage = parse_tool_usage_from_log(log_file)
 
-        assert usage.tool_counts["view"] == 0
-        assert usage.total_calls == 0
+        assert usage.tool_counts.get("view", 0) == 0
 
     def test_parses_mixed_tool_calls_and_definitions(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
@@ -118,20 +92,14 @@ Another non-JSON line
         usage = parse_tool_usage_from_log(log_file)
 
         assert usage.tool_counts["bash"] == 1
-        assert usage.total_calls == 1
 
     def test_returns_empty_for_nonexistent_file(self, tmp_path: Path):
-        usage = parse_tool_usage_from_log(tmp_path / "nonexistent.log")
-
-        assert usage.total_calls == 0
-
-    def test_handles_empty_file(self, tmp_path: Path):
         log_file = tmp_path / "empty.log"
         log_file.write_text("")
 
         usage = parse_tool_usage_from_log(log_file)
 
-        assert usage.total_calls == 0
+        assert usage.tool_counts == {}
 
     def test_parses_mcp_tool_names(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
@@ -145,35 +113,3 @@ Another non-JSON line
 
         assert usage.tool_counts["bc-code-intelligence-find_bc_knowledge"] == 1
         assert usage.tool_counts["bc-code-intelligence-ask_bc_expert"] == 1
-
-
-class TestParseToolUsageFromDirectory:
-    def test_aggregates_from_multiple_files(self, tmp_path: Path):
-        (tmp_path / "log1.log").write_text('{"function": {"name": "bash", "arguments": "{}"}}\n')
-        (tmp_path / "log2.log").write_text('{"function": {"name": "bash", "arguments": "{}"}}\n{"function": {"name": "view", "arguments": "{}"}}\n')
-
-        usage = parse_tool_usage_from_directory(tmp_path, "*.log")
-
-        assert usage.tool_counts["bash"] == 2
-        assert usage.tool_counts["view"] == 1
-
-    def test_returns_empty_for_nonexistent_directory(self, tmp_path: Path):
-        usage = parse_tool_usage_from_directory(tmp_path / "nonexistent", "*.log")
-
-        assert usage.total_calls == 0
-
-    def test_returns_empty_when_no_files_match_pattern(self, tmp_path: Path):
-        (tmp_path / "test.txt").write_text("content")
-
-        usage = parse_tool_usage_from_directory(tmp_path, "*.log")
-
-        assert usage.total_calls == 0
-
-    def test_searches_recursively(self, tmp_path: Path):
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        (subdir / "nested.log").write_text('{"function": {"name": "deep_tool", "arguments": "{}"}}\n')
-
-        usage = parse_tool_usage_from_directory(tmp_path, "*.log")
-
-        assert usage.tool_counts["deep_tool"] == 1

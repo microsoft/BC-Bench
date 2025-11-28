@@ -135,4 +135,11 @@ def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directo
 
     usage = parse_tool_usage_from_log(path)
 
-    print(usage)
+    print("Tool Usage Summary:")
+    print("-" * 40)
+
+    for tool_name, count in sorted(usage.tool_counts.items(), key=lambda x: (-x[1], x[0])):
+        print(f"  {tool_name}: {count}")
+
+    print("-" * 40)
+    print(f"Total tool calls: {sum(usage.tool_counts.values())}")

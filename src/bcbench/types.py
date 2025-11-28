@@ -14,9 +14,15 @@ from bcbench.logger import get_logger
 if TYPE_CHECKING:
     from bcbench.dataset import DatasetEntry
 
-__all__ = ["AgentMetrics", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = ["AgentMetrics", "EvaluationContext", "ExperimentConfiguration", "ToolUsage"]
 
 logger = get_logger(__name__)
+
+
+class ToolUsage(BaseModel):
+    """Tool usage statistics from agent logs."""
+
+    tool_counts: dict[str, int] = {}
 
 
 class AgentMetrics(BaseModel):
@@ -31,6 +37,9 @@ class AgentMetrics(BaseModel):
     # Token usage from LLM calls
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+
+    # Tool usage statistics from agent logs
+    tool_usage: ToolUsage | None = None
 
 
 class ExperimentConfiguration(BaseModel):

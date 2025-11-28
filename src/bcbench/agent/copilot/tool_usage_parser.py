@@ -17,13 +17,14 @@ Log format example:
 from __future__ import annotations
 
 import re
-from collections import Counter
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from bcbench.logger import get_logger
+from bcbench.types import ToolUsage
 
 logger = get_logger(__name__)
+
+__all__ = ["ToolUsage", "parse_tool_usage_from_log"]
 
 # Regex to find tool call function names in the log content
 # Matches tool calls (with "arguments") but NOT tool definitions (with "description")
@@ -32,35 +33,6 @@ TOOL_CALL_PATTERN = re.compile(
     r'"function"\s*:\s*\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"',
     re.MULTILINE,
 )
-
-
-@dataclass
-class ToolUsage:
-    """Tool usage statistics from Copilot CLI logs."""
-
-    tool_counts: Counter[str] = field(default_factory=Counter)
-
-    def __str__(self) -> str:
-        """Default serialization for CLI output, sorted by usage count (descending)."""
-        if not self.tool_counts:
-            return "No tool usage found."
-
-        lines = ["Tool Usage Summary:", "-" * 40]
-        for tool_name, count in self.tool_counts.most_common():
-            lines.append(f"  {tool_name}: {count}")
-        lines.append("-" * 40)
-        lines.append(f"Total tool calls: {self.total_calls}")
-        return "\n".join(lines)
-
-    @property
-    def total_calls(self) -> int:
-        return sum(self.tool_counts.values())
-
-    def merge(self, other: ToolUsage) -> ToolUsage:
-        """Merge another ToolUsage into this one."""
-        merged = ToolUsage(tool_counts=Counter(self.tool_counts))
-        merged.tool_counts.update(other.tool_counts)
-        return merged
 
 
 def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
@@ -75,26 +47,14 @@ def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
     Returns:
         ToolUsage with counted tool calls from the log
     """
-    tool_counts: Counter[str] = Counter()
+    tool_counts: dict[str, int] = {}
 
-    if not log_path.exists():
-        logger.warning(f"Log file not found: {log_path}")
-        return ToolUsage(tool_counts=tool_counts)
+    content = log_path.read_text(encoding="utf-8")
 
-    try:
-        content = log_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.error(f"Failed to read log file {log_path}: {e}")
-        return ToolUsage(tool_counts=tool_counts)
-
-    # Strategy 1: Use regex to find all tool call function names directly
+    # Use regex to find all tool call function names directly
     # This is more reliable than trying to parse multi-line JSON from logs
     matches = TOOL_CALL_PATTERN.findall(content)
     for tool_name in matches:
-        tool_counts[tool_name] += 1
-
-    # Strategy 2: Try to extract and parse JSON blocks for more structured data
-    # TODO: Consider implementing JSON block extraction for richer analysis
-    # (e.g., extracting arguments, timestamps, success/failure status)
+        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
 
     return ToolUsage(tool_counts=tool_counts)
