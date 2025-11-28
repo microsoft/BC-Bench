@@ -4,6 +4,7 @@ from rich.table import Table
 from bcbench.config import get_config
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.evaluation_result import _calculate_average_tool_usage
 
 logger = get_logger(__name__)
 console = Console()
@@ -19,6 +20,16 @@ def create_console_summary(results: list[BaseEvaluationResult]) -> None:
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
     console.print(f"Resolved: [bold green]{resolved}[/bold green]")
     console.print(f"Failed: [bold red]{failed}[/bold red]")
+
+    # Display average tool usage if available
+    tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
+    if tool_usages:
+        avg_usage = _calculate_average_tool_usage(tool_usages)
+        if avg_usage.tool_counts:
+            console.print("\n[bold cyan]Average Tool Usage[/bold cyan]")
+            sorted_tools = sorted(avg_usage.tool_counts.items(), key=lambda x: x[1], reverse=True)
+            for tool_name, count in sorted_tools:
+                console.print(f"  {tool_name}: [bold]{count}[/bold]")
 
     table = Table(title="\nDetailed Results", show_lines=True)
     table.add_column("Instance ID", style="cyan", no_wrap=True)
@@ -50,13 +61,23 @@ def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
     custom_instructions = "Yes" if results[0].experiment and results[0].experiment.custom_instructions else "No"
     custom_agent = results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else "N/A"
 
+    # Calculate average tool usage
+    tool_usage_section = ""
+    tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
+    if tool_usages:
+        avg_usage = _calculate_average_tool_usage(tool_usages)
+        if avg_usage.tool_counts:
+            sorted_tools = sorted(avg_usage.tool_counts.items(), key=lambda x: x[1], reverse=True)
+            tool_lines = [f"  - `{tool}`: {count}" for tool, count in sorted_tools]
+            tool_usage_section = "\n\n## Average Tool Usage\n" + "\n".join(tool_lines)
+
     markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
 - Category: `{results[0].category.value}`
 - MCP Servers used: {mcp_servers}
 - Custom Instructions: {custom_instructions}
 - Custom Agent: {custom_agent}
 - Successful evaluations: {resolved} :white_check_mark:
-- Failed evaluations: {failed} {success_icon}
+- Failed evaluations: {failed} {success_icon}{tool_usage_section}
 
 ## Detailed Results
 
