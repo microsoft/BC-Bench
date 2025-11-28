@@ -1,11 +1,14 @@
-# [Shopify] Assign sell-to and bill-to when a customer is added as location
+Title: Shopify - Export customer as location - Sell-to and Bill-to are missing
+Repro Steps:
+repro - not  sure, please assign back if you cannot repro
 
-<!-- Thank you for submitting a Pull Request. If you're new to contributing to BCApps please read our pull request guideline below
-* https://github.com/microsoft/BCApps/Contributing.md
--->
-#### Summary <!-- Provide a general summary of your changes -->
-Assign sell-to and bill-to when a customer is added as location
+I exported two companies.
+One is normal and another one has another (third) defined as bill-to.
 
-#### Work Item(s) <!-- Add the issue number here after the #. The issue needs to be open and approved. Submitting PRs with no linked issues or unapproved issues is highly discouraged. -->
-Fixes [AB#603787](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/603787)
+![Add Customer as Shopify Location](./add_cust_as_shopify_location.png)
 
+![Customer Card](./customer_card.png)
+
+Shopify Shop
+![B2B Company Sync](./b2b_company_sync.png)
+Description:
