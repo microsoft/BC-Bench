@@ -193,28 +193,27 @@
   },
   {
     "total": 34,
-    "resolved": 23,
-    "failed": 11,
+    "resolved": 21,
+    "failed": 13,
     "build": 34,
-    "date": "2025-11-28",
+    "date": "2025-11-29",
     "model": "claude-opus-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 98.1,
-    "average_prompt_tokens": 818252.9,
-    "average_completion_tokens": 4210.6,
+    "average_duration": 92.5,
+    "average_prompt_tokens": 731541.2,
+    "average_completion_tokens": 4294.4,
     "average_tool_usage": {
       "tool_counts": {
-        "report_intent": 2,
-        "grep": 6,
-        "view": 8,
-        "edit": 3,
-        "glob": 0,
-        "powershell": 0,
-        "create": 0
+        "report_intent": 2.12,
+        "grep": 5.24,
+        "view": 7.5,
+        "edit": 2.59,
+        "powershell": 0.12,
+        "glob": 0.29
       }
     },
-    "github_run_id": "19772828731",
+    "github_run_id": "19781418834",
     "experiment": null
   }
 ]
