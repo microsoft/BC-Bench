@@ -54,7 +54,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 15
+      max-parallel: ${{ startsWith(inputs.model, 'gpt') && 10 || 15 }}
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
