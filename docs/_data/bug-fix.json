@@ -215,5 +215,40 @@
     },
     "github_run_id": "19781418834",
     "experiment": null
+  },
+  {
+    "total": 34,
+    "resolved": 17,
+    "failed": 17,
+    "build": 32,
+    "date": "2025-11-29",
+    "model": "claude-opus-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 121.7,
+    "average_prompt_tokens": 955202.9,
+    "average_completion_tokens": 4741.0,
+    "average_tool_usage": {
+      "tool_counts": {
+        "report_intent": 2.09,
+        "grep": 6.88,
+        "glob": 0.35,
+        "filesystem-read_multiple_files": 0.21,
+        "edit": 2.74,
+        "view": 6.85,
+        "filesystem-read_text_file": 1.41,
+        "powershell": 0.29,
+        "create": 0.03,
+        "filesystem-edit_file": 0.09
+      }
+    },
+    "github_run_id": "19788241760",
+    "experiment": {
+      "mcp_servers": [
+        "filesystem"
+      ],
+      "custom_instructions": false,
+      "custom_agent": null
+    }
   }
 ]
