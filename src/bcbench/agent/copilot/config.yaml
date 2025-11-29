@@ -8,7 +8,7 @@ prompt:
     Important constraints:
     - Do NOT modify any testing logic or test files
     - Focus solely on fixing the reported issue
-    - Do NOT try to build or run tests, just provide the code changes needed
+    - Do NOT try to run tests
     - Do NOT commit any changes to the repository
 
     Issue details:
@@ -46,9 +46,8 @@ agents:
 mcp:
   servers:
     - name: "altool"
-      type: "local"
-      command: "al LaunchMcpServer"
-      args: ["--projects", "{{project_path}}", "--port", "54321"]
+      type: "http"
+      url: "http://localhost:5000"
       tools: ["*"]
 #   servers:
 #     - name: "mslearn"

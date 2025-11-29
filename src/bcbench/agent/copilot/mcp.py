@@ -1,4 +1,7 @@
+import atexit
 import json
+import subprocess
+import time
 from pathlib import Path
 
 from jinja2 import Template
@@ -10,6 +13,8 @@ from bcbench.operations.project_operations import categorize_projects
 
 logger = get_logger(__name__)
 
+_mcp_server_process: subprocess.Popen | None = None
+
 
 def build_mcp_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path) -> tuple[str | None, list[str] | None]:
     # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
@@ -19,7 +24,7 @@ def build_mcp_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path)
 
     mcp_config = {"mcpServers": {}}
     _test_projects, app_projects = categorize_projects(entry.project_paths)
-    template_context = {"repo_path": repo_path, "project_path": app_projects[0]}
+    template_context = {"repo_path": repo_path}
 
     mcp_server_names: list[str] = []
     for server in mcp_servers:
@@ -50,7 +55,7 @@ def build_mcp_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path)
                 raise AgentError(f"Unsupported MCP server type: {server_type}")
 
     if "altool" in mcp_server_names:
-        _install_al_mcp_server()
+        _install_and_launch_al_mcp_server(repo_path / app_projects[0])
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
     logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
@@ -58,9 +63,24 @@ def build_mcp_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path)
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names
 
 
-def _install_al_mcp_server() -> None:
-    # This could be potentially replaced by `dotnet tool exec` when available in GH runners
-    import subprocess
+def _install_and_launch_al_mcp_server(project_path: Path) -> None:
+    global _mcp_server_process  # noqa: PLW0603
 
     logger.info("Installing AL MCP server tool...")
     subprocess.run("dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global", check=True)
+
+    logger.info("Launching AL MCP server tool...")
+    _mcp_server_process = subprocess.Popen(f"al LaunchMcpServer --projects {project_path}")
+
+    atexit.register(_cleanup_mcp_server)
+
+    logger.info("Waiting 5 seconds for MCP server to start...")
+    time.sleep(5)
+
+
+def _cleanup_mcp_server() -> None:
+    global _mcp_server_process  # noqa: PLW0603
+    if _mcp_server_process is not None and _mcp_server_process.poll() is None:
+        logger.info("Terminating AL MCP server...")
+        _mcp_server_process.terminate()
+    _mcp_server_process = None
