@@ -44,7 +44,7 @@ def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
     Returns:
         ToolUsage with counted tool calls from the log
     """
-    tool_counts: dict[str, int] = {}
+    tool_counts: dict[str, float] = {}
 
     content = log_path.read_text(encoding="utf-8")
 

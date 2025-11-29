@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 class ToolUsage(BaseModel):
     """Tool usage statistics from agent logs."""
 
-    tool_counts: dict[str, int] = {}
+    tool_counts: dict[str, float] = {}
 
 
 class AgentMetrics(BaseModel):

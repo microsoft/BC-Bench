@@ -90,13 +90,13 @@ def _calculate_average_tool_usage(tool_usages: list[ToolUsage]) -> ToolUsage:
     if not tool_usages:
         return ToolUsage()
 
-    aggregated: dict[str, int] = {}
+    aggregated: dict[str, float] = {}
     for usage in tool_usages:
         for tool_name, count in usage.tool_counts.items():
             aggregated[tool_name] = aggregated.get(tool_name, 0) + count
 
     # Calculate average (rounded to nearest integer)
     num_results = len(tool_usages)
-    average_counts = {tool: round(count / num_results) for tool, count in aggregated.items()}
+    average_counts = {tool: round(count / num_results, 2) for tool, count in aggregated.items()}
 
     return ToolUsage(tool_counts=average_counts)

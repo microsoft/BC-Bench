@@ -10,6 +10,7 @@ import yaml
 from bcbench.agent.copilot.mcp import build_mcp_config
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.copilot.prompt import build_prompt
+from bcbench.agent.copilot.tool_usage_parser import parse_tool_usage_from_log
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -82,6 +83,17 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
         stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
         stderr_lines = stderr.splitlines()
         metrics = parse_metrics(stderr_lines)
+
+        session_logs = list(output_dir.glob("session-*.log"))  # look for session log files from Copilot CLI
+        if session_logs:
+            # Use the most recent session log if multiple exist
+            session_log = max(session_logs, key=lambda p: p.stat().st_mtime)
+            tool_usage = parse_tool_usage_from_log(session_log)
+            if metrics is None:
+                metrics = AgentMetrics(tool_usage=tool_usage)
+            else:
+                metrics.tool_usage = tool_usage
+
         return metrics, config
     except subprocess.TimeoutExpired:
         logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
