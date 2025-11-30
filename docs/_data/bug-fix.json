@@ -230,6 +230,39 @@
   },
   {
     "total": 34,
+    "resolved": 20,
+    "failed": 14,
+    "build": 33,
+    "date": "2025-11-29",
+    "model": "claude-haiku-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 181.1,
+    "average_prompt_tokens": 2812205.9,
+    "average_completion_tokens": 10788.2,
+    "average_tool_usage": {
+      "tool_counts": {
+        "report_intent": 1.68,
+        "view": 19.62,
+        "glob": 4.82,
+        "grep": 12.18,
+        "edit": 5.03,
+        "powershell": 4.21,
+        "stop_powershell": 0.06,
+        "altool-compile": 0.15
+      }
+    },
+    "github_run_id": "19783023568",
+    "experiment": {
+      "mcp_servers": [
+        "altool"
+      ],
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 34,
     "resolved": 17,
     "failed": 17,
     "build": 32,
