@@ -32,19 +32,31 @@
     "experiment": null
   },
   {
-    "total": 28,
-    "resolved": 19,
-    "failed": 9,
-    "build": 24,
-    "date": "2025-11-27",
+    "total": 34,
+    "resolved": 16,
+    "failed": 18,
+    "build": 30,
+    "date": "2025-11-29",
     "model": "claude-haiku-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 162.5,
-    "average_prompt_tokens": 2093992.9,
-    "average_completion_tokens": 9525.0,
-    "average_tool_usage": null,
-    "github_run_id": "19740511358",
+    "average_duration": 171.9,
+    "average_prompt_tokens": 2410900.0,
+    "average_completion_tokens": 9526.5,
+    "average_tool_usage": {
+      "tool_counts": {
+        "report_intent": 2.03,
+        "view": 19.12,
+        "glob": 4.85,
+        "grep": 10.65,
+        "edit": 4.56,
+        "powershell": 3.0,
+        "stop_powershell": 0.03,
+        "create": 0.09,
+        "bash": 0.03
+      }
+    },
+    "github_run_id": "19784980762",
     "experiment": null
   },
   {
@@ -244,6 +256,41 @@
     "experiment": {
       "mcp_servers": [
         "altool"
+      ],
+      "custom_instructions": false,
+      "custom_agent": null
+    }
+  },
+  {
+    "total": 34,
+    "resolved": 17,
+    "failed": 17,
+    "build": 32,
+    "date": "2025-11-29",
+    "model": "claude-opus-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 121.7,
+    "average_prompt_tokens": 955202.9,
+    "average_completion_tokens": 4741.0,
+    "average_tool_usage": {
+      "tool_counts": {
+        "report_intent": 2.09,
+        "grep": 6.88,
+        "glob": 0.35,
+        "filesystem-read_multiple_files": 0.21,
+        "edit": 2.74,
+        "view": 6.85,
+        "filesystem-read_text_file": 1.41,
+        "powershell": 0.29,
+        "create": 0.03,
+        "filesystem-edit_file": 0.09
+      }
+    },
+    "github_run_id": "19788241760",
+    "experiment": {
+      "mcp_servers": [
+        "filesystem"
       ],
       "custom_instructions": false,
       "custom_agent": null
