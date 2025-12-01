@@ -27,6 +27,7 @@ class EvaluationResultSummary(BaseModel):
     average_duration: float
     average_prompt_tokens: float
     average_completion_tokens: float
+    average_llm_duration: float
     average_tool_usage: ToolUsage | None = None
 
     github_run_id: str | None = None
@@ -40,6 +41,7 @@ class EvaluationResultSummary(BaseModel):
         durations = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
         prompt_tokens = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
         completion_tokens = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
+        llm_durations = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
 
         # Calculate average tool usage across all results
         tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
@@ -61,6 +63,7 @@ class EvaluationResultSummary(BaseModel):
             average_duration=sum(durations) / len(durations) if durations else 0.0,
             average_prompt_tokens=sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
             average_completion_tokens=sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
+            average_llm_duration=sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
             average_tool_usage=average_tool_usage,
             github_run_id=run_id,
             experiment=experiment,
