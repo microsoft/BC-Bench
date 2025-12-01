@@ -74,8 +74,10 @@ jobs:
           evalRunName="${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}"
           tags="${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}"
           uploadFlag="${{ !inputs.mock && '--upload-results' || '' }}"
+          scoreDef="${{ github.workspace }}/evaluator/scores.py"
+          metricsDef="${{ github.workspace }}/evaluator/metrics.py"
 
-          bceval metrics calculate --input-file "$bcevalResultsFile" --evaluators "resolution_rate,build_rate" --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" --eval-run-name "$evalRunName" --tags "$tags" $uploadFlag
+          bceval metrics calculate --input-file "$bcevalResultsFile" --evaluators "resolution_rate,build_rate" --evaluator-definitions "$scoreDef" --metric-definitions "$metricsDef" --metrics "bc_bench_metrics" --eval-run-name "$evalRunName" --tags "$tags" $uploadFlag
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock }}
