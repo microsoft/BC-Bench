@@ -33,6 +33,7 @@ class AgentMetrics(BaseModel):
 
     # Total execution time in seconds
     execution_time: float | None = None
+    llm_duration: float | None = None
 
     # Token usage from LLM calls
     prompt_tokens: int | None = None
