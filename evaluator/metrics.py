@@ -5,4 +5,5 @@ class BcBenchMetrics:
     def __call__(self, *, metadata: dict, **kwargs):
         return {
             "llm_duration": metadata.get("llm_duration", 0),
+            "tool_calls": metadata.get("tool_calls", {}),
         }
