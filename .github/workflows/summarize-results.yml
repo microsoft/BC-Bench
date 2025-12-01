@@ -77,7 +77,7 @@ jobs:
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \
-            --tags "${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}" "${{ !inputs.mock && '--upload-results' || '' }}"
+            --tags "${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}" ${{ !inputs.mock && '--upload-results' || '' }}
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock }}
