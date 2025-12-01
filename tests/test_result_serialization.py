@@ -133,6 +133,7 @@ class TestCategorySerialization:
             "average_duration": 120.5,
             "average_prompt_tokens": 1500.0,
             "average_completion_tokens": 600.0,
+            "average_llm_duration": 80.0,
         }
 
         summary = EvaluationResultSummary.model_validate(payload)
@@ -246,6 +247,8 @@ class TestCategorySerialization:
 
         assert loaded.metrics is not None
         assert loaded.metrics.tool_usage is not None
+        assert original.metrics is not None
+        assert original.metrics.tool_usage is not None
         assert loaded.metrics.tool_usage.tool_counts == original.metrics.tool_usage.tool_counts
 
 

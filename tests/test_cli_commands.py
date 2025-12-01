@@ -335,6 +335,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_duration": 120.5,
             "average_prompt_tokens": 5000.0,
             "average_completion_tokens": 1500.0,
+            "average_llm_duration": 80.0,
             "github_run_id": "run_001",
             "experiment": {
                 "mcp_servers": ["server1", "server2"],
@@ -354,6 +355,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_duration": 95.0,
             "average_prompt_tokens": 3500.0,
             "average_completion_tokens": 1000.0,
+            "average_llm_duration": 65.0,
             "github_run_id": "run_003",
             "experiment": {
                 "mcp_servers": None,
@@ -377,6 +379,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_duration": 110.0,
             "average_prompt_tokens": 4500.0,
             "average_completion_tokens": 1200.0,
+            "average_llm_duration": 75.0,
             "github_run_id": "run_002",
             "experiment": {
                 "mcp_servers": None,
@@ -405,6 +408,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "average_duration": 130.0,
         "average_prompt_tokens": 5200.0,
         "average_completion_tokens": 1600.0,
+        "average_llm_duration": 90.0,
         "github_run_id": "run_004",
         "experiment": {
             "mcp_servers": ["server1", "server2"],
@@ -476,6 +480,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "average_duration": 100.0,
         "average_prompt_tokens": 4800.0,
         "average_completion_tokens": 1400.0,
+        "average_llm_duration": 70.0,
         "github_run_id": "run_005",
         "experiment": {
             "mcp_servers": None,
@@ -535,6 +540,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "average_duration": 115.0,
         "average_prompt_tokens": 4900.0,
         "average_completion_tokens": 1350.0,
+        "average_llm_duration": 78.0,
         "github_run_id": "run_006",
         "experiment": {
             "mcp_servers": None,  # Different from existing ["server1", "server2"]

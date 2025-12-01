@@ -22,6 +22,7 @@ class TestEvaluationResultSummary:
             average_duration=120.5,
             average_prompt_tokens=5000.0,
             average_completion_tokens=1200.0,
+            average_llm_duration=80.0,
         )
 
         summary_file = "test.json"
@@ -57,6 +58,7 @@ class TestEvaluationResultSummary:
             average_duration=90.0,
             average_prompt_tokens=3000.0,
             average_completion_tokens=800.0,
+            average_llm_duration=60.0,
         )
 
         summary.save(tmp_path, summary_file="custom_summary.json")
@@ -244,6 +246,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
             experiment=experiment,
         )
 
@@ -265,6 +268,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
         )
 
         assert summary.experiment is None
@@ -286,6 +290,7 @@ class TestExperimentConfiguration:
             average_duration=120.5,
             average_prompt_tokens=5000.0,
             average_completion_tokens=1200.0,
+            average_llm_duration=80.0,
             experiment=experiment,
         )
 
@@ -312,6 +317,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
             experiment=None,
         )
 
