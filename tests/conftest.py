@@ -220,7 +220,7 @@ def sample_testgen_result() -> TestGenerationResult:
 @pytest.fixture
 def sample_bugfix_result_with_metrics() -> BugFixResult:
     return create_bugfix_result(
-        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200),
+        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200, llm_duration=100.0, tool_usage={"view_code": 2, "run_tests": 1}),
     )
 
 
