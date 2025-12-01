@@ -9,7 +9,6 @@ from jinja2 import Template
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.operations.project_operations import categorize_projects
 
 logger = get_logger(__name__)
 
@@ -23,7 +22,6 @@ def build_mcp_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path)
         return None, None
 
     mcp_config = {"mcpServers": {}}
-    _test_projects, app_projects = categorize_projects(entry.project_paths)
     template_context = {"repo_path": repo_path}
 
     mcp_server_names: list[str] = []
@@ -55,7 +53,7 @@ def build_mcp_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path)
                 raise AgentError(f"Unsupported MCP server type: {server_type}")
 
     if "altool" in mcp_server_names:
-        _install_and_launch_al_mcp_server(repo_path / app_projects[0])
+        _install_and_launch_al_mcp_server([repo_path / proj_path for proj_path in entry.project_paths])
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
     logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
@@ -63,14 +61,14 @@ def build_mcp_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path)
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names
 
 
-def _install_and_launch_al_mcp_server(project_path: Path) -> None:
+def _install_and_launch_al_mcp_server(project_paths: list[Path]) -> None:
     global _mcp_server_process  # noqa: PLW0603
 
     logger.info("Installing AL MCP server tool...")
     subprocess.run("dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global", check=True)
 
     logger.info("Launching AL MCP server tool...")
-    _mcp_server_process = subprocess.Popen(f"al LaunchMcpServer --projects {project_path}")
+    _mcp_server_process = subprocess.Popen(f"al LaunchMcpServer --projects {','.join(str(p) for p in project_paths)}")
 
     atexit.register(_cleanup_mcp_server)
 
