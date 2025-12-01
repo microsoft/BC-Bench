@@ -30,7 +30,7 @@ TOOL_CALL_PATTERN = re.compile(
 )
 
 
-def parse_tool_usage_from_log(log_path: Path) -> dict[str, float]:
+def parse_tool_usage_from_log(log_path: Path) -> dict[str, int]:
     """Parse tool usage from a single Copilot CLI log file.
 
     The log file format is timestamped text with embedded JSON responses.
@@ -42,7 +42,7 @@ def parse_tool_usage_from_log(log_path: Path) -> dict[str, float]:
     Returns:
         Dict mapping tool names to call counts from the log
     """
-    tool_counts: dict[str, float] = {}
+    tool_counts: dict[str, int] = {}
 
     content = log_path.read_text(encoding="utf-8")
 

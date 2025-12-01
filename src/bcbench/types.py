@@ -34,7 +34,7 @@ class AgentMetrics(BaseModel):
     completion_tokens: int | None = None
 
     # Tool usage statistics from agent logs
-    tool_usage: dict[str, float] | None = None
+    tool_usage: dict[str, int] | None = None
 
 
 class ExperimentConfiguration(BaseModel):

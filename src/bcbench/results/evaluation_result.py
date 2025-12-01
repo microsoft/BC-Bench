@@ -85,7 +85,7 @@ class EvaluationResultSummary(BaseModel):
         logger.info(f"Saved evaluation summary to {output_file}")
 
 
-def _calculate_average_tool_usage(tool_usages: list[dict[str, float]]) -> dict[str, float]:
+def _calculate_average_tool_usage(tool_usages: list[dict[str, int]]) -> dict[str, float]:
     """Calculate average tool usage across multiple results.
 
     Sums up all tool counts and divides by the number of results to get average.
