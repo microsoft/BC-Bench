@@ -22,6 +22,7 @@ class TestEvaluationResultSummary:
             average_duration=120.5,
             average_prompt_tokens=5000.0,
             average_completion_tokens=1200.0,
+            average_llm_duration=80.0,
         )
 
         summary_file = "test.json"
@@ -57,6 +58,7 @@ class TestEvaluationResultSummary:
             average_duration=90.0,
             average_prompt_tokens=3000.0,
             average_completion_tokens=800.0,
+            average_llm_duration=60.0,
         )
 
         summary.save(tmp_path, summary_file="custom_summary.json")
@@ -157,8 +159,6 @@ class TestFromResults:
         assert summary.average_completion_tokens == 0.0
 
     def test_from_results_calculates_average_tool_usage(self):
-        from bcbench.types import ToolUsage
-
         results = [
             create_bugfix_result(
                 instance_id="test__1",
@@ -166,7 +166,7 @@ class TestFromResults:
                 resolved=True,
                 metrics=AgentMetrics(
                     execution_time=100.0,
-                    tool_usage=ToolUsage(tool_counts={"bash": 10, "view": 5}),
+                    tool_usage={"bash": 10, "view": 5},
                 ),
             ),
             create_bugfix_result(
@@ -175,7 +175,7 @@ class TestFromResults:
                 resolved=True,
                 metrics=AgentMetrics(
                     execution_time=100.0,
-                    tool_usage=ToolUsage(tool_counts={"bash": 6, "view": 3, "edit": 2}),
+                    tool_usage={"bash": 6, "view": 3, "edit": 2},
                 ),
             ),
         ]
@@ -184,11 +184,11 @@ class TestFromResults:
 
         assert summary.average_tool_usage is not None
         # bash: (10 + 6) / 2 = 8
-        assert summary.average_tool_usage.tool_counts["bash"] == 8
+        assert summary.average_tool_usage["bash"] == 8
         # view: (5 + 3) / 2 = 4
-        assert summary.average_tool_usage.tool_counts["view"] == 4
+        assert summary.average_tool_usage["view"] == 4
         # edit: (0 + 2) / 2 = 1
-        assert summary.average_tool_usage.tool_counts["edit"] == 1
+        assert summary.average_tool_usage["edit"] == 1
 
     def test_from_results_handles_no_tool_usage(self):
         results = [
@@ -244,6 +244,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
             experiment=experiment,
         )
 
@@ -265,6 +266,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
         )
 
         assert summary.experiment is None
@@ -286,6 +288,7 @@ class TestExperimentConfiguration:
             average_duration=120.5,
             average_prompt_tokens=5000.0,
             average_completion_tokens=1200.0,
+            average_llm_duration=80.0,
             experiment=experiment,
         )
 
@@ -312,6 +315,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
             experiment=None,
         )
 

@@ -36,6 +36,8 @@ class TestWriteBcevalResults:
         assert data["metadata"]["resolved"] is True
         assert data["metadata"]["run_id"] == "test_run_123"
         assert data["metadata"]["project"] == "Shopify"
+        assert data["metadata"]["llm_duration"] == 100.0
+        assert data["metadata"]["tool_usage"] == {"view_code": 2, "run_tests": 1}
 
     def test_handles_none_prompt_tokens(self, tmp_path, sample_dataset_file, sample_testgen_result, problem_statement_dir):
         output_dir = tmp_path / "output"

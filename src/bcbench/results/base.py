@@ -57,22 +57,11 @@ class BaseEvaluationResult(BaseModel):
         Returns:
             Result instance (base or category-specific subclass)
         """
-        # Warn about missing critical data
+        # Warn about missing metrics if they are not present
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        else:
-            missing_metrics = []
-            if context.metrics.execution_time is None:
-                missing_metrics.append("execution_time")
-            if context.metrics.prompt_tokens is None:
-                missing_metrics.append("prompt_tokens")
-            if context.metrics.completion_tokens is None:
-                missing_metrics.append("completion_tokens")
-            if context.metrics.tool_usage is None:
-                missing_metrics.append("tool_usage")
-
-            if missing_metrics:
-                logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
+        elif missing_metrics := [name for name in AgentMetrics.model_fields if getattr(context.metrics, name) is None]:
+            logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         project = context.entry.extract_project_name()
         return cls(

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, ExperimentConfiguration, ToolUsage
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,8 @@ class EvaluationResultSummary(BaseModel):
     average_duration: float
     average_prompt_tokens: float
     average_completion_tokens: float
-    average_tool_usage: ToolUsage | None = None
+    average_llm_duration: float
+    average_tool_usage: dict[str, float] | None = None
 
     github_run_id: str | None = None
     experiment: ExperimentConfiguration | None = None
@@ -40,6 +41,7 @@ class EvaluationResultSummary(BaseModel):
         durations = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
         prompt_tokens = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
         completion_tokens = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
+        llm_durations = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
 
         # Calculate average tool usage across all results
         tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
@@ -61,6 +63,7 @@ class EvaluationResultSummary(BaseModel):
             average_duration=sum(durations) / len(durations) if durations else 0.0,
             average_prompt_tokens=sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
             average_completion_tokens=sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
+            average_llm_duration=sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
             average_tool_usage=average_tool_usage,
             github_run_id=run_id,
             experiment=experiment,
@@ -82,21 +85,19 @@ class EvaluationResultSummary(BaseModel):
         logger.info(f"Saved evaluation summary to {output_file}")
 
 
-def _calculate_average_tool_usage(tool_usages: list[ToolUsage]) -> ToolUsage:
+def _calculate_average_tool_usage(tool_usages: list[dict[str, int]]) -> dict[str, float]:
     """Calculate average tool usage across multiple results.
 
     Sums up all tool counts and divides by the number of results to get average.
     """
     if not tool_usages:
-        return ToolUsage()
+        return {}
 
     aggregated: dict[str, float] = {}
     for usage in tool_usages:
-        for tool_name, count in usage.tool_counts.items():
+        for tool_name, count in usage.items():
             aggregated[tool_name] = aggregated.get(tool_name, 0) + count
 
     # Calculate average (rounded to nearest integer)
     num_results = len(tool_usages)
-    average_counts = {tool: round(count / num_results, 2) for tool, count in aggregated.items()}
-
-    return ToolUsage(tool_counts=average_counts)
+    return {tool: round(count / num_results, 2) for tool, count in aggregated.items()}

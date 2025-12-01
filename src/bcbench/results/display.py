@@ -25,9 +25,9 @@ def create_console_summary(results: list[BaseEvaluationResult]) -> None:
     tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
     if tool_usages:
         avg_usage = _calculate_average_tool_usage(tool_usages)
-        if avg_usage.tool_counts:
+        if avg_usage:
             console.print("\n[bold cyan]Average Tool Usage[/bold cyan]")
-            sorted_tools = sorted(avg_usage.tool_counts.items(), key=lambda x: x[1], reverse=True)
+            sorted_tools = sorted(avg_usage.items(), key=lambda x: x[1], reverse=True)
             for tool_name, count in sorted_tools:
                 console.print(f"  {tool_name}: [bold]{count}[/bold]")
 
@@ -66,8 +66,8 @@ def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
     tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
     if tool_usages:
         avg_usage = _calculate_average_tool_usage(tool_usages)
-        if avg_usage.tool_counts:
-            sorted_tools = sorted(avg_usage.tool_counts.items(), key=lambda x: x[1], reverse=True)
+        if avg_usage:
+            sorted_tools = sorted(avg_usage.items(), key=lambda x: x[1], reverse=True)
             tool_lines = [f"  - `{tool}`: {count}" for tool, count in sorted_tools]
             tool_usage_section = "\n\n## Average Tool Usage\n" + "\n".join(tool_lines)
 
