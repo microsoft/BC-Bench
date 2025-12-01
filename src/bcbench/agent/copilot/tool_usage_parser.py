@@ -19,9 +19,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from bcbench.types import ToolUsage
-
-__all__ = ["ToolUsage", "parse_tool_usage_from_log"]
+__all__ = ["parse_tool_usage_from_log"]
 
 # Regex to find tool call function names in the log content
 # Matches tool calls (with "arguments") but NOT tool definitions (with "description")
@@ -32,7 +30,7 @@ TOOL_CALL_PATTERN = re.compile(
 )
 
 
-def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
+def parse_tool_usage_from_log(log_path: Path) -> dict[str, float]:
     """Parse tool usage from a single Copilot CLI log file.
 
     The log file format is timestamped text with embedded JSON responses.
@@ -42,7 +40,7 @@ def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
         log_path: Path to the Copilot CLI log file
 
     Returns:
-        ToolUsage with counted tool calls from the log
+        Dict mapping tool names to call counts from the log
     """
     tool_counts: dict[str, float] = {}
 
@@ -54,4 +52,4 @@ def parse_tool_usage_from_log(log_path: Path) -> ToolUsage:
     for tool_name in matches:
         tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
 
-    return ToolUsage(tool_counts=tool_counts)
+    return tool_counts

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, ExperimentConfiguration, ToolUsage
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 
@@ -28,7 +28,7 @@ class EvaluationResultSummary(BaseModel):
     average_prompt_tokens: float
     average_completion_tokens: float
     average_llm_duration: float
-    average_tool_usage: ToolUsage | None = None
+    average_tool_usage: dict[str, float] | None = None
 
     github_run_id: str | None = None
     experiment: ExperimentConfiguration | None = None
@@ -85,21 +85,19 @@ class EvaluationResultSummary(BaseModel):
         logger.info(f"Saved evaluation summary to {output_file}")
 
 
-def _calculate_average_tool_usage(tool_usages: list[ToolUsage]) -> ToolUsage:
+def _calculate_average_tool_usage(tool_usages: list[dict[str, float]]) -> dict[str, float]:
     """Calculate average tool usage across multiple results.
 
     Sums up all tool counts and divides by the number of results to get average.
     """
     if not tool_usages:
-        return ToolUsage()
+        return {}
 
     aggregated: dict[str, float] = {}
     for usage in tool_usages:
-        for tool_name, count in usage.tool_counts.items():
+        for tool_name, count in usage.items():
             aggregated[tool_name] = aggregated.get(tool_name, 0) + count
 
     # Calculate average (rounded to nearest integer)
     num_results = len(tool_usages)
-    average_counts = {tool: round(count / num_results, 2) for tool, count in aggregated.items()}
-
-    return ToolUsage(tool_counts=average_counts)
+    return {tool: round(count / num_results, 2) for tool, count in aggregated.items()}

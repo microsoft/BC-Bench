@@ -2,7 +2,6 @@ import json
 
 import pytest
 
-from bcbench.agent.copilot.tool_usage_parser import ToolUsage
 from bcbench.commands.result import _experiments_equal
 from bcbench.results.base import create_result_from_json
 from bcbench.results.evaluation_result import EvaluationResultSummary
@@ -184,7 +183,7 @@ class TestCategorySerialization:
         assert data["experiment"]["mcp_servers"] is None
 
     def test_tool_usage_saves_as_dict(self, tmp_path):
-        tool_usage = ToolUsage(tool_counts={"bash": 5, "view": 3, "search": 2})
+        tool_usage = {"bash": 5, "view": 3, "search": 2}
         result = create_bugfix_result(
             instance_id="test__tool-usage",
             project="app",
@@ -199,7 +198,7 @@ class TestCategorySerialization:
 
         assert data["metrics"]["tool_usage"] is not None
         assert isinstance(data["metrics"]["tool_usage"], dict)
-        assert data["metrics"]["tool_usage"]["tool_counts"] == {"bash": 5, "view": 3, "search": 2}
+        assert data["metrics"]["tool_usage"] == {"bash": 5, "view": 3, "search": 2}
 
     def test_tool_usage_loads_from_json(self):
         payload = {
@@ -215,7 +214,7 @@ class TestCategorySerialization:
                 "execution_time": 100.0,
                 "prompt_tokens": 5000,
                 "completion_tokens": 1000,
-                "tool_usage": {"tool_counts": {"bash": 5, "view": 3}},
+                "tool_usage": {"bash": 5, "view": 3},
             },
         }
 
@@ -223,11 +222,11 @@ class TestCategorySerialization:
 
         assert result.metrics is not None
         assert result.metrics.tool_usage is not None
-        assert result.metrics.tool_usage.tool_counts["bash"] == 5
-        assert result.metrics.tool_usage.tool_counts["view"] == 3
+        assert result.metrics.tool_usage["bash"] == 5
+        assert result.metrics.tool_usage["view"] == 3
 
     def test_tool_usage_round_trip(self, tmp_path):
-        tool_usage = ToolUsage(tool_counts={"bash": 10, "view": 5})
+        tool_usage = {"bash": 10, "view": 5}
         original = create_bugfix_result(
             instance_id="round-trip-tool-usage",
             project="test-project",
@@ -249,7 +248,7 @@ class TestCategorySerialization:
         assert loaded.metrics.tool_usage is not None
         assert original.metrics is not None
         assert original.metrics.tool_usage is not None
-        assert loaded.metrics.tool_usage.tool_counts == original.metrics.tool_usage.tool_counts
+        assert loaded.metrics.tool_usage == original.metrics.tool_usage
 
 
 class TestExperimentsEqual:
