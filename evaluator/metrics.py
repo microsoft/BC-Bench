@@ -3,7 +3,7 @@ from __future__ import annotations
 
 class LlmDuration:
     def __call__(self, *, metadata: dict, **kwargs):
-        return metadata.get("llm_duration", 0)
+        return metadata.pop("llm_duration", 0)
 
 
 class ToolCalls:
