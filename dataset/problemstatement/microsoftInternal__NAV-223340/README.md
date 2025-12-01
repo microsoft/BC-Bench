@@ -11,7 +11,6 @@ But there is nothing for Production BOMs, Routings, Versions.
 
 Expected:
 "Warn about non-certified production BOMs and Routings", enabled by default
-===
 feature added via OSS.
 It is useful, but might be annoying for users who for some reason mainly work with non-certified orders.
 
