@@ -1,1 +1,27 @@
-[]
+[
+  {
+    "total": 37,
+    "resolved": 7,
+    "failed": 30,
+    "build": 25,
+    "date": "2025-12-02",
+    "model": "claude-opus-4.5",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "test-generation",
+    "average_duration": 192.5,
+    "average_prompt_tokens": 1802910.8,
+    "average_completion_tokens": 6264.9,
+    "average_llm_duration": 169.6476216216216,
+    "average_tool_usage": {
+      "report_intent": 2.38,
+      "grep": 7.62,
+      "view": 13.35,
+      "create": 0.78,
+      "glob": 1.59,
+      "edit": 0.95,
+      "powershell": 0.22
+    },
+    "github_run_id": "19836508412",
+    "experiment": null
+  }
+]
