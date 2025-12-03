@@ -20,6 +20,10 @@ jobs:
     runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
     needs: get-entries
     if: needs.get-entries.outputs.entries != '[]'
+    environment: ado-read
+    permissions:
+      contents: read
+      id-token: write
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
@@ -34,7 +38,8 @@ jobs:
         uses: ./.github/actions/setup-bc-container
         with:
           instance-id: ${{ matrix.entry }}
-          ado-token: ${{ secrets.ADO_TOKEN }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run build and test verification for ${{ matrix.entry }}

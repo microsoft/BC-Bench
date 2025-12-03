@@ -5,8 +5,11 @@ inputs:
   instance-id:
     description: Instance ID for the dataset entry
     required: true
-  ado-token:
-    description: Token for cloning the NAV repository
+  azure-client-id:
+    description: Azure AD application client ID for OIDC authentication
+    required: true
+  azure-tenant-id:
+    description: Azure AD tenant ID for OIDC authentication
     required: true
   github-token:
     description: GitHub token for accessing public repositories
@@ -38,10 +41,21 @@ runs:
       run: Install-Module -Name BcContainerHelper -Force -AllowClobber
       shell: pwsh
 
+    - name: Azure Login with OIDC for cloning internal repository
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        allow-no-subscriptions: true
+
     - name: Setup BC container and repository for ${{ inputs.instance-id }}
       id: setup
       env:
-        ADO_TOKEN: ${{ inputs.ado-token }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
-      run: .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}"
+      run: |
+        # Get Azure DevOps access token via OIDC
+        $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
+        Write-Output "::add-mask::$env:ADO_TOKEN"
+
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}"
       shell: pwsh
