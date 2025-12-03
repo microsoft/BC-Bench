@@ -4,6 +4,7 @@
     "resolved": 11,
     "failed": 14,
     "build": 22,
+    "percentage": 44.0,
     "date": "2025-11-23",
     "model": "claude-sonnet-4",
     "agent_name": "GitHub Copilot CLI",
@@ -14,14 +15,14 @@
     "average_llm_duration": null,
     "average_tool_usage": null,
     "github_run_id": "19614090363",
-    "experiment": null,
-    "percentage": 44.0
+    "experiment": null
   },
   {
     "total": 32,
     "resolved": 16,
     "failed": 16,
     "build": 30,
+    "percentage": 50.0,
     "date": "2025-11-28",
     "model": "claude-sonnet-4.5",
     "agent_name": "GitHub Copilot CLI",
@@ -32,42 +33,42 @@
     "average_llm_duration": null,
     "average_tool_usage": null,
     "github_run_id": "19745030800",
-    "experiment": null,
-    "percentage": 50.0
+    "experiment": null
   },
   {
-    "total": 34,
-    "resolved": 16,
-    "failed": 18,
-    "build": 30,
-    "date": "2025-11-29",
+    "total": 45,
+    "resolved": 23,
+    "failed": 22,
+    "build": 41,
+    "percentage": 51.1,
+    "date": "2025-12-03",
     "model": "claude-haiku-4.5",
     "agent_name": "GitHub Copilot CLI",
     "category": "bug-fix",
-    "average_duration": 171.9,
-    "average_prompt_tokens": 2410900.0,
-    "average_completion_tokens": 9526.5,
-    "average_llm_duration": null,
+    "average_duration": 197.8,
+    "average_prompt_tokens": 2544137.8,
+    "average_completion_tokens": 11328.9,
+    "average_llm_duration": 162.90546666666665,
     "average_tool_usage": {
-      "report_intent": 2.03,
-      "view": 19.12,
-      "glob": 4.85,
-      "grep": 10.65,
-      "edit": 4.56,
-      "powershell": 3.0,
-      "stop_powershell": 0.03,
-      "create": 0.09,
-      "bash": 0.03
+      "report_intent": 1.62,
+      "view": 20.0,
+      "glob": 5.91,
+      "grep": 11.93,
+      "powershell": 4.71,
+      "edit": 4.2,
+      "read_powershell": 0.07,
+      "stop_powershell": 0.09,
+      "create": 0.02
     },
-    "github_run_id": "19784980762",
-    "experiment": null,
-    "percentage": 47.1
+    "github_run_id": "19900801771",
+    "experiment": null
   },
   {
     "total": 19,
     "resolved": 6,
     "failed": 13,
     "build": 15,
+    "percentage": 31.6,
     "date": "2025-11-10",
     "model": "gpt-5",
     "agent_name": "GitHub Copilot CLI",
@@ -78,14 +79,14 @@
     "average_llm_duration": null,
     "average_tool_usage": null,
     "github_run_id": "19227643144",
-    "experiment": null,
-    "percentage": 31.6
+    "experiment": null
   },
   {
     "total": 37,
     "resolved": 4,
     "failed": 33,
     "build": 23,
+    "percentage": 10.8,
     "date": "2025-12-02",
     "model": "azure/gpt-4.1",
     "agent_name": "mini-bc-agent",
@@ -96,14 +97,14 @@
     "average_llm_duration": 0.0,
     "average_tool_usage": null,
     "github_run_id": "19855931749",
-    "experiment": null,
-    "percentage": 10.8
+    "experiment": null
   },
   {
     "total": 45,
     "resolved": 20,
     "failed": 25,
     "build": 39,
+    "percentage": 44.4,
     "date": "2025-12-03",
     "model": "gpt-5.1-codex-mini",
     "agent_name": "GitHub Copilot CLI",
@@ -125,14 +126,14 @@
       "create": 0.02
     },
     "github_run_id": "19873787284",
-    "experiment": null,
-    "percentage": 44.4
+    "experiment": null
   },
   {
     "total": 34,
     "resolved": 16,
     "failed": 18,
     "build": 29,
+    "percentage": 47.1,
     "date": "2025-11-30",
     "model": "gpt-5.1-codex",
     "agent_name": "GitHub Copilot CLI",
@@ -151,14 +152,14 @@
       "create": 0.03
     },
     "github_run_id": "19795586715",
-    "experiment": null,
-    "percentage": 47.1
+    "experiment": null
   },
   {
     "total": 22,
     "resolved": 9,
     "failed": 13,
     "build": 19,
+    "percentage": 40.9,
     "date": "2025-11-15",
     "model": "gpt-5.1",
     "agent_name": "GitHub Copilot CLI",
@@ -169,14 +170,14 @@
     "average_llm_duration": null,
     "average_tool_usage": null,
     "github_run_id": "19388071339",
-    "experiment": null,
-    "percentage": 40.9
+    "experiment": null
   },
   {
     "total": 22,
     "resolved": 12,
     "failed": 10,
     "build": 19,
+    "percentage": 54.5,
     "date": "2025-11-16",
     "model": "claude-haiku-4.5",
     "agent_name": "GitHub Copilot CLI",
@@ -191,14 +192,14 @@
       "mcp_servers": null,
       "custom_instructions": true,
       "custom_agent": null
-    },
-    "percentage": 54.5
+    }
   },
   {
     "total": 34,
     "resolved": 21,
     "failed": 13,
     "build": 34,
+    "percentage": 61.8,
     "date": "2025-11-29",
     "model": "claude-opus-4.5",
     "agent_name": "GitHub Copilot CLI",
@@ -216,14 +217,14 @@
       "glob": 0.29
     },
     "github_run_id": "19781418834",
-    "experiment": null,
-    "percentage": 61.8
+    "experiment": null
   },
   {
     "total": 34,
     "resolved": 20,
     "failed": 14,
     "build": 33,
+    "percentage": 58.8,
     "date": "2025-11-29",
     "model": "claude-haiku-4.5",
     "agent_name": "GitHub Copilot CLI",
@@ -249,14 +250,14 @@
       ],
       "custom_instructions": false,
       "custom_agent": null
-    },
-    "percentage": 58.8
+    }
   },
   {
     "total": 34,
     "resolved": 17,
     "failed": 17,
     "build": 32,
+    "percentage": 50.0,
     "date": "2025-11-29",
     "model": "claude-opus-4.5",
     "agent_name": "GitHub Copilot CLI",
@@ -284,14 +285,14 @@
       ],
       "custom_instructions": false,
       "custom_agent": null
-    },
-    "percentage": 50.0
+    }
   },
   {
     "total": 37,
     "resolved": 21,
     "failed": 16,
     "build": 36,
+    "percentage": 56.8,
     "date": "2025-12-01",
     "model": "claude-opus-4.5",
     "agent_name": "GitHub Copilot CLI",
@@ -316,7 +317,6 @@
       ],
       "custom_instructions": false,
       "custom_agent": null
-    },
-    "percentage": 56.8
+    }
   }
 ]
