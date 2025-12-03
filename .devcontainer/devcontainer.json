@@ -1,6 +1,6 @@
 {
 	"name": "BC-Bench Development",
-	"image": "mcr.microsoft.com/devcontainers/python:3.12",
+	"image": "mcr.microsoft.com/devcontainers/python:3.13",
 	"features": {
 		"ghcr.io/devcontainers/features/powershell": {},
 		"ghcr.io/devcontainers-contrib/features/uv": {},
