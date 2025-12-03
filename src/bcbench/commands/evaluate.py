@@ -84,9 +84,6 @@ def evaluate_mini(
             repo_path=ctx.repo_path,
             category=category,
             model=ctx.model,
-            container_name=ctx.container_name,
-            username=ctx.username,
-            password=ctx.password,
             output_dir=ctx.result_dir,
         ),
     )
