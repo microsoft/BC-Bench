@@ -99,6 +99,7 @@ jobs:
     uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write
+      id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
