@@ -56,9 +56,6 @@ def run_mini_agent(
     repo_path: Path,
     model: str,
     category: EvaluationCategory,
-    container_name: str | None = None,
-    username: str = "admin",
-    password: str | None = None,
     output_dir: Path | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
     """Run mini-bc-agent on a single dataset entry.
@@ -73,10 +70,6 @@ def run_mini_agent(
     mini_bc_config = yaml.safe_load(config_file.read_text())
     agent_config = mini_bc_config.get("agent", {})
     env_config = mini_bc_config.get("environment", {})
-
-    enable_bc_tools: bool = env_config.get("enable_bc_tools")
-    if enable_bc_tools and (not container_name or not password):
-        raise ConfigurationError("container_name and password are required when enable_bc_tools is True")
 
     logger.info(f"Running mini-bc-agent on: {entry.instance_id}")
 
@@ -93,14 +86,10 @@ def run_mini_agent(
     agent = BCAgent(
         LitellmModel(model_name=model),
         BCEnvironment(
-            container_name=container_name,
             repo_path=str(repo_path),
-            username=username,
-            password=password,
             project_paths=entry.project_paths,
             cwd=str(repo_path),
             include_project_paths=env_config.get("include_project_paths"),
-            enable_bc_tools=enable_bc_tools,
             version=entry.environment_setup_version,
         ),
         **agent_config,
