@@ -199,7 +199,7 @@ function Wait-JobWithProgress {
         [string]$StatusMessage = "Job",
 
         [Parameter(Mandatory = $false)]
-        [int]$TimeoutMinutes = 40
+        [int]$TimeoutMinutes = 20
     )
 
     Write-Log "Waiting for $StatusMessage to complete (timeout: $TimeoutMinutes minutes)..." -Level Info
