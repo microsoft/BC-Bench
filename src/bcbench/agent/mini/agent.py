@@ -90,7 +90,6 @@ def run_mini_agent(
             project_paths=entry.project_paths,
             cwd=str(repo_path),
             include_project_paths=env_config.get("include_project_paths"),
-            version=entry.environment_setup_version,
         ),
         **agent_config,
     )

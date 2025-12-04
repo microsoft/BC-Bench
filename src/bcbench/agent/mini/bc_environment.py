@@ -6,12 +6,10 @@ from typing import Any
 
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
 
-from bcbench.config import get_config
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
-_config = get_config()
 
 
 @dataclass
@@ -19,7 +17,6 @@ class BCEnvironmentConfig(LocalEnvironmentConfig):
     repo_path: str = ""  # Store as string for JSON serialization
     include_project_paths: bool = False
     project_paths: list[str] = field(default_factory=list)
-    version: str = ""
 
 
 class BCEnvironment(LocalEnvironment):
@@ -32,18 +29,13 @@ class BCEnvironment(LocalEnvironment):
 
     def execute(self, command: str, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         command = command.strip()
-        return self._execute_powershell(command, cwd, timeout)
 
-    def _execute_powershell(self, command: str, cwd: str, timeout: int | None, log_command: bool = True) -> dict[str, Any]:
-        """Execute a PowerShell command"""
         if timeout is None:
             timeout = self.config.timeout
 
         working_dir: str = cwd or self.config.cwd or str(Path.cwd())
 
-        if log_command:
-            command_preview: str = command if len(command) <= 100 else command[:97] + "..."
-            logger.info(f"Executing:\n{command_preview}")
+        logger.info(f"Executing:\n{command if len(command) <= 100 else command[:97] + '...'}")
 
         try:
             result = subprocess.run(
@@ -69,7 +61,7 @@ class BCEnvironment(LocalEnvironment):
         except subprocess.CalledProcessError as e:
             error_msg = f"Command failed with exit code {e.returncode}"
             logger.warning(error_msg)
-            if e.stderr and log_command:
+            if e.stderr:
                 logger.debug(f"Error output (first line):\n{e.stderr.splitlines()[0]}")
 
             return {"returncode": e.returncode, "output": f"{error_msg}\n{e.stdout or ''}{e.stderr or ''}".strip()}
@@ -87,7 +79,6 @@ class BCEnvironment(LocalEnvironment):
                 "repo_path": self.config.repo_path,
                 "project_paths": self.config.project_paths,
                 "include_project_paths": self.config.include_project_paths,
-                "version": self.config.version,
             }
         )
 
