@@ -46,6 +46,23 @@ if (-not $RepoPath) {
 }
 Write-Log "Using repository path: $RepoPath" -Level Info
 
+if (Test-Path $RepoPath) {
+    Write-Log "Repository already exists at $RepoPath, skipping clone." -Level Warning
+}
+else {
+    try {
+        [hashtable] $cloneInfo = Get-RepoCloneInfo -Entry $entries[0]
+        [string] $commitSha = $entries[0].base_commit
+
+        Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
+        Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha
+    }
+    catch {
+        Write-Log "Failed to clone repository ($($entries[0].repo)): $($_.Exception.Message)" -Level Error
+        exit 1
+    }
+}
+
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
 Write-Log "Container name: $ContainerName" -Level Info
@@ -69,23 +86,6 @@ else {
     }
     catch {
         Write-Log "Failed to create container $ContainerName`: $($_.Exception.Message)" -Level Error
-        exit 1
-    }
-}
-
-if (Test-Path $RepoPath) {
-    Write-Log "Repository already exists at $RepoPath, skipping clone." -Level Warning
-}
-else {
-    try {
-        [hashtable] $cloneInfo = Get-RepoCloneInfo -Entry $entries[0]
-        [string] $commitSha = $entries[0].base_commit
-
-        Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
-        Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha
-    }
-    catch {
-        Write-Log "Failed to clone repository ($($entries[0].repo)): $($_.Exception.Message)" -Level Error
         exit 1
     }
 }
