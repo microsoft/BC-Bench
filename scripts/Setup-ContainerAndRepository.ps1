@@ -46,32 +46,6 @@ if (-not $RepoPath) {
 }
 Write-Log "Using repository path: $RepoPath" -Level Info
 
-Import-Module BcContainerHelper -Force -DisableNameChecking
-
-Write-Log "Container name: $ContainerName" -Level Info
-
-[System.Management.Automation.Job]$containerJob = $null
-
-if (Test-ContainerExists -containerName $ContainerName) {
-    Write-Log "Container $ContainerName already exists, reusing it" -Level Warning
-}
-else {
-    try {
-        Write-Log "Creating container $ContainerName for version $Version..." -Level Info
-
-        # Get BC artifact URL
-        [string] $url = Get-BCArtifactUrl -version $Version -Country $Country
-        Write-Log "Retrieved artifact URL: $url" -Level Info
-
-        # Create container asynchronously with NAV folder shared
-        $containerJob = New-BCContainerAsync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath)
-    }
-    catch {
-        Write-Log "Failed to start container creation job for $ContainerName`: $($_.Exception.Message)" -Level Error
-        exit 1
-    }
-}
-
 if (Test-Path $RepoPath) {
     Write-Log "Repository already exists at $RepoPath, skipping clone." -Level Warning
 }
@@ -85,19 +59,39 @@ else {
     }
     catch {
         Write-Log "Failed to clone repository ($($entries[0].repo)): $($_.Exception.Message)" -Level Error
-        if ($containerJob) { Stop-Job $containerJob; Remove-Job $containerJob }
         exit 1
     }
 }
 
-if ($containerJob) {
-    $success = Wait-JobWithProgress -Job $containerJob -StatusMessage "Container creation"
-    if ($success) {
-        Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
+Import-Module BcContainerHelper -Force -DisableNameChecking
+
+Write-Log "Container name: $ContainerName" -Level Info
+
+[bool]$containerCreated = $false
+
+if (Test-ContainerExists -containerName $ContainerName) {
+    Write-Log "Container $ContainerName already exists, reusing it" -Level Warning
+}
+else {
+    try {
+        Write-Log "Creating container $ContainerName for version $Version..." -Level Info
+
+        # Get BC artifact URL
+        [string] $url = Get-BCArtifactUrl -version $Version -Country $Country
+        Write-Log "Retrieved artifact URL: $url" -Level Info
+
+        # Create container synchronously with NAV folder shared
+        New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath)
+        $containerCreated = $true
     }
-    else {
+    catch {
+        Write-Log "Failed to create container $ContainerName`: $($_.Exception.Message)" -Level Error
         exit 1
     }
+}
+
+if ($containerCreated) {
+    Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 }
 
 # Set output for GitHub Actions or return path
