@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] Times sheet status factbox is not updated when a comment is added
+Repro Steps:
+REPRO: ============== Go to Resources List page and select any Resource card. In this example Terry Dodds: Activate the use time sheet for that user and create a time sheet at the end. After that go to Time Sheets and select any of the Time Sheets Created and open the Time Sheet: Add a comment on the Time Sheet. After the comment was created on the Time sheet: if you check the Fact-box, you will notice comment status is "No" Once you leave the page and come back or Refresh (F5) the page, the status changes to "Yes" EXPECTATION: ============== When adding a comment to a time sheet, the comment Boolean in the factbox is should be updated immediately without leaving and opening the Time Sheet page again or having to press Refresh (F5).RESULT: ============== When adding a comment to a time sheet, the comment Boolean in the factbox is not updated. The Boolean value is updated when I close the time sheet and open it again.Seems a CurrPage.MyFactBox.PAGE.UPDATE; is missing.
+Description:
+
