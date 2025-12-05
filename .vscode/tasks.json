@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Serve GitHub Pages Locally",
+            "type": "shell",
+            "command": "bundle exec jekyll serve",
+            "options": {
+                "cwd": "${workspaceFolder}/docs"
+            },
+            "isBackground": true,
+            "problemMatcher": []
+        }
+    ]
+}

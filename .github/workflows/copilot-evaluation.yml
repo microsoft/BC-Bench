@@ -20,7 +20,7 @@ on:
           - "gpt-5.1"
           - "gpt-5.1-codex-mini"
           - "gpt-5.1-codex"
-          - "gpt-4.1"
+          - "gpt-5.1-codex-max"
           - "gemini-3-pro-preview"
       category:
         description: "Evaluation category to run"
@@ -51,10 +51,14 @@ jobs:
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.get-entries.outputs.entries != '[]'
+    environment: ado-read
+    permissions:
+      contents: read
+      id-token: write
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 15
+      max-parallel: 12
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -66,17 +70,18 @@ jobs:
         uses: ./.github/actions/setup-bc-container
         with:
           instance-id: ${{ matrix.entry }}
-          ado-token: ${{ secrets.ADO_TOKEN }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.363
+        run: npm install -g @github/copilot@0.0.367
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
-        timeout-minutes: 90
+        timeout-minutes: 60
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
         run: |
@@ -99,6 +104,7 @@ jobs:
     uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write
+      id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}

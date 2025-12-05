@@ -23,5 +23,7 @@
     "powershell.integratedConsole.suppressStartupBanner": true,
     "[yaml]": {
         "editor.defaultFormatter": "redhat.vscode-yaml"
-    }
+    },
+    "git.autofetch": true,
+    "git.confirmSync": false
 }

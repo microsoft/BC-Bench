@@ -166,87 +166,6 @@ function Invoke-GitCloneWithRetry {
 
 <#
 .SYNOPSIS
-    Monitors a PowerShell job until completion
-.DESCRIPTION
-    Monitors job progress with periodic status updates and handles completion/failure
-.PARAMETER Job
-    The PowerShell job to monitor
-.PARAMETER PollingIntervalSeconds
-    How often to check job status in seconds (default: 60)
-.PARAMETER StatusMessage
-    Custom status message to display during monitoring
-.PARAMETER TimeoutMinutes
-    Maximum time to wait for job completion in minutes (default: 20)
-.OUTPUTS
-    Returns $true if job completed successfully, $false otherwise
-.EXAMPLE
-    $job = Start-Job -ScriptBlock { Start-Sleep 30 }
-    $success = Wait-JobWithProgress -Job $job -StatusMessage "Processing data"
-.EXAMPLE
-    $success = Wait-JobWithProgress -Job $job -StatusMessage "Long task" -TimeoutMinutes 30
-#>
-function Wait-JobWithProgress {
-    [CmdletBinding()]
-    [OutputType([bool])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.Management.Automation.Job]$Job,
-
-        [Parameter(Mandatory = $false)]
-        [int]$PollingIntervalSeconds = 60,
-
-        [Parameter(Mandatory = $false)]
-        [string]$StatusMessage = "Job",
-
-        [Parameter(Mandatory = $false)]
-        [int]$TimeoutMinutes = 40
-    )
-
-    Write-Log "Waiting for $StatusMessage to complete (timeout: $TimeoutMinutes minutes)..." -Level Info
-
-    # Calculate timeout
-    $timeoutSeconds = $TimeoutMinutes * 60
-    $startTime = Get-Date
-    $elapsedSeconds = 0
-
-    # Monitor job progress
-    do {
-        Start-Sleep -Seconds $PollingIntervalSeconds
-        $elapsedSeconds = ((Get-Date) - $startTime).TotalSeconds
-        $remainingMinutes = [math]::Max(0, [math]::Round(($timeoutSeconds - $elapsedSeconds) / 60, 1))
-
-        $jobState = Get-Job -Id $Job.Id | Select-Object -ExpandProperty State
-        Write-Log "$StatusMessage status: $jobState (${remainingMinutes}min remaining)" -Level Info
-
-        # Check for timeout
-        if ($elapsedSeconds -ge $timeoutSeconds) {
-            Write-Log "$StatusMessage timed out after $TimeoutMinutes minutes" -Level Warning
-            Stop-Job $Job -ErrorAction SilentlyContinue
-            Remove-Job $Job -Force -ErrorAction SilentlyContinue
-            return $false
-        }
-    } while ($jobState -eq "Running")
-
-    # Check job results
-    if ($jobState -eq "Completed") {
-        Write-Log "$StatusMessage completed successfully" -Level Success
-        Remove-Job $Job
-        return $true
-    }
-    else {
-        # Get error details
-        $jobError = Receive-Job $Job -ErrorAction SilentlyContinue
-        $jobOutput = Receive-Job $Job
-        Write-Log "$StatusMessage failed. State: $jobState" -Level Error
-        if ($jobError) { Write-Log "Error details: $jobError" -Level Error }
-        if ($jobOutput) { Write-Log "Output: $jobOutput" -Level Debug }
-        Remove-Job $Job
-        return $false
-    }
-}
-
-<#
-.SYNOPSIS
     Writes colorful log messages with standardized formatting
 .DESCRIPTION
     Provides consistent logging output with color coding for different log levels.
@@ -493,4 +412,4 @@ function Get-BCBenchDatasetPath {
     return Join-Path $projectRoot "dataset" $DatasetName
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Wait-JobWithProgress, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo

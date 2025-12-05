@@ -27,10 +27,14 @@ class AgentMetrics(BaseModel):
 
     # Total execution time in seconds
     execution_time: float | None = None
+    llm_duration: float | None = None
 
     # Token usage from LLM calls
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+
+    # Tool usage statistics from agent logs
+    tool_usage: dict[str, int] | None = None
 
 
 class ExperimentConfiguration(BaseModel):

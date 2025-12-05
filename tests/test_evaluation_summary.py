@@ -3,9 +3,12 @@ from datetime import date
 
 import pytest
 
+from bcbench.config import get_config
 from bcbench.results.evaluation_result import EvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_testgen_result
+
+_config = get_config()
 
 
 class TestEvaluationResultSummary:
@@ -15,6 +18,7 @@ class TestEvaluationResultSummary:
             resolved=8,
             failed=2,
             build=9,
+            percentage=80.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -22,6 +26,7 @@ class TestEvaluationResultSummary:
             average_duration=120.5,
             average_prompt_tokens=5000.0,
             average_completion_tokens=1200.0,
+            average_llm_duration=80.0,
         )
 
         summary_file = "test.json"
@@ -50,6 +55,7 @@ class TestEvaluationResultSummary:
             resolved=4,
             failed=1,
             build=5,
+            percentage=80.0,
             date=date(2025, 1, 20),
             model="gpt-4",
             category=EvaluationCategory.TEST_GENERATION,
@@ -57,12 +63,20 @@ class TestEvaluationResultSummary:
             average_duration=90.0,
             average_prompt_tokens=3000.0,
             average_completion_tokens=800.0,
+            average_llm_duration=60.0,
         )
 
         summary.save(tmp_path, summary_file="custom_summary.json")
 
         output_file = tmp_path / "custom_summary.json"
         assert output_file.exists()
+
+    def test_loading_existing_results(self):
+        for category in EvaluationCategory:
+            leaderboard_path = _config.paths.leaderboard_dir / f"{category.value}.json"
+
+            with open(leaderboard_path, encoding="utf-8") as f:
+                [EvaluationResultSummary.model_validate(entry) for entry in json.load(f)]
 
 
 class TestFromResults:
@@ -156,6 +170,52 @@ class TestFromResults:
         assert summary.average_prompt_tokens == 0.0
         assert summary.average_completion_tokens == 0.0
 
+    def test_from_results_calculates_average_tool_usage(self):
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(
+                    execution_time=100.0,
+                    tool_usage={"bash": 10, "view": 5},
+                ),
+            ),
+            create_bugfix_result(
+                instance_id="test__2",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(
+                    execution_time=100.0,
+                    tool_usage={"bash": 6, "view": 3, "edit": 2},
+                ),
+            ),
+        ]
+
+        summary = EvaluationResultSummary.from_results(results, run_id="test_run")
+
+        assert summary.average_tool_usage is not None
+        # bash: (10 + 6) / 2 = 8
+        assert summary.average_tool_usage["bash"] == 8
+        # view: (5 + 3) / 2 = 4
+        assert summary.average_tool_usage["view"] == 4
+        # edit: (0 + 2) / 2 = 1
+        assert summary.average_tool_usage["edit"] == 1
+
+    def test_from_results_handles_no_tool_usage(self):
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(execution_time=100.0),
+            ),
+        ]
+
+        summary = EvaluationResultSummary.from_results(results, run_id="test_run")
+
+        assert summary.average_tool_usage is None
+
 
 class TestExperimentConfiguration:
     def test_is_empty_with_all_defaults(self):
@@ -189,6 +249,7 @@ class TestExperimentConfiguration:
             resolved=3,
             failed=2,
             build=4,
+            percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -196,6 +257,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
             experiment=experiment,
         )
 
@@ -210,6 +272,7 @@ class TestExperimentConfiguration:
             resolved=3,
             failed=2,
             build=4,
+            percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -217,6 +280,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
         )
 
         assert summary.experiment is None
@@ -231,6 +295,7 @@ class TestExperimentConfiguration:
             resolved=8,
             failed=2,
             build=9,
+            percentage=80.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -238,6 +303,7 @@ class TestExperimentConfiguration:
             average_duration=120.5,
             average_prompt_tokens=5000.0,
             average_completion_tokens=1200.0,
+            average_llm_duration=80.0,
             experiment=experiment,
         )
 
@@ -257,6 +323,7 @@ class TestExperimentConfiguration:
             resolved=3,
             failed=2,
             build=4,
+            percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -264,6 +331,7 @@ class TestExperimentConfiguration:
             average_duration=100.0,
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
+            average_llm_duration=70.0,
             experiment=None,
         )
 

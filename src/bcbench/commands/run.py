@@ -1,20 +1,18 @@
 """CLI commands for running agents."""
 
 from pathlib import Path
-from typing import Literal
 
 import typer
 from typing_extensions import Annotated
 
 from bcbench.agent.copilot import run_copilot_agent
+from bcbench.agent.copilot.tool_usage_parser import parse_tool_usage_from_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
-    ContainerName,
-    ContainerPassword,
-    ContainerUsername,
     CopilotModel,
     DatasetPath,
     EvaluationCategoryOption,
+    FoundryModel,
     OutputDir,
     RepoPath,
 )
@@ -33,11 +31,8 @@ run_app = typer.Typer(help="Run agents on single dataset entry")
 @run_app.command("mini")
 def run_mini(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
-    model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
+    model: FoundryModel = "azure/gpt-5.1-codex-mini",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -61,9 +56,6 @@ def run_mini(
         repo_path=repo_path,
         category=category,
         model=model,
-        container_name=container_name,
-        username=username,
-        password=password,
         output_dir=output_dir,
     )
 
@@ -118,3 +110,27 @@ def run_mini_inspector(
 
     inspector = TrajectoryInspector(trajectory_files)
     inspector.run()
+
+
+@run_app.command("copilot-tool-analyzer")
+def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directory to search for log files or specific log file", exists=True, file_okay=True, dir_okay=False)]):
+    """
+    Analyze tool usage from Copilot CLI log files.
+
+    Parses log files to extract and summarize tool call statistics,
+    displaying results sorted by usage count.
+
+    Example:
+        uv run bcbench run copilot-tool-analyzer ./evaluation_results/
+    """
+
+    usage = parse_tool_usage_from_log(path)
+
+    print("Tool Usage Summary:")
+    print("-" * 40)
+
+    for tool_name, count in sorted(usage.items(), key=lambda x: (-x[1], x[0])):
+        print(f"  {tool_name}: {count}")
+
+    print("-" * 40)
+    print(f"Total tool calls: {sum(usage.values())}")

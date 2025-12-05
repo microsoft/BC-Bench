@@ -16,6 +16,7 @@ def test_parse_metrics_full_output_gpt5():
 
     assert result is not None
     assert result.execution_time == 235.1
+    assert result.llm_duration == 34.5
     assert result.prompt_tokens == 125500
     assert result.completion_tokens == 3600
 
@@ -35,8 +36,27 @@ def test_parse_metrics_full_output_haiku45():
 
     assert result is not None
     assert result.execution_time == 1765.4
+    assert result.llm_duration == 97.1
     assert result.prompt_tokens == 1100000
     assert result.completion_tokens == 6600
+
+
+def test_parse_metrics_llm_duration_seconds_only():
+    output_lines = ["Total duration (API):  45.7s\n"]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.llm_duration == 45.7
+
+
+def test_parse_metrics_llm_duration_minutes_and_seconds():
+    output_lines = ["Total duration (API):  5m 12.3s\n"]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.llm_duration == 312.3
 
 
 def test_parse_metrics_wall_time_seconds_only():
@@ -98,6 +118,7 @@ def test_parse_metrics_partial_data():
 
     assert result is not None
     assert result.execution_time == 90.0
+    assert result.llm_duration is None
     assert result.prompt_tokens is None
     assert result.completion_tokens is None
 
@@ -141,6 +162,7 @@ def test_parse_metrics_with_command_output():
 
     assert result is not None
     assert result.execution_time == 235.1
+    assert result.llm_duration == 34.5
     assert result.prompt_tokens == 125500
     assert result.completion_tokens == 3600
 

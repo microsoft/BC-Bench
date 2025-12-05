@@ -6,28 +6,17 @@ from typing import Any
 
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
 
-from bcbench.config import get_config
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
-from bcbench.operations.bc_operations import (
-    build_ps_app_build_and_publish,
-    build_ps_test_script,
-)
 
 logger = get_logger(__name__)
-_config = get_config()
 
 
 @dataclass
 class BCEnvironmentConfig(LocalEnvironmentConfig):
-    container_name: str = ""
     repo_path: str = ""  # Store as string for JSON serialization
-    username: str = "admin"
-    password: str = ""
     include_project_paths: bool = False
     project_paths: list[str] = field(default_factory=list)
-    enable_bc_tools: bool = True  # Flag to show/hide BC-specific tools from agent
-    version: str = ""
 
 
 class BCEnvironment(LocalEnvironment):
@@ -35,99 +24,18 @@ class BCEnvironment(LocalEnvironment):
         super().__init__(config_class=config_class, **kwargs)
         self.config: BCEnvironmentConfig = self.config
 
-        if self.config.enable_bc_tools and (not self.config.container_name or not self.config.password):
-            raise ConfigurationError("container_name and password are required in BCEnvironmentConfig when enable_bc_tools is True")
         if not self.config.repo_path:
             raise ConfigurationError("repo_path is required in BCEnvironmentConfig")
 
     def execute(self, command: str, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         command = command.strip()
 
-        if command.startswith("bc_build_and_publish "):
-            return self._bc_build_and_publish(command, cwd, timeout)
-        if command.startswith("bc_test "):
-            return self._bc_test(command, cwd, timeout)
-        return self._execute_powershell(command, cwd, timeout)
-
-    def _bc_build_and_publish(self, command: str, cwd: str, timeout: int | None) -> dict[str, Any]:
-        parts = command.split(maxsplit=1)
-        if len(parts) < 2:
-            return {
-                "returncode": 1,
-                "output": "Error: bc_build_and_publish requires a project path. Usage: bc_build_and_publish <project_path>",
-            }
-
-        project_path = parts[1].strip()
-        logger.info(f"Building project: {project_path}")
-
-        if self.config.project_paths and (project_path not in self.config.project_paths):
-            return {
-                "returncode": 1,
-                "output": f"Error: Project path '{project_path}' is not in the allowed project_paths list: {self.config.project_paths}",
-            }
-
-        full_project_path: Path = Path(self.config.repo_path) / project_path
-
-        ps_script = build_ps_app_build_and_publish(
-            container_name=self.config.container_name,
-            username=self.config.username,
-            password=self.config.password,
-            project_path=full_project_path,
-            version=self.config.version,
-        )
-
-        # Extend timeout for build and publish, especially for BaseApp
-        timeout = _config.timeout.build_baseapp if ("BaseApp" in project_path) else _config.timeout.build_app
-
-        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout, log_command=False)
-
-    def _bc_test(self, command: str, cwd: str, timeout: int | None) -> dict[str, Any]:
-        parts = command.split(maxsplit=2)
-        if len(parts) < 2:
-            return {
-                "returncode": 1,
-                "output": "Error: bc_test requires a codeunit ID. Usage: bc_test <codeunit_id> [function1,function2,...]",
-            }
-
-        try:
-            codeunit_id: int = int(parts[1])
-        except ValueError:
-            return {
-                "returncode": 1,
-                "output": f"Error: Invalid codeunit ID '{parts[1]}'. Must be an integer.",
-            }
-
-        function_names: list[str] = []
-        if len(parts) > 2:
-            function_names = [f.strip() for f in parts[2].split(",")]
-
-        if function_names:
-            logger.info(f"Running tests: codeunit {codeunit_id}, functions: {', '.join(function_names)}")
-        else:
-            logger.info(f"Running all tests in codeunit {codeunit_id}")
-
-        ps_script = build_ps_test_script(
-            container_name=self.config.container_name,
-            username=self.config.username,
-            password=self.config.password,
-            codeunit_id=codeunit_id,
-            function_names=function_names if function_names else None,
-        )
-
-        timeout = _config.timeout.test_execution
-
-        return self._execute_powershell(ps_script, cwd or self.config.cwd, timeout, log_command=False)
-
-    def _execute_powershell(self, command: str, cwd: str, timeout: int | None, log_command: bool = True) -> dict[str, Any]:
-        """Execute a PowerShell command"""
         if timeout is None:
             timeout = self.config.timeout
 
         working_dir: str = cwd or self.config.cwd or str(Path.cwd())
 
-        if log_command:
-            command_preview: str = command if len(command) <= 100 else command[:97] + "..."
-            logger.info(f"Executing:\n{command_preview}")
+        logger.info(f"Executing:\n{command if len(command) <= 100 else command[:97] + '...'}")
 
         try:
             result = subprocess.run(
@@ -153,7 +61,7 @@ class BCEnvironment(LocalEnvironment):
         except subprocess.CalledProcessError as e:
             error_msg = f"Command failed with exit code {e.returncode}"
             logger.warning(error_msg)
-            if e.stderr and log_command:
+            if e.stderr:
                 logger.debug(f"Error output (first line):\n{e.stderr.splitlines()[0]}")
 
             return {"returncode": e.returncode, "output": f"{error_msg}\n{e.stdout or ''}{e.stderr or ''}".strip()}
@@ -168,12 +76,9 @@ class BCEnvironment(LocalEnvironment):
 
         vars.update(
             {
-                "container_name": self.config.container_name,
                 "repo_path": self.config.repo_path,
                 "project_paths": self.config.project_paths,
-                "bc_tools_enabled": self.config.enable_bc_tools,
                 "include_project_paths": self.config.include_project_paths,
-                "version": self.config.version,
             }
         )
 

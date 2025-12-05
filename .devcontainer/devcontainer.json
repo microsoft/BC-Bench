@@ -1,13 +1,13 @@
 {
 	"name": "BC-Bench Development",
-	"image": "mcr.microsoft.com/devcontainers/python:3.12",
+	"image": "mcr.microsoft.com/devcontainers/python:3.13",
 	"features": {
 		"ghcr.io/devcontainers/features/powershell": {},
 		"ghcr.io/devcontainers-contrib/features/uv": {},
 		"ghcr.io/devcontainers-contrib/features/pre-commit": {},
 		"ghcr.io/devcontainers/features/ruby": {}
 	},
-	"postCreateCommand": "uv sync --all-extras && pre-commit install && cd docs && bundle install",
+	"postCreateCommand": "uv sync --all-extras && pre-commit install && cd docs && printf 'source \"https://rubygems.org\"\\ngem \"github-pages\", group: :jekyll_plugins\\ngem \"webrick\"\\n' > Gemfile && bundle install",
 	"customizations": {
 		"vscode": {
 			"extensions": [

@@ -1,7 +1,7 @@
 # Based on https://github.com/SWE-agent/mini-swe-agent/blob/main/src/minisweagent/config/mini.yaml
 
 agent:
-  step_limit: 50
+  step_limit: 200
   cost_limit: 3
   system_template: |
     You are an experienced software engineer in Business Central (BC) and AL programming language.
@@ -60,11 +60,7 @@ agent:
     1. **Analyze**: Find and read relevant files in the codebase
     1. **Diagnose**: Identify the root cause of the issue
     1. **Implement**: Edit the source code to resolve the issue
-    {% if bc_tools_enabled %}
-    1. **Verify**: Build the project to confirm the code compiles and publishes
-    {% else %}
     1. **Verify**: Carefully review your code changes to ensure correctness
-    {% endif %}
     1. **Submit**: Execute `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` when complete
        - This must be a standalone command
        - After submission, you can NOT continue working on this task
@@ -89,30 +85,11 @@ agent:
 
     ## Useful Command Examples
 
-    {% if bc_tools_enabled %}
-
-    ### BC-Specific Commands
-
-    Business Central/AL requires compilation before execution. Use these commands:
-
-    - `bc_build_and_publish <project_path>`: Compile, publish, and install a BC app
-      - REQUIRED before running any code (tests or application logic)
-      - Example: `bc_build_and_publish Test/MyApp`
-
-    - `bc_test <codeunit_id> [function1,function2,...]`: Execute tests in a codeunit
-      - Prerequisites: The test app MUST be built first using `bc_build_and_publish`
-      - Run all tests within a codeunit: `bc_test 123456`
-      - Run specific tests within a codeunit: `bc_test 123456 TestFunction1,TestFunction2`
-
-    Important: Always run `bc_build_and_publish` before `bc_test` when you create or modify test files.
-
-    {%- else -%}
     ### Verify changes
     You do NOT have access to a BC environment, so you cannot build or test BC projects.
     Verify your changes by ensuring code correctness through careful review.
 
     Important: DO NOT attempt to build BC projects or run tests.
-    {% endif %}
 
     ### Navigate and explore:
     ```powershell
@@ -190,4 +167,3 @@ agent:
 
 environment:
   include_project_paths: false
-  enable_bc_tools: false

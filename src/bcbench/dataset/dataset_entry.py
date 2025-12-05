@@ -72,7 +72,7 @@ class DatasetEntry(BaseModel):
         Examples:
             App\\Apps\\W1\\Sustainability\\app -> Sustainability
             App\\Layers\\W1\\BaseApp -> BaseApp
-            App\\Apps\\W1\\Shopify\\test -> Shopify
+            src\\Apps\\W1\\Shopify\\App -> Shopify
 
         Returns:
             The extracted project name, or empty string if no project paths.
@@ -91,7 +91,7 @@ class DatasetEntry(BaseModel):
         if len(parts) >= 4:
             # For paths like App\Apps\W1\Sustainability\app, return "Sustainability"
             # For paths like App\Layers\W1\BaseApp, return "BaseApp"
-            return parts[-2] if parts[-1] in ("app", "test") else parts[-1]
+            return parts[-2] if parts[-1].lower() in ("app", "test") else parts[-1]
 
         # Fallback to the last meaningful part
         return parts[-1] if parts else ""

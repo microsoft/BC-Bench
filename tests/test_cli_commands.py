@@ -328,6 +328,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "resolved": 6,
             "failed": 4,
             "build": 9,
+            "percentage": 60.0,
             "date": "2025-01-10",
             "model": "gpt-4o",
             "category": "bug-fix",
@@ -335,6 +336,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_duration": 120.5,
             "average_prompt_tokens": 5000.0,
             "average_completion_tokens": 1500.0,
+            "average_llm_duration": 80.0,
             "github_run_id": "run_001",
             "experiment": {
                 "mcp_servers": ["server1", "server2"],
@@ -347,6 +349,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "resolved": 7,
             "failed": 3,
             "build": 10,
+            "percentage": 70.0,
             "date": "2025-01-12",
             "model": "gpt-4o",
             "category": "bug-fix",
@@ -354,6 +357,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_duration": 95.0,
             "average_prompt_tokens": 3500.0,
             "average_completion_tokens": 1000.0,
+            "average_llm_duration": 65.0,
             "github_run_id": "run_003",
             "experiment": {
                 "mcp_servers": None,
@@ -370,6 +374,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "resolved": 5,
             "failed": 5,
             "build": 8,
+            "percentage": 50.0,
             "date": "2025-01-11",
             "model": "gpt-4-turbo",
             "category": "test-generation",
@@ -377,6 +382,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "average_duration": 110.0,
             "average_prompt_tokens": 4500.0,
             "average_completion_tokens": 1200.0,
+            "average_llm_duration": 75.0,
             "github_run_id": "run_002",
             "experiment": {
                 "mcp_servers": None,
@@ -398,6 +404,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "resolved": 8,  # Improved from 6 to 8
         "failed": 2,
         "build": 10,  # Improved from 9 to 10
+        "percentage": 80.0,
         "date": "2025-01-15",
         "model": "gpt-4o",
         "category": "bug-fix",
@@ -405,6 +412,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "average_duration": 130.0,
         "average_prompt_tokens": 5200.0,
         "average_completion_tokens": 1600.0,
+        "average_llm_duration": 90.0,
         "github_run_id": "run_004",
         "experiment": {
             "mcp_servers": ["server1", "server2"],
@@ -469,6 +477,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "resolved": 9,
         "failed": 1,
         "build": 10,
+        "percentage": 90.0,
         "date": "2025-01-16",
         "model": "gpt-4o",
         "category": "test-generation",
@@ -476,6 +485,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "average_duration": 100.0,
         "average_prompt_tokens": 4800.0,
         "average_completion_tokens": 1400.0,
+        "average_llm_duration": 70.0,
         "github_run_id": "run_005",
         "experiment": {
             "mcp_servers": None,
@@ -528,6 +538,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "resolved": 7,
         "failed": 3,
         "build": 9,
+        "percentage": 70.0,
         "date": "2025-01-17",
         "model": "gpt-4o",
         "category": "bug-fix",
@@ -535,6 +546,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "average_duration": 115.0,
         "average_prompt_tokens": 4900.0,
         "average_completion_tokens": 1350.0,
+        "average_llm_duration": 78.0,
         "github_run_id": "run_006",
         "experiment": {
             "mcp_servers": None,  # Different from existing ["server1", "server2"]

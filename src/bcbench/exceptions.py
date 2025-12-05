@@ -12,8 +12,6 @@ __all__ = [
     "BCBenchError",
     "BuildError",
     "CollectionError",
-    "CollectionError",
-    "CollectionError",
     "ConfigurationError",
     "DatasetError",
     "EmptyDiffError",

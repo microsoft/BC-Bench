@@ -2,7 +2,6 @@ import random
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
 
 import typer
 from typing_extensions import Annotated
@@ -15,6 +14,7 @@ from bcbench.cli_options import (
     CopilotModel,
     DatasetPath,
     EvaluationCategoryOption,
+    FoundryModel,
     OutputDir,
     RepoPath,
     RunId,
@@ -39,7 +39,7 @@ def evaluate_mini(
     username: ContainerUsername,
     password: ContainerPassword,
     category: EvaluationCategoryOption,
-    model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
+    model: FoundryModel = "azure/gpt-5.1-codex-mini",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -84,9 +84,6 @@ def evaluate_mini(
             repo_path=ctx.repo_path,
             category=category,
             model=ctx.model,
-            container_name=ctx.container_name,
-            username=ctx.username,
-            password=ctx.password,
             output_dir=ctx.result_dir,
         ),
     )
@@ -212,12 +209,12 @@ class MockEvaluationPipeline(EvaluationPipeline):
 
         # Randomize agent metrics to test different scenarios
         metrics_scenarios: list[AgentMetrics | None] = [
-            AgentMetrics(execution_time=0.1, prompt_tokens=100, completion_tokens=50),
-            AgentMetrics(execution_time=0.2, prompt_tokens=250),
-            AgentMetrics(execution_time=0.15),
+            AgentMetrics(execution_time=0.1, llm_duration=0.05, prompt_tokens=100, completion_tokens=50, tool_usage={"bash": 5, "view": 3, "edit": 2}),
+            AgentMetrics(execution_time=0.2, llm_duration=0.1, prompt_tokens=250, tool_usage={"bash": 10, "search": 4}),
+            AgentMetrics(execution_time=0.15, llm_duration=0.07, tool_usage={"view": 8}),
             AgentMetrics(),
             None,
-            AgentMetrics(prompt_tokens=500, completion_tokens=100),
+            AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage={"bash": 3, "view": 2, "edit": 1, "search": 5}),
         ]
         context.metrics = random.choice(metrics_scenarios)
 

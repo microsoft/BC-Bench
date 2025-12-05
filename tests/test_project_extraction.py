@@ -36,3 +36,8 @@ class TestProjectExtraction:
         entry = create_dataset_entry(project_paths=["App/Apps/W1/Sustainability/app", "App/Apps/W1/Sustainability/test"])
 
         assert entry.extract_project_name() == "Sustainability"
+
+    def test_extract_project_name_bcapps(self):
+        entry = create_dataset_entry(project_paths=["src\\Apps\\W1\\Shopify\\App", "src\\Apps\\W1\\Shopify\\Test"])
+
+        assert entry.extract_project_name() == "Shopify"

@@ -27,10 +27,19 @@ def parse_metrics(output_lines: Sequence[str]) -> AgentMetrics | None:
     logger.debug(f"Parsing metrics from output:\n{output_text}")
 
     execution_time: float | None = None
+    llm_duration: float | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 
     try:
+        # Parse LLM duration (API time)
+        llm_duration_match = re.search(r"Total duration \(API\):\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
+        if llm_duration_match:
+            minutes = int(llm_duration_match.group(1)) if llm_duration_match.group(1) else 0
+            seconds = float(llm_duration_match.group(2))
+            llm_duration = minutes * 60 + seconds
+
+        # Parse wall clock duration
         duration_match = re.search(r"Total duration \(wall\):\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
         if duration_match:
             minutes = int(duration_match.group(1)) if duration_match.group(1) else 0
@@ -52,8 +61,13 @@ def parse_metrics(output_lines: Sequence[str]) -> AgentMetrics | None:
             prompt_tokens = parse_token_count(input_str)
             completion_tokens = parse_token_count(output_str)
 
-        if execution_time is not None or prompt_tokens is not None or completion_tokens is not None:
-            return AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+        if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None:
+            return AgentMetrics(
+                execution_time=execution_time,
+                llm_duration=llm_duration,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            )
 
         logger.warning("No metrics found in output")
         return None
