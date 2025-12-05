@@ -125,6 +125,7 @@ class TestCategorySerialization:
             "resolved": 8,
             "failed": 2,
             "build": 9,
+            "percentage": 80.0,
             "date": "2025-11-18",
             "model": "gpt-4o",
             "category": "test-generation",

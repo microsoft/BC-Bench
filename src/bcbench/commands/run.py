@@ -1,7 +1,6 @@
 """CLI commands for running agents."""
 
 from pathlib import Path
-from typing import Literal
 
 import typer
 from typing_extensions import Annotated
@@ -10,12 +9,10 @@ from bcbench.agent.copilot import run_copilot_agent
 from bcbench.agent.copilot.tool_usage_parser import parse_tool_usage_from_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
-    ContainerName,
-    ContainerPassword,
-    ContainerUsername,
     CopilotModel,
     DatasetPath,
     EvaluationCategoryOption,
+    FoundryModel,
     OutputDir,
     RepoPath,
 )
@@ -34,11 +31,8 @@ run_app = typer.Typer(help="Run agents on single dataset entry")
 @run_app.command("mini")
 def run_mini(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
-    model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
+    model: FoundryModel = "azure/gpt-5.1-codex-mini",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -62,9 +56,6 @@ def run_mini(
         repo_path=repo_path,
         category=category,
         model=model,
-        container_name=container_name,
-        username=username,
-        password=password,
         output_dir=output_dir,
     )
 

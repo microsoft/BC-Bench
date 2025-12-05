@@ -17,6 +17,7 @@ class EvaluationResultSummary(BaseModel):
     resolved: int
     failed: int
     build: int
+    percentage: float
 
     date: date
 
@@ -27,7 +28,7 @@ class EvaluationResultSummary(BaseModel):
     average_duration: float
     average_prompt_tokens: float
     average_completion_tokens: float
-    average_llm_duration: float
+    average_llm_duration: float | None = None
     average_tool_usage: dict[str, float] | None = None
 
     github_run_id: str | None = None
@@ -54,6 +55,7 @@ class EvaluationResultSummary(BaseModel):
         return cls(
             total=total,
             resolved=resolved,
+            percentage=round(resolved / total * 100, 1),
             failed=total - resolved,
             build=sum(r.build for r in results),
             date=date.today(),

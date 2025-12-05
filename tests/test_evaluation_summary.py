@@ -3,9 +3,12 @@ from datetime import date
 
 import pytest
 
+from bcbench.config import get_config
 from bcbench.results.evaluation_result import EvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_testgen_result
+
+_config = get_config()
 
 
 class TestEvaluationResultSummary:
@@ -15,6 +18,7 @@ class TestEvaluationResultSummary:
             resolved=8,
             failed=2,
             build=9,
+            percentage=80.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -51,6 +55,7 @@ class TestEvaluationResultSummary:
             resolved=4,
             failed=1,
             build=5,
+            percentage=80.0,
             date=date(2025, 1, 20),
             model="gpt-4",
             category=EvaluationCategory.TEST_GENERATION,
@@ -65,6 +70,13 @@ class TestEvaluationResultSummary:
 
         output_file = tmp_path / "custom_summary.json"
         assert output_file.exists()
+
+    def test_loading_existing_results(self):
+        for category in EvaluationCategory:
+            leaderboard_path = _config.paths.leaderboard_dir / f"{category.value}.json"
+
+            with open(leaderboard_path, encoding="utf-8") as f:
+                [EvaluationResultSummary.model_validate(entry) for entry in json.load(f)]
 
 
 class TestFromResults:
@@ -237,6 +249,7 @@ class TestExperimentConfiguration:
             resolved=3,
             failed=2,
             build=4,
+            percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -259,6 +272,7 @@ class TestExperimentConfiguration:
             resolved=3,
             failed=2,
             build=4,
+            percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -281,6 +295,7 @@ class TestExperimentConfiguration:
             resolved=8,
             failed=2,
             build=9,
+            percentage=80.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,
@@ -308,6 +323,7 @@ class TestExperimentConfiguration:
             resolved=3,
             failed=2,
             build=4,
+            percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
             category=EvaluationCategory.BUG_FIX,

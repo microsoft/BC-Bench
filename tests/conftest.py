@@ -225,7 +225,7 @@ def sample_bugfix_result_with_metrics() -> BugFixResult:
 
 
 @pytest.fixture
-def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[DatasetEntry, None, None]:
+def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[DatasetEntry]:
     problem_dir = create_problem_statement_dir(tmp_path)
     entry = create_dataset_entry()
 

@@ -5,7 +5,7 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
-- **Agent Evaluations**: Focuses on mini-BC-agent (baseline), GitHub Copilot CLI
+- **Agent Evaluations**: Focuses on GitHub Copilot CLI
 - **Expieriments**: Various MCP Servers, custom intructions, custom agent and their performance on the benchmark
 
 ## Key Context
@@ -19,6 +19,9 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - Prefer strong typing and type hints
 - Prefer simple code for fast iteration
 - Prefer modular, testable components
+- Prefer pure functions where possible
+- Prefer explicit over implicit
+- Prefer high-order functions like map, filter, reduce over loops
 
 ### Readable code over documentation or comments
 Test function names should be self-explanatory. Do NOT add docstrings to test functions.

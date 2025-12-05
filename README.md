@@ -45,8 +45,6 @@ We follow the [SWE-Bench schema](https://huggingface.co/datasets/SWE-bench/SWE-b
 - `project_paths` to enumerate AL project roots touched by the fix
 - `problem_statement` and `hints_text` are not included in the jsonl file but stored under [problemstatement](/dataset/problemstatement/) for screenshots in repro steps
 
-See dataset under [`dataset/](./dataset/).
-
 ## What We're Evaluating
 
 ### mini-BC-agent (Baseline)

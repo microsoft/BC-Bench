@@ -2,7 +2,6 @@ import random
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
 
 import typer
 from typing_extensions import Annotated
@@ -15,6 +14,7 @@ from bcbench.cli_options import (
     CopilotModel,
     DatasetPath,
     EvaluationCategoryOption,
+    FoundryModel,
     OutputDir,
     RepoPath,
     RunId,
@@ -39,7 +39,7 @@ def evaluate_mini(
     username: ContainerUsername,
     password: ContainerPassword,
     category: EvaluationCategoryOption,
-    model: Annotated[Literal["azure/gpt-4.1"], typer.Option(help="Azure AI Foundry Model to use for mini-bc-agent")] = "azure/gpt-4.1",
+    model: FoundryModel = "azure/gpt-5.1-codex-mini",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -84,9 +84,6 @@ def evaluate_mini(
             repo_path=ctx.repo_path,
             category=category,
             model=ctx.model,
-            container_name=ctx.container_name,
-            username=ctx.username,
-            password=ctx.password,
             output_dir=ctx.result_dir,
         ),
     )
