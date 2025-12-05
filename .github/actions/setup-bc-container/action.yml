@@ -57,14 +57,14 @@ runs:
       id: cache-generic-image
       uses: actions/cache@v4
       with:
-        path: ~/docker-cache/generic-image.tar
+        path: ${{ runner.temp }}/docker-cache/generic-image.tar
         key: docker-generic-${{ steps.generic-image.outputs.cache-key }}
 
     - name: Load generic image from cache
       if: steps.cache-generic-image.outputs.cache-hit == 'true'
       run: |
         Write-Host "Loading generic image from cache..."
-        docker load -i ~/docker-cache/generic-image.tar
+        docker load -i "${{ runner.temp }}/docker-cache/generic-image.tar"
         Write-Host "Generic image loaded successfully from cache."
       shell: pwsh
 
@@ -75,8 +75,8 @@ runs:
         Write-Host "Pulling generic image: $genericImage"
         docker pull $genericImage
         Write-Host "Generic image pulled successfully, saving generic image to cache..."
-        New-Item -ItemType Directory -Path ~/docker-cache -Force | Out-Null
-        docker save -o ~/docker-cache/generic-image.tar $genericImage
+        New-Item -ItemType Directory -Path "${{ runner.temp }}/docker-cache" -Force | Out-Null
+        docker save -o "${{ runner.temp }}/docker-cache/generic-image.tar" $genericImage
         Write-Host "Generic image saved for caching."
       shell: pwsh
 
