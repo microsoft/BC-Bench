@@ -4,6 +4,12 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      test-run:
+        description: "Indicate this is a test run (with few entries)"
+        required: false
+        default: true
+        type: boolean
   schedule:
     - cron: "0 0 * * 0" # Weekly on Sundays at midnight
   pull_request:
@@ -15,6 +21,7 @@ jobs:
     uses: ./.github/workflows/get-entries.yml
     with:
       modified-only: ${{ github.event_name == 'pull_request' }}
+      test-run: ${{ inputs.test-run }}
 
   verify-build-and-tests:
     runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
