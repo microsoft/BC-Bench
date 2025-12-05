@@ -262,11 +262,10 @@ function Test-ContainerExists {
     .PARAMETER AuthType
     Authentication type (default: UserPassword)
     .EXAMPLE
-    $job = New-BCContainerAsync -ContainerName "test-container" -ArtifactUrl $url -Credential $cred
+    New-BCContainerSync -ContainerName "test-container" -ArtifactUrl $url -Credential $cred
 #>
-function New-BCContainerAsync {
+function New-BCContainerSync {
     [CmdletBinding()]
-    [OutputType([System.Management.Automation.Job])]
     param(
         [Parameter(Mandatory = $true)]
         [string]$ContainerName,
@@ -290,46 +289,40 @@ function New-BCContainerAsync {
         [string[]]$AdditionalFolders = @()
     )
 
-    Write-Log "Starting container creation job for: $ContainerName" -Level Info
+    Write-Log "Creating container: $ContainerName" -Level Info
 
-    [System.Management.Automation.Job]$containerJob = Start-Job -ScriptBlock {
-        param([string] $url, [string] $containerName, [PSCredential] $credential, [bool] $acceptEula, [string] $authType, [string[]] $additionalFolders, [string] $version)
+    # Set usePsSession to false to use docker exec instead of PowerShell remoting
+    $bcContainerHelperConfig.usePsSession = $false
 
-        Import-Module BcContainerHelper -Force -DisableNameChecking
+    $params = @{
+        artifactUrl              = $ArtifactUrl
+        containerName            = $ContainerName
+        auth                     = $AuthType
+        credential               = $Credential
+        includeTestToolkit       = $true
+        includeTestLibrariesOnly = $true
+        multitenant              = $false
+        shortcuts                = 'None'
+        memoryLimit              = "16G"
+        isolation                = "hyperv"
+    }
 
-        # Set usePsSession to false to use docker exec instead of PowerShell remoting
-        $bcContainerHelperConfig.usePsSession = $false
+    if ($AcceptEula) {
+        $params.accept_eula = $true
+    }
 
-        $params = @{
-            artifactUrl              = $url
-            containerName            = $ContainerName
-            auth                     = $authType
-            credential               = $credential
-            includeTestToolkit       = $true
-            includeTestLibrariesOnly = $true
-            multitenant              = $false
-            shortcuts                = 'None'
-            memoryLimit              = "16G"
+    if ($AdditionalFolders -and $AdditionalFolders.Count -gt 0) {
+        [string[]]$volumeMappings = @()
+        foreach ($folder in $AdditionalFolders) {
+            $volumeMappings += "--volume"
+            $volumeMappings += "${folder}:C:\Source"
         }
+        $params.additionalParameters = $volumeMappings
+    }
 
-        if ($acceptEula) {
-            $params.accept_eula = $true
-        }
+    New-BCContainer @params
 
-        if ($additionalFolders -and $additionalFolders.Count -gt 0) {
-            [string[]]$volumeMappings = @()
-            foreach ($folder in $additionalFolders) {
-                $volumeMappings += "--volume"
-                $volumeMappings += "${folder}:C:\Source"
-            }
-            $params.additionalParameters = $volumeMappings
-        }
-
-        New-BCContainer @params
-    } -ArgumentList $ArtifactUrl, $ContainerName, $Credential, $AcceptEula, $AuthType, $AdditionalFolders, $Version
-
-    Write-Log "Container creation job started (Job ID: $($containerJob.Id))" -Level Success
-    return $containerJob
+    Write-Log "Container created successfully: $ContainerName" -Level Success
 }
 
-Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerAsync
+Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync
