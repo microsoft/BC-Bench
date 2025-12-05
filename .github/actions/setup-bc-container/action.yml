@@ -41,17 +41,6 @@ runs:
       run: Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
       shell: pwsh
 
-    - name: Check tar and zstd availability
-      run: |
-        # https://github.com/actions/cache?tab=readme-ov-file#pre-requisites
-        Write-Host "Checking tar version..."
-        tar --version
-        Write-Host "Checking zstd version..."
-        zstd --version
-        Write-Host "Tar location:"
-        Get-Command tar | Select-Object Source
-      shell: pwsh
-
     - name: Get generic image name for caching
       id: generic-image
       run: |
