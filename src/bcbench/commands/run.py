@@ -6,7 +6,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.copilot.tool_usage_parser import parse_tool_usage_from_log
+from bcbench.agent.copilot.metrics import parse_tool_usage_from_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
     CopilotModel,

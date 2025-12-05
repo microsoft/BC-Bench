@@ -17,7 +17,7 @@ TOOL_CALL_PATTERN = re.compile(
 )
 
 
-def _parse_tool_usage_from_log(log_path: Path) -> dict[str, int]:
+def parse_tool_usage_from_log(log_path: Path) -> dict[str, int]:
     """Parse tool usage from a single Copilot CLI log file.
 
     The log file format is timestamped text with embedded JSON responses.
@@ -66,7 +66,7 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
     # Parse tool usage from session log if provided
     if session_log_path:
         try:
-            tool_usage = _parse_tool_usage_from_log(session_log_path)
+            tool_usage = parse_tool_usage_from_log(session_log_path)
             if not tool_usage:
                 tool_usage = None  # Convert empty dict to None
         except Exception as e:
