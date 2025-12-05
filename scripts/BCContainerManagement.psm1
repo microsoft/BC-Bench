@@ -297,6 +297,9 @@ function New-BCContainerAsync {
 
         Import-Module BcContainerHelper -Force -DisableNameChecking
 
+        # Set usePsSession to false to use docker exec instead of PowerShell remoting
+        $bcContainerHelperConfig.usePsSession = $false
+
         $params = @{
             artifactUrl              = $url
             containerName            = $ContainerName
