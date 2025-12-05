@@ -65,6 +65,12 @@ else {
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
+# Configure artifacts cache folder if specified via environment variable
+if ($env:BC_ARTIFACTS_CACHE_FOLDER) {
+    Write-Log "Using custom artifacts cache folder: $env:BC_ARTIFACTS_CACHE_FOLDER" -Level Info
+    $bcContainerHelperConfig.bcartifactsCacheFolder = $env:BC_ARTIFACTS_CACHE_FOLDER
+}
+
 Write-Log "Container name: $ContainerName" -Level Info
 
 [bool]$containerCreated = $false

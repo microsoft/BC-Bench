@@ -41,16 +41,20 @@ runs:
       run: Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
       shell: pwsh
 
-    - name: Get generic image name for caching
-      id: generic-image
+    - name: Get cache keys for Docker image and BC artifacts
+      id: cache-info
       run: |
+        using module .\scripts\BCBenchUtils.psm1
         Import-Module BcContainerHelper -Force -DisableNameChecking
-        $genericImage = Get-BestGenericImageName
-        Write-Host "Generic image for caching: $genericImage"
 
-        $cacheKey = $genericImage -replace '[:/]', '-'
-        "image=$genericImage" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        "cache-key=$cacheKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        # Get generic image cache info
+        $imageInfo = Get-GenericImageCacheInfo
+        "generic-image=$($imageInfo['image'])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "generic-cache-key=$($imageInfo['cache-key'])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+        # Get BC artifacts cache info
+        $artifactInfo = Get-BCArtifactsCacheInfo -InstanceId "${{ inputs.instance-id }}"
+        "artifacts-cache-key=$($artifactInfo['cache-key'])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       shell: pwsh
 
     - name: Cache generic Docker image
@@ -58,27 +62,33 @@ runs:
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}/docker-cache/generic-image.tar
-        key: docker-generic-${{ steps.generic-image.outputs.cache-key }}
+        key: ${{ steps.cache-info.outputs.generic-cache-key }}
 
     - name: Load generic image from cache
       if: steps.cache-generic-image.outputs.cache-hit == 'true'
       run: |
         Write-Host "Loading generic image from cache..."
         docker load -i "${{ runner.temp }}/docker-cache/generic-image.tar"
-        Write-Host "Generic image loaded successfully from cache."
+        Write-Host "Generic image loaded successfully."
       shell: pwsh
 
     - name: Pull and save generic image for caching
       if: steps.cache-generic-image.outputs.cache-hit != 'true'
       run: |
-        $genericImage = "${{ steps.generic-image.outputs.image }}"
+        $genericImage = "${{ steps.cache-info.outputs.generic-image }}"
         Write-Host "Pulling generic image: $genericImage"
         docker pull $genericImage
-        Write-Host "Generic image pulled successfully, saving generic image to cache..."
         New-Item -ItemType Directory -Path "${{ runner.temp }}/docker-cache" -Force | Out-Null
         docker save -o "${{ runner.temp }}/docker-cache/generic-image.tar" $genericImage
         Write-Host "Generic image saved for caching."
       shell: pwsh
+
+    - name: Cache BC artifacts
+      id: cache-artifacts
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/bcartifacts.cache
+        key: ${{ steps.cache-info.outputs.artifacts-cache-key }}
 
     - name: Azure Login with OIDC for cloning internal repository
       uses: azure/login@v2
@@ -91,6 +101,7 @@ runs:
       id: setup
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        BC_ARTIFACTS_CACHE_FOLDER: ${{ runner.temp }}/bcartifacts.cache
       run: |
         # Get Azure DevOps access token via OIDC
         $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
