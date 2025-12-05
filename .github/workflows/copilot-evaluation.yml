@@ -67,6 +67,7 @@ jobs:
 
       - name: Setup BC container
         id: setup-env
+        timeout-minutes: 40
         uses: ./.github/actions/setup-bc-container
         with:
           instance-id: ${{ matrix.entry }}
