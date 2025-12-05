@@ -12,22 +12,17 @@ Log format example:
         }
       }]
     }
+
+This module re-exports the parsing function from metrics.py for backward compatibility.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
-__all__ = ["parse_tool_usage_from_log"]
+from bcbench.agent.copilot.metrics import _parse_tool_usage_from_log
 
-# Regex to find tool call function names in the log content
-# Matches tool calls (with "arguments") but NOT tool definitions (with "description")
-# Pattern: "function": {"name": "tool_name", "arguments": ...}
-TOOL_CALL_PATTERN = re.compile(
-    r'"function"\s*:\s*\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"',
-    re.MULTILINE,
-)
+__all__ = ["parse_tool_usage_from_log"]
 
 
 def parse_tool_usage_from_log(log_path: Path) -> dict[str, int]:
@@ -42,14 +37,4 @@ def parse_tool_usage_from_log(log_path: Path) -> dict[str, int]:
     Returns:
         Dict mapping tool names to call counts from the log
     """
-    tool_counts: dict[str, int] = {}
-
-    content = log_path.read_text(encoding="utf-8")
-
-    # Use regex to find all tool call function names directly
-    # This is more reliable than trying to parse multi-line JSON from logs
-    matches = TOOL_CALL_PATTERN.findall(content)
-    for tool_name in matches:
-        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
-
-    return tool_counts
+    return _parse_tool_usage_from_log(log_path)

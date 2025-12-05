@@ -1,4 +1,6 @@
 import re
+from collections import Counter
+from pathlib import Path
 from typing import Sequence
 
 from bcbench.logger import get_logger
@@ -6,10 +8,39 @@ from bcbench.types import AgentMetrics
 
 logger = get_logger(__name__)
 
+# Regex to find tool call function names in the log content
+# Matches tool calls (with "arguments") but NOT tool definitions (with "description")
+# Pattern: "function": {"name": "tool_name", "arguments": ...}
+TOOL_CALL_PATTERN = re.compile(
+    r'"function"\s*:\s*\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"',
+    re.MULTILINE,
+)
 
-def parse_metrics(output_lines: Sequence[str]) -> AgentMetrics | None:
-    """Parse metrics from Copilot CLI output.
+
+def _parse_tool_usage_from_log(log_path: Path) -> dict[str, int]:
+    """Parse tool usage from a single Copilot CLI log file.
+
+    The log file format is timestamped text with embedded JSON responses.
+    Tool calls appear in response JSON under choices[].message.tool_calls[].
+
+    Args:
+        log_path: Path to the Copilot CLI log file
+
+    Returns:
+        Dict mapping tool names to call counts from the log
+    """
+    content = log_path.read_text(encoding="utf-8")
+    return dict(Counter(TOOL_CALL_PATTERN.findall(content)))
+
+
+def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = None) -> AgentMetrics | None:
+    """Parse metrics from Copilot CLI output and session logs.
+
     This is highly delicate and depends on the exact formatting of the CLI output.
+
+    Args:
+        output_lines: Lines from Copilot CLI stderr output
+        session_log_path: Optional path to session log file for tool usage parsing
 
     Expected output format at the end:
         Total usage est:       1 Premium request
@@ -30,6 +61,17 @@ def parse_metrics(output_lines: Sequence[str]) -> AgentMetrics | None:
     llm_duration: float | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    tool_usage: dict[str, int] | None = None
+
+    # Parse tool usage from session log if provided
+    if session_log_path:
+        try:
+            tool_usage = _parse_tool_usage_from_log(session_log_path)
+            if not tool_usage:
+                tool_usage = None  # Convert empty dict to None
+        except Exception as e:
+            logger.warning(f"Failed to parse tool usage from {session_log_path}: {e}")
+            tool_usage = None
 
     try:
         # Parse LLM duration (API time)
@@ -61,12 +103,13 @@ def parse_metrics(output_lines: Sequence[str]) -> AgentMetrics | None:
             prompt_tokens = parse_token_count(input_str)
             completion_tokens = parse_token_count(output_str)
 
-        if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None:
+        if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None or tool_usage is not None:
             return AgentMetrics(
                 execution_time=execution_time,
                 llm_duration=llm_duration,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
+                tool_usage=tool_usage,
             )
 
         logger.warning("No metrics found in output")
