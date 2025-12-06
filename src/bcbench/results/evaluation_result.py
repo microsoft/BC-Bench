@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Any, Sequence
@@ -95,11 +96,8 @@ def _calculate_average_tool_usage(tool_usages: list[dict[str, int]]) -> dict[str
     if not tool_usages:
         return {}
 
-    aggregated: dict[str, float] = {}
-    for usage in tool_usages:
-        for tool_name, count in usage.items():
-            aggregated[tool_name] = aggregated.get(tool_name, 0) + count
+    aggregated = sum((Counter(usage) for usage in tool_usages), Counter())
 
-    # Calculate average (rounded to nearest integer)
+    # Calculate average (rounded to 2 decimal places)
     num_results = len(tool_usages)
     return {tool: round(count / num_results, 2) for tool, count in aggregated.items()}
