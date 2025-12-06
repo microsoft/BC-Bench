@@ -85,10 +85,16 @@ jobs:
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot@0.0.367
 
+      - name: Select PAT based on job index
+        id: select-pat
+        run: |
+          $patIndex = ${{ strategy.job-index }} % 2
+          echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
+
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 60
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          GH_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' && secrets.COPILOT_PAT || secrets.COPILOT_PAT3 }}
         run: |
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
