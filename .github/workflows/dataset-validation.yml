@@ -31,7 +31,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    name: ${{ matrix.entry }}
+    name: ${{ matrix.entry.instance_id }}
     strategy:
       fail-fast: false
       matrix:
@@ -45,12 +45,13 @@ jobs:
         timeout-minutes: 40
         uses: ./.github/actions/setup-bc-container
         with:
-          instance-id: ${{ matrix.entry }}
+          instance-id: ${{ matrix.entry.instance_id }}
+          version: ${{ matrix.entry.version }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run build and test verification for ${{ matrix.entry }}
+      - name: Run build and test verification for ${{ matrix.entry.instance_id }}
         timeout-minutes: 60
-        run: .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.repo_path }}"
+        run: .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry.instance_id }}" -RepoPath "${{ steps.setup-env.outputs.repo_path }}"
         shell: pwsh

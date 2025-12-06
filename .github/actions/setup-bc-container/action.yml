@@ -5,6 +5,9 @@ inputs:
   instance-id:
     description: Instance ID for the dataset entry
     required: true
+  version:
+    description: BC environment version (e.g., "26.0")
+    required: true
   azure-client-id:
     description: Azure AD application client ID for OIDC authentication
     required: true
@@ -41,23 +44,12 @@ runs:
       run: Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
       shell: pwsh
 
-    - name: Get cache key for BC artifacts
-      id: cache-info
-      run: |
-        Import-Module .\scripts\BCBenchUtils.psm1 -Force
-        Import-Module BcContainerHelper -Force -DisableNameChecking
-
-        # Get BC artifacts cache info
-        $artifactInfo = Get-BCArtifactsCacheInfo -InstanceId "${{ inputs.instance-id }}"
-        "artifacts-cache-key=$($artifactInfo['cache-key'])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-      shell: pwsh
-
     - name: Cache BC artifacts
       id: cache-artifacts
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}/bcartifacts.cache
-        key: ${{ steps.cache-info.outputs.artifacts-cache-key }}
+        key: bcartifacts-sandbox-${{ inputs.version }}
 
     - name: Azure Login with OIDC for cloning internal repository
       uses: azure/login@v2

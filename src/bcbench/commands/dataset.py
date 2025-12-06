@@ -47,17 +47,17 @@ def list_entries(
             cwd=dataset_path.parent,
         )
         diff_output: str = result.stdout
-        entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
+        entries: list[dict[str, str]] = _modified_entries_from_diff(diff_output)
     else:
         dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path, random=2 if test_run else None)
-        entry_ids: list[str] = [e.instance_id for e in dataset_entries]
+        entries: list[dict[str, str]] = [{"instance_id": e.instance_id, "version": e.environment_setup_version} for e in dataset_entries]
 
-    print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")
-    for entry_id in entry_ids:
-        print(f"  - {entry_id}")
+    print(f"Found {len(entries)} entry(ies){' (modified only)' if modified_only else ''}:")
+    for entry in entries:
+        print(f"  - {entry['instance_id']} (v{entry['version']})")
 
     if github_output:
-        _write_github_output(github_output, json.dumps(entry_ids))
+        _write_github_output(github_output, json.dumps(entries))
 
 
 @dataset_app.command("view")
@@ -125,8 +125,8 @@ def view_entry(
         console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
 
-def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
-    instance_ids = []
+def _modified_entries_from_diff(diff_output: str) -> list[dict[str, str]]:
+    entries = []
 
     for line in diff_output.splitlines():
         # Look for added or modified lines (lines starting with +)
@@ -136,9 +136,9 @@ def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
             content: str = line[1:]
 
             entry_data = json.loads(content)
-            instance_ids.append(entry_data["instance_id"])
+            entries.append({"instance_id": entry_data["instance_id"], "version": entry_data["environment_setup_version"]})
 
-    return instance_ids
+    return entries
 
 
 def _write_github_output(key: str, value: str) -> None:
