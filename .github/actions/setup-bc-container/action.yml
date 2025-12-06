@@ -26,7 +26,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Generate BC container credentials
+    - name: Generate BC container name and credentials
       run: |
         # Generate a 32-character random password using Get-Random
         # The password is short-lived and only used for the duration of the workflow
@@ -35,7 +35,7 @@ runs:
         # Mask the password in GitHub Actions logs
         Write-Output "::add-mask::$password"
 
-        "BC_CONTAINER_NAME=bcbench" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_CONTAINER_NAME=bcbench-$("${{ inputs.instance-id }}".Split('-')[1])" | Out-File -FilePath $env:GITHUB_ENV -Append
         "BC_CONTAINER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
         "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
       shell: pwsh
@@ -67,7 +67,6 @@ runs:
         # Get Azure DevOps access token via OIDC
         $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
         Write-Output "::add-mask::$env:ADO_TOKEN"
-        $InstanceContainerName = 'bcbench-' + "${{ inputs.instance-id }}".split('-')[1]
 
-        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -ContainerName $InstanceContainerName
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}"
       shell: pwsh
