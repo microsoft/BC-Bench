@@ -37,7 +37,8 @@ def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]
     Raises:
         NoTestsExtractedError: If no test entries are found in the patch
     """
-    test_entries: list[TestEntry] = []
+    # Accumulator: codeunit_id -> set of function names (mutable during processing)
+    codeunit_functions: dict[int, set[str]] = {}
     current_codeunit_id: int | None = None
 
     # Pattern to match test procedure declarations that are ADDED (have + marker)
@@ -75,24 +76,13 @@ def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]
             procedure_match = re.match(procedure_pattern, line)
             if procedure_match:
                 function_name = procedure_match.group(1)
-
-                existing_entry = None
-                for entry in test_entries:
-                    if entry.codeunitID == current_codeunit_id:
-                        existing_entry = entry
-                        break
-
-                if existing_entry:
-                    if function_name not in existing_entry.functionName:
-                        existing_entry.functionName.add(function_name)
-                else:
-                    test_entries.append(TestEntry(codeunitID=current_codeunit_id, functionName={function_name}))
-
+                codeunit_functions.setdefault(current_codeunit_id, set()).add(function_name)
                 found_test_attribute = False
             elif not line.startswith("+"):
                 found_test_attribute = False
 
-    if not test_entries:
+    if not codeunit_functions:
         raise NoTestsExtractedError()
 
-    return test_entries
+    # Convert to immutable TestEntry objects
+    return [TestEntry(codeunitID=codeunit_id, functionName=frozenset(funcs)) for codeunit_id, funcs in codeunit_functions.items()]

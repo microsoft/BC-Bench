@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bcbench.agent.copilot.tool_usage_parser import parse_tool_usage_from_log
+from bcbench.agent.copilot.metrics import parse_tool_usage_from_log
 
 
 class TestParseToolUsageFromLog:
