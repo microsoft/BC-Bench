@@ -23,7 +23,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Generate BC container credentials
+    - name: Generate BC container name and credentials
       run: |
         # Generate a 32-character random password using Get-Random
         # The password is short-lived and only used for the duration of the workflow
@@ -32,7 +32,7 @@ runs:
         # Mask the password in GitHub Actions logs
         Write-Output "::add-mask::$password"
 
-        "BC_CONTAINER_NAME=bcbench" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_CONTAINER_NAME=bcbench-$("${{ inputs.instance-id }}".Split('-')[1])" | Out-File -FilePath $env:GITHUB_ENV -Append
         "BC_CONTAINER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
         "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
       shell: pwsh
