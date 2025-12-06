@@ -78,6 +78,10 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot@0.0.367
 
