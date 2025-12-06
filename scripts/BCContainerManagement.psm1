@@ -291,9 +291,6 @@ function New-BCContainerSync {
 
     Write-Log "Creating container: $ContainerName" -Level Info
 
-    # Set usePsSession to false to use docker exec instead of PowerShell remoting
-    $bcContainerHelperConfig.usePsSession = $false
-
     $params = @{
         artifactUrl              = $ArtifactUrl
         containerName            = $ContainerName
@@ -304,7 +301,6 @@ function New-BCContainerSync {
         multitenant              = $false
         shortcuts                = 'None'
         memoryLimit              = "16G"
-        isolation                = "hyperv"
     }
 
     if ($AcceptEula) {
