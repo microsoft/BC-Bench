@@ -44,7 +44,7 @@ runs:
     - name: Get cache key for BC artifacts
       id: cache-info
       run: |
-        using module .\scripts\BCBenchUtils.psm1
+        Import-Module .\scripts\BCBenchUtils.psm1 -Force
         Import-Module BcContainerHelper -Force -DisableNameChecking
 
         # Get BC artifacts cache info
