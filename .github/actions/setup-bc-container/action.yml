@@ -41,46 +41,15 @@ runs:
       run: Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
       shell: pwsh
 
-    - name: Get cache keys for Docker image and BC artifacts
+    - name: Get cache key for BC artifacts
       id: cache-info
       run: |
         using module .\scripts\BCBenchUtils.psm1
         Import-Module BcContainerHelper -Force -DisableNameChecking
 
-        # Get generic image cache info
-        $imageInfo = Get-GenericImageCacheInfo
-        "generic-image=$($imageInfo['image'])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        "generic-cache-key=$($imageInfo['cache-key'])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
         # Get BC artifacts cache info
         $artifactInfo = Get-BCArtifactsCacheInfo -InstanceId "${{ inputs.instance-id }}"
         "artifacts-cache-key=$($artifactInfo['cache-key'])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-      shell: pwsh
-
-    - name: Cache generic Docker image
-      id: cache-generic-image
-      uses: actions/cache@v4
-      with:
-        path: ${{ runner.temp }}/docker-cache/generic-image.tar
-        key: ${{ steps.cache-info.outputs.generic-cache-key }}
-
-    - name: Load generic image from cache
-      if: steps.cache-generic-image.outputs.cache-hit == 'true'
-      run: |
-        Write-Host "Loading generic image from cache..."
-        docker load -i "${{ runner.temp }}/docker-cache/generic-image.tar"
-        Write-Host "Generic image loaded successfully."
-      shell: pwsh
-
-    - name: Pull and save generic image for caching
-      if: steps.cache-generic-image.outputs.cache-hit != 'true'
-      run: |
-        $genericImage = "${{ steps.cache-info.outputs.generic-image }}"
-        Write-Host "Pulling generic image: $genericImage"
-        docker pull $genericImage
-        New-Item -ItemType Directory -Path "${{ runner.temp }}/docker-cache" -Force | Out-Null
-        docker save -o "${{ runner.temp }}/docker-cache/generic-image.tar" $genericImage
-        Write-Host "Generic image saved for caching."
       shell: pwsh
 
     - name: Cache BC artifacts

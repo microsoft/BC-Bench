@@ -471,33 +471,4 @@ function Get-BCArtifactsCacheInfo {
     }
 }
 
-<#
-.SYNOPSIS
-    Gets cache information for the generic Docker image
-.DESCRIPTION
-    Retrieves the generic image name and cache key for Docker image caching.
-    Used by GitHub Actions to set up caching for the generic BC Docker image.
-.OUTPUTS
-    Hashtable with image name and cache-key
-.EXAMPLE
-    $imageInfo = Get-GenericImageCacheInfo
-#>
-function Get-GenericImageCacheInfo {
-    [CmdletBinding()]
-    [OutputType([hashtable])]
-    param()
-
-    # Requires BcContainerHelper module
-    $genericImage = Get-BestGenericImageName
-    Write-Log "Generic image: $genericImage" -Level Info
-
-    $cacheKey = "docker-generic-" + ($genericImage -replace '[:/]', '-')
-    Write-Log "Cache key: $cacheKey" -Level Info
-
-    return @{
-        "image"     = $genericImage
-        "cache-key" = $cacheKey
-    }
-}
-
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo, Get-BCArtifactsCacheInfo, Get-GenericImageCacheInfo
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo, Get-BCArtifactsCacheInfo
