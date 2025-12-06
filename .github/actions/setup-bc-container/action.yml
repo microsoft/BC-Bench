@@ -67,6 +67,7 @@ runs:
         # Get Azure DevOps access token via OIDC
         $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
         Write-Output "::add-mask::$env:ADO_TOKEN"
+        $InstanceContainerName = 'bcbench-' + "${{ inputs.instance-id }}".split('-')[1]
 
-        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -ContainerName 'bcbench-' + "${{ inputs.instance-id }}".split('-')[0]
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -ContainerName $InstanceContainerName
       shell: pwsh
