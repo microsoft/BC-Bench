@@ -352,5 +352,23 @@
     },
     "github_run_id": "19994280665",
     "experiment": null
+  },
+  {
+    "total": 46,
+    "resolved": 21,
+    "failed": 25,
+    "build": 39,
+    "percentage": 45.7,
+    "date": "2025-12-07",
+    "model": "azure/claude-haiku-4-5",
+    "agent_name": "mini-bc-agent",
+    "category": "bug-fix",
+    "average_duration": 185.4,
+    "average_prompt_tokens": 1101650.5,
+    "average_completion_tokens": 8735.7,
+    "average_llm_duration": 0.0,
+    "average_tool_usage": null,
+    "github_run_id": "20003571490",
+    "experiment": null
   }
 ]
