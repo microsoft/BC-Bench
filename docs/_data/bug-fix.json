@@ -319,5 +319,30 @@
       "custom_instructions": false,
       "custom_agent": null
     }
+  },
+  {
+    "total": 46,
+    "resolved": 25,
+    "failed": 21,
+    "build": 43,
+    "percentage": 54.3,
+    "date": "2025-12-07",
+    "model": "gpt-5.1-codex-max",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 221.7,
+    "average_prompt_tokens": 1040032.6,
+    "average_completion_tokens": 11423.9,
+    "average_llm_duration": 165.63171739130436,
+    "average_tool_usage": {
+      "report_intent": 1.57,
+      "powershell": 9.39,
+      "view": 9.63,
+      "glob": 3.22,
+      "read_powershell": 0.17,
+      "stop_powershell": 0.04
+    },
+    "github_run_id": "19994280665",
+    "experiment": null
   }
 ]
