@@ -10,10 +10,9 @@ Escalation Engineer in US tested and confirmed in a Version 26 Tenant Sandbox in
 6 - Search for Customers and select the Customer and open the Customer Card for the new Customer used. Make sure to click the 'i' Icon to open the FactBox as shown below.
 ![Cronus Usa Warehouse](./cronus_usa_warehouse.png)
 
-**Result:** Identify above highlighted in yellow the Total ($) Amount shows $ 30,000.00 when the Customer Sales Amount is only $10,000.00 
-The Amount is tripled by having an open Sales Order with a posted Shipment along with an open Sales Invoice with Get Shipment Line completed to bring the Shipped Inventory into the Invoice Lines for billing, but prior to the Invoice being posted.
+**Result:** Identify above highlighted in yellow the Total ($)ted Shipment along with an open Sales Invoice with Get Shipment Line completed to bring the Shipped Inventory into the Invoice Lines for billing, but prior to the Invoice being posted.
 
-**Expected Results:** Instead of being tripled, the Sales Order/Invoice Amount should be calculated only once into the Total ($) Sales for the Customer. In the case provided above, it is expected that Sales ($) would equal $10,000.00
+**Expected Results:** Instead of being tripled, the Sales Order/Invoice Amount should be calculated only once into the Total $ Sales for the Customer. In the case provided above, it is expected that Sales $ would equal $10,000.00
 
 **NOTE:** The partner provided the following code as being the offending code area:
 ![Coding Part](./coding_part.png)
