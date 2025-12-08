@@ -209,9 +209,9 @@ class MockEvaluationPipeline(EvaluationPipeline):
 
         # Randomize agent metrics to test different scenarios
         metrics_scenarios: list[AgentMetrics | None] = [
-            AgentMetrics(execution_time=0.1, llm_duration=0.05, prompt_tokens=100, completion_tokens=50, tool_usage={"bash": 5, "view": 3, "edit": 2}),
+            AgentMetrics(execution_time=0.1, llm_duration=0.05, prompt_tokens=100, completion_tokens=50, tool_usage={"bash": 5, "view": 3, "edit": 2}, turn_count=7),
             AgentMetrics(execution_time=0.2, llm_duration=0.1, prompt_tokens=250, tool_usage={"bash": 10, "search": 4}),
-            AgentMetrics(execution_time=0.15, llm_duration=0.07, tool_usage={"view": 8}),
+            AgentMetrics(execution_time=0.15, llm_duration=0.07, tool_usage={"view": 8}, turn_count=4),
             AgentMetrics(),
             None,
             AgentMetrics(prompt_tokens=500, completion_tokens=100, tool_usage={"bash": 3, "view": 2, "edit": 1, "search": 5}),
