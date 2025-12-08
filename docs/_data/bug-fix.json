@@ -89,24 +89,6 @@
     "experiment": null
   },
   {
-    "total": 37,
-    "resolved": 4,
-    "failed": 33,
-    "build": 23,
-    "percentage": 10.8,
-    "date": "2025-12-02",
-    "model": "azure/gpt-4.1",
-    "agent_name": "mini-bc-agent",
-    "category": "bug-fix",
-    "average_duration": 378.3,
-    "average_prompt_tokens": 385869.7,
-    "average_completion_tokens": 3447.9,
-    "average_llm_duration": 0.0,
-    "average_tool_usage": null,
-    "github_run_id": "19855931749",
-    "experiment": null
-  },
-  {
     "total": 45,
     "resolved": 20,
     "failed": 25,
@@ -359,7 +341,7 @@
     "build": 39,
     "percentage": 45.7,
     "date": "2025-12-07",
-    "model": "azure/claude-haiku-4-5",
+    "model": "claude-haiku-4-5",
     "agent_name": "mini-bc-agent",
     "category": "bug-fix",
     "average_duration": 185.4,
