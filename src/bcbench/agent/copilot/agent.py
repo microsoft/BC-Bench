@@ -21,13 +21,7 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_copilot_agent(
-    entry: DatasetEntry,
-    model: str,
-    category: EvaluationCategory,
-    repo_path: Path,
-    output_dir: Path,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:

@@ -54,7 +54,9 @@ class TestGenerationPipeline(EvaluationPipeline):
         clean_repo(context.repo_path)
         checkout_commit(context.repo_path, context.entry.base_commit)
 
-        if _get_test_generation_input_mode() == "gold-patch":
+        input_mode: str = _get_test_generation_input_mode()
+        logger.info(f"Test generation input mode: {input_mode}")
+        if input_mode == "gold-patch":
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
         else:
             copy_problem_statement_folder(context.entry, context.repo_path)
