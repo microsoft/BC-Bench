@@ -242,7 +242,7 @@ class TestMiniAgentMetricsToResultFlow:
         assert result.metrics.prompt_tokens == 8500
         assert result.metrics.completion_tokens == 1800
         assert result.agent_name == "mini-bc-agent"
-        assert result.model == "azure/gpt-4.1"
+        assert result.model == "azure/gpt-4-1"
 
     def test_mini_agent_metrics_flow_without_tokens(self, sample_context):
         from unittest.mock import Mock
