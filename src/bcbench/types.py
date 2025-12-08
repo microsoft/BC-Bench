@@ -14,7 +14,7 @@ from bcbench.logger import get_logger
 if TYPE_CHECKING:
     from bcbench.dataset import DatasetEntry
 
-__all__ = ["AgentMetrics", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration", "TestGenerationInputMode"]
+__all__ = ["AgentMetrics", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
 logger = get_logger(__name__)
 
@@ -75,11 +75,6 @@ class EvaluationCategory(str, Enum):
     # EVENT_REQUEST = "event-request"
 
 
-class TestGenerationInputMode(str, Enum):
-    PROBLEM_STATEMENT = "problem-statement"
-    GOLD_PATCH = "gold-patch"
-
-
 @dataclass
 class EvaluationContext:
     """Context object containing all configuration for evaluation pipeline.
@@ -104,9 +99,6 @@ class EvaluationContext:
 
     # Evaluation category
     category: EvaluationCategory
-
-    # Test generation input mode (only used for TEST_GENERATION category)
-    input_mode: TestGenerationInputMode | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

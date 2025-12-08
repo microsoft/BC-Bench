@@ -1,4 +1,7 @@
 from collections.abc import Callable
+from pathlib import Path
+
+import yaml
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
@@ -19,12 +22,19 @@ from bcbench.operations import (
 )
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationContext, TestGenerationInputMode
+from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 _config = get_config()
 
 __all__ = ["TestGenerationPipeline"]
+
+
+def _get_test_generation_input_mode() -> str:
+    """Read test-generation input mode from copilot config."""
+    config_file: Path = _config.paths.agent_dir / "config.yaml"
+    copilot_config = yaml.safe_load(config_file.read_text())
+    return copilot_config.get("prompt", {}).get("test-generation-input", "problem-statement")
 
 
 class TestGenerationPipeline(EvaluationPipeline):
@@ -35,16 +45,16 @@ class TestGenerationPipeline(EvaluationPipeline):
     2. Run agent: execute agent to generate test code
     3. Evaluate: build, run tests with expected failures, then apply original patch, build, run tests with expected passes
 
-    Input modes:
-    - PROBLEM_STATEMENT (default): Agent receives bug description, generates tests from problem statement
-    - GOLD_PATCH: Agent sees the fixed code, generates tests that verify the fix works
+    Input modes (configured in copilot/config.yaml):
+    - problem-statement: Agent receives bug description, generates tests from problem statement
+    - gold-patch: Agent sees the fixed code, generates tests that verify the fix works
     """
 
     def setup(self, context: EvaluationContext) -> None:
         clean_repo(context.repo_path)
         checkout_commit(context.repo_path, context.entry.base_commit)
 
-        if context.input_mode == TestGenerationInputMode.GOLD_PATCH:
+        if _get_test_generation_input_mode() == "gold-patch":
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
         else:
             copy_problem_statement_folder(context.entry, context.repo_path)

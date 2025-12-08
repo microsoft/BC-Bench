@@ -1,5 +1,11 @@
 prompt:
   include_project_paths: false
+
+  # Input mode for test generation: "problem-statement" or "gold-patch"
+  # - problem-statement: Agent reads bug description, generates tests to reproduce issue => Test driven development
+  # - gold-patch: Agent sees fixed code, generates tests to verify fix works             => Test verification for known fixes
+  test-generation-input: "gold-patch"
+
   bug-fix-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
@@ -16,19 +22,24 @@ prompt:
 
   test-generation-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
-
+    {% if is_gold_patch %}
+    Task: Generate ONE test case that verifies the recent fix in the codebase {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+      The code has already been fixed. Write a test that passes with this fix and would fail without it.
+    {% else %}
     Task: Generate ONE test case that reproduce the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
       The tests should fail against the current codebase (unfixed) and should pass once the issue is fixed.
+    {% endif %}
 
     Important constraints:
     - Do NOT modify any production code files
-    - Focus solely on generating tests for the reported issue
+    - Focus solely on generating tests {% if is_gold_patch %}that verify the fix works correctly{% else %}for the reported issue{% endif %}
     - Do NOT try to build or run tests, just provide the code changes needed
     - Do NOT commit any changes to the repository
     - Do NOT generate more than ONE test case
-
+    {% if not is_gold_patch %}
     Issue details:
     {{task}}
+    {% endif %}
 
 # controls:
 # 1. whether to copy custom instructions (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/`) into the repo
