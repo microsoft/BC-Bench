@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] When updating Item, Resource or G/L Account codes It doesn't reflect properly in the Project Planning Lines.
+Repro Steps:
+Open any existing Project - Project Planning Lines in your Cronus environment. The resource was RESOURCE3, the item was SER203 and the GL Account was 10210 Then renamed them (as it changed the no. field) to RESOURCE3A, SER203A and 10210A and the job planning lines remained as they were. For example, the job planning line is RESOURCE3 but this resource doesn’t actually exist No Changes are done. This applies on the Items and G/L Accounts as well. Expected Results: Any Codes adjustments should apply to the Project Planning Lines. Actual Results: No Changes are applied. Mitigation: User has to delete the line and insert it again. More Information:Same issue works fine in other parts of BC. E.g. in general journal, when changing the No of a customer or vendor or g/l account.
+Description:
+When updating Item, Resource or G/L Account codes It doesn't reflect properly in the Project Planning Lines.
