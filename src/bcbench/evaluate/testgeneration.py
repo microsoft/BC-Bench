@@ -19,7 +19,7 @@ from bcbench.operations import (
 )
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationContext, TestGenerationInputMode
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -31,15 +31,23 @@ class TestGenerationPipeline(EvaluationPipeline):
     """Pipeline for test-generation evaluation category.
 
     Workflow:
-    1. Setup: clean repo, checkout base commit, copy problem statement, build
+    1. Setup: clean repo, checkout base commit, copy problem statement (or apply gold patch), build
     2. Run agent: execute agent to generate test code
     3. Evaluate: build, run tests with expected failures, then apply original patch, build, run tests with expected passes
+
+    Input modes:
+    - PROBLEM_STATEMENT (default): Agent receives bug description, generates tests from problem statement
+    - GOLD_PATCH: Agent sees the fixed code, generates tests that verify the fix works
     """
 
     def setup(self, context: EvaluationContext) -> None:
         clean_repo(context.repo_path)
         checkout_commit(context.repo_path, context.entry.base_commit)
-        copy_problem_statement_folder(context.entry, context.repo_path)
+
+        if context.input_mode == TestGenerationInputMode.GOLD_PATCH:
+            apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
+        else:
+            copy_problem_statement_folder(context.entry, context.repo_path)
 
         build_and_publish_projects(
             context.repo_path,
