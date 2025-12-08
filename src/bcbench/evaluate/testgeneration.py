@@ -5,7 +5,7 @@ import yaml
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
-from bcbench.dataset import TestEntry
+from bcbench.dataset import DatasetEntry, TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
@@ -22,12 +22,12 @@ from bcbench.operations import (
 )
 from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationCategory, EvaluationContext
 
 logger = get_logger(__name__)
 _config = get_config()
 
-__all__ = ["TestGenerationPipeline"]
+__all__ = ["TestGenerationPipeline", "setup_repo"]
 
 
 def _get_test_generation_input_mode() -> str:
@@ -50,6 +50,38 @@ def _get_test_generation_input_mode() -> str:
     return input_mode
 
 
+def setup_repo(entry: DatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
+    """Setup repository for evaluation without building.
+
+    This function prepares the repository for agent execution by:
+    1. Cleaning the repo to remove any uncommitted changes
+    2. Checking out the base commit
+    3. For test-generation with gold-patch mode: applying the gold patch
+    4. For all other cases: copying the problem statement folder
+
+    This is shared between the run command (no BC container) and evaluate command.
+    The evaluate pipeline additionally calls build_and_publish_projects after this.
+
+    Args:
+        entry: Dataset entry with instance metadata
+        repo_path: Path to the repository
+        category: Evaluation category (bug-fix or test-generation)
+    """
+    clean_repo(repo_path)
+    checkout_commit(repo_path, entry.base_commit)
+
+    if category == EvaluationCategory.TEST_GENERATION:
+        input_mode: str = _get_test_generation_input_mode()
+        logger.info(f"Test generation input mode: {input_mode}")
+        if input_mode == "gold-patch":
+            apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
+        else:
+            copy_problem_statement_folder(entry, repo_path)
+    else:
+        # For bug-fix and other categories, always copy problem statement
+        copy_problem_statement_folder(entry, repo_path)
+
+
 class TestGenerationPipeline(EvaluationPipeline):
     """Pipeline for test-generation evaluation category.
 
@@ -64,15 +96,7 @@ class TestGenerationPipeline(EvaluationPipeline):
     """
 
     def setup(self, context: EvaluationContext) -> None:
-        clean_repo(context.repo_path)
-        checkout_commit(context.repo_path, context.entry.base_commit)
-
-        input_mode: str = _get_test_generation_input_mode()
-        logger.info(f"Test generation input mode: {input_mode}")
-        if input_mode == "gold-patch":
-            apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
-        else:
-            copy_problem_statement_folder(context.entry, context.repo_path)
+        setup_repo(context.entry, context.repo_path, context.category)
 
         build_and_publish_projects(
             context.repo_path,
