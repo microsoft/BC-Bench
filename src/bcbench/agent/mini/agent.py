@@ -132,7 +132,7 @@ def _extract_metrics(agent: "DefaultAgent", execution_time: float) -> AgentMetri
                     prompt_tokens += usage["prompt_tokens"]
                     completion_tokens += usage["completion_tokens"]
 
-        return AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, step_count=agent.model.n_calls)
+        return AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, turn_count=agent.model.n_calls)
 
     except Exception as e:
         logger.warning(f"Failed to extract metrics from agent: {e}")

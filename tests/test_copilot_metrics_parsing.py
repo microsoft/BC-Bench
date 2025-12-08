@@ -185,7 +185,7 @@ def test_parse_metrics_minimal_real_output():
     assert result.completion_tokens == 1500
 
 
-def test_parse_session_log_extracts_step_count():
+def test_parse_session_log_extracts_turn_count():
     log_content = """
 2025-12-07T20:37:41.314Z [START-GROUP] Sending request to the AI model
 2025-12-07T20:37:43.267Z [DEBUG] response (Request-ID 00000-e9c550bb):
@@ -196,9 +196,9 @@ def test_parse_session_log_extracts_step_count():
 2025-12-07T20:37:47.662Z [DEBUG] response (Request-ID 00000-e9ca091f):
 """
     with patch.object(Path, "read_text", return_value=log_content):
-        _tool_usage, step_count = parse_session_log(Path("dummy.log"))
+        _tool_usage, turn_count = parse_session_log(Path("dummy.log"))
 
-    assert step_count == 3
+    assert turn_count == 3
 
 
 def test_parse_session_log_extracts_tool_calls():
@@ -209,12 +209,12 @@ def test_parse_session_log_extracts_tool_calls():
 "function": {"name": "edit", "arguments": "{}"}
 """
     with patch.object(Path, "read_text", return_value=log_content):
-        tool_usage, _step_count = parse_session_log(Path("dummy.log"))
+        tool_usage, _turn_count = parse_session_log(Path("dummy.log"))
 
     assert tool_usage == {"view": 2, "grep": 1, "edit": 1}
 
 
-def test_parse_metrics_with_session_log_includes_step_count(tmp_path):
+def test_parse_metrics_with_session_log_includes_turn_count(tmp_path):
     log_file = tmp_path / "session.log"
     log_file.write_text("""
 2025-12-07T20:37:41.314Z [START-GROUP] Sending request to the AI model
@@ -230,6 +230,6 @@ def test_parse_metrics_with_session_log_includes_step_count(tmp_path):
     result = parse_metrics(output_lines, session_log_path=log_file)
 
     assert result is not None
-    assert result.step_count == 5
+    assert result.turn_count == 5
     assert result.tool_usage == {"view": 1, "grep": 1}
     assert result.execution_time == 90.0

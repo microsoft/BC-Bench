@@ -27,7 +27,7 @@ class TestMiniAgentMetricsExtraction:
         assert metrics.execution_time == 120.5
         assert metrics.prompt_tokens == 0
         assert metrics.completion_tokens == 0
-        assert metrics.step_count == 5
+        assert metrics.turn_count == 5
 
     def test_metrics_extraction_with_token_usage(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -71,7 +71,7 @@ class TestMiniAgentMetricsExtraction:
         assert metrics.execution_time == 120.5
         assert metrics.prompt_tokens == 350  # 150 + 200
         assert metrics.completion_tokens == 125  # 50 + 75
-        assert metrics.step_count == 10
+        assert metrics.turn_count == 10
 
     def test_metrics_extraction_handles_missing_attributes(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -204,7 +204,7 @@ class TestMiniAgentMetricsExtraction:
         assert metrics.execution_time == 45.0
         assert metrics.prompt_tokens == 100
         assert metrics.completion_tokens == 25
-        assert metrics.step_count == 3
+        assert metrics.turn_count == 3
 
     def test_metrics_extraction_ignores_non_assistant_messages(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -243,4 +243,4 @@ class TestMiniAgentMetricsExtraction:
         assert metrics is not None
         assert metrics.prompt_tokens == 100
         assert metrics.completion_tokens == 50
-        assert metrics.step_count == 2
+        assert metrics.turn_count == 2

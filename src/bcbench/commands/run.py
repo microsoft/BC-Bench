@@ -121,7 +121,7 @@ def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directo
         uv run bcbench run copilot-inspector ./evaluation_results/
     """
 
-    usage, step_count = parse_session_log(path)
+    usage, turn_count = parse_session_log(path)
 
     print("Tool Usage Summary:")
     print("-" * 40)
@@ -131,4 +131,4 @@ def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directo
 
     print("-" * 40)
     print(f"Total tool calls: {sum(usage.values())}")
-    print(f"Total LLM calls: {step_count}")
+    print(f"Total LLM calls: {turn_count}")
