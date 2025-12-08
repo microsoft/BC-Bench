@@ -85,7 +85,7 @@ jobs:
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
             --evaluators "resolution_rate,build_rate" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
-            --metrics "llm_duration,tool_calls" \
+            --metrics "bc_bench_metrics" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \
             --tags "${{ inputs.agent }},${{ inputs.model }},${{ inputs.category }}" ${{ !inputs.mock && '--upload-results' || '' }}
 

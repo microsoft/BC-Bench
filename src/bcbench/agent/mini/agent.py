@@ -108,7 +108,7 @@ def run_mini_agent(
     return metrics, None
 
 
-def _extract_metrics(agent, execution_time: float) -> AgentMetrics | None:
+def _extract_metrics(agent: "DefaultAgent", execution_time: float) -> AgentMetrics | None:
     """Extract metrics from agent execution.
 
     Args:
@@ -132,7 +132,7 @@ def _extract_metrics(agent, execution_time: float) -> AgentMetrics | None:
                     prompt_tokens += usage["prompt_tokens"]
                     completion_tokens += usage["completion_tokens"]
 
-        return AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+        return AgentMetrics(execution_time=execution_time, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, turn_count=agent.model.n_calls)
 
     except Exception as e:
         logger.warning(f"Failed to extract metrics from agent: {e}")

@@ -16,21 +16,28 @@ TOOL_CALL_PATTERN = re.compile(
     re.MULTILINE,
 )
 
+# Regex to count LLM requests (turns) in the log
+# Each "[START-GROUP] Sending request to the AI model" indicates a new LLM call
+TURN_COUNT_PATTERN = re.compile(r"\[START-GROUP\] Sending request to the AI model")
 
-def parse_tool_usage_from_log(log_path: Path) -> dict[str, int]:
-    """Parse tool usage from a single Copilot CLI log file.
+
+def parse_session_log(log_path: Path) -> tuple[dict[str, int], int]:
+    """Parse tool usage and step count from a single Copilot CLI log file.
 
     The log file format is timestamped text with embedded JSON responses.
     Tool calls appear in response JSON under choices[].message.tool_calls[].
+    Step count is determined by counting LLM requests.
 
     Args:
         log_path: Path to the Copilot CLI log file
 
     Returns:
-        Dict mapping tool names to call counts from the log
+        Tuple of (tool_usage dict mapping tool names to call counts, turn_count)
     """
     content = log_path.read_text(encoding="utf-8")
-    return dict(Counter(TOOL_CALL_PATTERN.findall(content)))
+    tool_usage = dict(Counter(TOOL_CALL_PATTERN.findall(content)))
+    turn_count = len(TURN_COUNT_PATTERN.findall(content))
+    return tool_usage, turn_count
 
 
 def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = None) -> AgentMetrics | None:
@@ -62,16 +69,20 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     tool_usage: dict[str, int] | None = None
+    turn_count: int | None = None
 
-    # Parse tool usage from session log if provided
+    # Parse tool usage and turn count from session log if provided
     if session_log_path:
         try:
-            tool_usage = parse_tool_usage_from_log(session_log_path)
+            tool_usage, turn_count = parse_session_log(session_log_path)
             if not tool_usage:
                 tool_usage = None  # Convert empty dict to None
+            if turn_count == 0:
+                turn_count = None  # Convert zero to None
         except Exception as e:
             logger.warning(f"Failed to parse tool usage from {session_log_path}: {e}")
             tool_usage = None
+            turn_count = None
 
     try:
         # Parse LLM duration (API time)
@@ -103,10 +114,11 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
             prompt_tokens = parse_token_count(input_str)
             completion_tokens = parse_token_count(output_str)
 
-        if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None or tool_usage is not None:
+        if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None or tool_usage is not None or turn_count is not None:
             return AgentMetrics(
                 execution_time=execution_time,
                 llm_duration=llm_duration,
+                turn_count=turn_count,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 tool_usage=tool_usage,

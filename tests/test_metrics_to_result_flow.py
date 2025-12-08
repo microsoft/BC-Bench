@@ -200,6 +200,7 @@ class TestMiniAgentMetricsToResultFlow:
         from unittest.mock import Mock
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 15
         mock_agent.messages = [
             {
                 "role": "assistant",
@@ -242,12 +243,13 @@ class TestMiniAgentMetricsToResultFlow:
         assert result.metrics.prompt_tokens == 8500
         assert result.metrics.completion_tokens == 1800
         assert result.agent_name == "mini-bc-agent"
-        assert result.model == "azure/gpt-4.1"
+        assert result.model == "azure/gpt-4-1"
 
     def test_mini_agent_metrics_flow_without_tokens(self, sample_context):
         from unittest.mock import Mock
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 8
         mock_agent.messages = []  # No messages, no tokens
 
         from bcbench.agent.mini.agent import _extract_metrics
@@ -266,6 +268,7 @@ class TestMiniAgentMetricsToResultFlow:
         from unittest.mock import Mock
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 12
         mock_agent.messages = [
             {
                 "role": "assistant",
@@ -300,6 +303,7 @@ class TestMiniAgentMetricsToResultFlow:
         from unittest.mock import Mock
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 7
         mock_agent.messages = [
             {
                 "role": "assistant",
@@ -334,6 +338,7 @@ class TestMiniAgentMetricsToResultFlow:
         from unittest.mock import Mock
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 4
         mock_agent.messages = []
 
         from bcbench.agent.mini.agent import _extract_metrics
@@ -352,6 +357,7 @@ class TestMiniAgentMetricsToResultFlow:
         from unittest.mock import Mock
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 25
         mock_agent.messages = [
             {
                 "role": "assistant",
