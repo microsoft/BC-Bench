@@ -8,12 +8,12 @@ on:
       model:
         description: "model to use for evaluation"
         required: false
-        default: "azure/gpt-5.1-codex-mini"
+        default: "claude-haiku-4-5"
         type: choice
         options:
-          - "azure/gpt-5.1-codex-mini"
-          - "azure/claude-haiku-4-5"
-          - "azure/claude-opus-4-5"
+          - "gpt-5.1-codex-mini"
+          - "claude-haiku-4-5"
+          - "claude-opus-4-5"
       category:
         description: "Evaluation category to run"
         required: false
@@ -50,7 +50,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 6
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -59,6 +59,7 @@ jobs:
 
       - name: Setup BC container
         id: setup-env
+        timeout-minutes: 30
         uses: ./.github/actions/setup-bc-container
         with:
           instance-id: ${{ matrix.entry }}
@@ -69,12 +70,20 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
+      - name: Azure Login with OIDC for Microsoft Foundry
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Run mini-bc-agent for entry ${{ matrix.entry }}
         timeout-minutes: 60
         env:
-          AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
         run: |
+          $env:AZURE_AD_TOKEN = az account get-access-token --resource https://cognitiveservices.azure.com --query accessToken -o tsv
+
           uv run bcbench evaluate mini "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
             --category "${{ inputs.category }}" `

@@ -58,7 +58,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 12
+      max-parallel: 15
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -67,6 +67,7 @@ jobs:
 
       - name: Setup BC container
         id: setup-env
+        timeout-minutes: 30
         uses: ./.github/actions/setup-bc-container
         with:
           instance-id: ${{ matrix.entry }}
@@ -77,13 +78,23 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot@0.0.367
+
+      - name: Select PAT based on job index
+        id: select-pat
+        run: |
+          $patIndex = ${{ strategy.job-index }} % 2
+          echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 60
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          GH_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' && secrets.COPILOT_PAT || secrets.COPILOT_PAT3 }}
         run: |
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `

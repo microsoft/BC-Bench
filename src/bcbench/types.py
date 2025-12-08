@@ -7,7 +7,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from bcbench.logger import get_logger
 
@@ -25,9 +25,13 @@ class AgentMetrics(BaseModel):
     Separates runtime execution data from experiment configuration.
     """
 
+    model_config = ConfigDict(frozen=True)
+
     # Total execution time in seconds
     execution_time: float | None = None
     llm_duration: float | None = None
+
+    turn_count: int | None = None
 
     # Token usage from LLM calls
     prompt_tokens: int | None = None
@@ -43,6 +47,8 @@ class ExperimentConfiguration(BaseModel):
     This encapsulates experiment-related configuration that agents use,
     making it easier to add new configuration options without changing function signatures.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     # MCP server names used in experiment (if any)
     mcp_servers: list[str] | None = None

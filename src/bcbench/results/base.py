@@ -69,7 +69,7 @@ class BaseEvaluationResult(BaseModel):
             project=project,
             resolved=resolved,
             build=build,
-            model=context.model,
+            model=context.model.replace(".", "-"),
             category=context.category,
             agent_name=context.agent_name,
             generated_patch=generated_patch,

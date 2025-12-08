@@ -100,7 +100,7 @@ function Invoke-GitCloneWithRetry {
         [int]$MaxRetries = 3,
 
         [Parameter(Mandatory = $false)]
-        [int]$RetryDelaySeconds = 5,
+        [int]$RetryDelaySeconds = 30,
 
         [Parameter(Mandatory = $true)]
         [string]$CommitSha

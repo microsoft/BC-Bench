@@ -35,7 +35,7 @@ A benchmark for evaluating AI coding on Business Central (AL) development tasks,
 
 ## MCP Server Experimental Configurations
 
-Comparing experimental configurations against baseline for **claude-haiku-4.5**.
+Comparing experimental configurations for GitHub Copilot CLI with **claude-haiku-4.5**.
 
 <table>
   <thead>
@@ -49,7 +49,7 @@ Comparing experimental configurations against baseline for **claude-haiku-4.5**.
   <tbody>
     {% assign sorted_results = site.data.bug-fix | sort: "percentage" | reverse %}
     {% for result in sorted_results %}
-      {% if result.model == "claude-haiku-4.5" %}
+      {% if result.model == "claude-haiku-4-5" and result.agent_name == "GitHub Copilot CLI" %}
         {% unless result.experiment.custom_instructions == true %}
     <tr>
       <td>{% if result.experiment.mcp_servers %}{{ result.experiment.mcp_servers }}{% else %}None{% endif %}</td>
@@ -63,8 +63,7 @@ Comparing experimental configurations against baseline for **claude-haiku-4.5**.
   </tbody>
 </table>
 
-
-Comparing experimental configurations against baseline for **claude-opus-4.5**.
+Comparing experimental configurations for GitHub Copilot CLI with **claude-opus-4.5**.
 
 <table>
   <thead>
@@ -78,7 +77,7 @@ Comparing experimental configurations against baseline for **claude-opus-4.5**.
   <tbody>
     {% assign sorted_results = site.data.bug-fix | sort: "percentage" | reverse %}
     {% for result in sorted_results %}
-      {% if result.model == "claude-opus-4.5" %}
+      {% if result.model == "claude-opus-4-5" and result.agent_name == "GitHub Copilot CLI" %}
         {% unless result.experiment.custom_instructions == true %}
     <tr>
       <td>{% if result.experiment.mcp_servers %}{{ result.experiment.mcp_servers }}{% else %}None{% endif %}</td>
