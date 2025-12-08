@@ -91,3 +91,12 @@ jobs:
       mock: true
       category: "delete"
     secrets: inherit
+
+  test-new-win-image:
+    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
+    steps:
+      - name: Test dotnet tool
+        run: dotnet tool --help
+
+      - name: Test node
+        run: npm --version
