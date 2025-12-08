@@ -19,6 +19,7 @@ class TestMiniAgentMetricsExtraction:
 
         mock_agent = Mock()
         mock_agent.messages = []  # No messages, so no token data
+        mock_agent.model.n_calls = 5
 
         metrics = _extract_metrics(mock_agent, 120.5)
 
@@ -26,11 +27,13 @@ class TestMiniAgentMetricsExtraction:
         assert metrics.execution_time == 120.5
         assert metrics.prompt_tokens == 0
         assert metrics.completion_tokens == 0
+        assert metrics.turn_count == 5
 
     def test_metrics_extraction_with_token_usage(self):
         from bcbench.agent.mini.agent import _extract_metrics
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 10
         mock_agent.messages = [
             {
                 "role": "user",
@@ -68,6 +71,7 @@ class TestMiniAgentMetricsExtraction:
         assert metrics.execution_time == 120.5
         assert metrics.prompt_tokens == 350  # 150 + 200
         assert metrics.completion_tokens == 125  # 50 + 75
+        assert metrics.turn_count == 10
 
     def test_metrics_extraction_handles_missing_attributes(self):
         from bcbench.agent.mini.agent import _extract_metrics
@@ -159,7 +163,7 @@ class TestMiniAgentMetricsExtraction:
         # Verify other fields are still correctly populated
         assert result.instance_id == sample_context.entry.instance_id
         assert result.project == "Shopify"
-        assert result.model == "azure/gpt-4.1"
+        assert result.model == "azure/gpt-4-1"
         assert result.agent_name == "mini-bc-agent"
         assert result.resolved is True
         assert result.build is True
@@ -169,6 +173,7 @@ class TestMiniAgentMetricsExtraction:
         from bcbench.agent.mini.agent import _extract_metrics
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 3
         mock_agent.messages = [
             {
                 "role": "assistant",
@@ -199,11 +204,13 @@ class TestMiniAgentMetricsExtraction:
         assert metrics.execution_time == 45.0
         assert metrics.prompt_tokens == 100
         assert metrics.completion_tokens == 25
+        assert metrics.turn_count == 3
 
     def test_metrics_extraction_ignores_non_assistant_messages(self):
         from bcbench.agent.mini.agent import _extract_metrics
 
         mock_agent = Mock()
+        mock_agent.model.n_calls = 2
         mock_agent.messages = [
             {
                 "role": "user",
@@ -236,3 +243,4 @@ class TestMiniAgentMetricsExtraction:
         assert metrics is not None
         assert metrics.prompt_tokens == 100
         assert metrics.completion_tokens == 50
+        assert metrics.turn_count == 2

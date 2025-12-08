@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bcbench.agent.copilot.metrics import parse_tool_usage_from_log
+from bcbench.agent.copilot.metrics import parse_session_log
 
 
 class TestParseToolUsageFromLog:
@@ -24,7 +24,7 @@ class TestParseToolUsageFromLog:
 """
         log_file.write_text(log_content)
 
-        usage = parse_tool_usage_from_log(log_file)
+        usage, _turn_count = parse_session_log(log_file)
 
         assert usage["bash"] == 2
         assert usage["view"] == 1
@@ -40,7 +40,7 @@ class TestParseToolUsageFromLog:
 """
         log_file.write_text(log_content)
 
-        usage = parse_tool_usage_from_log(log_file)
+        usage, _turn_count = parse_session_log(log_file)
 
         assert usage.get("view", 0) == 0
 
@@ -60,7 +60,7 @@ class TestParseToolUsageFromLog:
 """
         log_file.write_text(log_content)
 
-        usage = parse_tool_usage_from_log(log_file)
+        usage, _turn_count = parse_session_log(log_file)
 
         # Should only count the actual tool call, not the definition
         assert usage["view"] == 1
@@ -74,7 +74,7 @@ Another non-JSON line
 """
         log_file.write_text(log_content)
 
-        usage = parse_tool_usage_from_log(log_file)
+        usage, _turn_count = parse_session_log(log_file)
 
         assert usage["bash"] == 1
 
@@ -82,9 +82,10 @@ Another non-JSON line
         log_file = tmp_path / "empty.log"
         log_file.write_text("")
 
-        usage = parse_tool_usage_from_log(log_file)
+        usage, turn_count = parse_session_log(log_file)
 
         assert usage == {}
+        assert turn_count == 0
 
     def test_parses_mcp_tool_names(self, tmp_path: Path):
         log_file = tmp_path / "test.log"
@@ -94,7 +95,7 @@ Another non-JSON line
 """
         log_file.write_text(log_content)
 
-        usage = parse_tool_usage_from_log(log_file)
+        usage, _turn_count = parse_session_log(log_file)
 
         assert usage["bc-code-intelligence-find_bc_knowledge"] == 1
         assert usage["bc-code-intelligence-ask_bc_expert"] == 1

@@ -6,7 +6,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.copilot.metrics import parse_tool_usage_from_log
+from bcbench.agent.copilot.metrics import parse_session_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
     CopilotModel,
@@ -112,19 +112,16 @@ def run_mini_inspector(
     inspector.run()
 
 
-@run_app.command("copilot-tool-analyzer")
+@run_app.command("copilot-inspector")
 def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directory to search for log files or specific log file", exists=True, file_okay=True, dir_okay=False)]):
     """
-    Analyze tool usage from Copilot CLI log files.
-
-    Parses log files to extract and summarize tool call statistics,
-    displaying results sorted by usage count.
+    Inspect GitHub Copilot CLI session log(s)
 
     Example:
-        uv run bcbench run copilot-tool-analyzer ./evaluation_results/
+        uv run bcbench run copilot-inspector ./evaluation_results/
     """
 
-    usage = parse_tool_usage_from_log(path)
+    usage, turn_count = parse_session_log(path)
 
     print("Tool Usage Summary:")
     print("-" * 40)
@@ -134,3 +131,4 @@ def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directo
 
     print("-" * 40)
     print(f"Total tool calls: {sum(usage.values())}")
+    print(f"Total LLM calls: {turn_count}")
