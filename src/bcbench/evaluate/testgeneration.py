@@ -4,17 +4,15 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import BuildError, TestExecutionError
+from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
     categorize_projects,
-    checkout_commit,
     clean_project_paths,
-    clean_repo,
-    copy_problem_statement_folder,
     extract_tests_from_patch,
+    setup_repo,
     stage_and_get_diff,
 )
 from bcbench.operations.bc_operations import run_test_suite
@@ -31,15 +29,17 @@ class TestGenerationPipeline(EvaluationPipeline):
     """Pipeline for test-generation evaluation category.
 
     Workflow:
-    1. Setup: clean repo, checkout base commit, copy problem statement, build
+    1. Setup: clean repo, checkout base commit, copy problem statement (or apply gold patch), build
     2. Run agent: execute agent to generate test code
     3. Evaluate: build, run tests with expected failures, then apply original patch, build, run tests with expected passes
+
+    Input modes (configured in copilot/config.yaml):
+    - problem-statement: Agent receives bug description, generates tests from problem statement
+    - gold-patch: Agent sees the fixed code, generates tests that verify the fix works
     """
 
     def setup(self, context: EvaluationContext) -> None:
-        clean_repo(context.repo_path)
-        checkout_commit(context.repo_path, context.entry.base_commit)
-        copy_problem_statement_folder(context.entry, context.repo_path)
+        setup_repo(context.entry, context.repo_path, context.category)
 
         build_and_publish_projects(
             context.repo_path,
@@ -70,10 +70,11 @@ class TestGenerationPipeline(EvaluationPipeline):
             if full_path.exists():
                 file_contents[file_path] = full_path.read_text(encoding="utf-8")
 
-        generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, file_contents)
         result: TestGenerationResult | None = None
 
         try:
+            generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, file_contents)
+
             build_and_publish_projects(
                 context.repo_path,
                 test_projects,
@@ -110,6 +111,10 @@ class TestGenerationPipeline(EvaluationPipeline):
                 result = TestGenerationResult.create_test_failure(context, generated_patch, "Generated tests Failed post-patch", pre_patch_failed=True, post_patch_passed=False)
 
             logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
+
+        except NoTestsExtractedError:
+            result = TestGenerationResult.create_no_tests_extracted(context, generated_patch, "No tests extracted from generated patch")
+            raise
 
         finally:
             if result is not None:
