@@ -21,9 +21,3 @@ Sales Invoice Lines should be created only for Contract Lines that exist in the 
 ### Additional context
 
 In the subscription line, the connection to the contract (line) should be revoked when the no. (item or GL account) is changed.
-
-### I will provide a fix for a bug
-
-- [x] I will provide a fix for a bug
-
-
