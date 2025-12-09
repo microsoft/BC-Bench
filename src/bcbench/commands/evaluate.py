@@ -124,9 +124,7 @@ def evaluate_copilot(
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
-    # Build agent name with version if available
-    version = get_copilot_version()
-    agent_name = f"GitHub Copilot CLI@{version}" if version else "GitHub Copilot CLI"
+    agent_name: str = f"GitHub Copilot CLI@{get_copilot_version()}"
 
     context = EvaluationContext(
         entry=entry,

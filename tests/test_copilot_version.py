@@ -1,4 +1,7 @@
+import subprocess
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from bcbench.agent.copilot import get_copilot_version
 
@@ -69,44 +72,43 @@ def test_get_copilot_version_handles_four_component_version():
     assert version == "1.2.3.4"
 
 
-def test_get_copilot_version_returns_none_when_cli_not_found():
-    with patch("bcbench.agent.copilot.agent.shutil.which", return_value=None):
-        version = get_copilot_version()
-
-    assert version is None
+def test_get_copilot_version_raises_when_cli_not_found():
+    with patch("bcbench.agent.copilot.agent.shutil.which", return_value=None), pytest.raises(FileNotFoundError, match="Copilot CLI not found in PATH"):
+        get_copilot_version()
 
 
-def test_get_copilot_version_returns_none_on_invalid_output():
+def test_get_copilot_version_raises_on_invalid_output():
     mock_result = MagicMock()
     mock_result.stdout = "some invalid output without version"
     mock_result.stderr = ""
 
-    with patch("bcbench.agent.copilot.agent.shutil.which", return_value="/usr/bin/copilot"), patch("bcbench.agent.copilot.agent.subprocess.run", return_value=mock_result):
-        version = get_copilot_version()
+    with (
+        patch("bcbench.agent.copilot.agent.shutil.which", return_value="/usr/bin/copilot"),
+        patch("bcbench.agent.copilot.agent.subprocess.run", return_value=mock_result),
+        pytest.raises(ValueError, match="Could not parse version"),
+    ):
+        get_copilot_version()
 
-    assert version is None
 
-
-def test_get_copilot_version_returns_none_on_timeout():
-    import subprocess
-
+def test_get_copilot_version_raises_on_timeout():
     with (
         patch("bcbench.agent.copilot.agent.shutil.which", return_value="/usr/bin/copilot"),
         patch(
             "bcbench.agent.copilot.agent.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="copilot --version", timeout=10),
         ),
+        pytest.raises(subprocess.TimeoutExpired),
     ):
-        version = get_copilot_version()
-
-    assert version is None
+        get_copilot_version()
 
 
-def test_get_copilot_version_returns_none_on_exception():
-    with patch("bcbench.agent.copilot.agent.shutil.which", return_value="/usr/bin/copilot"), patch("bcbench.agent.copilot.agent.subprocess.run", side_effect=OSError("Command failed")):
-        version = get_copilot_version()
-
-    assert version is None
+def test_get_copilot_version_raises_on_os_error():
+    with (
+        patch("bcbench.agent.copilot.agent.shutil.which", return_value="/usr/bin/copilot"),
+        patch("bcbench.agent.copilot.agent.subprocess.run", side_effect=OSError("Command failed")),
+        pytest.raises(OSError, match="Command failed"),
+    ):
+        get_copilot_version()
 
 
 def test_get_copilot_version_prefers_copilot_cmd_on_windows():
