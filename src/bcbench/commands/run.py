@@ -18,8 +18,8 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
-from bcbench.evaluate import setup_repo
 from bcbench.logger import get_logger
+from bcbench.operations import setup_repo
 
 logger = get_logger(__name__)
 _config = get_config()
