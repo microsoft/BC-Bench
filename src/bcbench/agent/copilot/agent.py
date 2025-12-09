@@ -1,5 +1,6 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,40 @@ from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfigurat
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def get_copilot_version() -> str | None:
+    """Get the version of the GitHub Copilot CLI.
+
+    Returns:
+        Version string (e.g., '0.0.367') or None if not available.
+    """
+    copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
+    if not copilot_cmd:
+        logger.warning("Copilot CLI not found in PATH, cannot determine version")
+        return None
+
+    try:
+        result = subprocess.run(
+            [copilot_cmd, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        output = result.stdout.strip() or result.stderr.strip()
+        # Expected format: "copilot <version>" or just "<version>"
+        version_match = re.search(r"(\d+\.\d+\.\d+)", output)
+        if version_match:
+            return version_match.group(1)
+        logger.warning(f"Could not parse version from Copilot CLI output: {output}")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("Copilot CLI --version command timed out")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to get Copilot CLI version: {e}")
+        return None
 
 
 def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> tuple[AgentMetrics | None, ExperimentConfiguration]:

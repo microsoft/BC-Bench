@@ -6,7 +6,7 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import run_copilot_agent, run_mini_agent
+from bcbench.agent import get_copilot_version, run_copilot_agent, run_mini_agent
 from bcbench.cli_options import (
     ContainerName,
     ContainerPassword,
@@ -124,6 +124,10 @@ def evaluate_copilot(
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
+    # Build agent name with version if available
+    version = get_copilot_version()
+    agent_name = f"GitHub Copilot CLI@{version}" if version else "GitHub Copilot CLI"
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
@@ -132,7 +136,7 @@ def evaluate_copilot(
         username=username,
         password=password,
         model=model,
-        agent_name="GitHub Copilot CLI",
+        agent_name=agent_name,
         category=category,
     )
 
