@@ -22,34 +22,39 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def get_copilot_version() -> str:
+def get_copilot_version() -> str | None:
     """Get the version of the GitHub Copilot CLI.
 
     Returns:
-        Version string (e.g., '0.0.367').
-
-    Raises:
-        FileNotFoundError: If Copilot CLI is not found in PATH.
-        ValueError: If version cannot be parsed from output.
+        Version string (e.g., '0.0.367') or None if not available.
     """
     copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot_cmd:
-        raise FileNotFoundError("Copilot CLI not found in PATH")
+        logger.warning("Copilot CLI not found in PATH, cannot determine version")
+        return None
 
-    result = subprocess.run(
-        [copilot_cmd, "--version"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=True,
-    )
-    output = result.stdout.strip() or result.stderr.strip()
-    # Expected format: "copilot <version>" or just "<version>"
-    # Match versions with 2 or more numeric components (e.g., "0.0.367", "1.2", "1.2.3.4")
-    version_match = re.search(r"(\d+(?:\.\d+)+)", output)
-    if not version_match:
-        raise ValueError(f"Could not parse version from Copilot CLI output: {output}")
-    return version_match.group(1)
+    try:
+        result = subprocess.run(
+            [copilot_cmd, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        output = result.stdout.strip() or result.stderr.strip()
+        # Expected format: "copilot <version>" or just "<version>"
+        # Match versions with 2 or more numeric components (e.g., "0.0.367", "1.2", "1.2.3.4")
+        version_match = re.search(r"(\d+(?:\.\d+)+)", output)
+        if version_match:
+            return version_match.group(1)
+        logger.warning(f"Could not parse version from Copilot CLI output: {output}")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("Copilot CLI --version command timed out")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to get Copilot CLI version: {e}")
+        return None
 
 
 def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -67,7 +72,8 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, repo_path)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
-    config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent)
+    agent_version: str | None = get_copilot_version()
+    config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent, agent_version=agent_version)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
