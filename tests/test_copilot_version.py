@@ -47,6 +47,28 @@ def test_get_copilot_version_handles_verbose_output():
     assert version == "2.1.0"
 
 
+def test_get_copilot_version_handles_two_component_version():
+    mock_result = MagicMock()
+    mock_result.stdout = "copilot 1.2\n"
+    mock_result.stderr = ""
+
+    with patch("bcbench.agent.copilot.agent.shutil.which", return_value="/usr/bin/copilot"), patch("bcbench.agent.copilot.agent.subprocess.run", return_value=mock_result):
+        version = get_copilot_version()
+
+    assert version == "1.2"
+
+
+def test_get_copilot_version_handles_four_component_version():
+    mock_result = MagicMock()
+    mock_result.stdout = "copilot 1.2.3.4\n"
+    mock_result.stderr = ""
+
+    with patch("bcbench.agent.copilot.agent.shutil.which", return_value="/usr/bin/copilot"), patch("bcbench.agent.copilot.agent.subprocess.run", return_value=mock_result):
+        version = get_copilot_version()
+
+    assert version == "1.2.3.4"
+
+
 def test_get_copilot_version_returns_none_when_cli_not_found():
     with patch("bcbench.agent.copilot.agent.shutil.which", return_value=None):
         version = get_copilot_version()

@@ -43,7 +43,8 @@ def get_copilot_version() -> str | None:
         )
         output = result.stdout.strip() or result.stderr.strip()
         # Expected format: "copilot <version>" or just "<version>"
-        version_match = re.search(r"(\d+\.\d+\.\d+)", output)
+        # Match versions with 2 or more numeric components (e.g., "0.0.367", "1.2", "1.2.3.4")
+        version_match = re.search(r"(\d+(?:\.\d+)+)", output)
         if version_match:
             return version_match.group(1)
         logger.warning(f"Could not parse version from Copilot CLI output: {output}")
