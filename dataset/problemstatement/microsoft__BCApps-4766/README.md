@@ -1,15 +1,29 @@
-# Consistent Changing No in Contract Line for Subscription Billing
+# Inconsitent data when changing item in manually changing contract line [SubscriptionBilling]
 
-<!-- Thank you for submitting a Pull Request. If you're new to contributing to BCApps please read our pull request guideline below
-* https://github.com/microsoft/BCApps/Contributing.md
--->
-#### Summary <!-- Provide a general summary of your changes -->
-If an Item  or a GL Account is changed in Customer Subscription Contract Line the Subscription that was previously connected to a Contract Line should either be deleted or disconnected from a contract line automatically.
+### Describe the issue
 
-#### Work Item(s) <!-- Add the issue number here after the #. The issue needs to be open and approved. Submitting PRs with no linked issues or unapproved issues is highly discouraged. -->
-Fixes #4444
-Fixes [AB#604192](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/604192)
+When the item no. is changed in a manually created contract line, the connection to the contract persists in the subscription line. This leads to the subscription line being invoiced although it should not have a connection to a contract any longer and should therefore not be considered for invoicing.
 
+### Expected behavior
 
+Sales Invoice Lines should be created only for Contract Lines that exist in the Contract.
+
+### Steps to reproduce
+
+- Create three new items with Subscription Option=Sales with Subscription, no subscription package assigned
+- Create a new Customer Subscription Contract and add lines for items No. 1 and No. 2 manually incl. further required data for billing.
+- Change item No. 2 with item No. 3.
+- Create contract invoice
+- Result: all three items are considered
+- Check subscription for item No. 2
+- Result: In the subscription line, field "Subscription Contract No." still contains the former contract no. although the subscription line is no longer part of that contract.
+
+### Additional context
+
+In the subscription line, the connection to the contract (line) should be revoked when the no. (item or GL account) is changed.
+
+### I will provide a fix for a bug
+
+- [x] I will provide a fix for a bug
 
 
