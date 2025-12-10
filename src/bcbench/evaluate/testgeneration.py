@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
@@ -20,7 +19,6 @@ from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
-_config = get_config()
 
 __all__ = ["TestGenerationPipeline"]
 
