@@ -35,7 +35,7 @@ PROBLEM_STATEMENT_CONTENT = "# Test Problem Statement\n\nThis is a test task."
 def create_test_entry(codeunit_id: int = 100, function_names: set[str] | None = None) -> TestEntry:
     if function_names is None:
         function_names = {"TestFunction"}
-    return TestEntry(codeunitID=codeunit_id, functionName=function_names)
+    return TestEntry(codeunitID=codeunit_id, functionName=frozenset(function_names))
 
 
 def create_dataset_entry(
@@ -132,8 +132,8 @@ def create_testgen_result(
     generated_patch: str = "diff --git a/test.al b/test.al\n+test",
     error_message: str | None = None,
     metrics: AgentMetrics | None = None,
-    pre_patch_failed: bool | None = None,
-    post_patch_passed: bool | None = None,
+    pre_patch_failed: bool = False,
+    post_patch_passed: bool = False,
 ) -> TestGenerationResult:
     return TestGenerationResult(
         instance_id=instance_id,
