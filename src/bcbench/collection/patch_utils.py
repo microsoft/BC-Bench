@@ -150,3 +150,29 @@ def extract_file_paths_from_patch(patch: str) -> list[str]:
     patch_set = PatchSet(patch)
 
     return [patched_file.path for patched_file in patch_set if patched_file.path]
+
+
+def compute_patch_stats(patch: str) -> tuple[int, int]:
+    """Compute statistics from a patch.
+
+    Args:
+        patch: The diff/patch string to analyze
+
+    Returns:
+        Tuple of (number_of_files, number_of_lines_added)
+        - number_of_files: Count of files modified in the patch
+        - number_of_lines_added: Count of lines added (lines starting with + but not +++)
+    """
+    if not patch:
+        return 0, 0
+
+    try:
+        patch_set = PatchSet(patch)
+    except Exception:
+        # If patch cannot be parsed, return 0s
+        return 0, 0
+
+    number_of_files = len([f for f in patch_set if f.path])
+    number_of_lines_added = sum(f.added for f in patch_set)
+
+    return number_of_files, number_of_lines_added

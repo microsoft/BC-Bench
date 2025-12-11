@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from bcbench.collection.patch_utils import compute_patch_stats
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
@@ -24,7 +25,12 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 logger.error(f"No matching dataset entry found for instance_id: {result.instance_id}")
                 continue
 
-            input, expected = get_info_from_dataset_entry(matching_entries[0], result.category)
+            entry = matching_entries[0]
+            input, expected = get_info_from_dataset_entry(entry, result.category)
+
+            # Compute patch statistics from the dataset entry's patch
+            patch_to_analyze = entry.patch if result.category == EvaluationCategory.BUG_FIX else entry.test_patch
+            number_of_files, number_of_lines = compute_patch_stats(patch_to_analyze)
 
             metadata: dict[str, Any] = {
                 "model": result.model,
@@ -38,6 +44,8 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 "run_id": run_id,
                 "project": result.project,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
+                "number_of_files": number_of_files,
+                "number_of_lines": number_of_lines,
             }
 
             if isinstance(result, TestGenerationResult):

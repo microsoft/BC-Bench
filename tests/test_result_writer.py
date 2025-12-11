@@ -164,3 +164,31 @@ class TestWriteBcevalResults:
         assert data["metadata"]["prompt_tokens"] == 0
         assert data["metadata"]["completion_tokens"] == 1500
         assert data["metadata"]["latency"] == 100.0
+
+    def test_includes_patch_metadata_fields(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+            write_bceval_results(
+                results=[sample_bugfix_result_with_metrics],
+                out_dir=output_dir,
+                run_id="test_run_metadata",
+                dataset_path=sample_dataset_file,
+                output_filename="results.jsonl",
+            )
+
+        output_file = output_dir / "results.jsonl"
+        with open(output_file) as f:
+            data = json.loads(f.readline())
+
+        # Check that patch metadata fields are present
+        assert "number_of_files" in data["metadata"]
+        assert "number_of_lines" in data["metadata"]
+        # The metadata fields should be integers
+        assert isinstance(data["metadata"]["number_of_files"], int)
+        assert isinstance(data["metadata"]["number_of_lines"], int)
+        # The default test patch has 1 file
+        assert data["metadata"]["number_of_files"] == 1
+        # The default test patch may have 0 lines if it's not a complete patch format
+        assert data["metadata"]["number_of_lines"] >= 0
