@@ -9,7 +9,7 @@ from bcbench.cli_options import DatasetPath
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.dataset.dataset_loader import load_dataset_entries
-from bcbench.exceptions import ConfigurationError
+from bcbench.exceptions import ConfigurationError, InvalidEntryFormatError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -166,6 +166,13 @@ def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
             patch_files.append(0)
             patch_lines.append(0)
 
+    # Raise error if invalid patches found
+    if invalid_patches:
+        raise InvalidEntryFormatError(
+            entry=f"{len(invalid_patches)} entries",
+            details=f"Invalid or empty patches found: {', '.join(invalid_patches)}",
+        )
+
     # Overview with patch statistics
     overview_text = f"[bold]Total Entries:[/bold] {len(entries)}\n"
     if patch_files:
@@ -175,14 +182,6 @@ def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
         overview_text += f"[bold]Patch Lines:[/bold] min={min(patch_lines)}, max={max(patch_lines)}, avg={avg_lines:.1f}"
 
     console.print(Panel(overview_text, title="[bold]Dataset Overview[/bold]", border_style="blue"))
-
-    # Report invalid patches
-    if invalid_patches:
-        console.print()
-        console.print(f"[bold red]Warning:[/bold red] Found {len(invalid_patches)} entries with invalid or empty patches:")
-        for instance_id in invalid_patches:
-            console.print(f"  - {instance_id}")
-        console.print()
 
     # Collect all metadata field names dynamically from entries
     metadata_fields: set[str] = set()

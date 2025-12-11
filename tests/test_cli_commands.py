@@ -359,10 +359,11 @@ def test_dataset_summary_detects_invalid_patches(tmp_path):
         ],
     )
 
-    assert result.exit_code == 0
-    assert "Warning" in result.stdout
-    assert "invalid or empty patches" in result.stdout
-    assert "microsoftInternal__NAV-200" in result.stdout
+    assert result.exit_code != 0
+    assert result.exception is not None
+    exception_msg = str(result.exception)
+    assert "Invalid or empty patches found" in exception_msg
+    assert "microsoftInternal__NAV-200" in exception_msg
 
 
 @pytest.fixture
