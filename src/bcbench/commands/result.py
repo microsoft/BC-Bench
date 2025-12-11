@@ -44,6 +44,7 @@ def result_summarize(
     Summarize evaluation results from a completed run.
 
     Aggregates individual instance results, displays job summaries and generates bceval output format.
+    Also loads the dataset and computes patch metadata (number of files and lines) from the gold patches.
     """
     run_dir: Path = result_dir / run_id
 

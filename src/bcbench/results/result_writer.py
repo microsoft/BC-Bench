@@ -13,7 +13,12 @@ logger = get_logger(__name__)
 
 
 def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str) -> None:
-    """Write results into a JSONL file for bceval consumption."""
+    """Write results into a JSONL file for bceval consumption.
+
+    Loads the dataset to extract gold patches and compute metadata:
+    - number_of_files: Count of files modified in the gold patch
+    - number_of_lines: Count of lines added in the gold patch
+    """
     dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path)
 
     output_file = out_dir / output_filename
