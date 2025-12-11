@@ -140,11 +140,49 @@ def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
     from rich.panel import Panel
     from rich.table import Table
 
+    from bcbench.collection.patch_utils import count_files_in_patch, count_lines_in_patch
+
     entries = load_dataset_entries(dataset_path)
     console = Console()
 
-    # Overview
-    console.print(Panel(f"[bold]Total Entries:[/bold] {len(entries)}", title="[bold]Dataset Overview[/bold]", border_style="blue"))
+    # Compute patch statistics
+    patch_files: list[int] = []
+    patch_lines: list[int] = []
+    invalid_patches: list[str] = []
+
+    for entry in entries:
+        try:
+            num_files = count_files_in_patch(entry.patch)
+            num_lines = count_lines_in_patch(entry.patch)
+            patch_files.append(num_files)
+            patch_lines.append(num_lines)
+
+            # Validate that patch is not empty/invalid
+            if num_files == 0 or num_lines == 0:
+                invalid_patches.append(entry.instance_id)
+        except Exception as e:
+            logger.warning(f"Failed to parse patch for {entry.instance_id}: {e}")
+            invalid_patches.append(entry.instance_id)
+            patch_files.append(0)
+            patch_lines.append(0)
+
+    # Overview with patch statistics
+    overview_text = f"[bold]Total Entries:[/bold] {len(entries)}\n"
+    if patch_files:
+        avg_files = sum(patch_files) / len(patch_files)
+        avg_lines = sum(patch_lines) / len(patch_lines)
+        overview_text += f"[bold]Patch Files:[/bold] min={min(patch_files)}, max={max(patch_files)}, avg={avg_files:.1f}\n"
+        overview_text += f"[bold]Patch Lines:[/bold] min={min(patch_lines)}, max={max(patch_lines)}, avg={avg_lines:.1f}"
+
+    console.print(Panel(overview_text, title="[bold]Dataset Overview[/bold]", border_style="blue"))
+
+    # Report invalid patches
+    if invalid_patches:
+        console.print()
+        console.print(f"[bold red]Warning:[/bold red] Found {len(invalid_patches)} entries with invalid or empty patches:")
+        for instance_id in invalid_patches:
+            console.print(f"  - {instance_id}")
+        console.print()
 
     # Collect all metadata field names dynamically from entries
     metadata_fields: set[str] = set()

@@ -150,3 +150,35 @@ def extract_file_paths_from_patch(patch: str) -> list[str]:
     patch_set = PatchSet(patch)
 
     return [patched_file.path for patched_file in patch_set if patched_file.path]
+
+
+def count_files_in_patch(patch: str) -> int:
+    """Count the number of files modified in a patch.
+
+    Args:
+        patch: The diff/patch string to analyze
+
+    Returns:
+        Number of files in the patch
+    """
+    if not patch:
+        return 0
+
+    patch_set = PatchSet(patch)
+    return len(patch_set)
+
+
+def count_lines_in_patch(patch: str) -> int:
+    """Count the total number of lines changed (added + removed) in a patch.
+
+    Args:
+        patch: The diff/patch string to analyze
+
+    Returns:
+        Total number of lines changed (added + removed)
+    """
+    if not patch:
+        return 0
+
+    patch_set = PatchSet(patch)
+    return patch_set.added + patch_set.removed

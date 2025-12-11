@@ -313,6 +313,58 @@ def test_dataset_list_verifies_entry_format(sample_dataset_file_for_cli):
     assert "microsoftInternal__NAV-1" in result.stdout
 
 
+@pytest.mark.integration
+def test_dataset_summary_displays_patch_statistics(sample_dataset_file_for_cli):
+    result = runner.invoke(
+        app,
+        [
+            "dataset",
+            "summary",
+            "--dataset-path",
+            str(sample_dataset_file_for_cli),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Total Entries: 3" in result.stdout
+    assert "Patch Files:" in result.stdout
+    assert "Patch Lines:" in result.stdout
+    assert "min=" in result.stdout
+    assert "max=" in result.stdout
+    assert "avg=" in result.stdout
+
+
+@pytest.mark.integration
+def test_dataset_summary_detects_invalid_patches(tmp_path):
+    # Create entries with valid and invalid patches
+    entries = [
+        create_dataset_entry(
+            instance_id="microsoftInternal__NAV-100",
+            patch="diff --git a/file.al b/file.al\nindex 123..456 789\n--- a/file.al\n+++ b/file.al\n@@ -1,3 +1,4 @@\n line1\n+new line\n line2\n line3\n",
+        ),
+        create_dataset_entry(
+            instance_id="microsoftInternal__NAV-200",
+            patch="not a valid patch format",
+        ),
+    ]
+    dataset_path = create_dataset_file(tmp_path, entries)
+
+    result = runner.invoke(
+        app,
+        [
+            "dataset",
+            "summary",
+            "--dataset-path",
+            str(dataset_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Warning" in result.stdout
+    assert "invalid or empty patches" in result.stdout
+    assert "microsoftInternal__NAV-200" in result.stdout
+
+
 @pytest.fixture
 def sample_leaderboard_and_summary(tmp_path):
     leaderboard_dir = tmp_path / "_data"
