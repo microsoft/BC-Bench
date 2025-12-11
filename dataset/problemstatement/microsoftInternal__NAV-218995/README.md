@@ -1,5 +1,5 @@
-Title: Error when posting a Purchase Credit Memo for 'Non-Inventory' item with Project No. selected
-Repro Steps:
+# Title: Error when posting a Purchase Credit Memo for 'Non-Inventory' item with Project No. selected
+## Repro Steps:
 Issue Description:
 When trying to post a purchase credit memo for project with non-inventory item, encounter this error message. "You must post more usage or credit the sale of Item 0001035467 in Project 536188 before you can post purchase credit memo ZPC1000070 Line No. = 10000."
 ![Error Message](./error_message.png)
@@ -18,4 +18,4 @@ Here are the reproduce steps:
 Other details: Customer said this is possible to post non-inventory item in a Project Journal with a negative quantity. CSS also tried the same test and it worked.
 ![Project Journals](./project_journals.png)
 
-Description:
+## Description:

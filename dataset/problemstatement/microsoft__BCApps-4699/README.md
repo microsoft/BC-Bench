@@ -1,5 +1,5 @@
-Title: Shopify - import from Shopify and create Item logic ignores Shopify Shop currency
-Repro Steps:
+# Title: Shopify - import from Shopify and create Item logic ignores Shopify Shop currency
+## Repro Steps:
 Shopify store with currency DKK (andreipa-catalogs)
 create product with price 5000 (or any other item)
 
@@ -28,7 +28,7 @@ Synchronize items and inventory - Business Central | Microsoft Learn
 
 ![Shopify Doc - Sync Prices with Shopify](./doc_sync_prices_with_shopify.png)
 
-Description:
+## Description:
 
 
 ## Hints

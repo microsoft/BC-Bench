@@ -1,5 +1,5 @@
-Title: Customer Card Statistics Information on the FactBox reflects T. Amount that is tripled when a Sales Order is Shipped and a Sales Invoice is used to get Shipment Lines prior to post
-Repro Steps:
+# Title: Customer Card Statistics Information on the FactBox reflects T. Amount that is tripled when a Sales Order is Shipped and a Sales Invoice is used to get Shipment Lines prior to post
+## Repro Steps:
 Reproduced by Partner in W1 and DE Version. 
 Escalation Engineer in US tested and confirmed in a Version 26 Tenant Sandbox in the US Version. (CRONUS USA Warehouse, Inc. - copy of base CRONUS USA, Inc. Company was used)
 1 - Create a new Customer for a clean test and use the standard CUSTOMER COMPANY Template to get required fields populated from the Template.  Added change was to Assign Location MAIN as the default Location for the company.
@@ -17,5 +17,4 @@ Escalation Engineer in US tested and confirmed in a Version 26 Tenant Sandbox in
 **NOTE:** The partner provided the following code as being the offending code area:
 ![Coding Part](./coding_part.png)
 
-Description:
-
+## Description:

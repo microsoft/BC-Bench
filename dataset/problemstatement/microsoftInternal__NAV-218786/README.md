@@ -1,5 +1,5 @@
-Title: Manually change quantity of "Take Line" in Warehouse Pick changes the quantity of the Wrong "Place Lines"
-Repro Steps:
+# Title: Manually change quantity of "Take Line" in Warehouse Pick changes the quantity of the Wrong "Place Lines"
+## Repro Steps:
 SETUP
 1.Location Card in DK Localization, require Pick = yes and Prod. Consumtion Whse. Handling = Warehouse Pick (mandatory) (The rest does not need to be filled)
 ![Location Card Setup1](./location_card_setup1.png)
@@ -36,4 +36,4 @@ The Second Place Line is updated instead which is confusing
 ![Warehouse Pick](./warehouse_pick.png)
 The Partner mentioned that the in the Code there seems to be a filter that always updates the First line of the Placing
 
-Description:
+## Description:

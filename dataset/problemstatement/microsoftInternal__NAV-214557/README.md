@@ -1,5 +1,5 @@
-Title: For an item that is consumed in multiple subassemblies, running planning worksheet suggests to change Quantity from 2 to 1, but then also create a new Prod. Order for 1, which is unnecessary noise and lines on the Planning Worksheet.
-Repro Steps:
+# Title: For an item that is consumed in multiple subassemblies, running planning worksheet suggests to change Quantity from 2 to 1, but then also create a new Prod. Order for 1, which is unnecessary noise and lines on the Planning Worksheet.
+## Repro Steps:
 1.  Search for items
     Create four items: Item1, Item 2A, Item 2B and Item 3 with
     Replenishment: Prod Order
@@ -37,5 +37,4 @@ And to change existing order line from 2 to 1
 EXPECTED RESULT:
 planning should ignore 1003 as it is already reserved in the production order and a calculation is not needed.​
 
-Description:
-
+## Description:

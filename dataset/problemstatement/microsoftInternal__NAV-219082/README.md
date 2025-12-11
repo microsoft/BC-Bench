@@ -1,5 +1,5 @@
-Title: Error "An error occurred and the transaction is stopped. Contact your administrator or partner for further assistance." when printing a service order with work description from the service order card page.
-Repro Steps:
+# Title: Error "An error occurred and the transaction is stopped. Contact your administrator or partner for further assistance." when printing a service order with work description from the service order card page.
+## Repro Steps:
 Reported in SE environment.
 Happens in W1 as well
 Tested in NL 26.2
@@ -44,5 +44,5 @@ AL call stack:
 
 **Expected result:** The print function should also work from the service order card page if the work description field is populated.
 
-Description:
+## Description:
 Error "An error occurred and the transaction is stopped. Contact your administrator or partner for further assistance." when printing a service order with work description from the service order card page.

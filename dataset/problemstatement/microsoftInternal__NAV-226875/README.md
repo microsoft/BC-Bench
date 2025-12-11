@@ -1,5 +1,5 @@
-Title: Payables Journal Lines entered will populate the Vendor Name column with the Description of the G/L Account and not just the Description column
-Repro Steps:
+# Title: Payables Journal Lines entered will populate the Vendor Name column with the Description of the G/L Account and not just the Description column
+## Repro Steps:
 Search for Purchase Journals - Make sure Vendor Name column is shown through Personalization.
 Enter Today's Date as the Posting Date
 Select Account Type of G/L Account and select Account Number (64100 - Office Supplies)
@@ -12,4 +12,4 @@ Validation of the G/L Account No. doesn't fill in the Vendor Name with the same 
 
 **Actual Outcome:**
 When a User selects an Account Type of GL Account, it puts the G/L Account Name into the Description field AND the Vendor Name column.
-Description:
+## Description:

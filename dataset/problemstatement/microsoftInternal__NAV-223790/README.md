@@ -1,5 +1,5 @@
-Title: "Calculate Regenarative Plan" in a planning worksheet does not plan the component when Stockkeeping Units are setup for the items.
-Repro Steps:
+# Title: "Calculate Regenarative Plan" in a planning worksheet does not plan the component when Stockkeeping Units are setup for the items.
+## Repro Steps:
 1.  Open BC 26.1 W1 on Prem
 2.  Open the manufacturing Setup
     ![manufacturing setup](./manufacturing_setup.png)
@@ -49,5 +49,5 @@ Both lines should be calculated with the first Calculate Regenrative Plan
 ADDITIONAL INFORMATION:
 This works as expected in BC 25.7
 
-Description:
+## Description:
 When you run "Calculate Regenarative Plan" in a planning worksheet the component is not planned in the first run, but in the second attempt it is planned.

@@ -1,7 +1,7 @@
-Title: Incorrect Non-Deductible VAT amount in project ledger entry if project has a foreign currency
-Repro Steps:
+# Title: Incorrect Non-Deductible VAT amount in project ledger entry if project has a foreign currency
+## Repro Steps:
 
-Description:
+## Description:
 Got it from Yammer:
 Hope you are well. We have a new issue with non-deductable VAT in connection with project module that you should probably get fixed rather soon.
 

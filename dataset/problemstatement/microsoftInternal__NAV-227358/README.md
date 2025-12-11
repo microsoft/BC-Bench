@@ -1,5 +1,5 @@
-Title: "The changes to the Gen. Journal Line record cannot be saved because some information is not up-to-date" error when posting Recurring General Journal and the Unlink Incoming Document on Posting option is activated.
-Repro Steps:
+# Title: "The changes to the Gen. Journal Line record cannot be saved because some information is not up-to-date" error when posting Recurring General Journal and the Unlink Incoming Document on Posting option is activated.
+## Repro Steps:
 Take any BC 25.5 / BC 26.x environment.
 1. Go to General Journal Template, create a new one
     Name = Test
@@ -42,5 +42,5 @@ Function UnlinkIncDocFromGenJnlLine Line 1019 GenJnlLine.Modify();
 
 **Did the partner reproduce the issue in a Sandbox without extensions?** Yes
 
-Description:
+## Description:
 "The changes to the Gen. Journal Line record cannot be saved because some information is not up-to-date" error when posting Recurring General Journal and the Unlink Incoming Document on Posting option is activated.

@@ -1,5 +1,5 @@
-Title: [Shopify] Exported invoice - when copied it should clear Shopify Order Id (and Shopify Order No).
-Repro Steps:
+# Title: [Shopify] Exported invoice - when copied it should clear Shopify Order Id (and Shopify Order No).
+## Repro Steps:
 BC Connected to Shopify
 Payment terms are imported and FIXED is marked as default.
 Enable Invoice Sync in the ORders fast tab.
@@ -17,4 +17,4 @@ IF you choose Update Document - you can see that it already has Shopify Order Id
 This field is the reason why this invoice is ignored.
 
 We need to adjust "Copy Document" logic to clean up Shopify ORder Id field.
-Description:
+## Description:

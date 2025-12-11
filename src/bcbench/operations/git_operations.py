@@ -108,7 +108,7 @@ def stage_and_get_diff(repo_path: Path) -> str:
         text=True,
         check=True,
     )
-    patch: str = result.stdout.strip()
+    patch: str = result.stdout
     logger.info("Git diff retrieved successfully")
     logger.debug(f"Generated diff:\n{patch}")
 

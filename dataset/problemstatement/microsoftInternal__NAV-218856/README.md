@@ -1,5 +1,5 @@
-Title: Contact xxx is not related to a customer error when using Change Customer in a Service Contract
-Repro Steps:
+# Title: Contact xxx is not related to a customer error when using Change Customer in a Service Contract
+## Repro Steps:
 1. Create a New Contact Card with Type Person. (No. = CT000028)
 2. Actions - > Functions - > Create As - Customer.
 3. Now It will appear in the Business Relation.
@@ -14,4 +14,4 @@ Repro Steps:
 
 **Investigation:**
 * On "Service Contract" page, If you change the Customer from the "Customer No." Field, It works with no errors.
-Description:
+## Description:

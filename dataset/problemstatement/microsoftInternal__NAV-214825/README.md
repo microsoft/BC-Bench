@@ -1,5 +1,5 @@
-Title: Create Purchase Order from Project not working as expected if we add Project Planning Lines before the previous ones.
-Repro Steps:
+# Title: Create Purchase Order from Project not working as expected if we add Project Planning Lines before the previous ones.
+## Repro Steps:
 1-Take a BC26 environment.
 2-Create a new Project
 3-Add a Project Task Line
@@ -35,5 +35,5 @@ EXPECTED RESULTS
 The information should be accurate, and show that those Items are unavailable... so we can create the Purchase Orders accordingly.
 Maybe take always the lower line no and build the filter with that before?? 15.. X??
 
-Description:
+## Description:
 Create Purchase Order from Project not working as expected if we add Project Planning Lines before the previous ones.

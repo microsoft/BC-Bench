@@ -34,7 +34,7 @@ uv run bcbench --help
 
 # Run Copilot CLI on a single entry (generate patch only, no build/test)
 # This is very fast, give it a go and see it live!
-uv run bcbench dataset view microsoftInternal__NAV-211710
+uv run bcbench dataset view microsoftInternal__NAV-211710 --category bug-fix
 ```
 
 ## Dataset
@@ -107,6 +107,19 @@ How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
 2. All files under `microsoftInternal-NAV` will be copied into `NAV/.github/` (overwrite if exists)
 3. If `enabled: false` a `--no-custom-instructions` flag is passed instead.
+
+### Experimenting with Custom Agents
+
+Enable instruction in the [config.yaml](src/bcbench/agent/copilot/config.yaml):
+
+```yaml
+# controls:
+# 1. whether to copy custom agents (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/agents/`) into the repo
+# 2. whether to pass --agent=<agent-name> to copilot
+agents:
+  enabled: true
+  name: ALTest
+```
 
 ### Results & Metrics
 

@@ -1,5 +1,5 @@
-Title: Incorrect dimensions assigned to General Ledger Entries and Customer Ledger Entries when a reminder with additional fees is created and the Dimensions are modified in the Reminder before issuing it.
-Repro Steps:
+# Title: Incorrect dimensions assigned to General Ledger Entries and Customer Ledger Entries when a reminder with additional fees is created and the Dimensions are modified in the Reminder before issuing it.
+## Repro Steps:
 1- Go to Ledger Setup and verify the Global Dimension.
 ![General Ledger Setup](./general_ledger_Setup.png)
 2- Navigate to Reminder Terms, select any option from the list, and enable the toggles for Additional Fees.
@@ -40,5 +40,5 @@ Tested various scenarios as a workaround. While the dimension can be corrected i
 
 **Did the partner reproduce the issue in a Sandbox without extensions?** Yes
 
-Description:
+## Description:
 Incorrect dimensions assigned to General Ledger Entries and Customer Ledger Entries when a reminder with additional fees is created and the Dimensions are modified in the Reminder before issuing it.

@@ -1,5 +1,5 @@
-Title: Input quantity and related production time is not recalculated in a released production order when using the function "Replan"
-Repro Steps:
+# Title: Input quantity and related production time is not recalculated in a released production order when using the function "Replan"
+## Repro Steps:
 1.  Open BC 25.4 W1 on prem
 2.  Go to "Routing", create a new routing
     Type = serial
@@ -66,5 +66,5 @@ Repro Steps:
     I tested in BC 16.5 there the results are as expected:
     ![Image](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_apis/wit/attachments/1e31963b-67c6-405f-a6d2-0f901ed002f9?fileName=image.png)
 
-Description:
+## Description:
 Input quantity and related production time is not recalculated in a released production order when using the function "Replan". In Version BC16.5 did it work as expected.

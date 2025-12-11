@@ -1,5 +1,5 @@
-Title: Report "Exchange Production BOM Item" no longer populates the 'End Date' field of the replaced Item
-Repro Steps:
+# Title: Report "Exchange Production BOM Item" no longer populates the 'End Date' field of the replaced Item
+## Repro Steps:
 1) go to Production BOM
 select 1000
 
@@ -18,5 +18,5 @@ but the replaced item 1100 does not have Ending Date date 28-01-2027
 **Expected Outcome:**
 The replaced item should have Ending Date 28-01-2027 that signifies it stops being valid automatically
 
-Description:
+## Description:
 Report "Exchange Production BOM Item" no longer populates the 'End Date' field of the replaced ItemThis was introduced with BC 25.03.Before this worked as expected.

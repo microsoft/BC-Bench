@@ -1,7 +1,7 @@
-Title: [master] Incoming documents are not synced between multiple general journal lines with the same Document No. and Posting Date
-Repro Steps:
+# Title: [master] Incoming documents are not synced between multiple general journal lines with the same Document No. and Posting Date
+## Repro Steps:
 
-Description:
+## Description:
 Issue: One Document in two lines needs two digital documents.
 Setup: CheckType = Attachment, Generated Automatically = False
 Create one document in two (or more) lines. In line 1 - Debit 100, and in line 2 Credit -100. Both lines of course have equal Document No. and Posting Date.

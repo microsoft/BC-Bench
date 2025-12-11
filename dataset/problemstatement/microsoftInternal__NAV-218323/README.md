@@ -1,5 +1,5 @@
-Title: "Journal Template Name must have a value" error message appears if you try to Calculate and Post VAT Settlement and Journal Template Name Mandatory is enabled in the G/L Setup.
-Repro Steps:
+# Title: "Journal Template Name must have a value" error message appears if you try to Calculate and Post VAT Settlement and Journal Template Name Mandatory is enabled in the G/L Setup.
+## Repro Steps:
 1.Go to G/L Setup.
 2.Settings -> Design -> Add Journal Template Name Mandatory and enable it.
 3.Search for Calculate and Post Vat Settlement.
@@ -15,5 +15,5 @@ We guess a kind of control should be set in this scenario, so this check is not 
 If there is anything we are missing, please let us know what.
 Thanks!
 
-Description:
+## Description:
 "Journal Template Name must have a value" error message appears if you try to Calculate and Post VAT Settlement and Journal Template Name Mandatory is enabled in the G/L Setup.

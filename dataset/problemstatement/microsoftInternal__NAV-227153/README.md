@@ -1,5 +1,5 @@
-Title: Report Reconcile Customer and Vendor Accounts shows wrong amounts when multiple posting groups are used
-Repro Steps:
+# Title: Report Reconcile Customer and Vendor Accounts shows wrong amounts when multiple posting groups are used
+## Repro Steps:
 The “Allow Multiple Posting Groups” is Enabled
 ![Sales Receivables Setup](./sales_receivables_setup.png)
 Different Receivables Account is being assigned to the specific Customer Posting Groups
@@ -29,5 +29,5 @@ Replicated the issue and noticed the faulty data
 
 **Did the partner reproduce the issue in a Sandbox without extensions?** Yes
 
-Description:
+## Description:
 The customer reports that Microsoft Standard Report ID 33 produces faulty data starting from Business Central version 20. The report incorrectly considers only the booking group at the debtor/creditor level instead of at the individual debtor/creditor entry level, causing issues for customers using alternative booking groups.

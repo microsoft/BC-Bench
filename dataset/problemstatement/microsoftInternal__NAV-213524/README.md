@@ -1,5 +1,5 @@
-Title: "Unable to navigate to the related document" error message if you use Go to Document from the Intercompany Outbox Transactions for a Credit Memo.
-Repro Steps:
+# Title: "Unable to navigate to the related document" error message if you use Go to Document from the Intercompany Outbox Transactions for a Credit Memo.
+## Repro Steps:
 1- Take a BC 25.x environment (W1 issue)
 2- Setup Intercompany Postings for 2 different companies.
 In my Case CRONUS ES and CRONUS 2. Link Intercompany Customer/Vendors.
@@ -17,5 +17,5 @@ EXPECTED RESULTS
 =================
 We should be able to Navigate to the Credit Memo documents, the same as Invoices/Orders
 
-Description:
+## Description:
 "Unable to navigate to the related document" error message if you use Go to Document from the Intercompany Outbox Transactions for a Credit Memo.

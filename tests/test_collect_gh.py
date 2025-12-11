@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bcbench.collection.gh_client import GHClient
-from bcbench.collection.patch_utils import find_project_paths_from_diff, separate_patches
+from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
 from bcbench.exceptions import CollectionError
 from bcbench.operations.test_operations import extract_codeunit_id_from_content
 
@@ -208,3 +208,68 @@ class TestGHClient:
             result = client.get_file_content("test.al", "abc123")
 
             assert "codeunit 12345" in result
+
+
+class TestExtractFilePathsFromPatch:
+    def test_extracts_single_file_path(self):
+        patch = """diff --git a/App/Code.al b/App/Code.al
+--- a/App/Code.al
++++ b/App/Code.al
+@@ -1,3 +1,4 @@
++// Fix code
+ procedure MainCode()
+ begin
+ end;
+"""
+        result = extract_file_paths_from_patch(patch)
+        assert result == ["App/Code.al"]
+
+    def test_extracts_multiple_file_paths(self):
+        patch = """diff --git a/App/Apps/W1/Sustainability/app/Code.al b/App/Apps/W1/Sustainability/app/Code.al
+--- a/App/Apps/W1/Sustainability/app/Code.al
++++ b/App/Apps/W1/Sustainability/app/Code.al
+@@ -1,3 +1,4 @@
++// Fix
+ procedure Main()
+ begin
+ end;
+diff --git a/App/Apps/W1/Sustainability/test/TestCode.al b/App/Apps/W1/Sustainability/test/TestCode.al
+--- a/App/Apps/W1/Sustainability/test/TestCode.al
++++ b/App/Apps/W1/Sustainability/test/TestCode.al
+@@ -1,3 +1,4 @@
++// Test
+ procedure Test()
+ begin
+ end;
+"""
+        result = extract_file_paths_from_patch(patch)
+        assert len(result) == 2
+        assert "App/Apps/W1/Sustainability/app/Code.al" in result
+        assert "App/Apps/W1/Sustainability/test/TestCode.al" in result
+
+    def test_returns_empty_list_for_empty_patch(self):
+        result = extract_file_paths_from_patch("")
+        assert result == []
+
+    def test_extracts_paths_from_layers_structure(self):
+        patch = """diff --git a/App/Layers/W1/BaseApp/Sales/ReminderIssue.Codeunit.al b/App/Layers/W1/BaseApp/Sales/ReminderIssue.Codeunit.al
+--- a/App/Layers/W1/BaseApp/Sales/ReminderIssue.Codeunit.al
++++ b/App/Layers/W1/BaseApp/Sales/ReminderIssue.Codeunit.al
+@@ -1,3 +1,4 @@
++// Fix
+ procedure Main()
+ begin
+ end;
+diff --git a/App/Layers/W1/Tests/ERM/ERMIssuedReminderAddnlFee.Codeunit.al b/App/Layers/W1/Tests/ERM/ERMIssuedReminderAddnlFee.Codeunit.al
+--- a/App/Layers/W1/Tests/ERM/ERMIssuedReminderAddnlFee.Codeunit.al
++++ b/App/Layers/W1/Tests/ERM/ERMIssuedReminderAddnlFee.Codeunit.al
+@@ -1,3 +1,4 @@
++// Test
+ procedure Test()
+ begin
+ end;
+"""
+        result = extract_file_paths_from_patch(patch)
+        assert len(result) == 2
+        assert "App/Layers/W1/BaseApp/Sales/ReminderIssue.Codeunit.al" in result
+        assert "App/Layers/W1/Tests/ERM/ERMIssuedReminderAddnlFee.Codeunit.al" in result

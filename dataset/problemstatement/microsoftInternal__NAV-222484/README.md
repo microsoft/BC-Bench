@@ -1,5 +1,5 @@
-Title: Escalated Error: Lot No. LOT0001 is not available on inventory or it has already been reserved for another document. when trying to register pick for item with reservation and item tracking with location set up FEFO
-Repro Steps:
+# Title: Escalated Error: Lot No. LOT0001 is not available on inventory or it has already been reserved for another document. when trying to register pick for item with reservation and item tracking with location set up FEFO
+## Repro Steps:
 1- Item Tracking Code:
 ![Item Tracking Code Card](./item_tracking_code_card.png)
 2- Item Card:
@@ -32,5 +32,5 @@ Error will be appearing:
 **The expected result:**
 It should be registered successfully without any errors.
 
-Description:
+## Description:
 Error: Lot No. LOT0001 is not available on inventory or it has already been reserved for another document. when trying to register pick for item with reservation and item tracking with location set up FEFO

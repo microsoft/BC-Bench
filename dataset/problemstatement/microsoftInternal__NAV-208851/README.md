@@ -1,5 +1,5 @@
-Title: In the Sales Price Lists, the 'Defines' field always defaults to Price & Discount when dealing with Customer Price Group/Customer Disc Group setting
-Repro Steps:
+# Title: In the Sales Price Lists, the 'Defines' field always defaults to Price & Discount when dealing with Customer Price Group/Customer Disc Group setting
+## Repro Steps:
 Reproduced in CRONUS GB v25.4
 Enable 'New Sales Price Experience' in Feature Management.
 1. Go to Sales Price Lists
@@ -14,7 +14,7 @@ You will notice "Defines" has changed back to Prices & Discounts Same behavior i
 **Expected Result:** Defines should remain as Discounts if only discounts are in the Sales Price list
 **Actual Results:** 'Defines' Always defaults to 'Prices & Discount'
 
-Description:
+## Description:
 The issue is with the setting for the "Defines" field. The setting may be changed from 'Price & Discount' to 'Discount' because only Line Discounts may be used in the new Price Group configuration. However, after closing the Page, the system will always default back to the 'Price & Discount', even though only Line Discounts are defined, because the code doesn't pass the value correctly.
 
 The Partner Developer highlighted the following code:

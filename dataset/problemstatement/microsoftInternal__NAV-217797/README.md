@@ -1,5 +1,5 @@
-Title: Lookup Item Availability by Event on Item Card opens the Wrong Planning Worksheet Batch (Last Used)
-Repro Steps:
+# Title: Lookup Item Availability by Event on Item Card opens the Wrong Planning Worksheet Batch (Last Used)
+## Repro Steps:
 Lookup Item Availability by Event on Item Card opens the Wrong Planning Worksheet Batch (Last Used)
 Issue was reproduced in **Version: GB Business Central 26.0 (Platform 26.0.32850.0 + Application 26.0.30643.33009)**
 1.Open the Planning Worksheet
@@ -25,5 +25,5 @@ The system should open the Batch where the Entry of the Planned Item exists
 **ROOT CAUSE OF THE SOURCE CODE PROVIDED BY PARTNER**
  ![Coding Part](./Coding_part.png)
 
-Description:
+## Description:
 If you have 2 or more planning worksheets with a planned item line the systems does not open the correct planning worksheet batch by show document from the item availabily page.

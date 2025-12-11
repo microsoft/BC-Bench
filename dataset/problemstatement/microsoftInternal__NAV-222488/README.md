@@ -1,5 +1,5 @@
-Title: If you register a warehouse put away with the break bulk filter set to yes, not all put away lines are registered
-Repro Steps:
+# Title: If you register a warehouse put away with the break bulk filter set to yes, not all put away lines are registered
+## Repro Steps:
 1.  Open BC 26.3 W1 on Prem
 2.  Search for Warehouse Employees
     Add your User for location WHITE
@@ -49,5 +49,5 @@ EXPECTED RESULT:
 The full Put away should be registered and in table 7312 you should find all 4 entries as it was in BC14
 ![Expected Result](./expected_result.png)
 
-Description:
+## Description:
 The break bulk filter leads to the effect that not all lines are registered from a warehouse put away.This filter should just give you a better overview on a put away but should not prevent the entries form beiing registered as it was in BC 14.

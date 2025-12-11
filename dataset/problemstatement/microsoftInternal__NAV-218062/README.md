@@ -1,5 +1,5 @@
-Title: Availability error when creating pick from pick worksheet with location setup Bin mandatory and the item reserved on the related production order
-Repro Steps:
+# Title: Availability error when creating pick from pick worksheet with location setup Bin mandatory and the item reserved on the related production order
+## Repro Steps:
 1. BC 25.5 W1
 2. Open location SILVER
 Add the following setup:
@@ -39,7 +39,7 @@ The creation of the Pick should be done since enough Items are available.
 If I do the same scenario with a location which has not BIN mandatory the picks are created as expected.
 It also works if I do not reserve the component items.
 
-Description:
+## Description:
 If want to create picks from the pick worksheet the following availability error appears:
 You can create a Pick only for the available quantity in Whse. Worksheet Line Worksheet Template Name = PICK,Name = DEFAULT,Location Code = SILVER,Line No. = 20000.
 This just happens if you have location with Bin mandatory and reserving the component items in the related production order.
