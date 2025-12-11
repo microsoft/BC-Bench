@@ -157,8 +157,8 @@ def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
             patch_files.append(num_files)
             patch_lines.append(num_lines)
 
-            # Validate that patch is not empty/invalid
-            if num_files == 0 or num_lines == 0:
+            # Validate that patch is not empty/invalid (both files and lines should be > 0)
+            if num_files == 0 and num_lines == 0:
                 invalid_patches.append(entry.instance_id)
         except Exception as e:
             logger.warning(f"Failed to parse patch for {entry.instance_id}: {e}")
