@@ -131,62 +131,6 @@ def view_entry(
         console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
 
-@dataset_app.command("summary")
-def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
-    """Show dataset summary with diversity breakdown by metadata fields."""
-    from collections import Counter
-
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.table import Table
-
-    entries = load_dataset_entries(dataset_path)
-    console = Console()
-
-    # Overview
-    console.print(Panel(f"[bold]Total Entries:[/bold] {len(entries)}", title="[bold]Dataset Overview[/bold]", border_style="blue"))
-
-    # Collect all metadata field names dynamically from entries
-    metadata_fields: set[str] = set()
-    for entry in entries:
-        metadata_fields.update(entry.metadata.model_dump().keys())
-
-    # For each metadata field, show the distribution
-    for field_name in sorted(metadata_fields):
-        values = [getattr(entry.metadata, field_name, None) for entry in entries]
-        counter = Counter(v if v else "(not set)" for v in values)
-
-        display_name = field_name.replace("_", " ").title()
-        table = Table(title=f"[bold cyan]By {display_name}[/bold cyan]")
-        table.add_column(display_name, style="magenta")
-        table.add_column("Count", style="green", justify="right")
-        table.add_column("Percentage", style="yellow", justify="right")
-
-        for value, count in counter.most_common():
-            percentage = (count / len(entries)) * 100
-            table.add_row(str(value), str(count), f"{percentage:.1f}%")
-
-        console.print(table)
-        console.print()
-
-    # Additional diversity metrics: by project (extracted from project_paths)
-    project_counter: Counter[str] = Counter()
-    for entry in entries:
-        project_name = entry.extract_project_name()
-        project_counter[project_name if project_name else "(unknown)"] += 1
-
-    project_table = Table(title="[bold cyan]By Project[/bold cyan]")
-    project_table.add_column("Project", style="magenta")
-    project_table.add_column("Count", style="green", justify="right")
-    project_table.add_column("Percentage", style="yellow", justify="right")
-
-    for project, count in project_counter.most_common():
-        percentage = (count / len(entries)) * 100
-        project_table.add_row(project, str(count), f"{percentage:.1f}%")
-
-    console.print(project_table)
-
-
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
     instance_ids = []
 
