@@ -39,7 +39,7 @@ def result_summarize(
     dataset_path: DatasetPath = _config.paths.dataset_path,
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
-    combined_output: Annotated[str, typer.Option(help="Output filename for combined raw results JSONL")] = "combined_results.jsonl",
+    combined_output: Annotated[str, typer.Option(help="Output filename for combined raw results JSONL")] = "evaluation_summary.jsonl",
 ):
     """
     Summarize evaluation results from a completed run.
