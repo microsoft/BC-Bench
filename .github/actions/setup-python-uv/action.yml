@@ -20,5 +20,5 @@ runs:
       shell: pwsh
 
     - name: Install bcbench package
-      run: uv sync ${{ inputs.all-extras == 'true' && '--all-extras' || '' }}
+      run: uv sync --no-group analysis ${{ inputs.all-extras == 'true' && '--all-extras' || '' }}
       shell: pwsh
