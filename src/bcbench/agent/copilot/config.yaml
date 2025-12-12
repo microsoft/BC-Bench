@@ -1,9 +1,10 @@
 prompt:
   include_project_paths: false
 
-  # Input mode for test generation: "problem-statement" or "gold-patch"
+  # Input mode for test generation: "problem-statement", "gold-patch", or "both"
   # - problem-statement: Agent reads bug description, generates tests to reproduce issue => Test driven development
   # - gold-patch: Agent sees fixed code, generates tests to verify fix works             => Test verification for known fixes
+  # - both: Agent sees both the bug description and the fixed code                       => Combined context for test generation
   test-generation-input: "gold-patch"
 
   bug-fix-template: |
@@ -36,7 +37,7 @@ prompt:
     - Do NOT try to build or run tests, just provide the code changes needed
     - Do NOT commit any changes to the repository
     - Do NOT generate more than ONE test case
-    {% if not is_gold_patch %}
+    {% if is_problem_statement %}
     Issue details:
     {{task}}
     {% endif %}

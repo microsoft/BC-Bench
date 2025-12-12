@@ -24,6 +24,15 @@ def test_get_test_generation_input_mode_valid_problem_statement():
     assert result == "problem-statement"
 
 
+def test_get_test_generation_input_mode_valid_both():
+    config_content = yaml.dump({"prompt": {"test-generation-input": "both"}})
+
+    with patch("pathlib.Path.read_text", return_value=config_content):
+        result = _get_test_generation_input_mode()
+
+    assert result == "both"
+
+
 def test_get_test_generation_input_mode_defaults_to_problem_statement():
     config_content = yaml.dump({"prompt": {}})
 
@@ -53,6 +62,7 @@ def test_get_test_generation_input_mode_invalid_random_value():
     assert "Invalid test-generation-input mode: 'invalid-mode'" in str(exc_info.value)
     assert "gold-patch" in str(exc_info.value)
     assert "problem-statement" in str(exc_info.value)
+    assert "both" in str(exc_info.value)
 
 
 def test_get_test_generation_input_mode_empty_string():
