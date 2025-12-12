@@ -1,4 +1,4 @@
-from bcbench.collection.patch_utils import count_files_in_patch, count_lines_in_patch
+from bcbench.utils import count_files_in_patch, count_lines_in_patch
 
 
 def test_count_files_single_file():

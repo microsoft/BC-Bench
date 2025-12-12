@@ -140,7 +140,7 @@ def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
     from rich.panel import Panel
     from rich.table import Table
 
-    from bcbench.collection.patch_utils import count_files_in_patch, count_lines_in_patch
+    from bcbench.utils import count_files_in_patch, count_lines_in_patch
 
     entries = load_dataset_entries(dataset_path)
     console = Console()
@@ -151,20 +151,14 @@ def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
     invalid_patches: list[str] = []
 
     for entry in entries:
-        try:
-            num_files = count_files_in_patch(entry.patch)
-            num_lines = count_lines_in_patch(entry.patch)
-            patch_files.append(num_files)
-            patch_lines.append(num_lines)
+        num_files = count_files_in_patch(entry.patch)
+        num_lines = count_lines_in_patch(entry.patch)
+        patch_files.append(num_files)
+        patch_lines.append(num_lines)
 
-            # Validate that patch is not empty/invalid (both files and lines should be > 0)
-            if num_files == 0 and num_lines == 0:
-                invalid_patches.append(entry.instance_id)
-        except Exception as e:
-            logger.warning(f"Failed to parse patch for {entry.instance_id}: {e}")
+        # Validate that patch is not empty/invalid (both files and lines should be > 0)
+        if num_files == 0 and num_lines == 0:
             invalid_patches.append(entry.instance_id)
-            patch_files.append(0)
-            patch_lines.append(0)
 
     # Raise error if invalid patches found
     if invalid_patches:
@@ -182,6 +176,34 @@ def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
         overview_text += f"[bold]Patch Lines:[/bold] min={min(patch_lines)}, max={max(patch_lines)}, avg={avg_lines:.1f}"
 
     console.print(Panel(overview_text, title="[bold]Dataset Overview[/bold]", border_style="blue"))
+
+    # Show patch statistics distribution
+    console.print()
+    files_counter = Counter(patch_files)
+    files_table = Table(title="[bold cyan]Patch Files Distribution[/bold cyan]")
+    files_table.add_column("Files", style="magenta", justify="right")
+    files_table.add_column("Count", style="green", justify="right")
+    files_table.add_column("Percentage", style="yellow", justify="right")
+
+    for num_files, count in sorted(files_counter.items()):
+        percentage = (count / len(entries)) * 100
+        files_table.add_row(str(num_files), str(count), f"{percentage:.1f}%")
+
+    console.print(files_table)
+    console.print()
+
+    lines_counter = Counter(patch_lines)
+    lines_table = Table(title="[bold cyan]Patch Lines Distribution[/bold cyan]")
+    lines_table.add_column("Lines", style="magenta", justify="right")
+    lines_table.add_column("Count", style="green", justify="right")
+    lines_table.add_column("Percentage", style="yellow", justify="right")
+
+    for num_lines, count in sorted(lines_counter.items()):
+        percentage = (count / len(entries)) * 100
+        lines_table.add_row(str(num_lines), str(count), f"{percentage:.1f}%")
+
+    console.print(lines_table)
+    console.print()
 
     # Collect all metadata field names dynamically from entries
     metadata_fields: set[str] = set()
