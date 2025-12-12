@@ -13,6 +13,9 @@ _config = get_config()
 
 __all__ = ["IMAGE_EXTENSIONS", "DatasetEntry", "TestEntry", "count_images_in_directory"]
 
+# Image file extensions to count
+IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"})
+
 
 class TestEntry(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -112,10 +115,6 @@ class DatasetEntry(BaseModel):
             The count of image files, or None if the directory doesn't exist.
         """
         return count_images_in_directory(self.problem_statement_dir)
-
-
-# Image file extensions to count
-IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"})
 
 
 def count_images_in_directory(directory: Path) -> int | None:

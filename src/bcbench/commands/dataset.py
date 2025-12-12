@@ -162,7 +162,7 @@ def update_metadata(
     dry_run: Annotated[bool, typer.Option(help="Print changes without writing to file")] = False,
 ):
     """Update metadata fields (e.g., image_count) for all dataset entries."""
-    from pathlib import Path
+    from typing import Any
 
     from rich.console import Console
     from rich.table import Table
@@ -170,7 +170,7 @@ def update_metadata(
     console = Console()
     entries = load_dataset_entries(dataset_path)
 
-    updated_entries: list[dict] = []
+    updated_entries: list[dict[str, Any]] = []
     changes: list[tuple[str, int | None, int | None]] = []
 
     for entry in entries:
@@ -209,8 +209,7 @@ def update_metadata(
         return
 
     # Write updated entries back to file
-    output_path = Path(dataset_path)
-    with output_path.open("w", encoding="utf-8") as f:
+    with dataset_path.open("w", encoding="utf-8") as f:
         for entry_dict in updated_entries:
             json.dump(entry_dict, f, ensure_ascii=False)
             f.write("\n")
