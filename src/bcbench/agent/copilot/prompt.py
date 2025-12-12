@@ -11,7 +11,7 @@ def build_prompt(entry: DatasetEntry, repo_path: Path, config: dict, category: E
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")
 
-    test_gen_input = prompt_config.get("test-generation-input", "problem-statement")
+    test_gen_input: str = prompt_config.get("test-generation-input", "problem-statement")
     is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
     is_problem_statement: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("problem-statement", "both")
 

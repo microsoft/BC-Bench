@@ -60,12 +60,13 @@ def setup_repo(entry: DatasetEntry, repo_path: Path, category: EvaluationCategor
     if category == EvaluationCategory.TEST_GENERATION:
         input_mode: str = _get_test_generation_input_mode()
         logger.info(f"Test generation input mode: {input_mode}")
-        if input_mode == "gold-patch":
-            apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
-        elif input_mode == "both":
-            apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
-            copy_problem_statement_folder(entry, repo_path)
-        else:
-            copy_problem_statement_folder(entry, repo_path)
+        match input_mode:
+            case "gold-patch":
+                apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
+            case "both":
+                apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
+                copy_problem_statement_folder(entry, repo_path)
+            case _:  # problem-statement
+                copy_problem_statement_folder(entry, repo_path)
     else:
         copy_problem_statement_folder(entry, repo_path)
