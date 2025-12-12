@@ -9,7 +9,7 @@ from bcbench.cli_options import DatasetPath
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.dataset.dataset_loader import load_dataset_entries
-from bcbench.exceptions import ConfigurationError, InvalidEntryFormatError
+from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -129,121 +129,6 @@ def view_entry(
         console.print(test_table)
     else:
         console.print("[dim]No PASS_TO_PASS tests[/dim]")
-
-
-@dataset_app.command("summary")
-def summary(dataset_path: DatasetPath = _config.paths.dataset_path):
-    """Show dataset summary with diversity breakdown by metadata fields."""
-    from collections import Counter
-
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.table import Table
-
-    from bcbench.utils import count_files_in_patch, count_lines_in_patch
-
-    entries = load_dataset_entries(dataset_path)
-    console = Console()
-
-    # Compute patch statistics
-    patch_files: list[int] = []
-    patch_lines: list[int] = []
-    invalid_patches: list[str] = []
-
-    for entry in entries:
-        num_files = count_files_in_patch(entry.patch)
-        num_lines = count_lines_in_patch(entry.patch)
-        patch_files.append(num_files)
-        patch_lines.append(num_lines)
-
-        # Validate that patch is not empty/invalid (both files and lines should be > 0)
-        if num_files == 0 and num_lines == 0:
-            invalid_patches.append(entry.instance_id)
-
-    # Raise error if invalid patches found
-    if invalid_patches:
-        raise InvalidEntryFormatError(
-            entry=f"{len(invalid_patches)} entries",
-            details=f"Invalid or empty patches found: {', '.join(invalid_patches)}",
-        )
-
-    # Overview with patch statistics
-    overview_text = f"[bold]Total Entries:[/bold] {len(entries)}\n"
-    if patch_files:
-        avg_files = sum(patch_files) / len(patch_files)
-        avg_lines = sum(patch_lines) / len(patch_lines)
-        overview_text += f"[bold]Patch Files:[/bold] min={min(patch_files)}, max={max(patch_files)}, avg={avg_files:.1f}\n"
-        overview_text += f"[bold]Patch Lines:[/bold] min={min(patch_lines)}, max={max(patch_lines)}, avg={avg_lines:.1f}"
-
-    console.print(Panel(overview_text, title="[bold]Dataset Overview[/bold]", border_style="blue"))
-
-    # Show patch statistics distribution
-    console.print()
-    files_counter = Counter(patch_files)
-    files_table = Table(title="[bold cyan]Patch Files Distribution[/bold cyan]")
-    files_table.add_column("Files", style="magenta", justify="right")
-    files_table.add_column("Count", style="green", justify="right")
-    files_table.add_column("Percentage", style="yellow", justify="right")
-
-    for num_files, count in sorted(files_counter.items()):
-        percentage = (count / len(entries)) * 100
-        files_table.add_row(str(num_files), str(count), f"{percentage:.1f}%")
-
-    console.print(files_table)
-    console.print()
-
-    lines_counter = Counter(patch_lines)
-    lines_table = Table(title="[bold cyan]Patch Lines Distribution[/bold cyan]")
-    lines_table.add_column("Lines", style="magenta", justify="right")
-    lines_table.add_column("Count", style="green", justify="right")
-    lines_table.add_column("Percentage", style="yellow", justify="right")
-
-    for num_lines, count in sorted(lines_counter.items()):
-        percentage = (count / len(entries)) * 100
-        lines_table.add_row(str(num_lines), str(count), f"{percentage:.1f}%")
-
-    console.print(lines_table)
-    console.print()
-
-    # Collect all metadata field names dynamically from entries
-    metadata_fields: set[str] = set()
-    for entry in entries:
-        metadata_fields.update(entry.metadata.model_dump().keys())
-
-    # For each metadata field, show the distribution
-    for field_name in sorted(metadata_fields):
-        values = [getattr(entry.metadata, field_name, None) for entry in entries]
-        counter = Counter(v if v else "(not set)" for v in values)
-
-        display_name = field_name.replace("_", " ").title()
-        table = Table(title=f"[bold cyan]By {display_name}[/bold cyan]")
-        table.add_column(display_name, style="magenta")
-        table.add_column("Count", style="green", justify="right")
-        table.add_column("Percentage", style="yellow", justify="right")
-
-        for value, count in counter.most_common():
-            percentage = (count / len(entries)) * 100
-            table.add_row(str(value), str(count), f"{percentage:.1f}%")
-
-        console.print(table)
-        console.print()
-
-    # Additional diversity metrics: by project (extracted from project_paths)
-    project_counter: Counter[str] = Counter()
-    for entry in entries:
-        project_name = entry.extract_project_name()
-        project_counter[project_name if project_name else "(unknown)"] += 1
-
-    project_table = Table(title="[bold cyan]By Project[/bold cyan]")
-    project_table.add_column("Project", style="magenta")
-    project_table.add_column("Count", style="green", justify="right")
-    project_table.add_column("Percentage", style="yellow", justify="right")
-
-    for project, count in project_counter.most_common():
-        percentage = (count / len(entries)) * 100
-        project_table.add_row(project, str(count), f"{percentage:.1f}%")
-
-    console.print(project_table)
 
 
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
