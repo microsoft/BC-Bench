@@ -11,7 +11,7 @@ from bcbench.config import get_config
 
 _config = get_config()
 
-__all__ = ["DatasetEntry", "TestEntry"]
+__all__ = ["IMAGE_EXTENSIONS", "DatasetEntry", "TestEntry", "count_images_in_directory"]
 
 
 class TestEntry(BaseModel):
@@ -25,6 +25,7 @@ class EntryMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     area: str | None = None
+    image_count: int | None = None
 
 
 class DatasetEntry(BaseModel):
@@ -103,3 +104,30 @@ class DatasetEntry(BaseModel):
 
         # Fallback to the last meaningful part
         return parts[-1] if parts else ""
+
+    def count_images(self) -> int | None:
+        """Count the number of image files in the problem statement directory.
+
+        Returns:
+            The count of image files, or None if the directory doesn't exist.
+        """
+        return count_images_in_directory(self.problem_statement_dir)
+
+
+# Image file extensions to count
+IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"})
+
+
+def count_images_in_directory(directory: Path) -> int | None:
+    """Count the number of image files in a directory.
+
+    Args:
+        directory: The directory to search for images.
+
+    Returns:
+        The count of image files, or None if the directory doesn't exist.
+    """
+    if not directory.exists():
+        return None
+
+    return sum(1 for f in directory.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS)

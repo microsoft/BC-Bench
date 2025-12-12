@@ -154,3 +154,65 @@ def _write_github_output(key: str, value: str) -> None:
         raise ConfigurationError("GITHUB_OUTPUT environment variable not set. This feature is only available when running in GitHub Actions.")
     with open(config.env.github_output, "a", encoding="utf-8") as f:
         f.write(f"{key}={value}\n")
+
+
+@dataset_app.command("update-metadata")
+def update_metadata(
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+    dry_run: Annotated[bool, typer.Option(help="Print changes without writing to file")] = False,
+):
+    """Update metadata fields (e.g., image_count) for all dataset entries."""
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+    entries = load_dataset_entries(dataset_path)
+
+    updated_entries: list[dict] = []
+    changes: list[tuple[str, int | None, int | None]] = []
+
+    for entry in entries:
+        # Count images in problem statement directory
+        new_image_count = entry.count_images()
+        old_image_count = entry.metadata.image_count
+
+        # Create updated entry dict
+        entry_dict = entry.model_dump(by_alias=True, mode="json")
+
+        # Update metadata with new image_count
+        entry_dict["metadata"]["image_count"] = new_image_count
+        updated_entries.append(entry_dict)
+
+        # Track changes
+        if old_image_count != new_image_count:
+            changes.append((entry.instance_id, old_image_count, new_image_count))
+
+    # Display changes
+    if changes:
+        table = Table(title="Metadata Updates")
+        table.add_column("Instance ID", style="cyan")
+        table.add_column("Old image_count", style="red")
+        table.add_column("New image_count", style="green")
+
+        for instance_id, old_count, new_count in changes:
+            table.add_row(instance_id, str(old_count), str(new_count))
+
+        console.print(table)
+        console.print(f"\n[bold]Total entries with changes: {len(changes)}[/bold]")
+    else:
+        console.print("[green]No changes needed - all metadata is up to date.[/green]")
+
+    if dry_run:
+        console.print("[yellow]Dry run - no changes written.[/yellow]")
+        return
+
+    # Write updated entries back to file
+    output_path = Path(dataset_path)
+    with output_path.open("w", encoding="utf-8") as f:
+        for entry_dict in updated_entries:
+            json.dump(entry_dict, f, ensure_ascii=False)
+            f.write("\n")
+
+    console.print(f"[green]Updated {len(updated_entries)} entries in {dataset_path}[/green]")
