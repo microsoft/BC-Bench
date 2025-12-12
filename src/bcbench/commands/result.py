@@ -39,6 +39,7 @@ def result_summarize(
     dataset_path: DatasetPath = _config.paths.dataset_path,
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
+    combined_output: Annotated[str, typer.Option(help="Output filename for combined raw results JSONL")] = "combined_results.jsonl",
 ):
     """
     Summarize evaluation results from a completed run.
@@ -64,11 +65,19 @@ def result_summarize(
         logger.error(f"No instance-specific result files found in {run_dir}")
         raise typer.Exit(code=1)
 
-    results: list[BaseEvaluationResult] = []
+    raw_lines: list[str] = []
     for results_path in result_files:
         logger.info(f"Reading results from: {results_path}")
-        with open(results_path) as f:
-            results.extend(create_result_from_json(json.loads(line)) for line in f if line.strip())
+        with open(results_path, encoding="utf-8") as f:
+            raw_lines.extend(line.strip() for line in f)
+
+    combined_path = run_dir / combined_output
+    with open(combined_path, "w", encoding="utf-8") as combined_f:
+        for line in raw_lines:
+            combined_f.write(line + "\n")
+    logger.info(f"Combined results written to: {combined_path}")
+
+    results: list[BaseEvaluationResult] = [create_result_from_json(json.loads(line)) for line in raw_lines]
 
     if not results:
         logger.error("No results found in the result files")
