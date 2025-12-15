@@ -9,8 +9,8 @@ class TestGenerationResult(BaseEvaluationResult):
     Tracks whether generated tests failed before patch and passed after patch.
     """
 
-    pre_patch_failed: bool | None = None
-    post_patch_passed: bool | None = None
+    pre_patch_failed: bool = False
+    post_patch_passed: bool = False
 
     @classmethod
     def create_no_tests_extracted(cls: type[T], context: "EvaluationContext", generated_patch: str, error_message: str) -> T:

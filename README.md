@@ -27,7 +27,7 @@ cd BC-Bench
 uv python install
 
 # Install dependencies
-uv sync --all-extras
+uv sync --all-groups
 
 # Show CLI help
 uv run bcbench --help

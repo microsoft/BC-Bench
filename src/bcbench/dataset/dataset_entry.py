@@ -25,6 +25,7 @@ class EntryMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     area: str | None = None
+    image_count: int | None = None
 
 
 class DatasetEntry(BaseModel):
