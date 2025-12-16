@@ -1,5 +1,5 @@
-Title: Missing handling of "Direct Cost - Non Inventory" cost type for assemblies in "Inventory Posting to G/L" codeunit.
-Repro Steps:
+# Title: Missing handling of "Direct Cost - Non Inventory" cost type for assemblies in "Inventory Posting to G/L" codeunit.
+## Repro Steps:
 The codeunit "Inventory Posting To G/L" has a handler for the new "Direct Cost - Non Inventory" cost type in BufferOutputPosting function, but doesn't have the handler in BufferAsmOutputPosting function.
 
 **Call stack a partner has reported:**
@@ -35,4 +35,4 @@ AL call stack: "Adjust Cost - Item Entries"(Report 795).RunCostAdjustmentWithLog
 " Adjust Cost - Item Entries"(Report 795).OnPreReport(Trigger) line 19 - Base Application by Microsoft
 Thank you.
 Best regard
-Description:
+## Description:

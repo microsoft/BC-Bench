@@ -1,5 +1,5 @@
-Title: Wrong Decimal Rounding with Quantity in Reservation Entries, using Order Tracking Policy where tracking lines are split into 3, each ending in x.xxxx7, which results with all 3 adding up to x.00001
-Repro Steps:
+# Title: Wrong Decimal Rounding with Quantity in Reservation Entries, using Order Tracking Policy where tracking lines are split into 3, each ending in x.xxxx7, which results with all 3 adding up to x.00001
+## Repro Steps:
 1. Create new item 1000 or whatever number.
 2. On the Item in Related > Item > Units of Measure, Add UOM for CASE (CA), Qty 24 Per Base UOM of PCS
 3. **Set 'Sales UOM' = CASE**
@@ -18,5 +18,5 @@ Repro Steps:
 **EXPECTED RESULTS:**Summed Quantity is 12
 **ACTUAL RESULTS:** If we add the 'Quantity' together, we get 12.00001
 
-Description:
+## Description:
 Copied and derived from Support Case Review

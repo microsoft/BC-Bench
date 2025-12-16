@@ -1,14 +1,14 @@
 import json
 from pathlib import Path
+from typing import Any
 
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
-
-# TODO: handle test-generation category
 
 
 def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str) -> None:
@@ -26,25 +26,31 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
 
             input, expected = get_info_from_dataset_entry(matching_entries[0], result.category)
 
+            metadata: dict[str, Any] = {
+                "model": result.model,
+                "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
+                "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
+                "llm_duration": (result.metrics.llm_duration if result.metrics else None) or 0,
+                "latency": (result.metrics.execution_time if result.metrics else None) or 0,
+                "turn_count": (result.metrics.turn_count if result.metrics else None) or 0,
+                "resolved": result.resolved,
+                "build": result.build,
+                "run_id": run_id,
+                "project": result.project,
+                "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
+            }
+
+            if isinstance(result, TestGenerationResult):
+                metadata["pre_patch_failed"] = result.pre_patch_failed
+                metadata["post_patch_passed"] = result.post_patch_passed
+
             bceval_result = {
                 "id": result.instance_id,
                 "input": input,
                 "expected": expected,
                 "output": result.generated_patch,
                 "context": "",
-                "metadata": {
-                    "model": result.model,
-                    "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
-                    "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
-                    "llm_duration": (result.metrics.llm_duration if result.metrics else None) or 0,
-                    "latency": (result.metrics.execution_time if result.metrics else None) or 0,
-                    "turn_count": (result.metrics.turn_count if result.metrics else None) or 0,
-                    "resolved": result.resolved,
-                    "build": result.build,
-                    "run_id": run_id,
-                    "project": result.project,
-                    "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
-                },
+                "metadata": metadata,
                 "tags": [],
             }
             f.write(json.dumps(bceval_result) + "\n")

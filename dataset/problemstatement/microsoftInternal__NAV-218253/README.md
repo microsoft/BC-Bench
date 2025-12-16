@@ -1,5 +1,5 @@
-Title: When the quantity in a Sales Invoices was changed after using 'Get Shipment lines' and an item with item tracking lines and reserve always the tracking information gets lost.
-Repro Steps:
+# Title: When the quantity in a Sales Invoices was changed after using 'Get Shipment lines' and an item with item tracking lines and reserve always the tracking information gets lost.
+## Repro Steps:
 1. Open BC26.0 GB.
 2. Search for Item tracking code.
 3. Add a New Item tracking code "Test".
@@ -35,5 +35,5 @@ Check the tracking lines again they are cleared
 
 **Expected Resul**t: The item tracking lines should remain intact when adjustments are made to the quantity on the sales line, ensuring that the document can be posted successfully without any errors.
 
-Description:
+## Description:
 When the quantity in a Sales Invoices was changed after using 'Get Shipment lines' and an item with item tracking lines and reserve always the tracking information gets lost.

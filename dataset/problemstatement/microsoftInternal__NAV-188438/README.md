@@ -1,7 +1,7 @@
-Title: Wrong calculation at Sustainability Journal
-Repro Steps:
+# Title: Wrong calculation at Sustainability Journal
+## Repro Steps:
 
-Description:
+## Description:
 Use **CRONUS USA, Inc.** company:
 
 1. Install Sustainability demo data in Contoso Demo Tool.

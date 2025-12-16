@@ -219,7 +219,7 @@ class TestRunTestSuite:
 
     def test_test_entries_serialized_as_json(self, mock_subprocess):
         test_entries = [
-            TestEntry(codeunitID=137404, functionName={"ExchangeProductionBOMItemShouldSetEndingDate"}),
+            TestEntry(codeunitID=137404, functionName=frozenset({"ExchangeProductionBOMItemShouldSetEndingDate"})),
         ]
 
         bc_operations.run_test_suite(
@@ -241,8 +241,8 @@ class TestRunTestSuite:
 
     def test_multiple_test_entries_serialized_as_json(self, mock_subprocess):
         test_entries = [
-            TestEntry(codeunitID=100, functionName={"TestA", "TestB"}),
-            TestEntry(codeunitID=200, functionName={"TestC"}),
+            TestEntry(codeunitID=100, functionName=frozenset({"TestA", "TestB"})),
+            TestEntry(codeunitID=200, functionName=frozenset({"TestC"})),
         ]
 
         bc_operations.run_test_suite(

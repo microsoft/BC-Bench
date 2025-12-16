@@ -1,8 +1,8 @@
-Title: When recalculating an item in a requisition or planning worksheet with no planning results lead to wrong surplus entries in the reservation table whic are added to the item tracking page.
-Repro Steps:
+# Title: When recalculating an item in a requisition or planning worksheet with no planning results lead to wrong surplus entries in the reservation table whic are added to the item tracking page.
+## Repro Steps:
 I tested in BC 25.5 and 26.0 GB and DE Localization.
 
-Repro Steps:
+## Repro Steps:
 1. We start with creating a new Item:
 ![Item Card Step1](./item_card_step1.png) 
 With item tracking:
@@ -52,5 +52,4 @@ And if you go the item tracking lines on the purchase line, you will notice that
 **Additional information:** Same behavior if you use instead the planning worksheet.
 When you post the purchase order everything is posted correctly, and the wrongly created reservation entries are gone.
 
-Description:
-
+## Description:

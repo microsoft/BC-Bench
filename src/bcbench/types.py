@@ -14,7 +14,7 @@ from bcbench.logger import get_logger
 if TYPE_CHECKING:
     from bcbench.dataset import DatasetEntry
 
-__all__ = ["AgentMetrics", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = ["AgentMetrics", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
 logger = get_logger(__name__)
 

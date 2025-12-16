@@ -11,10 +11,10 @@ on:
     paths: [".github/workflows/copilot-setup-steps.yml"]
 
 jobs:
-  copilot-setup-steps:  # The job MUST be called this
+  copilot-setup-steps: # The job MUST be called this
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # Needed for checkout
+      contents: read # Needed for checkout
 
     steps:
       - name: Checkout code
@@ -29,7 +29,7 @@ jobs:
         run: uv python install
 
       - name: Install bcbench package with all dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-groups
 
       - name: Install pre-commit hooks
         run: uv run pre-commit install

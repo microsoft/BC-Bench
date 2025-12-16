@@ -21,8 +21,17 @@ class TestEntry(BaseModel):
     functionName: Annotated[frozenset[str], Field(min_length=1)]
 
 
+class EntryMetadata(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    area: str | None = None
+    image_count: int | None = None
+
+
 class DatasetEntry(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
     repo: str = Field(default="microsoftInternal/NAV", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)

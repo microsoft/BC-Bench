@@ -147,9 +147,6 @@ def extract_file_paths_from_patch(patch: str) -> list[str]:
     if not patch:
         return []
 
-    try:
-        patch_set = PatchSet(str(patch))
-    except Exception:
-        return []
+    patch_set = PatchSet(patch)
 
     return [patched_file.path for patched_file in patch_set if patched_file.path]

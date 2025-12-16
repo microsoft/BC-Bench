@@ -35,3 +35,4 @@ repos:
         name: ty check
         entry: uvx ty check . --ignore=unresolved-import
         language: python
+        pass_filenames: false

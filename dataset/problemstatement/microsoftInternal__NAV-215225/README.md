@@ -1,5 +1,5 @@
-Title: Recurring Project Journal is not handy to use as the posted lines needs to be revalidated to get again the Unit Amounts for the next posting.
-Repro Steps:
+# Title: Recurring Project Journal is not handy to use as the posted lines needs to be revalidated to get again the Unit Amounts for the next posting.
+## Repro Steps:
 1- Navigate to the Recurring Project Journal.
 2- Add a new line with the following details and post it:
 Recurring Method | Recurring Frequency | Line Type | Posting Date | Document No. | Project No. | Project Task No. | Type     | No.       | Description    | Location Code | Work Type Code | Unit of Measure Code | Quantity | Unit Cost | Unit Cost (LCY) | Total Cost | Total Cost (LCY) | Unit Price | Line Amount | Line Discount % | Line Discount Amount | Applies-to Entry | Expiration Date
@@ -17,5 +17,5 @@ Imagine a customer with many Recurring Project Journal lines, and having to re-v
 What is the sense of it? Is this on purpose? If this is on purpose, could you provide a customer ready explanation?
 
 We can understand that the Unit Amount might change in the Resource card... but at least after adding the Quantity we should take the updated/current Unit Price from the Resource/Item at least... otherwise, not much sense to have a Project Recurring Journal where you need to re-validate the Resource/Item all the time before posting the new lines.
-Description:
+## Description:
 Recurring Project Journal is not handy to use as the posted lines needs to be revalidated to get again the Unit Amounts for the next posting.

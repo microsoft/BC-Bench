@@ -71,7 +71,7 @@ def evaluate_mini(
         container_name=container_name,
         username=username,
         password=password,
-        model="azure/" + model,
+        model=model,
         agent_name="mini-bc-agent",
         category=category,
     )
@@ -83,7 +83,7 @@ def evaluate_mini(
             entry=ctx.entry,
             repo_path=ctx.repo_path,
             category=category,
-            model=ctx.model,
+            model="azure/" + model,
             output_dir=ctx.result_dir,
         ),
     )

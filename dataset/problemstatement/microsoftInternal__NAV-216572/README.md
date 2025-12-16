@@ -1,5 +1,5 @@
-Title: In Recurring General Journals Import from Allocation Accounts does not import dimensions
-Repro Steps:
+# Title: In Recurring General Journals Import from Allocation Accounts does not import dimensions
+## Repro Steps:
 Repro steps in US version to use Allocation Accounts in Recurring General Journals: 
 Create an allocation account, assign dimensions on each line.
 ![Allocation Account Test](./allocation_account_test.png)
@@ -19,6 +19,6 @@ Dimensions come empty:
 Expected Result:
 The lines should have the same dimesion as setup on the Allocation Account.
 
-Description:
+## Description:
 In Recurring General Journals Import from Allocation Accounts does not import dimensions.
 When you use the Allocation Account on a General Journal line, the dimensions are added correctly.

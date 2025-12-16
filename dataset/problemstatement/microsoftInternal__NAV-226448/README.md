@@ -1,5 +1,5 @@
-Title: Inconsistency error when posting purchase invoice with non-deductible VAT - Prices Including VAT
-Repro Steps:
+# Title: Inconsistency error when posting purchase invoice with non-deductible VAT - Prices Including VAT
+## Repro Steps:
 Recreation steps 1 - Background setups to complete first
 
 1. I change DOMESTIC Vendor 20000 to TICK Prices Including VAT
@@ -37,7 +37,7 @@ These values of the Base and Amount should both be 0.00 (ZERO) as the Non-Deduct
 **Actual Outcome:**
 The system is incorrectly calculating Base as -0.01 and Amount as 0.01 in VAT Entries preview. It also throws inconsistent error on posting the document.
 
-Description:
+## Description:
 • The system is incorrectly calculating Base as -0.01 and Amount as 0.01 in VAT Entries preview
 • These values should both be 0.00 (ZERO) as the Non Deductible VAT is 100%
 • This problem seems specific to particular Amounts which round unusually. Also we believe it arises from using Prices Including VAT and the system having to work out the Base (Net) Amount from that

@@ -1,5 +1,5 @@
-Title: [Headlines] Certain headlines are not hidden because the record Get fails while attempting to set visibility field to false
-Repro Steps:
+# Title: [Headlines] Certain headlines are not hidden because the record Get fails while attempting to set visibility field to false
+## Repro Steps:
 Headlines are always created with a headline name + user security id as seen below.
 
 ```al
@@ -17,4 +17,4 @@ However when a headline fx Overdue invoices are suppose to be hidden, when it tr
 This does not error out because the error is trapped with a if/else
 
 in file EssentialBusHeadlineMgt.Codeunit.al `if EssentialBusinessHeadline.Get(HeadlineName) then begin`
-Description:
+## Description:

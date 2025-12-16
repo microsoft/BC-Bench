@@ -88,6 +88,12 @@ def view_entry(
         "\n".join(entry.project_paths) if entry.project_paths else "N/A",
     )
 
+    # Add metadata fields dynamically
+    metadata_dict = entry.metadata.model_dump()
+    for field_name, field_value in metadata_dict.items():
+        display_name = field_name.replace("_", " ").title()
+        info_table.add_row(f"[dim]Metadata:[/dim] {display_name}", str(field_value) if field_value else "N/A")
+
     console.print(Panel(info_table, title="[bold]Entry Information[/bold]", border_style="blue"))
 
     console.print("\n[bold cyan]Problem Statement with Hints:[/bold cyan]")

@@ -1,5 +1,5 @@
-Title: In the Item Reclassification Journal is the Dimension value wrongly updated by adding a Sales Person to the line
-Repro Steps:
+# Title: In the Item Reclassification Journal is the Dimension value wrongly updated by adding a Sales Person to the line
+## Repro Steps:
 1- Insert dimensions in the East and Main location as following: 
 ![location card](./location_card.png)
 ![location east](./location_east.png)
@@ -17,5 +17,5 @@ The "new dimension value code" is changed the original dimension value code: HOM
 **Expected Outcome:**
 The new dimension value code should keep its value INDUSTRIAL which comes from the new location.
 
-Description:
+## Description:
 The new dimension value appears to be incorrect after the salesperson is inserted.

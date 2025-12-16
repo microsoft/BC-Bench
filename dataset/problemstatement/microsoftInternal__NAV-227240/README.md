@@ -1,5 +1,5 @@
-Title: The due date of the created reminder does not update when the due date is changed to an earlier date
-Repro Steps:
+# Title: The due date of the created reminder does not update when the due date is changed to an earlier date
+## Repro Steps:
 1- Customer setup:
 ![Customer Card](./customer_card.png)
 2- Reminder terms:
@@ -40,4 +40,4 @@ And if yes, why only in one direction (forward, not backwards)?
 The issue was reproducible on our side and we tested some scenarios are being discussed in the repro steps
 
 **Did the partner reproduce the issue in a Sandbox without extensions?** Yes
-Description:
+## Description:

@@ -1,5 +1,5 @@
-Title: If you create a pick with several lines with diffrenct Lot No. Expiration date and a location with Pick According to FEFO = Yes picking from different BINS lead to a rounding issue.
-Repro Steps:
+# Title: If you create a pick with several lines with diffrenct Lot No. Expiration date and a location with Pick According to FEFO = Yes picking from different BINS lead to a rounding issue.
+## Repro Steps:
 1. Open BC26.1 W1
 2. Open Warehouse Employees
     Add your user for location SILVER
@@ -100,5 +100,5 @@ The posted pick lines
 If you compare the posted pick lines and the pick lines many entries differ int the Qty. Base.
 I was just able to create the rouding issue with the different Expiration Dates and the Pick According to FEFO I assume the order might be of importance.
 
-Description:
+## Description:
 If you create a pick with several lines with diffrenct Lot No. Expiration date and a location with Pick According to FEFO = Yes picking from different BINS lead to a rounding issue.

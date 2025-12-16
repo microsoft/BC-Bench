@@ -69,6 +69,13 @@ ignore = [
 ]
 
 [dependency-groups]
+analysis = [
+    "ipykernel>=7.1.0",
+    "nbformat>=5.10.4",
+    "pandas>=2.3.3",
+    "plotly>=6.5.0",
+    "scipy>=1.16.3",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=7.0",

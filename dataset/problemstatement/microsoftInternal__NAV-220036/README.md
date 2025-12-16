@@ -1,5 +1,5 @@
-Title: Field Email on Reminder is empty when customer does not have any contacts
-Repro Steps:
+# Title: Field Email on Reminder is empty when customer does not have any contacts
+## Repro Steps:
 Tested in latest build 26.x onprem
 1.Create a new domestic customer that has no contact, use the template CUSTOMER PERSON
 In addition to the automatically added fields, add the following values:
@@ -27,5 +27,5 @@ The email field should show value test@test.de
 Usually the email field on the reminder header does show the email of the contact related to the customer. In our case we do not have a contact, so the email from the customer card should be shown. When you then actually issue and send the reminder, you will notice that BC does take the e-mail adress from the customer card.
 But this e-mail adress should also be visible on the reminder page directly.
 
-Description:
+## Description:
 Field Email on Reminder is empty when customer does not have any contacts

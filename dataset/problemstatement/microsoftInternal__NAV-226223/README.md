@@ -1,5 +1,5 @@
-Title: "Attempted to divide by zero" error during Exchange Rates Adjustment if the company has no Tax/VAT Entries.
-Repro Steps:
+# Title: "Attempted to divide by zero" error during Exchange Rates Adjustment if the company has no Tax/VAT Entries.
+## Repro Steps:
 Steps to Reproduce:
 Used US company, but it is W1
 You can use My Company, as it has no VAT/TAX Entries.
@@ -28,5 +28,5 @@ After making these changes, rerun the process. The error should no longer occur.
 
 **Did the partner reproduce the issue in a Sandbox without extensions?** Yes
 
-Description:
+## Description:
 "Attempted to divide by zero" error during Exchange Rates Adjustment if the company has no Tax/VAT Entries.

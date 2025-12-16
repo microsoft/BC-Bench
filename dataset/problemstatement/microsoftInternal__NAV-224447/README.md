@@ -1,5 +1,5 @@
-Title: Issued reminder emails are not logged in sent e-mail history of a customer
-Repro Steps:
+# Title: Issued reminder emails are not logged in sent e-mail history of a customer
+## Repro Steps:
 REPRO:
 ==============
 This repro is based on a SaaS environment
@@ -16,4 +16,4 @@ The issued reminder emails should be appearing.
 **==============**
 
 The issued reminder emails is not appearing on the "Send Emails" page
-Description:
+## Description:

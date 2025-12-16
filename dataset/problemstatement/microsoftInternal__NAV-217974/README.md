@@ -1,5 +1,5 @@
-Title: Move Negative Lines on the Sales Order copies the customer address to Shipping to address of the Return Order.
-Repro Steps:
+# Title: Move Negative Lines on the Sales Order copies the customer address to Shipping to address of the Return Order.
+## Repro Steps:
 1.  Create a Sales order for customer 20000.
     Take a note of the Shipping address.
     ![Sales Order](./Sales_order.png)
@@ -26,4 +26,4 @@ addresses are copied wrongly as in the code of CopyDocumentMgt, transferfield is
         OnAfterCopySalesHeader(ToSalesHeader, OldSalesHeader, FromSalesHeader, FromDocType);
     end;
 
-Description:
+## Description:

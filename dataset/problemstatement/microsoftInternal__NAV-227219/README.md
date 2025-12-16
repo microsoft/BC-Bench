@@ -1,5 +1,5 @@
-Title: Variant mandatory if exists is not checked in transfer orders
-Repro Steps:
+# Title: Variant mandatory if exists is not checked in transfer orders
+## Repro Steps:
 Tested in CZ version 26.4 but appears in W1 as well
 
 1- Open the inventory setup and enable "Variant mandatory if exists":
@@ -28,4 +28,4 @@ Document is released without adding a variant code.
 **Expected Outcome:**
 The system should not allow the transfer order to be released. The same error as in the PO and SO should be shown.
 
-Description:
+## Description:

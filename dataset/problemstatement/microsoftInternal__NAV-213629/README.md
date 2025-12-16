@@ -1,5 +1,5 @@
-Title: Copy project: System-Created Entry must be equal to 'No' in Project Planning Line
-Repro Steps:
+# Title: Copy project: System-Created Entry must be equal to 'No' in Project Planning Line
+## Repro Steps:
 Create a Project1 for any customer (10000)
 Make sure that Apply Usage Link is Enabled (posting tab)
 Add new Task1 (Code = 1). No planning lines.
@@ -27,4 +27,4 @@ AL call stack:
 
 Expected - remove "system-Created Entry" mark when copying project planning lines.
 
-Description:
+## Description:
