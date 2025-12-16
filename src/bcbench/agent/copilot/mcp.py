@@ -27,8 +27,8 @@ class _ALMcpServerManager:
         # https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools/#readme-body-tab
         self._process = subprocess.Popen(["al", "LaunchMcpServer", "--projects", str(project_path)])
         atexit.register(self.cleanup)
-        logger.info("Waiting 5 seconds for MCP server to start...")
-        time.sleep(5)
+        logger.info("Waiting 60 seconds for MCP server to start...")
+        time.sleep(60)
 
     def cleanup(self) -> None:
         if self._process is not None and self._process.poll() is None:
