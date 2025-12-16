@@ -7,14 +7,15 @@
 		"ghcr.io/devcontainers-contrib/features/pre-commit": {},
 		"ghcr.io/devcontainers/features/ruby": {}
 	},
-	"postCreateCommand": "uv sync --all-extras && pre-commit install && cd docs && printf 'source \"https://rubygems.org\"\\ngem \"github-pages\", group: :jekyll_plugins\\ngem \"webrick\"\\n' > Gemfile && bundle install",
+	"postCreateCommand": "uv sync --all-groups && pre-commit install && cd docs && printf 'source \"https://rubygems.org\"\\ngem \"github-pages\", group: :jekyll_plugins\\ngem \"webrick\"\\n' > Gemfile && bundle install",
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"ms-python.python",
 				"ms-vscode.powershell",
 				"charliermarsh.ruff",
-				"redhat.vscode-yaml"
+				"redhat.vscode-yaml",
+				"ms-toolsai.jupyter"
 			]
 		}
 	}
