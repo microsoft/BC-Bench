@@ -67,8 +67,9 @@ def _install_and_launch_al_mcp_server(project_path: Path) -> None:
     global _mcp_server_process  # noqa: PLW0603
 
     logger.info("Launching AL MCP server tool...")
+    logger.debug(f"Project path for AL MCP server: {project_path}")
     # https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools/#readme-body-tab
-    _mcp_server_process = subprocess.Popen(f"al LaunchMcpServer --projects {project_path}")
+    _mcp_server_process = subprocess.Popen(["al", "LaunchMcpServer", "--projects", str(project_path)])
 
     atexit.register(_cleanup_mcp_server)
 
