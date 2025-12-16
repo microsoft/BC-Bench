@@ -83,6 +83,9 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install AL MCP Server Tool
+        run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global
+
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot@0.0.369
 
