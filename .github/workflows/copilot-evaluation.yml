@@ -32,6 +32,11 @@ on:
         required: false
         default: true
         type: boolean
+      al-mcp:
+        description: "Enable AL MCP server"
+        required: false
+        default: false
+        type: boolean
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -103,7 +108,8 @@ jobs:
             --model "${{ inputs.model }}" `
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
+            ${{ inputs.al-mcp && '--al-mcp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v4
