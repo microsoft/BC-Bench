@@ -12,12 +12,9 @@ on:
         type: choice
         options:
           - "claude-sonnet-4.5"
-          - "claude-sonnet-4"
           - "claude-haiku-4.5"
           - "claude-opus-4.5"
-          - "gpt-5"
-          - "gpt-5-mini"
-          - "gpt-5.1"
+          - "gpt-5.2"
           - "gpt-5.1-codex-mini"
           - "gpt-5.1-codex"
           - "gpt-5.1-codex-max"
@@ -83,7 +80,7 @@ jobs:
           node-version: 24
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.367
+        run: npm install -g @github/copilot@0.0.369
 
       - name: Select PAT based on job index
         id: select-pat
