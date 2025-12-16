@@ -83,6 +83,9 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Add dotnet tools to PATH
+        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install AL MCP Server Tool
         run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global
 
