@@ -67,6 +67,7 @@ def _install_and_launch_al_mcp_server(project_path: Path) -> None:
     global _mcp_server_process  # noqa: PLW0603
 
     logger.info("Installing AL MCP server tool...")
+    # https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools/#readme-body-tab
     subprocess.run("dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global", check=True)
 
     logger.info("Launching AL MCP server tool...")
