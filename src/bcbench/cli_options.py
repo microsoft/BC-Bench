@@ -30,12 +30,9 @@ EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Cate
 CopilotModel = Annotated[
     Literal[
         "claude-sonnet-4.5",
-        "claude-sonnet-4",
         "claude-haiku-4.5",
         "claude-opus-4.5",
-        "gpt-5",
-        "gpt-5-mini",
-        "gpt-5.1",
+        "gpt-5.2",
         "gpt-5.1-codex-mini",
         "gpt-5.1-codex",
         "gpt-5.1-codex-max",
