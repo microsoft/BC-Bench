@@ -10,7 +10,6 @@ from jinja2 import Template
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.operations.project_operations import categorize_projects
 
 logger = get_logger(__name__)
 
@@ -21,11 +20,11 @@ class _ALMcpServerManager:
     def __init__(self) -> None:
         self._process: subprocess.Popen | None = None
 
-    def launch(self, project_path: Path) -> None:
+    def launch(self, projects: str) -> None:
         logger.info("Launching AL MCP server tool...")
-        logger.debug(f"Project path for AL MCP server: {project_path}")
+        logger.debug(f"Project paths for AL MCP server: {projects}")
         # https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools/#readme-body-tab
-        self._process = subprocess.Popen(["al", "LaunchMcpServer", "--projects", str(project_path)])
+        self._process = subprocess.Popen(["al", "LaunchMcpServer", "--projects", projects])
         atexit.register(self.cleanup)
         logger.info("Waiting 60 seconds for MCP server to start...")
         time.sleep(60)
@@ -81,13 +80,14 @@ def build_mcp_config(copilot_config: dict[str, Any], entry: DatasetEntry, repo_p
     if not mcp_servers:
         return None, None
 
-    _test_projects, app_projects = categorize_projects(entry.project_paths)
     template_context = {"repo_path": repo_path}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     if al_mcp:
-        _mcp_server_manager.launch(repo_path / app_projects[0])
+        # Launch MCP server with all project paths separated by semicolons
+        all_projects = ";".join(str(repo_path / project_path) for project_path in entry.project_paths)
+        _mcp_server_manager.launch(all_projects)
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
     logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
