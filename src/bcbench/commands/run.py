@@ -19,7 +19,7 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.logger import get_logger
-from bcbench.operations import setup_repo
+from bcbench.operations import setup_repo_postbuild, setup_repo_prebuild
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -46,7 +46,8 @@ def run_mini(
     """
     entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
-    setup_repo(entry, repo_path, category)
+    setup_repo_prebuild(entry, repo_path)
+    setup_repo_postbuild(entry, repo_path, category)
 
     run_mini_agent(
         entry=entry,
@@ -77,7 +78,8 @@ def run_copilot(
     """
     entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
-    setup_repo(entry, repo_path, category)
+    setup_repo_prebuild(entry, repo_path)
+    setup_repo_postbuild(entry, repo_path, category)
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
 

@@ -9,7 +9,8 @@ from bcbench.operations import (
     categorize_projects,
     clean_project_paths,
     run_tests,
-    setup_repo,
+    setup_repo_postbuild,
+    setup_repo_prebuild,
     stage_and_get_diff,
 )
 from bcbench.results.bugfix import BugFixResult
@@ -30,7 +31,8 @@ class BugFixPipeline(EvaluationPipeline):
     """
 
     def setup(self, context: EvaluationContext) -> None:
-        setup_repo(context.entry, context.repo_path, context.category)
+        setup_repo_prebuild(context.entry, context.repo_path)
+        setup_repo_postbuild(context.entry, context.repo_path, context.category)
 
         build_and_publish_projects(
             context.repo_path,
