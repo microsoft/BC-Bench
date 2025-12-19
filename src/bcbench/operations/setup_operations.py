@@ -72,7 +72,9 @@ def setup_repo_postbuild(entry: DatasetEntry, repo_path: Path, category: Evaluat
             case "both":
                 apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
                 copy_problem_statement_folder(entry, repo_path)
-            case _:  # problem-statement
+            case "problem-statement":
                 copy_problem_statement_folder(entry, repo_path)
+            case _:
+                raise ValueError(f"Unhandled test generation input mode: {input_mode}")
     else:
         copy_problem_statement_folder(entry, repo_path)
