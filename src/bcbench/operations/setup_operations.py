@@ -14,7 +14,7 @@ from bcbench.types import EvaluationCategory
 logger = get_logger(__name__)
 _config = get_config()
 
-__all__ = ["setup_repo"]
+__all__ = ["_get_test_generation_input_mode", "setup_repo_postbuild", "setup_repo_prebuild"]
 
 
 def _get_test_generation_input_mode() -> str:
@@ -37,26 +37,32 @@ def _get_test_generation_input_mode() -> str:
     return input_mode
 
 
-def setup_repo(entry: DatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
-    """Setup repository for evaluation without building.
+def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
+    """Setup repository before building - clean and checkout base commit.
 
-    This function prepares the repository for agent execution by:
-    1. Cleaning the repo to remove any uncommitted changes
-    2. Checking out the base commit
-    3. For test-generation with gold-patch mode: applying the gold patch
-    4. For all other cases: copying the problem statement folder
+    This is the first phase of repo setup that should be called BEFORE build_and_publish_projects.
+    It prepares a clean slate at the base commit without any patches or problem statements.
 
-    This is shared between the run command (no BC container) and evaluate command.
-    The evaluate pipeline additionally calls build_and_publish_projects after this.
+    Args:
+        entry: Dataset entry with instance metadata
+        repo_path: Path to the repository
+    """
+    clean_repo(repo_path)
+    checkout_commit(repo_path, entry.base_commit)
+
+
+def setup_repo_postbuild(entry: DatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
+    """Setup repository after building - apply patches and copy problem statements.
+
+    This is the second phase of repo setup that should be called AFTER build_and_publish_projects.
+    For test-generation, this ensures the gold patch is applied only after the base code is built,
+    so the agent sees the fixed code but tests run against the unfixed published app.
 
     Args:
         entry: Dataset entry with instance metadata
         repo_path: Path to the repository
         category: Evaluation category (bug-fix or test-generation)
     """
-    clean_repo(repo_path)
-    checkout_commit(repo_path, entry.base_commit)
-
     if category == EvaluationCategory.TEST_GENERATION:
         input_mode: str = _get_test_generation_input_mode()
         logger.info(f"Test generation input mode: {input_mode}")
@@ -66,7 +72,9 @@ def setup_repo(entry: DatasetEntry, repo_path: Path, category: EvaluationCategor
             case "both":
                 apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
                 copy_problem_statement_folder(entry, repo_path)
-            case _:  # problem-statement
+            case "problem-statement":
                 copy_problem_statement_folder(entry, repo_path)
+            case _:
+                raise ValueError(f"Unhandled test generation input mode: {input_mode}")
     else:
         copy_problem_statement_folder(entry, repo_path)

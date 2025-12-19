@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 
@@ -43,6 +43,28 @@ class DatasetEntry(BaseModel):
     pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
     test_patch: Annotated[str, Field(min_length=1)]
     patch: Annotated[str, Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_baseapp_patches_are_w1_only(self) -> DatasetEntry:
+        """Validate that patches only modify files in the expected layer (currently W1).
+
+        Only applicable to BaseApp, patches should only modify W1 layer files, not country-specific layers (IT, DE, etc.).
+        """
+        if self.extract_project_name() != "BaseApp":
+            return self
+
+        # Check both patch and test_patch
+        for patch in (self.patch, self.test_patch):
+            patch_paths = re.findall(r"^diff --git a/(.+?) b/", patch, re.MULTILINE)
+
+            for patch_path in patch_paths:
+                match = re.match(r"App/Layers/([^/]+)/", patch_path)
+                if match:
+                    layer = match.group(1)
+                    if layer != "W1":
+                        raise ValueError(f"Patch modifies non-W1 layer '{layer}': {patch_path}")
+
+        return self
 
     @property
     def problem_statement_dir(self) -> Path:

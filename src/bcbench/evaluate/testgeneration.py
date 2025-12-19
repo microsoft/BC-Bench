@@ -11,7 +11,8 @@ from bcbench.operations import (
     categorize_projects,
     clean_project_paths,
     extract_tests_from_patch,
-    setup_repo,
+    setup_repo_postbuild,
+    setup_repo_prebuild,
     stage_and_get_diff,
 )
 from bcbench.operations.bc_operations import run_test_suite
@@ -27,17 +28,20 @@ class TestGenerationPipeline(EvaluationPipeline):
     """Pipeline for test-generation evaluation category.
 
     Workflow:
-    1. Setup: clean repo, checkout base commit, copy problem statement (or apply gold patch), build
+    1. Setup: clean repo, checkout base commit, build, then apply gold patch/problem statement
     2. Run agent: execute agent to generate test code
     3. Evaluate: build, run tests with expected failures, then apply original patch, build, run tests with expected passes
 
     Input modes (configured in copilot/config.yaml):
     - problem-statement: Agent receives bug description, generates tests from problem statement
     - gold-patch: Agent sees the fixed code, generates tests that verify the fix works
+
+    Note: For test-generation, we build BEFORE applying the gold patch so the published app
+    doesn't include the fix. The agent sees the fix in source but tests run against unfixed app.
     """
 
     def setup(self, context: EvaluationContext) -> None:
-        setup_repo(context.entry, context.repo_path, context.category)
+        setup_repo_prebuild(context.entry, context.repo_path)
 
         build_and_publish_projects(
             context.repo_path,
@@ -47,6 +51,9 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.password,
             context.entry.environment_setup_version,
         )
+
+        # Apply gold patch / problem statement AFTER build so fix isn't included in published app
+        setup_repo_postbuild(context.entry, context.repo_path, context.category)
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
