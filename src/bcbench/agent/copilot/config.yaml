@@ -5,7 +5,7 @@ prompt:
   # - problem-statement: Agent reads bug description, generates tests to reproduce issue => Test driven development
   # - gold-patch: Agent sees fixed code, generates tests to verify fix works             => Test verification for known fixes
   # - both: Agent sees both the bug description and the fixed code                       => Combined context for test generation
-  test-generation-input: "gold-patch"
+  test-generation-input: "both"
 
   bug-fix-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
