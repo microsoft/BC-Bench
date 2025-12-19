@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] Error occurs when attempting to save an Item Reference longer than 20 characters: "Cannot write the value [number] to the field [BC] Item Reference No. ... because the value is either too long or the content is invalid."
+Repro Steps:
+1.I created a new item in the item called=LAPTOP 2.Then I move to Related=item=Item References 3.Then Filled up the REFERENCE NO to 30 characters 4.After that you need to leave the page and return then change the values in reference No making sure is up to 30 characters. 5. After that I click on YES to update the related records 6.After that an error occurred In addition, It appears to be because the field in the related table (E-Document Purchase Line) is defined as 20 characters rather than the 50 that the Item Reference allows. Expected Outcome: It is expected to allow more than 20 characters as it was in 25.5 versionsActual Outcome: Cannot Write the value to the field (BC) item reference number int the table E-document purchase line because the value is either too long or the content is invalid
+Description:
+
