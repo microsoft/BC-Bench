@@ -18,9 +18,12 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.evaluate.testgeneration import _get_test_generation_input_mode
 from bcbench.logger import get_logger
 from bcbench.operations import checkout_commit, clean_repo
+from bcbench.operations.git_operations import apply_patch
 from bcbench.operations.instruction_operations import copy_problem_statement_folder
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -82,7 +85,20 @@ def run_copilot(
 
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
-    copy_problem_statement_folder(entry, repo_path)
+
+    if category == EvaluationCategory.TEST_GENERATION:
+        input_mode: str = _get_test_generation_input_mode()
+        logger.info(f"Test generation input mode: {input_mode}")
+        match input_mode:
+            case "gold-patch":
+                apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
+            case "both":
+                apply_patch(repo_path, entry.patch, f"{entry.instance_id} gold patch")
+                copy_problem_statement_folder(entry, repo_path)
+            case "problem-statement":
+                copy_problem_statement_folder(entry, repo_path)
+    else:
+        copy_problem_statement_folder(entry, repo_path)
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
 
