@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from bcbench.evaluate.testgeneration import _get_test_generation_input_mode
+from bcbench.operations.setup_operations import _get_test_generation_input_mode
 
 
 def test_get_test_generation_input_mode_valid_gold_patch():

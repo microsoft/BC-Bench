@@ -1,10 +1,6 @@
 from collections.abc import Callable
-from pathlib import Path
-
-import yaml
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
@@ -13,11 +9,9 @@ from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
     categorize_projects,
-    checkout_commit,
     clean_project_paths,
-    clean_repo,
-    copy_problem_statement_folder,
     extract_tests_from_patch,
+    setup_repo,
     stage_and_get_diff,
 )
 from bcbench.operations.bc_operations import run_test_suite
@@ -25,29 +19,8 @@ from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
-_config = get_config()
 
 __all__ = ["TestGenerationPipeline"]
-
-
-def _get_test_generation_input_mode() -> str:
-    """Read test-generation input mode from copilot config.
-
-    Returns:
-        str: The validated input mode: "gold-patch", "problem-statement" or "both"
-
-    Raises:
-        ValueError: If the input mode is not one of the valid values
-    """
-    config_file: Path = _config.paths.agent_dir / "config.yaml"
-    copilot_config = yaml.safe_load(config_file.read_text())
-    input_mode = copilot_config.get("prompt", {}).get("test-generation-input", "problem-statement")
-
-    valid_modes = {"gold-patch", "problem-statement", "both"}
-    if input_mode not in valid_modes:
-        raise ValueError(f"Invalid test-generation-input mode: '{input_mode}'. Must be one of {valid_modes}. Note: Use hyphens, not underscores (e.g., 'gold-patch' not 'gold_patch')")
-
-    return input_mode
 
 
 class TestGenerationPipeline(EvaluationPipeline):
@@ -64,8 +37,7 @@ class TestGenerationPipeline(EvaluationPipeline):
     """
 
     def setup(self, context: EvaluationContext) -> None:
-        clean_repo(context.repo_path)
-        checkout_commit(context.repo_path, context.entry.base_commit)
+        setup_repo(context.entry, context.repo_path, context.category)
 
         build_and_publish_projects(
             context.repo_path,
@@ -75,18 +47,6 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.password,
             context.entry.environment_setup_version,
         )
-
-        # this must be done after the build to ensure gold patch is not included in build
-        input_mode: str = _get_test_generation_input_mode()
-        logger.info(f"Test generation input mode: {input_mode}")
-        match input_mode:
-            case "gold-patch":
-                apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
-            case "both":
-                apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
-                copy_problem_statement_folder(context.entry, context.repo_path)
-            case "problem-statement":
-                copy_problem_statement_folder(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
