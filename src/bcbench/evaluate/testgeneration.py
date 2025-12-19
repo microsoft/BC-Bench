@@ -67,13 +67,6 @@ class TestGenerationPipeline(EvaluationPipeline):
         clean_repo(context.repo_path)
         checkout_commit(context.repo_path, context.entry.base_commit)
 
-        input_mode: str = _get_test_generation_input_mode()
-        logger.info(f"Test generation input mode: {input_mode}")
-        if input_mode == "gold-patch":
-            apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
-        else:
-            copy_problem_statement_folder(context.entry, context.repo_path)
-
         build_and_publish_projects(
             context.repo_path,
             context.entry.project_paths,
@@ -82,6 +75,18 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.password,
             context.entry.environment_setup_version,
         )
+
+        # this must be done after the build to ensure gold patch is not included in build
+        input_mode: str = _get_test_generation_input_mode()
+        logger.info(f"Test generation input mode: {input_mode}")
+        match input_mode:
+            case "gold-patch":
+                apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
+            case "both":
+                apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} gold patch")
+                copy_problem_statement_folder(context.entry, context.repo_path)
+            case "problem-statement":
+                copy_problem_statement_folder(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
