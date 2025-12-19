@@ -34,7 +34,7 @@ def _get_test_generation_input_mode() -> str:
     """Read test-generation input mode from copilot config.
 
     Returns:
-        str: The validated input mode, either "gold-patch" or "problem-statement"
+        str: The validated input mode: "gold-patch", "problem-statement" or "both"
 
     Raises:
         ValueError: If the input mode is not one of the valid values
@@ -43,7 +43,7 @@ def _get_test_generation_input_mode() -> str:
     copilot_config = yaml.safe_load(config_file.read_text())
     input_mode = copilot_config.get("prompt", {}).get("test-generation-input", "problem-statement")
 
-    valid_modes = {"gold-patch", "problem-statement"}
+    valid_modes = {"gold-patch", "problem-statement", "both"}
     if input_mode not in valid_modes:
         raise ValueError(f"Invalid test-generation-input mode: '{input_mode}'. Must be one of {valid_modes}. Note: Use hyphens, not underscores (e.g., 'gold-patch' not 'gold_patch')")
 
