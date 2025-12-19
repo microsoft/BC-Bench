@@ -32,7 +32,6 @@ class BugFixPipeline(EvaluationPipeline):
 
     def setup(self, context: EvaluationContext) -> None:
         setup_repo_prebuild(context.entry, context.repo_path)
-        setup_repo_postbuild(context.entry, context.repo_path, context.category)
 
         build_and_publish_projects(
             context.repo_path,
@@ -42,6 +41,8 @@ class BugFixPipeline(EvaluationPipeline):
             context.password,
             context.entry.environment_setup_version,
         )
+
+        setup_repo_postbuild(context.entry, context.repo_path, context.category)
 
     def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
