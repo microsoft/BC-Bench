@@ -71,6 +71,10 @@ Follow <create_test_scenario_and_steps_instructions> section below.
 
 ## STEP 4: Implement code for test scenario
 Follow <implement_test_code_workflow> section below.
+
+## STEP 5: Compile and verify
+- Fix all compilation errors related to changes.
+- Task is complete when code compiles successfully.
 </create_test_scenarios_workflow>
 
 <find_existing_test_codeunit_instructions>
@@ -180,6 +184,12 @@ Bad: `// [SCENARIO] ... Bug fix: "Previous errors for records are not removed"`
 ### STEP 5: Add code to test
 - Based on results from STEP 4, add code UNDER the existing [GIVEN] comments.
 - Do NOT duplicate the scenario comments - they already exist from STEP 3.
+
+### STEP 6: Compile code and fix all errors
+- Build and fix the corresponding compilation errors.
+- **Do NOT use alc.exe, dotnet for compilation.**
+- Continue fixing until compilation succeeds.
+- Task is complete when the test compiles successfully.
 </implementation_steps>
 </implement_test_code_workflow>
 
@@ -188,6 +198,7 @@ Bad: `// [SCENARIO] ... Bug fix: "Previous errors for records are not removed"`
 1. Unstaged changes (bug fix) have been analyzed.
 2. Exactly ONE test procedure has been created.
 3. The test validates the bug fix scenario.
+4. The code compiles successfully.
 
 **Final output:** Brief summary with test name and file location.
 </completion_criteria>

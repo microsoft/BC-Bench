@@ -60,7 +60,7 @@ instructions:
 # 2. whether to pass --agent=<agent-name> to copilot
 agents:
   enabled: true
-  name: ALTest
+  name: ALTestMinimal
 # mcp:
 #   servers:
 #     - name: "mslearn"
