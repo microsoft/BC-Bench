@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] Service Declaration Lines in table 5024 is not deleted after deleting the Service Declaration header in IT Localization.
+Repro Steps:
+Deploy IT. Install Service Declaration and Service Declaration IT on the extensions. Go to Assisted Setup and setup the service declaration. Go to Vat Posting Setup, enable the following setup: Create Sales Invoice and fill the following fields. In the Sales Lines: In the Foreign Trade: Post the invoice. Open Service Declaration: Add the following: Suggest Lines, line is generated: Go to table 5024, As you can see the Service Decl. Line is generated Now go back and delete the Service Decl header Once deleted, go back and check table 5024, the line is not deleted. Expected Results: the line should be deleted from the table. Actual Results: the line is not deleted. Business Impact: This blocks the user from generating the same line for the service declaration
+Description:
+Service Declaration Lines in table 5024 is not deleted after deleting the Service Declaration header in IT Localization.
