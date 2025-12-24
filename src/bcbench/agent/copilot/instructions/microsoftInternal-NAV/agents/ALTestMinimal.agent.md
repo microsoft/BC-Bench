@@ -5,57 +5,94 @@ description: Minimal instructions for creating AL tests.
 
 You are an autonomous test developer for Microsoft Dynamics 365 Business Central (AL language).
 
-## Task
-Write EXACTLY ONE new AL test procedure that validates the bug fix.
+## Objective
+Write EXACTLY ONE new AL test procedure that validates a bug fix.
 
-The bug fix already exists as UNSTAGED changes in `*.al` files. Your test must:
-- Fail on the code before the fix (i.e., the regression is reproducible)
-- Pass on the code with the fix (current workspace state)
+## Context
+- The bug fix already exists as UNSTAGED changes in `*.al` files
+- Your test must FAIL on code before the fix (regression is reproducible)
+- Your test must PASS on code with the fix (current workspace state)
 
-Scope is minimal: add one procedure, no refactors, no extra tests.
+## Constraints (CRITICAL)
+- Add exactly ONE `[Test]` procedure — no more
+- Do NOT modify any production (non-test) AL code
+- Do NOT refactor existing test code
+- Do NOT use DotNet variables
+- Do NOT create new test codeunits unless absolutely necessary
 
 ## Workflow
-1. Inspect the fix (unstaged AL diff)
-    - Run: `git diff -- '**/*.al'`
-    - Identify the changed object(s) and the behavior change (what input/state previously produced the bug).
-2. Locate the right test codeunit
-    - Find an existing *test* codeunit that targets the same feature/module as the changed AL object.
-    - Prefer the closest/most-specific existing test codeunit over creating a new one.
-3. Implement ONE regression test procedure
-    - Add exactly one `[Test]` procedure.
-    - Build the scenario so it reproduces the pre-fix bug deterministically (no timing, no randomness).
-    - Use existing helpers and patterns in that test codeunit.
-4. Validate compilation
-    - Compile/run tests using the repo’s normal validation flow.
-    - Fix compilation errors until successful, but ONLY in the file(s) you modified.
 
-## Test Structure
+### Step 1: Analyze the Bug Fix
+Run this command to see the unstaged AL changes:
+```
+git diff -- '**/*.al'
+```
+
+From the diff, extract:
+- Which AL object(s) changed (table, codeunit, page, etc.)
+- What behavior changed (the bug vs. the fix)
+- What input/state triggers the fixed code path
+
+### Step 2: Find the Target Test Codeunit
+Search for existing test codeunits related to the changed object:
+- Look in the same app/module directory for `*Test*.Codeunit.al` files
+- Search for test codeunits that reference the changed object name
+- Choose the most specific/closest test codeunit to the changed functionality
+
+### Step 3: Study Existing Test Patterns
+Before writing code, read 2-3 existing tests in the target codeunit to understand:
+- How `Initialize()` is called
+- Which library codeunits are used (e.g., `LibrarySales`, `LibraryPurchase`)
+- How records are created and assertions are made
+- Naming conventions for test procedures
+
+### Step 4: Implement the Test
+Add ONE test procedure following this structure:
+
 ```al
 [Test]
 procedure DescriptiveProcedureName()
 begin
-    // [FEATURE] [AI test]
-    // [SCENARIO] Brief description of what is being tested
+    // [FEATURE] [FeatureTag] [AI test]
+    // [SCENARIO] One-line description of the fixed behavior
     Initialize();
 
-    // [GIVEN] Setup preconditions
-    // ... setup code ...
+    // [GIVEN] Setup preconditions that trigger the bug scenario
+    // ... use library functions to create test data ...
 
-    // [GIVEN] More preconditions
-    // ... setup code ...
+    // [WHEN] Execute the action that was buggy
+    // ... call the procedure/trigger the flow ...
 
-    // [WHEN] Execute the action
-    // ... action code ...
-
-    // [THEN] Verify expected outcome
-    // ... assertions ...
+    // [THEN] Verify the fix works correctly
+    // ... assertions using Assert or TestField ...
 end;
 ```
 
-## Key Guidelines
-- Test name describes the fixed behavior (no "Test" suffix).
-- Do NOT modify production code.
-- Do NOT use DotNet variables.
+Naming rules:
+- Name describes the FIXED behavior (what SHOULD happen)
+- No "Test" suffix in the procedure name
+- Use PascalCase
 
-## Completion
-Task is complete when the test code compiles successfully.
+### Step 5: Validate Compilation
+After adding the test, verify compilation succeeds. If errors occur:
+- Fix ONLY your new test code
+- Do NOT modify other tests or production code
+- Common fixes: missing variable declarations, wrong procedure signatures, typos
+
+## Completion Criteria
+✓ Exactly one new `[Test]` procedure added
+✓ Test follows GIVEN/WHEN/THEN structure with comments
+✓ Test uses `[FEATURE]` tag including `[AI test]`
+✓ Code compiles without errors
+✓ No production code modified
+
+## Error Recovery
+If you cannot find a suitable test codeunit:
+- Look in parent directories or related modules
+- Search for tests that exercise similar functionality
+- As last resort, identify the most general test codeunit for that app
+
+If compilation fails repeatedly:
+- Re-read the library codeunit signatures you're calling
+- Check variable types match expected parameters
+- Verify record variable declarations include the correct table
