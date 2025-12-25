@@ -227,6 +227,7 @@ function Invoke-DatasetTests {
     }
 
     [bool] $allTestsPassed = $true
+    [System.Collections.Generic.List[string]] $testResults = @()
 
     foreach ($testEntry in $testEntries) {
         [int] $codeunitID = $testEntry.codeunitID
@@ -234,16 +235,21 @@ function Invoke-DatasetTests {
 
         [bool] $testPassed = Invoke-BCTest -containerName $containerName -credential $credential -codeunitID $codeunitID -functionNames $functionNames
 
+        $status = if ($testPassed) { "PASSED" } else { "FAILED" }
+        $testResults.Add("Codeunit $codeunitID ($($functionNames -join ', ')): $status")
+
         if (-not $testPassed) {
             $allTestsPassed = $false
         }
     }
 
+    [string] $resultsSummary = $testResults -join "`n"
+
     if ($expectation -eq 'Pass' -and -not $allTestsPassed) {
-        throw "Tests were expected to Pass but some tests failed"
+        throw "Tests were expected to Pass but some tests failed`n$resultsSummary"
     }
     elseif ($expectation -eq 'Fail' -and $allTestsPassed) {
-        throw "Tests were expected to Fail but all tests passed"
+        throw "Tests were expected to Fail but all tests passed`n$resultsSummary"
     }
 
     Write-Log "Test expectation '$expectation' met successfully" -Level Success
