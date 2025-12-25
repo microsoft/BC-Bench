@@ -1,5 +1,7 @@
 from collections.abc import Callable
 
+from pathlib import Path
+
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.base import EvaluationPipeline
@@ -122,8 +124,20 @@ class TestGenerationPipeline(EvaluationPipeline):
             raise
 
         finally:
+            self._save_test_codeunits(context, file_contents)
             if result is not None:
                 self.save_result(context, result)
             else:
                 logger.error(f"No result generated for {context.entry.instance_id}")
                 raise RuntimeError(f"No result generated for {context.entry.instance_id}")
+
+    def _save_test_codeunits(self, context: EvaluationContext, file_contents: dict[str, str]) -> None:
+        """Save test codeunit files to result directory alongside other artifacts."""
+        if not file_contents:
+            return
+
+        for file_path, content in file_contents.items():
+            file_name = Path(file_path).name
+            artifact_path = context.result_dir / file_name
+            artifact_path.write_text(content, encoding="utf-8")
+            logger.info(f"Saved test codeunit to {artifact_path}")
