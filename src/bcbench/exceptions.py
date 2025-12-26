@@ -19,6 +19,7 @@ __all__ = [
     "GitOperationError",
     "InvalidEntryFormatError",
     "NoEntriesFoundError",
+    "NoTestsExtractedError",
     "PatchApplicationError",
     "TestExecutionError",
 ]

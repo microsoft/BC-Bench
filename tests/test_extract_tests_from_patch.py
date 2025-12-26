@@ -1,6 +1,3 @@
-import pytest
-
-from bcbench.exceptions import NoTestsExtractedError
 from bcbench.operations.test_operations import extract_tests_from_patch
 
 
@@ -107,8 +104,8 @@ table 6217 "Sustainability Setup"
 }
     """
 
-    with pytest.raises(NoTestsExtractedError):
-        extract_tests_from_patch(patch, {})
+    result = extract_tests_from_patch(patch, {})
+    assert result == []
 
 
 def test_test_attribute_with_comment():
@@ -234,8 +231,8 @@ index abc..def 100644
 def test_empty_patch():
     patch = ""
 
-    with pytest.raises(NoTestsExtractedError):
-        extract_tests_from_patch(patch, {})
+    result = extract_tests_from_patch(patch, {})
+    assert result == []
 
 
 def test_patch_with_no_codeunit_id():
@@ -246,8 +243,8 @@ def test_patch_with_no_codeunit_id():
 +    end;
     """
 
-    with pytest.raises(NoTestsExtractedError):
-        extract_tests_from_patch(patch, {})
+    result = extract_tests_from_patch(patch, {})
+    assert result == []
 
 
 def test_context_lines_without_plus_marker():

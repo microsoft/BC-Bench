@@ -38,10 +38,10 @@ class DatasetEntry(BaseModel):
     base_commit: str = Field(pattern=r"^[a-fA-F0-9]{40}$")
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
-    project_paths: Annotated[list[str], Field(min_length=2)]
-    fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
+    project_paths: Annotated[list[str], Field(min_length=1)]
+    fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS")] = []
     pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
-    test_patch: Annotated[str, Field(min_length=1)]
+    test_patch: str = ""
     patch: Annotated[str, Field(min_length=1)]
 
     @model_validator(mode="after")
