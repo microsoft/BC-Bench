@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] Wrong calculation in Source Currency Amount when VAT calculation type is Reverse Charge in VAT posting setup and the posting is done via Journal.
+Repro Steps:
+1- Tested in NL and SE BC 25.5 2- Currencies - EUR- add this Exch. Rate: 3- Open the general journal & add the below line: 4-VAT prod. & bus. groups: 5-VAT posting setup: 6-Post the lines and open the general ledger entries: Expected results: The source currency amount must reflect correctly instead of showing 10,000 in the reverse VAT lines and it should reflect the negative amount as well: -2500 2500
+Description:
+Wrong calculation in Source Currency Amount when VAT calculation type is Reverse Charge in VAT posting setup and the posting is done via Journal. It seems we fixed similar scenario in documents in 25.5, but when posting from Journal with Reverse Charge, we see a similar situation: Bug 559286 [All-E] Wrong calculation in Source Currency Amount with wrong sign when VAT calculation type is reverse charge tax in VAT posti... From Purchase Invoice, similar settings as in this ticket: From Journal:
