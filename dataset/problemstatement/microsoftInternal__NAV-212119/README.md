@@ -1,0 +1,5 @@
+Title: [master] [all-e]The Applies-to Ext. Doc. No. field is not cleaned up after Unapplying Entries.
+Repro Steps:
+1-Take BC 25.x environment 2-Create a Purchase Invoice for Vendor 50000, for example. Use Vendor Invoice No: TESTTIMO_001 3- Create a Payment for Vendor 50000 for the same amount, and I use the “Applies-to Doc. No” = 108210 (previous Invoice posted)Then, the “Applies-to Ext. Doc. No.” gets filled in with the Vendor Invoice No. of the Posted Invoice applied: TESTTIMO_001 4- Post the Payment and both entries gets applied to each other. 5- Go to Vendor Ledger Entries: 6- Unapply the Entries: , and check the Applies-to Ext. Doc. No. is still pointing to the Invoice we unnaplied the Payment from (TESTTIMO_001) ===================ACTUAL RESULTS =================== The Applies-to Ext. Doc. No. field is not cleaned up after Unapplying Entries. =================== EXPECTED RESULTS =================== The Applies-to Ext. Doc. No. field should be cleaned up after Unapplying Entries.
+Description:
+The Applies-to Ext. Doc. No. field is not cleaned up after Unapplying Entries.
