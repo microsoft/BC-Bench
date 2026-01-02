@@ -1,0 +1,5 @@
+Title: S11/S12 - non-inventory items are not included into standard cost of SKU
+Repro Steps:
+Item, unit cost = 100. post inventory on empty location and main (red) location NonInv item. Unit cost 10. Create BOM with two lines: Item, qty 1 NonInv, qty 1 Certify. Activate Include Non-inv cost and Load SKU Cost on Manufacturing in the manufacturing setup. Create new FG item with STandard cost, replenishment = production order and assign it new bom. Calculate standard cost (110). Create SKU for location MAIN (or Red), select same bom. Calculate standard cost (110). Explore Rolled-up/Single level cost create released prod order. add two lines. same item (FG), qty 1. Use empty location for one line and MAIN (RED) for another. select line 3 (empty) and choose production journal (both lines will be included). Post output. change status to finished. Run Adjust Cost Item Entries batch job navigate to item ledger entries and find 2 output entries notice that cost is different. For SKU it misses non-inv item. if you compare value entries you can see Non-inv is missing: Correct (from item) wring (SKU) we need it in 26.0
+Description:
+
