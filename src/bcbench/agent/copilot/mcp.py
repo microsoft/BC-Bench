@@ -24,7 +24,7 @@ class _ALMcpServerManager:
         logger.info("Launching AL MCP server tool...")
         logger.debug(f"Project paths for AL MCP server: {projects}")
         # https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools/#readme-body-tab
-        self._process = subprocess.Popen(["al", "LaunchMcpServer", "--projects", projects])
+        self._process = subprocess.Popen(["al", "launchmcpserver", projects])
         atexit.register(self.cleanup)
         logger.info("Waiting 60 seconds for MCP server to start...")
         time.sleep(60)
@@ -85,8 +85,8 @@ def build_mcp_config(copilot_config: dict[str, Any], entry: DatasetEntry, repo_p
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     if al_mcp:
-        # Launch MCP server with all project paths separated by semicolons
-        all_projects = ";".join(str(repo_path / project_path) for project_path in entry.project_paths)
+        # Launch MCP server with all project paths separated by spaces
+        all_projects = " ".join(str(repo_path / project_path) for project_path in entry.project_paths)
         _mcp_server_manager.launch(all_projects)
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
