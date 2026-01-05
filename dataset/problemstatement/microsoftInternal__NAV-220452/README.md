@@ -1,5 +1,5 @@
-Title: Shopify - invoices created via Get Receipt lines - won't be Suggested by Suggest Shopify Payments
-Repro Steps:
+# Title: Shopify - invoices created via Get Receipt lines - won't be Suggested by Suggest Shopify Payments
+## Repro Steps:
 Connect BC to Shopify.
 Create in Shopify two orders for the same customers (with credit card transaction, make sure it is paid)
 Import them into Business CEntral, convert to Order. Post shipment only
@@ -18,5 +18,4 @@ Expected - 
 payments are proposed to be linked to the same sales invoice/ledger entry
 ![Customer Ledger Entries](./customer_ledger_entries.png)
 
-Description:
-
+## Description:
