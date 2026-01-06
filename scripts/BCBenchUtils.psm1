@@ -66,21 +66,20 @@ function Get-BCCredential {
 .SYNOPSIS
     Clones a Git repository with authentication and retry logic
 .DESCRIPTION
-    Clones a repository using token authentication with configurable retry attempts
+    Initializes a repository and fetches a specific commit using token authentication with configurable retry attempts.
+    Uses git init and git fetch to avoid fetching the default branch tip.
 .PARAMETER RepoUrl
     Base URL of the repository (without authentication)
 .PARAMETER Token
     Authentication token for repository access
-.PARAMETER Branch
-    Specific branch to clone
 .PARAMETER ClonePath
     Local path where repository should be cloned
 .PARAMETER MaxRetries
-    Maximum number of retry attempts (default: 2)
+    Maximum number of retry attempts (default: 3)
 .PARAMETER RetryDelaySeconds
-    Delay between retry attempts in seconds (default: 5)
+    Delay between retry attempts in seconds (default: 30)
 .PARAMETER CommitSha
-    Specific commit SHA to checkout. Performs a shallow clone of that commit.
+    Specific commit SHA to checkout. Fetches the commit with depth 200 to include history.
 .EXAMPLE
     Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -ClonePath "C:\temp\repo" -CommitSha "abc123..."
 #>
@@ -154,10 +153,12 @@ function Invoke-GitCloneWithRetry {
             }
 
             # Remove the remote to clean up credentials
+            # Note: This step removes credentials from the git config but is non-fatal.
+            # The repository is still usable if this fails, though credentials remain in .git/config
             Write-Log "Removing remote origin to clean up credentials" -Level Debug
             $remoteRemoveResult = & git -C $ClonePath remote remove origin 2>&1
             if ($LASTEXITCODE -ne 0) {
-                Write-Log "Warning: Failed to remove remote origin: $remoteRemoveResult" -Level Warning
+                Write-Log "Warning: Failed to remove remote origin. Credentials may remain in repository config: $remoteRemoveResult" -Level Warning
             }
 
             $cloneSuccess = $true
