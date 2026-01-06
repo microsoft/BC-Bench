@@ -124,18 +124,24 @@ function Invoke-GitCloneWithRetry {
         try {
             Write-Log "Attempting repository clone (Attempt $retryCount/$MaxRetries)..." -Level Info
 
-            Write-Log "Using shallow clone with specific commit: $CommitSha" -Level Debug
-            # Initial shallow clone without checkout
-            $cloneCommand = "git clone --depth 1 --filter=blob:none --no-checkout `"$authenticatedUrl`" `"$ClonePath`""
-            $cloneResult = Invoke-Expression $cloneCommand 2>&1
+            Write-Log "Using git init and fetch to clone specific commit: $CommitSha" -Level Debug
 
+            # Initialize empty git repository
+            $initResult = & git init $ClonePath 2>&1
             if ($LASTEXITCODE -ne 0) {
-                throw "Git clone failed with exit code $LASTEXITCODE`: $cloneResult"
+                throw "Git init failed with exit code $LASTEXITCODE`: $initResult"
             }
 
-            # Fetch the specific commit
-            Write-Log "Fetching specific commit $CommitSha" -Level Debug
-            $fetchResult = & git -C $ClonePath fetch --depth 1 origin $CommitSha 2>&1
+            # Add remote with authenticated URL
+            Write-Log "Adding remote origin" -Level Debug
+            $remoteAddResult = & git -C $ClonePath remote add origin $authenticatedUrl 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to add remote origin with exit code $LASTEXITCODE`: $remoteAddResult"
+            }
+
+            # Fetch the specific commit with depth 200 to get its history
+            Write-Log "Fetching commit $CommitSha with depth 200" -Level Debug
+            $fetchResult = & git -C $ClonePath fetch --depth 200 origin $CommitSha 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to fetch commit $CommitSha`: $fetchResult"
             }
@@ -145,6 +151,13 @@ function Invoke-GitCloneWithRetry {
             $checkoutResult = & git -C $ClonePath checkout $CommitSha 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to checkout commit $CommitSha`: $checkoutResult"
+            }
+
+            # Remove the remote to clean up credentials
+            Write-Log "Removing remote origin to clean up credentials" -Level Debug
+            $remoteRemoveResult = & git -C $ClonePath remote remove origin 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Warning: Failed to remove remote origin: $remoteRemoveResult" -Level Warning
             }
 
             $cloneSuccess = $true
