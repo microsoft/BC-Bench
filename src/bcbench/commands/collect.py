@@ -17,7 +17,10 @@ def collect_nav(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
     output: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
-    diff_path: Annotated[str, typer.Option(help="Filter git diff to only show changes under this path")] = "",
+    diff_path: Annotated[
+        list[str] | None,
+        typer.Option(help="Filter git diff to only show changes under this path. Can be specified multiple times."),
+    ] = None,
 ):
     """
     Collect dataset entry from Azure DevOps NAV pull request.
@@ -26,6 +29,8 @@ def collect_nav(
 
     For BaseApp Data, use diff_path: .\\App\\Layers\\W1\\:
     """
+    if diff_path is None:
+        diff_path = []
     collect_nav_entry(pr_number=pr_number, output=output, repo_path=repo_path, diff_path=diff_path)
 
 
