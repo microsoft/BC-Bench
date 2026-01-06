@@ -1,12 +1,13 @@
 # Repository: microsoft/BC-Bench
 
-This is a benchmark for evaluating AI coding agents on Business Central (AL) development tasks, inspired by SWE-Bench. The repository contains:
+This is a benchmark for evaluating AI coding agents on Business Central (AL) development tasks, inspired by SWE-Bench. Unlike traditional model benchmarks, BC-Bench is designed to help select models and rapidly iterate on mcp servers, custom instruction/agents, etc for engineers. The repository contains:
 
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
 - **Agent Evaluations**: Focuses on GitHub Copilot CLI and mini-bc-agent (building on top of mini-swe-agent)
 - **Expieriments**: Various MCP Servers, custom intructions, custom agent and their performance on the benchmark
+- **Notebooks** (`notebooks/`): Analysis and visualization of benchmark results
 
 ## Key Context
 - Primary language: Python (with AL/Business Central as the target evaluation language)
@@ -24,7 +25,7 @@ This is a benchmark for evaluating AI coding agents on Business Central (AL) dev
 - Prefer immutable data structures where possible
 
 ### Readable code over documentation or comments
-Test function names should be self-explanatory. Do NOT add docstrings to test functions.
+Function names should be self-explanatory. Do NOT add docstrings to functions unless absolutely necessary.
 
 Bad:
 ```python
@@ -38,6 +39,12 @@ def test_full_metrics_flow_to_success_result(self, sample_context):
     # No docstring needed - the name says it all
 ```
 
-## Backward compatibility
+## No Backward compatibility
 - Do NOT worry about backward compatibility unless explicitly stated
 - Do NOT worry about breaking changes
+
+## Notebooks
+- User is a software engineer, not a statistician — explain statistical concepts in plain terms
+- Challenge or question statistical methods when appropriate (e.g., sample size, assumptions, alternatives)
+- Prefer clear visualizations over complex statistical jargon
+- Use pandas and plotly for data manipulation and visualization
