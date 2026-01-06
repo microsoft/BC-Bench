@@ -54,3 +54,10 @@ jobs:
         timeout-minutes: 60
         run: .\scripts\Verify-BuildAndTests.ps1 -InstanceId "${{ matrix.entry }}" -RepoPath "${{ steps.setup-env.outputs.repo_path }}"
         shell: pwsh
+
+      - name: Cleanup BC container and testbed
+        if: always()
+        uses: ./.github/actions/cleanup-bc-container
+        with:
+          container-name: ${{ env.BC_CONTAINER_NAME }}
+          testbed-path: ${{ steps.setup-env.outputs.repo_path }}

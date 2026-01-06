@@ -1,0 +1,53 @@
+name: Cleanup BC Container
+description: Remove BC container and testbed folder from previous workflow run
+
+inputs:
+  container-name:
+    description: Name of the BC container to remove
+    required: true
+  testbed-path:
+    description: Path to the testbed folder to remove
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Remove BC container
+      if: always()
+      run: |
+        $containerName = "${{ inputs.container-name }}"
+
+        # Check if BcContainerHelper is available
+        if (-not (Get-Module -ListAvailable -Name BcContainerHelper)) {
+          Write-Host "BcContainerHelper not installed, installing..."
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
+        }
+
+        Import-Module BcContainerHelper -Force -DisableNameChecking
+
+        # Check if container exists and remove it
+        $existingContainer = docker ps -aq -f name="$containerName"
+        if ($existingContainer) {
+          Write-Host "Removing container: $containerName"
+          Remove-BcContainer -containerName $containerName
+          Write-Host "Container removed successfully"
+        }
+        else {
+          Write-Host "Container $containerName does not exist, skipping removal"
+        }
+      shell: pwsh
+
+    - name: Remove testbed folder
+      if: always()
+      run: |
+        $testbedPath = "${{ inputs.testbed-path }}"
+
+        if (Test-Path $testbedPath) {
+          Write-Host "Removing testbed folder: $testbedPath"
+          Remove-Item -Path $testbedPath -Recurse -Force
+          Write-Host "Testbed folder removed successfully"
+        }
+        else {
+          Write-Host "Testbed folder $testbedPath does not exist, skipping removal"
+        }
+      shell: pwsh
