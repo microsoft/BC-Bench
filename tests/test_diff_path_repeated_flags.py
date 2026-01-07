@@ -1,9 +1,13 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from typer.testing import CliRunner
 
+from bcbench.cli import app
 from bcbench.collection.patch_utils import extract_patches
 from bcbench.exceptions import CollectionError
+
+runner = CliRunner()
 
 
 class TestExtractPatchesWithMultipleDiffPaths:
@@ -201,3 +205,77 @@ diff --git a/App/Layers/W1/Tests/ERM/SalesTest.Codeunit.al b/App/Layers/W1/Tests
             call_args = mock_run.call_args[0][0]
             assert "App\\Layers\\W1\\BaseApp" in call_args
             assert "App/Apps/W1/Test Project" in call_args
+
+
+class TestCLIRepeatedFlags:
+    @pytest.mark.integration
+    def test_cli_accepts_multiple_diff_path_flags(self, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+
+        with patch("bcbench.commands.collect.collect_nav_entry") as mock_collect:
+            result = runner.invoke(
+                app,
+                [
+                    "collect",
+                    "nav",
+                    "12345",
+                    "--repo-path",
+                    str(repo_path),
+                    "--diff-path",
+                    "App/Layers/W1/BaseApp",
+                    "--diff-path",
+                    "App/Apps/W1/Shopify",
+                ],
+            )
+
+            assert result.exit_code == 0, f"CLI failed: {result.output}"
+            mock_collect.assert_called_once()
+            call_kwargs = mock_collect.call_args[1]
+            assert call_kwargs["diff_path"] == ["App/Layers/W1/BaseApp", "App/Apps/W1/Shopify"]
+
+    @pytest.mark.integration
+    def test_cli_accepts_single_diff_path_flag(self, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+
+        with patch("bcbench.commands.collect.collect_nav_entry") as mock_collect:
+            result = runner.invoke(
+                app,
+                [
+                    "collect",
+                    "nav",
+                    "12345",
+                    "--repo-path",
+                    str(repo_path),
+                    "--diff-path",
+                    "App/Layers/W1/BaseApp",
+                ],
+            )
+
+            assert result.exit_code == 0, f"CLI failed: {result.output}"
+            mock_collect.assert_called_once()
+            call_kwargs = mock_collect.call_args[1]
+            assert call_kwargs["diff_path"] == ["App/Layers/W1/BaseApp"]
+
+    @pytest.mark.integration
+    def test_cli_works_without_diff_path_flag(self, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+
+        with patch("bcbench.commands.collect.collect_nav_entry") as mock_collect:
+            result = runner.invoke(
+                app,
+                [
+                    "collect",
+                    "nav",
+                    "12345",
+                    "--repo-path",
+                    str(repo_path),
+                ],
+            )
+
+            assert result.exit_code == 0, f"CLI failed: {result.output}"
+            mock_collect.assert_called_once()
+            call_kwargs = mock_collect.call_args[1]
+            assert call_kwargs["diff_path"] is None
