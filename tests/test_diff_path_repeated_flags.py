@@ -1,5 +1,3 @@
-"""Tests for repeated diff_path flags functionality."""
-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,10 +7,7 @@ from bcbench.exceptions import CollectionError
 
 
 class TestExtractPatchesWithMultipleDiffPaths:
-    """Test extract_patches function with repeated diff_path flags."""
-
     def test_single_diff_path(self, tmp_path):
-        """Test with a single diff_path (backward compatibility)."""
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
@@ -35,7 +30,6 @@ class TestExtractPatchesWithMultipleDiffPaths:
             assert "fix" in fix
 
     def test_multiple_diff_paths(self, tmp_path):
-        """Test with multiple diff_path values."""
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
@@ -67,7 +61,6 @@ class TestExtractPatchesWithMultipleDiffPaths:
             assert "another fix" in fix
 
     def test_empty_diff_path_list(self, tmp_path):
-        """Test with empty diff_path list (no filtering)."""
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
@@ -90,7 +83,6 @@ class TestExtractPatchesWithMultipleDiffPaths:
             assert "all changes" in fix
 
     def test_none_diff_path(self, tmp_path):
-        """Test with None diff_path (default behavior)."""
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
@@ -113,7 +105,6 @@ class TestExtractPatchesWithMultipleDiffPaths:
             assert "all changes" in fix
 
     def test_diff_path_separates_test_and_fix_patches(self, tmp_path):
-        """Test that diff_path filtering still properly separates test and fix patches."""
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
@@ -161,7 +152,6 @@ diff --git a/App/Layers/W1/Tests/ERM/SalesTest.Codeunit.al b/App/Layers/W1/Tests
             assert "Test code" in full
 
     def test_raises_error_when_no_patch_found(self, tmp_path):
-        """Test that CollectionError is raised when no patch data is found."""
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
@@ -180,7 +170,6 @@ diff --git a/App/Layers/W1/Tests/ERM/SalesTest.Codeunit.al b/App/Layers/W1/Tests
                 )
 
     def test_raises_error_when_repo_not_found(self, tmp_path):
-        """Test that FileNotFoundError is raised when repository doesn't exist."""
         repo_path = tmp_path / "nonexistent"
 
         with pytest.raises(FileNotFoundError, match="Repository not found"):
@@ -192,7 +181,6 @@ diff --git a/App/Layers/W1/Tests/ERM/SalesTest.Codeunit.al b/App/Layers/W1/Tests
             )
 
     def test_git_command_with_special_characters_in_path(self, tmp_path):
-        """Test that paths with special characters are handled correctly."""
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 

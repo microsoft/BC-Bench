@@ -19,9 +19,6 @@ def collect_nav_entry(
     repo_path: Path,
     diff_path: list[str] | None = None,
 ) -> None:
-    if diff_path is None:
-        diff_path = []
-
     config = get_config()
     ado_token = config.resolve_ado_token()
     ado_client = ADOClient(ado_token)

@@ -29,8 +29,6 @@ def collect_nav(
 
     For BaseApp Data, use diff_path: .\\App\\Layers\\W1\\:
     """
-    if diff_path is None:
-        diff_path = []
     collect_nav_entry(pr_number=pr_number, output=output, repo_path=repo_path, diff_path=diff_path)
 
 

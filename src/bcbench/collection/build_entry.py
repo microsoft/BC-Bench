@@ -52,9 +52,6 @@ def build_dataset_entry_from_ado(
     commit: str,
     diff_path: list[str] | None = None,
 ) -> DatasetEntry:
-    if diff_path is None:
-        diff_path = []
-
     created_at = extract_creation_date(pr_data)
     patch, patch_fix, patch_test = extract_patches(repo_path, base_commit, commit, diff_path=diff_path)
     problem_statement, hints = extract_problem_statement(work_item_data)
