@@ -156,7 +156,7 @@ def evaluate_claude_code(
     username: ContainerUsername,
     password: ContainerPassword,
     category: EvaluationCategoryOption,
-    model: ClaudeCodeModel = "haiku",
+    model: ClaudeCodeModel = "claude-haiku-4-5",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,

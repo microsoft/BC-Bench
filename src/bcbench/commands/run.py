@@ -90,7 +90,7 @@ def run_copilot(
 def run_claude(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    model: ClaudeCodeModel = "haiku",
+    model: ClaudeCodeModel = "claude-haiku-4-5",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
