@@ -6,8 +6,9 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import run_copilot_agent, run_mini_agent
+from bcbench.agent import run_claude_code, run_copilot_agent, run_mini_agent
 from bcbench.cli_options import (
+    ClaudeCodeModel,
     ContainerName,
     ContainerPassword,
     ContainerUsername,
@@ -49,9 +50,6 @@ def evaluate_mini(
     Evaluate mini-bc-agent on single dataset entry.
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run mini' instead.
-
-    Example:
-        uv run bcbench evaluate mini microsoftInternal__NAV-211710 --container-name bcserver
     """
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]
@@ -110,9 +108,6 @@ def evaluate_copilot(
     Evaluate GitHub Copilot CLI on single dataset entry.
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
-
-    Example:
-        uv run bcbench evaluate copilot microsoftInternal__NAV-211710 --container-name bcserver
     """
     entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
     entry: DatasetEntry = entries[0]
@@ -147,6 +142,63 @@ def evaluate_copilot(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp,
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("claude")
+def evaluate_claude_code(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    container_name: ContainerName,
+    username: ContainerUsername,
+    password: ContainerPassword,
+    category: EvaluationCategoryOption,
+    model: ClaudeCodeModel = "haiku",
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+    repo_path: RepoPath = _config.paths.testbed_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    run_id: RunId = "claude_code_test_run",
+):
+    """
+    Evaluate Claude Code on single dataset entry.
+
+    To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
+    """
+    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
+    entry: DatasetEntry = entries[0]
+    logger.info(f"Loaded {entry_id} entry from dataset")
+
+    run_dir: Path = output_dir / run_id
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True)
+
+    logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container_name=container_name,
+        username=username,
+        password=password,
+        model=model,
+        agent_name="Claude Code",
+        category=category,
+    )
+
+    pipeline = create_pipeline(category)
+    pipeline.execute(
+        context,
+        lambda ctx: run_claude_code(
+            entry=ctx.entry,
+            repo_path=ctx.repo_path,
+            category=category,
+            model=ctx.model,
+            output_dir=ctx.result_dir,
         ),
     )
 

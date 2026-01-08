@@ -7,9 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from bcbench.agent.copilot.mcp import build_mcp_config
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.agent.copilot.prompt import build_prompt
+from bcbench.agent.shared import build_mcp_config, build_prompt
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -27,7 +26,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
     """
-    config_file = Path(__file__).parent / "config.yaml"
+    config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
