@@ -17,7 +17,7 @@ def collect_nav_entry(
     pr_number: int,
     output: Path,
     repo_path: Path,
-    diff_path: str = "",
+    diff_path: list[str] | None = None,
 ) -> None:
     config = get_config()
     ado_token = config.resolve_ado_token()
