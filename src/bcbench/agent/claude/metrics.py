@@ -1,13 +1,11 @@
-import json
-
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
 logger = get_logger(__name__)
 
 
-def parse_metrics(json_output: str) -> AgentMetrics | None:
-    """Parse metrics from Claude Code CLI JSON output.
+def parse_metrics(data: dict) -> AgentMetrics | None:
+    """Parse metrics from Claude Code result object.
 
     The Claude Code CLI outputs JSON when run with --output-format json.
     Expected format:
@@ -31,9 +29,6 @@ def parse_metrics(json_output: str) -> AgentMetrics | None:
         ...
     }
     """
-
-    data = json.loads(json_output)
-
     logger.debug(f"Parsing metrics from Claude Code output: {data}")
 
     # Extract metrics from JSON

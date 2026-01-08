@@ -17,17 +17,6 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def _print_result_from_json(json_output: str) -> None:
-    """Print the result summary from Claude Code JSON output."""
-    try:
-        data = json.loads(json_output)
-        # Only print the result summary, not the full JSON
-        if "result" in data:
-            print(data["result"], flush=True)
-    except json.JSONDecodeError:
-        logger.warning("Could not parse JSON output to extract result")
-
-
 def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
 
@@ -79,11 +68,19 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
         )
 
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
-        _print_result_from_json(stdout)
+        logger.debug(f"Claude Code raw output: {stdout}")
 
-        metrics = parse_metrics(stdout)
+        try:
+            data = json.loads(stdout)
+            if "result" in data:
+                print(data["result"], flush=True)
+            else:
+                logger.warning("No 'result' field found in Claude Code output JSON")
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse Claude Code JSON output:\n{stdout}")
+            raise AgentError("Failed to parse Claude Code JSON output") from None
 
-        return metrics, config
+        return parse_metrics(data), config
     except subprocess.TimeoutExpired:
         logger.error(f"Claude Code timed out after {_config.timeout.github_copilot_cli} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.github_copilot_cli)

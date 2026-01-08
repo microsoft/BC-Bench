@@ -1,7 +1,5 @@
 """Tests for Claude Code metrics parsing."""
 
-from json import JSONDecodeError
-
 import pytest
 
 from bcbench.agent.claude.metrics import parse_metrics
@@ -9,9 +7,27 @@ from bcbench.agent.claude.metrics import parse_metrics
 
 class TestClaudeCodeMetricsParsing:
     def test_parse_metrics_full_output(self):
-        json_output = '{"type":"result","subtype":"success","is_error":false,"duration_ms":2814,"duration_api_ms":4819,"num_turns":1,"result":"2","session_id":"0dd1b90a-f477-431f-a278-f3079e4f795f","total_cost_usd":0.024096399999999997,"usage":{"input_tokens":2,"cache_creation_input_tokens":4974,"cache_read_input_tokens":12673,"output_tokens":5,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard"}}'
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "duration_ms": 2814,
+            "duration_api_ms": 4819,
+            "num_turns": 1,
+            "result": "2",
+            "session_id": "0dd1b90a-f477-431f-a278-f3079e4f795f",
+            "total_cost_usd": 0.024096399999999997,
+            "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 4974,
+                "cache_read_input_tokens": 12673,
+                "output_tokens": 5,
+                "server_tool_use": {"web_search_requests": 0, "web_fetch_requests": 0},
+                "service_tier": "standard",
+            },
+        }
 
-        metrics = parse_metrics(json_output)
+        metrics = parse_metrics(data)
 
         assert metrics is not None
         assert metrics.execution_time == pytest.approx(2.814, rel=1e-3)
@@ -22,9 +38,9 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.tool_usage is None  # Not parsed from JSON
 
     def test_parse_metrics_minimal_output(self):
-        json_output = '{"type":"result","duration_ms":1000,"num_turns":3}'
+        data = {"type": "result", "duration_ms": 1000, "num_turns": 3}
 
-        metrics = parse_metrics(json_output)
+        metrics = parse_metrics(data)
 
         assert metrics is not None
         assert metrics.execution_time == 1.0
@@ -34,9 +50,15 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.completion_tokens is None
 
     def test_parse_metrics_with_usage_no_cache(self):
-        json_output = '{"type":"result","duration_ms":5000,"duration_api_ms":3000,"num_turns":5,"usage":{"input_tokens":100,"output_tokens":50}}'
+        data = {
+            "type": "result",
+            "duration_ms": 5000,
+            "duration_api_ms": 3000,
+            "num_turns": 5,
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        }
 
-        metrics = parse_metrics(json_output)
+        metrics = parse_metrics(data)
 
         assert metrics is not None
         assert metrics.execution_time == 5.0
@@ -45,19 +67,15 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.prompt_tokens == 100  # No cache tokens
         assert metrics.completion_tokens == 50
 
-    def test_parse_metrics_invalid_json(self):
-        with pytest.raises(JSONDecodeError):
-            parse_metrics("not valid json")
-
-    def test_parse_metrics_empty_json_object(self):
-        metrics = parse_metrics("{}")
+    def test_parse_metrics_empty_dict(self):
+        metrics = parse_metrics({})
 
         assert metrics is None  # No metrics fields present
 
     def test_parse_metrics_only_duration(self):
-        json_output = '{"duration_ms":12345}'
+        data = {"duration_ms": 12345}
 
-        metrics = parse_metrics(json_output)
+        metrics = parse_metrics(data)
 
         assert metrics is not None
         assert metrics.execution_time == pytest.approx(12.345, rel=1e-3)
@@ -69,10 +87,10 @@ class TestClaudeCodeMetricsParsing:
     def test_parse_metrics_with_model_usage(self):
         # Real-world sample with modelUsage breakdown (multi-model scenario)
         # We parse from top-level usage only, modelUsage is per-model breakdown (not parsed)
-        json_output = """{
+        data = {
             "type": "result",
             "subtype": "success",
-            "is_error": false,
+            "is_error": False,
             "duration_ms": 175011,
             "duration_api_ms": 118584,
             "num_turns": 14,
@@ -83,21 +101,15 @@ class TestClaudeCodeMetricsParsing:
                 "input_tokens": 41,
                 "cache_creation_input_tokens": 22439,
                 "cache_read_input_tokens": 246700,
-                "output_tokens": 1909
+                "output_tokens": 1909,
             },
             "modelUsage": {
-                "claude-haiku-4-5-20251001": {
-                    "inputTokens": 48287,
-                    "outputTokens": 8017
-                },
-                "claude-sonnet-4-5-20250929": {
-                    "inputTokens": 3,
-                    "outputTokens": 324
-                }
-            }
-        }"""
+                "claude-haiku-4-5-20251001": {"inputTokens": 48287, "outputTokens": 8017},
+                "claude-sonnet-4-5-20250929": {"inputTokens": 3, "outputTokens": 324},
+            },
+        }
 
-        metrics = parse_metrics(json_output)
+        metrics = parse_metrics(data)
 
         assert metrics is not None
         assert metrics.execution_time == pytest.approx(175.011, rel=1e-3)
