@@ -23,7 +23,7 @@ def _print_result_from_json(json_output: str) -> None:
         data = json.loads(json_output)
         # Only print the result summary, not the full JSON
         if "result" in data:
-            print(data["result"])
+            print(data["result"], flush=True)
     except json.JSONDecodeError:
         logger.warning("Could not parse JSON output to extract result")
 
@@ -65,7 +65,7 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
             "--strict-mcp-config",  # Only use MCP servers from --mcp-config, ignoring all other MCP configurations
             f"--model={model}",
             "--permission-mode=acceptEdits",  # acceptEdits instead of bypassPermissions for now, avoid unexpected behavior
-            prompt,
+            prompt.replace("\r", "").replace("\n", " "),
         ]
 
         logger.debug(f"Claude Code command args: {cmd_args}")
