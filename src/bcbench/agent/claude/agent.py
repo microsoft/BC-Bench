@@ -62,7 +62,7 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            timeout=_config.timeout.github_copilot_cli,  # Reuse copilot timeout for now
+            timeout=_config.timeout.agent_execution,
             check=True,
             capture_output=True,
         )
@@ -84,11 +84,11 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
 
         return metrics, config
     except subprocess.TimeoutExpired:
-        logger.error(f"Claude Code timed out after {_config.timeout.github_copilot_cli} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.github_copilot_cli)
+        logger.error(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
+        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Claude Code timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
-        logger.error(f"Claude Code execution failed with errorP {e.stderr}")
+        logger.error(f"Claude Code execution failed with error {e.stderr}")
         raise AgentError(f"Claude Code execution failed: {e.stderr}") from e
     except Exception as e:
         logger.exception(f"Unexpected error running Claude Code: {e}")

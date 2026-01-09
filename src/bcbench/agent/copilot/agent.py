@@ -69,7 +69,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
             cmd_args,
             cwd=str(repo_path),
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
-            timeout=_config.timeout.github_copilot_cli,
+            timeout=_config.timeout.agent_execution,
             check=True,
         )
 
@@ -89,8 +89,8 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
 
         return metrics, config
     except subprocess.TimeoutExpired:
-        logger.error(f"Copilot CLI timed out after {_config.timeout.github_copilot_cli} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.github_copilot_cli)
+        logger.error(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
+        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.error(f"Copilot CLI execution failed with error {e.stderr}")
