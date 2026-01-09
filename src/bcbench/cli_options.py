@@ -46,3 +46,12 @@ FoundryModel = Annotated[
     Literal["gpt-5.1-codex-mini", "claude-haiku-4-5", "claude-opus-4-5"],
     typer.Option(help="Microsoft Foundry Model to use"),
 ]
+
+ClaudeCodeModel = Annotated[
+    Literal[
+        "claude-sonnet-4-5",
+        "claude-opus-4-5",
+        "claude-haiku-4-5",
+    ],
+    typer.Option(help="Claude Code model to use"),
+]

@@ -1,5 +1,7 @@
 """CLI entry point for bcbench using typer."""
 
+import sys
+
 import typer
 from typing_extensions import Annotated
 
@@ -10,6 +12,10 @@ from bcbench.config import get_config
 from bcbench.logger import setup_logger
 
 get_config()
+
+# Ensure UTF-8 encoding for stdout/stderr on Windows GitHub Action runner (default is cp1252)
+sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 app = typer.Typer(
     name="bcbench",
