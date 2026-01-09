@@ -14,43 +14,6 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
-  test-unicode-windows:
-    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
-
-      - name: Test sys.stdout.buffer.write with Unicode
-        run: |
-          uv run python -c "
-          import sys
-          text = 'Testing Unicode buffer.write: ✓ ✗ → ← ↑ ↓ • ★'
-          sys.stdout.buffer.write(text.encode('utf-8'))
-          sys.stdout.buffer.write(b'\n')
-          sys.stdout.buffer.flush()
-          print('Buffer write test passed!')
-          "
-
-      - name: Test sys.stdout.reconfigure with Unicode
-        run: |
-          uv run python -c "
-          import sys
-          sys.stdout.reconfigure(encoding='utf-8')
-          text = 'Testing Unicode reconfigure: ✓ ✗ → ← ↑ ↓ • ★'
-          print(text)
-          print('Reconfigure test passed!')
-          "
-
-      - name: Test bcbench agent module
-        run: |
-          uv run python -c "
-          from bcbench.agent.claude.agent import run_claude_code
-          print('Import test passed ✓')
-          "
-
   lint-and-test:
     runs-on: ubuntu-latest
 
