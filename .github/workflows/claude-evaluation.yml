@@ -1,4 +1,4 @@
-name: Evaluation with GitHub Copilot
+name: Evaluation with Claude Code
 permissions:
   contents: read
 
@@ -6,20 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: "Copilot model to use for evaluation"
+        description: "Claude Code model to use for evaluation"
         required: false
-        default: "claude-haiku-4.5"
+        default: "claude-haiku-4-5"
         type: choice
         options:
-          - "claude-sonnet-4.5"
-          - "claude-haiku-4.5"
-          - "claude-opus-4.5"
-          - "gpt-5.2"
-          - "gpt-5.1-codex-mini"
-          - "gpt-5.1-codex"
-          - "gpt-5.1-codex-max"
-          - "gpt-4.1"
-          - "gemini-3-pro-preview"
+          - "claude-sonnet-4-5"
+          - "claude-opus-4-5"
+          - "claude-haiku-4-5"
       category:
         description: "Evaluation category to run"
         required: false
@@ -33,11 +27,6 @@ on:
         required: false
         default: true
         type: boolean
-      al-mcp:
-        description: "Enable AL MCP server"
-        required: false
-        default: false
-        type: boolean
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -48,7 +37,7 @@ jobs:
     with:
       test-run: ${{ inputs.test-run }}
 
-  evaluate-with-copilot-cli:
+  evaluate-with-claude-code:
     runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
     needs: get-entries
     outputs:
@@ -85,34 +74,19 @@ jobs:
         with:
           node-version: 24
 
-      - name: Add dotnet tools to PATH
-        if: ${{ inputs.al-mcp }}
-        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.0.76
 
-      - name: Install AL MCP Server Tool
-        if: ${{ inputs.al-mcp }}
-        run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global
-
-      - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.369
-
-      - name: Select PAT based on job index
-        id: select-pat
-        run: |
-          $patIndex = ${{ strategy.job-index }} % 3
-          echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
-
-      - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+      - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 60
         env:
-          GH_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' && secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' && secrets.COPILOT_PAT2 || secrets.COPILOT_PAT3) }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          uv run bcbench evaluate copilot "${{ matrix.entry }}" `
+          uv run bcbench evaluate claude "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            ${{ inputs.al-mcp && '--al-mcp' || '' }}
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v4
@@ -123,15 +97,15 @@ jobs:
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: evaluate-with-copilot-cli
+    needs: evaluate-with-claude-code
     uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
     with:
-      results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
+      results-dir: ${{ needs.evaluate-with-claude-code.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: "GitHub Copilot CLI"
+      agent: "Claude Code"
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
     secrets: inherit
