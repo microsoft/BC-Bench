@@ -79,7 +79,9 @@ function Get-BCCredential {
 .PARAMETER RetryDelaySeconds
     Delay between retry attempts in seconds (default: 30)
 .PARAMETER CommitSha
-    Specific commit SHA to checkout. Fetches the commit with depth 200 to include history.
+    Specific commit SHA to checkout.
+.PARAMETER FetchDepth
+    Depth of history to fetch (default: 200). Used for both commit fetch and submodule initialization.
 .EXAMPLE
     Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -ClonePath "C:\temp\repo" -CommitSha "abc123..."
 #>
@@ -102,7 +104,10 @@ function Invoke-GitCloneWithRetry {
         [int]$RetryDelaySeconds = 30,
 
         [Parameter(Mandatory = $true)]
-        [string]$CommitSha
+        [string]$CommitSha,
+
+        [Parameter(Mandatory = $false)]
+        [int]$FetchDepth = 200
     )
 
     # Remove existing clone if it exists
@@ -138,9 +143,9 @@ function Invoke-GitCloneWithRetry {
                 throw "Failed to add remote origin with exit code $LASTEXITCODE`: $remoteAddResult"
             }
 
-            # Fetch the specific commit with depth 200 to get its history
-            Write-Log "Fetching commit $CommitSha with depth 200" -Level Debug
-            $fetchResult = & git -C $ClonePath fetch --depth 200 origin $CommitSha 2>&1
+            # Fetch the specific commit with history
+            Write-Log "Fetching commit $CommitSha with depth $FetchDepth" -Level Debug
+            $fetchResult = & git -C $ClonePath fetch --depth $FetchDepth origin $CommitSha 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to fetch commit $CommitSha`: $fetchResult"
             }
@@ -154,7 +159,7 @@ function Invoke-GitCloneWithRetry {
 
             # Initialize submodules if any exist (while remote is still configured)
             Write-Log "Initializing submodules (if any)" -Level Debug
-            $submoduleResult = & git -C $ClonePath submodule update --init --recursive --depth 200 2>&1
+            $submoduleResult = & git -C $ClonePath submodule update --init --recursive --depth $FetchDepth 2>&1
             if ($LASTEXITCODE -ne 0) {
                 Write-Log "Warning: Failed to initialize submodules: $submoduleResult" -Level Warning
             }
