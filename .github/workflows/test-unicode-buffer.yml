@@ -1,0 +1,40 @@
+name: Test Unicode - Buffer Write
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-unicode-buffer:
+    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Test sys.stdout.buffer.write with Unicode
+        run: |
+          python -c "
+            import sys
+            # Test characters that failed before: ✓ (U+2713)
+            text = 'Testing Unicode: ✓ ✗ → ← ↑ ↓ • ★ ♠ ♣ ♥ ♦'
+            sys.stdout.buffer.write(text.encode('utf-8'))
+            sys.stdout.buffer.write(b'\n')
+            sys.stdout.buffer.flush()
+            print('Buffer write test passed!')
+            "
+
+      - name: Test with JSON containing Unicode
+        run: |
+          python -c "
+          import sys
+          import json
+          data = {'result': 'Task completed ✓ with success! → Next step...'}
+          result = data['result']
+          sys.stdout.buffer.write(result.encode('utf-8'))
+          sys.stdout.buffer.write(b'\n')
+          sys.stdout.buffer.flush()
+          print('JSON Unicode test passed!')
+          "
