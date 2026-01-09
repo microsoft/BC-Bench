@@ -70,17 +70,19 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        try:
-            data = json.loads(stdout)
-            if "result" in data:
-                print(data["result"], flush=True)
-            else:
-                logger.warning("No 'result' field found in Claude Code output JSON")
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse Claude Code JSON output:\n{stdout}")
-            raise AgentError("Failed to parse Claude Code JSON output") from None
+        metrics = None
+        for line in stdout.splitlines():
+            striped_line: str = line.strip()
+            if striped_line:
+                try:
+                    data = json.loads(striped_line)
+                    if "result" in data:
+                        print(data["result"], flush=True)
+                        metrics = parse_metrics(data)
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping non-JSON line: {striped_line}")
 
-        return parse_metrics(data), config
+        return metrics, config
     except subprocess.TimeoutExpired:
         logger.error(f"Claude Code timed out after {_config.timeout.github_copilot_cli} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.github_copilot_cli)
