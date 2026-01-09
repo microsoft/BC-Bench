@@ -368,5 +368,23 @@
     "average_tool_usage": null,
     "github_run_id": "20846947967",
     "experiment": null
+  },
+  {
+    "total": 66,
+    "resolved": 41,
+    "failed": 25,
+    "build": 65,
+    "percentage": 62.1,
+    "date": "2026-01-09",
+    "model": "claude-opus-4-5",
+    "agent_name": "Claude Code",
+    "category": "bug-fix",
+    "average_duration": 180.8,
+    "average_prompt_tokens": 554378.5,
+    "average_completion_tokens": 4031.5,
+    "average_llm_duration": 150.28581818181817,
+    "average_tool_usage": null,
+    "github_run_id": "20860867006",
+    "experiment": null
   }
 ]
