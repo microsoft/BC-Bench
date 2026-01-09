@@ -152,6 +152,13 @@ function Invoke-GitCloneWithRetry {
                 throw "Failed to checkout commit $CommitSha`: $checkoutResult"
             }
 
+            # Initialize submodules if any exist (while remote is still configured)
+            Write-Log "Initializing submodules (if any)" -Level Debug
+            $submoduleResult = & git -C $ClonePath submodule update --init --recursive --depth 200 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Warning: Failed to initialize submodules: $submoduleResult" -Level Warning
+            }
+
             # Remove the remote to clean up credentials
             # Note: This step removes credentials from the git config but is non-fatal.
             # The repository is still usable if this fails, though credentials remain in .git/config
