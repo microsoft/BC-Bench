@@ -386,5 +386,23 @@
     "average_tool_usage": null,
     "github_run_id": "20860867006",
     "experiment": null
+  },
+  {
+    "total": 66,
+    "resolved": 33,
+    "failed": 33,
+    "build": 63,
+    "percentage": 50.0,
+    "date": "2026-01-11",
+    "model": "claude-sonnet-4-5",
+    "agent_name": "Claude Code",
+    "category": "bug-fix",
+    "average_duration": 219.3,
+    "average_prompt_tokens": 852947.4,
+    "average_completion_tokens": 6039.2,
+    "average_llm_duration": 179.53293939393942,
+    "average_tool_usage": null,
+    "github_run_id": "20892140009",
+    "experiment": null
   }
 ]
