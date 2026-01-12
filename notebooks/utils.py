@@ -37,9 +37,24 @@ def load_results_df(setup_folder: Path) -> pd.DataFrame:
             r = create_result_from_json(json.loads(line))
             data = r.model_dump()
             metrics = data.pop("metrics", {}) or {}
-            tool_usage = metrics.pop("tool_usage", {}) or {}
-            rows.append({"run_id": run_id, **data, **metrics, **tool_usage})
+            tool_usage = metrics.pop("tool_usage", None)
+            rows.append({"run_id": run_id, **data, **metrics, "tool_usage": tool_usage})
     return pd.DataFrame(rows)
+
+
+def expand_tool_usage(df: pd.DataFrame) -> pd.DataFrame:
+    """Expand tool_usage dict column into separate columns."""
+    tool_df = df["tool_usage"].apply(lambda x: pd.Series(x) if x else pd.Series(dtype=int))
+    return tool_df.fillna(0).astype(int)
+
+
+def get_all_tools(df: pd.DataFrame) -> list[str]:
+    """Get all unique tool names from tool_usage column."""
+    all_tools: set[str] = set()
+    for usage in df["tool_usage"].dropna():
+        if usage:
+            all_tools.update(usage.keys())
+    return sorted(all_tools)
 
 
 def load_all_results() -> dict[str, pd.DataFrame]:

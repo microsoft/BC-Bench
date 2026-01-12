@@ -61,6 +61,7 @@ instructions:
 agents:
   enabled: false
   name: ALTest
+
 # mcp:
 #   servers:
 #     - name: "mslearn"
