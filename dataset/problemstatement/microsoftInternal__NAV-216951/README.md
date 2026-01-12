@@ -1,0 +1,5 @@
+Title: [All-e][master] RFH: Error editing Power BI Account Categories when the G/L Account Category has special character ')'
+Repro Steps:
+REPRO: ============== Go to G/L Account Categories. Change the Description of any Account and add ')'. Once done, go to Power BI Account Categories. Add the G/L Account category you've edited with ')'. The following error appears. Error " The filter "3) Cash*" is not valid for the Description field on the G/L Account Category table. An error occured while interpreting the filter: Did not expect ')'. For more information, see https://go.microsoft.com/fwlink/?linkid=2158058" If you Refresh the page, It gets saved with no issues., but only when there was no previous value added to the column. EXPECTATION: ============== No errors should occur and the G/L Account Category should be added with the special chararacter RESULT: ============== Error when adding a value with a special char
+Description:
+PROBLEM: ============== Power BI Account Categories page does not accept values with a special char.
