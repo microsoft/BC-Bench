@@ -40,8 +40,14 @@ def separate_patches(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str,
     return diff, patch_fix, patch_test
 
 
-def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_path: str = "") -> tuple[str, str, str]:
+def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_path: list[str] | None = None) -> tuple[str, str, str]:
     """Extract patches between two commits, separating test and fix patches.
+
+    Args:
+        repo_path: Path to the repository
+        base_commit_id: Base commit SHA
+        commit_id: Target commit SHA
+        diff_path: Optional list of paths to filter the diff. Can be empty or None.
 
     Returns:
         tuple: (full_patch, fix_patch, test_patch)
@@ -49,10 +55,13 @@ def extract_patches(repo_path: Path, base_commit_id: str, commit_id: str, diff_p
     if not repo_path.exists():
         raise FileNotFoundError(f"Repository not found at {repo_path}.")
 
+    if diff_path is None:
+        diff_path = []
+
     git_cmd = ["git", "diff", base_commit_id, commit_id]
     if diff_path:
         git_cmd.append("--")
-        git_cmd.append(diff_path)
+        git_cmd.extend(diff_path)
 
     result = subprocess.run(
         git_cmd,
