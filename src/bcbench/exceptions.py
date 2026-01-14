@@ -87,15 +87,31 @@ class EmptyDiffError(GitOperationError):
         super().__init__(message)
 
 
+def _extract_compiler_errors(output: str, max_lines: int = 30) -> str:
+    """Extract AL compiler error/warning lines from build output."""
+    if not output:
+        return ""
+
+    lines = output.splitlines()
+    # Match lines like: path.al(line,col): error AL0185: ...
+    error_lines = [line for line in lines if ": error " in line or ": warning " in line]
+
+    if error_lines:
+        return "\n".join(error_lines[:max_lines])
+
+    # Fallback: return last N lines if no error pattern found
+    return "\n".join(lines[-max_lines:])
+
+
 class BuildError(BCBenchError):
     """Build or publish operation failures."""
 
-    def __init__(self, project_path: str, stderr: str = ""):
+    def __init__(self, project_path: str, output: str = ""):
         self.project_path = project_path
-        self.stderr = stderr
-        message = f"Build or publish failed for {project_path}"
-        if stderr:
-            message += f": {stderr}"
+        self.output = output
+        self.errors = _extract_compiler_errors(output)
+        message = f"Build or publish failed for {project_path}:\n{self.errors}"
+
         super().__init__(message)
 
 
