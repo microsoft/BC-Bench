@@ -175,9 +175,13 @@ function Invoke-GitCloneWithRetry {
             # Remove remotes from all submodules to prevent fetching future commits
             # This is critical for benchmark integrity - submodules should not be able to access newer code
             Write-Log "Removing remotes from submodules to prevent future fetches" -Level Debug
+            # git provides $name and $sm_path variables in submodule foreach
             $submodulePaths = & git -C $ClonePath submodule foreach --quiet 'echo $sm_path' 2>&1
+            $submoduleNames = & git -C $ClonePath submodule foreach --quiet 'echo $name' 2>&1
             if ($LASTEXITCODE -eq 0 -and $submodulePaths) {
-                foreach ($submodulePath in $submodulePaths) {
+                for ($i = 0; $i -lt @($submodulePaths).Count; $i++) {
+                    $submodulePath = @($submodulePaths)[$i]
+                    $submoduleName = @($submoduleNames)[$i]
                     if ($submodulePath) {
                         $fullSubmodulePath = Join-Path $ClonePath $submodulePath
                         $subRemoteResult = & git -C $fullSubmodulePath remote remove origin 2>&1
@@ -185,6 +189,16 @@ function Invoke-GitCloneWithRetry {
                             throw "Failed to remove remote from submodule $submodulePath. Benchmark integrity compromised: $subRemoteResult"
                         }
                         Write-Log "Removed remote from submodule: $submodulePath" -Level Debug
+
+                        # Remove submodule URL from main repo's .git/config using the submodule name
+                        $submoduleConfigKey = "submodule.$submoduleName.url"
+                        $unsetResult = & git -C $ClonePath config --unset $submoduleConfigKey 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Log "Warning: Failed to remove submodule URL config for $submoduleName`: $unsetResult" -Level Warning
+                        }
+                        else {
+                            Write-Log "Removed submodule URL config: $submoduleConfigKey" -Level Debug
+                        }
                     }
                 }
             }
