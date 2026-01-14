@@ -173,6 +173,25 @@ function Invoke-GitCloneWithRetry {
                 Write-Log "Warning: Failed to remove remote origin. Credentials may remain in repository config: $remoteRemoveResult" -Level Warning
             }
 
+            # Remove remotes from all submodules to prevent fetching future commits
+            # This is critical for benchmark integrity - submodules should not be able to access newer code
+            Write-Log "Removing remotes from submodules to prevent future fetches" -Level Debug
+            $submodulePaths = & git -C $ClonePath submodule foreach --quiet 'echo $sm_path' 2>&1
+            if ($LASTEXITCODE -eq 0 -and $submodulePaths) {
+                foreach ($submodulePath in $submodulePaths) {
+                    if ($submodulePath) {
+                        $fullSubmodulePath = Join-Path $ClonePath $submodulePath
+                        $subRemoteResult = & git -C $fullSubmodulePath remote remove origin 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Log "Warning: Failed to remove remote from submodule $submodulePath`: $subRemoteResult" -Level Warning
+                        }
+                        else {
+                            Write-Log "Removed remote from submodule: $submodulePath" -Level Debug
+                        }
+                    }
+                }
+            }
+
             $cloneSuccess = $true
             Write-Log "Repository cloned and checked out to commit $CommitSha successfully" -Level Success
         }
