@@ -164,13 +164,12 @@ function Invoke-GitCloneWithRetry {
                 Write-Log "Warning: Failed to initialize submodules: $submoduleResult" -Level Warning
             }
 
-            # Remove the remote to clean up credentials
-            # Note: This step removes credentials from the git config but is non-fatal.
-            # The repository is still usable if this fails, though credentials remain in .git/config
-            Write-Log "Removing remote origin to clean up credentials" -Level Debug
+            # Remove the remote to prevent fetching future commits and clean up credentials
+            # This is critical for benchmark integrity - the repository must not be able to access newer code
+            Write-Log "Removing remote origin to prevent future fetches" -Level Debug
             $remoteRemoveResult = & git -C $ClonePath remote remove origin 2>&1
             if ($LASTEXITCODE -ne 0) {
-                Write-Log "Warning: Failed to remove remote origin. Credentials may remain in repository config: $remoteRemoveResult" -Level Warning
+                throw "Failed to remove remote origin. Benchmark integrity compromised: $remoteRemoveResult"
             }
 
             # Remove remotes from all submodules to prevent fetching future commits
@@ -183,11 +182,9 @@ function Invoke-GitCloneWithRetry {
                         $fullSubmodulePath = Join-Path $ClonePath $submodulePath
                         $subRemoteResult = & git -C $fullSubmodulePath remote remove origin 2>&1
                         if ($LASTEXITCODE -ne 0) {
-                            Write-Log "Warning: Failed to remove remote from submodule $submodulePath`: $subRemoteResult" -Level Warning
+                            throw "Failed to remove remote from submodule $submodulePath. Benchmark integrity compromised: $subRemoteResult"
                         }
-                        else {
-                            Write-Log "Removed remote from submodule: $submodulePath" -Level Debug
-                        }
+                        Write-Log "Removed remote from submodule: $submodulePath" -Level Debug
                     }
                 }
             }
