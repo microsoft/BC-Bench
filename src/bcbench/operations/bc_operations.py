@@ -184,7 +184,7 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
     try:
         logger.info(f"Running test suite with expectation: {expectation}")
         logger.info(f"Tests to run: {test_entries_json}")
-        subprocess.run(
+        result = subprocess.run(
             ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
             capture_output=True,
             check=True,
@@ -192,9 +192,15 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
             timeout=_config.timeout.test_execution,
         )
         logger.info(f"Test suite completed with expectation met: {expectation}")
+        if result.stdout:
+            logger.debug(f"Test output:\n{result.stdout}")
     except subprocess.CalledProcessError as e:
-        logger.debug(f"Test result did not meet expectation (expected: {expectation}): {e.stderr}")
-        raise TestExecutionError(expectation, e.stderr) from None
+        logger.error(f"Test result did not meet expectation (expected: {expectation})")
+        if e.stdout:
+            logger.error(f"Test output:\n{e.stdout}")
+        if e.stderr:
+            logger.error(f"Test errors:\n{e.stderr}")
+        raise TestExecutionError(expectation, e.stderr, e.stdout) from None
     except subprocess.TimeoutExpired:
         logger.error(f"Test execution timed out after {_config.timeout.test_execution} seconds")
         raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None

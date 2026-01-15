@@ -128,12 +128,15 @@ class BuildTimeoutExpired(BCBenchError):
 class TestExecutionError(BCBenchError):
     """Test execution failures."""
 
-    def __init__(self, expectation: str, stderr: str = ""):
+    def __init__(self, expectation: str, stderr: str = "", stdout: str = ""):
         self.expectation = expectation
         self.stderr = stderr
+        self.stdout = stdout
         message = f"Test result did not meet expectation (expected: {expectation})"
+        if stdout:
+            message += f"\nOutput:\n{stdout}"
         if stderr:
-            message += f"\n{stderr}"
+            message += f"\nErrors:\n{stderr}"
         super().__init__(message)
 
 
