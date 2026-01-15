@@ -225,7 +225,6 @@ function Invoke-DatasetTests {
     }
 
     [bool] $allTestsPassed = $true
-    [System.Collections.Generic.List[string]] $failedTests = @()
 
     foreach ($testEntry in $testEntries) {
         [int] $codeunitID = $testEntry.codeunitID
@@ -235,14 +234,11 @@ function Invoke-DatasetTests {
 
         if (-not $testPassed) {
             $allTestsPassed = $false
-            [string] $failedFunctions = if ($functionNames -and $functionNames.Count -gt 0) { $functionNames -join ', ' } else { '*' }
-            $failedTests.Add("Codeunit $codeunitID [$failedFunctions]")
         }
     }
 
     if ($expectation -eq 'Pass' -and -not $allTestsPassed) {
-        [string] $failedTestsMessage = $failedTests -join "; "
-        throw "Tests were expected to Pass but failed: $failedTestsMessage"
+        throw "Tests were expected to Pass but some tests failed"
     }
     elseif ($expectation -eq 'Fail' -and $allTestsPassed) {
         throw "Tests were expected to Fail but all tests passed"
