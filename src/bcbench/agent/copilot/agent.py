@@ -1,4 +1,32 @@
-"""GitHub Copilot CLI Agent implementation."""
+"""GitHub Copilot CLI Agent implementation.
+
+This module implements the Copilot agent using the GitHub Copilot Python SDK
+instead of subprocess-based CLI invocation.
+
+Key Changes from Subprocess Implementation:
+- Uses CopilotClient from github-copilot-sdk package
+- Async/await pattern for agent execution
+- Event-based metrics collection from SDK session events
+- Structured error detection (API vs agent failures)
+
+Known Limitations:
+- Custom Instructions: Handled via .github/copilot-instructions.md file which is
+  auto-detected by the CLI when running in server mode. The setup_instructions_from_config
+  function still manages this file, and the SDK respects it automatically.
+
+- Custom Agents: The CLI's --agent flag for selecting specific custom agents is not
+  directly supported by the SDK's session configuration. Custom agents placed in
+  .github/agents/ directory may be auto-detected by the CLI in server mode, but
+  explicit selection by name is not available in this implementation.
+
+- Parallel Tool Execution: The CLI's --disable-parallel-tools-execution flag is not
+  exposed in the SDK configuration.
+
+Error Handling:
+- AgentAPIError: Raised for API-related failures (5xx, rate limits, auth errors)
+- AgentError: Raised for general agent execution failures
+- AgentTimeoutError: Raised when execution exceeds configured timeout
+"""
 
 import asyncio
 import contextlib
@@ -36,8 +64,8 @@ def _is_api_error(error_code: str | None, error_message: str) -> bool:
     # Check error code for HTTP status codes
     if error_code:
         error_code_lower = error_code.lower()
-        # 5xx server errors
-        if error_code.startswith("5") and len(error_code) == 3 and error_code.isdigit():
+        # 5xx server errors (500-599)
+        if error_code.isdigit() and 500 <= int(error_code) <= 599:
             return True
         # Common API error codes
         if error_code_lower in ("rate_limit_exceeded", "unauthorized", "forbidden", "authentication_failed", "invalid_api_key", "429", "401", "403"):
@@ -107,12 +135,15 @@ async def _run_copilot_agent_async(
     # Build custom agent configuration if specified
     custom_agents_list: list[CustomAgentConfig] | None = None
     if custom_agent_name:
-        # Custom agents are loaded from .github/agents/ directory
-        # The SDK will handle loading them when we specify the agent name
-        logger.debug(f"Custom agent specified: {custom_agent_name}")
-        # Note: The SDK doesn't directly support custom agents via config in the same way
-        # as the CLI. We'll need to handle this differently or rely on the CLI's custom
-        # instructions mechanism which is already set up.
+        # Custom agents are loaded from .github/agents/ directory by setup_custom_agent
+        # However, the SDK doesn't provide a direct way to select a specific agent by name
+        # like the CLI's --agent flag. The agents may be auto-detected by the CLI server,
+        # but we cannot guarantee the specific agent will be selected.
+        logger.warning(
+            f"Custom agent '{custom_agent_name}' was configured but SDK does not support "
+            f"explicit agent selection like the CLI --agent flag. Agents in .github/agents/ "
+            f"may be auto-detected by the CLI server, but specific selection is not guaranteed."
+        )
         custom_agents_list = None  # Not directly configurable in SDK session config
 
     # Create session configuration
