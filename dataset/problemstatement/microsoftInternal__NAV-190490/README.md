@@ -1,0 +1,5 @@
+Title: [Project Order replan] - after running Create Purchase Order from Projects there are some orphan or unexpected lines in the Order Planning page.
+Repro Steps:
+create project1, any customer add task add line Budget with any item1, any qty (large enough to make sure that there is no supply to cover that demand). Let's say 3000000. create project2, any customer add task add line Budget with any _another_ item2, any qty (large enough to make sure that there is no supply to cover that demand). Let's say 3000000. Run new Create Purchase Order action from project card. The Create purchase orders page is open. Select vendor if needed and press ok to create purchase order. Navigate to Order Planning page. Notice it has header and line from Project1 and header from project2. (while fixing this bug, consider adding action - "delete all lines in worksheet" (see example in the Planning Worksheet), it will be much easier to verify if one should not delete existing lines one by one 😊
+Description:
+
