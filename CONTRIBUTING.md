@@ -1,7 +1,5 @@
 # Contributing to BC-Bench
 
-Thank you for your interest in contributing to BC-Bench! This guide will help you get started with the project and experiment with different configurations.
-
 ## Quick Start
 
 Prerequisites:
@@ -10,8 +8,8 @@ Prerequisites:
 - [GitHub Copilot CLI](https://github.com/github/copilot-cli)
 
 ```bash
-# Folder layout
-#   C:\depot\NAV        -> cloned internal NAV repo
+# Sample folder layout
+#   C:\depot\BCApps     -> cloned https://github.com/microsoft/BCApps
 #   C:\depot\BC-Bench   -> this repo
 
 gh repo clone microsoft/BC-Bench
@@ -28,7 +26,7 @@ uv run bcbench --help
 
 # Run Copilot CLI on a single entry (generate patch only, no build/test)
 # This is very fast, give it a go and see it live!
-uv run bcbench dataset view microsoftInternal__NAV-211710 --category bug-fix
+uv run bcbench dataset view microsoft__BCApps-5633 --category bug-fix
 ```
 
 ## How to Experiment with GitHub Copilot CLI
