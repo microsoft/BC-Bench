@@ -403,5 +403,23 @@
     "average_tool_usage": null,
     "github_run_id": "20892140009",
     "experiment": null
+  },
+  {
+    "total": 70,
+    "resolved": 42,
+    "failed": 28,
+    "build": 68,
+    "percentage": 60.0,
+    "date": "2026-01-16",
+    "model": "gpt-5-2-codex",
+    "agent_name": "GitHub Copilot CLI",
+    "category": "bug-fix",
+    "average_duration": 295.6,
+    "average_prompt_tokens": 607952.8,
+    "average_completion_tokens": 13814.3,
+    "average_llm_duration": 243.7544,
+    "average_tool_usage": null,
+    "github_run_id": "21035681042",
+    "experiment": null
   }
 ]
