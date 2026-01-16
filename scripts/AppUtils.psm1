@@ -55,6 +55,7 @@ function Invoke-AppBuildAndPublish {
             appSymbolsFolder     = $appSymbolsFolder
             GenerateReportLayout = 'No'
             gitHubActions        = $false
+            nowarn               = 'AL0432;AL0523;AL0547;AL0551;AL0602;AL0659;AL0684;AL0685;AL0748'
         }
 
         if ($env:RUNNER_DEBUG -eq '1') {
@@ -158,10 +159,7 @@ function Invoke-BCTest {
         returnTrueIfAllPassed = $true
         testCodeunitRange     = $codeunitID.ToString()
         testFunction          = $combinedFunctions
-    }
-
-    if ($env:RUNNER_DEBUG -eq '1') {
-        $testParams.detailed = $true
+        detailed              = $true
     }
 
     try {
