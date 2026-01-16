@@ -195,11 +195,8 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
         if result.stdout:
             logger.debug(f"Test output:\n{result.stdout}")
     except subprocess.CalledProcessError as e:
-        logger.error(f"Test result did not meet expectation (expected: {expectation})")
-        if e.stdout:
-            logger.error(f"Test output:\n{e.stdout}")
-        if e.stderr:
-            logger.error(f"Test errors:\n{e.stderr}")
+        logger.debug(f"Test result did not meet expectation (expected: {expectation})")
+        logger.debug(f"Full test output: {e.stdout}")
         raise TestExecutionError(expectation, e.stderr, e.stdout) from None
     except subprocess.TimeoutExpired:
         logger.error(f"Test execution timed out after {_config.timeout.test_execution} seconds")

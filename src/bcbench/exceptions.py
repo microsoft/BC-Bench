@@ -103,6 +103,39 @@ def _extract_compiler_errors(output: str, max_lines: int = 30) -> str:
     return "\n".join(lines[-max_lines:])
 
 
+def _extract_test_errors(output: str, max_lines: int = 20) -> str:
+    """Extract test failure information from test output, filtering verbose lines."""
+    if not output:
+        return ""
+
+    skip_patterns = (
+        "BcContainerHelper",
+        "BC.HelperFunctions",
+        "Running on Windows",
+        "Using Container",
+        "WARNING: TaskScheduler",
+        "Connecting to http://",
+        "Tests failed for",
+        "::group::",
+        "::endgroup::",
+        "::error",
+        "::warning",
+        "Running tests for Codeunit",
+    )
+
+    def is_relevant(line: str) -> bool:
+        return not any(skip in line for skip in skip_patterns)
+
+    lines = output.splitlines()
+    filtered = list(filter(is_relevant, lines))
+
+    if filtered:
+        return "\n".join(filtered[:max_lines])
+
+    # Fallback: return last N lines if no pattern found
+    return "\n".join(lines[-max_lines:])
+
+
 class BuildError(BCBenchError):
     """Build or publish operation failures."""
 
@@ -132,11 +165,10 @@ class TestExecutionError(BCBenchError):
         self.expectation = expectation
         self.stderr = stderr
         self.stdout = stdout
+        self.errors = _extract_test_errors(stdout)
         message = f"Test result did not meet expectation (expected: {expectation})"
-        if stdout:
-            message += f"\nOutput:\n{stdout}"
-        if stderr:
-            message += f"\nErrors:\n{stderr}"
+        if self.errors:
+            message += f"\n{self.errors}"
         super().__init__(message)
 
 
