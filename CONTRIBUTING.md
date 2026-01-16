@@ -41,7 +41,7 @@ Steps for an experiment:
 5. Start with **Test Run** (2 entries) → verify the changes are picked up in logs
 6. Run full evaluation
 
-> Test runs are faster (~1–2h) and help confirm MCP reachability & instruction copying before a longer full run.
+> Test runs are faster (~1h) and help confirm MCP reachability & instruction copying before a longer full run.
 
 ### Experimenting with MCP Servers
 
@@ -49,11 +49,11 @@ Uncomment the `mcp:` section in [config.yaml](src/bcbench/agent/copilot/config.y
 
 ```yaml
 mcp:
-    servers:
-        - name: "mslearn"
-            type: "http"
-            url: "https://learn.microsoft.com/api/mcp"
-            tools: ["*"]
+  servers:
+    - name: "mslearn"
+        type: "http"
+        url: "https://learn.microsoft.com/api/mcp"
+        tools: ["*"]
 ```
 
 ### Experimenting with Custom Instructions
@@ -68,11 +68,11 @@ instructions:
 Replace the files below with your instructions:
 ```
 src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
-    copilot-instructions.md
-    instructions/
-        tables.instructions.md
-        pages.instructions.md
-        codeunits.instructions.md
+  copilot-instructions.md
+  instructions/
+    tables.instructions.md
+    pages.instructions.md
+    codeunits.instructions.md
 ```
 
 How it works (take `NAV` repo as example):
@@ -98,5 +98,5 @@ agents:
 You can find all results in the GitHub Action (workflow: `copilot-evaluation`) directly:
 - Logs: select one instance, find the step called `Run GitHub Copilot CLI ...`, and see how copilot solve an issue
 - Artifacts:
-    - per-entry result JSONL (with all metrics)
-    - Copilot CLI logs
+  - per-entry result JSONL (with all metrics)
+  - Copilot CLI logs
