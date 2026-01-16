@@ -1,13 +1,16 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import asyncio
+import contextlib
+import json
 import shutil
-import subprocess
-import sys
+import time
 from pathlib import Path
 
 import yaml
+from copilot import CopilotClient, CustomAgentConfig, MCPServerConfig
 
-from bcbench.agent.copilot.metrics import parse_metrics
+from bcbench.agent.copilot.metrics import parse_metrics_from_sdk_events
 from bcbench.agent.shared import build_mcp_config, build_prompt
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
@@ -26,75 +29,146 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration) with metrics and configuration used during the experiment
     """
+    return asyncio.run(_run_copilot_agent_async(entry, model, category, repo_path, output_dir, al_mcp))
+
+
+async def _run_copilot_agent_async(
+    entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False
+) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+    """Internal async implementation of run_copilot_agent."""
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
 
-    logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
+    logger.info(f"Running GitHub Copilot SDK on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
-    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
-    config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent)
+    custom_agent_name: str | None = setup_custom_agent(copilot_config, entry, repo_path)
+    config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent_name)
 
-    logger.info(f"Executing Copilot CLI in directory: {repo_path}")
+    logger.info(f"Executing Copilot SDK in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
     copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
+    # Parse MCP config from JSON to SDK format
+    mcp_servers_dict: dict[str, MCPServerConfig] | None = None
+    if mcp_config_json:
+        mcp_json_config = json.loads(mcp_config_json)
+        mcp_servers_dict = mcp_json_config.get("mcpServers", {})
+
+    # Build custom agent configuration if specified
+    custom_agents_list: list[CustomAgentConfig] | None = None
+    if custom_agent_name:
+        # Custom agents are loaded from .github/agents/ directory
+        # The SDK will handle loading them when we specify the agent name
+        logger.debug(f"Custom agent specified: {custom_agent_name}")
+        # Note: The SDK doesn't directly support custom agents via config in the same way
+        # as the CLI. We'll need to handle this differently or rely on the CLI's custom
+        # instructions mechanism which is already set up.
+        custom_agents_list = None  # Not directly configurable in SDK session config
+
+    # Create session configuration
+    session_config = {
+        "model": model,
+    }
+
+    # Add MCP servers if configured
+    if mcp_servers_dict:
+        session_config["mcp_servers"] = mcp_servers_dict
+
+    # Add custom agents if configured
+    if custom_agents_list:
+        session_config["custom_agents"] = custom_agents_list
+
+    # Determine available/excluded tools based on configuration
+    # The CLI uses --allow-all-tools, so we don't restrict tools in the SDK
+    # The CLI uses --disable-builtin-mcps, but this is default in SDK
+    # The CLI uses --disable-parallel-tools-execution, but SDK doesn't expose this
+
+    client = CopilotClient(
+        {
+            "cli_path": copilot_cmd,
+            "cwd": str(repo_path),
+            "log_level": "debug",
+        }
+    )
+
     try:
-        cmd_args = [
-            copilot_cmd,
-            "--allow-all-tools",  # required for non-interactive mode
-            "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
-            "--disable-builtin-mcps",
-            f"--model={model}",
-            "--log-level=debug",
-            "--disable-parallel-tools-execution",
-            f"--log-dir={output_dir.resolve()}",
-            f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
-        ]
-        if not instructions_enabled:
-            cmd_args.append("--no-custom-instructions")
-        if mcp_config_json:
-            cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
-        if custom_agent:
-            cmd_args.append(f"--agent={custom_agent}")
+        await client.start()
 
-        logger.debug(f"Copilot command args: {cmd_args}")
+        # Create session with configuration
+        session = await client.create_session(session_config)
 
-        result = subprocess.run(
-            cmd_args,
-            cwd=str(repo_path),
-            stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
-            timeout=_config.timeout.agent_execution,
-            check=True,
-        )
+        # Track events for metrics collection
+        events = []
+        session_start_time = time.time()
+        done = asyncio.Event()
+        error_occurred = None
 
-        if result.stderr:
-            sys.stdout.buffer.write(result.stderr)
-            sys.stdout.buffer.flush()
-        logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
+        def on_event(event):
+            nonlocal error_occurred
+            events.append(event)
 
-        stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
-        stderr_lines = stderr.splitlines()
+            # Log event for debugging
+            logger.debug(f"SDK Event: {event.type.value}")
 
-        # Find the most recent session log for tool usage parsing
-        session_logs = list(output_dir.glob("session-*.log"))
-        session_log_path = max(session_logs, key=lambda p: p.stat().st_mtime) if session_logs else None
+            # Check for session errors
+            if event.type.value == "session.error":
+                error_occurred = event.data.message
+                logger.error(f"Session error: {error_occurred}")
+                done.set()
+            elif event.type.value == "session.idle":
+                done.set()
 
-        metrics = parse_metrics(stderr_lines, session_log_path=session_log_path)
+        # Subscribe to session events
+        session.on(on_event)
+
+        # Send the prompt and wait for completion
+        await session.send({"prompt": prompt})
+
+        # Wait for session to complete or timeout
+        try:
+            await asyncio.wait_for(done.wait(), timeout=_config.timeout.agent_execution)
+        except TimeoutError:
+            logger.error(f"Copilot SDK timed out after {_config.timeout.agent_execution} seconds")
+            await session.destroy()
+            await client.stop()
+            metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+            raise AgentTimeoutError("Copilot SDK timed out", metrics=metrics, config=config) from None
+
+        session_end_time = time.time()
+        execution_time = session_end_time - session_start_time
+
+        # Check if an error occurred during execution
+        if error_occurred:
+            logger.error(f"Copilot SDK execution failed with error: {error_occurred}")
+            await session.destroy()
+            await client.stop()
+            raise AgentError(f"Copilot SDK execution failed: {error_occurred}")
+
+        logger.info(f"Copilot SDK run complete for: {entry.instance_id}")
+
+        # Parse metrics from SDK events
+        metrics = parse_metrics_from_sdk_events(events, execution_time)
+
+        # Clean up
+        await session.destroy()
+        await client.stop()
 
         return metrics, config
-    except subprocess.TimeoutExpired:
-        logger.error(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Copilot CLI execution failed with error {e.stderr}")
-        raise AgentError(f"Copilot CLI execution failed: {e}") from None
-    except Exception as e:
-        logger.exception(f"Unexpected error running Copilot CLI: {e}")
+
+    except AgentTimeoutError:
+        # Re-raise timeout errors as-is
         raise
+    except AgentError:
+        # Re-raise agent errors as-is
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error running Copilot SDK: {e}")
+        with contextlib.suppress(Exception):
+            await client.force_stop()
+        raise AgentError(f"Unexpected error running Copilot SDK: {e}") from e

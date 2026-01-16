@@ -23,6 +23,7 @@ dependencies = [
     "typing-extensions>=4.0",
     "pyyaml>=6.0",
     "pydantic>=2.0",
+    "github-copilot-sdk",
 ]
 
 [project.scripts]
@@ -67,6 +68,9 @@ ignore = [
     "UP035",   # deprecated-import (typing.Dict, etc. still valid)
     "PTH123",  # Allow open() for now, Path.open() migration can be gradual
 ]
+
+[tool.uv.sources]
+github-copilot-sdk = { git = "https://github.com/github/copilot-sdk.git", subdirectory = "python" }
 
 [dependency-groups]
 analysis = [

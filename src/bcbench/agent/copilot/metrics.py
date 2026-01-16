@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
@@ -130,3 +130,55 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
     except Exception as e:
         logger.error(f"Failed to parse metrics from output: {e}")
         return None
+
+
+def parse_metrics_from_sdk_events(events: list[Any], execution_time: float) -> AgentMetrics | None:
+    """Parse metrics from Copilot SDK session events.
+
+    Args:
+        events: List of SessionEvent objects from the SDK
+        execution_time: Total wall clock execution time in seconds
+
+    Returns:
+        AgentMetrics object with collected metrics, or None if no metrics found
+    """
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    llm_duration: float = 0.0
+    turn_count: int = 0
+    tool_usage: dict[str, int] = {}
+
+    for event in events:
+        event_type = event.type.value
+
+        # Count turns (each assistant.turn_start is a new LLM call)
+        if event_type == "assistant.turn_start":
+            turn_count += 1
+
+        # Aggregate token usage from assistant.usage events
+        elif event_type == "assistant.usage":
+            if hasattr(event.data, "input_tokens") and event.data.input_tokens is not None:
+                prompt_tokens += int(event.data.input_tokens)
+            if hasattr(event.data, "output_tokens") and event.data.output_tokens is not None:
+                completion_tokens += int(event.data.output_tokens)
+            if hasattr(event.data, "duration") and event.data.duration is not None:
+                llm_duration += event.data.duration / 1000.0  # Convert ms to seconds
+
+        # Track tool executions
+        elif event_type == "tool.execution_start" and hasattr(event.data, "tool_name") and event.data.tool_name:
+            tool_name = event.data.tool_name
+            tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+
+    # Only return metrics if we collected something
+    if prompt_tokens > 0 or completion_tokens > 0 or turn_count > 0 or tool_usage:
+        return AgentMetrics(
+            execution_time=execution_time,
+            llm_duration=llm_duration if llm_duration > 0 else None,
+            turn_count=turn_count if turn_count > 0 else None,
+            prompt_tokens=prompt_tokens if prompt_tokens > 0 else None,
+            completion_tokens=completion_tokens if completion_tokens > 0 else None,
+            tool_usage=tool_usage if tool_usage else None,
+        )
+
+    logger.warning("No metrics found in SDK events")
+    return None
