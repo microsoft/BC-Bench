@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from bcbench.agent.copilot.prompt import build_prompt
+from bcbench.agent.shared import build_prompt
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry, create_problem_statement_dir
 

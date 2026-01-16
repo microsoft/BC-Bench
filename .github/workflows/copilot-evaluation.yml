@@ -1,6 +1,7 @@
 name: Evaluation with GitHub Copilot
 permissions:
   contents: read
+  actions: write
 
 on:
   workflow_dispatch:
@@ -14,10 +15,12 @@ on:
           - "claude-sonnet-4.5"
           - "claude-haiku-4.5"
           - "claude-opus-4.5"
+          - "gpt-5.2-codex"
           - "gpt-5.2"
           - "gpt-5.1-codex-mini"
           - "gpt-5.1-codex"
           - "gpt-5.1-codex-max"
+          - "gpt-4.1"
           - "gemini-3-pro-preview"
       category:
         description: "Evaluation category to run"
@@ -37,6 +40,21 @@ on:
         required: false
         default: false
         type: boolean
+      repeat:
+        description: "Number of times to run sequentially (ignored for test runs)"
+        required: false
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+
+concurrency:
+  group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  cancel-in-progress: false
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -93,7 +111,7 @@ jobs:
         run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.369
+        run: npm install -g @github/copilot@0.0.382
 
       - name: Select PAT based on job index
         id: select-pat
@@ -134,3 +152,21 @@ jobs:
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
     secrets: inherit
+
+  requeue-if-needed:
+    needs: summarize-results
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.test-run && inputs.repeat != '1' }}
+    steps:
+      - name: Trigger next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run copilot-evaluation.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.sha }} \
+            -f model="${{ inputs.model }}" \
+            -f category="${{ inputs.category }}" \
+            -f test-run="${{ inputs.test-run }}" \
+            -f al-mcp="${{ inputs.al-mcp }}" \
+            -f repeat="$(( ${{ inputs.repeat }} - 1 ))"
