@@ -14,13 +14,57 @@ from bcbench.agent.copilot.metrics import parse_metrics_from_sdk_events
 from bcbench.agent.shared import build_mcp_config, build_prompt
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
-from bcbench.exceptions import AgentError, AgentTimeoutError
+from bcbench.exceptions import AgentAPIError, AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def _is_api_error(error_code: str | None, error_message: str) -> bool:
+    """Determine if an error is an API error (5xx, rate limit, auth) vs agent error.
+
+    Args:
+        error_code: Error code from the session error event
+        error_message: Error message from the session error event
+
+    Returns:
+        True if this is an API error, False if it's an agent execution error
+    """
+    # Check error code for HTTP status codes
+    if error_code:
+        error_code_lower = error_code.lower()
+        # 5xx server errors
+        if error_code.startswith("5") and len(error_code) == 3 and error_code.isdigit():
+            return True
+        # Common API error codes
+        if error_code_lower in ("rate_limit_exceeded", "unauthorized", "forbidden", "authentication_failed", "invalid_api_key", "429", "401", "403"):
+            return True
+
+    # Check error message for common API error patterns
+    error_message_lower = error_message.lower()
+    api_error_patterns = [
+        "rate limit",
+        "quota exceeded",
+        "authentication",
+        "unauthorized",
+        "invalid api key",
+        "api key",
+        "server error",
+        "internal server error",
+        "service unavailable",
+        "gateway timeout",
+        "bad gateway",
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+    ]
+
+    return any(pattern in error_message_lower for pattern in api_error_patterns)
 
 
 def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -108,9 +152,10 @@ async def _run_copilot_agent_async(
         session_start_time = time.time()
         done = asyncio.Event()
         error_occurred = None
+        error_code = None
 
         def on_event(event):
-            nonlocal error_occurred
+            nonlocal error_occurred, error_code
             events.append(event)
 
             # Log event for debugging
@@ -119,7 +164,10 @@ async def _run_copilot_agent_async(
             # Check for session errors
             if event.type.value == "session.error":
                 error_occurred = event.data.message
-                logger.error(f"Session error: {error_occurred}")
+                # Extract error code if available (e.g., HTTP status codes, rate limit errors)
+                if hasattr(event.data, "code") and event.data.code:
+                    error_code = event.data.code
+                logger.error(f"Session error: {error_occurred} (code: {error_code})")
                 done.set()
             elif event.type.value == "session.idle":
                 done.set()
@@ -145,9 +193,14 @@ async def _run_copilot_agent_async(
 
         # Check if an error occurred during execution
         if error_occurred:
-            logger.error(f"Copilot SDK execution failed with error: {error_occurred}")
+            # Determine if this is an API error based on error code or message
+            is_api_error = _is_api_error(error_code, error_occurred)
+            logger.error(f"Copilot SDK execution failed with error: {error_occurred} (API error: {is_api_error})")
             await session.destroy()
             await client.stop()
+
+            if is_api_error:
+                raise AgentAPIError(f"Copilot SDK API error: {error_occurred}", error_code=error_code, metrics=None, config=config)
             raise AgentError(f"Copilot SDK execution failed: {error_occurred}")
 
         logger.info(f"Copilot SDK run complete for: {entry.instance_id}")

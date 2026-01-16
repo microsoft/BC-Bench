@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from bcbench.types import AgentMetrics, ExperimentConfiguration
 
 __all__ = [
+    "AgentAPIError",
     "AgentError",
     "BCBenchError",
     "BuildError",
@@ -141,6 +142,16 @@ class NoTestsExtractedError(BCBenchError):
 
 class AgentError(BCBenchError):
     """Agent execution errors."""
+
+
+class AgentAPIError(BCBenchError):
+    """API-related errors (5xx, rate limits, auth errors)."""
+
+    def __init__(self, message: str, error_code: str | None = None, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None):
+        self.error_code = error_code
+        self.metrics = metrics
+        self.config = config
+        super().__init__(message)
 
 
 class AgentTimeoutError(BCBenchError):
