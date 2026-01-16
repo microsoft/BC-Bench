@@ -6,17 +6,12 @@ A benchmark for evaluating AI coding agents on Business Central (AL) development
 
 ## Purpose
 
-BC-Bench provides a reproducible evaluation framework for AI coding agents working on real-world Business Central development tasks. Unlike traditional model benchmarks that focus on isolated code snippets, BC-Bench evaluates agents on complete, realistic AL development scenarios.
+BC-Bench provides a reproducible evaluation framework for AI coding agents working on real-world Business Central development tasks:
 
-This benchmark enables you to:
 - **Measure performance** of different AI models on authentic AL issues
-- **Quantify impact** of tooling changes (MCP servers, custom instructions, custom agents)
+- **Quantify impact** of tooling changes (MCP servers, custom instructions, custom agents, etc)
 - **Track progress** with transparent, comparable metrics over time
 - **Rapidly iterate** on agent configurations and evaluation setups
-
-## Getting Started
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for installation instructions and how to run experiments.
 
 ## Dataset
 
@@ -34,12 +29,8 @@ A minimal agent loop based on [mini-swe-agent](https://github.com/SWE-agent/mini
 
 ### GitHub Copilot CLI
 
-The [GitHub Copilot CLI](https://github.com/github/copilot-cli) (public preview Sept 2025) supports MCP servers, tools, and agent mode. It closely simulates real developers' workflow (both VS Code and Coding Agent), making it an ideal candidate for evaluating automated workflows.
+The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP servers, tools, and agent mode. It closely simulates real developers' workflow (both VS Code and Coding Agent), making it an ideal candidate for evaluating automated workflows.
 
-## Contributing
+## Getting Started
 
-Interested in running experiments or contributing? Check out [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions on:
-- Setting up your environment
-- Running evaluations locally
-- Experimenting with MCP servers, custom instructions, and custom agents
-- Interpreting results and metrics
+Ready to run experiments? See [CONTRIBUTING.md](CONTRIBUTING.md)
