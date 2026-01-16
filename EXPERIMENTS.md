@@ -4,22 +4,7 @@ This guide covers how to run BC-Bench evaluations with different configurations.
 
 ## Quick Start
 
-Prerequisites:
-- [uv](https://docs.astral.sh/uv/)
-- [GitHub CLI](https://cli.github.com/)
-- [GitHub Copilot CLI](https://github.com/github/copilot-cli)
-
-```bash
-gh repo clone microsoft/BC-Bench
-cd BC-Bench
-
-uv python install
-uv sync --all-groups
-
-# Run Copilot CLI on a single entry (generate patch only, no build/test)
-# This is very fast, give it a go and see it live!
-uv run bcbench run copilot microsoft__BCApps-5633
-```
+To setup your local environment, follow [Setup](CONTRIBUTING.md) first.
 
 ## Workflow Tips
 
@@ -56,9 +41,9 @@ Uncomment the `mcp:` section in [config.yaml](src/bcbench/agent/copilot/config.y
 mcp:
   servers:
     - name: "mslearn"
-        type: "http"
-        url: "https://learn.microsoft.com/api/mcp"
-        tools: ["*"]
+      type: "http"
+      url: "https://learn.microsoft.com/api/mcp"
+      tools: ["*"]
 ```
 
 ### Custom Instructions

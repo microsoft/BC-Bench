@@ -34,4 +34,4 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP ser
 ## Getting Started
 
 - **[Run experiments](EXPERIMENTS.md)** - Evaluate models with MCP servers, custom instructions, and agents
-- **[Contribute](CONTRIBUTING.md)** - Setup, code style, and PR guidelines
+- **[Contribute](CONTRIBUTING.md)** - Setup
