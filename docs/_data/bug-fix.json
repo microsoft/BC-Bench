@@ -24,7 +24,8 @@
         "create": 0.02
       },
       "github_run_id": "20892142144",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 55,
@@ -52,7 +53,8 @@
         "create": 0.02
       },
       "github_run_id": "20104171950",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 55,
@@ -80,7 +82,8 @@
         "list_powershell": 0.02
       },
       "github_run_id": "20204753082",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 55,
@@ -107,7 +110,8 @@
         "list_powershell": 0.02
       },
       "github_run_id": "20317360843",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 22,
@@ -129,33 +133,8 @@
         "mcp_servers": null,
         "custom_instructions": true,
         "custom_agent": null
-      }
-    },
-    {
-      "total": 66,
-      "resolved": 36,
-      "failed": 30,
-      "build": 63,
-      "percentage": 54.5,
-      "date": "2026-01-10",
-      "model": "claude-opus-4-5",
-      "agent_name": "GitHub Copilot CLI",
-      "category": "bug-fix",
-      "average_duration": 107.0,
-      "average_prompt_tokens": 968463.6,
-      "average_completion_tokens": 4454.0,
-      "average_llm_duration": 86.69372727272727,
-      "average_tool_usage": {
-        "report_intent": 2.12,
-        "grep": 7.03,
-        "view": 8.41,
-        "edit": 2.15,
-        "powershell": 0.15,
-        "glob": 0.44,
-        "create": 0.02
       },
-      "github_run_id": "20877725707",
-      "experiment": null
+      "instance_results": null
     },
     {
       "total": 55,
@@ -190,7 +169,8 @@
         ],
         "custom_instructions": false,
         "custom_agent": null
-      }
+      },
+      "instance_results": null
     },
     {
       "total": 34,
@@ -225,7 +205,8 @@
         ],
         "custom_instructions": false,
         "custom_agent": null
-      }
+      },
+      "instance_results": null
     },
     {
       "total": 37,
@@ -257,7 +238,8 @@
         ],
         "custom_instructions": false,
         "custom_agent": null
-      }
+      },
+      "instance_results": null
     },
     {
       "total": 55,
@@ -283,7 +265,8 @@
         "stop_powershell": 0.09
       },
       "github_run_id": "20313927037",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 66,
@@ -301,7 +284,8 @@
       "average_llm_duration": 0.0,
       "average_tool_usage": null,
       "github_run_id": "20877740015",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 55,
@@ -319,7 +303,8 @@
       "average_llm_duration": 0.0,
       "average_tool_usage": null,
       "github_run_id": "20133501643",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 55,
@@ -349,7 +334,8 @@
         "list_powershell": 0.02
       },
       "github_run_id": "20260744570",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 66,
@@ -367,7 +353,8 @@
       "average_llm_duration": 164.251,
       "average_tool_usage": null,
       "github_run_id": "20846947967",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 66,
@@ -385,7 +372,8 @@
       "average_llm_duration": 150.28581818181817,
       "average_tool_usage": null,
       "github_run_id": "20860867006",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 66,
@@ -403,7 +391,8 @@
       "average_llm_duration": 179.53293939393942,
       "average_tool_usage": null,
       "github_run_id": "20892140009",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
     },
     {
       "total": 70,
@@ -421,7 +410,127 @@
       "average_llm_duration": 243.7544,
       "average_tool_usage": null,
       "github_run_id": "21035681042",
-      "experiment": null
+      "experiment": null,
+      "instance_results": null
+    },
+    {
+      "total": 66,
+      "resolved": 36,
+      "failed": 30,
+      "build": 63,
+      "percentage": 54.5,
+      "date": "2026-01-10",
+      "model": "claude-opus-4-5",
+      "agent_name": "GitHub Copilot CLI",
+      "category": "bug-fix",
+      "average_duration": 107.0,
+      "average_prompt_tokens": 968463.6,
+      "average_completion_tokens": 4454.0,
+      "average_llm_duration": 86.69372727272727,
+      "average_tool_usage": {
+        "report_intent": 2.12,
+        "grep": 7.03,
+        "view": 8.41,
+        "edit": 2.15,
+        "powershell": 0.15,
+        "glob": 0.44,
+        "create": 0.02
+      },
+      "github_run_id": "20877725707",
+      "experiment": null,
+      "instance_results": null
+    },
+    {
+      "total": 72,
+      "resolved": 40,
+      "failed": 32,
+      "build": 69,
+      "percentage": 55.6,
+      "date": "2026-01-18",
+      "model": "claude-opus-4-5",
+      "agent_name": "GitHub Copilot CLI",
+      "category": "bug-fix",
+      "average_duration": 145.2,
+      "average_prompt_tokens": 739605.6,
+      "average_completion_tokens": 5732.0,
+      "average_llm_duration": 117.12519444444443,
+      "average_tool_usage": null,
+      "github_run_id": "21112061984",
+      "experiment": null,
+      "instance_results": {
+        "microsoftInternal__NAV-222488": true,
+        "microsoftInternal__NAV-220452": false,
+        "microsoftInternal__NAV-211710": true,
+        "microsoftInternal__NAV-226448": false,
+        "microsoftInternal__NAV-209835": false,
+        "microsoftInternal__NAV-224668": true,
+        "microsoftInternal__NAV-218323": false,
+        "microsoftInternal__NAV-214926": true,
+        "microsoftInternal__NAV-220036": false,
+        "microsoftInternal__NAV-210200": false,
+        "microsoftInternal__NAV-216057": false,
+        "microsoftInternal__NAV-195193": false,
+        "microsoftInternal__NAV-218856": false,
+        "microsoftInternal__NAV-191624": false,
+        "microsoft__BCApps-5633": false,
+        "microsoftInternal__NAV-216918": false,
+        "microsoftInternal__NAV-224009": true,
+        "microsoftInternal__NAV-217797": false,
+        "microsoftInternal__NAV-209450": false,
+        "microsoft__BCApps-4766": false,
+        "microsoftInternal__NAV-208320": false,
+        "microsoftInternal__NAV-219082": true,
+        "microsoftInternal__NAV-223790": false,
+        "microsoftInternal__NAV-215645": false,
+        "microsoftInternal__NAV-227358": true,
+        "microsoftInternal__NAV-224447": true,
+        "microsoftInternal__NAV-208851": true,
+        "microsoftInternal__NAV-211521": false,
+        "microsoftInternal__NAV-211548": true,
+        "microsoftInternal__NAV-222484": true,
+        "microsoftInternal__NAV-226223": true,
+        "microsoftInternal__NAV-210528": true,
+        "microsoftInternal__NAV-215972": true,
+        "microsoftInternal__NAV-218253": true,
+        "microsoftInternal__NAV-227219": true,
+        "microsoftInternal__NAV-214825": true,
+        "microsoftInternal__NAV-214557": false,
+        "microsoft__BCApps-4822": true,
+        "microsoftInternal__NAV-226004": false,
+        "microsoftInternal__NAV-216572": true,
+        "microsoftInternal__NAV-226875": true,
+        "microsoftInternal__NAV-227240": true,
+        "microsoftInternal__NAV-209737": true,
+        "microsoftInternal__NAV-215225": false,
+        "microsoftInternal__NAV-222092": true,
+        "microsoftInternal__NAV-220984": true,
+        "microsoftInternal__NAV-221877": false,
+        "microsoftInternal__NAV-193649": true,
+        "microsoftInternal__NAV-218995": true,
+        "microsoftInternal__NAV-201169": false,
+        "microsoftInternal__NAV-188438": false,
+        "microsoftInternal__NAV-208649": false,
+        "microsoftInternal__NAV-220314": true,
+        "microsoftInternal__NAV-208748": true,
+        "microsoftInternal__NAV-223493": true,
+        "microsoftInternal__NAV-207878": false,
+        "microsoft__BCApps-4699": false,
+        "microsoftInternal__NAV-213683": true,
+        "microsoftInternal__NAV-213629": true,
+        "microsoftInternal__NAV-213671": true,
+        "microsoftInternal__NAV-213741": false,
+        "microsoftInternal__NAV-218786": false,
+        "microsoftInternal__NAV-223819": true,
+        "microsoftInternal__NAV-212355": true,
+        "microsoftInternal__NAV-218062": false,
+        "microsoftInternal__NAV-213524": true,
+        "microsoftInternal__NAV-193853": true,
+        "microsoftInternal__NAV-209496": true,
+        "microsoftInternal__NAV-223202": true,
+        "microsoftInternal__NAV-217974": true,
+        "microsoftInternal__NAV-206527": false,
+        "microsoftInternal__NAV-227153": true
+      }
     }
   ],
   "aggregate": [
@@ -432,10 +541,10 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "average_duration": 135.8,
-      "pass_power_1": 34,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 135.8
     },
     {
       "model": "claude-haiku-4-5",
@@ -444,10 +553,10 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "average_duration": 165.1,
-      "pass_power_1": 23,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 165.1
     },
     {
       "model": "gpt-5-1-codex-mini",
@@ -456,10 +565,10 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "average_duration": 341.0,
-      "pass_power_1": 25,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 341.0
     },
     {
       "model": "gpt-5-1-codex",
@@ -468,10 +577,10 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "average_duration": 329.5,
-      "pass_power_1": 28,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 329.5
     },
     {
       "model": "claude-haiku-4-5",
@@ -484,22 +593,10 @@
       },
       "total": 22,
       "num_runs": 1,
-      "average_duration": 164.0,
-      "pass_power_1": 12,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
-    },
-    {
-      "model": "claude-opus-4-5",
-      "agent_name": "GitHub Copilot CLI",
-      "category": "bug-fix",
-      "experiment": null,
-      "total": 66,
-      "num_runs": 1,
-      "average_duration": 107.0,
-      "pass_power_1": 36,
-      "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 164.0
     },
     {
       "model": "claude-haiku-4-5",
@@ -514,10 +611,10 @@
       },
       "total": 55,
       "num_runs": 1,
-      "average_duration": 341.9,
-      "pass_power_1": 26,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 341.9
     },
     {
       "model": "claude-opus-4-5",
@@ -532,10 +629,10 @@
       },
       "total": 34,
       "num_runs": 1,
-      "average_duration": 121.7,
-      "pass_power_1": 17,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 121.7
     },
     {
       "model": "claude-opus-4-5",
@@ -550,10 +647,10 @@
       },
       "total": 37,
       "num_runs": 1,
-      "average_duration": 120.4,
-      "pass_power_1": 21,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 120.4
     },
     {
       "model": "gpt-5-1-codex-max",
@@ -562,10 +659,10 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "average_duration": 161.4,
-      "pass_power_1": 30,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 161.4
     },
     {
       "model": "claude-opus-4-5",
@@ -574,10 +671,10 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "average_duration": 331.7,
-      "pass_power_1": 42,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 331.7
     },
     {
       "model": "claude-haiku-4-5",
@@ -586,10 +683,10 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "average_duration": 199.3,
-      "pass_power_1": 23,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 199.3
     },
     {
       "model": "gpt-5-2",
@@ -598,10 +695,10 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "average_duration": 190.4,
-      "pass_power_1": 29,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 190.4
     },
     {
       "model": "claude-haiku-4-5",
@@ -610,10 +707,10 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "average_duration": 197.6,
-      "pass_power_1": 34,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 197.6
     },
     {
       "model": "claude-opus-4-5",
@@ -622,10 +719,10 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "average_duration": 180.8,
-      "pass_power_1": 41,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 180.8
     },
     {
       "model": "claude-sonnet-4-5",
@@ -634,10 +731,10 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "average_duration": 219.3,
-      "pass_power_1": 33,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 219.3
     },
     {
       "model": "gpt-5-2-codex",
@@ -646,10 +743,22 @@
       "experiment": null,
       "total": 70,
       "num_runs": 1,
-      "average_duration": 295.6,
-      "pass_power_1": 42,
+      "pass_power_1": 0,
       "pass_power_3": null,
-      "pass_power_5": null
+      "pass_power_5": null,
+      "average_duration": 295.6
+    },
+    {
+      "model": "claude-opus-4-5",
+      "agent_name": "GitHub Copilot CLI",
+      "category": "bug-fix",
+      "experiment": null,
+      "total": 66,
+      "num_runs": 2,
+      "pass_power_1": 40,
+      "pass_power_3": null,
+      "pass_power_5": null,
+      "average_duration": 126.1
     }
   ]
 }
