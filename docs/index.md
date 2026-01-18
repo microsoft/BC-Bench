@@ -12,21 +12,23 @@ A benchmark for evaluating Agentic Development on Business Central (AL) developm
     <tr>
       <th>Agent</th>
       <th>Model</th>
-      <th>% Resolved</th>
+      <th>pass^1</th>
+      <th>pass^3</th>
+      <th>pass^5</th>
       <th>Avg Duration (s)</th>
-      <th>Date</th>
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.bug-fix | sort: "percentage" | reverse %}
-    {% for result in sorted_results %}
-      {% if result.experiment == null %}
+    {% assign sorted_results = site.data.bug-fix.aggregate | sort: "pass_power_1" | reverse %}
+    {% for agg in sorted_results %}
+      {% if agg.experiment == null %}
     <tr>
-      <td>{{ result.agent_name }}</td>
-      <td>{{ result.model }}</td>
-      <td>{{ result.resolved }} / {{ result.total }} ({{ result.percentage }}%)</td>
-      <td>{% if result.average_duration %}{{ result.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/actions/runs/{{ result.github_run_id }}" target="_blank">{{ result.date }}</a></td>
+      <td>{{ agg.agent_name }}</td>
+      <td>{{ agg.model }}</td>
+      <td>{% if agg.pass_power_1 %}{{ agg.pass_power_1 }} / {{ agg.total }} ({{ agg.pass_power_1 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
+      <td>{% if agg.pass_power_3 %}{{ agg.pass_power_3 }} / {{ agg.total }} ({{ agg.pass_power_3 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
+      <td>{% if agg.pass_power_5 %}{{ agg.pass_power_5 }} / {{ agg.total }} ({{ agg.pass_power_5 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
+      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
     </tr>
       {% endif %}
     {% endfor %}
@@ -41,21 +43,23 @@ Comparing experimental configurations for GitHub Copilot CLI with **claude-haiku
   <thead>
     <tr>
       <th>MCP Servers</th>
-      <th>% Resolved</th>
+      <th>pass^1</th>
+      <th>pass^3</th>
+      <th>pass^5</th>
       <th>Avg Duration (s)</th>
-      <th>Date</th>
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.bug-fix | sort: "percentage" | reverse %}
-    {% for result in sorted_results %}
-      {% if result.model == "claude-haiku-4-5" and result.agent_name == "GitHub Copilot CLI" %}
-        {% unless result.experiment.custom_instructions == true %}
+    {% assign sorted_results = site.data.bug-fix.aggregate | sort: "pass_power_1" | reverse %}
+    {% for agg in sorted_results %}
+      {% if agg.model == "claude-haiku-4-5" and agg.agent_name == "GitHub Copilot CLI" %}
+        {% unless agg.experiment.custom_instructions == true %}
     <tr>
-      <td>{% if result.experiment.mcp_servers %}{{ result.experiment.mcp_servers }}{% else %}None{% endif %}</td>
-      <td>{{ result.resolved }} / {{ result.total }} ({{ result.percentage }}%)</td>
-      <td>{% if result.average_duration %}{{ result.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/actions/runs/{{ result.github_run_id }}" target="_blank">{{ result.date }}</a></td>
+      <td>{% if agg.experiment.mcp_servers %}{{ agg.experiment.mcp_servers }}{% else %}None{% endif %}</td>
+      <td>{% if agg.pass_power_1 %}{{ agg.pass_power_1 }} / {{ agg.total }} ({{ agg.pass_power_1 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
+      <td>{% if agg.pass_power_3 %}{{ agg.pass_power_3 }} / {{ agg.total }} ({{ agg.pass_power_3 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
+      <td>{% if agg.pass_power_5 %}{{ agg.pass_power_5 }} / {{ agg.total }} ({{ agg.pass_power_5 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
+      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
     </tr>
         {% endunless %}
       {% endif %}

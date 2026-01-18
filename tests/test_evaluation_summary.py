@@ -72,11 +72,20 @@ class TestEvaluationResultSummary:
         assert output_file.exists()
 
     def test_loading_existing_results(self):
+        from bcbench.results.evaluation_result import Leaderboard
+
         for category in EvaluationCategory:
             leaderboard_path = _config.paths.leaderboard_dir / f"{category.value}.json"
 
             with open(leaderboard_path, encoding="utf-8") as f:
-                [EvaluationResultSummary.model_validate(entry) for entry in json.load(f)]
+                data = json.load(f)
+                # New format: {"runs": [...], "aggregate": [...]}
+                if "runs" in data and "aggregate" in data:
+                    Leaderboard.model_validate(data)
+                else:
+                    # Old format: array of items
+                    for item in data:
+                        EvaluationResultSummary.model_validate(item)
 
 
 class TestFromResults:
@@ -438,3 +447,116 @@ class TestExperimentConfiguration:
         assert summary.experiment is not None
         assert summary.experiment.mcp_servers == ["pylance"]
         assert summary.experiment.custom_instructions is True
+
+
+class TestInstanceResults:
+    def test_from_results_creates_instance_results(self):
+        results = [
+            create_bugfix_result(instance_id="test__1", resolved=True),
+            create_bugfix_result(instance_id="test__2", resolved=False),
+            create_bugfix_result(instance_id="test__3", resolved=True),
+        ]
+
+        summary = EvaluationResultSummary.from_results(results, run_id="test_run")
+
+        assert summary.instance_results is not None
+        assert len(summary.instance_results) == 3
+        assert summary.instance_results["test__1"] is True
+        assert summary.instance_results["test__2"] is False
+        assert summary.instance_results["test__3"] is True
+
+
+class TestLeaderboardAggregate:
+    def test_from_single_run_calculates_pass_power_1(self):
+        from bcbench.results.evaluation_result import LeaderboardAggregate
+
+        summary = EvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__1", resolved=True),
+                create_bugfix_result(instance_id="test__2", resolved=False),
+                create_bugfix_result(instance_id="test__3", resolved=True),
+            ],
+            run_id="run_1",
+        )
+
+        agg = LeaderboardAggregate.from_runs([summary])
+
+        assert agg.num_runs == 1
+        assert agg.total == 3
+        assert agg.pass_power_1 == 2  # 2 out of 3 resolved
+        assert agg.pass_power_3 is None  # Not enough runs
+        assert agg.pass_power_5 is None
+
+    def test_from_multiple_runs_calculates_pass_k(self):
+        from bcbench.results.evaluation_result import LeaderboardAggregate
+
+        run1 = EvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__1", resolved=True),
+                create_bugfix_result(instance_id="test__2", resolved=False),
+                create_bugfix_result(instance_id="test__3", resolved=False),
+            ],
+            run_id="run_1",
+        )
+        run2 = EvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__1", resolved=False),
+                create_bugfix_result(instance_id="test__2", resolved=True),
+                create_bugfix_result(instance_id="test__3", resolved=False),
+            ],
+            run_id="run_2",
+        )
+        run3 = EvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__1", resolved=False),
+                create_bugfix_result(instance_id="test__2", resolved=False),
+                create_bugfix_result(instance_id="test__3", resolved=True),
+            ],
+            run_id="run_3",
+        )
+
+        agg = LeaderboardAggregate.from_runs([run1, run2, run3])
+
+        assert agg.num_runs == 3
+        assert agg.total == 3
+        # pass^1: first run only - test__1 resolved
+        assert agg.pass_power_1 == 1
+        # pass^3: resolved in at least one of 3 runs - all 3 instances qualify
+        assert agg.pass_power_3 == 3
+        # pass^5: not enough runs
+        assert agg.pass_power_5 is None
+
+
+class TestLeaderboard:
+    def test_aggregate_from_runs(self):
+        from bcbench.results.evaluation_result import LeaderboardAggregate
+
+        run1 = EvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__1", resolved=True),
+                create_bugfix_result(instance_id="test__2", resolved=False),
+            ],
+            run_id="run_1",
+        )
+
+        agg = LeaderboardAggregate.from_runs([run1])
+
+        assert agg.num_runs == 1
+        assert agg.pass_power_1 == 1
+
+    def test_leaderboard_to_dict(self):
+        from bcbench.results.evaluation_result import Leaderboard, LeaderboardAggregate
+
+        run1 = EvaluationResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__1", resolved=True)],
+            run_id="run_1",
+        )
+
+        agg = LeaderboardAggregate.from_runs([run1])
+        leaderboard = Leaderboard(runs=[run1], aggregate=[agg])
+        data = leaderboard.to_dict()
+
+        assert "runs" in data
+        assert "aggregate" in data
+        assert len(data["runs"]) == 1
+        assert data["aggregate"][0]["pass_power_1"] == 1
