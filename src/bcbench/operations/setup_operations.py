@@ -26,7 +26,7 @@ def _get_test_generation_input_mode() -> str:
     Raises:
         ValueError: If the input mode is not one of the valid values
     """
-    config_file: Path = Path(__file__).parent.parent / "agent" / "shared" / "config.yaml"
+    config_file: Path = _config.paths.agent_share_dir / "config.yaml"
     shared_config = yaml.safe_load(config_file.read_text())
     input_mode: str = shared_config.get("prompt", {}).get("test-generation-input", "problem-statement")
 
