@@ -1,6 +1,7 @@
 name: Evaluation with GitHub Copilot
 permissions:
   contents: read
+  actions: write
 
 on:
   workflow_dispatch:
@@ -14,6 +15,7 @@ on:
           - "claude-sonnet-4.5"
           - "claude-haiku-4.5"
           - "claude-opus-4.5"
+          - "gpt-5.2-codex"
           - "gpt-5.2"
           - "gpt-5.1-codex-mini"
           - "gpt-5.1-codex"
@@ -38,6 +40,21 @@ on:
         required: false
         default: false
         type: boolean
+      repeat:
+        description: "Number of times to run sequentially (ignored for test runs)"
+        required: false
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+
+concurrency:
+  group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  cancel-in-progress: false
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -94,7 +111,7 @@ jobs:
         run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --prerelease --global
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.369
+        run: npm install -g @github/copilot@0.0.382
 
       - name: Select PAT based on job index
         id: select-pat
@@ -135,3 +152,16 @@ jobs:
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
     secrets: inherit
+
+  requeue:
+    needs: summarize-results
+    if: ${{ !inputs.test-run }}
+    uses: ./.github/workflows/requeue-evaluation.yml
+    permissions:
+      contents: write
+      actions: write
+    with:
+      workflow-file: copilot-evaluation.yml
+      repeat: ${{ inputs.repeat }}
+      workflow-inputs: |
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}
