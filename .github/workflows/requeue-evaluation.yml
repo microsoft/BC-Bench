@@ -21,22 +21,29 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.repeat != '1' }}
     steps:
-      - name: Create tag for requeue
+      - name: Create or reuse tag for requeue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          COMMIT_SHA="${{ github.sha }}"
+          REF="${{ github.ref }}"
 
-          # Extract agent name from workflow file (e.g., "claude-evaluation.yml" -> "claude")
-          WORKFLOW_FILE="${{ inputs.workflow-file }}"
-          AGENT_NAME="${WORKFLOW_FILE%%-evaluation.yml}"
+          # If already running from an eval-run tag, reuse it
+          if [[ "${REF}" == refs/tags/eval-run-* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            echo "Reusing existing ephemeral tag: ${TAG_NAME}"
+          else
+            # First run in the chain: create a new tag
+            COMMIT_SHA="${{ github.sha }}"
+            WORKFLOW_FILE="${{ inputs.workflow-file }}"
+            AGENT_NAME="${WORKFLOW_FILE%%-evaluation.yml}"
 
-          TAG_NAME="eval-run-${AGENT_NAME}-${{ github.run_id }}"
-          echo "Creating ephemeral tag: ${TAG_NAME}"
-          gh api repos/${{ github.repository }}/git/refs \
-            --method POST \
-            -f ref="refs/tags/${TAG_NAME}" \
-            -f sha="${COMMIT_SHA}"
+            TAG_NAME="eval-run-${AGENT_NAME}-${{ github.run_id }}"
+            echo "Creating ephemeral tag: ${TAG_NAME}"
+            gh api repos/${{ github.repository }}/git/refs \
+              --method POST \
+              -f ref="refs/tags/${TAG_NAME}" \
+              -f sha="${COMMIT_SHA}"
+          fi
 
           # Build the workflow dispatch command with inputs from JSON
           INPUTS_JSON='${{ inputs.workflow-inputs }}'
