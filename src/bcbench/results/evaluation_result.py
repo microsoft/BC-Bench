@@ -123,6 +123,11 @@ class LeaderboardAggregate(BaseModel):
         total: int = first_run.total
         num_runs: int = len(runs)
 
+        # Warn if runs have different instance counts
+        unique_totals = {r.total for r in runs}
+        if len(unique_totals) > 1:
+            logger.warning(f"Aggregating runs with different instance counts for '{first_run.agent_name}' + '{first_run.model}': {sorted(unique_totals)}. pass^k metrics may be misleading.")
+
         # Average duration across runs
         durations: list[float] = [r.average_duration for r in runs if r.average_duration]
         average_duration: float | None = sum(durations) / len(durations) if durations else None
