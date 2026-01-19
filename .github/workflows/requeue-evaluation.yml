@@ -1,0 +1,83 @@
+name: Requeue Evaluation
+
+on:
+  workflow_call:
+    inputs:
+      workflow-file:
+        description: "The workflow file to requeue"
+        required: true
+        type: string
+      repeat:
+        description: "Current repeat count"
+        required: true
+        type: string
+      workflow-inputs:
+        description: "JSON string of workflow inputs to pass (excluding repeat)"
+        required: true
+        type: string
+
+jobs:
+  requeue-if-needed:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.repeat != '1' }}
+    steps:
+      - name: Create or reuse tag for requeue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REF="${{ github.ref }}"
+
+          # If already running from an eval-run tag, reuse it
+          if [[ "${REF}" == refs/tags/eval-run-* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            echo "Reusing existing ephemeral tag: ${TAG_NAME}"
+          else
+            # First run in the chain: create a new tag
+            COMMIT_SHA="${{ github.sha }}"
+            WORKFLOW_FILE="${{ inputs.workflow-file }}"
+            AGENT_NAME="${WORKFLOW_FILE%%-evaluation.yml}"
+
+            TAG_NAME="eval-run-${AGENT_NAME}-${{ github.run_id }}"
+            echo "Creating ephemeral tag: ${TAG_NAME}"
+            gh api repos/${{ github.repository }}/git/refs \
+              --method POST \
+              -f ref="refs/tags/${TAG_NAME}" \
+              -f sha="${COMMIT_SHA}"
+          fi
+
+          # Build the workflow dispatch command with inputs from JSON
+          INPUTS_JSON='${{ inputs.workflow-inputs }}'
+          NEXT_REPEAT=$(( ${{ inputs.repeat }} - 1 ))
+
+          # Build the arguments array safely (handles spaces and special chars)
+          ARGS=()
+          while IFS= read -r line; do
+            key="${line%%=*}"
+            value="${line#*=}"
+            ARGS+=("-f" "${key}=${value}")
+          done < <(echo "${INPUTS_JSON}" | jq -r 'to_entries[] | "\(.key)=\(.value)"')
+
+          # Trigger the workflow using the tag as ref
+          gh workflow run ${{ inputs.workflow-file }} \
+            --repo ${{ github.repository }} \
+            --ref "${TAG_NAME}" \
+            -f repeat="${NEXT_REPEAT}" \
+            "${ARGS[@]}"
+
+  cleanup-ephemeral-tag:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.repeat == '1' }}
+    steps:
+      - name: Delete ephemeral tag if running from one
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REF="${{ github.ref }}"
+          if [[ "${REF}" == refs/tags/eval-run-* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            echo "Cleaning up ephemeral tag: ${TAG_NAME}"
+            gh api repos/${{ github.repository }}/git/refs/tags/${TAG_NAME} \
+              --method DELETE || echo "Tag deletion failed or already deleted"
+          else
+            echo "Not running from an ephemeral tag (ref: ${REF}), skipping cleanup"
+          fi

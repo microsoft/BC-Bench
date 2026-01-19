@@ -55,4 +55,3 @@ The Invoice Discount should be:10 %
 
 ## Description:
 Sales Order -  Invoice discount disappears when currency exchange rate is changed by shipment posting date and a location is used with BIN
-

@@ -3,62 +3,25 @@ layout: default
 title: BC-Bench
 ---
 
-A benchmark for evaluating Agentic Development on Business Central (AL) development tasks, inspired by [SWE-Bench](https://github.com/swe-bench/SWE-bench).
+A benchmark for evaluating AI coding agents on real-world **Business Central (AL)** development tasks, inspired by [SWE-Bench](https://github.com/swe-bench/SWE-bench).
 
-## Baseline Leaderboard
+## Categories
 
-<table>
-  <thead>
-    <tr>
-      <th>Agent</th>
-      <th>Model</th>
-      <th>% Resolved</th>
-      <th>Avg Duration (s)</th>
-      <th>Date</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% assign sorted_results = site.data.bug-fix | sort: "percentage" | reverse %}
-    {% for result in sorted_results %}
-      {% if result.experiment == null %}
-    <tr>
-      <td>{{ result.agent_name }}</td>
-      <td>{{ result.model }}</td>
-      <td>{{ result.resolved }} / {{ result.total }} ({{ result.percentage }}%)</td>
-      <td>{% if result.average_duration %}{{ result.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/actions/runs/{{ result.github_run_id }}" target="_blank">{{ result.date }}</a></td>
-    </tr>
-      {% endif %}
-    {% endfor %}
-  </tbody>
-</table>
+| Category | Description |
+|----------|-------------|
+| [Bug Fixing](bug-fix.md) | Follows [SWE-Bench](https://www.swebench.com/) methodology to evaluate bug fixxing in AL code |
+| [Test Generation](test-generation.md) | "Reverses" SWE-Bench: Generates reproduction tests (TDD) instead of fixes |
+| Code Review | *Coming Soon* |
+| Feature Addition | *Coming Soon* |
 
-## MCP Server Experimental Configurations
+## What is Business Central?
 
-Comparing experimental configurations for GitHub Copilot CLI with **claude-haiku-4.5**.
+**Microsoft Dynamics 365 Business Central** is a comprehensive business management solution for small and medium-sized organizations. It connects sales, service, finance, and operations to help businesses work smarter, adapt faster, and perform better.
 
-<table>
-  <thead>
-    <tr>
-      <th>MCP Servers</th>
-      <th>% Resolved</th>
-      <th>Avg Duration (s)</th>
-      <th>Date</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% assign sorted_results = site.data.bug-fix | sort: "percentage" | reverse %}
-    {% for result in sorted_results %}
-      {% if result.model == "claude-haiku-4-5" and result.agent_name == "GitHub Copilot CLI" %}
-        {% unless result.experiment.custom_instructions == true %}
-    <tr>
-      <td>{% if result.experiment.mcp_servers %}{{ result.experiment.mcp_servers }}{% else %}None{% endif %}</td>
-      <td>{{ result.resolved }} / {{ result.total }} ({{ result.percentage }}%)</td>
-      <td>{% if result.average_duration %}{{ result.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/actions/runs/{{ result.github_run_id }}" target="_blank">{{ result.date }}</a></td>
-    </tr>
-        {% endunless %}
-      {% endif %}
-    {% endfor %}
-  </tbody>
-</table>
+**AL (Application Language)** is the programming language used to develop extensions and customizations for Business Central. It is a domain-specific language designed for building business applications, featuring tight integration with the Business Central platform.
+
+## Why BC-Bench?
+
+- **Evaluate real-world ERP development** — Tasks are derived from actual Business Central issues and pull requests
+- **AL is a low-resource, domain-specific programming language** — AL has limited public training data, tooling, and community examples compared to mainstream languages (e.g., Python), making BC-Bench better suited for evaluating different agent and system setups in in a realistic AL development setting.
+- **Enable rapid iteration** — Help engineers select models and iterate on MCP servers, custom instructions, and agent setups in a realistic but controllable environment.
