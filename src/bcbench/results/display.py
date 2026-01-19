@@ -50,6 +50,14 @@ def create_console_summary(results: list[BaseEvaluationResult]) -> None:
     console.print()
 
 
+def _get_short_error_message(error_message: str | None) -> str:
+    """Extract the first line of an error message for summary display."""
+    if not error_message:
+        return ""
+    first_line = error_message.split("\n")[0].rstrip(":")
+    return first_line.replace("|", "\\|")
+
+
 def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
     total = len(results)
     resolved = sum(r.resolved for r in results)
@@ -87,8 +95,7 @@ def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
     for result in results:
         status_icon = ":white_check_mark:" if result.resolved else ":x:"
         status_text = f"{status_icon} {'Success' if result.resolved else 'Failed'}"
-        error_msg = result.error_message or ""
-        error_msg = error_msg.replace("|", "\\|")
+        error_msg = _get_short_error_message(result.error_message)
         markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {error_msg} |\n"
 
     _write_github_step_summary(markdown_summary)

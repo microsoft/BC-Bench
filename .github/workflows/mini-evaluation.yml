@@ -28,6 +28,10 @@ on:
         default: true
         type: boolean
 
+concurrency:
+  group: mini-evaluation-${{ inputs.model }}-${{ inputs.test-run && 'test' || 'full' }}
+  cancel-in-progress: false
+
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
 

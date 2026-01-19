@@ -24,7 +24,7 @@ class _ALMcpServerManager:
         logger.info("Launching AL MCP server tool...")
         logger.debug(f"Project paths for AL MCP server: {projects}")
         # https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools/#readme-body-tab
-        self._process = subprocess.Popen(["al", "launchmcpserver", projects])
+        self._process = subprocess.Popen(["al", "launchmcpserver", "--projects", projects])
         atexit.register(self.cleanup)
         logger.info("Waiting 3 minutes for MCP server to start...")
         time.sleep(3 * 60)
@@ -65,13 +65,13 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
-def build_mcp_config(copilot_config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
+def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
     # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
-    mcp_servers: list[dict[str, Any]] = copilot_config.get("mcp", {}).get("servers", [])
+    mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
     # Handle AL MCP server (special-cased, flag-gated)
     if al_mcp:
-        al_mcp_config: dict[str, Any] | None = copilot_config.get("al-mcp")
+        al_mcp_config: dict[str, Any] | None = config.get("al-mcp")
         if not al_mcp_config:
             raise AgentError("--al-mcp flag enabled but 'al-mcp' section not found in config.yaml")
         mcp_servers = [*mcp_servers, al_mcp_config]
@@ -85,8 +85,8 @@ def build_mcp_config(copilot_config: dict[str, Any], entry: DatasetEntry, repo_p
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     if al_mcp:
-        # Launch MCP server with all project paths separated by spaces
-        all_projects = " ".join(str(repo_path / project_path) for project_path in entry.project_paths)
+        # Launch MCP server with all project paths separated by semicolons
+        all_projects = ";".join(str(repo_path / project_path) for project_path in entry.project_paths)
         _mcp_server_manager.launch(all_projects)
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
