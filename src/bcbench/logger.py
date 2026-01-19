@@ -88,21 +88,32 @@ class ColoredFormatter(logging.Formatter):
     RESET = "\033[0m"
 
     FORMATS: ClassVar = {
-        logging.DEBUG: GREY + "[%(asctime)s] %(name)s - %(message)s" + RESET,
-        logging.INFO: "[%(asctime)s] %(name)s - %(message)s",
-        logging.WARNING: YELLOW + "[%(asctime)s] %(name)s - %(message)s" + RESET,
-        logging.ERROR: RED + "[%(asctime)s] %(name)s - %(message)s" + RESET,
-        logging.CRITICAL: RED + "[%(asctime)s] %(name)s - CRITICAL: %(message)s" + RESET,
+        logging.DEBUG: (GREY, "[%(asctime)s] %(name)s - %(message)s"),
+        logging.INFO: (None, "[%(asctime)s] %(name)s - %(message)s"),
+        logging.WARNING: (YELLOW, "[%(asctime)s] %(name)s - %(message)s"),
+        logging.ERROR: (RED, "[%(asctime)s] %(name)s - %(message)s"),
+        logging.CRITICAL: (RED, "[%(asctime)s] %(name)s - CRITICAL: %(message)s"),
     }
 
     def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno, self.FORMATS[logging.INFO])
+        color, log_fmt = self.FORMATS.get(record.levelno, self.FORMATS[logging.INFO])
         formatter = logging.Formatter(log_fmt, datefmt="%H:%M:%S")
-        return formatter.format(record)
+        formatted = formatter.format(record)
+
+        # Apply color to each line for multiline messages
+        if color:
+            lines = formatted.split("\n")
+            formatted = "\n".join(f"{color}{line}{self.RESET}" for line in lines)
+
+        return formatted
 
 
 class GitHubActionsHandler(logging.Handler):
-    """Handler that emits GitHub Actions workflow commands for warnings and errors."""
+    """Handler that emits GitHub Actions workflow commands for warnings and errors.
+
+    This handler outputs annotations to GitHub Actions and marks records as handled
+    to prevent duplicate output from other handlers.
+    """
 
     def emit(self, record: logging.LogRecord) -> None:
         """Emit a GitHub Actions annotation for warning and error level logs."""
@@ -110,6 +121,9 @@ class GitHubActionsHandler(logging.Handler):
             # Only emit annotations for warnings and errors
             if record.levelno < logging.WARNING:
                 return
+
+            # Mark this record as handled by GitHub Actions to prevent duplicate output
+            record.gh_actions_handled = True  # type: ignore[attr-defined]
 
             # Format the message
             msg = self.format(record)
@@ -133,6 +147,14 @@ class GitHubActionsHandler(logging.Handler):
 
         except Exception:
             self.handleError(record)
+
+
+class GitHubActionsSkipFilter(logging.Filter):
+    """Filter that skips records already handled by GitHubActionsHandler."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False if the record was already handled by GitHub Actions handler."""
+        return not getattr(record, "gh_actions_handled", False)
 
 
 _logging_configured = False
@@ -170,19 +192,21 @@ def setup_logger(verbose: bool = False) -> None:
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Create console handler with colored formatter and sensitive data filter
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setFormatter(ColoredFormatter())
-    console_handler.addFilter(SensitiveDataFilter())
-    root_logger.addHandler(console_handler)
-
-    # Add GitHub Actions handler if running in GitHub Actions
+    # Add GitHub Actions handler FIRST if running in GitHub Actions
+    # This ensures records are marked before the console handler sees them
     if config.env.github_actions:
         github_handler = GitHubActionsHandler()
         github_handler.setLevel(logging.WARNING)  # Only warnings and errors
         github_handler.setFormatter(logging.Formatter("%(message)s"))
         github_handler.addFilter(SensitiveDataFilter())
         root_logger.addHandler(github_handler)
+
+    # Create console handler with colored formatter and sensitive data filter
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setFormatter(ColoredFormatter())
+    console_handler.addFilter(SensitiveDataFilter())
+    console_handler.addFilter(GitHubActionsSkipFilter())
+    root_logger.addHandler(console_handler)
 
     # Configure bcbench loggers to use the desired level
     bcbench_logger = logging.getLogger("bcbench")
