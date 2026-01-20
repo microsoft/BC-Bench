@@ -18,7 +18,7 @@ __all__ = ["_get_test_generation_input_mode", "setup_repo_postbuild", "setup_rep
 
 
 def _get_test_generation_input_mode() -> str:
-    """Read test-generation input mode from copilot config.
+    """Read test-generation input mode from shared agent config.
 
     Returns:
         str: The validated input mode: "gold-patch", "problem-statement", or "both"
@@ -26,9 +26,9 @@ def _get_test_generation_input_mode() -> str:
     Raises:
         ValueError: If the input mode is not one of the valid values
     """
-    config_file: Path = _config.paths.agent_dir / "config.yaml"
-    copilot_config = yaml.safe_load(config_file.read_text())
-    input_mode: str = copilot_config.get("prompt", {}).get("test-generation-input", "problem-statement")
+    config_file: Path = _config.paths.agent_share_dir / "config.yaml"
+    shared_config = yaml.safe_load(config_file.read_text())
+    input_mode: str = shared_config.get("prompt", {}).get("test-generation-input", "problem-statement")
 
     valid_modes: set[str] = {"gold-patch", "problem-statement", "both"}
     if input_mode not in valid_modes:

@@ -17,4 +17,3 @@ Also I notice that there was another pair (maybe fixed in main)
 with request for translatable resources for item that wasn't created. I suspect we fixed something similar for metafields. But apparently it is still there for items (if for any other reason Shopify will reject creation of item)
 
 ## Description:
-
