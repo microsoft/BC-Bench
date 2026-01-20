@@ -27,9 +27,10 @@ Steps for an experiment:
 1. Create a new branch: `git checkout -b experiment/<meaningful-name>`
 2. Edit `src/bcbench/agent/copilot/config.yaml` and optionally modify instruction markdown under `src/bcbench/agent/copilot/instructions/<sanitized-repo>/` (see below)
 3. Locally run one entry: `uv run bcbench run copilot <entry_id>` to ensure everything is setup correctly
-4. In GitHub Actions: run workflow `copilot-evaluation` after selecting your branch & model
-5. Start with **Test Run** (2 entries) → verify the changes are picked up in logs
-6. Run full evaluation
+4. Create a draft PR with your changes and give a description of the experiment
+5. In GitHub Actions: run workflow `copilot-evaluation` after selecting your branch & model
+6. Start with **Test Run** (2 entries) → verify the changes are picked up in logs
+7. Run full evaluation
 
 > Test runs are faster (~1h) and help confirm MCP reachability & instruction copying before a longer full run.
 

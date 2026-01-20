@@ -18,4 +18,3 @@ the repeated rows/fields appears to just 'sit' in the reports - because the othe
 ![Finance Report](./finance_report.png)
 
 ## Description:
-
