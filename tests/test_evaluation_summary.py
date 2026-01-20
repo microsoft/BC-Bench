@@ -467,7 +467,7 @@ class TestInstanceResults:
 
 
 class TestLeaderboardAggregate:
-    def test_from_single_run_calculates_pass_power_1(self):
+    def test_from_single_run_calculates_pass_hat_1(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         summary = EvaluationResultSummary.from_results(
@@ -483,9 +483,10 @@ class TestLeaderboardAggregate:
 
         assert agg.num_runs == 1
         assert agg.total == 3
-        assert agg.pass_power_1 == 2  # 2 out of 3 resolved
-        assert agg.pass_power_3 is None  # Not enough runs
-        assert agg.pass_power_5 is None
+        # With 1 run: pass^1 = avg of C(s,1)/C(1,1) = (1 + 0 + 1)/3 = 0.667
+        assert agg.pass_hat_1 == 0.667
+        assert agg.pass_hat_3 is None  # Not enough runs
+        assert agg.pass_hat_5 is None
 
     def test_from_multiple_runs_calculates_pass_k(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
@@ -519,20 +520,24 @@ class TestLeaderboardAggregate:
 
         assert agg.num_runs == 3
         assert agg.total == 3
-        # pass^1: first run only - test__1 resolved
-        assert agg.pass_power_1 == 1
-        # pass^3: resolved in ALL 3 runs - no instance qualifies (each only resolved in 1 run)
-        assert agg.pass_power_3 == 0
+        # pass^1: average of individual pass^1 values
+        # test__1: 1/3 successes -> C(1,1)/C(3,1) = 1/3
+        # test__2: 1/3 successes -> C(1,1)/C(3,1) = 1/3
+        # test__3: 1/3 successes -> C(1,1)/C(3,1) = 1/3
+        # Average = 1/3 = 0.333
+        assert agg.pass_hat_1 == 0.333
+        # pass^3: C(1,3)/C(3,3) = 0 for each (can't pick 3 successes from 1)
+        assert agg.pass_hat_3 == 0.0
         # pass^5: not enough runs
-        assert agg.pass_power_5 is None
+        assert agg.pass_hat_5 is None
 
-    def test_pass_power_k_calculation(self):
+    def test_pass_hat_k_calculation(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         # Create 3 runs where:
-        # - test__1: resolved in runs 1,2,3 (all) -> counts for pass^1, pass^3
-        # - test__2: resolved in runs 1,2 only -> counts for pass^1, pass^2, not pass^3
-        # - test__3: resolved in run 1 only -> counts for pass^1 only
+        # - test__1: resolved in runs 1,2,3 (3/3 successes)
+        # - test__2: resolved in runs 1,2 only (2/3 successes)
+        # - test__3: resolved in run 1 only (1/3 successes)
         run1 = EvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
@@ -560,15 +565,21 @@ class TestLeaderboardAggregate:
 
         agg = LeaderboardAggregate.from_runs([run1, run2, run3])
 
-        # pass^1: 3 instances resolved in run 1
-        assert agg.pass_power_1 == 3
-        # pass^3: only test__1 resolved in ALL 3 runs
-        assert agg.pass_power_3 == 1
-        # Verify monotonic: pass^1 >= pass^3
-        assert agg.pass_power_1 >= agg.pass_power_3
+        # pass^1: Average of C(s,1)/C(3,1) for each instance
+        # test__1: C(3,1)/C(3,1) = 1.0
+        # test__2: C(2,1)/C(3,1) = 2/3
+        # test__3: C(1,1)/C(3,1) = 1/3
+        # Average = (1 + 2/3 + 1/3) / 3 = 2/3 = 0.667
+        assert agg.pass_hat_1 == 0.667
+        # pass^3: C(s,3)/C(3,3) for each instance
+        # test__1: C(3,3)/C(3,3) = 1.0
+        # test__2: C(2,3)/C(3,3) = 0 (can't choose 3 from 2)
+        # test__3: C(1,3)/C(3,3) = 0
+        # Average = 1/3 = 0.333
+        assert agg.pass_hat_3 == 0.333
 
-    def test_pass_power_k_with_consistent_results(self):
-        """When an instance passes all runs, it counts for all pass^k levels."""
+    def test_pass_hat_k_with_consistent_results(self):
+        """When an instance passes all runs, pass^k = 1.0 for all k."""
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         # All instances pass all runs
@@ -596,10 +607,10 @@ class TestLeaderboardAggregate:
 
         agg = LeaderboardAggregate.from_runs([run1, run2, run3])
 
-        # All instances pass all runs, so pass^1 == pass^3
-        assert agg.pass_power_1 == 2
-        assert agg.pass_power_3 == 2
-        assert agg.pass_power_1 == agg.pass_power_3
+        # All instances pass all runs: C(3,k)/C(3,k) = 1.0 for each
+        assert agg.pass_hat_1 == 1.0
+        assert agg.pass_hat_3 == 1.0
+        assert agg.pass_hat_1 == agg.pass_hat_3
 
 
 class TestLeaderboard:
@@ -617,7 +628,8 @@ class TestLeaderboard:
         agg = LeaderboardAggregate.from_runs([run1])
 
         assert agg.num_runs == 1
-        assert agg.pass_power_1 == 1
+        # With 1 run: pass^1 = avg of C(s,1)/C(1,1) = (1 + 0)/2 = 0.5
+        assert agg.pass_hat_1 == 0.5
 
     def test_leaderboard_to_dict(self):
         from bcbench.results.evaluation_result import Leaderboard, LeaderboardAggregate
@@ -634,10 +646,10 @@ class TestLeaderboard:
         assert "runs" in data
         assert "aggregate" in data
         assert len(data["runs"]) == 1
-        assert data["aggregate"][0]["pass_power_1"] == 1
+        assert data["aggregate"][0]["pass_hat_1"] == 1.0
 
     def test_aggregate_from_legacy_runs_without_instance_results(self):
-        """TRANSITION: Test that legacy runs without instance_results use direct resolved count."""
+        """Test that a single legacy run without instance_results uses pass rate ratio."""
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         # Create a summary without instance_results (simulates legacy data)
@@ -661,49 +673,11 @@ class TestLeaderboard:
 
         assert agg.num_runs == 1
         assert agg.total == 10
-        # Should fall back to resolved count from the run
-        assert agg.pass_power_1 == 6
-        assert agg.pass_power_3 is None
-        assert agg.pass_power_5 is None
-
-    def test_aggregate_from_mixed_runs_with_and_without_instance_results(self):
-        """TRANSITION: Test that only runs with instance_results contribute to pass^k calculation."""
-        from bcbench.results.evaluation_result import LeaderboardAggregate
-
-        # Legacy run without instance_results
-        legacy_run = EvaluationResultSummary(
-            total=3,
-            resolved=2,
-            failed=1,
-            build=3,
-            percentage=66.7,
-            date=date.today(),
-            model="gpt-4",
-            agent_name="test-agent",
-            category=EvaluationCategory.BUG_FIX,
-            average_duration=100.0,
-            average_prompt_tokens=1000.0,
-            average_completion_tokens=500.0,
-            instance_results=None,
-        )
-
-        # New run with instance_results
-        new_run = EvaluationResultSummary.from_results(
-            [
-                create_bugfix_result(instance_id="test__1", resolved=True),
-                create_bugfix_result(instance_id="test__2", resolved=False),
-                create_bugfix_result(instance_id="test__3", resolved=True),
-            ],
-            run_id="run_2",
-        )
-
-        agg = LeaderboardAggregate.from_runs([legacy_run, new_run])
-
-        assert agg.num_runs == 2
-        assert agg.total == 3
-        # pass^1 should be based only on runs with instance_results (1 run has data)
-        assert agg.pass_power_1 == 2  # test__1 and test__3 resolved in run with data
-        assert agg.pass_power_3 is None  # Only 1 run has instance_results
+        # Should fall back to pass rate (resolved/total) from the run
+        assert agg.pass_hat_1 == 0.6  # 6/10 = 0.6
+        assert agg.pass_hat_3 is None
+        assert agg.pass_hat_5 is None
+        assert agg.pass_hat_3 is None  # Only 1 run has instance_results
 
     def test_load_empty_leaderboard_file(self, tmp_path):
         """Test loading a leaderboard file that contains an empty array."""

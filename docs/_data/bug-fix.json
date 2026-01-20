@@ -1231,9 +1231,9 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "pass_power_1": 34,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.515,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 135.8
     },
     {
@@ -1243,9 +1243,9 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "pass_power_1": 23,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.418,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 165.1
     },
     {
@@ -1255,9 +1255,9 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "pass_power_1": 25,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.455,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 341.0
     },
     {
@@ -1267,9 +1267,9 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "pass_power_1": 28,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.509,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 329.5
     },
     {
@@ -1285,9 +1285,9 @@
       },
       "total": 55,
       "num_runs": 1,
-      "pass_power_1": 26,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.473,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 341.9
     },
     {
@@ -1297,9 +1297,9 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "pass_power_1": 30,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.545,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 161.4
     },
     {
@@ -1309,9 +1309,9 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "pass_power_1": 42,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.636,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 331.7
     },
     {
@@ -1321,9 +1321,9 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "pass_power_1": 23,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.418,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 199.3
     },
     {
@@ -1333,9 +1333,9 @@
       "experiment": null,
       "total": 55,
       "num_runs": 1,
-      "pass_power_1": 29,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.527,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 190.4
     },
     {
@@ -1345,9 +1345,9 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "pass_power_1": 34,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.515,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 197.6
     },
     {
@@ -1357,9 +1357,9 @@
       "experiment": null,
       "total": 72,
       "num_runs": 5,
-      "pass_power_1": 46,
-      "pass_power_3": 27,
-      "pass_power_5": 26,
+      "pass_hat_1": 0.572,
+      "pass_hat_3": 0.415,
+      "pass_hat_5": 0.361,
       "average_duration": 189.7
     },
     {
@@ -1369,9 +1369,9 @@
       "experiment": null,
       "total": 66,
       "num_runs": 1,
-      "pass_power_1": 33,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.5,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 219.3
     },
     {
@@ -1381,9 +1381,9 @@
       "experiment": null,
       "total": 70,
       "num_runs": 1,
-      "pass_power_1": 42,
-      "pass_power_3": null,
-      "pass_power_5": null,
+      "pass_hat_1": 0.6,
+      "pass_hat_3": null,
+      "pass_hat_5": null,
       "average_duration": 295.6
     },
     {
@@ -1393,9 +1393,9 @@
       "experiment": null,
       "total": 72,
       "num_runs": 5,
-      "pass_power_1": 40,
-      "pass_power_3": 31,
-      "pass_power_5": 25,
+      "pass_hat_1": 0.536,
+      "pass_hat_3": 0.397,
+      "pass_hat_5": 0.347,
       "average_duration": 156.9
     }
   ]

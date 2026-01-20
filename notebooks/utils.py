@@ -6,6 +6,7 @@ import pandas as pd
 from unidiff import PatchSet
 
 from bcbench.results.base import create_result_from_json
+from bcbench.results.metrics import pass_at_k, pass_hat_k
 
 RESULT_FOLDER = Path(__file__).parent / "result"
 
@@ -21,12 +22,8 @@ class PassMetrics(TypedDict):
     n_runs: int
     n_instances: int
     mean_pct: float
-    pass_any_pct: float  # pass@k: resolved in at least 1 run
-    pass_majority_pct: float  # resolved in ≥50% of runs
-    pass_all_pct: float  # pass^k: resolved in ALL runs
-    pass_any_count: int
-    pass_majority_count: int
-    pass_all_count: int
+    pass_at_k: float
+    pass_hat_k: float
 
 
 def load_results_df(setup_folder: Path) -> pd.DataFrame:
@@ -57,6 +54,35 @@ def get_all_tools(df: pd.DataFrame) -> list[str]:
     return sorted(all_tools)
 
 
+def load_aggreate_results(result_folder: Path) -> dict[str, pd.DataFrame]:
+    """
+    Load aggregate results from the specified result folder.
+
+    This function is different because aggregate results are stored differently: each setup is a jsonl file containing multiple runs.
+    """
+    all_results: dict[str, pd.DataFrame] = {}
+
+    for jsonl_file in sorted(result_folder.glob("*.jsonl")):
+        setup_name = jsonl_file.stem
+        rows = []
+        for line in jsonl_file.read_text(encoding="utf-8").splitlines():
+            run_data = json.loads(line)
+            run_id = run_data.get("github_run_id", run_data.get("date"))
+            instance_results = run_data.get("instance_results", {})
+            for instance_id, resolved in instance_results.items():
+                rows.append(
+                    {
+                        "run_id": run_id,
+                        "instance_id": instance_id,
+                        "resolved": resolved,
+                        "execution_time": run_data.get("average_duration", 0),
+                    }
+                )
+        all_results[setup_name] = pd.DataFrame(rows)
+
+    return all_results
+
+
 def load_all_results() -> dict[str, pd.DataFrame]:
     all_results: dict[str, pd.DataFrame] = {}
     for setup_folder in sorted(RESULT_FOLDER.iterdir()):
@@ -78,15 +104,6 @@ def compute_summary_stats(df: pd.DataFrame) -> SummaryStats:
 
 
 def compute_pass_metrics(df: pd.DataFrame, k: int | None = None) -> PassMetrics:
-    """Compute pass@k (any) and pass^k (all) metrics across runs.
-
-    Args:
-        df: DataFrame with run_id, instance_id, and resolved columns.
-        k: Number of runs to consider (uses first k runs). If None, uses all runs.
-
-    Returns:
-        PassMetrics with pass@k (lenient), pass^k (strict), and majority voting metrics.
-    """
     run_ids = sorted(df["run_id"].unique())
     if k is not None:
         run_ids = run_ids[:k]
@@ -97,21 +114,42 @@ def compute_pass_metrics(df: pd.DataFrame, k: int | None = None) -> PassMetrics:
     n_instances = len(pivot)
     runs_resolved = pivot.sum(axis=1)
 
-    pass_all = int((runs_resolved == n_runs).sum())
-    pass_majority = int((runs_resolved >= n_runs / 2).sum())
-    pass_any = int((runs_resolved >= 1).sum())
+    pass_at_k_value = _calculate_pass_at_k(pivot, n_runs)
+    pass_hat_k_value = _calculate_pass_hat_k(pivot, n_runs)
 
     return {
         "n_runs": n_runs,
         "n_instances": n_instances,
         "mean_pct": float(runs_resolved.mean() / n_runs * 100),
-        "pass_any_pct": pass_any / n_instances * 100,
-        "pass_majority_pct": pass_majority / n_instances * 100,
-        "pass_all_pct": pass_all / n_instances * 100,
-        "pass_any_count": pass_any,
-        "pass_majority_count": pass_majority,
-        "pass_all_count": pass_all,
+        "pass_at_k": pass_at_k_value,
+        "pass_hat_k": pass_hat_k_value,
     }
+
+
+def _calculate_pass_at_k(pivot: pd.DataFrame, k: int) -> float:
+    num_samples = len(pivot.columns)
+    if num_samples < k:
+        return 0.0
+
+    total_pass_at_k = 0.0
+    for _, row in pivot.iterrows():
+        num_correct = int(row.sum())
+        total_pass_at_k += pass_at_k(num_samples, num_correct, k)
+
+    return total_pass_at_k / len(pivot)
+
+
+def _calculate_pass_hat_k(pivot: pd.DataFrame, k: int) -> float:
+    num_trials = len(pivot.columns)
+    if num_trials < k:
+        return 0.0
+
+    total_pass_hat_k = 0.0
+    for _, row in pivot.iterrows():
+        success_count = int(row.sum())
+        total_pass_hat_k += pass_hat_k(num_trials, success_count, k)
+
+    return total_pass_hat_k / len(pivot)
 
 
 def count_files_in_patch(patch: str) -> int:

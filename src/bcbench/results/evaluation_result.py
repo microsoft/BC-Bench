@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.metrics import pass_hat_k
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -106,10 +107,9 @@ class LeaderboardAggregate(BaseModel):
     # Number of runs aggregated
     num_runs: int
 
-    # pass^k: instances resolved in at least one of k runs
-    pass_power_1: int | None = None
-    pass_power_3: int | None = None
-    pass_power_5: int | None = None
+    pass_hat_1: float | None = None
+    pass_hat_3: float | None = None
+    pass_hat_5: float | None = None
 
     # Averaged metrics across runs
     average_duration: float | None = None
@@ -132,12 +132,9 @@ class LeaderboardAggregate(BaseModel):
         durations: list[float] = [r.average_duration for r in runs if r.average_duration]
         average_duration: float | None = sum(durations) / len(durations) if durations else None
 
-        # TRANSITION LOGIC: Handle legacy runs without instance_results
-        # This block should be removed once all runs have instance_results populated
-        runs_with_instance_results = [r for r in runs if r.instance_results]
-        if not runs_with_instance_results:
-            # No runs have instance_results - fall back to direct resolved count from first run
-            # This preserves the old behavior for legacy data
+        # Legacy single run without instance_results: use simple pass rate
+        if num_runs == 1 and not first_run.instance_results:
+            pass_rate = first_run.resolved / first_run.total if first_run.total > 0 else 0.0
             return cls(
                 model=first_run.model,
                 agent_name=first_run.agent_name,
@@ -145,13 +142,13 @@ class LeaderboardAggregate(BaseModel):
                 experiment=first_run.experiment,
                 total=total,
                 num_runs=num_runs,
-                pass_power_1=first_run.resolved if num_runs >= 1 else None,
-                pass_power_3=first_run.resolved if num_runs >= 3 else None,
-                pass_power_5=first_run.resolved if num_runs >= 5 else None,
+                pass_hat_1=round(pass_rate, 3),
+                pass_hat_3=None,
+                pass_hat_5=None,
                 average_duration=round(average_duration, 1) if average_duration else None,
             )
-        # END TRANSITION LOGIC
 
+        # Multiple runs: all must have instance_results
         # Collect per-instance results across runs: instance_id -> list of resolved booleans
         instance_resolved: dict[str, list[bool]] = {}
         for run in runs:
@@ -161,12 +158,9 @@ class LeaderboardAggregate(BaseModel):
                         instance_resolved[instance_id] = []
                     instance_resolved[instance_id].append(resolved)
 
-        # Calculate pass^k metrics (instances resolved in at least one of first k runs)
-        # Only count runs that have instance_results for the k calculation
-        num_runs_with_data = len(runs_with_instance_results)
-        pass_power_1 = _calculate_pass_power_k(instance_resolved, 1) if num_runs_with_data >= 1 else None
-        pass_power_3 = _calculate_pass_power_k(instance_resolved, 3) if num_runs_with_data >= 3 else None
-        pass_power_5 = _calculate_pass_power_k(instance_resolved, 5) if num_runs_with_data >= 5 else None
+        pass_hat_1 = _calculate_pass_hat_k(instance_resolved, 1, num_runs) if num_runs >= 1 else None
+        pass_hat_3 = _calculate_pass_hat_k(instance_resolved, 3, num_runs) if num_runs >= 3 else None
+        pass_hat_5 = _calculate_pass_hat_k(instance_resolved, 5, num_runs) if num_runs >= 5 else None
 
         return cls(
             model=first_run.model,
@@ -175,9 +169,9 @@ class LeaderboardAggregate(BaseModel):
             experiment=first_run.experiment,
             total=total,
             num_runs=num_runs,
-            pass_power_1=pass_power_1,
-            pass_power_3=pass_power_3,
-            pass_power_5=pass_power_5,
+            pass_hat_1=pass_hat_1,
+            pass_hat_3=pass_hat_3,
+            pass_hat_5=pass_hat_5,
             average_duration=round(average_duration, 1) if average_duration else None,
         )
 
@@ -204,14 +198,16 @@ class Leaderboard(BaseModel):
         }
 
 
-def _calculate_pass_power_k(instance_resolved: dict[str, list[bool]], k: int) -> int:
-    count = 0
+def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int, num_trials: int) -> float:
+    if num_trials < k:
+        return 0.0
+
+    total_pass_hat_k: float = 0.0
     for results in instance_resolved.values():
-        first_k = results[:k]
-        # Instance counts if resolved in ALL of the first k runs (intersection)
-        if len(first_k) == k and all(first_k):
-            count += 1
-    return count
+        success_count = sum(results[:num_trials])
+        total_pass_hat_k += pass_hat_k(num_trials, success_count, k)
+
+    return round(total_pass_hat_k / len(instance_resolved), 3)
 
 
 def _calculate_average_tool_usage(tool_usages: list[dict[str, int]]) -> dict[str, float]:

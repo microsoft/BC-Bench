@@ -21,16 +21,16 @@ This category follows the [SWE-Bench](https://www.swebench.com/) methodology. Th
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.bug-fix.aggregate | sort: "pass_power_1" | reverse %}
+    {% assign sorted_results = site.data.bug-fix.aggregate | sort: "pass_hat_1" | reverse %}
     {% for agg in sorted_results %}
       {% if agg.experiment == null %}
     <tr>
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
-      <td>{% if agg.pass_power_1 %}{{ agg.pass_power_1 }} / {{ agg.total }} ({{ agg.pass_power_1 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
-      <td>{% if agg.pass_power_3 %}{{ agg.pass_power_3 }} / {{ agg.total }} ({{ agg.pass_power_3 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
-      <td>{% if agg.pass_power_5 %}{{ agg.pass_power_5 }} / {{ agg.total }} ({{ agg.pass_power_5 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
-      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
+      <td>{% if agg.pass_hat_1 %}{{ agg.pass_hat_1 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.pass_hat_3 %}{{ agg.pass_hat_3 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% endif %}</td>
     </tr>
       {% endif %}
     {% endfor %}
@@ -52,16 +52,16 @@ Comparing experimental configurations for GitHub Copilot CLI with **claude-haiku
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.bug-fix.aggregate | sort: "pass_power_1" | reverse %}
+    {% assign sorted_results = site.data.bug-fix.aggregate | sort: "pass_hat_1" | reverse %}
     {% for agg in sorted_results %}
       {% if agg.model == "claude-haiku-4-5" and agg.agent_name == "GitHub Copilot CLI" %}
         {% unless agg.experiment.custom_instructions == true %}
     <tr>
       <td>{% if agg.experiment.mcp_servers %}{{ agg.experiment.mcp_servers }}{% else %}None{% endif %}</td>
-      <td>{% if agg.pass_power_1 %}{{ agg.pass_power_1 }} / {{ agg.total }} ({{ agg.pass_power_1 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
-      <td>{% if agg.pass_power_3 %}{{ agg.pass_power_3 }} / {{ agg.total }} ({{ agg.pass_power_3 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
-      <td>{% if agg.pass_power_5 %}{{ agg.pass_power_5 }} / {{ agg.total }} ({{ agg.pass_power_5 | times: 100.0 | divided_by: agg.total | round: 1 }}%){% else %}N/A{% endif %}</td>
-      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% else %}N/A{% endif %}</td>
+      <td>{% if agg.pass_hat_1 %}{{ agg.pass_hat_1 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.pass_hat_3 %}{{ agg.pass_hat_3 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% endif %}</td>
     </tr>
         {% endunless %}
       {% endif %}

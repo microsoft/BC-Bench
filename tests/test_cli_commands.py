@@ -386,9 +386,9 @@ def sample_leaderboard_and_summary(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 120.5,
-                "pass_power_1": 6,
-                "pass_power_3": None,
-                "pass_power_5": None,
+                "pass_hat_1": 0.6,
+                "pass_hat_3": None,
+                "pass_hat_5": None,
             },
             {
                 "model": "gpt-4o",
@@ -398,9 +398,9 @@ def sample_leaderboard_and_summary(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 95.0,
-                "pass_power_1": 7,
-                "pass_power_3": None,
-                "pass_power_5": None,
+                "pass_hat_1": 0.7,
+                "pass_hat_3": None,
+                "pass_hat_5": None,
             },
         ],
     }
@@ -442,9 +442,9 @@ def sample_leaderboard_and_summary(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 110.0,
-                "pass_power_1": 5,
-                "pass_power_3": None,
-                "pass_power_5": None,
+                "pass_hat_1": 0.5,
+                "pass_hat_3": None,
+                "pass_hat_5": None,
             },
         ],
     }
@@ -662,8 +662,8 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
     without_servers = next((a for a in copilot_gpt4o_aggs if (a.get("experiment") or {}).get("mcp_servers") is None), None)
 
     assert with_servers is not None and without_servers is not None
-    assert with_servers["pass_power_1"] == 6, "Original aggregate should be unchanged"
-    assert without_servers["pass_power_1"] == 7, "New aggregate should have new values"
+    assert with_servers["pass_hat_1"] == 0.6, "Original aggregate should be unchanged"
+    assert without_servers["pass_hat_1"] == 0.7, "New aggregate should have new values"
 
 
 @pytest.mark.integration
@@ -870,7 +870,7 @@ def test_result_refresh_recalculates_aggregates(sample_leaderboard_and_summary):
         leaderboard = json.load(f)
 
     for agg in leaderboard["aggregate"]:
-        agg["pass_power_1"] = 999  # Invalid value
+        agg["pass_hat_1"] = 999.0  # Invalid value
 
     with open(bugfix_leaderboard_path, "w") as f:
         json.dump(leaderboard, f, indent=2)
@@ -886,10 +886,10 @@ def test_result_refresh_recalculates_aggregates(sample_leaderboard_and_summary):
     # Should have 2 aggregates (copilot with servers, mini without)
     assert len(refreshed["aggregate"]) == 2
 
-    # All pass_power_1 values should be recalculated (not 999)
+    # All pass_hat_1 values should be recalculated (not 999)
     for agg in refreshed["aggregate"]:
-        assert agg["pass_power_1"] != 999
-        assert agg["pass_power_1"] > 0
+        assert agg["pass_hat_1"] != 999.0
+        assert agg["pass_hat_1"] > 0
 
 
 @pytest.mark.integration
@@ -938,9 +938,9 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 100.0,
-                "pass_power_1": 0,  # Incorrectly set to 0
-                "pass_power_3": None,
-                "pass_power_5": None,
+                "pass_hat_1": 0.0,  # Incorrectly set to 0
+                "pass_hat_3": None,
+                "pass_hat_5": None,
             },
         ],
     }
@@ -954,5 +954,5 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
     with open(leaderboard_path) as f:
         refreshed = json.load(f)
 
-    # Should fall back to resolved count from run
-    assert refreshed["aggregate"][0]["pass_power_1"] == 6
+    # Should fall back to pass rate (resolved/total) from run
+    assert refreshed["aggregate"][0]["pass_hat_1"] == 0.6
