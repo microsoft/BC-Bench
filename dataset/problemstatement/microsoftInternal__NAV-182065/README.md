@@ -1,0 +1,5 @@
+Title: [ALL-E] Issue with the value filters of dimensions in a item template not being transferred to new products created using the template
+Repro Steps:
+Troubleshooting Steps: Go to “Item Template” and we choose the first one as an example Go to Dimensions In the default Dimensions I specified at as the following Go to the allowed values filter Specify it as the following screenshot in the allowed values Go to “Items” and create a new Item with the Item template we’ve used with name “Articulo” Go to “Dimensions” As here it seems the filters are correct except for the allowed values filter it’s not the same as we specified previously in the Item template Also, if we went to the allowed values filter it sets another values automatically Actual Result The item template encounters an issue where modifications made to the “Allowed value filter” are not being saved. Expected Result The expected behavior is for the item template to retain the previously applied modifications in its code
+Description:
+Issue with the value filters of dimensions in a item template not being transferred to new products created using the template
