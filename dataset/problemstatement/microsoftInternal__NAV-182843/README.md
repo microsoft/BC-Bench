@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] Error Message when regestering an Inventory Pick from a Job if the item has Serial tracking and the number of items is greater than 1
+Repro Steps:
+*** Were you able to reproduce the issue? Yes Reproduced in Version: GB Business Central 23.2 (Platform 23.0.15175.0 + Application 23.2.14098.14274) Add Admin as the Warehouse Employee for Silver Location Ensure Inventory Pick is allowed on the location card. Create an Item with serial tracking. Create a Purchase Order to buy three of the items. Assign the item tracking lines to the item. Create a Warehouse Receipt Post the Warehouse Receipt to create a Put away. Register the Put away in Bins that are arranged serially. Create a Job Card Create the Job Planning Lines to consume the item created above, specify the location where the Inventory exist. Assign Item tracking to the Lines. Create an Inventory Pick from the Job Card When you try to post the Inventory Pick, you get this error message. ACTUAL RESULT: EXPECTED RESULT: It should be possible to register the pick
+Description:
+
