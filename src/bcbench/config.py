@@ -42,7 +42,8 @@ class PathConfig:
     ps_script_path: Path
     evaluation_results_path: Path
     leaderboard_dir: Path
-    agent_dir: Path
+    copilot_dir: Path
+    agent_share_dir: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -56,7 +57,8 @@ class PathConfig:
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
             leaderboard_dir=root / "docs" / "_data",
-            agent_dir=root / "src" / "bcbench" / "agent" / "copilot",
+            copilot_dir=root / "src" / "bcbench" / "agent" / "copilot",
+            agent_share_dir=root / "src" / "bcbench" / "agent" / "shared",
         )
 
 
@@ -67,7 +69,7 @@ class TimeoutConfig:
     build_baseapp: int
     build_app: int
     test_execution: int
-    github_copilot_cli: int
+    agent_execution: int
 
     @classmethod
     def default(cls) -> TimeoutConfig:
@@ -76,7 +78,7 @@ class TimeoutConfig:
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
-            github_copilot_cli=30 * 60,  # 30 minutes for GitHub Copilot CLI execution
+            agent_execution=30 * 60,  # 30 minutes for coding agent (claude and copilot) execution
         )
 
 

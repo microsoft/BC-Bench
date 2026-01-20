@@ -66,21 +66,22 @@ function Get-BCCredential {
 .SYNOPSIS
     Clones a Git repository with authentication and retry logic
 .DESCRIPTION
-    Clones a repository using token authentication with configurable retry attempts
+    Initializes a repository and fetches a specific commit using token authentication with configurable retry attempts.
+    Uses git init and git fetch to avoid fetching the default branch tip.
 .PARAMETER RepoUrl
     Base URL of the repository (without authentication)
 .PARAMETER Token
     Authentication token for repository access
-.PARAMETER Branch
-    Specific branch to clone
 .PARAMETER ClonePath
     Local path where repository should be cloned
 .PARAMETER MaxRetries
-    Maximum number of retry attempts (default: 2)
+    Maximum number of retry attempts (default: 3)
 .PARAMETER RetryDelaySeconds
-    Delay between retry attempts in seconds (default: 5)
+    Delay between retry attempts in seconds (default: 30)
 .PARAMETER CommitSha
-    Specific commit SHA to checkout. Performs a shallow clone of that commit.
+    Specific commit SHA to checkout.
+.PARAMETER FetchDepth
+    Depth of history to fetch (default: 200). Used for both commit fetch and submodule initialization.
 .EXAMPLE
     Invoke-GitCloneWithRetry -RepoUrl "https://example.com/repo.git" -Token $token -ClonePath "C:\temp\repo" -CommitSha "abc123..."
 #>
@@ -103,7 +104,10 @@ function Invoke-GitCloneWithRetry {
         [int]$RetryDelaySeconds = 30,
 
         [Parameter(Mandatory = $true)]
-        [string]$CommitSha
+        [string]$CommitSha,
+
+        [Parameter(Mandatory = $false)]
+        [int]$FetchDepth = 200
     )
 
     # Remove existing clone if it exists
@@ -124,18 +128,24 @@ function Invoke-GitCloneWithRetry {
         try {
             Write-Log "Attempting repository clone (Attempt $retryCount/$MaxRetries)..." -Level Info
 
-            Write-Log "Using shallow clone with specific commit: $CommitSha" -Level Debug
-            # Initial shallow clone without checkout
-            $cloneCommand = "git clone --depth 1 --filter=blob:none --no-checkout `"$authenticatedUrl`" `"$ClonePath`""
-            $cloneResult = Invoke-Expression $cloneCommand 2>&1
+            Write-Log "Using git init and fetch to clone specific commit: $CommitSha" -Level Debug
 
+            # Initialize empty git repository
+            $initResult = & git init $ClonePath 2>&1
             if ($LASTEXITCODE -ne 0) {
-                throw "Git clone failed with exit code $LASTEXITCODE`: $cloneResult"
+                throw "Git init failed with exit code $LASTEXITCODE`: $initResult"
             }
 
-            # Fetch the specific commit
-            Write-Log "Fetching specific commit $CommitSha" -Level Debug
-            $fetchResult = & git -C $ClonePath fetch --depth 1 origin $CommitSha 2>&1
+            # Add remote with authenticated URL
+            Write-Log "Adding remote origin" -Level Debug
+            $remoteAddResult = & git -C $ClonePath remote add origin $authenticatedUrl 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to add remote origin with exit code $LASTEXITCODE`: $remoteAddResult"
+            }
+
+            # Fetch the specific commit with history
+            Write-Log "Fetching commit $CommitSha with depth $FetchDepth" -Level Debug
+            $fetchResult = & git -C $ClonePath fetch --depth $FetchDepth origin $CommitSha 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to fetch commit $CommitSha`: $fetchResult"
             }
@@ -145,6 +155,52 @@ function Invoke-GitCloneWithRetry {
             $checkoutResult = & git -C $ClonePath checkout $CommitSha 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to checkout commit $CommitSha`: $checkoutResult"
+            }
+
+            # Initialize submodules if any exist (while remote is still configured)
+            Write-Log "Initializing submodules (if any)" -Level Debug
+            $submoduleResult = & git -C $ClonePath submodule update --init --recursive --depth $FetchDepth 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Warning: Failed to initialize submodules: $submoduleResult" -Level Warning
+            }
+
+            # Remove the remote to prevent fetching future commits and clean up credentials
+            # This is critical for benchmark integrity - the repository must not be able to access newer code
+            Write-Log "Removing remote origin to prevent future fetches" -Level Debug
+            $remoteRemoveResult = & git -C $ClonePath remote remove origin 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to remove remote origin. Benchmark integrity compromised: $remoteRemoveResult"
+            }
+
+            # Remove remotes from all submodules to prevent fetching future commits
+            # This is critical for benchmark integrity - submodules should not be able to access newer code
+            Write-Log "Removing remotes from submodules to prevent future fetches" -Level Debug
+            # git provides $name and $sm_path variables in submodule foreach
+            $submodulePaths = & git -C $ClonePath submodule foreach --quiet 'echo $sm_path' 2>&1
+            $submoduleNames = & git -C $ClonePath submodule foreach --quiet 'echo $name' 2>&1
+            if ($LASTEXITCODE -eq 0 -and $submodulePaths) {
+                for ($i = 0; $i -lt @($submodulePaths).Count; $i++) {
+                    $submodulePath = @($submodulePaths)[$i]
+                    $submoduleName = @($submoduleNames)[$i]
+                    if ($submodulePath) {
+                        $fullSubmodulePath = Join-Path $ClonePath $submodulePath
+                        $subRemoteResult = & git -C $fullSubmodulePath remote remove origin 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "Failed to remove remote from submodule $submodulePath. Benchmark integrity compromised: $subRemoteResult"
+                        }
+                        Write-Log "Removed remote from submodule: $submodulePath" -Level Debug
+
+                        # Remove submodule URL from main repo's .git/config using the submodule name
+                        $submoduleConfigKey = "submodule.$submoduleName.url"
+                        $unsetResult = & git -C $ClonePath config --unset $submoduleConfigKey 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Log "Warning: Failed to remove submodule URL config for $submoduleName`: $unsetResult" -Level Warning
+                        }
+                        else {
+                            Write-Log "Removed submodule URL config: $submoduleConfigKey" -Level Debug
+                        }
+                    }
+                }
             }
 
             $cloneSuccess = $true
