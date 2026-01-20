@@ -1,5 +1,23 @@
-Title: [master] [ALL-E] When creating a new price for variant items the variant code should not automatically display in the price list based on the previously created line
-Repro Steps:
-Open BC 22.13 W1 Search for "Feature management"Activate "New sales pricing experience" Search for ItemsCreate a new item Create 3 Variants for this item:Actions -> item -> variants Search for "Sales price lists"Create a new price listInsert a line with your new item (70061) and select a variant "Blue"insert a second line for this item (70061) the variant "Blue" is automatically presettedACTUAL RESULT:the variant "Blue" is automatically presetted EXPECTED RESULT: The Variant should not be preset for the next line.
-Description:
+# Title: When creating a new price for variant items the variant code should not automatically display in the price list based on the previously created line
+## Repro Steps:
+1. Open BC 22.13 W1
+2. Search for "Feature management"
+   Activate "New sales pricing experience"
+   ![Feature Management](./feature-management.png)
+3. Search for Items
+   Create a new item
+4. Create 3 Variants for this item:
+   Actions -> item -> variants
+   ![Item Variants](./item-variants.png)
+5. Search for "Sales price lists"
+   Create a new price list
+   Insert a line with your new item (70061) and select a variant "Blue"
+   insert a second line for this item (70061) the variant "Blue" is automatically presetted
 
+ACTUAL RESULT:
+the variant "Blue" is automatically presetted
+![Sales Price List](./sales-price-list.png)
+
+EXPECTED RESULT: The Variant should not be preset for the next line.
+
+## Description:
