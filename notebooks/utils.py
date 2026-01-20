@@ -54,6 +54,35 @@ def get_all_tools(df: pd.DataFrame) -> list[str]:
     return sorted(all_tools)
 
 
+def load_aggreate_results(result_folder: Path) -> dict[str, pd.DataFrame]:
+    """
+    Load aggregate results from the specified result folder.
+
+    This function is different because aggregate results are stored differently: each setup is a jsonl file containing multiple runs.
+    """
+    all_results: dict[str, pd.DataFrame] = {}
+
+    for jsonl_file in sorted(result_folder.glob("*.jsonl")):
+        setup_name = jsonl_file.stem
+        rows = []
+        for line in jsonl_file.read_text(encoding="utf-8").splitlines():
+            run_data = json.loads(line)
+            run_id = run_data.get("github_run_id", run_data.get("date"))
+            instance_results = run_data.get("instance_results", {})
+            for instance_id, resolved in instance_results.items():
+                rows.append(
+                    {
+                        "run_id": run_id,
+                        "instance_id": instance_id,
+                        "resolved": resolved,
+                        "execution_time": run_data.get("average_duration", 0),
+                    }
+                )
+        all_results[setup_name] = pd.DataFrame(rows)
+
+    return all_results
+
+
 def load_all_results() -> dict[str, pd.DataFrame]:
     all_results: dict[str, pd.DataFrame] = {}
     for setup_folder in sorted(RESULT_FOLDER.iterdir()):
