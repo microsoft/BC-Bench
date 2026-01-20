@@ -63,4 +63,3 @@ AL call stack: 
     "Opportunity List"(Page 5123).Caption line 4 - Base Application by Microsoft
 
 ## Description:
-

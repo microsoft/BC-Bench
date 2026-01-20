@@ -12,4 +12,3 @@ Acquisition date is null for all FAs.
 ![Result](./result.png)
 
 ## Description:
-

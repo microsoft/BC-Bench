@@ -55,7 +55,7 @@ function Invoke-AppBuildAndPublish {
             appSymbolsFolder     = $appSymbolsFolder
             GenerateReportLayout = 'No'
             gitHubActions        = $false
-            nowarn               = 'AL0432;AL0523;AL0547;AL0551;AL0602;AL0659;AL0684;AL0685;AL0748'
+            nowarn               = 'AL0432;AL0523;AL0547;AL0551;AL0602;AL0659;AL0684;AL0685;AL0748;AL0254;AL0667'
         }
 
         if ($env:RUNNER_DEBUG -eq '1') {

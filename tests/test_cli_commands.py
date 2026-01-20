@@ -321,76 +321,133 @@ def sample_leaderboard_and_summary(tmp_path):
     testgen_leaderboard_path = leaderboard_dir / "test-generation.json"
     summary_path = tmp_path / "summary.json"
 
-    # Create bug-fix leaderboard with 2 entries
-    bugfix_data = [
-        {
-            "total": 10,
-            "resolved": 6,
-            "failed": 4,
-            "build": 9,
-            "percentage": 60.0,
-            "date": "2025-01-10",
-            "model": "gpt-4o",
-            "category": "bug-fix",
-            "agent_name": "copilot",
-            "average_duration": 120.5,
-            "average_prompt_tokens": 5000.0,
-            "average_completion_tokens": 1500.0,
-            "average_llm_duration": 80.0,
-            "github_run_id": "run_001",
-            "experiment": {
-                "mcp_servers": ["server1", "server2"],
-                "custom_instructions": True,
-                "custom_agent": None,
+    # Create bug-fix leaderboard with 2 runs from different agents
+    # Generate instance_results for pass^k calculation
+    copilot_instance_results = {f"test__inst_{i}": (i < 6) for i in range(10)}  # 6 resolved
+    mini_instance_results = {f"test__inst_{i}": (i < 7) for i in range(10)}  # 7 resolved
+
+    bugfix_data = {
+        "runs": [
+            {
+                "total": 10,
+                "resolved": 6,
+                "failed": 4,
+                "build": 9,
+                "percentage": 60.0,
+                "date": "2025-01-10",
+                "model": "gpt-4o",
+                "category": "bug-fix",
+                "agent_name": "copilot",
+                "average_duration": 120.5,
+                "average_prompt_tokens": 5000.0,
+                "average_completion_tokens": 1500.0,
+                "average_llm_duration": 80.0,
+                "github_run_id": "run_001",
+                "experiment": {
+                    "mcp_servers": ["server1", "server2"],
+                    "custom_instructions": True,
+                    "custom_agent": None,
+                },
+                "instance_results": copilot_instance_results,
             },
-        },
-        {
-            "total": 10,
-            "resolved": 7,
-            "failed": 3,
-            "build": 10,
-            "percentage": 70.0,
-            "date": "2025-01-12",
-            "model": "gpt-4o",
-            "category": "bug-fix",
-            "agent_name": "mini",
-            "average_duration": 95.0,
-            "average_prompt_tokens": 3500.0,
-            "average_completion_tokens": 1000.0,
-            "average_llm_duration": 65.0,
-            "github_run_id": "run_003",
-            "experiment": {
-                "mcp_servers": None,
-                "custom_instructions": False,
-                "custom_agent": None,
+            {
+                "total": 10,
+                "resolved": 7,
+                "failed": 3,
+                "build": 10,
+                "percentage": 70.0,
+                "date": "2025-01-12",
+                "model": "gpt-4o",
+                "category": "bug-fix",
+                "agent_name": "mini",
+                "average_duration": 95.0,
+                "average_prompt_tokens": 3500.0,
+                "average_completion_tokens": 1000.0,
+                "average_llm_duration": 65.0,
+                "github_run_id": "run_003",
+                "experiment": {
+                    "mcp_servers": None,
+                    "custom_instructions": False,
+                    "custom_agent": None,
+                },
+                "instance_results": mini_instance_results,
             },
-        },
-    ]
+        ],
+        "aggregate": [
+            {
+                "model": "gpt-4o",
+                "agent_name": "copilot",
+                "category": "bug-fix",
+                "experiment": {
+                    "mcp_servers": ["server1", "server2"],
+                    "custom_instructions": True,
+                    "custom_agent": None,
+                },
+                "total": 10,
+                "num_runs": 1,
+                "average_duration": 120.5,
+                "pass_hat_1": 0.6,
+                "pass_hat_3": None,
+                "pass_hat_5": None,
+            },
+            {
+                "model": "gpt-4o",
+                "agent_name": "mini",
+                "category": "bug-fix",
+                "experiment": None,
+                "total": 10,
+                "num_runs": 1,
+                "average_duration": 95.0,
+                "pass_hat_1": 0.7,
+                "pass_hat_3": None,
+                "pass_hat_5": None,
+            },
+        ],
+    }
 
     # Create test-generation leaderboard with 1 entry
-    testgen_data = [
-        {
-            "total": 10,
-            "resolved": 5,
-            "failed": 5,
-            "build": 8,
-            "percentage": 50.0,
-            "date": "2025-01-11",
-            "model": "gpt-4-turbo",
-            "category": "test-generation",
-            "agent_name": "copilot",
-            "average_duration": 110.0,
-            "average_prompt_tokens": 4500.0,
-            "average_completion_tokens": 1200.0,
-            "average_llm_duration": 75.0,
-            "github_run_id": "run_002",
-            "experiment": {
-                "mcp_servers": None,
-                "custom_instructions": False,
-                "custom_agent": None,
+    testgen_instance_results = {f"test__inst_{i}": (i < 5) for i in range(10)}  # 5 resolved
+
+    testgen_data = {
+        "runs": [
+            {
+                "total": 10,
+                "resolved": 5,
+                "failed": 5,
+                "build": 8,
+                "percentage": 50.0,
+                "date": "2025-01-11",
+                "model": "gpt-4-turbo",
+                "category": "test-generation",
+                "agent_name": "copilot",
+                "average_duration": 110.0,
+                "average_prompt_tokens": 4500.0,
+                "average_completion_tokens": 1200.0,
+                "average_llm_duration": 75.0,
+                "github_run_id": "run_002",
+                "experiment": {
+                    "mcp_servers": None,
+                    "custom_instructions": False,
+                    "custom_agent": None,
+                },
+                "instance_results": testgen_instance_results,
             },
-        },
-    ]
+        ],
+        "aggregate": [
+            {
+                "model": "gpt-4-turbo",
+                "agent_name": "copilot",
+                "category": "test-generation",
+                "experiment": None,
+                "total": 10,
+                "num_runs": 1,
+                "average_duration": 110.0,
+                "pass_hat_1": 0.5,
+                "pass_hat_3": None,
+                "pass_hat_5": None,
+            },
+        ],
+    }
 
     with open(bugfix_leaderboard_path, "w") as f:
         json.dump(bugfix_data, f, indent=2)
@@ -399,6 +456,8 @@ def sample_leaderboard_and_summary(tmp_path):
         json.dump(testgen_data, f, indent=2)
 
     # Create a new summary to update (updated copilot + gpt-4o + server1, server2)
+    new_summary_instance_results = {f"test__inst_{i}": (i < 8) for i in range(10)}  # 8 resolved
+
     new_summary = {
         "total": 10,
         "resolved": 8,  # Improved from 6 to 8
@@ -419,6 +478,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "custom_instructions": True,
             "custom_agent": None,
         },
+        "instance_results": new_summary_instance_results,
     }
 
     with open(summary_path, "w") as f:
@@ -440,30 +500,33 @@ def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
             str(summary_path),
             "--leaderboard-dir",
             str(leaderboard_dir),
+            "--n",
+            "1",
         ],
     )
 
     assert result.exit_code == 0, f"Command failed:\nstdout: {result.stdout}\nstderr: {result.stderr}\nexception: {result.exception}"
 
-    # Verify bug-fix leaderboard still has 2 entries (not 3)
+    # Verify bug-fix leaderboard still has 2 aggregates (not 3)
     with open(bugfix_leaderboard_path) as f:
         updated_leaderboard = json.load(f)
 
-    assert len(updated_leaderboard) == 2, "Should still have 2 entries (replaced, not added)"
+    assert len(updated_leaderboard["aggregate"]) == 2, "Should still have 2 aggregates (replaced, not added)"
 
     # Find the updated entry and verify it matches
-    updated_entry = None
-    for entry in updated_leaderboard:
-        exp = entry.get("experiment", {})
-        if entry["agent_name"] == "copilot" and entry["model"] == "gpt-4o" and exp.get("mcp_servers") == ["server1", "server2"] and exp.get("custom_instructions") is True:
-            updated_entry = entry
+    updated_agg = None
+    for agg in updated_leaderboard["aggregate"]:
+        exp = agg.get("experiment") or {}
+        if agg["agent_name"] == "copilot" and agg["model"] == "gpt-4o" and exp.get("mcp_servers") == ["server1", "server2"] and exp.get("custom_instructions") is True:
+            updated_agg = agg
             break
 
-    assert updated_entry is not None, "Should find the updated copilot + gpt-4o + server1, server2 entry"
-    assert updated_entry["resolved"] == 8, "Should have updated resolved count"
-    assert updated_entry["build"] == 10, "Should have updated build count"
-    assert updated_entry["average_prompt_tokens"] == 5200.0, "Should have updated average_prompt_tokens"
-    assert updated_entry["github_run_id"] == "run_004", "Should have updated github_run_id"
+    assert updated_agg is not None, "Should find the updated copilot + gpt-4o + server1, server2 aggregate"
+    # Find the corresponding run
+    latest_run = next(r for r in updated_leaderboard["runs"] if r["github_run_id"] == "run_004")
+    assert latest_run["resolved"] == 8, "Should have updated resolved count"
+    assert latest_run["build"] == 10, "Should have updated build count"
+    assert latest_run["average_prompt_tokens"] == 5200.0, "Should have updated average_prompt_tokens"
 
 
 @pytest.mark.integration
@@ -472,6 +535,8 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
     summary_path = leaderboard_dir.parent / "new_agent_summary.json"
 
     # Create a new summary for a different agent
+    new_agent_instance_results = {f"test__inst_{i}": (i < 9) for i in range(10)}  # 9 resolved
+
     new_summary = {
         "total": 10,
         "resolved": 9,
@@ -492,6 +557,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
             "custom_instructions": False,
             "custom_agent": None,
         },
+        "instance_results": new_agent_instance_results,
     }
 
     with open(summary_path, "w") as f:
@@ -505,26 +571,29 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
             str(summary_path),
             "--leaderboard-dir",
             str(leaderboard_dir),
+            "--n",
+            "1",
         ],
     )
 
     assert result.exit_code == 0
 
-    # Verify leaderboard now has 2 entries in test-generation
+    # Verify leaderboard now has 2 aggregates in test-generation
     with open(leaderboard_dir / "test-generation.json") as f:
         updated_leaderboard = json.load(f)
 
-    assert len(updated_leaderboard) == 2, "Should now have 2 entries (added new in test-generation)"
+    assert len(updated_leaderboard["aggregate"]) == 2, "Should now have 2 aggregates (added new in test-generation)"
 
     # Find the new entry
-    new_entry = None
-    for entry in updated_leaderboard:
-        if entry["agent_name"] == "new-agent" and entry["model"] == "gpt-4o":
-            new_entry = entry
+    new_agg = None
+    for agg in updated_leaderboard["aggregate"]:
+        if agg["agent_name"] == "new-agent" and agg["model"] == "gpt-4o":
+            new_agg = agg
             break
 
-    assert new_entry is not None, "Should find the new entry for new-agent"
-    assert new_entry["resolved"] == 9, "Should have correct resolved count"
+    assert new_agg is not None, "Should find the new aggregate for new-agent"
+    new_run = next(r for r in updated_leaderboard["runs"] if r["agent_name"] == "new-agent")
+    assert new_run["resolved"] == 9, "Should have correct resolved count"
 
 
 @pytest.mark.integration
@@ -533,6 +602,8 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
     summary_path = leaderboard_dir.parent / "copilot_different_mcp_summary.json"
 
     # Create a new summary for copilot + gpt-4o but WITHOUT mcp_servers (different from existing)
+    diff_mcp_instance_results = {f"test__inst_{i}": (i < 7) for i in range(10)}  # 7 resolved
+
     new_summary = {
         "total": 10,
         "resolved": 7,
@@ -553,6 +624,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
             "custom_instructions": False,  # Different from existing True
             "custom_agent": None,
         },
+        "instance_results": diff_mcp_instance_results,
     }
 
     with open(summary_path, "w") as f:
@@ -566,30 +638,32 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
             str(summary_path),
             "--leaderboard-dir",
             str(leaderboard_dir),
+            "--n",
+            "1",
         ],
     )
 
     assert result.exit_code == 0
 
-    # Verify bug-fix leaderboard now has 3 entries (not replaced because mcp_servers differ)
+    # Verify bug-fix leaderboard now has 3 aggregates (not replaced because mcp_servers differ)
     bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
     with open(bugfix_leaderboard_path) as f:
         updated_leaderboard = json.load(f)
 
-    assert len(updated_leaderboard) == 3, "Should have 3 entries in bug-fix (added new because mcp_servers differ)"
+    assert len(updated_leaderboard["aggregate"]) == 3, "Should have 3 aggregates in bug-fix (added new because mcp_servers differ)"
 
-    # Verify both copilot + gpt-4o entries exist
-    copilot_gpt4o_entries = [e for e in updated_leaderboard if e["agent_name"] == "copilot" and e["model"] == "gpt-4o"]
+    # Verify both copilot + gpt-4o aggregates exist
+    copilot_gpt4o_aggs = [a for a in updated_leaderboard["aggregate"] if a["agent_name"] == "copilot" and a["model"] == "gpt-4o"]
 
-    assert len(copilot_gpt4o_entries) == 2, "Should have 2 different copilot + gpt-4o entries"
+    assert len(copilot_gpt4o_aggs) == 2, "Should have 2 different copilot + gpt-4o aggregates"
 
     # Find each by experiment.mcp_servers
-    with_servers = next((e for e in copilot_gpt4o_entries if e.get("experiment", {}).get("mcp_servers") == ["server1", "server2"]), None)
-    without_servers = next((e for e in copilot_gpt4o_entries if e.get("experiment", {}).get("mcp_servers") is None), None)
+    with_servers = next((a for a in copilot_gpt4o_aggs if (a.get("experiment") or {}).get("mcp_servers") == ["server1", "server2"]), None)
+    without_servers = next((a for a in copilot_gpt4o_aggs if (a.get("experiment") or {}).get("mcp_servers") is None), None)
 
     assert with_servers is not None and without_servers is not None
-    assert with_servers["resolved"] == 6, "Original entry should be unchanged"
-    assert without_servers["resolved"] == 7, "New entry should have new values"
+    assert with_servers["pass_hat_1"] == 0.6, "Original aggregate should be unchanged"
+    assert without_servers["pass_hat_1"] == 0.7, "New aggregate should have new values"
 
 
 @pytest.mark.integration
@@ -660,3 +734,225 @@ def test_result_update_does_not_add_multiple_newlines_when_run_twice(sample_lead
     # Count trailing newlines after second update
     trailing_newlines_second = len(content_after_second) - len(content_after_second.rstrip(b"\n"))
     assert trailing_newlines_second == 1, "File should still have exactly 1 trailing newline after second update, not 2"
+
+
+@pytest.mark.integration
+def test_result_update_stores_multiple_results_with_default_n(sample_leaderboard_and_summary):
+    leaderboard_dir, summary_path = sample_leaderboard_and_summary
+    bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
+
+    # Default n=5 - should add as new entry (even though combination exists)
+    # because n>1 means we keep multiple results
+    multi_results_instance = {f"test__inst_{i}": (i < 8) for i in range(10)}  # 8 resolved
+
+    new_summary = {
+        "total": 10,
+        "resolved": 8,
+        "failed": 2,
+        "build": 10,
+        "percentage": 80.0,
+        "date": "2025-01-15",
+        "model": "gpt-4o",
+        "category": "bug-fix",
+        "agent_name": "copilot",
+        "average_duration": 130.0,
+        "average_prompt_tokens": 5200.0,
+        "average_completion_tokens": 1600.0,
+        "average_llm_duration": 90.0,
+        "github_run_id": "run_new_1",
+        "experiment": {
+            "mcp_servers": ["server1", "server2"],
+            "custom_instructions": True,
+            "custom_agent": None,
+        },
+        "instance_results": multi_results_instance,
+    }
+
+    with open(summary_path, "w") as f:
+        json.dump(new_summary, f, indent=2)
+
+    result = runner.invoke(
+        app,
+        ["result", "update", str(summary_path), "--leaderboard-dir", str(leaderboard_dir)],
+    )
+
+    assert result.exit_code == 0
+
+    with open(bugfix_leaderboard_path) as f:
+        updated_leaderboard = json.load(f)
+
+    # Should still have 2 aggregates (the new result is added to an existing combination's runs)
+    assert len(updated_leaderboard["aggregate"]) == 2
+
+    # Verify we have 2 runs for copilot + gpt-4o + server1,server2 (original + new)
+    copilot_runs = [r for r in updated_leaderboard["runs"] if r["agent_name"] == "copilot" and r["model"] == "gpt-4o" and (r.get("experiment") or {}).get("mcp_servers") == ["server1", "server2"]]
+    assert len(copilot_runs) == 2  # Original + new run
+
+
+@pytest.mark.integration
+def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_summary):
+    leaderboard_dir, _ = sample_leaderboard_and_summary
+    bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
+
+    # First, add 4 more results to have 5 total for copilot + gpt-4o + servers combination (default n=5)
+    oldest_instance_results = {f"test__inst_{i}": (i < 7) for i in range(10)}  # 7 resolved
+
+    base_summary = {
+        "total": 10,
+        "resolved": 7,
+        "failed": 3,
+        "build": 9,
+        "percentage": 70.0,
+        "model": "gpt-4o",
+        "category": "bug-fix",
+        "agent_name": "copilot",
+        "average_duration": 120.0,
+        "average_prompt_tokens": 5000.0,
+        "average_completion_tokens": 1500.0,
+        "average_llm_duration": 85.0,
+        "experiment": {
+            "mcp_servers": ["server1", "server2"],
+            "custom_instructions": True,
+            "custom_agent": None,
+        },
+        "instance_results": oldest_instance_results,
+    }
+
+    summary_path = leaderboard_dir.parent / "test_summary.json"
+
+    # Add results to fill up to n=5 (original is from 2025-01-10)
+    for _, (day, run_id) in enumerate([("2025-01-16", "run_second"), ("2025-01-17", "run_third"), ("2025-01-18", "run_fourth"), ("2025-01-19", "run_fifth")]):
+        summary = {**base_summary, "date": day, "github_run_id": run_id}
+        with open(summary_path, "w") as f:
+            json.dump(summary, f, indent=2)
+        runner.invoke(app, ["result", "update", str(summary_path), "--leaderboard-dir", str(leaderboard_dir)])
+
+    # Now we should have 5 runs for this combination
+    with open(bugfix_leaderboard_path) as f:
+        leaderboard = json.load(f)
+
+    copilot_runs = [r for r in leaderboard["runs"] if r["agent_name"] == "copilot" and r["model"] == "gpt-4o" and (r.get("experiment") or {}).get("mcp_servers") == ["server1", "server2"]]
+    assert len(copilot_runs) == 5
+
+    # Now add a 6th result - should replace oldest (2025-01-10)
+    newest_instance_results = {f"test__inst_{i}": (i < 9) for i in range(10)}  # 9 resolved
+    summary_new = {**base_summary, "date": "2025-01-20", "github_run_id": "run_sixth", "resolved": 9, "instance_results": newest_instance_results}
+    with open(summary_path, "w") as f:
+        json.dump(summary_new, f, indent=2)
+
+    result = runner.invoke(app, ["result", "update", str(summary_path), "--leaderboard-dir", str(leaderboard_dir)])
+    assert result.exit_code == 0
+
+    with open(bugfix_leaderboard_path) as f:
+        final_leaderboard = json.load(f)
+
+    # Should still have 5 runs for this combination
+    final_copilot_runs = [r for r in final_leaderboard["runs"] if r["agent_name"] == "copilot" and r["model"] == "gpt-4o" and (r.get("experiment") or {}).get("mcp_servers") == ["server1", "server2"]]
+    assert len(final_copilot_runs) == 5
+
+    # The oldest (2025-01-10) should be gone, replaced by 2025-01-20
+    dates = sorted(r["date"] for r in final_copilot_runs)
+    assert dates == ["2025-01-16", "2025-01-17", "2025-01-18", "2025-01-19", "2025-01-20"]
+
+    # Verify the newest entry has the correct resolved count
+    newest = next(r for r in final_copilot_runs if r["date"] == "2025-01-20")
+    assert newest["resolved"] == 9
+    assert newest["github_run_id"] == "run_sixth"
+
+
+@pytest.mark.integration
+def test_result_refresh_recalculates_aggregates(sample_leaderboard_and_summary):
+    leaderboard_dir, _ = sample_leaderboard_and_summary
+    bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
+
+    # Corrupt the aggregates to verify refresh recalculates them
+    with open(bugfix_leaderboard_path) as f:
+        leaderboard = json.load(f)
+
+    for agg in leaderboard["aggregate"]:
+        agg["pass_hat_1"] = 999.0  # Invalid value
+
+    with open(bugfix_leaderboard_path, "w") as f:
+        json.dump(leaderboard, f, indent=2)
+
+    # Run refresh command
+    result = runner.invoke(app, ["result", "refresh", "--leaderboard-dir", str(leaderboard_dir)])
+    assert result.exit_code == 0
+
+    # Verify aggregates were recalculated correctly
+    with open(bugfix_leaderboard_path) as f:
+        refreshed = json.load(f)
+
+    # Should have 2 aggregates (copilot with servers, mini without)
+    assert len(refreshed["aggregate"]) == 2
+
+    # All pass_hat_1 values should be recalculated (not 999)
+    for agg in refreshed["aggregate"]:
+        assert agg["pass_hat_1"] != 999.0
+        assert agg["pass_hat_1"] > 0
+
+
+@pytest.mark.integration
+def test_result_refresh_handles_empty_leaderboard(tmp_path):
+    # Create an empty leaderboard file
+    empty_leaderboard = tmp_path / "bug-fix.json"
+    empty_leaderboard.write_text("[]")
+
+    result = runner.invoke(app, ["result", "refresh", "--leaderboard-dir", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No runs found" in result.output
+
+
+@pytest.mark.integration
+def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
+    """Test that refresh handles legacy runs that don't have instance_results."""
+    leaderboard_path = tmp_path / "bug-fix.json"
+
+    legacy_data = {
+        "runs": [
+            {
+                "total": 10,
+                "resolved": 6,
+                "failed": 4,
+                "build": 9,
+                "percentage": 60.0,
+                "date": "2025-01-10",
+                "model": "gpt-4o",
+                "category": "bug-fix",
+                "agent_name": "legacy-agent",
+                "average_duration": 100.0,
+                "average_prompt_tokens": 4000.0,
+                "average_completion_tokens": 1200.0,
+                "average_llm_duration": 70.0,
+                "github_run_id": "run_legacy",
+                "experiment": None,
+                "instance_results": None,  # Legacy: no instance_results
+            },
+        ],
+        "aggregate": [
+            {
+                "model": "gpt-4o",
+                "agent_name": "legacy-agent",
+                "category": "bug-fix",
+                "experiment": None,
+                "total": 10,
+                "num_runs": 1,
+                "average_duration": 100.0,
+                "pass_hat_1": 0.0,  # Incorrectly set to 0
+                "pass_hat_3": None,
+                "pass_hat_5": None,
+            },
+        ],
+    }
+
+    with open(leaderboard_path, "w") as f:
+        json.dump(legacy_data, f, indent=2)
+
+    result = runner.invoke(app, ["result", "refresh", "--leaderboard-dir", str(tmp_path)])
+    assert result.exit_code == 0
+
+    with open(leaderboard_path) as f:
+        refreshed = json.load(f)
+
+    # Should fall back to pass rate (resolved/total) from run
+    assert refreshed["aggregate"][0]["pass_hat_1"] == 0.6

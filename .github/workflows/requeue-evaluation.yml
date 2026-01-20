@@ -21,22 +21,23 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.repeat != '1' }}
     steps:
-      - name: Find or create tag for requeue
+      - name: Create or reuse tag for requeue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          COMMIT_SHA="${{ github.sha }}"
+          REF="${{ github.ref }}"
 
-          # Check if any tag already exists on this commit
-          EXISTING_TAG=$(gh api repos/${{ github.repository }}/git/refs/tags \
-            --jq ".[] | select(.object.sha == \"${COMMIT_SHA}\") | .ref" \
-            | head -n 1 | sed 's|refs/tags/||')
-
-          if [ -n "${EXISTING_TAG}" ]; then
-            echo "Reusing existing tag: ${EXISTING_TAG}"
-            TAG_NAME="${EXISTING_TAG}"
+          # If already running from an eval-run tag, reuse it
+          if [[ "${REF}" == refs/tags/eval-run-* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            echo "Reusing existing ephemeral tag: ${TAG_NAME}"
           else
-            TAG_NAME="eval-run-${{ github.run_id }}"
+            # First run in the chain: create a new tag
+            COMMIT_SHA="${{ github.sha }}"
+            WORKFLOW_FILE="${{ inputs.workflow-file }}"
+            AGENT_NAME="${WORKFLOW_FILE%%-evaluation.yml}"
+
+            TAG_NAME="eval-run-${AGENT_NAME}-${{ github.run_id }}"
             echo "Creating ephemeral tag: ${TAG_NAME}"
             gh api repos/${{ github.repository }}/git/refs \
               --method POST \
