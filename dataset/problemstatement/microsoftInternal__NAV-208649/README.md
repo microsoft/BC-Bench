@@ -36,4 +36,3 @@ If you were then to delete the Released Production Order, and go to the Planning
 But if you run the Planning Worksheet's 'Calc. Regenerative Plan', then you will get an error message about the 'Quantity Rounding Precision'.
 
 I don't believe the 'Quantity Rounding Precision' in the Item UOM should have any influence on this process.  I always thought this field was only for scenario with Picking and when Base UOM is larger than the smallest UOM, and picking in smallest UOM.  There is a lot of confusion about this 'Quantity Rounding Precision' field within the Item UOM actually. 
-

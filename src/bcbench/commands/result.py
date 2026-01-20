@@ -1,5 +1,6 @@
 import json
 import re
+from collections import defaultdict
 from pathlib import Path
 
 import typer
@@ -8,22 +9,18 @@ from typing_extensions import Annotated
 from bcbench.cli_options import DatasetPath, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult, EvaluationResultSummary, create_console_summary, create_github_job_summary, create_result_from_json, write_bceval_results
-from bcbench.types import ExperimentConfiguration
+from bcbench.results import (
+    BaseEvaluationResult,
+    EvaluationResultSummary,
+    Leaderboard,
+    LeaderboardAggregate,
+    create_console_summary,
+    create_github_job_summary,
+    create_result_from_json,
+    write_bceval_results,
+)
 
 logger = get_logger(__name__)
-
-
-def _experiments_equal(exp1: ExperimentConfiguration | None, exp2: ExperimentConfiguration | None) -> bool:
-    """Compare two experiment configurations, treating None as equivalent to an empty config.
-
-    This handles the case where JSON has "experiment": null but the pipeline creates
-    an ExperimentConfiguration with all default values.
-    """
-    # Normalize None to empty config for comparison
-    exp1_normalized = exp1 if exp1 is not None and not exp1.is_empty() else None
-    exp2_normalized = exp2 if exp2 is not None and not exp2.is_empty() else None
-    return exp1_normalized == exp2_normalized
 
 
 _config = get_config()
@@ -86,20 +83,31 @@ def result_summarize(
     summary.save(run_dir, summary_output)
 
 
+def _get_combination_key(result: EvaluationResultSummary) -> tuple[str, str, str | None]:
+    exp_key = None
+    if result.experiment and not result.experiment.is_empty():
+        exp_key = json.dumps(result.experiment.model_dump(mode="json"), sort_keys=True)
+    return (result.agent_name, result.model, exp_key)
+
+
+def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:
+    grouped: defaultdict[tuple[str, str, str | None], list[EvaluationResultSummary]] = defaultdict(list)
+    for run in runs:
+        grouped[_get_combination_key(run)].append(run)
+    return [LeaderboardAggregate.from_runs(group) for group in grouped.values()]
+
+
 @result_app.command("update")
 def result_update(
     evaluation_summary: Annotated[Path, typer.Argument(help="Path to a single evaluation run's summary JSON", exists=True, file_okay=True, dir_okay=False)],
     leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_dir,
+    n: Annotated[int, typer.Option(help="Max number of runs to store per agent+model+experiment combination")] = 5,
 ):
     """
     Update the public leaderboard with a new evaluation summary.
 
-    Takes a single evaluation run's summary and updates the appropriate category-specific
-    leaderboard file (e.g. bug-fix.json), either replacing an existing
-    agent-model combination or adding a new entry.
-
-    Example:
-        bcbench result update evaluation_results/12345/evaluation_summary.json
+    Takes a single evaluation run's summary and updates the appropriate category-specific leaderboard file.
+    Stores up to n runs per combination, removing the oldest when exceeding n.
     """
     logger.info(f"Loading evaluation summary from: {evaluation_summary}")
     with open(evaluation_summary, encoding="utf-8") as f:
@@ -107,36 +115,75 @@ def result_update(
 
     logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}' in category '{new_result.category.value}'")
 
-    # Determine the appropriate leaderboard file based on category
     leaderboard_path = leaderboard_dir / f"{new_result.category.value}.json"
-
     logger.info(f"Using leaderboard file: {leaderboard_path}")
 
-    # Load or create leaderboard file
-    if leaderboard_path.exists():
-        logger.info(f"Loading existing leaderboard from: {leaderboard_path}")
-        with open(leaderboard_path, encoding="utf-8") as f:
-            existing_results: list[EvaluationResultSummary] = [EvaluationResultSummary.model_validate(entry) for entry in json.load(f)]
+    # Load existing leaderboard
+    leaderboard: Leaderboard = Leaderboard.load(leaderboard_path)
+    runs: list[EvaluationResultSummary] = list(leaderboard.runs)
+    logger.info(f"Loaded {len(runs)} existing runs")
+
+    # Find runs matching this combination
+    new_result_key = _get_combination_key(new_result)
+    matching_runs: list[EvaluationResultSummary] = [r for r in runs if _get_combination_key(r) == new_result_key]
+    other_runs: list[EvaluationResultSummary] = [r for r in runs if _get_combination_key(r) != new_result_key]
+
+    if len(matching_runs) < n:
+        logger.info(f"Adding run ({len(matching_runs) + 1}/{n}) for '{new_result.agent_name}' + '{new_result.model}'")
+        matching_runs.append(new_result)
     else:
-        logger.info(f"Creating new leaderboard file: {leaderboard_path}")
-        existing_results = []
+        matching_runs.sort(key=lambda x: x.date)
+        logger.info(f"Replacing oldest run (date: {matching_runs[0].date}) for '{new_result.agent_name}' + '{new_result.model}'")
+        matching_runs = [*matching_runs[1:], new_result]
 
-    # Check if result already exists for this agent+model+experiment combination
-    updated = False
-    for i, result in enumerate(existing_results):
-        if result.agent_name == new_result.agent_name and result.model == new_result.model and _experiments_equal(result.experiment, new_result.experiment):
-            logger.info(f"Found existing result for '{new_result.agent_name}' + '{new_result.model}', replacing...")
-            existing_results[i] = new_result
-            updated = True
-            break
+    # Combine and rebuild aggregates
+    all_runs: list[EvaluationResultSummary] = other_runs + matching_runs
+    aggregates = _rebuild_aggregates(all_runs)
 
-    if not updated:
-        logger.info(f"No existing result found for '{new_result.agent_name}' + '{new_result.model}', adding new entry")
-        existing_results.append(new_result)
-
-    # Write back as list of dicts
+    # Write back
+    leaderboard = Leaderboard(runs=all_runs, aggregate=aggregates)
     with open(leaderboard_path, "w", encoding="utf-8") as f:
-        json.dump([result.to_dict() for result in existing_results], f, indent=2)
+        json.dump(leaderboard.to_dict(), f, indent=2)
         f.write("\n")
 
     logger.info(f"Successfully updated leaderboard at: {leaderboard_path}")
+
+
+@result_app.command("refresh")
+def result_refresh(
+    leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_dir,
+):
+    """
+    Refresh all leaderboard aggregates without adding new data.
+
+    Recalculates aggregate metrics for all category-specific leaderboard files
+    based on their existing runs. Useful when the aggregation logic has changed.
+    """
+    leaderboard_files: list[Path] = list(leaderboard_dir.glob("*.json"))
+
+    if not leaderboard_files:
+        logger.error(f"No leaderboard files found in: {leaderboard_dir}")
+        raise typer.Exit(code=1)
+
+    logger.info(f"Found {len(leaderboard_files)} leaderboard file(s) to refresh")
+
+    for leaderboard_path in leaderboard_files:
+        logger.info(f"Refreshing: {leaderboard_path.name}")
+
+        leaderboard: Leaderboard = Leaderboard.load(leaderboard_path)
+        runs: list[EvaluationResultSummary] = list(leaderboard.runs)
+
+        if not runs:
+            logger.warning(f"No runs found in {leaderboard_path.name}, skipping")
+            continue
+
+        # Rebuild aggregates from existing runs
+        aggregates = _rebuild_aggregates(runs)
+
+        # Write back
+        leaderboard = Leaderboard(runs=runs, aggregate=aggregates)
+        with open(leaderboard_path, "w", encoding="utf-8") as f:
+            json.dump(leaderboard.to_dict(), f, indent=2)
+            f.write("\n")
+
+        logger.info(f"Refreshed {leaderboard_path.name}: {len(runs)} runs -> {len(aggregates)} aggregates")
