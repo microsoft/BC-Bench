@@ -27,6 +27,21 @@ on:
         required: false
         default: true
         type: boolean
+      repeat:
+        description: "Number of times to run sequentially (ignored for test runs)"
+        required: false
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+
+concurrency:
+  group: claude-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  cancel-in-progress: false
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
@@ -109,3 +124,16 @@ jobs:
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
     secrets: inherit
+
+  requeue:
+    needs: summarize-results
+    if: ${{ !inputs.test-run }}
+    uses: ./.github/workflows/requeue-evaluation.yml
+    permissions:
+      contents: write
+      actions: write
+    with:
+      workflow-file: claude-evaluation.yml
+      repeat: ${{ inputs.repeat }}
+      workflow-inputs: |
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}"}

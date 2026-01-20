@@ -153,20 +153,15 @@ jobs:
       category: ${{ inputs.category }}
     secrets: inherit
 
-  requeue-if-needed:
+  requeue:
     needs: summarize-results
-    runs-on: ubuntu-latest
-    if: ${{ !inputs.test-run && inputs.repeat != '1' }}
-    steps:
-      - name: Trigger next run
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run copilot-evaluation.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.sha }} \
-            -f model="${{ inputs.model }}" \
-            -f category="${{ inputs.category }}" \
-            -f test-run="${{ inputs.test-run }}" \
-            -f al-mcp="${{ inputs.al-mcp }}" \
-            -f repeat="$(( ${{ inputs.repeat }} - 1 ))"
+    if: ${{ !inputs.test-run }}
+    uses: ./.github/workflows/requeue-evaluation.yml
+    permissions:
+      contents: write
+      actions: write
+    with:
+      workflow-file: copilot-evaluation.yml
+      repeat: ${{ inputs.repeat }}
+      workflow-inputs: |
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}
