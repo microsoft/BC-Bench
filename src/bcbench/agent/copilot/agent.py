@@ -54,7 +54,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
             "--log-level=debug",
             "--disable-parallel-tools-execution",
             f"--log-dir={output_dir.resolve()}",
-            f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
+            f"-p={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")
@@ -82,7 +82,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
         stderr_lines = stderr.splitlines()
 
         # Find the most recent session log for tool usage parsing
-        session_logs = list(output_dir.glob("session-*.log"))
+        session_logs = list(output_dir.glob("process-*.log"))
         session_log_path = max(session_logs, key=lambda p: p.stat().st_mtime) if session_logs else None
 
         metrics = parse_metrics(stderr_lines, session_log_path=session_log_path)

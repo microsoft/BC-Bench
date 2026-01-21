@@ -187,13 +187,13 @@ def test_parse_metrics_minimal_real_output():
 
 def test_parse_session_log_extracts_turn_count():
     log_content = """
-2025-12-07T20:37:41.314Z [START-GROUP] Sending request to the AI model
-2025-12-07T20:37:43.267Z [DEBUG] response (Request-ID 00000-e9c550bb):
-2025-12-07T20:37:43.268Z [DEBUG] Tool calls count: 2
-2025-12-07T20:37:43.316Z [START-GROUP] Sending request to the AI model
-2025-12-07T20:37:44.908Z [DEBUG] response (Request-ID 00000-da769f99):
-2025-12-07T20:37:45.903Z [START-GROUP] Sending request to the AI model
-2025-12-07T20:37:47.662Z [DEBUG] response (Request-ID 00000-e9ca091f):
+2026-01-20T08:55:10.767Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:13.898Z [DEBUG] response (Request-ID 00000-1e14d4ab):
+2026-01-20T08:55:13.900Z [DEBUG] Tool calls count: 2
+2026-01-20T08:55:19.055Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:21.413Z [DEBUG] response (Request-ID 00000-caa8ae3a):
+2026-01-20T08:55:21.460Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:23.793Z [DEBUG] response (Request-ID 00000-3e8094c5):
 """
     with patch.object(Path, "read_text", return_value=log_content):
         _tool_usage, turn_count = parse_session_log(Path("dummy.log"))
@@ -217,11 +217,11 @@ def test_parse_session_log_extracts_tool_calls():
 def test_parse_metrics_with_session_log_includes_turn_count(tmp_path):
     log_file = tmp_path / "session.log"
     log_file.write_text("""
-2025-12-07T20:37:41.314Z [START-GROUP] Sending request to the AI model
-2025-12-07T20:37:43.316Z [START-GROUP] Sending request to the AI model
-2025-12-07T20:37:45.903Z [START-GROUP] Sending request to the AI model
-2025-12-07T20:37:47.681Z [START-GROUP] Sending request to the AI model
-2025-12-07T20:37:49.939Z [START-GROUP] Sending request to the AI model
+2026-01-20T08:55:10.767Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:19.055Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:21.460Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:23.840Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:25.299Z [INFO] --- Start of group: Sending request to the AI model ---
 "function": {"name": "view", "arguments": "{}"}
 "function": {"name": "grep", "arguments": "{}"}
 """)
@@ -233,3 +233,25 @@ def test_parse_metrics_with_session_log_includes_turn_count(tmp_path):
     assert result.turn_count == 5
     assert result.tool_usage == {"view": 1, "grep": 1}
     assert result.execution_time == 90.0
+
+
+def test_parse_metrics_with_session_log_multiple_tools(tmp_path):
+    log_file = tmp_path / "session.log"
+    log_file.write_text("""
+2026-01-20T08:55:10.767Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:19.055Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:21.460Z [INFO] --- Start of group: Sending request to the AI model ---
+2026-01-20T08:55:23.840Z [INFO] --- Start of group: Sending request to the AI model ---
+"function": {"name": "powershell", "arguments": "{}"}
+"function": {"name": "view", "arguments": "{}"}
+"function": {"name": "grep", "arguments": "{}"}
+"function": {"name": "view", "arguments": "{}"}
+""")
+
+    output_lines = ["Total duration (wall): 2m 15s\n"]
+    result = parse_metrics(output_lines, session_log_path=log_file)
+
+    assert result is not None
+    assert result.turn_count == 4
+    assert result.tool_usage == {"powershell": 1, "view": 2, "grep": 1}
+    assert result.execution_time == 135.0
