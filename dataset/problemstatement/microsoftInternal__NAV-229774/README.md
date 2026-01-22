@@ -1,0 +1,5 @@
+Title: The record reference is empty. Please save the record before attaching files." error if you try to upload a file inside the VAT return.
+Repro Steps:
+1) ALT + Q > VAT Returns. 2) Select one, or create one if blank > "Documents" drop-down menu > Upload files. 3) Upload a file. 4) We get an error. Expected Outcome:The customer should be able to upload the desired file.Actual Outcome:The customer is unable to upload the desired file using this visible Factbox - Documents. WORKAROUND: Use Personalization to add "Attachments" part. Then we can upload a file... But not possible from Documents. WHY?? If only possible from Attachments, this is the part that should be visible, although we think it should be possible from both sides. Troubleshooting Actions Taken:Tried in a different localization, and different version, but same error.Did the partner reproduce the issue in a Sandbox without extensions? Yes
+Description:
+"The record reference is empty. Please save the record before attaching files." error if you try to upload a file inside the VAT return.
