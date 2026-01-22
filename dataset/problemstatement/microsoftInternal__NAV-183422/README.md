@@ -1,0 +1,5 @@
+Title: [ALL-E] Refund is wrongly suggested by Suggest Vendor Payments routine if Summarize per Vendor is enabled. - Copy
+Repro Steps:
+1-Take a BC 23.X environment 2-Create a new Vendor to be easier to Troubleshoot the issue. LAETICIA, Posting Groups = NATIONAL 3- In the Payment Journal, create a line for a Refund for this Vendor for TODAY and post it. 4- Now click on the same Payment Journal on:Prepare --> Suggest Vendor Payments Posting Date/Last Payment Date = TODAY Summarize per Vendor = No Starting Doc No = TEST001 Filter by Vendor = LAETICIA 5- Click OK. Nothing gets suggested. That's right! 6- Now do the same as in Step 4, but enable: Summarize per Vendor = YES 7. Click OK. ===============ACTUAL RESULTS =============== Refund is wrongly suggested by Suggest Vendor Payments routine if Summarize per Vendor is enabled. ===============EXPECTED RESULTS =============== It does not make sense to suggest a Refund. This is causing impact on customers, which leads to payments being made to suppliers by error.
+Description:
+Refund is wrongly suggested by Suggest Vendor Payments routine if Summarize per Vendor is enabled.
