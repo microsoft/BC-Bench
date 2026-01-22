@@ -17,8 +17,8 @@ TOOL_CALL_PATTERN = re.compile(
 )
 
 # Regex to count LLM requests (turns) in the log
-# Each "[START-GROUP] Sending request to the AI model" indicates a new LLM call
-TURN_COUNT_PATTERN = re.compile(r"\[START-GROUP\] Sending request to the AI model")
+# Each "--- Start of group: Sending request to the AI model ---" indicates a new LLM call
+TURN_COUNT_PATTERN = re.compile(r"--- Start of group: Sending request to the AI model ---")
 
 
 def parse_session_log(log_path: Path) -> tuple[dict[str, int], int]:
