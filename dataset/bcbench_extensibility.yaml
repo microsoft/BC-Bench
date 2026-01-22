@@ -52,8 +52,8 @@ entries:
                         TempInvtOrderTrackingBuffer.Open := TempInvtOrderTrackingBuffer."Outstanding Quantity" <> 0;
 
                         // Start Event
-                           
-                          OnCreateOrderTrackingBufferLinesOnBeforeModifyTempInvtOrderTracking(TempInvtOrderTrackingBuffer, DocNo, LineNo);                
+
+                          OnCreateOrderTrackingBufferLinesOnBeforeModifyTempInvtOrderTracking(TempInvtOrderTrackingBuffer, DocNo, LineNo);
 
                        // End Event
 
@@ -73,7 +73,7 @@ entries:
 
     expected:
       labels: "SCM, event-request"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ Analysis complete - approved for implementation
@@ -114,13 +114,13 @@ entries:
 
         ### Describe the request
 
-        Remove "local" scope from procedure UpdateTypeText() in page 176 "Standard Purchase Code Subform";        
+        Remove "local" scope from procedure UpdateTypeText() in page 176 "Standard Purchase Code Subform";
 
       comments: ""
 
     expected:
       labels: "SCM, request-for-external"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ Analysis complete - approved for implementation
@@ -156,7 +156,7 @@ entries:
 
     expected:
       labels: "SCM, request-for-external"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ Analysis complete - approved for implementation
@@ -195,7 +195,7 @@ entries:
 
     expected:
       labels: "SCM, request-for-external"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ Analysis complete - approved for implementation
@@ -221,7 +221,7 @@ entries:
         ### Why do you need this change?
 
         We currently have an AppSource app that allows tracking of different legal entities in a single Business Central company using Dimension Values to distinguish between the legal entities.  For many of our US clients, each legal entity may correspond to a different tax group and therefore require separate tax generation and submission of the IRS 1099 reports based on the dimension values.  We already fully integrate with the 1099 functionality in the Business Central US base app, however with the introduction of the new IRS 1099 module we require a few additional integration events in this new module to allow our solution to continue to function in this area for our customers.
-         
+
         We require 4 integration events as follows:
         1. report 10034 "Create Transmission IRIS" inside trigger OnPostReport()
             This will be used to set an additional range against the validation which currently only allows one transmission per IRS Reporting Period.  We would add an additional range here based on our dimension values as there may be up to one transmission per IRS Reporting Period and Dimension Value.
@@ -250,9 +250,9 @@ entries:
               procedure OnBeforeTransmissionFindFirst(var Transmission: Record "Transmission IRIS")
               begin
               end;
-              
-              
-         2) codeunit 10056 "Process Transmission IRIS" - 
+
+
+         2) codeunit 10056 "Process Transmission IRIS" -
 
              procedure AddReleasedFormDocsToTransmission(var Transmission: Record "Transmission IRIS") DocsCount: Integer
               var
@@ -264,15 +264,15 @@ entries:
                 ....
                 ....
               end;
-              
+
               [IntegrationEvent(false, false)]
               procedure OnBeforeIRS1099FormDocHeaderFindSet(var IRS1099FormDocHeader: Record "IRS 1099 Form Doc. Header" ;
                                                             Transmission: Record "Transmission IRIS")
               begin
               end;
-              
+
           3) Inside codeunit 10033 "Generate Xml File IRIS" but as It is marked internal so have to create new codeunit to add new events and use it inside this codeunit.
-            
+
             a) local procedure AddIssuerDetails()
                 var
                     ....
@@ -287,7 +287,7 @@ entries:
                 end
 
 
-                
+
             b)local procedure AddContactPersonInformationGrp()
               var
                 ....
@@ -298,28 +298,28 @@ entries:
                 "Generate Xml File IRIS Events".OnAfterGetCompanyInformationSetup(CompanyInformation);
                 .....
             end;
-            
-                
+
+
             Codeunit XXXX "Generate Xml File IRIS Events"
                 {
-                    procedure OnAfterGetCompanyInfoAndIRSFormSetup(var CompanyInformation: Record "Company Information"; 
+                    procedure OnAfterGetCompanyInfoAndIRSFormSetup(var CompanyInformation: Record "Company Information";
                                                                        var IRSFormsSetup: Record "IRS Forms Setup";)
                     begin
                         OnGetCompanyInfoAndIRSFormSetup(CompanyInformation,IRSFormsSetup);
                     end;
-                    
+
                     procedure OnAfterGetCompanyInformationSetup(var CompanyInformation: Record "Company Information")
                     begin
                         OnGetCompanyInformationSetup(CompanyInformation);
                     end;
-                    
-                    
+
+
                     [IntegrationEvent(false, false)]
-                    procedure OnGetCompanyInfoAndIRSFormSetup(var CompanyInformation: Record "Company Information"; 
+                    procedure OnGetCompanyInfoAndIRSFormSetup(var CompanyInformation: Record "Company Information";
                                                                        var IRSFormsSetup: Record "IRS Forms Setup";)
                     begin
                     end;
-                    
+
                    [IntegrationEvent(false, false)]
                    procedure OnGetCompanyInformationSetup(var CompanyInformation: Record "Company Information")
                    begin
@@ -357,7 +357,7 @@ entries:
 
     expected:
       labels: "missing-info"
-      comments: 
+      comments:
         - author: Agent
           body: |
             Thank you for your request. To process this event modification, please provide the following missing information:
@@ -433,7 +433,7 @@ entries:
 
     expected:
       labels: "SCM, event-request"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ **Analysis complete - approved for implementation**
@@ -483,7 +483,7 @@ entries:
 
     expected:
       labels: "SCM, request-for-external"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ **Analysis complete - approved for implementation**
@@ -524,7 +524,7 @@ entries:
       description: |
         ### Why do you need this change?
 
-        The problem occurs with the prod. bom version comparison when a production bom has another sub bom in the production bom lines. If this sub bom has multiple versions then it is possible hat the comparison shows not the components of the active certified version but of a newer one which is currently under development. In the case part of the "BuildMatrix" procedure is the following GetVersion call 
+        The problem occurs with the prod. bom version comparison when a production bom has another sub bom in the production bom lines. If this sub bom has multiple versions then it is possible hat the comparison shows not the components of the active certified version but of a newer one which is currently under development. In the case part of the "BuildMatrix" procedure is the following GetVersion call
 
         However, this does not filter for the current version or even consider the status, but only the start date, which can result in the active version not being returned.
 
@@ -540,7 +540,7 @@ entries:
 
     expected:
       labels: "SCM, event-request"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ **Analysis complete - approved for implementation**
@@ -601,7 +601,7 @@ entries:
                 TempInvtOrderTrackingBuffer.Reset();
                 TempInvtOrderTrackingBuffer.DeleteAll();
                 CreateOrderTrackingBufferLines(PhysInvtOrderLine."Document No.", PhysInvtOrderLine."Line No.");
-               
+
                 // Start Event
                 OnCodeOnBeforeCreateReservationEntriesAfterCreateOrderTrackingBufferLines(PhysInvtOrderLine);
                 // End Event
@@ -627,7 +627,7 @@ entries:
 
     expected:
       labels: "missing-info"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ⚠️ **Clarification needed**
@@ -677,7 +677,7 @@ entries:
                 TempInvtOrderTrackingBuffer.Reset();
                 TempInvtOrderTrackingBuffer.DeleteAll();
                 CreateOrderTrackingBufferLines(PhysInvtOrderLine."Document No.", PhysInvtOrderLine."Line No.");
-               
+
                 // Start Event
                 OnCodeOnBeforeCreateReservationEntriesAfterCreateOrderTrackingBufferLines(PhysInvtOrderLine);
                 // End Event
@@ -729,10 +729,10 @@ entries:
     expected:
       labels: "missing-info"
       state: "closed"
-      comments: 
+      comments:
         - author: Agent
           body: |
-            Thanks for confirming! 
+            Thanks for confirming!
 
             Since the existing `OnBeforePhysInvtOrderLineModify` event works for your scenario, no new event is needed. This event provides `var PhysInvtOrderLine` allowing you to modify the record before it's saved.
 
@@ -775,7 +775,7 @@ entries:
     expected:
       labels: ""
       state: "closed"
-      comments: 
+      comments:
         - author: Agent
           body: |
             ✅ **Good news! This is already implemented in the codebase.**
@@ -794,3 +794,273 @@ entries:
             **File:** `PurchPostPrint.Codeunit.al`
 
             You can use this existing event in your extension to modify the Purchase Header after the post confirmation. Closing this issue as the request is already satisfied.
+
+  - instance_id: issue-29576
+    input:
+      title: "[Event Requests] - Table 83 \"Item Journal Line\""
+      description: |
+        ### Why do you need this change?
+
+        1. Please add an event publisher before the if "Qty. (Phys. Inventory)" >= "Qty. (Calculated") block in the OnValidate trigger of _Qty. (Phys. Inventory)_.
+        The event should include an IsHandled flag so extensions can skip the standard Validate("Entry Type") logic and assign the field value directly without triggering validation.
+        2. Please add a new event publisher before the Validate("Setup Time") and Validate("Run Time") calls in the _Concurrent Capacity_ field – OnValidate trigger. The publisher should include an IsHandled parameter so extensions can override this logic and assign the values without executing the standard validation triggers.
+
+        ### Describe the request
+
+        1. OnValidate trigger field 54 "Qty. (Phys. Inventory)"
+        ``````al
+        field(54; "Qty. (Phys. Inventory)"; Decimal)
+        {
+            ...
+            trigger OnValidate()
+            var
+                IsHandled : Boolean; //New local variable
+            begin
+                ...
+
+                PhysInvtEntered := true;
+                Quantity := 0;
+                //Code change - Start
+                OnBeforeCheckQuantity(Rec, xRec, IsHandled);
+                If not IsHandled then
+                    if "Qty. (Phys. Inventory)" >= "Qty. (Calculated)" then begin
+                        Validate("Entry Type", "Entry Type"::"Positive Adjmt.");
+                        Validate(Quantity, "Qty. (Phys. Inventory)" - "Qty. (Calculated)");
+                    end else begin
+                        Validate("Entry Type", "Entry Type"::"Negative Adjmt.");
+                        Validate(Quantity, "Qty. (Calculated)" - "Qty. (Phys. Inventory)");
+                    end;
+                //Code change - End
+                PhysInvtEntered := false;
+            end;
+
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeCheckQuantity(var ItemJournalLine: Record "Item Journal Line"; xItemJournalLine: Record "Item Journal Line"; var IsHandled: Boolean)
+        begin
+        end;
+        ``````
+        2. OnValidate trigger field 5849 "Concurrent Capacity"
+        ``````al
+        field(5849; "Concurrent Capacity"; Decimal)
+        {
+            ...
+            trigger OnValidate()
+            var
+                WorkCenter: Record "Work Center";
+                ShopCalendarMgt: Codeunit "Shop Calendar Management";
+                TotalTime: Integer;
+                IsHandled : Boolean; //New local variable
+            begin
+                ...
+                WorkCenter.Get("Work Center No.");
+                OnBeforeTimeValidation(Rec, xRec, IsHandled);
+                if not IsHandled then begin
+                    Validate("Setup Time", 0);
+                    Validate(
+                      "Run Time",
+                      Round(
+                        TotalTime / ShopCalendarMgt.TimeFactor("Cap. Unit of Measure Code") *
+                        "Concurrent Capacity", WorkCenter."Calendar Rounding Precision"));
+                end;
+            end;
+        }
+
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeTimeValidation(var ItemJournalLine: Record "Item Journal Line"; xItemJournalLine: Record "Item Journal Line"; var IsHandled: Boolean)
+        begin
+        end;
+        ``````
+
+      comments: ""
+
+    expected:
+      labels: "missing-info"
+      comments:
+        - author: Agent
+          body: |
+            Hi @exnihiloo,
+
+            Thanks for submitting this extensibility request. To help us process it efficiently, please update the issue to include the required information.
+
+            📚 [Extensibility Guidelines](https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-contribute-extensibility)
+
+            **Missing Information:**
+
+            - **Alternatives Evaluated**: Which existing events or patterns were tried and why are they insufficient?
+            - **Justification for IsHandled**: Why is a standard event (without IsHandled) or alternative approach not feasible? What specific business logic must be skipped/replaced and why is bypass essential?
+            - **Performance Considerations**: How frequently will these events be triggered? What is the expected performance impact?
+            - **Data Sensitivity Review**: Are there any sensitive data exposure concerns? Please confirm data security implications.
+            - **Multi-Extension Interaction**: What are the risks if multiple extensions subscribe to these events with IsHandled? How would conflicts be handled?
+
+            Please update the issue with the missing details. We'll automatically re-analyze once updated.
+
+  - instance_id: issue-29557
+    input:
+      title: "Report 6 \"Trial Balance\" - add area(Content) to request page"
+      description: |
+        ### Why do you need this change?
+
+        In 4PS Construct we want to extend request page of report 6 "Trial Balance" with new field and it is not possible to do it.
+
+        ### Describe the request
+
+        Dear ALAppExtensions team,
+
+        On behalf of 4PS I would like to request adding Content area to request page of report 6 "Trial Balance".
+        Currently it not possible to add a new field to request page using report extension due to error "The control 'Content' is not found in the target 'RequestOptionsPage'".
+
+        ````
+            requestpage
+            {
+                SaveValues = true;
+                AboutTitle = 'About Trial Balance';
+                AboutText = 'View a snapshot of your chart of accounts with a balance at date and net change in the specified period.';
+
+                layout
+                {
+                    area(Content) { } //new
+                }
+
+                actions
+                {
+                }
+            }
+        ````
+
+      comments: ""
+
+    expected:
+      labels: ""
+      state: "closed"
+      comments:
+        - author: Agent
+          body: |
+            This request cannot be implemented.
+
+            **Reason:** The target code (Report 6 "Trial Balance") is marked as obsolete and cannot be modified. The report has `ObsoleteState = Pending`, `ObsoleteTag = '28.0'`, and is wrapped in `#if not CLEAN28` preprocessor directive. The `ObsoleteReason` states: "This report has been replaced by the report Trial Balance (Excel). This report will be removed in a future release."
+
+  - instance_id: issue-29519
+    input:
+      title: "[Change Request] table 130 \"Incoming Document\" - field(18; Status; Option)"
+      description: |
+        ### Why do you need this change?
+
+        We have to extend the Enum for additional Document Status like Archived etc.
+
+        ### Describe the request
+
+        Hello, can you please change the field 18 "Status" in table 130 "Incoming Document" from option to an Enum?
+
+        ```
+        table 130 "Incoming Document";
+        {
+        .
+        .
+        .
+                field(18; Status; Enum "Incoming Document Status")
+                {
+                    Caption = 'Status';
+                    Editable = false;
+                }
+        ```
+
+        ```
+        enum 59002 "Incoming Document Status";
+        {
+            Extensible = true;
+
+            value(0; New)
+            {
+                Caption = 'New';
+            }
+            value(1; Released)
+            {
+                Caption = 'Released';
+            }
+            value(2; Rejected)
+            {
+                Caption = 'Rejected';
+            }
+            value(3; Posted)
+            {
+                Caption = 'Posted';
+            }
+            value(4; Created)
+            {
+                Caption = 'Created';
+            }
+            value(5; Failed)
+            {
+                Caption = 'Failed';
+            }
+            value(6; "Pending Approval")
+            {
+                Caption = 'Pending Approval';
+            }
+        }
+        ```
+
+      comments: ""
+
+    expected:
+      labels: "SCM, enum-request"
+      comments:
+        - author: Agent
+          body: |
+            ✅ **Analysis complete - approved for implementation**
+
+            ---
+
+            **Implementation:**
+
+            Convert field 18 "Status" in table 130 "Incoming Document" from Option field to Enum "Incoming Document Status" (enum 59002). This enables partners to extend the status values (e.g., add "Archived") without modifying base code.
+
+            ```al
+            enum 59002 "Incoming Document Status"
+            {
+                Extensible = true;
+
+                value(0; New)
+                {
+                    Caption = 'New';
+                }
+                value(1; Released)
+                {
+                    Caption = 'Released';
+                }
+                value(2; Rejected)
+                {
+                    Caption = 'Rejected';
+                }
+                value(3; Posted)
+                {
+                    Caption = 'Posted';
+                }
+                value(4; Created)
+                {
+                    Caption = 'Created';
+                }
+                value(5; Failed)
+                {
+                    Caption = 'Failed';
+                }
+                value(6; "Pending Approval")
+                {
+                    Caption = 'Pending Approval';
+                }
+            }
+            ```
+
+            **Modified field in table 130:**
+
+            ```al
+            field(18; Status; Enum "Incoming Document Status")
+            {
+                Caption = 'Status';
+                Editable = false;
+            }
+            ```
+
+            ---
+
+            **File:** `IncomingDocument.Table.al` (modified) and `IncomingDocumentStatus.Enum.al` (new)
