@@ -52,7 +52,7 @@ prompt:
     {{task}}
     {% endif %}
 
-  extensibility-template: |
+  extensibility-request-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
     Task: Analyze and process the extensibility request using the custom agent - "Argus extensibility agent"

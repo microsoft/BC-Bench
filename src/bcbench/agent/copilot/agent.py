@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.agent.shared import build_mcp_config, build_prompt
+from bcbench.agent.shared import build_mcp_config, build_prompt, build_prompt_ext
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, ExtensibilityDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -113,7 +113,7 @@ def run_copilot_agent_ext(
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
+    prompt: str = build_prompt_ext(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
@@ -136,7 +136,8 @@ def run_copilot_agent_ext(
             "--log-level=debug",
             "--disable-parallel-tools-execution",
             f"--log-dir={output_dir.resolve()}",
-            f"-p={prompt.replace('\r', '').replace('\n', ' ')}",
+            "-p",
+            prompt.replace('\r', '').replace('\n', ' '),
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")

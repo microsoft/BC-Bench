@@ -35,7 +35,7 @@ def build_prompt_ext(entry: ExtensibilityDatasetEntry, repo_path: Path, config: 
     template = Template(template_str)
     return template.render(
         repo_path=repo_path,
-        task=entry.get_task(transform_image_paths=True),
+        task=entry.get_task(),
         project_paths=", ".join(entry.project_paths),
         include_project_paths=include_project_paths,
         al_mcp=al_mcp,  # whether AL MCP server is enabled
