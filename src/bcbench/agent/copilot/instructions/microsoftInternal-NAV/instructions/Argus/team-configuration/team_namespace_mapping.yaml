@@ -1,0 +1,111 @@
+# Team Namespace Mapping Configuration
+# Maps namespaces to team ownership for automated team assignment
+# Version: 1.0
+
+team_namespace_mapping:
+
+  Finance:
+    namespaces:
+      - "AccountantPortal"
+      - "Bank"
+      - "Booking"
+      - "CashFlow"
+      - "Finance.CashFlow"
+      - "CostAccounting"
+      - "Finance"
+      - "FixedAssets"
+      - "Foundation"
+      - "Globalization"
+      - "GeneralLedger"
+      - "MoneyTransfer"
+      - "PaymentMethods"
+      - "Payroll"
+      - "PostingSetup"
+      - "Sales.Peppol"
+      - "SubscriptionBilling"
+      - "TaxEngine"
+      - "ValueAddedTax"
+    match_strategy: "iterative_fallback"
+    case_sensitive: false
+    description: "Finance team - handles financial/accounting related code"
+
+  SCM:
+    namespaces:
+      - "Assembly"
+      - "CRM"
+      - "HumanResources"
+      - "Inventory"
+      - "Inventory.Posting"
+      - "Manufacturing"
+      - "Pricing"
+      - "Projects"
+      - "Purchases"
+      - "PurchaseDocuments"
+      - "Sales"
+      - "Sales.Document"
+      - "SalesInvoicing"
+      - "Service"
+      - "ServiceManagement"
+      - "Warehouse"
+      - "WarehouseManagement"
+      - "ProductionOrders"
+      - "ServiceOrders"
+    match_strategy: "iterative_fallback"
+    case_sensitive: false
+    description: "SCM team - handles supply chain, manufacturing, service, and related code"
+
+  Integration:
+    namespaces:
+      - "AI"
+      - "API"
+      - "Automation"
+      - "Azure"
+      - "AzureML"
+      - "BusinessCentral"
+      - "DataAdministration"
+      - "DateTime"
+      - "Device"
+      - "Diagnostics"
+      - "EMail"
+      - "Email"
+      - "EServices"
+      - "ExternalServices"
+      - "Foundation"
+      - "Integration"
+      - "Intercompany"
+      - "JSON"
+      - "REST"
+      - "SOAP"
+      - "Security"
+      - "System"
+      - "SystemApplication"
+      - "Telemetry"
+      - "Utilities"
+      - "WebServices"
+      - "XML"
+    match_strategy: "iterative_fallback"
+    case_sensitive: false
+    description: "Integration team - handles system integration, API, automation, and utilities"
+
+# Assignment Algorithm
+assignment_algorithm:
+  step1: "Extract namespaces from target objects in issue"
+  step2: "Search codebase to locate actual object and determine namespace"
+  step3: "Match each namespace against team namespace mappings (iterative fallback: remove Microsoft prefix, then try full, drop segment, repeat)"
+  step4: "Count namespace matches per team"
+  step5: "Assign team with highest match count"
+  step6: "If tie, sort alphabetically and select first team (Finance > Integration > SCM)"
+  step7: "If no matches found, mark as agent-not-processable"
+
+# Tie-Breaker Rules
+tie_breaker:
+  enabled: true
+  strategy: "alphabetical"
+  order: ["Finance", "Integration", "SCM"]  # Alphabetical order
+  description: "When multiple teams have equal match counts, select team appearing first alphabetically"
+
+# Fallback Handling
+fallback:
+  no_objects_identified: "agent-not-processable"
+  no_namespace_match: "agent-not-processable"
+  single_object_multiple_namespaces: "count_all_matches"

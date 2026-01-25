@@ -2,10 +2,12 @@
 
 from pathlib import Path
 
-from bcbench.dataset.dataset_entry import DatasetEntry
+import yaml
+
+from bcbench.dataset.dataset_entry import DatasetEntry, ExtensibilityDataset, ExtensibilityDatasetEntry
 from bcbench.exceptions import EntryNotFoundError
 
-__all__ = ["load_dataset_entries"]
+__all__ = ["load_dataset_entries", "load_ext_dataset_entries"]
 
 
 def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[DatasetEntry]:
@@ -47,5 +49,32 @@ def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random
         import random as random_module
 
         return random_module.sample(entries, min(random, len(entries)))
+
+    return entries
+
+
+def load_ext_dataset_entries(dataset_path: Path, entry_id: str | None = None) -> list[ExtensibilityDatasetEntry]:
+    """
+    Load extension dataset entries from a YAML file.
+
+    Examples:
+        # Load a single entry by ID
+        entries = load_ext_dataset_entries(path, entry_id="issue-29447")
+    """
+    if not dataset_path.exists():
+        raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
+
+    with open(dataset_path, encoding="utf-8") as file:
+        entries: list[ExtensibilityDatasetEntry] = ExtensibilityDataset(**yaml.safe_load(file)).entries
+
+    for entry in entries:
+        if entry_id:
+            if entry.instance_id == entry_id:
+                return [entry]
+            continue
+        entries.append(entry)
+
+    if entry_id:
+        raise EntryNotFoundError(entry_id)
 
     return entries

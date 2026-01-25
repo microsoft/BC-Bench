@@ -48,14 +48,14 @@ def test_setup_custom_instructions():
 
             # Verify file content matches
             if item.is_file():
-                assert target_item.read_text() == item.read_text(), f"Content mismatch for {item.name}"
+                assert target_item.read_text(encoding="utf-8") == item.read_text(encoding="utf-8"), f"Content mismatch for {item.name}"
             elif item.is_dir():
                 # For directories, verify all files match recursively
                 for source_file in item.rglob("*"):
                     if source_file.is_file():
                         target_file = target_item / source_file.relative_to(item)
                         assert target_file.exists(), f"{target_file} should exist"
-                        assert target_file.read_text() == source_file.read_text(), f"Content mismatch for {target_file}"
+                        assert target_file.read_text(encoding="utf-8") == source_file.read_text(encoding="utf-8"), f"Content mismatch for {target_file}"
 
 
 def test_sanitization():

@@ -7,6 +7,7 @@ from typing_extensions import Annotated
 
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
+from bcbench.agent.copilot.agent import run_copilot_agent_ext
 from bcbench.agent.copilot.metrics import parse_session_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
@@ -19,9 +20,10 @@ from bcbench.cli_options import (
     RepoPath,
 )
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset import DatasetEntry, ExtensibilityDatasetEntry, load_dataset_entries, load_ext_dataset_entries
 from bcbench.logger import get_logger
 from bcbench.operations import setup_repo_postbuild, setup_repo_prebuild
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -65,7 +67,7 @@ def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     model: CopilotModel = "claude-haiku-4.5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
+    dataset_path: DatasetPath | None = None,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
@@ -78,12 +80,24 @@ def run_copilot(
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix
     """
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+
+    if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
+        if dataset_path is None:
+            dataset_path = _config.paths.ext_dataset_path
+        entry: ExtensibilityDatasetEntry = load_ext_dataset_entries(dataset_path, entry_id=entry_id)[0]
+    else:
+        if dataset_path is None:
+            dataset_path = _config.paths.dataset_path
+        entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
     setup_repo_prebuild(entry, repo_path)
-    setup_repo_postbuild(entry, repo_path, category)
+    if category != EvaluationCategory.EXTENSIBILITY_REQUEST:
+        setup_repo_postbuild(entry, repo_path, category)
 
-    run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
+    if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
+        run_copilot_agent_ext(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
+    else:
+        run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
 
 
 @run_app.command("claude")

@@ -71,6 +71,7 @@ class ExperimentConfiguration(BaseModel):
 class EvaluationCategory(str, Enum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
+    EXTENSIBILITY_REQUEST = "extensibility-request"
     # CODE_REVIEW = "code-review"
     # EVENT_REQUEST = "event-request"
 

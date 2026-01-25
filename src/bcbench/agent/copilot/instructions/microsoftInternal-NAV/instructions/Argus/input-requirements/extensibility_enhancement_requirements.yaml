@@ -1,0 +1,37 @@
+# Extensibility Enhancement Specific Requirements Configuration
+# Defines ADDITIONAL requirements specific to extensibility-enhancement type issues
+# NOTE: General requirements (title, description, meaningful justification) are defined in ea_config_general_requirements.yaml
+# Version: 1.0
+
+extensibility_enhancement:
+  enabled: true
+  description: "General extensibility improvements and enhancements - ADDITIONAL requirements beyond general ones"
+  detection_keywords: ["extensibility", "enhancement", "improvement", "access", "protected", "variable"]
+  max_iterations: 3
+
+  additional_requirements:
+    - id: proposed_enhancement
+      name: "Proposed Enhancement"
+      description: "Specific enhancement with exact code changes or design modifications"
+      mandatory: true
+      validation_hints: ["enhancement", "code", "change", "design", "modification"]
+      documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-extensibility-patterns"
+
+    - id: technical_justification
+      name: "Technical Justification"
+      description: "Technical reasoning why the enhancement is necessary and beneficial"
+      mandatory: true
+      validation_hints: ["technical", "reasoning", "necessary", "beneficial", "why"]
+      quality_standards:
+        reject_generic_statements: true
+        requires_specifics:
+          - "Technical limitation of current approach"
+          - "Performance or architectural benefits"
+          - "Specific scenarios where current design fails"
+          - "Impact on extension development patterns"
+
+# Validation Messages
+validation_messages:
+  insufficient_detail: "The provided information is insufficient for processing. Please add:"
+  #requirement_reference: "For more details, see our Extensibility Guidelines: {link}"
+  resubmit_after_update: "Please update the issue with the missing details. We'll automatically re-analyze once updated."

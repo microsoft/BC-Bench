@@ -11,7 +11,7 @@ from bcbench.config import get_config
 
 _config = get_config()
 
-__all__ = ["DatasetEntry", "TestEntry"]
+__all__ = ["DatasetEntry", "ExtensibilityDataset", "ExtensibilityDatasetEntry", "TestEntry"]
 
 
 class TestEntry(BaseModel):
@@ -126,3 +126,47 @@ class DatasetEntry(BaseModel):
 
         # Fallback to the last meaningful part
         return parts[-1] if parts else ""
+
+
+class ExtensibilityDataset(BaseModel):
+    entries: list[ExtensibilityDatasetEntry]
+
+
+class ExtensibilityDatasetEntry(BaseModel):
+    """Representation of a Business Central benchmark dataset entry."""
+
+    repo: str | None = None
+    base_commit: str | None = None
+    environment_setup_version: str | None = None
+    instance_id: str
+    input: dict
+    expected: dict
+    project_paths: list[str] = []
+
+    @model_validator(mode="after")
+    def populate_defaults(self) -> ExtensibilityDatasetEntry:
+        """Populate default values from default_setup.json if not set."""
+        defaults_path = _config.paths.ext_dataset_default_setup_path
+
+        if defaults_path.exists():
+            defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+
+            if self.repo is None:
+                self.repo = defaults.get("repo")
+
+            if self.base_commit is None:
+                self.base_commit = defaults.get("base_commit")
+
+            if self.environment_setup_version is None:
+                self.environment_setup_version = defaults.get("environment_setup_version")
+
+            if not self.project_paths:
+                self.project_paths = defaults.get("project_paths", [])
+        return self
+
+    def get_task(self) -> str:
+        """Get the full task description including hints."""
+        return json.dumps(self.input)
+
+    def extract_project_name(self) -> str:
+        return ""

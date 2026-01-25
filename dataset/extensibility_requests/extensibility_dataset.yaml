@@ -1,0 +1,140 @@
+entries:
+  - instance_id: issue-29447
+    input:
+      title: "[Event Request] Codeunit 5880 \"Phys. Invt. Order-Finish\""
+      description: |
+        ### Why do you need this change?
+
+        Hi,
+        i need an event in the Codeunit 5880 "Phys. Invt. Order-Finish" in the procedure "CreateOrderTrackingBufferLines" to modify the TempInvtOrderTrackingBuffer record.
+
+        ### Describe the request
+
+        Add a new event in the procedure "CreateOrderTrackingBufferLines", before modifying the record TempInvtOrderTrackingBuffer.
+
+            procedure CreateOrderTrackingBufferLines(DocNo: Code[20]; LineNo: Integer)
+            var
+                ExpInvtOrderTracking: Record "Exp. Invt. Order Tracking";
+                ItemTrackingSetup: Record "Item Tracking Setup";
+            begin
+                PhysInvtRecordLine.Reset();
+                PhysInvtRecordLine.SetCurrentKey("Order No.", "Order Line No.");
+                PhysInvtRecordLine.SetRange("Order No.", DocNo);
+                PhysInvtRecordLine.SetRange("Order Line No.", LineNo);
+                PhysInvtRecordLine.SetFilter("Quantity (Base)", '<>%1', 0);
+                if PhysInvtRecordLine.Find('-') then
+                    repeat
+                        ItemTrackingSetup."Serial No." := PhysInvtRecordLine."Serial No.";
+                        ItemTrackingSetup."Lot No." := PhysInvtRecordLine."Lot No.";
+                        ItemTrackingSetup."Package No." := PhysInvtRecordLine."Package No.";
+                        UpdateBufferRecordedQty(ItemTrackingSetup, PhysInvtRecordLine."Quantity (Base)", LineNo);
+                        OnCreateOrderTrackingBufferLinesFromPhysInvtRecordLine(TempInvtOrderTrackingBuffer, PhysInvtRecordLine);
+                    until PhysInvtRecordLine.Next() = 0;
+
+                ExpInvtOrderTracking.Reset();
+                ExpInvtOrderTracking.SetRange("Order No", DocNo);
+                ExpInvtOrderTracking.SetRange("Order Line No.", LineNo);
+                if ExpInvtOrderTracking.Find('-') then
+                    repeat
+                        ItemTrackingSetup."Serial No." := ExpInvtOrderTracking."Serial No.";
+                        ItemTrackingSetup."Lot No." := ExpInvtOrderTracking."Lot No.";
+                        ItemTrackingSetup."Package No." := ExpInvtOrderTracking."Package No.";
+                        UpdateBufferExpectedQty(ItemTrackingSetup, ExpInvtOrderTracking."Quantity (Base)", LineNo);
+                        OnCreateOrderTrackingBufferLinesFromExpInvtOrderTracking(TempInvtOrderTrackingBuffer, ExpInvtOrderTracking);
+                    until ExpInvtOrderTracking.Next() = 0;
+
+                TempInvtOrderTrackingBuffer.Reset();
+                if TempInvtOrderTrackingBuffer.Find('-') then
+                    repeat
+                        TempInvtOrderTrackingBuffer."Qty. To Transfer" :=
+                          TempInvtOrderTrackingBuffer."Qty. Recorded (Base)" - TempInvtOrderTrackingBuffer."Qty. Expected (Base)";
+                        TempInvtOrderTrackingBuffer."Outstanding Quantity" := TempInvtOrderTrackingBuffer."Qty. To Transfer";
+                        TempInvtOrderTrackingBuffer.Open := TempInvtOrderTrackingBuffer."Outstanding Quantity" <> 0;
+
+                        // Start Event
+
+                          OnCreateOrderTrackingBufferLinesOnBeforeModifyTempInvtOrderTracking(TempInvtOrderTrackingBuffer, DocNo, LineNo);
+
+                       // End Event
+
+                        TempInvtOrderTrackingBuffer.Modify();
+                    until TempInvtOrderTrackingBuffer.Next() = 0;
+            end;
+
+        **New Event**
+        ```
+        [IntegrationEvent(false, false)]
+            local procedure OnCreateOrderTrackingBufferLinesOnBeforeModifyTempInvtOrderTracking(var TempInvtOrderTracking: Record "Invt. Order Tracking" temporary; DocNo: Code[20]; LineNo: Integer)
+            begin
+            end;
+        ```
+
+      comments: ""
+
+    expected:
+      labels: "SCM, event-request"
+      comments:
+        - author: Agent
+          body: |
+            ✅ Analysis complete - approved for implementation
+
+            **Implementation:**
+
+            Add event publisher in procedure `CreateOrderTrackingBufferLines` before `TempInvtOrderTrackingBuffer.Modify()`:
+
+            ```al
+            TempInvtOrderTrackingBuffer.Reset();
+            if TempInvtOrderTrackingBuffer.Find('-') then
+                repeat
+                    TempInvtOrderTrackingBuffer."Qty. To Transfer" :=
+                      TempInvtOrderTrackingBuffer."Qty. Recorded (Base)" - TempInvtOrderTrackingBuffer."Qty. Expected (Base)";
+                    TempInvtOrderTrackingBuffer."Outstanding Quantity" := TempInvtOrderTrackingBuffer."Qty. To Transfer";
+                    TempInvtOrderTrackingBuffer.Open := TempInvtOrderTrackingBuffer."Outstanding Quantity" <> 0;
+                    OnCreateOrderTrackingBufferLinesOnBeforeModifyTempInvtOrderTracking(TempInvtOrderTrackingBuffer, DocNo, LineNo);
+                    TempInvtOrderTrackingBuffer.Modify();
+                until TempInvtOrderTrackingBuffer.Next() = 0;
+            ```
+
+            Add event publisher procedure at the end of the codeunit (before the closing brace):
+
+            ```al
+            [IntegrationEvent(false, false)]
+            local procedure OnCreateOrderTrackingBufferLinesOnBeforeModifyTempInvtOrderTracking(var TempInvtOrderTracking: Record "Invt. Order Tracking" temporary; DocNo: Code[20]; LineNo: Integer)
+            begin
+            end;
+            ```
+
+  - instance_id: issue-29442
+    input:
+      title: "[W1][Page][176][Standard Purchase Code Subform] Make procedure UpdateTypeText() not local"
+      description: |
+        ### Why do you need this change?
+
+        Procedure UpdateTypeText() is in local scope and it updates field variable TypeAsText
+
+        ### Describe the request
+
+        Remove "local" scope from procedure UpdateTypeText() in page 176 "Standard Purchase Code Subform";
+
+      comments: ""
+
+    expected:
+      labels: "SCM, request-for-external"
+      comments:
+        - author: Agent
+          body: |
+            ✅ Analysis complete - approved for implementation
+
+            **Implementation:**
+
+            Remove `local` scope from procedure `UpdateTypeText()` in Page 176 "Standard Purchase Code Subform":
+
+            ```al
+            procedure UpdateTypeText()
+            var
+                RecRef: RecordRef;
+            begin
+                RecRef.GetTable(Rec);
+                TypeAsText := TempOptionLookupBuffer.FormatOption(RecRef.Field(Rec.FieldNo(Type)));
+            end;
+            ```

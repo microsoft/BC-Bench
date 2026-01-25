@@ -116,6 +116,7 @@ def create_result_from_json(payload: dict[str, Any]) -> BaseEvaluationResult:
     """
     # Import here to avoid circular dependencies
     from bcbench.results.bugfix import BugFixResult
+    from bcbench.results.extensibility import ExtensibilityResult
     from bcbench.results.testgeneration import TestGenerationResult
 
     category = EvaluationCategory(payload["category"])
@@ -125,5 +126,7 @@ def create_result_from_json(payload: dict[str, Any]) -> BaseEvaluationResult:
             return BugFixResult.model_validate(payload)
         case EvaluationCategory.TEST_GENERATION:
             return TestGenerationResult.model_validate(payload)
+        case EvaluationCategory.EXTENSIBILITY:
+            return ExtensibilityResult.model_validate(payload)
         case _:
             raise ValueError(f"Unknown evaluation category: {category}")
