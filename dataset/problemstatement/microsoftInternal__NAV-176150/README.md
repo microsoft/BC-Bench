@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] Preview Posting on Production Journal shows just Consumption line from the Consumption Journal
+Repro Steps:
+Open BC23.4 W1 Search for Released Production OrderCreate a new Production OrderSource: 1000Quantity: 1Home -> Refresh Production Order Select the created LineLine -> Production JournalPost -> PreviewOpen Item Ledger Entries:This is correct Search for Consumption JournalInsert a Line as follows (from a totally different Production Order)Leave the Consumption Journal without posting Go back to released Production OrderLine -> Production Journal -> Post Preview ACTUAL RESULT:The posting preview is selecting the line from the Consumption Journal and it's issuesor if you select in the consumption Order the same released production Order just this line for preview. EXPECTED RESULT:The Posting preview should be the same as in step 3, since this is what the system is posting.
+Description:
+Preview Posting on Production Journal shows just Consumption line from the Consumption Journal
