@@ -1,0 +1,5 @@
+Title: [ALL-E] Receiving a purchase order for Subcontracting results in an error "The record in table Warehouse Entry already exists. Identification fields and values: Entry No.='2'
+Repro Steps:
+Find repro attached.
+Description:
+When you create a Purchase Order with two Order Lines by using the Subcontracting Worksheet. After that when you decided to order a regular item from the same vendor to the purchase order. Insert the regular item between the two items. When you try to post and receive the purchase order you get an error message ("The record in table Warehouse Entry already exists. Identification fields and values: Entry No.='2') With posting and receive it comes to an error; "The record in table Warehouse Entry already exists. Identification fields and values: Entry No.='2'"ACTUAL RESULT: you get the following error:The record in table Warehouse Entry already exists. Identification fields and values: Entry No.='79' EXPECTED RESULT: It should be possible to post the purchase order.
