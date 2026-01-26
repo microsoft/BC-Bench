@@ -1,0 +1,5 @@
+Title: [master] [23.x] [ALL-E] After Enabling the use of new extensible exchange rate adjustment Feature, Bank Account Filter not working on Adjust Exchange Rate report
+Repro Steps:
+Repro Steps: Feature Update: Enable use of new extensible exchange rate adjustment, including posting review = "True" Create 2 Bank Accounts both having Currency code set as "EUR" and post some entries against them on 5/08/2024 (check step 3 and this should be posted without the last line for the 5/08/2024 exchange rate. Last one should be 4/08/2024. ACTUAL RESULT: B010 Test-Bank: B020 Test-Bank02: 3. Go to Currencies Page and create "Exch. Rates" for "EUR" for 5/08/2024 4. Run the "Adjust Exchange Rate" function and Filter the Bank Account by "B010" ADDITIONAL INFORMATION: You can reproduce this issue irrespective of any Currency Code you set for any of the Bank Accounts. EXPECTED RESULT: The Bank account Filter function is supposed to filter the Bank account on the Adjust Exchange Rate report page.
+Description:
+
