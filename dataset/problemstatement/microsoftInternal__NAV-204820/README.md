@@ -1,0 +1,5 @@
+Title: [master] [ALL-E ]Status must be equal to 'Open' in Purchase Header when posting a purchase invoice that was released and having an Allocation Account in one of It's lines.
+Repro Steps:
+Setup Allocation Accounts. Go to Purchase Invoice and create a new purchase invoice. Add Allocation Account Line with the setup you've done. Add another line with any item and then release the document. Try to post the invoice you will get the following error "Status must be equal to 'Open' in Purchase Header" Possible Cause: The Allocation Account Line is divided into separate lines of G/L Accounts that was added in the allocation account setup when posting the document, which cannot happen because the document status is released. Expected Behaviour:Since we did choose the allocation account on purpose, we would expect the purchase invoice to post without error message.
+Description:
+Status must be equal to 'Open' in Purchase Header when posting a purchase invoice that was released and having an Allocation Account in one of It's lines. Reproduced in 25.0 and 24.5
