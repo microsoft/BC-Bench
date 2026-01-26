@@ -1,0 +1,43 @@
+# Title: Posted Transfer Shipment - Undo Shipment function - valuation issue
+## Repro Steps:
+We encountered an error when using Undo Shipment function from Posted Transfer Shipment.
+If, after posting the transfer shipment, a revaluation of the original item ledger entry that was used to apply the shipment is performed and then the transfer shipment is returned using the Undo Shipment function, then the item ledger entry created by this function is not correctly valued...the Cost Amount is equal to the original unrevalued value.
+repro steps to understand the issue:
+1. Run Business Central (I tested in 22.5 and also in 23.3 version)
+2. Create new Item
+    Select the Item template for creation a new item.
+    On the item card:
+        - Description = Test
+1. Receive 1 PCS of the new created item
+    Open the Item Journal
+    - in its line enter item Test
+    - in the Entry Type field select Positive Adjmt.
+    - in the Location Code field select a location (in my case HLAVNÍ)
+    - enter 1 in the Quantity field and Unit Amount = 10.
+    Post the journal.
+
+1. Create a new **transfer order** document to transfer 1 PCS of new created item Test (in my case from HLAVNÍ location to VÝCHODNÍ location) Post Ship.
+
+1. Revalue the original positive adjustment item ledger entry
+    Open the Item Revaluation Journal
+    - in its line enter item Test
+    - in the Applies-to Entry field, select the item ledger entry posted in step 3 of this scenario
+    - in the Unit Cost (Revalued) field enter 12 Post the journal.
+1. Adjust item entries
+    Open the Adjust Cost - Item Entries batch
+    - In the Item No. Fillter select item Test
+    - Run the batch
+
+1. Undo posted transfer shipment
+    Search for posted transfer shipment that was posted in step 4 of this scenario and undo shipment.
+1. Adjust item entries
+    Open the Adjust Cost - Item Entries batch
+    - In the Item No. Fillter select item Test
+    - Run the batch
+
+**Result:** the item ledger entry created by the Undo Shipment function is not correctly valued...the Cost Amount is equal to the original unrevalued value (10 in this case)
+It should be valued at the same value as the original transferred item ledger entry (12 in this case)
+The total cost amount on such a transfer is not zero.
+![Item Ledger Entries](./item-ledger-entries.png)
+
+## Description:
