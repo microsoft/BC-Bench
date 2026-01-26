@@ -1,0 +1,5 @@
+Title: [master] Bin contents move to another location without information when filtering and the connection to the Item is lost
+Repro Steps:
+Open BC Search for User -> Add yourself as user Search for Warehouse EmployeesAdd your user for Location WHITE and SILVER Search for ItemsSelect Item LS-75Open BIN ContentRelated Warehouse -> BIN contentClose the Item Search for BIN ContentsSet the Filter for BIN Code : W-01-0001Stay with the Filter and change the location in the Header to SILVERChange the location back to WHITEThe following message appears:yesACTUAL RESULT:The BIN is gone for location WHITEAnd if you change back to location SILVER it is added to SILVER instead:And the reference to the Item is lostOpen the Item LS-75 and open the BIN ContentEXPECTED RESULT:The Bin should not be moved to another location.
+Description:
+When in bin contents filtering back and forth between 2 locations while having a bin code filter, it deletes bin contents in one location and adds it to the other location with no item no. and no qty.
