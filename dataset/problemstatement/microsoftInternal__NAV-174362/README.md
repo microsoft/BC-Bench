@@ -1,0 +1,5 @@
+Title: [JobTaskBilling] Task Billing Method is not copied to new job / Change how new fields (SellTo/BillTo Customer, Payment methods,..) are populated in Job Task when Job Task is copied from other Job
+Repro Steps:
+Project Setup.Default Task Billing Method = One Customer. New Job1, customer 10000. Task Billing Method = Multiple Customers. Job Task1, Customer = 10000, BillTo = 20000 Job Task2, Customer = 30000, BillTo = 30000 Create new job2. Customer = 10000. Choose Copy Project Tasks from.. action, Copy from Job1. Notice that Job Tasks are copied. The Task Billing Method = One Customer hence Customer/BillTo are not visible. Switch Task Billing Method = Multiple customers. Now Customer/BillTo is visible in the Job tasks and they are same as in source (10000/20000; 30000/30000). But until user activates user has no idea that these fields are populated and what will be impact. I suggest that Copy Project Task from/Copy Project Task to do not copy new fields regardless of Project Setup.Default Task Billing Method setting. Like it was before feature was introduced - user could not copy customer details and used values from header
+Description:
+
