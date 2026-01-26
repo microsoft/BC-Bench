@@ -54,7 +54,6 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
             "--log-level=debug",
             "--disable-parallel-tools-execution",
             f"--log-dir={output_dir.resolve()}",
-            f"-p={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")
@@ -69,6 +68,7 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
             cmd_args,
             cwd=str(repo_path),
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
+            input=prompt.encode("utf-8"),
             timeout=_config.timeout.agent_execution,
             check=True,
         )
@@ -136,8 +136,6 @@ def run_copilot_agent_ext(
             "--log-level=debug",
             "--disable-parallel-tools-execution",
             f"--log-dir={output_dir.resolve()}",
-            "-p",
-            prompt.replace('\r', '').replace('\n', ' '),
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")
@@ -146,12 +144,25 @@ def run_copilot_agent_ext(
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 
+        # Add prompt as argument
+        # We write it to a temporary file to avoid issues with quoting on Windows
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8") as tmp:
+            tmp.write(prompt)
+            tmp_path = tmp.name
+
+        # Copilot CLI often accepts a file via redirection but here we use the cat strategy or just pass regular args if we can,
+        # but since we had issues, let's try the pipe approach if supported, OR just standard input.
+        # But actually, looking at similar tools, they often just take the prompt as the last argument or via a file.
+        # Let's try passing it via stdin first as it assumes less about file flags.
+
         logger.debug(f"Copilot command args: {cmd_args}")
 
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
+            input=prompt.encode("utf-8"),
             timeout=_config.timeout.agent_execution,
             check=True,
         )

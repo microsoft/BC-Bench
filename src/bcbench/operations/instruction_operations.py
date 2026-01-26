@@ -1,3 +1,6 @@
+import os
+import stat
+import subprocess
 from pathlib import Path
 from shutil import copytree, rmtree
 
@@ -7,6 +10,26 @@ from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def on_rm_error(func, path, exc_info):
+    """
+    Error handler for ``shutil.rmtree``.
+
+    If the error is due to an access error (read only file)
+    it attempts to add write permission and then retries.
+
+    If the error is for another reason it re-raises the error.
+
+    Usage : ``shutil.rmtree(path, onerror=on_rm_error)``
+    """
+    # Is the error an access error?
+    if not os.access(path, os.W_OK):
+        # Is the error because the file is read-only?
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    else:
+        raise
 
 
 def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path) -> bool:
@@ -30,7 +53,12 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
 
         logger.info(f"Setting up custom instructions for repository: {entry.repo}")
         if github_dir.exists():
-            rmtree(github_dir)
+            try:
+                rmtree(github_dir, onerror=on_rm_error)
+            except OSError:
+                # Fallback to system command which is more robust on Windows for read-only files
+                subprocess.run(["cmd", "/c", "rd", "/s", "/q", str(github_dir)], check=True)
+
         copytree(source_instructions, github_dir)
         logger.info(f".github dir is overwritten with {source_instructions}")
 
