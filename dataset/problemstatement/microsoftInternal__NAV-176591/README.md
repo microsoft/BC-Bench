@@ -1,0 +1,5 @@
+Title: [master] [ALL-E] Production BOM Version not used when item has not No No. Series
+Repro Steps:
+Open BC 22.9 W1 Search for inventory SetupDelete no. Serie for Items Search for manufacturing Setup Search for itemsCreate 3 Items:Comp1 and Comp2 have the same setupThe 3rd Item MAIN has the following Setup:Production BOM for Item MAINVersion of Production BOM Search for Sales OrdersCreate a new Sales orderCustomer: 10000Item: MAINLocation: (no location)Quantity:1 Search for Planning WorksheetPrepare -> Calculate Regenerative PlanThe Version of the production BOM is used: Search for Production BOMChange the Status to new (no change in the Version still certified) Search for Calculate Low Level Codeyes Seardh for Planning worksheetdelete all lines and run calculate Regenerative Plan ACTUAL RESULT:no components are planned anymore: EXPECTED RESULT:The Components should be planned with the active Version of the Production BOMWhich happens when the Main Item has a Item no. Series
+Description:
+
