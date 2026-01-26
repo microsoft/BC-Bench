@@ -1,5 +1,31 @@
-Title: [master] [ALL-E] Preview Posting on Production Journal shows just Consumption line from the Consumption Journal
-Repro Steps:
-Open BC23.4 W1 Search for Released Production OrderCreate a new Production OrderSource: 1000Quantity: 1Home -> Refresh Production Order Select the created LineLine -> Production JournalPost -> PreviewOpen Item Ledger Entries:This is correct Search for Consumption JournalInsert a Line as follows (from a totally different Production Order)Leave the Consumption Journal without posting Go back to released Production OrderLine -> Production Journal -> Post Preview ACTUAL RESULT:The posting preview is selecting the line from the Consumption Journal and it's issuesor if you select in the consumption Order the same released production Order just this line for preview. EXPECTED RESULT:The Posting preview should be the same as in step 3, since this is what the system is posting.
-Description:
+# Title: Preview Posting on Production Journal shows just Consumption line from the Consumption Journal
+## Repro Steps:
+1. Open BC23.4 W1
+2. Search for Released Production Order
+    Create a new Production Order
+    Source: 1000
+    Quantity: 1
+    Home -> Refresh Production Order
+3. Select the created Line
+    Line -> Production Journal
+    Post -> Preview
+    Open Item Ledger Entries:
+    ![Item Ledger Entries Preview](./item-ledger-entries-preview.png)
+    This is correct
+4. Search for Consumption Journal
+    Insert a Line as follows (from a totally different Production Order)
+    ![Consumption Journals](./consumption-journals.png)
+    Leave the Consumption Journal without posting
+5. Go back to released Production Order
+    Line -> Production Journal -> Post Preview
+
+ACTUAL RESULT:
+The posting preview is selecting the line from the Consumption Journal and it's issues
+![Error Message](./error-message.png)
+
+or if you select in the consumption Order the same released production Order just this line for preview.
+
+EXPECTED RESULT:
+The Posting preview should be the same as in step 3, since this is what the system is posting.
+## Description:
 Preview Posting on Production Journal shows just Consumption line from the Consumption Journal
