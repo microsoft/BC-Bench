@@ -1,0 +1,5 @@
+Title: [ALL-E] Replace Posting Date on Batch Posting doesn’t work with Post with Job Queue
+Repro Steps:
+Detailed Repro step Pre-requisitions: Cronus Data base BC 23.0 Company: Cronus International Ltd. On Purchases & Payable Setup on Background Posting enable Post with Job Queu Re-creation steps Create a simple purchase document. Any customer, any item. Select >>> Home>>> Post>>> Post Batch Take note of the Posting Date On the Batch Post Purchase Orders we change the Posting date and we expect the posting date on the document to be changed Click Ok to post After Clicking okay this should post the Document. In case of error check "Job Queue Log Entries" for the reason for the error. Search Posted Purchase Invoice Select the recently posted invoice The posting date remains the same despite selecting that batch posting should replace the posting Date.
+Description:
+Summary: Option Replace Posting Date on any of Batch Posting reports doesn’t work if Post with Job Queue is enabled, neither on sales nor purchase side.
