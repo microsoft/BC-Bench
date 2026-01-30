@@ -17,8 +17,8 @@ This category follows the [SWE-Bench](https://www.swebench.com/) methodology. Th
       <th>pass^1</th>
       <th>pass^3</th>
       <th>pass^5</th>
-      <th>Avg Duration (s)</th>
-      <th>Version</th>
+      <th>Avg Time</th>
+      <th>Ver</th>
     </tr>
   </thead>
   <tbody>
@@ -28,11 +28,11 @@ This category follows the [SWE-Bench](https://www.swebench.com/) methodology. Th
     <tr>
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
-      <td>{% if agg.pass_hat_1 %}{{ agg.pass_hat_1 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{{ agg.pass_hat_1 | times: 100.0 | round: 1 }}%</td>
       <td>{% if agg.pass_hat_3 %}{{ agg.pass_hat_3 | times: 100.0 | round: 1 }}%{% endif %}</td>
       <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
-      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% endif %}</td>
-      <td>{% if agg.benchmark_version %}{{ agg.benchmark_version }}{% endif %}</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>
       {% endif %}
     {% endfor %}
@@ -50,8 +50,8 @@ Comparing experimental configurations for GitHub Copilot CLI with **claude-haiku
       <th>pass^1</th>
       <th>pass^3</th>
       <th>pass^5</th>
-      <th>Avg Duration (s)</th>
-      <th>Version</th>
+      <th>Avg Time</th>
+      <th>Ver</th>
     </tr>
   </thead>
   <tbody>
@@ -61,11 +61,11 @@ Comparing experimental configurations for GitHub Copilot CLI with **claude-haiku
         {% unless agg.experiment.custom_instructions == true %}
     <tr>
       <td>{% if agg.experiment.mcp_servers %}{{ agg.experiment.mcp_servers }}{% else %}None{% endif %}</td>
-      <td>{% if agg.pass_hat_1 %}{{ agg.pass_hat_1 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{{ agg.pass_hat_1 | times: 100.0 | round: 1 }}%</td>
       <td>{% if agg.pass_hat_3 %}{{ agg.pass_hat_3 | times: 100.0 | round: 1 }}%{% endif %}</td>
       <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
-      <td>{% if agg.average_duration %}{{ agg.average_duration | round: 1 }}{% endif %}</td>
-      <td>{% if agg.benchmark_version %}{{ agg.benchmark_version }}{% endif %}</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}">{{ agg.benchmark_version }}</a></td>
     </tr>
         {% endunless %}
       {% endif %}
