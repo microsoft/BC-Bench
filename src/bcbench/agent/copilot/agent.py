@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import cast
 
 import yaml
-from copilot import CopilotClient, MCPServerConfig
+from copilot import CopilotClient, MCPServerConfig, SessionConfig
 from copilot.generated.session_events import SessionEventType
 
 from bcbench.agent.copilot.metrics import parse_metrics
@@ -37,10 +37,10 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
+    mcp_config: dict[str, MCPServerConfig] | None = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
-    config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent)
+    config = ExperimentConfiguration(mcp_servers=list(mcp_config.keys()) if mcp_config else None, custom_instructions=instructions_enabled, custom_agent=custom_agent)
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -63,8 +63,6 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")
-        if mcp_config_json:
-            cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 
@@ -75,20 +73,12 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
             client = CopilotClient({"cli_path": copilot_cmd})
             await client.start()
 
-            if mcp_config_json:
-                raw = json.loads(mcp_config_json)
-                raw_servers = raw.get("mcpServers", {})
-            else:
-                raw_servers = {}
-
-            mcp_servers = cast(dict[str, MCPServerConfig], raw_servers or {})
-
             session = await client.create_session(
-                {
-                    "model": model,
-                    "mcp_servers": mcp_servers,
-                    "streaming": True,
-                }
+                SessionConfig(
+                    model=model,
+                    mcp_servers=mcp_config if mcp_config else {},
+                    streaming=True,
+                )
             )
 
             # Listen for response chunks
