@@ -57,7 +57,7 @@ Comparing experimental configurations for GitHub Copilot CLI with **claude-haiku
   <tbody>
     {% assign sorted_results = site.data.bug-fix.aggregate | sort: "pass_hat_1" | reverse %}
     {% for agg in sorted_results %}
-      {% if agg.model == "claude-haiku-4-5" and agg.agent_name == "GitHub Copilot CLI" %}
+      {% if agg.model == "claude-haiku-4-5" and agg.agent_name == "GitHub Copilot" %}
         {% unless agg.experiment.custom_instructions == true %}
     <tr>
       <td>{% if agg.experiment.mcp_servers %}{{ agg.experiment.mcp_servers }}{% else %}None{% endif %}</td>

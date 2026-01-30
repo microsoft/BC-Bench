@@ -128,7 +128,7 @@ def evaluate_copilot(
         username=username,
         password=password,
         model=model,
-        agent_name="GitHub Copilot CLI",
+        agent_name="GitHub Copilot",
         category=category,
     )
 
