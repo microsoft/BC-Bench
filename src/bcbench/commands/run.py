@@ -33,7 +33,7 @@ run_app = typer.Typer(help="Run agents on single dataset entry")
 def run_mini(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    model: FoundryModel = "claude-haiku-4-5",
+    model: FoundryModel = "gpt-5.1-codex-mini",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,

@@ -349,6 +349,7 @@ def sample_leaderboard_and_summary(tmp_path):
                     "custom_agent": None,
                 },
                 "instance_results": copilot_instance_results,
+                "benchmark_version": "0.1.0",
             },
             {
                 "total": 10,
@@ -371,6 +372,7 @@ def sample_leaderboard_and_summary(tmp_path):
                     "custom_agent": None,
                 },
                 "instance_results": mini_instance_results,
+                "benchmark_version": "0.1.0",
             },
         ],
         "aggregate": [
@@ -389,6 +391,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "pass_hat_1": 0.6,
                 "pass_hat_3": None,
                 "pass_hat_5": None,
+                "benchmark_version": "0.1.0",
             },
             {
                 "model": "gpt-4o",
@@ -401,6 +404,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "pass_hat_1": 0.7,
                 "pass_hat_3": None,
                 "pass_hat_5": None,
+                "benchmark_version": "0.1.0",
             },
         ],
     }
@@ -431,6 +435,7 @@ def sample_leaderboard_and_summary(tmp_path):
                     "custom_agent": None,
                 },
                 "instance_results": testgen_instance_results,
+                "benchmark_version": "0.1.0",
             },
         ],
         "aggregate": [
@@ -445,6 +450,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "pass_hat_1": 0.5,
                 "pass_hat_3": None,
                 "pass_hat_5": None,
+                "benchmark_version": "0.1.0",
             },
         ],
     }
@@ -479,6 +485,7 @@ def sample_leaderboard_and_summary(tmp_path):
             "custom_agent": None,
         },
         "instance_results": new_summary_instance_results,
+        "benchmark_version": "0.1.0",
     }
 
     with open(summary_path, "w") as f:
@@ -558,6 +565,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
             "custom_agent": None,
         },
         "instance_results": new_agent_instance_results,
+        "benchmark_version": "0.1.0",
     }
 
     with open(summary_path, "w") as f:
@@ -625,6 +633,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
             "custom_agent": None,
         },
         "instance_results": diff_mcp_instance_results,
+        "benchmark_version": "0.1.0",
     }
 
     with open(summary_path, "w") as f:
@@ -766,6 +775,7 @@ def test_result_update_stores_multiple_results_with_default_n(sample_leaderboard
             "custom_agent": None,
         },
         "instance_results": multi_results_instance,
+        "benchmark_version": "0.1.0",
     }
 
     with open(summary_path, "w") as f:
@@ -816,6 +826,7 @@ def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_s
             "custom_agent": None,
         },
         "instance_results": oldest_instance_results,
+        "benchmark_version": "0.1.0",
     }
 
     summary_path = leaderboard_dir.parent / "test_summary.json"
@@ -927,6 +938,7 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
                 "github_run_id": "run_legacy",
                 "experiment": None,
                 "instance_results": None,  # Legacy: no instance_results
+                "benchmark_version": "0.1.0",
             },
         ],
         "aggregate": [
@@ -941,6 +953,7 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
                 "pass_hat_1": 0.0,  # Incorrectly set to 0
                 "pass_hat_3": None,
                 "pass_hat_5": None,
+                "benchmark_version": "0.1.0",
             },
         ],
     }

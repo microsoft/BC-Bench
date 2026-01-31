@@ -40,7 +40,7 @@ def evaluate_mini(
     username: ContainerUsername,
     password: ContainerPassword,
     category: EvaluationCategoryOption,
-    model: FoundryModel = "claude-haiku-4-5",
+    model: FoundryModel = "gpt-5.1-codex-mini",
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -128,7 +128,7 @@ def evaluate_copilot(
         username=username,
         password=password,
         model=model,
-        agent_name="GitHub Copilot CLI",
+        agent_name="GitHub Copilot",
         category=category,
     )
 

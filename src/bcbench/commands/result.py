@@ -19,6 +19,7 @@ from bcbench.results import (
     create_result_from_json,
     write_bceval_results,
 )
+from bcbench.results.reviewer import run_reviewer
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,23 @@ logger = get_logger(__name__)
 _config = get_config()
 
 result_app = typer.Typer(help="Process and display evaluation results")
+
+
+@result_app.command("review")
+def result_review(
+    results_file: Annotated[Path, typer.Argument(help="Path to results JSONL file to review", exists=True, file_okay=True, dir_okay=False)],
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+):
+    """
+    Review evaluation results and annotate failure categories using a TUI.
+
+    Opens a split-pane view showing expected (gold patch) vs actual (agent output).
+    Use j/k or arrows to navigate, 1-7 to select failure category.
+    Categories are auto-saved on navigate and quit.
+
+    Only shows unresolved results (resolved=false).
+    """
+    run_reviewer(results_file, dataset_path)
 
 
 @result_app.command("summarize")
