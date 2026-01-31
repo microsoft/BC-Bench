@@ -1,5 +1,5 @@
 ---
-name: ALTestWorkFlowWithHints
+name: ALTest
 description: Instructions for creating AL tests.
 ---
 
