@@ -59,6 +59,12 @@ instructions:
   enabled: false
 
 # controls:
+# 1. whether to copy skills (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/skills/`) into repo/.github/skills/
+# 2. CLI auto-discovers from repo/.github/skills/
+skills:
+  enabled: false
+
+# controls:
 # 1. whether to copy custom agents (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/agents/`) into the repo
 # 2. whether to pass --agent=<agent-name> to copilot
 agents:
