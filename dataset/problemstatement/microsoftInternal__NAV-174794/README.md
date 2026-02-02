@@ -6,7 +6,7 @@ This was reproduced on a SE environment V23.3 (Same as cx environment), but it i
 Also reproduced in other country versions (ES)
 ![Troubleshooting](./troubleshooting.png)
 
->>> go to "Sales & Receivables Setup" to enable multiple posting groups.
+>>> go to `Sales & Receivables Setup` to enable multiple posting groups.
 ![Sales & Receivables Setup](./sales-receivables-seutp.png)
 
 >>> Go to customer card to enable Allow multiple posting group. Also take note of the Customer posting group

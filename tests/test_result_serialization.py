@@ -133,6 +133,7 @@ class TestCategorySerialization:
             "average_prompt_tokens": 1500.0,
             "average_completion_tokens": 600.0,
             "average_llm_duration": 80.0,
+            "benchmark_version": "0.1.0",
         }
 
         summary = EvaluationResultSummary.model_validate(payload)

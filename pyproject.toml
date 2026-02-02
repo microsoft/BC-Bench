@@ -24,6 +24,7 @@ dependencies = [
     "pyyaml>=6.0",
     "pydantic>=2.0",
     "github-copilot-sdk>=0.1.18",
+    "textual>=7.0",
 ]
 
 [project.scripts]

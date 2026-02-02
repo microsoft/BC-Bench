@@ -27,6 +27,7 @@ class TestEvaluationResultSummary:
             average_prompt_tokens=5000.0,
             average_completion_tokens=1200.0,
             average_llm_duration=80.0,
+            benchmark_version="0.1.0",
         )
 
         summary_file = "test.json"
@@ -64,6 +65,7 @@ class TestEvaluationResultSummary:
             average_prompt_tokens=3000.0,
             average_completion_tokens=800.0,
             average_llm_duration=60.0,
+            benchmark_version="0.1.0",
         )
 
         summary.save(tmp_path, summary_file="custom_summary.json")
@@ -268,6 +270,7 @@ class TestExperimentConfiguration:
             average_completion_tokens=1000.0,
             average_llm_duration=70.0,
             experiment=experiment,
+            benchmark_version="0.1.0",
         )
 
         assert summary.experiment is not None
@@ -290,6 +293,7 @@ class TestExperimentConfiguration:
             average_prompt_tokens=4000.0,
             average_completion_tokens=1000.0,
             average_llm_duration=70.0,
+            benchmark_version="0.1.0",
         )
 
         assert summary.experiment is None
@@ -314,6 +318,7 @@ class TestExperimentConfiguration:
             average_completion_tokens=1200.0,
             average_llm_duration=80.0,
             experiment=experiment,
+            benchmark_version="0.1.0",
         )
 
         summary.save(tmp_path, "summary_with_experiment.json")
@@ -342,6 +347,7 @@ class TestExperimentConfiguration:
             average_completion_tokens=1000.0,
             average_llm_duration=70.0,
             experiment=None,
+            benchmark_version="0.1.0",
         )
 
         summary.save(tmp_path, "summary_no_experiment.json")
@@ -667,6 +673,7 @@ class TestLeaderboard:
             average_prompt_tokens=1000.0,
             average_completion_tokens=500.0,
             instance_results=None,  # Legacy: no instance_results
+            benchmark_version="0.1.0",
         )
 
         agg = LeaderboardAggregate.from_runs([legacy_run])
@@ -679,12 +686,115 @@ class TestLeaderboard:
         assert agg.pass_hat_5 is None
         assert agg.pass_hat_3 is None  # Only 1 run has instance_results
 
+    def test_aggregate_includes_benchmark_version_from_runs(self):
+        from bcbench.results.evaluation_result import LeaderboardAggregate
+
+        run1 = EvaluationResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__1", resolved=True)],
+            run_id="run_1",
+        )
+
+        agg = LeaderboardAggregate.from_runs([run1])
+
+        # Should inherit benchmark_version from the runs
+        assert agg.benchmark_version == run1.benchmark_version
+        assert agg.benchmark_version is not None
+
+    def test_aggregate_rejects_different_benchmark_versions(self):
+        from bcbench.results.evaluation_result import LeaderboardAggregate
+
+        run1 = EvaluationResultSummary(
+            total=3,
+            resolved=2,
+            failed=1,
+            build=3,
+            percentage=66.7,
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            instance_results={"test__1": True, "test__2": True, "test__3": False},
+            benchmark_version="0.1.0",
+        )
+        run2 = EvaluationResultSummary(
+            total=3,
+            resolved=1,
+            failed=2,
+            build=3,
+            percentage=33.3,
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            instance_results={"test__1": False, "test__2": True, "test__3": False},
+            benchmark_version="0.2.0",  # Different version!
+        )
+
+        with pytest.raises(ValueError, match="Cannot aggregate runs with different benchmark versions"):
+            LeaderboardAggregate.from_runs([run1, run2])
+
+    def test_aggregate_allows_same_benchmark_versions(self):
+        from bcbench.results.evaluation_result import LeaderboardAggregate
+
+        run1 = EvaluationResultSummary(
+            total=3,
+            resolved=2,
+            failed=1,
+            build=3,
+            percentage=66.7,
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            instance_results={"test__1": True, "test__2": True, "test__3": False},
+            benchmark_version="0.1.0",
+        )
+        run2 = EvaluationResultSummary(
+            total=3,
+            resolved=1,
+            failed=2,
+            build=3,
+            percentage=33.3,
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            instance_results={"test__1": False, "test__2": True, "test__3": False},
+            benchmark_version="0.1.0",  # Same version
+        )
+
+        agg = LeaderboardAggregate.from_runs([run1, run2])
+
+        assert agg.benchmark_version == "0.1.0"
+
     def test_load_empty_leaderboard_file(self, tmp_path):
-        """Test loading a leaderboard file that contains an empty array."""
         from bcbench.results.evaluation_result import Leaderboard
 
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("[]")
+
+        leaderboard = Leaderboard.load(empty_file)
+
+        assert leaderboard.runs == []
+        assert leaderboard.aggregate == []
+
+    def test_load_empty_object_leaderboard_file(self, tmp_path):
+        from bcbench.results.evaluation_result import Leaderboard
+
+        empty_file = tmp_path / "empty.json"
+        empty_file.write_text("{}")
 
         leaderboard = Leaderboard.load(empty_file)
 

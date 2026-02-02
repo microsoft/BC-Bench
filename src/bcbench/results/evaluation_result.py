@@ -1,4 +1,5 @@
 import json
+import tomllib
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -12,6 +13,19 @@ from bcbench.results.metrics import pass_hat_k
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
+
+
+def _get_benchmark_version() -> str:
+    pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
+    if not pyproject_path.exists():
+        try:
+            from importlib.metadata import version
+
+            return version("bcbench")
+        except Exception:
+            return "unknown"
+    with open(pyproject_path, "rb") as f:
+        return tomllib.load(f).get("project", {}).get("version", "unknown")
 
 
 class EvaluationResultSummary(BaseModel):
@@ -38,6 +52,9 @@ class EvaluationResultSummary(BaseModel):
 
     # Per-instance results for aggregate metrics calculation: instance_id -> resolved
     instance_results: dict[str, bool] | None = None
+
+    # Benchmark version from pyproject.toml at evaluation time
+    benchmark_version: str
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
@@ -78,6 +95,7 @@ class EvaluationResultSummary(BaseModel):
             github_run_id=run_id,
             experiment=experiment,
             instance_results=instance_results,
+            benchmark_version=_get_benchmark_version(),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,6 +104,7 @@ class EvaluationResultSummary(BaseModel):
         data["average_duration"] = round(data["average_duration"], 1)
         data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)
         data["average_completion_tokens"] = round(data["average_completion_tokens"], 1)
+        data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:
@@ -114,6 +133,9 @@ class LeaderboardAggregate(BaseModel):
     # Averaged metrics across runs
     average_duration: float | None = None
 
+    # Benchmark version(s) from aggregated runs
+    benchmark_version: str
+
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "LeaderboardAggregate":
         if not runs:
@@ -122,6 +144,15 @@ class LeaderboardAggregate(BaseModel):
         first_run: EvaluationResultSummary = runs[0]
         total: int = first_run.total
         num_runs: int = len(runs)
+
+        # Check for version mismatches - this is an error since results may not be comparable
+        unique_versions: set[str] = {r.benchmark_version for r in runs if r.benchmark_version}
+        if len(unique_versions) > 1:
+            raise ValueError(
+                f"Cannot aggregate runs with different benchmark versions for: {sorted(unique_versions)}. "
+                "Results from different versions may not be comparable. Re-run evaluations with the same benchmark version."
+            )
+        benchmark_version: str = unique_versions.pop()
 
         # Warn if runs have different instance counts
         unique_totals = {r.total for r in runs}
@@ -146,6 +177,7 @@ class LeaderboardAggregate(BaseModel):
                 pass_hat_3=None,
                 pass_hat_5=None,
                 average_duration=round(average_duration, 1) if average_duration else None,
+                benchmark_version=benchmark_version,
             )
 
         # Multiple runs: all must have instance_results
@@ -173,6 +205,7 @@ class LeaderboardAggregate(BaseModel):
             pass_hat_3=pass_hat_3,
             pass_hat_5=pass_hat_5,
             average_duration=round(average_duration, 1) if average_duration else None,
+            benchmark_version=benchmark_version,
         )
 
 

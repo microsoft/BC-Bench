@@ -19,6 +19,7 @@ from bcbench.results import (
     create_result_from_json,
     write_bceval_results,
 )
+from bcbench.results.reviewer import run_instance_reviewer, run_reviewer
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,35 @@ logger = get_logger(__name__)
 _config = get_config()
 
 result_app = typer.Typer(help="Process and display evaluation results")
+
+
+@result_app.command("review")
+def result_review(
+    results_file: Annotated[Path, typer.Argument(help="Path to results JSONL file to review (or directory if --instance-id is used)", exists=True, file_okay=True, dir_okay=True)],
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+    instance_id: Annotated[str | None, typer.Option("--instance-id", "-i", help="Review a single instance across all runs in a directory")] = None,
+):
+    """
+    Review evaluation results and annotate failure categories using a TUI.
+
+    Opens a split-pane view showing expected (gold patch) vs actual (agent output).
+    Use j/k or arrows to navigate, 1-7 to select failure category.
+    Categories are auto-saved on navigate and quit.
+
+    Two modes:
+    - Default: Review all unresolved results in a single JSONL file
+    - With --instance-id: Review one instance across all runs in a directory
+    """
+    if instance_id:
+        if not results_file.is_dir():
+            logger.error(f"When using --instance-id, the path must be a directory containing JSONL files: {results_file}")
+            raise typer.Exit(code=1)
+        run_instance_reviewer(results_file, instance_id, dataset_path)
+    else:
+        if not results_file.is_file():
+            logger.error(f"Expected a JSONL file, got directory: {results_file}. Use --instance-id to review across runs.")
+            raise typer.Exit(code=1)
+        run_reviewer(results_file, dataset_path)
 
 
 @result_app.command("summarize")

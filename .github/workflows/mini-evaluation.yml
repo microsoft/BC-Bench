@@ -8,12 +8,10 @@ on:
       model:
         description: "model to use for evaluation"
         required: false
-        default: "claude-haiku-4-5"
+        default: "gpt-5.1-codex-mini"
         type: choice
         options:
           - "gpt-5.1-codex-mini"
-          - "claude-haiku-4-5"
-          - "claude-opus-4-5"
       category:
         description: "Evaluation category to run"
         required: false
