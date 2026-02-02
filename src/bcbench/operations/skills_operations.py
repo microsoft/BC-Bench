@@ -1,5 +1,5 @@
 from pathlib import Path
-from shutil import copytree
+from shutil import copytree, rmtree
 
 from bcbench.dataset.dataset_entry import DatasetEntry
 from bcbench.logger import get_logger
@@ -7,14 +7,14 @@ from bcbench.operations.instruction_operations import _get_source_instructions_p
 
 logger = get_logger(__name__)
 
-def setup_copilot_skills(copilot_config: dict, entry: DatasetEntry, repo_path: Path) -> bool:
+def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path) -> bool:
     """
     Setup skills in the repository if available.
-
+    
     Returns:
         True if skills were copied, False if skills are disabled.
     """
-    skills_enabled: bool = copilot_config["skills"]["enabled"]
+    skills_enabled: bool = agent_config["skills"]["enabled"]
 
     if skills_enabled:
         source_skills: Path = _get_source_instructions_path(entry.repo)
@@ -26,7 +26,12 @@ def setup_copilot_skills(copilot_config: dict, entry: DatasetEntry, repo_path: P
 
         github_dir: Path = repo_path / ".github"
         skills_dir = github_dir / "skills"
-        copytree(source_skills_dir, skills_dir, dirs_exist_ok=True)
+
+        # Remove existing skills directory to ensure clean state
+        if skills_dir.exists():
+            rmtree(skills_dir)
+
+        copytree(source_skills_dir, skills_dir)
 
         logger.info(f"Skills copied from {source_skills_dir} to {skills_dir}")
         return True
