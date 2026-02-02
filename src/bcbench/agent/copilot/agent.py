@@ -34,9 +34,14 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
-    setup_copilot_skills(copilot_config, entry, repo_path)  # Copies skills to .github/skills/, CLI auto-discovers
+    skills_enabled: bool = setup_copilot_skills(copilot_config, entry, repo_path)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
-    config = ExperimentConfiguration(mcp_servers=mcp_server_names, custom_instructions=instructions_enabled, custom_agent=custom_agent)
+    config = ExperimentConfiguration(
+        mcp_servers=mcp_server_names,
+        custom_instructions=instructions_enabled,
+        skills_enabled=skills_enabled,
+        custom_agent=custom_agent,
+    )
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
