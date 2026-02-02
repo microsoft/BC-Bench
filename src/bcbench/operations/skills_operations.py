@@ -1,11 +1,10 @@
 from pathlib import Path
-import yaml
 from shutil import copytree
 
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import DatasetEntry
-from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.logger import get_logger
+from bcbench.operations.instruction_operations import _get_source_instructions_path
 
 logger = get_logger(__name__)
 _config = get_config()
