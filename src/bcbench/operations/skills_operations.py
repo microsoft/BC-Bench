@@ -24,7 +24,8 @@ def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path,
         if not source_skills_dir.exists():
             raise FileNotFoundError(f"Skills folder not found for repository: {entry.repo} at {source_skills_dir}")
 
-        target_dir: Path = repo_path / f".{agent_type}"
+        # Copilot reads from .github automatically, Claude uses .claude with explicit flag
+        target_dir: Path = repo_path / (".github" if agent_type == "copilot" else f".{agent_type}")
         skills_dir = target_dir / "skills"
 
         # Remove existing skills directory to ensure clean state

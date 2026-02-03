@@ -25,13 +25,14 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
 
     if instructions_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.repo, agent_type)
-        target_dir: Path = repo_path / f".{agent_type}"
+        # Copilot reads from .github automatically, Claude uses .claude with explicit flag
+        target_dir: Path = repo_path / (".github" if agent_type == "copilot" else f".{agent_type}")
 
         logger.info(f"Setting up custom instructions for repository: {entry.repo}")
         if target_dir.exists():
             rmtree(target_dir)
         copytree(source_instructions, target_dir)
-        logger.info(f".{agent_type} dir is overwritten with {source_instructions}")
+        logger.info(f"{target_dir.name} dir is overwritten with {source_instructions}")
 
     return instructions_enabled
 
@@ -45,7 +46,7 @@ def setup_custom_agent(copilot_config: dict, entry: DatasetEntry, repo_path: Pat
 
     if custom_agent_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.repo, agent_type)
-        target_dir: Path = repo_path / f".{agent_type}"
+        target_dir: Path = repo_path / (".github" if agent_type == "copilot" else f".{agent_type}")
         copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
 
         logger.info(f"Custom agents are set up from {source_instructions / 'agents'}")

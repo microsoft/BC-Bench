@@ -53,20 +53,25 @@ prompt:
     {% endif %}
 
 # controls:
-# 1. whether to copy custom instructions (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/`) into the repo
+# 1. whether to copy custom instructions from `src/bcbench/agent/{agent_type}/instructions/<sanitized-repo>/`
+#    - Copilot: copies to repo/.github/ (CLI auto-reads)
+#    - Claude: copies to repo/.claude/ (passed via --append-system-prompt-file)
 # 2. whether to pass --disable-custom-instructions to copilot
 instructions:
   enabled: false
 
 # controls:
-# 1. whether to copy skills (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/skills/`) into repo/.github/skills/
-# 2. CLI auto-discovers from repo/.github/skills/
+# 1. whether to copy skills from `src/bcbench/agent/{agent_type}/instructions/<sanitized-repo>/skills/`
+#    - Copilot: copies to repo/.github/skills/ (CLI auto-discovers)
+#    - Claude: copies to repo/.claude/skills/
 skills:
   enabled: false
 
 # controls:
-# 1. whether to copy custom agents (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/agents/`) into the repo
-# 2. whether to pass --agent=<agent-name> to copilot
+# 1. whether to copy custom agents from `src/bcbench/agent/{agent_type}/instructions/<sanitized-repo>/agents/`
+#    - Copilot: copies to repo/.github/agents/
+#    - Claude: copies to repo/.claude/agents/
+# 2. whether to pass --agent=<agent-name> to copilot or claude
 agents:
   enabled: false
   name: ALTest
