@@ -174,3 +174,39 @@ def count_files_in_patch(patch: str) -> int:
 def count_loc_in_patch(patch: str) -> int:
     patch_set = PatchSet(patch)
     return patch_set.added + patch_set.removed
+
+
+def extract_localizations_from_patch(patch: str) -> set[str]:
+    """
+    Extract localization codes from a patch based on BC path patterns.
+
+    BC projects have paths like:
+    - App/Apps/<Localization>/<ProjectName>/app/  (NAV repo)
+    - App/Layers/<Localization>/<ProjectName>/    (NAV repo)
+    - src/Apps/<Localization>/<ProjectName>/      (BCApps repo)
+
+    Where <Localization> is W1, DACH, NA, etc.
+
+    Returns set of localization codes found (e.g., {'W1', 'DACH'}).
+    """
+    import re
+
+    if not patch:
+        return set()
+
+    localizations: set[str] = set()
+
+    # Pattern matches:
+    # - App/Apps/<loc>/... or App/Layers/<loc>/... (NAV repo)
+    # - src/Apps/<loc>/... (BCApps repo)
+    # Localization code is typically 2-4 uppercase letters/digits
+    loc_pattern = re.compile(r"(?:App|src)[/\\](?:Apps|Layers)[/\\]([A-Z][A-Z0-9]{1,3})[/\\]", re.IGNORECASE)
+
+    for line in patch.split("\n"):
+        # Only check diff header lines that contain file paths
+        if line.startswith(("+++", "---", "diff --git")):
+            matches = loc_pattern.findall(line)
+            # Normalize to uppercase
+            localizations.update(m.upper() for m in matches)
+
+    return localizations
