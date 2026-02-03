@@ -34,9 +34,7 @@ def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path)
         copytree(source_skills_dir, skills_dir)
 
         logger.info(f"Skills copied from {source_skills_dir} to {skills_dir}")
-        return True
-
-    return False
+    return skills_enabled
 
 
 
