@@ -62,10 +62,6 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
         ]
         if mcp_config_json:
             cmd_args.append(f"--mcp-config={mcp_config_json}")
-        if instructions_enabled:
-            instructions_file = repo_path / ".claude" / "claude-instructions.md"
-            if instructions_file.exists():
-                cmd_args.append(f"--append-system-prompt-file={instructions_file}")
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 

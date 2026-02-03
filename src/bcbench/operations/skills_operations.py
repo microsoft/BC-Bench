@@ -17,7 +17,7 @@ def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path,
     skills_enabled: bool = agent_config["skills"]["enabled"]
 
     if skills_enabled:
-        source_skills: Path = _get_source_instructions_path(entry.repo, agent_type)
+        source_skills: Path = _get_source_instructions_path(entry.repo)
         source_skills_dir = source_skills / "skills"
 
         # Skip if skills folder doesn't exist for this repo
