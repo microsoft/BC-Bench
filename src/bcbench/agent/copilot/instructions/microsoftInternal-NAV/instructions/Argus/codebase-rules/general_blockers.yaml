@@ -1,5 +1,5 @@
-general_rules:
-  description: "Rules that apply to ALL request types"
+general_blockers:
+  description: "Blocker rules that apply to ALL request types - auto-reject scenarios"
 
   rules:
     - id: obsolete_code
@@ -160,7 +160,7 @@ general_rules:
 
     - id: potential_security_risk
       applies_to: ["all"]
-      severity: "warning"
+      severity: "blocking"
       description: "Potential exposure of sensitive data or security mechanisms based on keywords"
       action: "include_human"
       rejection_reason: "The requested change involves code handling sensitive security data. This requires manual security review."
@@ -218,61 +218,3 @@ general_rules:
         1. Apply `missing-info` label
         2. Do NOT apply team label or `agent-analyzed`
         3. Post a comment asking the author to verify the target location and names
-
-    - id: alternative_solution_requires_confirmation
-      applies_to: ["all"]
-      severity: "warning"
-      description: "When agent's suggested implementation location differs from author's request, require author confirmation"
-      action: "suggest_alternative"
-      rejection_note: "If the agent determines that a better solution exists in a DIFFERENT location than what the author requested, treat as MISSING_INFO and request author confirmation."
-      requires_confirmation: true
-      guidance: |
-        **Mandatory Rule:** When the agent's codebase analysis reveals that the optimal solution
-        involves a different location, procedure, or approach than what the author explicitly requested,
-        the agent MUST NOT proceed with approval. Instead, apply 'missing-info' label and request confirmation.
-
-        **Rationale:**
-        - The author may have specific reasons for requesting a particular location
-        - The author may not be aware of a better alternative
-        - Implementing something different than requested without confirmation violates trust
-        - The author should make the final decision on which approach to take
-
-        **Detection Criteria:**
-        1. Author requests event in procedure A, but agent determines procedure B is better
-        2. Author requests event in Object X, but agent finds solution should be in Object Y
-        3. Author requests specific parameters, but agent finds different parameters are needed
-        4. Author's described use case is better served by a different approach entirely
-
-        **Example Scenario:**
-        Request: "Add OnAfterIsCancellationSupported event to TestPurchaseLines in Codeunit 1313"
-        Agent Analysis: "The IsCancellationSupported logic is actually in Table 123 Purch. Inv. Line,
-                        not in Codeunit 1313. Adding event in the table would be more appropriate."
-
-        **Correct Agent Response:**
-        - Apply label: `missing-info`
-        - DO NOT apply team label or `agent-analyzed`
-        - Post comment explaining the alternative and requesting confirmation
-
-        **Agent Comment Template:**
-        ```
-        Thank you for your request!
-
-        After analyzing the codebase, I found that [brief explanation of difference].
-
-        **Your request:** [what author asked for]
-        **Suggested alternative:** [what agent recommends and why]
-
-        Please confirm if this alternative approach works for your scenario, or let us know if you specifically need a change like it is requested and what are the reasons.
-        ```
-
-        **What Counts as "Different Location":**
-        - Different procedure than requested
-        - Different object (codeunit, table, page, etc.) than requested
-        - Different file/layer than requested
-        - Fundamentally different approach (e.g., new event vs. extending existing)
-
-        **What Does NOT Require Confirmation:**
-        - Minor parameter adjustments that don't change the location
-        - Adding standard parameters like IsHandled when appropriate
-        - Naming convention corrections
-        - Technical improvements that don't change the core request location

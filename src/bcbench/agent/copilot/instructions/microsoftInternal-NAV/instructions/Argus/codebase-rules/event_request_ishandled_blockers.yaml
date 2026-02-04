@@ -1,0 +1,184 @@
+event_request_ishandled_blockers:
+  description: "Blocker rules specific to event-request/ishandled subtype - auto-reject scenarios for IsHandled events"
+
+  rules:
+    - id: ishandled_in_ondelete_trigger
+      applies_to: ["event-request/ishandled"]
+      severity: "blocking"
+      description: "IsHandled event at the beginning of OnDelete trigger"
+      action: "auto_reject"
+      warning_message: "IsHandled events at the beginning of OnDelete triggers are not allowed. Bypassing delete operations entirely can cause data inconsistency and orphaned records."
+      guidance: |
+        Instead of using an IsHandled event at the beginning of the OnDelete trigger, consider these alternatives:
+
+        **Recommended approaches:**
+        1. Use standard OnBeforeDelete event (without IsHandled) to add custom logic before deletion
+        2. Use OnAfterDelete event to handle post-deletion operations
+        3. If you need to prevent deletion conditionally, use TestField or Error statements before the delete operation
+
+        This approach:
+        - ✅ Allows extensions to add logic before/after deletion
+        - ✅ Maintains data consistency
+        - ✅ Prevents orphaned records
+        - ✅ Follows standard extensibility patterns
+
+    - id: ishandled_unsafe_code_block
+      applies_to: ["event-request/ishandled"]
+      severity: "blocking"
+      description: "IsHandled event with unsafe/critical code block"
+      action: "suggest_alternative"
+      warning_message: "The code block that would be bypassed contains critical operations that cannot be safely skipped."
+      requires_confirmation: true
+      guidance: |
+        **Blocking Rule:** When an IsHandled event is requested, the agent MUST analyze the code block that would be bypassed to identify unsafe or critical operations that cannot be safely skipped.
+
+        **What Makes a Code Block Unsafe to Bypass:**
+
+        1. **Database Operations Without Compensation**
+           - INSERT/MODIFY/DELETE operations that other code depends on
+           - Operations that maintain referential integrity
+           - Ledger entry creation or posting operations
+
+        2. **State Management Operations**
+           - Status field updates that control workflow
+           - Lock/unlock operations
+           - Commit statements that other operations depend on
+
+        3. **Critical Validation Logic**
+           - Security checks or permission validations
+           - Data integrity validations
+           - Business rule enforcements that prevent data corruption
+
+        ---
+
+        **Example 1 - UNSAFE: Bypassing Ledger Entry Creation**
+        Author requests: "Add IsHandled event to skip the G/L posting in PostSalesInvoice"
+        ```al
+        local procedure PostSalesInvoice(var SalesHeader: Record "Sales Header")
+        var
+            GenJnlLine: Record "Gen. Journal Line";
+        begin
+            // ❌ UNSAFE TO BYPASS - These operations maintain financial integrity
+            GenJnlLine.Init();
+            GenJnlLine."Document Type" := GenJnlLine."Document Type"::Invoice;
+            GenJnlLine."Account Type" := GenJnlLine."Account Type"::Customer;
+            GenJnlLine.Amount := SalesHeader."Amount Including VAT";
+            GenJnlPostLine.RunWithCheck(GenJnlLine);  // Creates G/L entries
+
+            SalesHeader.Status := SalesHeader.Status::Posted;
+            SalesHeader.Modify();
+        end;
+        ```
+        **Why Unsafe:** Skipping this block would:
+        - Leave financial records incomplete (invoice without G/L entries)
+        - Cause imbalanced ledgers
+        - Break audit trails
+        - Potentially mark document as posted without actual posting
+
+        **Agent Response:**
+        ```
+        ⛔ **Cannot add IsHandled event here.**
+
+        The code block contains critical G/L posting operations that cannot be safely bypassed:
+        - `GenJnlPostLine.RunWithCheck()` creates ledger entries
+        - Status update depends on successful posting
+
+        **Alternatives:**
+        1. Add a regular event BEFORE posting to modify values
+        2. Add a regular event AFTER posting for post-processing
+        3. If you need to change HOW posting works, consider extending the posting codeunit instead
+        ```
+        ---
+        **Example 2 - UNSAFE: Bypassing Referential Integrity Operations**
+        Author requests: "Add IsHandled event to skip dimension validation in PostPurchaseLine"
+
+        ```al
+        local procedure PostPurchaseLine(var PurchLine: Record "Purchase Line")
+        begin
+            // ❌ UNSAFE TO BYPASS - Maintains referential integrity
+            DimensionMgt.CheckDimValuePosting(
+                TableArray, NoArray,
+                PurchLine."Dimension Set ID");
+
+            // Creates dimension set entries linked to the posted document
+            PostedDimSetID := DimensionMgt.CreateDimSetFromJobTaskDim(
+                PurchLine."Job No.",
+                PurchLine."Job Task No.",
+                PurchLine."Dimension Set ID");
+
+            PurchInvLine."Dimension Set ID" := PostedDimSetID;
+            PurchInvLine.Insert();
+        end;
+        ```
+        **Why Unsafe:** Skipping this block would:
+        - Allow invalid dimension combinations to be posted
+        - Create posted documents without proper dimension linkage
+        - Break dimension reporting and analysis
+        ---
+
+        **Agent Analysis Checklist:**
+
+        | Check | Question | If YES |
+        |-------|----------|--------|
+        | Database writes | Does the block INSERT/MODIFY/DELETE records that other code depends on? | ⛔ Unsafe |
+        | Ledger operations | Does it create ledger entries or posting operations? | ⛔ Unsafe |
+        | Status changes | Does it update status fields that control workflow? | ⚠️ Review carefully |
+        | External calls | Does it call external services or APIs? | ⚠️ Review carefully |
+        | Validation | Does it perform security or integrity validations? | ⛔ Unsafe |
+        | Number series | Does it consume document numbers? | ⛔ Unsafe |
+        | Only assignments | Does it only assign/calculate values without side effects? | ✅ Safe |
+
+        ---
+        **Alternative Suggestions When Blocking:**
+        1. **Use regular event instead** - Allows extensions to ADD logic without BYPASSING
+        2. **Add event at different location** - Before or after the critical block
+        3. **Request parameter access** - Add parameters to existing events to modify behavior
+        4. **Suggest code refactoring** - Extract safe portions into separate procedures
+
+    - id: ishandled_modification_to_existing_event
+      applies_to: ["event-request/ishandled"]
+      severity: "blocking"
+      description: "Request to add IsHandled pattern to an existing event"
+      action: "auto_reject"
+      warning_message: "Adding IsHandled pattern to existing events is not allowed. This fundamentally changes the purpose of the event and can break existing subscribers."
+      guidance: |
+        **⛔ BLOCKER: Cannot Add IsHandled to Existing Events**
+
+        When an author requests to add IsHandled functionality to an event that already exists in the codebase, this must be **automatically rejected**.
+
+        **Why This Is Not Allowed:** Changes the fundamental purpose and behavior of the existing event
+
+        **Detection Criteria:**
+        The agent must check if:
+        1. An event with the requested name already exists in the codebase
+        2. The request is to add IsHandled pattern to this existing event
+        3. The event doesn't currently support IsHandled functionality
+
+        **Agent Response Template:**
+        ```
+        ⛔ **Request Rejected: Cannot Add IsHandled to Existing Event**
+
+        The event '[EventName]' already exists without IsHandled functionality. Adding IsHandled to an existing event is not allowed as it changes the event's purpose.
+
+        **Recommended Alternatives:**
+        1. **Add a NEW event** with IsHandled before or after the existing event
+           - Example: OnBeforeDoSomething() with IsHandled, followed by the existing OnDoSomething()
+
+        2. **Use alternatives to IsHandled pattern:**
+           - Add parameters to influence behavior without bypassing
+           - Use conditional event triggering
+           - Refactor code to be more extensible
+
+        3. **Create a separate request** for one of the above alternatives
+
+        **Example:**
+        If you want to allow bypassing logic around the existing event, create a NEW event:
+        - Existing: `OnAfterCalculateTotal()`
+        - New: `OnBeforeCalculateTotal(var IsHandled: Boolean)` (raised before existing event)
+        ```
+
+        **Important Notes:**
+        - Even if the change seems "minor", it's still not allowed
+        - This rule applies to ALL existing events, regardless of age or usage
+        - The author should create a NEW request with an alternative approach
+        - Point the author to alternative suggestion rules for guidance on better patterns

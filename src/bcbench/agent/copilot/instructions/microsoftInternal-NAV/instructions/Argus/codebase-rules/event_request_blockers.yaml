@@ -1,0 +1,72 @@
+event_request_blockers:
+  description: "Blocker rules specific to event-request type - auto-reject scenarios"
+
+  rules:
+    - id: consecutive_events_not_allowed
+      applies_to: ["event-request"]
+      severity: "blocking"
+      description: "Consecutive event calls (one directly after another) are not allowed"
+      action: "suggest_alternative"
+      rejection_note: "Adding a new event directly adjacent to an existing event is not allowed. The existing event should be updated with additional parameters instead."
+      guidance: |
+        **Blocking Rule:** Two event calls placed consecutively (one directly after another with no meaningful code between them) are not acceptable. If someone requests a new event just above or below an existing one, the solution is to update the existing event with new parameters.
+
+        **Rationale:**
+        - Consecutive events create unnecessary overhead (two event invocations instead of one)
+        - Subscribers would need to subscribe to multiple events for related data
+        - Increases complexity for extension developers
+        - Indicates the existing event is missing parameters rather than needing a new event
+        - Violates the principle of event consolidation
+
+        **Detection Criteria:**
+        - New event requested immediately before an existing event (no code between)
+        - New event requested immediately after an existing event (no code between)
+        - Only whitespace, comments, or variable declarations between events
+
+        **Example - NOT Allowed (consecutive events):**
+        ```al
+        local procedure ProcessSalesOrder(var SalesHeader: Record "Sales Header")
+        begin
+            // Some processing code...
+
+            // ❌ NOT ALLOWED - Two events directly next to each other
+            OnBeforeProcessSalesOrderNewEvent(SalesHeader, CustomerNo);  // New event requested
+            OnBeforeProcessSalesOrder(SalesHeader, IsHandled);           // Existing event
+
+            if not IsHandled then begin
+                // Processing logic
+            end;
+        end;
+        ```
+
+        **Example - Correct Solution (update existing event):**
+        ```al
+        local procedure ProcessSalesOrder(var SalesHeader: Record "Sales Header")
+        begin
+            // Some processing code...
+
+            // ✅ CORRECT - Existing event updated with new parameter
+            OnBeforeProcessSalesOrder(SalesHeader, IsHandled, CustomerNo);  // Added CustomerNo parameter
+
+            if not IsHandled then begin
+                // Processing logic
+            end;
+        end;
+
+        // Updated event signature with new parameter at the END
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeProcessSalesOrder(var SalesHeader: Record "Sales Header"; var IsHandled: Boolean; var CustomerNo: Code[20])
+        begin
+        end;
+        ```
+
+        **What Counts as "Consecutive":**
+        - Direct adjacency (no code between events)
+        - Only whitespace between events
+        - Only comments between events
+        - Only variable declarations between events (no executable code)
+
+        **What Does NOT Count as "Consecutive":**
+        - Meaningful executable code between events (assignments, function calls, conditionals)
+        - Different logical sections of a procedure
+        - Events in different procedures/triggers

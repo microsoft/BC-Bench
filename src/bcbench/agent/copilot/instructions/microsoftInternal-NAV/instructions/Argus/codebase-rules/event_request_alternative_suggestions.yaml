@@ -1,0 +1,181 @@
+event_request_alternative_suggestions:
+  description: "Alternative suggestions for event-request type - recommending existing solutions or better approaches"
+
+  common_rules:
+    - id: similar_events_exist
+      applies_to: ["event-request"]
+      severity: "warning"
+      description: "Similar events already available nearby"
+      action: "suggest_alternative"
+      rejection_note: "Similar event exists at this location: {event_name}. Consider adding parameters to the existing event instead of creating a new one."
+      requires_confirmation: true
+      guidance: |
+        When analyzing an event request, check if a similar event already exists at or near the requested location.
+        If found, suggest adding parameters to the existing event instead of creating a new one.
+
+        **Detection Criteria:**
+        - Event fires at the same logical point (before/after same operation)
+        - Event provides access to the same or related records
+
+        **Why Consolidate Events:**
+        - Reduces event overhead (fewer event invocations)
+        - Simplifies subscriber implementation (one event to subscribe to)
+        - Easier to maintain and understand
+        - Avoids confusion about which event to use
+
+        **Example - Similar Event Exists:**
+
+        Author requests: "Add OnBeforePostSalesLine event with CustomerNo parameter"
+
+        Existing event found:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforePostSalesLine(var SalesLine: Record "Sales Line"; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+
+        ✅ **Recommended Solution** - Add parameter to existing event:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforePostSalesLine(var SalesLine: Record "Sales Line"; var IsHandled: Boolean; CustomerNo: Code[20])
+        begin
+        end;
+        ```
+
+        ❌ **Not Recommended** - Creating a new similar event:
+        ```al
+        // Don't create this - too similar to existing event
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforePostSalesLineWithCustomer(var SalesLine: Record "Sales Line"; CustomerNo: Code[20])
+        begin
+        end;
+        ```
+
+        **Agent Response Template:**
+        ```
+        A similar event `{existing_event_name}` already exists at this location.
+
+        Instead of creating a new event, we recommend adding the requested parameter(s) to the existing event:
+        - Current: `{current_signature}`
+        - Proposed: `{proposed_signature}`
+
+        Do you agree with this approach?
+        ```
+
+    - id: existing_event_may_satisfy_request
+      applies_to: ["event-request"]
+      severity: "warning"
+      description: "An existing nearby event may satisfy the author's use case"
+      action: "request_clarification"
+      warning_message: "An existing event may satisfy this request. Clarification needed before adding a new event."
+      requires_confirmation: true
+      guidance: |
+        When analyzing an event request, check if an existing event at a different (but nearby) location
+        could satisfy the author's use case. This differs from `similar_events_exist` - here the event
+        is at a DIFFERENT location but might still achieve the same goal.
+
+        **When to Apply This Rule:**
+        - Author wants to modify a record before a specific operation
+        - An existing event fires at a nearby point with the same record available
+        - It's unclear if the timing difference between events matters for the use case
+
+        **Analysis Steps:**
+        1. Identify the author's stated goal (what they want to modify and why)
+        2. Check if an existing event provides access to the same record
+        3. Analyze if the existing event fires at a point where modifications would achieve the same result
+        4. Consider if data flow to subsequent procedures is affected by event placement
+
+        **Example Scenario:**
+
+        Author requests: "Add OnBeforeValidateQuantity event in Sales Line table to modify Quantity"
+
+        Agent finds existing event:
+        ```al
+        // Existing event in OnValidate trigger for Quantity field
+        [IntegrationEvent(false, false)]
+        local procedure OnAfterValidateQuantity(var SalesLine: Record "Sales Line")
+        begin
+        end;
+        ```
+
+        **Questions to Ask:**
+        - Does the author need to modify Quantity BEFORE validation runs, or would modifying it AFTER work?
+        - Will the existing OnAfterValidateQuantity event allow the author to achieve their goal?
+        - What specific behavior requires the event to be BEFORE vs AFTER?
+
+        **Agent Response Template:**
+        ```
+        We noticed there is an existing event `OnAfterValidateQuantity` that fires after the Quantity field is validated.
+
+        This event provides access to the same `Sales Line` record that you want to modify.
+
+        **Question:** Could you use the existing `OnAfterValidateQuantity` event for your scenario?
+
+        If not, please explain:
+        1. What specific modifications do you need to make?
+        2. Why must these modifications happen BEFORE validation rather than after?
+        3. What behavior would differ if you used the existing event instead?
+        ```
+
+    - id: integration_event_include_sender_true
+      applies_to: ["event-request"]
+      severity: "blocking"
+      description: "IntegrationEvent with IncludeSender=true (first parameter is true)"
+      action: "suggest_alternative"
+      requires_confirmation: true
+      warning_message: "The event signature has IncludeSender set to true. Consider using 'this' keyword instead."
+      guidance: |
+        **Preferred Alternative:** When IncludeSender=true is requested, suggest using the 'this' keyword instead (especially for codeunits).
+
+        **What is 'this' keyword:**
+        The 'this' keyword in AL provides a reference to the current instance of an object. It can be passed as a parameter to events, allowing subscribers to access the publisher object's public members.
+
+        **Why 'this' is Better Than IncludeSender=true:**
+        - More explicit and intentional - developer consciously passes the reference
+        - Clearer code - the parameter is visible in the event call
+
+        **Example - Using IncludeSender=true (Less Preferred):**
+        ```al
+        codeunit 50100 "Sales Order Processor"
+        {
+            // ❌ Less preferred - IncludeSender=true affects all subscribers
+            [IntegrationEvent(true, false)]
+            local procedure OnBeforeProcessOrder(var SalesHeader: Record "Sales Header"; var IsHandled: Boolean)
+            begin
+            end;
+        }
+        ```
+        **Example - Using 'this' Keyword (Preferred):**
+        ```al
+        codeunit 50100 "Sales Order Processor"
+        {
+            // ✅ Preferred - explicit 'this' parameter
+            [IntegrationEvent(false, false)]
+            local procedure OnBeforeProcessOrder(var SalesHeader: Record "Sales Header"; var IsHandled: Boolean; Sender: Codeunit "Sales Order Processor")
+            begin
+            end;
+
+            local procedure ProcessOrder(var SalesHeader: Record "Sales Header")
+            var
+                IsHandled: Boolean;
+            begin
+                OnBeforeProcessOrder(SalesHeader, IsHandled, this);  // Explicitly passing 'this'
+            end;
+        }
+        ```
+        **Applicability:**
+        - **Codeunits:** Fully supported - always suggest 'this' instead of IncludeSender=true
+        - **Pages:** 'this' can be used for page reference
+        - **Reports:** 'this' can be used for report reference
+
+        **Agent Response Template:**
+        ```
+        Instead of IncludeSender=true, we recommend using the 'this' keyword explicitly:
+
+        **Suggested Implementation:**
+        - Pass 'this' when calling the event
+
+        This approach is more explicit and follows modern AL patterns.
+        Do you agree with this approach, or do you have a specific reason for requiring IncludeSender=true?
+        ```

@@ -1,7 +1,7 @@
-request_for_external_rules:
-  description: "Rules specific to request-for-external type (making internal procedures/variables accessible)"
+request_for_external_implementation:
+  description: "Implementation rules specific to request-for-external type - ensure alignment with coding standards"
 
-  conditional_restrictions:
+  rules:
     - id: procedure_access_level
       applies_to: ["request-for-external"]
       severity: "notice"

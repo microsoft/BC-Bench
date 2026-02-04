@@ -103,21 +103,42 @@ general_requirements:
           - "We need this to be public so we can call it"
           - "This enum needs more options for our extension"
 
-# Validation Process (applies to all types)
-validation_process:
-  steps:
-    1: "Check if title is clear and descriptive"
-    2: "Verify description includes all minimum elements"
-    3: "Read author's justification/problem statement"
-    4: "Check if justification shows clear technical intent or specific need"
-    5: "Accept if technical context is present (e.g., 'set filters', 'validate data', 'access information')"
-    6: "Reject only if completely generic with no technical details (e.g., 'we need this', 'customers want it')"
-    7: "If borderline, err on the side of acceptance"
+    - id: no_images_use_code_snippets
+      name: "No Images - Use Code Snippets"
+      description: "Images are not allowed - code must be provided as text using code snippets"
+      mandatory: true
+      validation_hints: ["image", "screenshot", "picture", "code snippet", "text"]
+      quality_standards:
+        reject_images: true
+        rationale: |
+          - Code in images cannot be analyzed by the agent
+          - Images cannot be searched or indexed
+          - Code snippets allow for proper syntax highlighting and copying
+          - Text-based code is accessible and easier to work with
+        required_format: |
+          All code must be provided as text using proper markdown code blocks with AL language syntax:
+          ```al
+          // Your AL code here
+          procedure Example()
+          begin
+              // Implementation
+          end;
+          ```
+        polite_message_template: |
+          Thank you for your request!
 
-# Validation Messages
-validation_messages:
-  insufficient_title: "Issue title is too generic. Please make it specific and descriptive."
-  insufficient_description: "Issue description lacks required details. Please include: problem, proposed solution, justification, and implementation details."
-  insufficient_justification: "Please provide more context about your technical need. What specific functionality are you trying to implement or what limitation are you trying to address?"
-  requirement_reference: "For more details, see our Extensibility Guidelines: https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-contribute-extensibility"
-  resubmit_after_update: "Please update the issue with the missing details. We'll automatically re-analyze once updated."
+          I noticed that you've included an image in your submission. To help us analyze your request more effectively, could you please replace the image with a text-based code snippet?
+
+          Please use the following format for AL code:
+
+          ```al
+          // Your AL code here
+          procedure YourProcedureName()
+          begin
+              // Your implementation
+          end;
+          ```
+
+          This will allow us to better understand your request and provide more accurate guidance.
+
+          Thank you for your cooperation!
