@@ -61,7 +61,7 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 "id": result.instance_id,
                 "input": input,
                 "expected": expected,
-                "output": result.generated_patch,
+                "output": result.generated_patch if not is_extensibility else result.json_output,
                 "context": "",
                 "metadata": metadata,
                 "tags": [],
@@ -99,4 +99,4 @@ def get_info_from_dataset_entry_ext(entry: ExtensibilityDatasetEntry) -> tuple[s
     Returns:
         A tuple of (input, expected output)
     """
-    return entry.get_task(), entry.expected
+    return entry.get_task(), json.dumps(entry.expected)

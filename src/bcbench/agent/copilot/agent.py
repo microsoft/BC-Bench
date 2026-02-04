@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from bcbench.agent.copilot.metrics import parse_metrics
+from bcbench.agent.copilot.metrics import parse_metrics, parse_metrics_ext
 from bcbench.agent.shared import build_mcp_config, build_prompt, build_prompt_ext
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, ExtensibilityDatasetEntry
@@ -144,13 +144,6 @@ def run_copilot_agent_ext(
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 
-        # Add prompt as argument
-        # We write it to a temporary file to avoid issues with quoting on Windows
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8") as tmp:
-            tmp.write(prompt)
-            tmp_path = tmp.name
-
         # Copilot CLI often accepts a file via redirection but here we use the cat strategy or just pass regular args if we can,
         # but since we had issues, let's try the pipe approach if supported, OR just standard input.
         # But actually, looking at similar tools, they often just take the prompt as the last argument or via a file.
@@ -179,7 +172,7 @@ def run_copilot_agent_ext(
         session_logs = list(output_dir.glob("process-*.log"))
         session_log_path = max(session_logs, key=lambda p: p.stat().st_mtime) if session_logs else None
 
-        metrics = parse_metrics(stderr_lines, session_log_path=session_log_path)
+        metrics = parse_metrics_ext(stderr_lines, session_log_path=session_log_path)
 
         return metrics, config
     except subprocess.TimeoutExpired:

@@ -1,10 +1,11 @@
+import json
 import re
 from collections import Counter
 from pathlib import Path
 from typing import Sequence
 
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics
+from bcbench.types import AgentMetrics, ExtAgentMetrics
 
 logger = get_logger(__name__)
 
@@ -130,3 +131,46 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
     except Exception as e:
         logger.error(f"Failed to parse metrics from output: {e}")
         return None
+
+
+def parse_metrics_ext(output_lines: Sequence[str], session_log_path: Path | None = None) -> ExtAgentMetrics | None:
+    """Parse extended metrics from Copilot CLI output and session logs.
+
+    This extends parse_metrics() by additionally extracting JSON output from code fences.
+
+    Args:
+        output_lines: Lines from Copilot CLI stderr output
+        session_log_path: Optional path to session log file for tool usage parsing
+
+    Returns:
+        ExtAgentMetrics with all base metrics plus json_output field, or None if parsing fails
+    """
+    # Parse base metrics using the standard parser
+    base_metrics = parse_metrics(output_lines, session_log_path)
+    if base_metrics is None:
+        return None
+
+    # Parse additional JSON field from code fences
+    json_output = None
+    output_text = "".join(output_lines)
+
+    try:
+        json_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", output_text)
+        if json_match:
+            json_str = json_match.group(1)
+            try:
+                json_output = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to decode JSON metrics: {e}")
+    except Exception as e:
+        logger.warning(f"Failed to parse JSON output: {e}")
+
+    return ExtAgentMetrics(
+        execution_time=base_metrics.execution_time,
+        llm_duration=base_metrics.llm_duration,
+        turn_count=base_metrics.turn_count,
+        prompt_tokens=base_metrics.prompt_tokens,
+        completion_tokens=base_metrics.completion_tokens,
+        tool_usage=base_metrics.tool_usage,
+        json_output=json_output,
+    )
