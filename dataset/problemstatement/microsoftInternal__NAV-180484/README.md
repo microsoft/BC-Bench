@@ -42,3 +42,7 @@ Or
 I have search bug and wikis there is no existing ticket as regards this and in the documentation, there is no definite explanations for what each status connotes. Please Investigate.
 
 I attached the repro and the file use to create the repro. The issue is not with the document created it is with the status of the document after it has been created.
+
+## Hints
+
+We should go with option 2
