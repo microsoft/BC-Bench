@@ -40,26 +40,61 @@ class _ALMcpServerManager:
 _mcp_server_manager = _ALMcpServerManager()
 
 
+def _get_mcp_tools(tools: list[str], agent_type: AgentType) -> list[str]:
+    """
+    Get MCP tools based on agent type.
+    """
+    match agent_type:
+        case AgentType.COPILOT:
+            return tools
+        case AgentType.CLAUDE:
+            return []
+        case _:
+            logger.error(f"Unsupported agent type: {agent_type}")
+            raise AgentError(f"Unsupported agent type: {agent_type}")
+
+
+def _get_mcp_server_type(server_type: str, agent_type: AgentType) -> str:
+    """
+    Get MCP server type based on agent type.
+    """
+    match server_type:
+        case "http":
+            return server_type
+        case "local" | "stdio":
+            match agent_type:
+                case AgentType.COPILOT:
+                    return "local"
+                case AgentType.CLAUDE:
+                    return "stdio"
+                case _:
+                    logger.error(f"Unsupported agent type: {agent_type}")
+                    raise AgentError(f"Unsupported agent type: {agent_type}")
+        case _:
+            logger.error(f"Unsupported MCP server type: {server_type}")
+            raise AgentError(f"Unsupported MCP server type: {server_type}")
+
+
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any], agent_type: AgentType) -> tuple[str, dict[str, Any]]:
-    server_type: str = server["type"]
+    server_type: str = _get_mcp_server_type(server["type"], agent_type)
     server_name: str = server["name"]
-    tools: list[str] = server["tools"]
+    tools: list[str] = _get_mcp_tools(server["tools"], agent_type)
 
     match server_type:
         case "http":
             return server_name, {
                 "type": server_type,
                 "url": server["url"],
-                "tools": tools if agent_type == AgentType.COPILOT else None,
+                "tools": tools,
             }
-        case "local":
+        case "local" | "stdio":
             args: list[str] = server["args"]
             rendered_args = [Template(arg).render(**template_context) for arg in args]
             return server_name, {
-                "type": server_type if agent_type == AgentType.COPILOT else "stdio", 
+                "type": server_type,
                 "command": server["command"],
                 "args": rendered_args,
-                "tools": tools if agent_type == AgentType.COPILOT else None,
+                "tools": tools,
             }
         case _:
             logger.error(f"Unsupported MCP server type: {server_type}, {server}")
