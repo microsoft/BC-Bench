@@ -36,6 +36,7 @@ def result_review(
     category: Annotated[EvaluationCategory, typer.Option("--category", "-c", help="Evaluation category: bug-fix (compare patch) or test-generation (compare test_patch)")],
     dataset_path: DatasetPath = _config.paths.dataset_path,
     instance_id: Annotated[str | None, typer.Option("--instance-id", "-i", help="Review a single instance across all runs in a directory")] = None,
+    include_resolved: Annotated[bool, typer.Option("--include-resolved", help="Include resolved instances in the review")] = False,
 ):
     """
     Review evaluation results and annotate failure categories using a TUI.
@@ -59,7 +60,7 @@ def result_review(
         if not results_file.is_file():
             logger.error(f"Expected a JSONL file, got directory: {results_file}. Use --instance-id to review across runs.")
             raise typer.Exit(code=1)
-        run_reviewer(results_file, dataset_path, category)
+        run_reviewer(results_file, dataset_path, category, include_resolved)
 
 
 @result_app.command("summarize")

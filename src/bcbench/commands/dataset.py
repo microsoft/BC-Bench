@@ -1,6 +1,7 @@
 """CLI commands for dataset operations."""
 
 import json
+from pathlib import Path
 
 import typer
 from typing_extensions import Annotated
@@ -9,6 +10,7 @@ from bcbench.cli_options import DatasetPath
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.dataset.dataset_loader import load_dataset_entries
+from bcbench.dataset.reviewer import run_dataset_reviewer
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
 
@@ -16,6 +18,25 @@ logger = get_logger(__name__)
 _config = get_config()
 
 dataset_app = typer.Typer(help="Query and analyze dataset")
+
+
+@dataset_app.command("review")
+def review_dataset(
+    dataset_path: Annotated[Path, typer.Argument(help="Path to dataset JSONL file")] = _config.paths.dataset_path,
+    results_dir: Annotated[
+        Path | None, typer.Option("--results-dir", "-r", help="Directory containing result JSONL files to show resolution stats", exists=True, file_okay=False, dir_okay=True)
+    ] = None,
+):
+    """
+    Review dataset entries using a TUI.
+
+    Opens a split-pane view showing entry information and problem statement.
+    Use arrow keys to navigate between entries.
+
+    If --results-dir is provided, shows resolution stats (e.g., "2/5 resolved")
+    for each entry based on the results in that directory.
+    """
+    run_dataset_reviewer(dataset_path, results_dir)
 
 
 @dataset_app.command("list")

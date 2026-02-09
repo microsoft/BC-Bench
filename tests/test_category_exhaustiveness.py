@@ -1,6 +1,6 @@
 from bcbench.dataset import DatasetEntry
 from bcbench.evaluate import create_pipeline
-from bcbench.results.result_writer import get_info_from_dataset_entry
+from bcbench.results.bceval_export import get_info_from_dataset_entry
 from bcbench.types import EvaluationCategory
 
 

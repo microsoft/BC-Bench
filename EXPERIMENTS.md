@@ -78,7 +78,7 @@ How it works (take `NAV` repo as example):
 3. **Claude**: All files are copied into `NAV/.claude/`
 4. If `enabled: false`, Copilot gets `--no-custom-instructions` flag; Claude skips the file
 
-### Custom Skills
+### Skills
 
 Enable skills in the [config.yaml](src/bcbench/agent/shared/config.yaml):
 

@@ -15,6 +15,8 @@ on:
           - "claude-sonnet-4.5"
           - "claude-haiku-4.5"
           - "claude-opus-4.5"
+          - "claude-opus-4.6"
+          - "claude-opus-4.6-fast"
           - "gpt-5.2-codex"
           - "gpt-5.2"
           - "gpt-5.1-codex-mini"
@@ -111,7 +113,7 @@ jobs:
         run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.30.49729-beta --global
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.382
+        run: npm install -g @github/copilot@0.0.406
 
       - name: Select PAT based on job index
         id: select-pat
@@ -120,7 +122,7 @@ jobs:
           echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
-        timeout-minutes: 60
+        timeout-minutes: 90
         env:
           GH_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' && secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' && secrets.COPILOT_PAT2 || secrets.COPILOT_PAT3) }}
         run: |

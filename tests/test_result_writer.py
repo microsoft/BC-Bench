@@ -2,7 +2,7 @@ import json
 from unittest.mock import patch
 
 from bcbench.dataset import DatasetEntry
-from bcbench.results.result_writer import write_bceval_results
+from bcbench.results.bceval_export import write_bceval_results
 from bcbench.types import AgentMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
 

@@ -48,7 +48,5 @@ and the below process occurs
 
 After thoroughly investigating, I've found that the validation process is not always reliable. Sometimes it works as expected, but other times you need to leave the page and come back for it to function properly.
 
-For further clarification, please take a look at the attachment provided. If you have any questions or need additional assistance, feel free to reach out.
-
 ## Description:
 Alternative Customer VAT Registration issue when using Bill to customer and Ship-to-Code.

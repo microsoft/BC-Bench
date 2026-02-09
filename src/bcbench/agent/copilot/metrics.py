@@ -50,12 +50,12 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
         session_log_path: Optional path to session log file for tool usage parsing
 
     Expected output format at the end:
-        Total usage est:       1 Premium request
-        Total duration (API):  34.5s
-        Total duration (wall): 3m 55.1s
-        Total code changes:    2 lines added, 1 lines removed
-        Usage by model:
-            gpt-5                125.5k input, 3.6k output, 0 cache read, 0 cache write (Est. 1 Premium request)
+        Total usage est:        0.33 Premium requests
+        API time spent:         2m 10.145s
+        Total session time:     2m 41.651s
+        Total code changes:     +42 -1
+        Breakdown by AI model:
+         claude-haiku-4.5        1.3m in, 11.6k out, 1.2m cached (Est. 0.33 Premium requests)
     """
     if not output_lines:
         logger.warning("No output lines to parse metrics from")
@@ -86,20 +86,21 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
 
     try:
         # Parse LLM duration (API time)
-        llm_duration_match = re.search(r"Total duration \(API\):\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
+        llm_duration_match = re.search(r"API time spent:\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
         if llm_duration_match:
             minutes = int(llm_duration_match.group(1)) if llm_duration_match.group(1) else 0
             seconds = float(llm_duration_match.group(2))
             llm_duration = minutes * 60 + seconds
 
         # Parse wall clock duration
-        duration_match = re.search(r"Total duration \(wall\):\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
+        duration_match = re.search(r"Total session time:\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
         if duration_match:
             minutes = int(duration_match.group(1)) if duration_match.group(1) else 0
             seconds = float(duration_match.group(2))
             execution_time = minutes * 60 + seconds
 
-        usage_match = re.search(r"(\d+(?:\.\d+)?[km]?)\s+input,\s*(\d+(?:\.\d+)?[km]?)\s+output", output_text)
+        # Token usage: "1.3m in, 11.6k out"
+        usage_match = re.search(r"(\d+(?:\.\d+)?[km]?)\s+in,\s*(\d+(?:\.\d+)?[km]?)\s+out", output_text)
         if usage_match:
             input_str = usage_match.group(1)
             output_str = usage_match.group(2)

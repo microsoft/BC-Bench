@@ -17,3 +17,7 @@ expected value:
 ![Customer Ledger Entries Expected](./customer-ledger-entries-expected.png)
 
 ## Description:
+
+## Hints
+
+Also, found that calculation and drilldown for "Total Overdue (LCY)" are not in line.

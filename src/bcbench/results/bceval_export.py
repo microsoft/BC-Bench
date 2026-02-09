@@ -1,3 +1,7 @@
+"""
+Convert the result into a format that bceval can consume and upload to Braintrust.
+"""
+
 import json
 from pathlib import Path
 from typing import Any

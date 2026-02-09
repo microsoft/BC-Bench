@@ -19,4 +19,6 @@ but the replaced item 1100 does not have Ending Date date 28-01-2027
 The replaced item should have Ending Date 28-01-2027 that signifies it stops being valid automatically
 
 ## Description:
-Report "Exchange Production BOM Item" no longer populates the 'End Date' field of the replaced ItemThis was introduced with BC 25.03.Before this worked as expected.
+Report "Exchange Production BOM Item" no longer populates the 'End Date' field of the replaced Item
+This was introduced with BC 25.03.
+Before this worked as expected.

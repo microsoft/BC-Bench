@@ -99,13 +99,30 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Create branch from main
-          branchName="leaderboard/${{ inputs.category }}/${{ github.run_id }}"
-          git checkout -b $branchName origin/main
+          # Derive a stable branch name for the entire multi-run chain.
+          # When running from a requeue tag (eval-run-<agent>-<original_run_id>),
+          # extract the original run_id so all runs in the chain share one branch.
+          REF="${{ github.ref }}"
+          if [[ "${REF}" == refs/tags/eval-run-* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            STABLE_ID="${TAG_NAME##*-}"
+          else
+            STABLE_ID="${{ github.run_id }}"
+          fi
+
+          branchName="leaderboard/${{ inputs.category }}/${STABLE_ID}"
+
+          # Reuse existing branch from a prior run in this chain, or create new from main
+          if git ls-remote --exit-code --heads origin "$branchName" >/dev/null 2>&1; then
+            git fetch origin "$branchName"
+            git checkout -b "$branchName" "origin/$branchName"
+          else
+            git checkout -b "$branchName" origin/main
+          fi
 
           uv run bcbench result update "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.SUMMARY_OUTPUT_FILE }}"
 
           git add docs/_data/${{ inputs.category }}.json
-          git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }})"
+          git commit -m "Update leaderboard: ${{ inputs.agent }} (${{ inputs.model }}) - Run ${{ github.run_id }}"
 
           git push --set-upstream origin $branchName

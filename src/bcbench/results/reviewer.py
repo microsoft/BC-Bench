@@ -35,6 +35,7 @@ FAILURE_CATEGORIES = [
     ("Missing Using", "Missing using statement for namespace"),
     ("Timeout", "Agent timed out and made no changes"),
     ("Other", "Doesn't fit above"),
+    ("Flag For Review", "Needs further review"),
 ]
 
 
@@ -63,6 +64,7 @@ class BaseReviewer(App):
         Binding("4", "select_category(3)", "Missing Using"),
         Binding("5", "select_category(4)", "Timeout"),
         Binding("6", "select_category(5)", "Other"),
+        Binding("7", "select_category(6)", "Flag For Review"),
         Binding("escape", "quit", "Quit"),
     ]
 
@@ -291,26 +293,38 @@ class FailureModeAnalysis(BaseReviewer):
 
     TITLE = "Failure Mode Analysis"
 
-    def __init__(self, results_path: Path, dataset_path: Path, category: EvaluationCategory = EvaluationCategory.BUG_FIX):
+    def __init__(self, results_path: Path, dataset_path: Path, category: EvaluationCategory = EvaluationCategory.BUG_FIX, include_resolved: bool = False):
         super().__init__(dataset_path, category)
         self.results_path = results_path
         self.results: list[dict] = []
         self.unresolved_indices: list[int] = []
         self.dataset_lookup: dict[str, str] = {}
+        self.include_resolved = include_resolved
 
     def _load_data(self) -> None:
+        # Build dataset lookup and track order
+        dataset_order: dict[str, int] = {}
         with open(self.dataset_path, encoding="utf-8") as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 if line.strip():
                     entry = json.loads(line)
-                    self.dataset_lookup[entry["instance_id"]] = entry.get(_get_patch_field(self.category), "")
+                    instance_id = entry["instance_id"]
+                    self.dataset_lookup[instance_id] = entry.get(_get_patch_field(self.category), "")
+                    dataset_order[instance_id] = idx
 
         with open(self.results_path, encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     self.results.append(json.loads(line))
 
-        self.unresolved_indices = [i for i, r in enumerate(self.results) if not r.get("resolved", False) and r.get("scores", {}).get("ResolutionRate", 0) == 0]
+        if self.include_resolved:
+            # Sort indices by dataset order to match dataset review iteration
+            self.unresolved_indices = sorted(
+                range(len(self.results)),
+                key=lambda i: dataset_order.get(self.results[i].get("instance_id") or self.results[i].get("InstanceID", ""), float("inf")),
+            )
+        else:
+            self.unresolved_indices = [i for i, r in enumerate(self.results) if not r.get("resolved", False) and r.get("scores", {}).get("ResolutionRate", 0) == 0]
 
     def _get_current_result(self) -> dict | None:
         if not self.unresolved_indices or self.current_index >= len(self.unresolved_indices):
@@ -330,7 +344,7 @@ class FailureModeAnalysis(BaseReviewer):
         return "Actual (Agent)"
 
     def _get_empty_message(self) -> str:
-        return "No unresolved results"
+        return "No results to review" if self.include_resolved else "No unresolved results"
 
     def _get_item_count(self) -> int:
         return len(self.unresolved_indices)
@@ -342,8 +356,8 @@ class FailureModeAnalysis(BaseReviewer):
         InstanceAcrossRunsReviewer._write_results(self.results_path, self.results)
 
 
-def run_reviewer(results_path: Path, dataset_path: Path, category: EvaluationCategory = EvaluationCategory.BUG_FIX) -> None:
-    app = FailureModeAnalysis(results_path, dataset_path, category)
+def run_reviewer(results_path: Path, dataset_path: Path, category: EvaluationCategory = EvaluationCategory.BUG_FIX, include_resolved: bool = False) -> None:
+    app = FailureModeAnalysis(results_path, dataset_path, category, include_resolved)
     app.run()
 
 
