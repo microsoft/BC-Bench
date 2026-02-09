@@ -54,15 +54,15 @@ prompt:
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
-#    - Copilot: copies to repo/.github/ (CLI auto-reads)
-#    - Claude: copies to repo/.claude/ (passed via --append-system-prompt-file)
+#    - Copilot: copies to repo/.github/
+#    - Claude: copies to repo/.claude/
 # 2. whether to pass --disable-custom-instructions to copilot
 instructions:
   enabled: false
 
 # controls:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
-#    - Copilot: copies to repo/.github/skills/ (CLI auto-discovers)
+#    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
 skills:
   enabled: false

@@ -36,16 +36,7 @@ Steps for an experiment:
 
 ## Experimenting with Claude Code
 
-Claude Code uses the same shared configuration as Copilot:
-
-Steps for an experiment:
-1. Create a new branch: `git checkout -b experiment/<meaningful-name>`
-2. Edit `src/bcbench/agent/shared/config.yaml` and optionally modify instruction markdown under `src/bcbench/agent/shared/instructions/<sanitized-repo>/` (see below)
-3. Locally run one entry: `uv run bcbench run claude <entry_id>` to ensure everything is setup correctly
-4. Create a draft PR (the default template will let you switch to the experiment template)
-5. In GitHub Actions: run workflow `claude-evaluation` after selecting your branch & model
-6. Start with **Test Run** (2 entries) → verify the changes are picked up in logs
-7. Run full evaluation
+Same steps as Copilot above, but use `uv run bcbench run claude <entry_id>` locally and trigger the `claude-evaluation` workflow.
 
 ## Shared Configuration
 

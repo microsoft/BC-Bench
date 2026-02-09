@@ -12,7 +12,7 @@ from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -31,9 +31,9 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp)
-    instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, agent_type="claude")
-    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type="claude")
-    custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type="claude")
+    instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
+    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
+    custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
         custom_instructions=instructions_enabled,

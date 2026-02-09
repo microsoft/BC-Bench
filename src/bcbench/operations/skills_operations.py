@@ -4,10 +4,11 @@ from shutil import copytree, rmtree
 from bcbench.dataset.dataset_entry import DatasetEntry
 from bcbench.logger import get_logger
 from bcbench.operations.instruction_operations import _get_source_instructions_path
+from bcbench.types import AgentType
 
 logger = get_logger(__name__)
 
-def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: str = "copilot") -> bool:
+def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType = AgentType.COPILOT) -> bool:
     """
     Setup skills in the repository if available.
 
@@ -25,7 +26,7 @@ def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path,
             raise FileNotFoundError(f"Skills folder not found for repository: {entry.repo} at {source_skills_dir}")
 
         # Copilot reads from .github automatically, Claude uses .claude with explicit flag
-        target_dir: Path = repo_path / (".github" if agent_type == "copilot" else f".{agent_type}")
+        target_dir: Path = agent_type.get_target_dir(repo_path)
         skills_dir = target_dir / "skills"
 
         # Remove existing skills directory to ensure clean state

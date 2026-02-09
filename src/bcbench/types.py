@@ -14,7 +14,7 @@ from bcbench.logger import get_logger
 if TYPE_CHECKING:
     from bcbench.dataset import DatasetEntry
 
-__all__ = ["AgentMetrics", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = ["AgentMetrics", "AgentType", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
 logger = get_logger(__name__)
 
@@ -69,6 +69,17 @@ class ExperimentConfiguration(BaseModel):
         This is useful for comparing with None (no experiment) vs default experiment.
         """
         return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
+
+
+class AgentType(str, Enum):
+    COPILOT = "copilot"
+    CLAUDE = "claude"
+
+    def get_target_dir(self, repo_path: Path) -> Path:
+        """Get target directory for agent-specific files based on agent type."""
+        if self == AgentType.COPILOT:
+            return repo_path / ".github"
+        return repo_path / f".{self}"
 
 
 class EvaluationCategory(str, Enum):
