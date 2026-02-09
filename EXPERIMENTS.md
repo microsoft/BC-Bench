@@ -69,7 +69,7 @@ src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
 How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
 2. All files under `microsoftInternal-NAV` will be copied into `NAV/.github/` (overwrite if exists)
-3. If `enabled: false` a `--no-custom-instructions` flag is passed instead.
+3. If `enabled: false`, a `--no-custom-instructions` flag is passed instead.
 
 ### Skills
 

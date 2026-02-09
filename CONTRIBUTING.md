@@ -15,12 +15,12 @@ A very high-level overview of the repository structure:
 
 ```
 BC-Bench/
-├── src/bcbench/        # Evaluation harness — agent orchestration, build/test pipeline, results
-├── dataset/            # Benchmark dataset tasks
-├── scripts/            # Scripts for container setup & test execution; not needed for local development
-├── notebooks/          # Analysis and visualization of results
-├── evaluator/          # Braintrust scorer integration, used only when uploading result to Braintrust
-└── docs/               # GitHub Page for the leaderboard site
+├── src/bcbench/    # Evaluation harness — agent orchestration, build/test pipeline, results
+├── dataset/        # Benchmark dataset tasks
+├── scripts/        # Scripts for container setup & test execution; not needed for local development
+├── notebooks/      # Analysis and visualization of results
+├── evaluator/      # Braintrust scorer integration, used only when uploading result to Braintrust
+└── docs/           # GitHub Page for the leaderboard site
 ```
 ## Setup
 
