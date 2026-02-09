@@ -690,6 +690,7 @@
       "experiment": {
         "mcp_servers": null,
         "custom_instructions": false,
+        "skills_enabled": false,
         "custom_agent": "ALTest"
       },
       "instance_results": {
@@ -826,6 +827,7 @@
       "experiment": {
         "mcp_servers": null,
         "custom_instructions": false,
+        "skills_enabled": false,
         "custom_agent": "ALTest"
       },
       "instance_results": {
@@ -963,6 +965,7 @@
       "experiment": {
         "mcp_servers": null,
         "custom_instructions": false,
+        "skills_enabled": false,
         "custom_agent": "ALTest"
       },
       "instance_results": {
@@ -1100,6 +1103,7 @@
       "experiment": {
         "mcp_servers": null,
         "custom_instructions": false,
+        "skills_enabled": false,
         "custom_agent": "ALTest"
       },
       "instance_results": {
@@ -1236,6 +1240,7 @@
       "experiment": {
         "mcp_servers": null,
         "custom_instructions": false,
+        "skills_enabled": false,
         "custom_agent": "ALTest"
       },
       "instance_results": {
@@ -1365,6 +1370,7 @@
       "experiment": {
         "mcp_servers": null,
         "custom_instructions": false,
+        "skills_enabled": false,
         "custom_agent": "ALTest"
       },
       "total": 101,

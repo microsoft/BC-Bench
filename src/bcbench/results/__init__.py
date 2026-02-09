@@ -1,4 +1,5 @@
 from bcbench.results.base import create_result_from_json
+from bcbench.results.bceval_export import write_bceval_results
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.evaluation_result import (
     BaseEvaluationResult,
@@ -7,7 +8,6 @@ from bcbench.results.evaluation_result import (
     LeaderboardAggregate,
 )
 from bcbench.results.metrics import pass_at_k, pass_hat_k
-from bcbench.results.result_writer import write_bceval_results
 
 __all__ = [
     "BaseEvaluationResult",

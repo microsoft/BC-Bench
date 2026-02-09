@@ -15,9 +15,9 @@ class TestCopilotMetricsToResultFlow:
 
     def test_full_metrics_flow_to_success_result(self, sample_context):
         output_lines = [
-            "Total duration (wall): 3m 45.2s\n",
-            "Usage by model:\n",
-            "    gpt-4o    100.5k input, 2.3k output\n",
+            "Total session time:     3m 45.2s\n",
+            "Breakdown by AI model:\n",
+            "   gpt-4o    100.5k in, 2.3k out\n",
         ]
         metrics = parse_metrics(output_lines)
 
@@ -36,9 +36,9 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_flow_with_seconds_only_wall_time(self, sample_context):
         output_lines = [
-            "Total duration (wall): 45.7s\n",
-            "Usage by model:\n",
-            "    gpt-4o    50k input, 1k output\n",
+            "Total session time:     45.7s\n",
+            "Breakdown by AI model:\n",
+            "   gpt-4o    50k in, 1k out\n",
         ]
         metrics = parse_metrics(output_lines)
         sample_context.metrics = metrics
@@ -51,7 +51,7 @@ class TestCopilotMetricsToResultFlow:
         assert result.metrics.completion_tokens == 1000
 
     def test_metrics_flow_with_partial_metrics(self, sample_context):
-        output_lines = ["Total duration (wall): 1m 30s\n"]
+        output_lines = ["Total session time: 1m 30s\n"]
         metrics = parse_metrics(output_lines)
         sample_context.metrics = metrics
 
@@ -73,9 +73,9 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_flow_to_test_failure_result(self, sample_context):
         output_lines = [
-            "Total duration (wall): 2m 15.5s\n",
-            "Usage by model:\n",
-            "    gpt-4o    75.2k input, 1.8k output\n",
+            "Total session time:     2m 15.5s\n",
+            "Breakdown by AI model:\n",
+            "   gpt-4o    75.2k in, 1.8k out\n",
         ]
         metrics = parse_metrics(output_lines)
         sample_context.metrics = metrics
@@ -92,9 +92,9 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_flow_to_build_failure_result(self, sample_context):
         output_lines = [
-            "Total duration (wall): 5m 10.3s\n",
-            "Usage by model:\n",
-            "    gpt-4o    200k input, 5k output\n",
+            "Total session time:     5m 10.3s\n",
+            "Breakdown by AI model:\n",
+            "   gpt-4o    200k in, 5k out\n",
         ]
         metrics = parse_metrics(output_lines)
         sample_context.metrics = metrics
@@ -115,12 +115,12 @@ class TestCopilotMetricsToResultFlow:
             "     $ Get-ChildItem -Path C:\\temp\\repo -Recurse -Filter *.al\n",
             "     ↪ 10 lines...\n",
             "\n",
-            "  Total usage est:       1 Premium request\n",
-            "  Total duration (API):  45.2s\n",
-            "  Total duration (wall): 4m 32.8s\n",
-            "  Total code changes:    5 lines added, 2 lines removed\n",
-            "  Usage by model:\n",
-            "      gpt-4o    125.5k input, 3.6k output, 0 cache read, 0 cache write\n",
+            "  Total usage est:        1 Premium request\n",
+            "  API time spent:         45.2s\n",
+            "  Total session time:     4m 32.8s\n",
+            "  Total code changes:     +5 -2\n",
+            "  Breakdown by AI model:\n",
+            "   gpt-4o    125.5k in, 3.6k out, 0 cached\n",
         ]
         metrics = parse_metrics(output_lines)
         sample_context.metrics = metrics
@@ -165,9 +165,9 @@ class TestCopilotMetricsToResultFlow:
 
     def test_metrics_flow_preserves_other_result_fields(self, sample_context):
         output_lines = [
-            "Total duration (wall): 1m 0s\n",
-            "Usage by model:\n",
-            "    gpt-4o    10k input, 500 output\n",
+            "Total session time:     1m 0s\n",
+            "Breakdown by AI model:\n",
+            "   gpt-4o    10k in, 500 out\n",
         ]
         metrics = parse_metrics(output_lines)
         sample_context.metrics = metrics

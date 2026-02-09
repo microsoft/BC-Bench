@@ -110,12 +110,6 @@ function Invoke-GitCloneWithRetry {
         [int]$FetchDepth = 200
     )
 
-    # Remove existing clone if it exists
-    if (Test-Path $ClonePath) {
-        Write-Log "Removing existing directory at $ClonePath" -Level Warning
-        Remove-Item -Path $ClonePath -Recurse -Force
-    }
-
     # Extract domain and path from URL for authentication
     $uri = [System.Uri]$RepoUrl
     $authenticatedUrl = "https://$($Token)@$($uri.Authority)$($uri.PathAndQuery)"
@@ -126,6 +120,12 @@ function Invoke-GitCloneWithRetry {
     while ($retryCount -lt $MaxRetries -and -not $cloneSuccess) {
         $retryCount++
         try {
+            # Remove existing clone if it exists (clean slate for each attempt)
+            if (Test-Path $ClonePath) {
+                Write-Log "Removing existing directory at $ClonePath" -Level Warning
+                Remove-Item -Path $ClonePath -Recurse -Force
+            }
+
             Write-Log "Attempting repository clone (Attempt $retryCount/$MaxRetries)..." -Level Info
 
             Write-Log "Using git init and fetch to clone specific commit: $CommitSha" -Level Debug

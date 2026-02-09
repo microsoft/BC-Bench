@@ -37,6 +37,7 @@ def create_console_summary(results: list[BaseEvaluationResult]) -> None:
     table.add_column("Status", justify="center")
     table.add_column("MCP Servers", style="yellow")
     table.add_column("Custom Instructions", style="yellow")
+    table.add_column("Custom Agent", style="yellow")
     table.add_column("Error Message", style="dim")
 
     for result in results:

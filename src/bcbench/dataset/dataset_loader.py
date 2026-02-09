@@ -26,11 +26,11 @@ def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random
 
     with open(dataset_path, encoding="utf-8") as file:
         for line in file:
-            striped_line = line.strip()
-            if not striped_line:
+            stripped_line: str = line.strip()
+            if not stripped_line:
                 continue
 
-            entry = DatasetEntry.model_validate_json(striped_line)
+            entry = DatasetEntry.model_validate_json(stripped_line)
 
             # If searching for specific entry_id, return immediately when found
             if entry_id:

@@ -7,12 +7,12 @@ from bcbench.agent.copilot.metrics import parse_metrics, parse_session_log
 def test_parse_metrics_full_output_gpt5():
     output_lines = [
         "Some other output\n",
-        "Total usage est:       1 Premium request\n",
-        "Total duration (API):  34.5s\n",
-        "Total duration (wall): 3m 55.1s\n",
-        "Total code changes:    2 lines added, 1 lines removed\n",
-        "Usage by model:\n",
-        "    gpt-5                125.5k input, 3.6k output, 0 cache read, 0 cache write (Est. 1 Premium request)\n",
+        "Total usage est:        1 Premium request\n",
+        "API time spent:         34.5s\n",
+        "Total session time:     3m 55.1s\n",
+        "Total code changes:     +2 -1\n",
+        "Breakdown by AI model:\n",
+        "   gpt-5                125.5k in, 3.6k out, 0 cached (Est. 1 Premium request)\n",
     ]
 
     result = parse_metrics(output_lines)
@@ -27,12 +27,12 @@ def test_parse_metrics_full_output_gpt5():
 def test_parse_metrics_full_output_haiku45():
     output_lines = [
         "Some other output\n",
-        "Total usage est:       0.33 Premium requests\n",
-        "Total duration (API):  1m 37.1s\n",
-        "Total duration (wall): 29m 25.4s\n",
-        "Total code changes:    2 lines added, 2 lines removed\n",
-        "Usage by model:\n",
-        "    claude-haiku-4.5     1.1m input, 6.6k output, 0 cache read, 0 cache write (Est. 0.33 Premium requests)\n",
+        "Total usage est:        0.33 Premium requests\n",
+        "API time spent:         1m 37.1s\n",
+        "Total session time:     29m 25.4s\n",
+        "Total code changes:     +2 -2\n",
+        "Breakdown by AI model:\n",
+        "   claude-haiku-4.5      1.1m in, 6.6k out, 1.0m cached (Est. 0.33 Premium requests)\n",
     ]
 
     result = parse_metrics(output_lines)
@@ -45,7 +45,7 @@ def test_parse_metrics_full_output_haiku45():
 
 
 def test_parse_metrics_llm_duration_seconds_only():
-    output_lines = ["Total duration (API):  45.7s\n"]
+    output_lines = ["API time spent:  45.7s\n"]
 
     result = parse_metrics(output_lines)
 
@@ -54,7 +54,7 @@ def test_parse_metrics_llm_duration_seconds_only():
 
 
 def test_parse_metrics_llm_duration_minutes_and_seconds():
-    output_lines = ["Total duration (API):  5m 12.3s\n"]
+    output_lines = ["API time spent:  5m 12.3s\n"]
 
     result = parse_metrics(output_lines)
 
@@ -63,7 +63,7 @@ def test_parse_metrics_llm_duration_minutes_and_seconds():
 
 
 def test_parse_metrics_wall_time_seconds_only():
-    output_lines = ["Total duration (wall): 45.7s\n"]
+    output_lines = ["Total session time: 45.7s\n"]
 
     result = parse_metrics(output_lines)
 
@@ -72,7 +72,7 @@ def test_parse_metrics_wall_time_seconds_only():
 
 
 def test_parse_metrics_wall_time_minutes_and_seconds():
-    output_lines = ["Total duration (wall): 5m 12.3s\n"]
+    output_lines = ["Total session time: 5m 12.3s\n"]
 
     result = parse_metrics(output_lines)
 
@@ -81,7 +81,7 @@ def test_parse_metrics_wall_time_minutes_and_seconds():
 
 
 def test_parse_metrics_token_counts_without_k():
-    output_lines = ["Usage by model:\n", "    model-name    1234 input, 567 output\n"]
+    output_lines = ["Breakdown by AI model:\n", "   model-name    1234 in, 567 out\n"]
 
     result = parse_metrics(output_lines)
 
@@ -91,13 +91,26 @@ def test_parse_metrics_token_counts_without_k():
 
 
 def test_parse_metrics_token_counts_with_k():
-    output_lines = ["Usage by model:\n", "    model-name    12.5k input, 3.2k output\n"]
+    output_lines = ["Breakdown by AI model:\n", "   model-name    12.5k in, 3.2k out\n"]
 
     result = parse_metrics(output_lines)
 
     assert result is not None
     assert result.prompt_tokens == 12500
     assert result.completion_tokens == 3200
+
+
+def test_parse_metrics_token_counts_with_m():
+    output_lines = [
+        "Breakdown by AI model:\n",
+        "   claude-haiku-4.5    1.3m in, 11.6k out, 1.2m cached\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.prompt_tokens == 1300000
+    assert result.completion_tokens == 11600
 
 
 def test_parse_metrics_empty_output():
@@ -115,7 +128,7 @@ def test_parse_metrics_no_matching_patterns():
 
 
 def test_parse_metrics_partial_data():
-    output_lines = ["Total duration (wall): 1m 30s\n", "Some other text\n"]
+    output_lines = ["Total session time: 1m 30s\n", "Some other text\n"]
 
     result = parse_metrics(output_lines)
 
@@ -127,7 +140,7 @@ def test_parse_metrics_partial_data():
 
 
 def test_parse_metrics_malformed_token_count():
-    output_lines = ["Usage by model:\n", "    model-name    invalid input, 100 output\n"]
+    output_lines = ["Breakdown by AI model:\n", "   model-name    invalid in, 100 out\n"]
 
     result = parse_metrics(output_lines)
 
@@ -153,12 +166,12 @@ def test_parse_metrics_with_command_output():
         "     Path,LineNumber,Line | Format-Table -AutoSize\n",
         "     ↪ 90 lines...\n",
         "\n",
-        "  Total usage est:       1 Premium request\n",
-        "  Total duration (API):  34.5s\n",
-        "  Total duration (wall): 3m 55.1s\n",
-        "  Total code changes:    2 lines added, 1 lines removed\n",
-        "  Usage by model:\n",
-        "      gpt-5                125.5k input, 3.6k output, 0 cache read, 0 cache write (Est. 1 Premium request)\n",
+        "  Total usage est:        1 Premium request\n",
+        "  API time spent:         34.5s\n",
+        "  Total session time:     3m 55.1s\n",
+        "  Total code changes:     +2 -1\n",
+        "  Breakdown by AI model:\n",
+        "   gpt-5                125.5k in, 3.6k out, 0 cached (Est. 1 Premium request)\n",
     ]
 
     result = parse_metrics(output_lines)
@@ -172,9 +185,9 @@ def test_parse_metrics_with_command_output():
 
 def test_parse_metrics_minimal_real_output():
     output_lines = [
-        "  Total duration (wall): 2m 15.3s\n",
-        "  Usage by model:\n",
-        "      gpt-4o               50.2k input, 1.5k output\n",
+        "  Total session time:     2m 15.3s\n",
+        "  Breakdown by AI model:\n",
+        "   gpt-4o               50.2k in, 1.5k out\n",
     ]
 
     result = parse_metrics(output_lines)
@@ -226,7 +239,7 @@ def test_parse_metrics_with_session_log_includes_turn_count(tmp_path):
 "function": {"name": "grep", "arguments": "{}"}
 """)
 
-    output_lines = ["Total duration (wall): 1m 30s\n"]
+    output_lines = ["Total session time: 1m 30s\n"]
     result = parse_metrics(output_lines, session_log_path=log_file)
 
     assert result is not None
@@ -248,7 +261,7 @@ def test_parse_metrics_with_session_log_multiple_tools(tmp_path):
 "function": {"name": "view", "arguments": "{}"}
 """)
 
-    output_lines = ["Total duration (wall): 2m 15s\n"]
+    output_lines = ["Total session time: 2m 15s\n"]
     result = parse_metrics(output_lines, session_log_path=log_file)
 
     assert result is not None
