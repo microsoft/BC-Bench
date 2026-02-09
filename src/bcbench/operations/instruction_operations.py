@@ -9,7 +9,8 @@ from bcbench.types import AgentType
 logger = get_logger(__name__)
 _config = get_config()
 
-def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType = AgentType.COPILOT) -> bool:
+
+def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
     """
     Setup custom instructions from config if enabled.
 
@@ -27,7 +28,7 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
 
     if instructions_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.repo)
-        # Copilot reads from .github automatically, Claude uses .claude with explicit flag
+        # Copilot reads from .github automatically, Claude reads from .claude automatically
         target_dir: Path = agent_type.get_target_dir(repo_path)
 
         logger.info(f"Setting up custom instructions for repository: {entry.repo}")
@@ -39,7 +40,7 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     return instructions_enabled
 
 
-def setup_custom_agent(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType = AgentType.COPILOT) -> str | None:
+def setup_custom_agent(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> str | None:
     """
     Setup custom agents in the repository if available.
     """
@@ -67,9 +68,7 @@ def _get_source_instructions_path(repo_name: str) -> Path:
         FileNotFoundError: If instruction file doesn't exist
     """
     sanitized_name = repo_name.replace("/", "-")
-    # Instructions are now in shared/instructions/ for all agents
-    shared_dir = _config.paths.agent_share_dir
-    instructions_path = shared_dir / _config.file_patterns.copilot_instructions_dirname / sanitized_name
+    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.copilot_instructions_dirname / sanitized_name
 
     if not instructions_path.exists():
         raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for repository: {repo_name}")

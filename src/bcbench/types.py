@@ -77,9 +77,13 @@ class AgentType(str, Enum):
 
     def get_target_dir(self, repo_path: Path) -> Path:
         """Get target directory for agent-specific files based on agent type."""
-        if self == AgentType.COPILOT:
-            return repo_path / ".github"
-        return repo_path / f".{self}"
+        match self:
+            case AgentType.COPILOT:
+                return repo_path / ".github"
+            case AgentType.CLAUDE:
+                return repo_path / ".claude"
+            case _:
+                raise ValueError(f"Unknown AgentType: {self}")
 
 
 class EvaluationCategory(str, Enum):

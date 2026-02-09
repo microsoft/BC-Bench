@@ -13,6 +13,7 @@ from bcbench.operations.instruction_operations import (
     _get_source_instructions_path,
     setup_instructions_from_config,
 )
+from bcbench.types import AgentType
 
 _config = get_config()
 
@@ -34,7 +35,7 @@ def test_setup_custom_instructions():
         config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        result = setup_instructions_from_config(config, entry, repo_path)
+        result = setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.COPILOT)
         assert result is True
 
         # Verify
@@ -95,7 +96,7 @@ def test_overwrite_existing_instructions():
         target_path.write_text(original_content)
 
         # Setup instructions (should overwrite)
-        setup_instructions_from_config(config, entry, repo_path)
+        setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Verify file was overwritten
         assert target_path.exists(), "Instruction file should exist"
@@ -113,7 +114,7 @@ def test_path_specific_instructions_copied():
         config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        setup_instructions_from_config(config, entry, repo_path)
+        setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Verify path-specific instructions were copied
         target_instructions_dir = repo_path / ".github" / _config.file_patterns.copilot_instructions_dirname
@@ -138,7 +139,7 @@ def test_path_specific_instructions_removed_before_copy():
         old_file.write_text("# Old instruction that should be removed")
 
         # Setup instructions (should remove existing .github and copy new one)
-        setup_instructions_from_config(config, entry, repo_path)
+        setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Verify old file was removed
         assert not (github_dir / "old.md").exists(), "Old file should be removed"
@@ -155,7 +156,7 @@ def test_no_path_specific_instructions_warning():
         config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        setup_instructions_from_config(config, entry, repo_path)
+        setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Verify repository-level instructions were created
         github_dir = repo_path / ".github"
@@ -171,7 +172,7 @@ def test_empty_instructions_folder_warning():
         config = {"instructions": {"enabled": True}}
 
         # Setup instructions
-        setup_instructions_from_config(config, entry, repo_path)
+        setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Verify .github directory was created
         github_dir = repo_path / ".github"

@@ -1,6 +1,7 @@
 name: Evaluation with Claude Code
 permissions:
   contents: read
+  actions: write
 
 on:
   workflow_dispatch:
@@ -26,6 +27,11 @@ on:
         description: "Indicate this is a test run (with few entries)"
         required: false
         default: true
+        type: boolean
+      al-mcp:
+        description: "Enable AL MCP server"
+        required: false
+        default: false
         type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
@@ -89,6 +95,14 @@ jobs:
         with:
           node-version: 24
 
+      - name: Add dotnet tools to PATH
+        if: ${{ inputs.al-mcp }}
+        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install AL MCP Server Tool
+        if: ${{ inputs.al-mcp }}
+        run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.30.49729-beta --global
+
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.0.76
 
@@ -101,7 +115,8 @@ jobs:
             --model "${{ inputs.model }}" `
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
+            ${{ inputs.al-mcp && '--al-mcp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v4
@@ -136,4 +151,4 @@ jobs:
       workflow-file: claude-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}

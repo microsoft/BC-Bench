@@ -10,6 +10,7 @@ from jinja2 import Template
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
+from bcbench.types import AgentType
 
 logger = get_logger(__name__)
 
@@ -39,7 +40,7 @@ class _ALMcpServerManager:
 _mcp_server_manager = _ALMcpServerManager()
 
 
-def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any], agent_type: AgentType) -> tuple[str, dict[str, Any]]:
     server_type: str = server["type"]
     server_name: str = server["name"]
     tools: list[str] = server["tools"]
@@ -49,23 +50,23 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
             return server_name, {
                 "type": server_type,
                 "url": server["url"],
-                "tools": tools,
+                "tools": tools if agent_type == AgentType.COPILOT else None,
             }
         case "local":
             args: list[str] = server["args"]
             rendered_args = [Template(arg).render(**template_context) for arg in args]
             return server_name, {
-                "type": server_type,
+                "type": server_type if agent_type == AgentType.COPILOT else "stdio", 
                 "command": server["command"],
                 "args": rendered_args,
-                "tools": tools,
+                "tools": tools if agent_type == AgentType.COPILOT else None,
             }
         case _:
             logger.error(f"Unsupported MCP server type: {server_type}, {server}")
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
-def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
+def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, agent_type: AgentType, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
     # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
@@ -82,7 +83,7 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
 
     template_context = {"repo_path": repo_path}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
-    mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
+    mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context, agent_type), mcp_servers))}
 
     if al_mcp:
         # Launch MCP server with all project paths separated by semicolons
