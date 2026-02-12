@@ -123,7 +123,7 @@ class GitHubActionsHandler(logging.Handler):
                 return
 
             # Mark this record as handled by GitHub Actions to prevent duplicate output
-            record.gh_actions_handled = True  # type: ignore[attr-defined]
+            record.gh_actions_handled = True  # pyright: ignore[reportAttributeAccessIssue]
 
             # Format the message
             msg = self.format(record)

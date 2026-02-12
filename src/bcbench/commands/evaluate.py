@@ -23,6 +23,8 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset.dataset_entry import ExtensibilityDatasetEntry
+from bcbench.dataset.dataset_loader import load_ext_dataset_entries
 from bcbench.evaluate import EvaluationPipeline, create_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
@@ -99,7 +101,7 @@ def evaluate_copilot(
     password: ContainerPassword,
     category: EvaluationCategoryOption,
     model: CopilotModel = "claude-haiku-4.5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
+    dataset_path: DatasetPath | None = None,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
@@ -110,8 +112,16 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
-    entry: DatasetEntry = entries[0]
+    if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
+        if dataset_path is None:
+            dataset_path = _config.paths.ext_dataset_path
+        entries: list[ExtensibilityDatasetEntry] = load_ext_dataset_entries(dataset_path, entry_id=entry_id)
+        entry: ExtensibilityDatasetEntry = entries[0]
+    else:
+        if dataset_path is None:
+            dataset_path = _config.paths.dataset_path
+        entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
+        entry: DatasetEntry = entries[0]
     logger.info(f"Loaded {entry_id} entry from dataset")
 
     run_dir: Path = output_dir / run_id

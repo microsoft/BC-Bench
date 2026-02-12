@@ -12,6 +12,8 @@ def test_all_categories_have_pipelines():
 
 def test_all_categories_handled_in_get_info_from_dataset_entry(sample_dataset_entry_with_problem_statement: DatasetEntry):
     for category in EvaluationCategory:
+        if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
+            continue  # Uses get_info_from_dataset_entry_ext with ExtensibilityDatasetEntry
         input_text, expected_output = get_info_from_dataset_entry(sample_dataset_entry_with_problem_statement, category)
         assert isinstance(input_text, str)
         assert isinstance(expected_output, str)

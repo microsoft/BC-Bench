@@ -1,8 +1,8 @@
 import json
-import os
 from collections.abc import Callable
 
-from openai import OpenAI
+from autoevals import LLMClassifier
+from autoevals.score import Score
 
 from bcbench.config import get_config
 from bcbench.dataset import ExtensibilityDatasetEntry
@@ -19,125 +19,80 @@ __all__ = ["ExtensibilityPipeline"]
 
 
 class AcceptanceCorrectnessRate:
-    """Evaluator for checking if acceptance decision matches expected.
-
-    Mirrors the bceval AcceptanceCorrectnessRate evaluator.
-    """
-
     def __call__(self, *, expected: dict, output: dict, **kwargs) -> bool:
-        """Check if acceptance decision is correct.
-
-        Args:
-            expected: Expected output with labels field
-            output: Agent output with accepted field
-
-        Returns:
-            True if acceptance matches expected, False otherwise
-        """
         expected_accepted_str = expected.get("labels", "")
         expected_accepted = False if not expected_accepted_str else "event-request" in expected_accepted_str or "request-for-external" in expected_accepted_str
-
         output_accepted = output.get("accepted", False)
 
         return expected_accepted == output_accepted
 
 
 class LabelMatch:
-    """Evaluator for checking if labels match expected.
-
-    Mirrors the bceval LabelMatch evaluator.
-    """
-
-    def __call__(self, *, expected: dict, output: dict, **kwargs) -> bool:
-        """Check if labels match exactly.
-
-        Args:
-            expected: Expected output with labels field (comma-separated string)
-            output: Agent output with labels field (list)
-
-        Returns:
-            True if labels match exactly, False otherwise
-        """
+    def __call__(self, *, expected: dict, output: dict, **kwargs) -> list[Score]:
         expected_labels_str = expected.get("labels", "")
         expected_labels = {label.strip() for label in expected_labels_str.split(",")} if expected_labels_str else set()
-
         output_labels = set(output.get("labels", []))
 
-        return expected_labels == output_labels
+        matched_labels = expected_labels.intersection(output_labels)
+
+        recall = (1.0 if len(output_labels) == 0 else 0.0) if len(expected_labels) == 0 else len(matched_labels) / len(expected_labels)
+        precision = (1.0 if len(expected_labels) == 0 else 0.0) if len(output_labels) == 0 else len(matched_labels) / len(output_labels)
+        f1_score = 0.0 if precision + recall == 0 else 2 * (precision * recall) / (precision + recall)
+
+        match_rate = len(matched_labels) / len(expected_labels) if expected_labels else 0.0
+
+        return [
+            Score("LabelMatchRate", match_rate),
+            Score("LabelRecall", recall),
+            Score("LabelPrecision", precision),
+            Score("LabelF1Score", f1_score),
+        ]
 
 
 class IssueCommentMatch:
-    """Evaluator for checking if comment semantically matches expected.
+    def __init__(self, **kwargs):
+        self._classifier = LLMClassifier(
+            name=self.__class__.__name__,
+            model="gpt-41",
+            choice_scores={"Y": 1.0, "N": 0.0},
+            prompt_template="""You are evaluating whether a *generated* GitHub BC extensibility issue comment is an acceptable
+substitute for the *expected* comment, given the original issue.
 
-    Uses LLM-based semantic comparison to evaluate if the agent's comment
-    matches the intent and content of the expected comment.
-    """
+Consider:
+- Does the generated comment correctly address the same concern?
+- Is it at least as helpful and specific as the expected one?
+- Is it technically accurate w.r.t. the issue description?
 
-    def __init__(self, model: str = "gpt-4", **kwargs):
-        """Initialize comment evaluator with LLM classifier.
+Here is the data:
+[Issue title]
+{{input.title}}
 
-        Args:
-            model: OpenAI model to use for semantic comparison
-        """
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+[Issue body]
+{{input.description}}
 
-        self.prompt_template = """Compare the following two GitHub issue comments to determine if they are semantically equivalent.
+[Issue comments]
+{{input.comments}}
 
-Expected Comment(s):
-{expected_comments}
+[Expected comments]
+{{expected.comments}}
 
-Agent's Comment:
-{output_comment}
+[Model (generated) comment]
+{{output.comment}}
 
-Consider the comments semantically equivalent if they:
-1. Convey the same core message or intent
-2. Address the same key points
-3. Have similar tone and purpose (e.g., both requesting info, both approving, both rejecting)
+Respond with a single letter:
 
-Respond with ONLY 'Y' if they are semantically equivalent, or 'N' if they are not.
-Do not provide any explanation, just Y or N."""
+Y - The model comment is an adequate replacement for the expected comment.
+N - The model comment is not an adequate replacement.
+""",
+        )
 
-    def __call__(self, *, expected: dict, output: dict, **kwargs) -> bool:
-        """Check if comment semantically matches expected.
-
-        Args:
-            expected: Expected output with comments field (list of comment dicts)
-            output: Agent output with comment field (string)
-
-        Returns:
-            True if comments are semantically equivalent, False otherwise
-        """
-        expected_comments = expected.get("comments", [])
-        output_comment = output.get("comment", "")
-
-        # If neither has comments, that's a match
-        if not expected_comments and not output_comment.strip():
-            return True
-
-        # If only one has comments, that's a mismatch
-        if bool(expected_comments) != bool(output_comment.strip()):
-            return False
-
-        # Both have comments - use LLM to compare semantically
-        try:
-            # Format expected comments (list of dicts with 'body' field)
-            expected_text = "\n".join(comment.get("body", "") for comment in expected_comments if isinstance(comment, dict))
-            if not expected_text:
-                # Fallback if comments are just strings
-                expected_text = "\n".join(str(c) for c in expected_comments)
-
-            prompt = self.prompt_template.format(expected_comments=expected_text, output_comment=output_comment)
-
-            response = self.client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": prompt}], temperature=0.0, max_tokens=1)
-
-            result = response.choices[0].message.content.strip().upper()
-            return result == "Y"
-
-        except Exception as e:
-            logger.warning(f"LLM comparison failed: {e}. Falling back to presence check.")
-            # Fallback to simple presence check if LLM call fails
-            return bool(expected_comments) == bool(output_comment.strip())
+    def __call__(self, *, input: dict, output: dict, expected: dict, **kwargs):
+        return self._classifier(
+            input=json.loads(input) if isinstance(input, str) else input,
+            output=output,
+            expected=expected,
+            **kwargs,
+        )
 
 
 class ExtensibilityPipeline(EvaluationPipeline):
@@ -149,15 +104,12 @@ class ExtensibilityPipeline(EvaluationPipeline):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext) -> None:
-        """Evaluate agent output by comparing with expected results.
-
-        Uses the same evaluators as bceval (acceptance, labels, comments).
-        """
         resolved = False
         error_messages = []
 
         if isinstance(context.entry, ExtensibilityDatasetEntry):
             expected = context.entry.expected
+            input_data = context.entry.get_task()
 
             # Check if agent produced JSON output
             if context.metrics and isinstance(context.metrics, ExtAgentMetrics) and context.metrics.json_output:
@@ -167,27 +119,37 @@ class ExtensibilityPipeline(EvaluationPipeline):
                     if isinstance(agent_output, str):
                         agent_output = json.loads(agent_output)
 
-                    # Transform agent output to match bceval format
-                    # Expected format: {accepted: bool, labels: list, comment: str}
-                    final_determination = agent_output.get("final_determination", {})
+                    # Transform agent output to match evaluator format
                     output = {
-                        "accepted": final_determination.get("outcome") == "FEASIBLE",
-                        "labels": final_determination.get("labels_to_apply", []),
-                        "comment": final_determination.get("comment_to_post", ""),
+                        "accepted": agent_output.get("state_of_issue", "") != "closed",
+                        "labels": agent_output.get("labels_to_apply", []),
+                        "comment": agent_output.get("comment_to_post", ""),
                     }
 
                     logger.info(f"Expected: {expected}")
                     logger.info(f"Agent output: {output}")
 
-                    # Instantiate evaluators (same pattern as bceval)
+                    # Run evaluators
                     acceptance_evaluator = AcceptanceCorrectnessRate()
                     labels_evaluator = LabelMatch()
                     comment_evaluator = IssueCommentMatch()
 
-                    # Run evaluators
                     acceptance_ok = acceptance_evaluator(expected=expected, output=output)
-                    labels_ok = labels_evaluator(expected=expected, output=output)
-                    comment_ok = comment_evaluator(expected=expected, output=output)
+                    label_scores = labels_evaluator(expected=expected, output=output)
+                    comment_result = comment_evaluator(input=input_data, expected=expected, output=output)
+
+                    # Log label scores
+                    for score in label_scores:
+                        logger.info(f"  {score.name}: {score.score}")
+
+                    # Log comment score
+                    comment_score = comment_result.score if comment_result else 0.0
+                    logger.info(f"  CommentMatch: {comment_score}")
+
+                    # Determine label match from F1 score
+                    label_f1 = next((s for s in label_scores if s.name == "LabelF1Score"), None)
+                    labels_ok = label_f1 is not None and label_f1.score == 1.0
+                    comment_ok = comment_score == 1.0
 
                     # Collect errors
                     if not acceptance_ok:
@@ -195,9 +157,8 @@ class ExtensibilityPipeline(EvaluationPipeline):
                     if not labels_ok:
                         error_messages.append(f"Labels: expected {expected.get('labels')}, got {output.get('labels')}")
                     if not comment_ok:
-                        error_messages.append("Comment: presence mismatch")
+                        error_messages.append(f"Comment: score {comment_score}")
 
-                    # Set resolved if all evaluators pass
                     resolved = acceptance_ok and labels_ok and comment_ok
 
                     if resolved:
@@ -212,14 +173,19 @@ class ExtensibilityPipeline(EvaluationPipeline):
                 error_messages.append("Agent did not produce JSON output")
                 logger.warning(error_messages[-1])
 
+        # Extract json_output string for the result
+        json_output_str: str | None = None
+        if context.metrics and isinstance(context.metrics, ExtAgentMetrics):
+            json_output_str = context.metrics.json_output
+
         # Create result based on validation
         error_summary = "; ".join(error_messages) if error_messages else "Validation failed"
 
         if resolved:
-            result = ExtensibilityResult.create_success(context, "")
+            result = ExtensibilityResult.create_success(context, "", json_output=json_output_str)
             logger.info(f"✓ Successfully validated {context.entry.instance_id}")
         else:
-            result = ExtensibilityResult.create_test_failure(context, "", error_msg=error_summary)
+            result = ExtensibilityResult.create_test_failure(context, "", error_msg=error_summary, json_output=json_output_str)
             logger.warning(f"✗ Validation failed for {context.entry.instance_id}: {error_summary}")
 
         if result is not None:
