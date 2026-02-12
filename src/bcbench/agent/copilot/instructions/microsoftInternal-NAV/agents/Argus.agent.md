@@ -56,3 +56,12 @@ Execute ALL the following steps (2-7) sequentially.
 - Expect output: {"Success": boolean, "TEAM_LABEL": string, "FailureLabel": string, "FailureReason": string}
 
 7. Step 7: Finalize the process based on the instructions from #file:../instructions/Argus/step7-labels-comments.md . Use all collected data (including any failure reasons if applicable) to avoid refetching.
+   **CRITICAL**: Your final output for this step MUST be a single ```json code fence containing EXACTLY this structure — no other keys, no nesting, no renaming:
+   ```json
+   {
+     "labels_to_apply": ["label1", "label2"],
+     "comment_to_post": "full comment text",
+     "state_of_issue": "open"
+   }
+   ```
+   Do NOT use alternative key names like `RecommendedLabels`, `final_labels`, `GitHubComment`, `comment_template`, etc. The keys MUST be literally `labels_to_apply`, `comment_to_post`, `state_of_issue`.

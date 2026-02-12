@@ -133,6 +133,68 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
         return None
 
 
+# Pattern to find JSON code fences with real newlines
+_JSON_FENCE_REAL_NEWLINES = re.compile(r"```json\s*(\{[\s\S]*?\})\s*```")
+
+# Pattern to find JSON code fences with literal \n (escaped newlines in JSON string values
+# found in session log files where assistant content is stored as JSON strings)
+_JSON_FENCE_ESCAPED_NEWLINES = re.compile(r"```json\\n(\{.*?\})\\n```")
+
+
+def _unescape_json_string(s: str) -> str:
+    """Unescape a JSON-encoded string value (handles \\n, \\", \\\\ etc.)."""
+    try:
+        return json.loads(f'"{s}"')
+    except json.JSONDecodeError:
+        return s
+
+
+# Required keys for the Final_Output JSON schema from step7-labels-comments
+_FINAL_OUTPUT_KEYS = {"labels_to_apply", "comment_to_post", "state_of_issue"}
+
+
+def _normalize_final_output(raw: dict) -> dict:
+    return {
+        "labels_to_apply": raw.get("labels_to_apply", []),
+        "comment_to_post": raw.get("comment_to_post", ""),
+        "state_of_issue": raw.get("state_of_issue", ""),
+    }
+
+
+def _extract_last_json_from_fences(text: str) -> dict:
+    """Extract the Final_Output JSON from code fences in text.
+
+    Returns a dict with exactly {labels_to_apply, comment_to_post, state_of_issue}.
+    Missing keys default to empty values.
+    """
+    candidates: list[str] = []
+
+    # Match fences with real newlines
+    candidates.extend(m.group(1) for m in _JSON_FENCE_REAL_NEWLINES.finditer(text))
+
+    # Match fences with literal \n (session log format where content is inside JSON strings)
+    for m in _JSON_FENCE_ESCAPED_NEWLINES.finditer(text):
+        # Content is JSON-escaped — unescape via json.loads to handle \n, \", \\\\ etc.
+        candidates.append(_unescape_json_string(m.group(1)))
+
+    # Parse all candidates
+    parsed: list[dict] = []
+    for json_str in candidates:
+        try:
+            obj = json.loads(json_str)
+            if isinstance(obj, dict):
+                parsed.append(obj)
+        except json.JSONDecodeError:
+            continue
+
+    # Only match blocks that have at least one exact Final_Output key
+    matches = [p for p in parsed if _FINAL_OUTPUT_KEYS & p.keys()]
+    if matches:
+        return _normalize_final_output(matches[-1])
+
+    return _normalize_final_output({})
+
+
 def parse_metrics_ext(output_lines: Sequence[str], session_log_path: Path | None = None) -> ExtAgentMetrics | None:
     """Parse extended metrics from Copilot CLI output and session logs.
 
@@ -150,37 +212,27 @@ def parse_metrics_ext(output_lines: Sequence[str], session_log_path: Path | None
     if base_metrics is None:
         return None
 
-    # Parse additional JSON field from code fences
-    json_output = None
+    # Extract Final_Output JSON (labels_to_apply, comment_to_post, state_of_issue)
     output_text = "".join(output_lines)
+    json_output = _normalize_final_output({})
 
     try:
-        # First, try to find JSON in stderr output
-        json_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", output_text)
-        if json_match:
-            json_str = json_match.group(1)
-            try:
-                json_output = json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to decode JSON from stderr: {e}")
+        # First, try to find JSON in stderr output (real newlines)
+        json_output = _extract_last_json_from_fences(output_text)
 
-        # If not found in stderr and we have a session log, search there
-        if json_output is None and session_log_path and session_log_path.exists():
+        # If all values are empty and we have a session log, search there
+        if not any(json_output.values()) and session_log_path and session_log_path.exists():
             try:
                 session_content = session_log_path.read_text(encoding="utf-8")
-                # Look for JSON in the session log content (often in assistant messages)
-                json_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", session_content)
-                if json_match:
-                    json_str = json_match.group(1)
-                    try:
-                        json_output = json.loads(json_str)
-                        logger.debug(f"Found JSON output in session log: {session_log_path}")
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to decode JSON from session log: {e}")
+                json_output = _extract_last_json_from_fences(session_content)
+                if any(json_output.values()):
+                    logger.debug(f"Found JSON output in session log: {session_log_path}")
             except Exception as e:
                 logger.warning(f"Failed to read session log for JSON extraction: {e}")
     except Exception as e:
         logger.warning(f"Failed to parse JSON output: {e}")
+
+    logger.info(f"Extracted JSON output: {json_output}")
 
     return ExtAgentMetrics(
         execution_time=base_metrics.execution_time,
@@ -189,5 +241,5 @@ def parse_metrics_ext(output_lines: Sequence[str], session_log_path: Path | None
         prompt_tokens=base_metrics.prompt_tokens,
         completion_tokens=base_metrics.completion_tokens,
         tool_usage=base_metrics.tool_usage,
-        json_output=json_output,
+        json_output=json.dumps(json_output),
     )

@@ -7,6 +7,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.agent import run_claude_code, run_copilot_agent, run_mini_agent
+from bcbench.agent.copilot.agent import run_copilot_agent_ext
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -25,7 +26,7 @@ from bcbench.dataset import DatasetEntry, load_dataset_entries
 from bcbench.evaluate import EvaluationPipeline, create_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -133,17 +134,31 @@ def evaluate_copilot(
     )
 
     pipeline = create_pipeline(category)
-    pipeline.execute(
-        context,
-        lambda ctx: run_copilot_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            al_mcp=al_mcp,
-        ),
-    )
+
+    if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
+        pipeline.execute(
+            context,
+            lambda ctx: run_copilot_agent_ext(
+                entry=ctx.entry,
+                repo_path=ctx.repo_path,
+                model=ctx.model,
+                category=category,
+                output_dir=ctx.result_dir,
+                al_mcp=al_mcp,
+            ),
+        )
+    else:
+        pipeline.execute(
+            context,
+            lambda ctx: run_copilot_agent(
+                entry=ctx.entry,
+                repo_path=ctx.repo_path,
+                category=category,
+                model=ctx.model,
+                output_dir=ctx.result_dir,
+                al_mcp=al_mcp,
+            ),
+        )
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")

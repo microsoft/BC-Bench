@@ -95,7 +95,8 @@ def run_copilot(
         setup_repo_postbuild(entry, repo_path, category)
 
     if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
-        run_copilot_agent_ext(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
+        matrix, _ = run_copilot_agent_ext(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
+        logger.info(f"Metrics MARKO: {matrix}")
     else:
         run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
 
