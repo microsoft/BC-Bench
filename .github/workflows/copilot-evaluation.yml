@@ -13,6 +13,7 @@ on:
         type: choice
         options:
           - "claude-sonnet-4.5"
+          - "claude-sonnet-4.6"
           - "claude-haiku-4.5"
           - "claude-opus-4.5"
           - "claude-opus-4.6"
@@ -114,7 +115,7 @@ jobs:
         run: dotnet tool install Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.30.49729-beta --global
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@0.0.409
+        run: npm install -g @github/copilot@0.0.411
 
       - name: Select PAT based on job index
         id: select-pat
