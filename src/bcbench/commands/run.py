@@ -95,8 +95,17 @@ def run_copilot(
         setup_repo_postbuild(entry, repo_path, category)
 
     if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
-        matrix, _ = run_copilot_agent_ext(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
-        logger.info(f"Metrics MARKO: {matrix}")
+        metrics, _ = run_copilot_agent_ext(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
+        logger.info(f"Agent metrics: {metrics}")
+
+        # Compare against expected
+        from bcbench.evaluate.extensibility import compare_extensibility_output
+
+        resolved, errors = compare_extensibility_output(entry, metrics)
+        if resolved:
+            logger.info(f"✓ Entry {entry_id} matches expected output")
+        else:
+            logger.warning(f"✗ Entry {entry_id} does not match expected: {errors}")
     else:
         run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
 

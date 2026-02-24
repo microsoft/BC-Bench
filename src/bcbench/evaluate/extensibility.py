@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import Callable
 
 from autoevals import LLMClassifier
@@ -18,13 +19,10 @@ _config = get_config()
 __all__ = ["ExtensibilityPipeline"]
 
 
-class AcceptanceCorrectnessRate:
-    def __call__(self, *, expected: dict, output: dict, **kwargs) -> bool:
-        expected_accepted_str = expected.get("labels", "")
-        expected_accepted = False if not expected_accepted_str else "event-request" in expected_accepted_str or "request-for-external" in expected_accepted_str
-        output_accepted = output.get("accepted", False)
-
-        return expected_accepted == output_accepted
+class IssueStateMatch:
+    def __call__(self, *, expected: str, output: dict, **kwargs) -> bool:
+        output_state = output["state_of_issue"]
+        return expected == output_state
 
 
 class LabelMatch:
@@ -49,12 +47,27 @@ class LabelMatch:
         ]
 
 
+def _create_github_models_client():
+    import subprocess
+
+    from openai import OpenAI
+
+    token = os.environ.get("GITHUB_TOKEN") or subprocess.check_output(["gh", "auth", "token"], text=True).strip()
+
+    return OpenAI(
+        base_url="https://models.github.ai/inference",
+        api_key=token,
+    )
+
+
 class IssueCommentMatch:
     def __init__(self, **kwargs):
+        client = _create_github_models_client()
         self._classifier = LLMClassifier(
             name=self.__class__.__name__,
-            model="gpt-41",
+            model="openai/gpt-4.1",
             choice_scores={"Y": 1.0, "N": 0.0},
+            client=client,
             prompt_template="""You are evaluating whether a *generated* GitHub BC extensibility issue comment is an acceptable
 substitute for the *expected* comment, given the original issue.
 
@@ -86,13 +99,94 @@ N - The model comment is not an adequate replacement.
 """,
         )
 
-    def __call__(self, *, input: dict, output: dict, expected: dict, **kwargs):
+    def __call__(self, *, input: str | dict, output: dict, expected: dict, **kwargs):
         return self._classifier(
             input=json.loads(input) if isinstance(input, str) else input,
             output=output,
             expected=expected,
             **kwargs,
         )
+
+
+def compare_extensibility_output(
+    entry: ExtensibilityDatasetEntry,
+    metrics: ExtAgentMetrics | None,
+    *,
+    run_comment_eval: bool = True,
+) -> tuple[bool, list[str]]:
+    resolved = False
+    error_messages: list[str] = []
+
+    expected = entry.expected
+    input_data = entry.get_task()
+
+    if not metrics or not metrics.json_output:
+        error_messages.append("Agent did not produce JSON output")
+        logger.warning(error_messages[-1])
+        return False, error_messages
+
+    try:
+        agent_output = metrics.json_output
+        if isinstance(agent_output, str):
+            agent_output = json.loads(agent_output)
+
+        output = {
+            "state_of_issue": agent_output.get("state_of_issue"),
+            "labels": agent_output.get("labels_to_apply", []),
+            "comment": agent_output.get("comment_to_post", ""),
+        }
+
+        logger.info(f"Expected: {expected}")
+        logger.info(f"Agent output: {output}")
+
+        # Issue state
+        expected_state = expected.get("state", "open")
+        state_ok = IssueStateMatch()(expected=expected_state, output=output)
+
+        # Labels
+        label_scores = LabelMatch()(expected=expected, output=output)
+        for score in label_scores:
+            logger.info(f"  {score.name}: {score.score}")
+        label_f1 = next((s for s in label_scores if s.name == "LabelF1Score"), None)
+        labels_ok = label_f1 is not None and label_f1.score == 1.0
+
+        # Comment (LLM judge — may fail without API key)
+        comment_ok = False
+        comment_score = 0.0
+        if run_comment_eval:
+            try:
+                comment_result = IssueCommentMatch()(input=input_data, expected=expected, output=output)
+                comment_score = comment_result.score if comment_result else 0.0
+                comment_ok = comment_score == 1.0
+            except Exception as llm_err:
+                logger.warning(f"IssueCommentMatch evaluator failed: {llm_err}")
+                error_messages.append(f"Comment eval error: {llm_err}")
+        else:
+            logger.info("  CommentMatch: skipped (run_comment_eval=False)")
+            comment_ok = True  # don't penalize when skipped
+
+        logger.info(f"  CommentMatch: {comment_score}")
+
+        # Collect errors
+        if not state_ok:
+            error_messages.append(f"IssueState: expected '{expected_state}', got '{output.get('state_of_issue')}'")
+        if not labels_ok:
+            error_messages.append(f"Labels: expected {expected.get('labels')}, got {output.get('labels')}")
+        if not comment_ok and "Comment eval error" not in str(error_messages):
+            error_messages.append(f"Comment: score {comment_score}")
+
+        resolved = state_ok and labels_ok and comment_ok
+
+        if resolved:
+            logger.info("✓ All evaluators passed")
+        else:
+            logger.warning(f"✗ Some evaluators failed: {error_messages}")
+
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        error_messages.append(f"Failed to parse/validate JSON output: {e}")
+        logger.error(error_messages[-1])
+
+    return resolved, error_messages
 
 
 class ExtensibilityPipeline(EvaluationPipeline):
@@ -104,74 +198,11 @@ class ExtensibilityPipeline(EvaluationPipeline):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext) -> None:
-        resolved = False
-        error_messages = []
-
         if isinstance(context.entry, ExtensibilityDatasetEntry):
-            expected = context.entry.expected
-            input_data = context.entry.get_task()
-
-            # Check if agent produced JSON output
-            if context.metrics and isinstance(context.metrics, ExtAgentMetrics) and context.metrics.json_output:
-                try:
-                    # Parse agent's JSON output
-                    agent_output = context.metrics.json_output
-                    if isinstance(agent_output, str):
-                        agent_output = json.loads(agent_output)
-
-                    # Transform agent output to match evaluator format
-                    output = {
-                        "accepted": agent_output.get("state_of_issue", "") != "closed",
-                        "labels": agent_output.get("labels_to_apply", []),
-                        "comment": agent_output.get("comment_to_post", ""),
-                    }
-
-                    logger.info(f"Expected: {expected}")
-                    logger.info(f"Agent output: {output}")
-
-                    # Run evaluators
-                    acceptance_evaluator = AcceptanceCorrectnessRate()
-                    labels_evaluator = LabelMatch()
-                    comment_evaluator = IssueCommentMatch()
-
-                    acceptance_ok = acceptance_evaluator(expected=expected, output=output)
-                    label_scores = labels_evaluator(expected=expected, output=output)
-                    comment_result = comment_evaluator(input=input_data, expected=expected, output=output)
-
-                    # Log label scores
-                    for score in label_scores:
-                        logger.info(f"  {score.name}: {score.score}")
-
-                    # Log comment score
-                    comment_score = comment_result.score if comment_result else 0.0
-                    logger.info(f"  CommentMatch: {comment_score}")
-
-                    # Determine label match from F1 score
-                    label_f1 = next((s for s in label_scores if s.name == "LabelF1Score"), None)
-                    labels_ok = label_f1 is not None and label_f1.score == 1.0
-                    comment_ok = comment_score == 1.0
-
-                    # Collect errors
-                    if not acceptance_ok:
-                        error_messages.append("Acceptance: decision mismatch")
-                    if not labels_ok:
-                        error_messages.append(f"Labels: expected {expected.get('labels')}, got {output.get('labels')}")
-                    if not comment_ok:
-                        error_messages.append(f"Comment: score {comment_score}")
-
-                    resolved = acceptance_ok and labels_ok and comment_ok
-
-                    if resolved:
-                        logger.info("✓ All evaluators passed")
-                    else:
-                        logger.warning(f"✗ Some evaluators failed: {error_messages}")
-
-                except (json.JSONDecodeError, KeyError, TypeError) as e:
-                    error_messages.append(f"Failed to parse/validate JSON output: {e}")
-                    logger.error(error_messages[-1])
-            else:
-                error_messages.append("Agent did not produce JSON output")
-                logger.warning(error_messages[-1])
+            ext_metrics = context.metrics if isinstance(context.metrics, ExtAgentMetrics) else None
+            resolved, error_messages = compare_extensibility_output(context.entry, ext_metrics)
+        else:
+            resolved, error_messages = False, ["Entry is not an ExtensibilityDatasetEntry"]
 
         # Extract json_output string for the result
         json_output_str: str | None = None
