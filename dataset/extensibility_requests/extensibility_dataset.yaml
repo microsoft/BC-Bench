@@ -138,3 +138,819 @@ entries:
                 TypeAsText := TempOptionLookupBuffer.FormatOption(RecRef.Field(Rec.FieldNo(Type)));
             end;
             ```
+
+  - instance_id: issue-29519
+    input:
+      title: "[Change Request] table 130 \"Incoming Document\" - field(18; Status; Option)"
+      description: |
+        ### Why do you need this change?
+
+        We have to extend the Enum for additional Document Status like Archived etc.
+
+        ### Describe the request
+
+        Hello, can you please change the field 18 "Status" in table 130 "Incoming Document" from option to an Enum?
+
+        ```
+        table 130 "Incoming Document";
+        {
+        .
+        .
+        .
+                field(18; Status; Enum "Incoming Document Status")
+                {
+                    Caption = 'Status';
+                    Editable = false;
+                }
+        ```
+
+        ```
+        enum 59002 "Incoming Document Status";
+        {
+            Extensible = true;
+
+            value(0; New)
+            {
+                Caption = 'New';
+            }
+            value(1; Released)
+            {
+                Caption = 'Released';
+            }
+            value(2; Rejected)
+            {
+                Caption = 'Rejected';
+            }
+            value(3; Posted)
+            {
+                Caption = 'Posted';
+            }
+            value(4; Created)
+            {
+                Caption = 'Created';
+            }
+            value(5; Failed)
+            {
+                Caption = 'Failed';
+            }
+            value(6; "Pending Approval")
+            {
+                Caption = 'Pending Approval';
+            }
+        }
+        ```
+
+      comments: ""
+
+    expected:
+      labels: "Integration, enum-request"
+      comments:
+        - author: Agent
+          body: |
+            ✅ **Analysis complete - approved for implementation**
+
+            ---
+
+            **Implementation:**
+
+            Convert field 18 "Status" in table 130 "Incoming Document" from Option field to Enum "Incoming Document Status" (enum 59002). This enables partners to extend the status values (e.g., add "Archived") without modifying base code.
+
+            ```al
+            enum 59002 "Incoming Document Status"
+            {
+                Extensible = true;
+
+                value(0; New)
+                {
+                    Caption = 'New';
+                }
+                value(1; Released)
+                {
+                    Caption = 'Released';
+                }
+                value(2; Rejected)
+                {
+                    Caption = 'Rejected';
+                }
+                value(3; Posted)
+                {
+                    Caption = 'Posted';
+                }
+                value(4; Created)
+                {
+                    Caption = 'Created';
+                }
+                value(5; Failed)
+                {
+                    Caption = 'Failed';
+                }
+                value(6; "Pending Approval")
+                {
+                    Caption = 'Pending Approval';
+                }
+            }
+            ```
+
+            **Modified field in table 130:**
+
+            ```al
+            field(18; Status; Enum "Incoming Document Status")
+            {
+                Caption = 'Status';
+                Editable = false;
+            }
+            ```
+
+            ---
+
+            **File:** `IncomingDocument.Table.al` (modified) and `IncomingDocumentStatus.Enum.al` (new)
+
+  - instance_id: issue-29557
+    base_commit: "706e179dd811ac4c9ef3a474b53d64fa852ad420"
+    input:
+      title: "Report 6 \"Trial Balance\" - add area(Content) to request page"
+      description: |
+        ### Why do you need this change?
+
+        In 4PS Construct we want to extend request page of report 6 "Trial Balance" with new field and it is not possible to do it.
+
+        ### Describe the request
+
+        Dear ALAppExtensions team,
+
+        On behalf of 4PS I would like to request adding Content area to request page of report 6 "Trial Balance".
+        Currently it not possible to add a new field to request page using report extension due to error "The control 'Content' is not found in the target 'RequestOptionsPage'".
+
+        ````
+            requestpage
+            {
+                SaveValues = true;
+                AboutTitle = 'About Trial Balance';
+                AboutText = 'View a snapshot of your chart of accounts with a balance at date and net change in the specified period.';
+
+                layout
+                {
+                    area(Content) { } //new
+                }
+
+                actions
+                {
+                }
+            }
+        ````
+
+      comments: ""
+
+    expected:
+      labels: ""
+      state: "closed"
+      comments:
+        - author: Agent
+          body: |
+            This request cannot be implemented.
+
+            **Reason:** The target code (Report 6 "Trial Balance") is marked as obsolete and cannot be modified. The report has `ObsoleteState = Pending`, `ObsoleteTag = '28.0'`, and is wrapped in `#if not CLEAN28` preprocessor directive. The `ObsoleteReason` states: "This report has been replaced by the report Trial Balance (Excel). This report will be removed in a future release."
+
+  - instance_id: issue-29576
+    input:
+      title: "[Event Requests] - Table 83 \"Item Journal Line\""
+      description: |
+        ### Why do you need this change?
+
+        1. Please add an event publisher before the if "Qty. (Phys. Inventory)" >= "Qty. (Calculated") block in the OnValidate trigger of _Qty. (Phys. Inventory)_.
+        The event should include an IsHandled flag so extensions can skip the standard Validate("Entry Type") logic and assign the field value directly without triggering validation.
+        2. Please add a new event publisher before the Validate("Setup Time") and Validate("Run Time") calls in the _Concurrent Capacity_ field – OnValidate trigger. The publisher should include an IsHandled parameter so extensions can override this logic and assign the values without executing the standard validation triggers.
+
+        ### Describe the request
+
+        1. OnValidate trigger field 54 "Qty. (Phys. Inventory)"
+        ``````al
+        field(54; "Qty. (Phys. Inventory)"; Decimal)
+        {
+            ...
+            trigger OnValidate()
+            var
+                IsHandled : Boolean; //New local variable
+            begin
+                ...
+
+                PhysInvtEntered := true;
+                Quantity := 0;
+                //Code change - Start
+                OnBeforeCheckQuantity(Rec, xRec, IsHandled);
+                If not IsHandled then
+                    if "Qty. (Phys. Inventory)" >= "Qty. (Calculated)" then begin
+                        Validate("Entry Type", "Entry Type"::"Positive Adjmt.");
+                        Validate(Quantity, "Qty. (Phys. Inventory)" - "Qty. (Calculated)");
+                    end else begin
+                        Validate("Entry Type", "Entry Type"::"Negative Adjmt.");
+                        Validate(Quantity, "Qty. (Calculated)" - "Qty. (Phys. Inventory)");
+                    end;
+                //Code change - End
+                PhysInvtEntered := false;
+            end;
+
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeCheckQuantity(var ItemJournalLine: Record "Item Journal Line"; xItemJournalLine: Record "Item Journal Line"; var IsHandled: Boolean)
+        begin
+        end;
+        ``````
+        2. OnValidate trigger field 5849 "Concurrent Capacity"
+        ``````al
+        field(5849; "Concurrent Capacity"; Decimal)
+        {
+            ...
+            trigger OnValidate()
+            var
+                WorkCenter: Record "Work Center";
+                ShopCalendarMgt: Codeunit "Shop Calendar Management";
+                TotalTime: Integer;
+                IsHandled : Boolean; //New local variable
+            begin
+                ...
+                WorkCenter.Get("Work Center No.");
+                OnBeforeTimeValidation(Rec, xRec, IsHandled);
+                if not IsHandled then begin
+                    Validate("Setup Time", 0);
+                    Validate(
+                      "Run Time",
+                      Round(
+                        TotalTime / ShopCalendarMgt.TimeFactor("Cap. Unit of Measure Code") *
+                        "Concurrent Capacity", WorkCenter."Calendar Rounding Precision"));
+                end;
+            end;
+        }
+
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeTimeValidation(var ItemJournalLine: Record "Item Journal Line"; xItemJournalLine: Record "Item Journal Line"; var IsHandled: Boolean)
+        begin
+        end;
+        ``````
+
+      comments: ""
+
+    expected:
+      labels: "missing-info"
+      comments:
+        - author: Agent
+          body: |
+            Hi @exnihiloo,
+
+            Thanks for submitting this extensibility request. To help us process it efficiently, please update the issue to include the required information.
+
+            📚 [Extensibility Guidelines](https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-contribute-extensibility)
+
+            **Missing Information:**
+
+            - **Alternatives Evaluated**: Which existing events or patterns were tried and why are they insufficient?
+            - **Justification for IsHandled**: Why is a standard event (without IsHandled) or alternative approach not feasible? What specific business logic must be skipped/replaced and why is bypass essential?
+            - **Performance Considerations**: How frequently will these events be triggered? What is the expected performance impact?
+            - **Data Sensitivity Review**: Are there any sensitive data exposure concerns? Please confirm data security implications.
+            - **Multi-Extension Interaction**: What are the risks if multiple extensions subscribe to these events with IsHandled? How would conflicts be handled?
+
+            Please update the issue with the missing details. We'll automatically re-analyze once updated.
+
+  - instance_id: issue-29465
+    base_commit: "706e179dd811ac4c9ef3a474b53d64fa852ad420"
+    input:
+      title: "[extensibility request] - Purch Post + Print - Event OnAfterConfirmPost"
+      description: |
+        ### Why do you need this change?
+
+        Could PurchaseHeader be set as reference?
+
+        Var PurchaseHeader:Record "Purchase Header"
+
+        ### Describe the request
+
+        I need this because i want to modify purchase header.
+
+        ```
+        [IntegrationEvent(false, false)]
+            local procedure OnAfterConfirmPost(var PurchaseHeader: Record "Purchase Header"; var IsHandled: Boolean)
+            begin
+            end;
+        ```
+
+        We have already looked at existing events in the purchase posting flow but none of them expose the PurchaseHeader at the right point after the confirm dialog.
+        The IsHandled flag is needed so we can fully replace the default post-confirmation logic when our extension requires different behavior.
+        This event is triggered only when a user explicitly confirms posting, so the performance impact is negligible.
+        The PurchaseHeader record does not expose sensitive data beyond what is already visible in the purchase posting UI.
+        If multiple extensions subscribe with IsHandled, the last one to set it to true wins, which is acceptable given the narrow use case.
+
+      comments: ""
+
+    expected:
+      labels: ""
+      state: "closed"
+      comments:
+        - author: Agent
+          body: |
+            ✅ **Good news! This is already implemented in the codebase.**
+
+            The requested change already exists. The `PurchaseHeader` parameter in the `OnAfterConfirmPost` event **already has the `var` modifier**:
+
+            **Existing implementation:**
+
+            ```al
+            [IntegrationEvent(false, false)]
+            local procedure OnAfterConfirmPost(var PurchaseHeader: Record "Purchase Header"; var IsHandled: Boolean)
+            begin
+            end;
+            ```
+
+            **File:** `PurchPostPrint.Codeunit.al`
+
+            You can use this existing event in your extension to modify the Purchase Header after the post confirmation. Closing this issue as the request is already satisfied.
+
+  - instance_id: issue-29459-step1
+    input:
+      title: "[Event Request] Codeunit 5880 \"Phys. Invt. Order-Finish\""
+      description: |
+        ### Why do you need this change?
+
+        Hi,
+        i need an event in the Codeunit 5880 "Phys. Invt. Order-Finish" in the procedure "Code"() to modify the PhysInvtOrderLine record before creating the  reservation entries.
+
+        ### Describe the request
+
+        Add a new event in the procedure "Code"(), before the procedure "CreateReservationEntries".
+
+        ```
+        procedure "Code"()
+        var
+            ItemTrackingSetup: Record "Item Tracking Setup";
+            IsHandled: Boolean;
+         begin
+            ...
+            if PhysInvtOrderLine."Use Item Tracking" and
+               not IsBinMandatoryNoWhseTracking(Item, PhysInvtOrderLine."Location Code")
+            then begin
+                PhysInvtOrderLine."Pos. Qty. (Base)" := 0;
+                PhysInvtOrderLine."Neg. Qty. (Base)" := 0;
+                TempInvtOrderTrackingBuffer.Reset();
+                TempInvtOrderTrackingBuffer.DeleteAll();
+                CreateOrderTrackingBufferLines(PhysInvtOrderLine."Document No.", PhysInvtOrderLine."Line No.");
+
+                // Start Event
+                OnCodeOnBeforeCreateReservationEntriesAfterCreateOrderTrackingBufferLines(PhysInvtOrderLine);
+                // End Event
+
+                CreateReservationEntries(PhysInvtOrderLine."Document No.", PhysInvtOrderLine."Line No.", true, 0);
+            end else
+            ...
+        end;
+        ```
+
+        Add the event publisher at the end of the codeunit:
+
+        ```
+        [IntegrationEvent(false, false)]
+        local procedure OnCodeOnBeforeCreateReservationEntriesAfterCreateOrderTrackingBufferLines(var PhysInvtOrderLine: Record "Phys. Invt. Order Line")
+        begin
+        end;
+        ```
+
+        Internal work item: [AB#614919](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/614919)
+
+      comments: ""
+
+    expected:
+      labels: "missing-info"
+      comments:
+        - author: Agent
+          body: |
+            ⚠️ **Clarification needed**
+
+            ---
+
+            We noticed there is an existing event `OnBeforePhysInvtOrderLineModify` that fires before `PhysInvtOrderLine.Modify()` and provides access to the same `PhysInvtOrderLine` record.
+
+            **Question:** Could you use the existing `OnBeforePhysInvtOrderLineModify` event for your scenario?
+
+            If not, please explain:
+            1. What specific modifications do you need to make to `PhysInvtOrderLine`?
+            2. Why must these modifications happen **before** `CreateReservationEntries` rather than before `Modify()`?
+            3. How does the data flow to `CreateReservationEntries` affect your extension's behavior?
+
+            This helps us avoid adding duplicate events when an existing one could serve the same purpose.
+
+            ---
+
+            **File:** `PhysInvtOrderFinish.Codeunit.al`
+
+  - instance_id: issue-29459-step2
+    input:
+      title: "[Event Request] Codeunit 5880 \"Phys. Invt. Order-Finish\""
+      description: |
+        ### Why do you need this change?
+
+        Hi,
+        i need an event in the Codeunit 5880 "Phys. Invt. Order-Finish" in the procedure "Code"() to modify the PhysInvtOrderLine record before creating the  reservation entries.
+
+        ### Describe the request
+
+        Add a new event in the procedure "Code"(), before the procedure "CreateReservationEntries".
+
+        ```
+        procedure "Code"()
+        var
+            ItemTrackingSetup: Record "Item Tracking Setup";
+            IsHandled: Boolean;
+         begin
+            ...
+            if PhysInvtOrderLine."Use Item Tracking" and
+               not IsBinMandatoryNoWhseTracking(Item, PhysInvtOrderLine."Location Code")
+            then begin
+                PhysInvtOrderLine."Pos. Qty. (Base)" := 0;
+                PhysInvtOrderLine."Neg. Qty. (Base)" := 0;
+                TempInvtOrderTrackingBuffer.Reset();
+                TempInvtOrderTrackingBuffer.DeleteAll();
+                CreateOrderTrackingBufferLines(PhysInvtOrderLine."Document No.", PhysInvtOrderLine."Line No.");
+
+                // Start Event
+                OnCodeOnBeforeCreateReservationEntriesAfterCreateOrderTrackingBufferLines(PhysInvtOrderLine);
+                // End Event
+
+                CreateReservationEntries(PhysInvtOrderLine."Document No.", PhysInvtOrderLine."Line No.", true, 0);
+            end else
+            ...
+        end;
+        ```
+
+        Add the event publisher at the end of the codeunit:
+
+        ```
+        [IntegrationEvent(false, false)]
+        local procedure OnCodeOnBeforeCreateReservationEntriesAfterCreateOrderTrackingBufferLines(var PhysInvtOrderLine: Record "Phys. Invt. Order Line")
+        begin
+        end;
+        ```
+
+        Internal work item: [AB#614919](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/614919)
+      labels: "missing-info"
+      comments: |
+        **Comment 1 (AleksandricMarko):**
+        ⚠️ **Clarification needed**
+
+        ---
+
+        We noticed there is an existing event `OnBeforePhysInvtOrderLineModify` that fires before `PhysInvtOrderLine.Modify()` and provides access to the same `PhysInvtOrderLine` record.
+
+        **Question:** Could you use the existing `OnBeforePhysInvtOrderLineModify` event for your scenario?
+
+        If not, please explain:
+        1. What specific modifications do you need to make to `PhysInvtOrderLine`?
+        2. Why must these modifications happen **before** `CreateReservationEntries` rather than before `Modify()`?
+        3. How does the data flow to `CreateReservationEntries` affect your extension's behavior?
+
+        This helps us avoid adding duplicate events when an existing one could serve the same purpose.
+
+        ---
+
+        **File:** `PhysInvtOrderFinish.Codeunit.al`
+
+        ---
+
+        **Comment 2 (Mariangela-DeMaio-EOS):**
+        Hi,
+        thanks for the suggestion, I think I can use the event "OnBeforePhysInvtOrderLineModify".
+
+    expected:
+      labels: ""
+      state: "closed"
+      comments:
+        - author: Agent
+          body: |
+            Thanks for confirming!
+
+            Since the existing `OnBeforePhysInvtOrderLineModify` event works for your scenario, no new event is needed. This event provides `var PhysInvtOrderLine` allowing you to modify the record before it's saved.
+
+            **Existing event you can use:**
+
+            ```al
+            [IntegrationEvent(false, false)]
+            local procedure OnBeforePhysInvtOrderLineModify(var PhysInvtOrderLine: Record "Phys. Invt. Order Line")
+            begin
+            end;
+            ```
+
+            **File:** `PhysInvtOrderFinish.Codeunit.al`
+
+            Closing this issue as your need is already satisfied by the existing event.
+
+  - instance_id: issue-29455
+    input:
+      title: "[Extend publisher] Codeunit 99000771 BOM Matrix Management - OnBeforeBuildMatrix"
+      description: |
+        ### Why do you need this change?
+
+        The problem occurs with the prod. bom version comparison when a production bom has another sub bom in the production bom lines. If this sub bom has multiple versions then it is possible hat the comparison shows not the components of the active certified version but of a newer one which is currently under development. In the case part of the "BuildMatrix" procedure is the following GetVersion call
+
+        However, this does not filter for the current version or even consider the status, but only the start date, which can result in the active version not being returned.
+
+        ### Describe the request
+
+        It would be desirable if either the onbeforebuildmatrix event were adjusted and the VersionCode parameter were declared as a var parameter so that, if necessary, the active version could be set manually in this event.
+
+        or if the GetVersion function were to return the current version directly, as on the "Production BOM" page using the exixting GetBOMVersion procedure of codeunit VersionManagement VersionManagement.GetBOMVersion(Rec."No.", WorkDate(), true);
+
+        Internal work item: [AB#614921](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/614921)
+
+      comments: ""
+
+    expected:
+      labels: "SCM, event-request"
+      comments:
+        - author: Agent
+          body: |
+            ✅ **Analysis complete - approved for implementation**
+
+            ---
+
+            **Implementation:**
+
+            Extend the existing `OnBeforeBuildMatrix` event publisher in Codeunit 99000771 "BOM Matrix Management" by changing the `VersionCode` parameter to a `var` parameter, allowing subscribers to override the version code.
+
+            **Current code:**
+
+            ```al
+            [IntegrationEvent(false, false)]
+            local procedure OnBeforeBuildMatrix(ProductionBOMNo: Code[20]; VersionCode: Code[20]; Level: Integer; Quantity: Decimal; var IsHandled: Boolean)
+            begin
+            end;
+            ```
+
+            **Proposed change:**
+
+            ```al
+            [IntegrationEvent(false, false)]
+            local procedure OnBeforeBuildMatrix(ProductionBOMNo: Code[20]; var VersionCode: Code[20]; Level: Integer; Quantity: Decimal; var IsHandled: Boolean)
+            begin
+            end;
+            ```
+
+            ---
+
+            **File:** `BOMMatrixManagement.Codeunit.al`
+
+  - instance_id: issue-29454
+    input:
+      title: "[Request for External] table 7001 \"Price List Line\" - CheckAmountType"
+      description: |
+        ### Why do you need this change?
+
+        Can you remove local from provedure CheckAmountType in table 7001 "Price List Line"?
+
+        ### Describe the request
+
+        I need this to avoid making duplicate code, as I need to check the same scenario.
+        Internal work item: [AB#614920](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/614920)
+
+      comments: ""
+
+    expected:
+      labels: "SCM, request-for-external"
+      comments:
+        - author: Agent
+          body: |
+            ✅ **Analysis complete - approved for implementation**
+
+            ---
+
+            **Implementation:**
+
+            Change the `CheckAmountType` procedure from `local` to public (remove the `local` keyword) in table 7001 "Price List Line".
+
+            **Current code:**
+
+            ```al
+            local procedure CheckAmountType(FldCaption: Text; AmountType: Enum "Price Amount Type")
+            begin
+                if "Amount Type" = AmountType then
+                    Error(FieldNotAllowedForAmountTypeErr, FldCaption, FieldCaption("Amount Type"), Format("Amount Type"));
+            end;
+            ```
+
+            **Proposed change:**
+
+            ```al
+            procedure CheckAmountType(FldCaption: Text; AmountType: Enum "Price Amount Type")
+            begin
+                if "Amount Type" = AmountType then
+                    Error(FieldNotAllowedForAmountTypeErr, FldCaption, FieldCaption("Amount Type"), Format("Amount Type"));
+            end;
+            ```
+
+            ---
+
+            **File:** `PriceListLine.Table.al`
+
+  - instance_id: issue-29453-step1
+    input:
+      title: "[Event Request] page 7001 \"Price List Lines\" - OnAfterUpdateColumnVisibility"
+      description: |
+        ### Why do you need this change?
+
+        Can you change IncludeSender to true?
+
+        ```
+            //[IntegrationEvent(false, false)]
+            [IntegrationEvent(true, false)]
+            local procedure OnAfterUpdateColumnVisibility(PriceListHeader: Record "Price List Header"; var SourceTypeVisible: Boolean; var JobSourceTypeVisible: Boolean)
+            begin
+            end;
+        ```
+
+        ### Describe the request
+
+        ..
+        Internal work item: [AB#615080](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/615080)
+
+      comments: ""
+
+    expected:
+      labels: "missing-info"
+      comments:
+        - author: Agent
+          body: |
+            Thank you for your request. To process this event modification, please provide the following missing information:
+
+            **1. Complete Description:**
+            The "Describe the request" section is incomplete. Please provide:
+            - What specific problem you're trying to solve
+            - What information from the page you need to access
+            - Why the current event parameters are insufficient
+            - How you plan to use the page sender reference
+
+            **2. Detailed Justification for IncludeSender=true:**
+            Changing IncludeSender to true is a critical modification that requires careful justification. Please explain:
+            - **Why subscribers MUST have access to the page instance** - what specific page properties, methods, or state do you need to access?
+            - **Why the current event parameters (PriceListHeader, SourceTypeVisible, JobSourceTypeVisible) are insufficient** - what can't you accomplish with these?
+            - **What alternatives you evaluated** - why can't you achieve your goal by adding parameters to the event instead?
+            - **Specific use case** - describe the exact scenario where your extension needs page instance access
+
+            Please update the issue with this information so we can evaluate the request properly.
+
+  - instance_id: issue-29453-step2
+    input:
+      title: "[Event Request] page 7001 \"Price List Lines\" - OnAfterUpdateColumnVisibility"
+      description: |
+        ### Why do you need this change?
+
+        Can you change IncludeSender to true, so i can get information from the page and be able to set visibility for my own fields?
+
+        ```
+            //[IntegrationEvent(false, false)]
+            [IntegrationEvent(true, false)]
+            local procedure OnAfterUpdateColumnVisibility(PriceListHeader: Record "Price List Header"; var SourceTypeVisible: Boolean; var JobSourceTypeVisible: Boolean)
+            begin
+            end;
+        ```
+
+        ### Describe the request
+
+        ..
+        Internal work item: [AB#615080](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/615080)
+      labels: "missing-info"
+
+      comments: |
+        **Comment 1 (AleksandricMarko):**
+        Thank you for your request. To process this event modification, please provide the following missing information:
+
+        **1. Complete Description:**
+        The "Describe the request" section is incomplete. Please provide:
+        - What specific problem you're trying to solve
+        - What information from the page you need to access
+        - Why the current event parameters are insufficient
+        - How you plan to use the page sender reference
+
+        **2. Detailed Justification for IncludeSender=true:**
+        Changing IncludeSender to true is a critical modification that requires careful justification. Please explain:
+        - **Why subscribers MUST have access to the page instance** - what specific page properties, methods, or state do you need to access?
+        - **Why the current event parameters (PriceListHeader, SourceTypeVisible, JobSourceTypeVisible) are insufficient** - what can't you accomplish with these?
+        - **What alternatives you evaluated** - why can't you achieve your goal by adding parameters to the event instead?
+        - **Specific use case** - describe the exact scenario where your extension needs page instance access
+
+        Please update the issue with this information so we can evaluate the request properly.
+
+        ---
+
+        **Comment 2 (auzhhv):**
+        Hi Alexander,
+
+        **1. Complete Description:**
+        We have added custom fields that should behave simular to other fields in the same page regarding visibility. These fields have custom criterias for visibility, but the points where our visibility variables should be updated is the same as the existing fields. The event is called OnAfterUpdateColumnVisibility, but it's not possible to update visibility for other fields because of access. As we cannot add custom variables to events, we need access to find and change other events on pages. We will add procedures in the a page extension to access our visibility variables. Ex. SetField1Visibility(NewVisibility) where Field1 is the name of our field.
+
+        **2. Detailed Justification for IncludeSender=true:**
+        We must have access to the page to be able to set the our own visibility variables.
+        It makes no sense to put it other places as the name of the event applies that its the correct place to change visibility. And I have not found other places it makes sense to do the same. And this is probably the reason why this is the place base application has the same code.
+
+    expected:
+      labels: "SCM, event-request"
+      comments:
+        - author: Agent
+          body: |
+            ✅ **Analysis complete - approved for implementation**
+
+            ---
+
+            **Implementation:**
+
+            Change `IncludeSender` from `false` to `true` on the existing `OnAfterUpdateColumnVisibility` event in Page 7001 "Price List Lines" to allow subscribers to access the page instance.
+
+            **Current code (around line 490):**
+
+            ```al
+            [IntegrationEvent(false, false)]
+            local procedure OnAfterUpdateColumnVisibility(PriceListHeader: Record "Price List Header"; var SourceTypeVisible: Boolean; var JobSourceTypeVisible: Boolean)
+            begin
+            end;
+            ```
+
+            **Proposed change:**
+
+            ```al
+            [IntegrationEvent(true, false)]
+            local procedure OnAfterUpdateColumnVisibility(PriceListHeader: Record "Price List Header"; var SourceTypeVisible: Boolean; var JobSourceTypeVisible: Boolean)
+            begin
+            end;
+            ```
+
+            ---
+
+            **File:** `PriceListLines.Page.al`
+
+  - instance_id: issue-29443
+    input:
+      title: "[W1][Page][171][Standard Sales Code Subform] Make procedure UpdateTypeText() not local"
+      description: |
+        ### Why do you need this change?
+
+        Procedure UpdateTypeText() is in local scope and it updates field variable TypeAsText
+
+        ### Describe the request
+
+        Remove "local" scope from procedure UpdateTypeText() in page 171 "Standard Sales Code Subform"
+        Internal work item: [AB#614045](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/614045)
+
+      comments: ""
+
+    expected:
+      labels: "SCM, request-for-external"
+      comments:
+        - author: Agent
+          body: |
+            ✅ Analysis complete - approved for implementation
+
+            **Implementation:**
+
+            Remove `local` scope from procedure `UpdateTypeText()` in Page 171 "Standard Sales Code Subform":
+
+            ```al
+            procedure UpdateTypeText()
+            var
+                RecRef: RecordRef;
+            begin
+                RecRef.GetTable(Rec);
+                TypeAsText := TempOptionLookupBuffer.FormatOption(RecRef.Field(Rec.FieldNo(Type)));
+            end;
+            ```
+
+  - instance_id: issue-29441
+    input:
+      title: "[W1][Page][289][Recurring Job Jnl.] Move variables to protected variables"
+      description: |
+        ### Why do you need this change?
+
+        Variables used as field values need to be accessable so they could be updated after changes from new fields
+
+        ### Describe the request
+
+        Please move variables JobDescription and AccName to protected variables
+
+      comments: ""
+
+    expected:
+      labels: "SCM, request-for-external"
+      comments:
+        - author: Agent
+          body: |
+            ✅ Analysis complete - approved for implementation
+
+            **Implementation:**
+
+            Move `JobDescription` and `AccName` variables from `var` to `protected var` section in Page 289 "Recurring Job Jnl.":
+
+            ```al
+            var
+                JobJnlManagement: Codeunit JobJnlManagement;
+                ReportPrint: Codeunit "Test Report-Print";
+                JobJnlReconcile: Page "Job Journal Reconcile";
+                CurrentJnlBatchName: Code[10];
+
+            protected var
+                JobDescription: Text[100];
+                AccName: Text[100];
+                ShortcutDimCode: array[8] of Code[20];
+            ```

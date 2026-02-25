@@ -122,11 +122,17 @@ event_request_alternative_suggestions:
       applies_to: ["event-request"]
       severity: "blocking"
       description: "IntegrationEvent with IncludeSender=true (first parameter is true)"
-      action: "suggest_alternative"
+      action: "suggest_alternative_or_request_justification"
       requires_confirmation: true
-      warning_message: "The event signature has IncludeSender set to true. Consider using 'this' keyword instead."
+      warning_message: "The event signature has IncludeSender set to true. For codeunits, consider using 'this' keyword instead. For all object types, a detailed justification is required."
       guidance: |
-        **Preferred Alternative:** When IncludeSender=true is requested, suggest using the 'this' keyword instead (especially for codeunits).
+        This rule has two behaviors depending on the object type:
+
+        ---
+
+        ## Behavior A: Codeunit Objects — Suggest 'this' Keyword
+
+        When the event is in a **codeunit**, suggest replacing IncludeSender=true with an explicit 'this' parameter.
 
         **What is 'this' keyword:**
         The 'this' keyword in AL provides a reference to the current instance of an object. It can be passed as a parameter to events, allowing subscribers to access the publisher object's public members.
@@ -164,12 +170,8 @@ event_request_alternative_suggestions:
             end;
         }
         ```
-        **Applicability:**
-        - **Codeunits:** Fully supported - always suggest 'this' instead of IncludeSender=true
-        - **Pages:** 'this' can be used for page reference
-        - **Reports:** 'this' can be used for report reference
 
-        **Agent Response Template:**
+        **Agent Response Template (Codeunit):**
         ```
         Instead of IncludeSender=true, we recommend using the 'this' keyword explicitly:
 
@@ -178,4 +180,30 @@ event_request_alternative_suggestions:
 
         This approach is more explicit and follows modern AL patterns.
         Do you agree with this approach, or do you have a specific reason for requiring IncludeSender=true?
+        ```
+
+        ---
+
+        ## Behavior B: All Object Types — Require Detailed Justification
+
+        For **all object types** (including codeunits, pages, reports, tables, etc.), if the author requests IncludeSender=true **without providing a justification**, ask for one before proceeding.
+
+        **When to Apply:**
+        - The request includes IncludeSender=true (first parameter of [IntegrationEvent] is true)
+        - The author has not explained why IncludeSender is needed
+
+        **What Counts as Sufficient Justification:**
+        - A concrete use case that requires the subscriber to call back into the publisher object
+        - Explanation of why an explicit parameter cannot be used instead
+        - Reference to a specific scenario where the subscriber needs the sender instance
+
+        **Agent Response Template (Justification Required):**
+        ```
+        The requested event has IncludeSender set to true. Before proceeding, please provide a detailed justification:
+
+        1. **Why is IncludeSender=true needed?** What does the subscriber need to do with the sender instance?
+        2. **Why can't an explicit parameter be used instead?** (e.g., passing the relevant data directly as a parameter)
+        3. **What is the concrete use case** that requires access to the publisher object from the subscriber?
+
+        This information is needed to evaluate whether IncludeSender=true is the appropriate design choice here.
         ```
