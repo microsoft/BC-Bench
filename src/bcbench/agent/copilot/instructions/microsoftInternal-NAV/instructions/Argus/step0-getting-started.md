@@ -2,7 +2,7 @@
 
 ## 1. Startup Checks
 Both checks are **required** and must pass. Before processing, verify:
-1.  **Codebase**: `semantic_search` for "codeunit 80 Sales-Post" returns results.
+1.  **Codebase**: `grep` for "SalesPost" in `**/*.al` returns results.
 2.  **Configs**: Ensure existence of YAML files (team-mapping, templates, and at least some requirements/rules). Do not read or open the files.
 
 **Failure**: Report error and halt. **Success**: Print "✅ Argus initialized".

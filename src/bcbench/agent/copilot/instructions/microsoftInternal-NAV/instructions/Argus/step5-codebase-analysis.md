@@ -10,7 +10,8 @@
     - **Action:** Generate `ObjectList` (only objects where changes are required).
 
 3.  **Locate Code:** For each object in `ObjectList`:
-    - Find the object in the codebase (only search in `.al` files) (use **Tools:** `semantic_search`, `grep_search`, `file_search`).
+    - Find the object in the codebase using `grep` to search `.al` files by object name or ID. Use targeted patterns such as the object name or numeric ID — **do NOT use broad glob patterns like `**/*.al`**.
+        - Example: `grep("codeunit 5880", "**/*.al")` or `grep("Phys. Invt. Order-Finish", "**/*.al")`
         - **Priority:** Search in the W1 layer first (even if another layer is mentioned in the request); if not found, search in other locations.
         - **Failure Condition:** If not found, return `agent-not-processable`.
     - **Verify Target:** Confirm procedure/trigger logic.
