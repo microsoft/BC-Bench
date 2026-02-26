@@ -2701,9 +2701,8 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
-      "pass_hat_1": 0.455,
-      "pass_hat_3": 0.271,
-      "pass_hat_5": 0.208,
+      "average": 0.455,
+      "ci": 0.04,
       "average_duration": 169.0,
       "benchmark_version": "0.1.0"
     },
@@ -2719,9 +2718,8 @@
       },
       "total": 101,
       "num_runs": 5,
-      "pass_hat_1": 0.386,
-      "pass_hat_3": 0.164,
-      "pass_hat_5": 0.119,
+      "average": 0.386,
+      "ci": 0.043,
       "average_duration": 194.8,
       "benchmark_version": "0.1.0"
     },
@@ -2732,9 +2730,8 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
-      "pass_hat_1": 0.604,
-      "pass_hat_3": 0.446,
-      "pass_hat_5": 0.376,
+      "average": 0.604,
+      "ci": 0.026,
       "average_duration": 468.9,
       "benchmark_version": "0.2.0"
     },
@@ -2745,9 +2742,8 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
-      "pass_hat_1": 0.453,
-      "pass_hat_3": 0.26,
-      "pass_hat_5": 0.208,
+      "average": 0.453,
+      "ci": 0.047,
       "average_duration": 154.7,
       "benchmark_version": "0.2.2"
     }

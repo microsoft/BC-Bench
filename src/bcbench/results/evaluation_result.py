@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.metrics import pass_hat_k
+from bcbench.results.metrics import ci_half_width
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -126,9 +126,8 @@ class LeaderboardAggregate(BaseModel):
     # Number of runs aggregated
     num_runs: int
 
-    pass_hat_1: float | None = None
-    pass_hat_3: float | None = None
-    pass_hat_5: float | None = None
+    average: float | None = None
+    ci: float | None = None
 
     # Averaged metrics across runs
     average_duration: float | None = None
@@ -173,26 +172,16 @@ class LeaderboardAggregate(BaseModel):
                 experiment=first_run.experiment,
                 total=total,
                 num_runs=num_runs,
-                pass_hat_1=round(pass_rate, 3),
-                pass_hat_3=None,
-                pass_hat_5=None,
+                average=round(pass_rate, 3),
+                ci=None,
                 average_duration=round(average_duration, 1) if average_duration else None,
                 benchmark_version=benchmark_version,
             )
 
-        # Multiple runs: all must have instance_results
-        # Collect per-instance results across runs: instance_id -> list of resolved booleans
-        instance_resolved: dict[str, list[bool]] = {}
-        for run in runs:
-            if run.instance_results:
-                for instance_id, resolved in run.instance_results.items():
-                    if instance_id not in instance_resolved:
-                        instance_resolved[instance_id] = []
-                    instance_resolved[instance_id].append(resolved)
-
-        pass_hat_1 = _calculate_pass_hat_k(instance_resolved, 1, num_runs) if num_runs >= 1 else None
-        pass_hat_3 = _calculate_pass_hat_k(instance_resolved, 3, num_runs) if num_runs >= 3 else None
-        pass_hat_5 = _calculate_pass_hat_k(instance_resolved, 5, num_runs) if num_runs >= 5 else None
+        # Calculate per-run pass rates for average and CI
+        per_run_rates = [run.resolved / run.total for run in runs if run.total > 0]
+        avg = round(sum(per_run_rates) / len(per_run_rates), 3) if per_run_rates else None
+        ci = ci_half_width(per_run_rates)
 
         return cls(
             model=first_run.model,
@@ -201,9 +190,8 @@ class LeaderboardAggregate(BaseModel):
             experiment=first_run.experiment,
             total=total,
             num_runs=num_runs,
-            pass_hat_1=pass_hat_1,
-            pass_hat_3=pass_hat_3,
-            pass_hat_5=pass_hat_5,
+            average=avg,
+            ci=ci,
             average_duration=round(average_duration, 1) if average_duration else None,
             benchmark_version=benchmark_version,
         )
@@ -229,18 +217,6 @@ class Leaderboard(BaseModel):
             "runs": [r.to_dict() for r in self.runs],
             "aggregate": [a.model_dump(mode="json") for a in self.aggregate],
         }
-
-
-def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int, num_trials: int) -> float:
-    if num_trials < k:
-        return 0.0
-
-    total_pass_hat_k: float = 0.0
-    for results in instance_resolved.values():
-        success_count = sum(results[:num_trials])
-        total_pass_hat_k += pass_hat_k(num_trials, success_count, k)
-
-    return round(total_pass_hat_k / len(instance_resolved), 3)
 
 
 def _calculate_average_tool_usage(tool_usages: list[dict[str, int]]) -> dict[str, float]:

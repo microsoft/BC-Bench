@@ -1,4 +1,16 @@
 import math
+import statistics
+
+from scipy.stats import t as t_dist
+
+
+def ci_half_width(values: list[float], confidence: float = 0.95) -> float | None:
+    n = len(values)
+    if n < 2:
+        return None
+    sem = statistics.stdev(values) / math.sqrt(n)
+    t_crit = t_dist.ppf((1 + confidence) / 2, df=n - 1)
+    return round(t_crit * sem, 3)
 
 
 def pass_hat_k(num_trials: int, success_count: int, k: int) -> float:
