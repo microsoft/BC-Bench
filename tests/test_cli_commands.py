@@ -390,6 +390,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "average_duration": 120.5,
                 "average": 0.6,
                 "ci": None,
+                "pass_hat_5": None,
                 "benchmark_version": "0.1.0",
             },
             {
@@ -402,6 +403,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "average_duration": 95.0,
                 "average": 0.7,
                 "ci": None,
+                "pass_hat_5": None,
                 "benchmark_version": "0.1.0",
             },
         ],
@@ -447,6 +449,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "average_duration": 110.0,
                 "average": 0.5,
                 "ci": None,
+                "pass_hat_5": None,
                 "benchmark_version": "0.1.0",
             },
         ],

@@ -2,35 +2,51 @@
 
 import pytest
 
-from bcbench.results.metrics import ci_half_width, pass_at_k, pass_hat_k
+from bcbench.results.metrics import bootstrap_ci, pass_at_k, pass_hat_k
 
 
-class TestCIHalfWidth:
-    def test_returns_none_for_single_value(self):
-        assert ci_half_width([0.5]) is None
+class TestBootstrapCI:
+    def test_returns_none_ci_for_single_value(self):
+        result = bootstrap_ci([0.5])
+        assert result["ci_half"] is None
 
-    def test_returns_none_for_empty_list(self):
-        assert ci_half_width([]) is None
+    def test_returns_none_ci_for_empty_list(self):
+        result = bootstrap_ci([])
+        assert result["ci_half"] is None
 
     def test_returns_zero_for_identical_values(self):
-        assert ci_half_width([0.5, 0.5, 0.5]) == 0.0
+        result = bootstrap_ci([0.5, 0.5, 0.5])
+        assert result["ci_half"] == 0.0
 
     def test_returns_positive_for_varying_values(self):
-        result = ci_half_width([0.4, 0.5, 0.6])
-        assert result is not None
-        assert result > 0
+        result = bootstrap_ci([0.4, 0.5, 0.6])
+        assert result["ci_half"] is not None
+        assert result["ci_half"] > 0
 
     def test_wider_ci_for_more_variance(self):
-        low_var = ci_half_width([0.49, 0.50, 0.51])
-        high_var = ci_half_width([0.3, 0.5, 0.7])
-        assert low_var is not None and high_var is not None
-        assert high_var > low_var
+        low_var = bootstrap_ci([0.49, 0.50, 0.51])
+        high_var = bootstrap_ci([0.3, 0.5, 0.7])
+        assert high_var["ci_half"] > low_var["ci_half"]
 
     def test_narrower_ci_for_more_samples(self):
-        few = ci_half_width([0.4, 0.6])
-        many = ci_half_width([0.4, 0.5, 0.5, 0.5, 0.6])
-        assert few is not None and many is not None
-        assert many < few
+        few = bootstrap_ci([0.4, 0.6])
+        many = bootstrap_ci([0.4, 0.5, 0.5, 0.5, 0.6])
+        assert many["ci_half"] < few["ci_half"]
+
+    def test_deterministic_with_seed(self):
+        result1 = bootstrap_ci([0.3, 0.5, 0.7, 0.4, 0.6])
+        result2 = bootstrap_ci([0.3, 0.5, 0.7, 0.4, 0.6])
+        assert result1["ci_half"] == result2["ci_half"]
+
+    def test_returns_mean(self):
+        result = bootstrap_ci([0.4, 0.6])
+        assert result["mean"] == pytest.approx(0.5)
+
+    def test_returns_ci_bounds(self):
+        result = bootstrap_ci([0.3, 0.5, 0.7])
+        assert result["ci_low"] is not None
+        assert result["ci_high"] is not None
+        assert result["ci_low"] < result["ci_high"]
 
 
 class TestPassHatK:

@@ -7,14 +7,14 @@ from bcbench.results.evaluation_result import (
     Leaderboard,
     LeaderboardAggregate,
 )
-from bcbench.results.metrics import ci_half_width, pass_at_k, pass_hat_k
+from bcbench.results.metrics import bootstrap_ci, pass_at_k, pass_hat_k
 
 __all__ = [
     "BaseEvaluationResult",
     "EvaluationResultSummary",
     "Leaderboard",
     "LeaderboardAggregate",
-    "ci_half_width",
+    "bootstrap_ci",
     "create_console_summary",
     "create_github_job_summary",
     "create_result_from_json",

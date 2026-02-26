@@ -1,16 +1,25 @@
 import math
-import statistics
+from typing import Any
 
-from scipy.stats import t as t_dist
+import numpy as np
 
 
-def ci_half_width(values: list[float], confidence: float = 0.95) -> float | None:
-    n = len(values)
-    if n < 2:
-        return None
-    sem = statistics.stdev(values) / math.sqrt(n)
-    t_crit = t_dist.ppf((1 + confidence) / 2, df=n - 1)
-    return round(t_crit * sem, 3)
+def bootstrap_ci(values: list[float] | np.ndarray, n_bootstrap: int = 10000, ci_level: float = 0.95) -> dict[str, Any]:
+    data = np.asarray(values)
+    if len(data) < 2:
+        return {"mean": float(data.mean()) if len(data) == 1 else 0.0, "ci_low": None, "ci_high": None, "ci_half": None}
+    rng = np.random.default_rng(42)
+    bootstrap_means = np.array([rng.choice(data, size=len(data), replace=True).mean() for _ in range(n_bootstrap)])
+    alpha = 1 - ci_level
+    ci_low = float(np.percentile(bootstrap_means, alpha / 2 * 100))
+    ci_high = float(np.percentile(bootstrap_means, (1 - alpha / 2) * 100))
+    return {
+        "mean": float(data.mean()),
+        "ci_low": ci_low,
+        "ci_high": ci_high,
+        "ci_half": round((ci_high - ci_low) / 2, 3),
+        "bootstrap_means": bootstrap_means,
+    }
 
 
 def pass_hat_k(num_trials: int, success_count: int, k: int) -> float:

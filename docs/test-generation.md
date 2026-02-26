@@ -16,6 +16,7 @@ This category "reverses" the SWE-Bench workflow: instead of generating a fix, th
       <th>Agent</th>
       <th>Model</th>
       <th>Average</th>
+      <th>pass^5</th>
       <th>Avg Time</th>
       <th>Version</th>
     </tr>
@@ -28,6 +29,7 @@ This category "reverses" the SWE-Bench workflow: instead of generating a fix, th
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci %}±{{ agg.ci | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>
@@ -48,6 +50,7 @@ Comparing experimental configurations for GitHub Copilot CLI with `ALTest` custo
     <tr>
       <th>Custom Agent</th>
       <th>Average</th>
+      <th>pass^5</th>
       <th>Avg Time</th>
       <th>Ver</th>
     </tr>
@@ -59,6 +62,7 @@ Comparing experimental configurations for GitHub Copilot CLI with `ALTest` custo
     <tr>
       <td>{% if agg.experiment == null %}Default{% else %}{{ agg.experiment.custom_agent }}{% endif %}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci %}±{{ agg.ci | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>

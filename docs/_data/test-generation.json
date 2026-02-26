@@ -2702,7 +2702,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.455,
-      "ci": 0.04,
+      "ci": 0.025,
+      "pass_hat_5": 0.208,
       "average_duration": 169.0,
       "benchmark_version": "0.1.0"
     },
@@ -2719,7 +2720,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.386,
-      "ci": 0.043,
+      "ci": 0.028,
+      "pass_hat_5": 0.119,
       "average_duration": 194.8,
       "benchmark_version": "0.1.0"
     },
@@ -2731,7 +2733,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.604,
-      "ci": 0.026,
+      "ci": 0.016,
+      "pass_hat_5": 0.376,
       "average_duration": 468.9,
       "benchmark_version": "0.2.0"
     },
@@ -2743,7 +2746,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.453,
-      "ci": 0.047,
+      "ci": 0.028,
+      "pass_hat_5": 0.208,
       "average_duration": 154.7,
       "benchmark_version": "0.2.2"
     }

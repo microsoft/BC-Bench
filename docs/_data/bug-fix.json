@@ -5662,7 +5662,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.574,
-      "ci": 0.033,
+      "ci": 0.02,
+      "pass_hat_5": 0.317,
       "average_duration": 204.6,
       "benchmark_version": "0.1.0"
     },
@@ -5681,7 +5682,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.549,
-      "ci": 0.028,
+      "ci": 0.018,
+      "pass_hat_5": 0.347,
       "average_duration": 169.6,
       "benchmark_version": "0.1.0"
     },
@@ -5693,7 +5695,8 @@
       "total": 101,
       "num_runs": 3,
       "average": 0.432,
-      "ci": 0.014,
+      "ci": 0.005,
+      "pass_hat_5": null,
       "average_duration": null,
       "benchmark_version": "0.1.0"
     },
@@ -5705,7 +5708,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.685,
-      "ci": 0.047,
+      "ci": 0.028,
+      "pass_hat_5": 0.495,
       "average_duration": 284.0,
       "benchmark_version": "0.2.0"
     },
@@ -5717,7 +5721,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.651,
-      "ci": 0.039,
+      "ci": 0.025,
+      "pass_hat_5": 0.505,
       "average_duration": 313.9,
       "benchmark_version": "0.2.0"
     },
@@ -5729,7 +5734,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.598,
-      "ci": 0.024,
+      "ci": 0.015,
+      "pass_hat_5": 0.386,
       "average_duration": 172.0,
       "benchmark_version": "0.2.0"
     },
@@ -5741,7 +5747,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.558,
-      "ci": 0.024,
+      "ci": 0.015,
+      "pass_hat_5": 0.376,
       "average_duration": 106.6,
       "benchmark_version": "0.2.1"
     },
@@ -5753,7 +5760,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.608,
-      "ci": 0.022,
+      "ci": 0.014,
+      "pass_hat_5": 0.495,
       "average_duration": 195.5,
       "benchmark_version": "0.2.2"
     },
@@ -5765,7 +5773,8 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.537,
-      "ci": 0.037,
+      "ci": 0.022,
+      "pass_hat_5": 0.366,
       "average_duration": 229.2,
       "benchmark_version": "0.2.2"
     }
