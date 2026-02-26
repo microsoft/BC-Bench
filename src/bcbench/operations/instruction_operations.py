@@ -26,10 +26,10 @@ def on_rm_error(func, path, exc_info):
     # Is the error an access error?
     if not os.access(path, os.W_OK):
         # Is the error because the file is read-only?
-        os.chmod(path, stat.S_IWRITE)
+        Path(path).chmod(stat.S_IWRITE)
         func(path)
     else:
-        raise
+        raise exc_info[1]
 
 
 def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path) -> bool:
