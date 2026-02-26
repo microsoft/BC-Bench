@@ -127,7 +127,8 @@ class LeaderboardAggregate(BaseModel):
     num_runs: int
 
     average: float | None = None
-    ci: float | None = None
+    ci_low: float | None = None
+    ci_high: float | None = None
     pass_hat_5: float | None = None
 
     # Averaged metrics across runs
@@ -174,7 +175,8 @@ class LeaderboardAggregate(BaseModel):
                 total=total,
                 num_runs=num_runs,
                 average=round(pass_rate, 3),
-                ci=None,
+                ci_low=None,
+                ci_high=None,
                 pass_hat_5=None,
                 average_duration=round(average_duration, 1) if average_duration else None,
                 benchmark_version=benchmark_version,
@@ -192,7 +194,9 @@ class LeaderboardAggregate(BaseModel):
         # Calculate per-run pass rates for average and CI
         per_run_rates = [run.resolved / run.total for run in runs if run.total > 0]
         avg = round(sum(per_run_rates) / len(per_run_rates), 3) if per_run_rates else None
-        ci = bootstrap_ci(per_run_rates)["ci_half"]
+        ci_result = bootstrap_ci(per_run_rates)
+        ci_low = round(ci_result["ci_low"], 3) if ci_result["ci_low"] is not None else None
+        ci_high = round(ci_result["ci_high"], 3) if ci_result["ci_high"] is not None else None
 
         # Calculate pass^5
         pass_hat_5_val = _calculate_pass_hat_k(instance_resolved, 5, num_runs) if num_runs >= 5 else None
@@ -205,7 +209,8 @@ class LeaderboardAggregate(BaseModel):
             total=total,
             num_runs=num_runs,
             average=avg,
-            ci=ci,
+            ci_low=ci_low,
+            ci_high=ci_high,
             pass_hat_5=pass_hat_5_val,
             average_duration=round(average_duration, 1) if average_duration else None,
             benchmark_version=benchmark_version,

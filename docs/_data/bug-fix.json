@@ -5662,10 +5662,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.574,
-      "ci": 0.02,
       "pass_hat_5": 0.317,
       "average_duration": 204.6,
-      "benchmark_version": "0.1.0"
+      "benchmark_version": "0.1.0",
+      "ci_low": 0.554,
+      "ci_high": 0.594
     },
     {
       "model": "claude-opus-4-5",
@@ -5682,10 +5683,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.549,
-      "ci": 0.018,
       "pass_hat_5": 0.347,
       "average_duration": 169.6,
-      "benchmark_version": "0.1.0"
+      "benchmark_version": "0.1.0",
+      "ci_low": 0.531,
+      "ci_high": 0.567
     },
     {
       "model": "claude-haiku-4-5",
@@ -5695,10 +5697,11 @@
       "total": 101,
       "num_runs": 3,
       "average": 0.432,
-      "ci": 0.005,
       "pass_hat_5": null,
       "average_duration": null,
-      "benchmark_version": "0.1.0"
+      "benchmark_version": "0.1.0",
+      "ci_low": 0.427,
+      "ci_high": 0.437
     },
     {
       "model": "claude-opus-4-6",
@@ -5708,10 +5711,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.685,
-      "ci": 0.028,
       "pass_hat_5": 0.495,
       "average_duration": 284.0,
-      "benchmark_version": "0.2.0"
+      "benchmark_version": "0.2.0",
+      "ci_low": 0.657,
+      "ci_high": 0.713
     },
     {
       "model": "claude-opus-4-6",
@@ -5721,10 +5725,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.651,
-      "ci": 0.025,
       "pass_hat_5": 0.505,
       "average_duration": 313.9,
-      "benchmark_version": "0.2.0"
+      "benchmark_version": "0.2.0",
+      "ci_low": 0.626,
+      "ci_high": 0.676
     },
     {
       "model": "claude-opus-4-5",
@@ -5734,10 +5739,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.598,
-      "ci": 0.015,
       "pass_hat_5": 0.386,
       "average_duration": 172.0,
-      "benchmark_version": "0.2.0"
+      "benchmark_version": "0.2.0",
+      "ci_low": 0.583,
+      "ci_high": 0.613
     },
     {
       "model": "gpt-5-3-codex",
@@ -5747,10 +5753,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.558,
-      "ci": 0.015,
       "pass_hat_5": 0.376,
       "average_duration": 106.6,
-      "benchmark_version": "0.2.1"
+      "benchmark_version": "0.2.1",
+      "ci_low": 0.543,
+      "ci_high": 0.573
     },
     {
       "model": "gpt-5-2-codex",
@@ -5760,10 +5767,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.608,
-      "ci": 0.014,
       "pass_hat_5": 0.495,
       "average_duration": 195.5,
-      "benchmark_version": "0.2.2"
+      "benchmark_version": "0.2.2",
+      "ci_low": 0.594,
+      "ci_high": 0.622
     },
     {
       "model": "gpt-5-1-codex-max",
@@ -5773,10 +5781,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.537,
-      "ci": 0.022,
       "pass_hat_5": 0.366,
       "average_duration": 229.2,
-      "benchmark_version": "0.2.2"
+      "benchmark_version": "0.2.2",
+      "ci_low": 0.515,
+      "ci_high": 0.559
     }
   ]
 }

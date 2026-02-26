@@ -491,10 +491,11 @@ class TestLeaderboardAggregate:
         assert agg.total == 3
         # With 1 run: average = resolved/total = 2/3 = 0.667
         assert agg.average == 0.667
-        assert agg.ci is None  # Not enough runs for CI
+        assert agg.ci_low is None  # Not enough runs for CI
+        assert agg.ci_high is None
         assert agg.pass_hat_5 is None  # Not enough runs
 
-    def test_from_multiple_runs_calculates_average_and_ci(self):
+    def test_from_multiple_runs_calculates_average_and_ci_bounds(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         run1 = EvaluationResultSummary.from_results(
@@ -528,11 +529,12 @@ class TestLeaderboardAggregate:
         assert agg.total == 3
         # Each run has 1/3 resolved, so average = 1/3 = 0.333
         assert agg.average == 0.333
-        # All runs have identical pass rates (1/3), so CI = 0 (no variance)
-        assert agg.ci == 0.0
+        # All runs have identical pass rates (1/3), so CI bounds are None (no variance)
+        assert agg.ci_low is None
+        assert agg.ci_high is None
         assert agg.pass_hat_5 is None  # Not enough runs
 
-    def test_average_and_ci_with_varying_results(self):
+    def test_average_and_ci_bounds_with_varying_results(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         # Create 3 runs where:
@@ -569,8 +571,11 @@ class TestLeaderboardAggregate:
         # Average: (1.0 + 2/3 + 1/3) / 3 = 2/3 = 0.667
         assert agg.average == 0.667
         # CI should be non-None with 3 runs and varying results
-        assert agg.ci is not None
-        assert agg.ci > 0
+        assert agg.ci_low is not None
+        assert agg.ci_high is not None
+        assert agg.ci_low < agg.ci_high
+        assert agg.average is not None
+        assert agg.ci_low <= agg.average <= agg.ci_high
         assert agg.pass_hat_5 is None  # Not enough runs
 
     def test_consistent_results_have_zero_ci(self):
@@ -603,7 +608,8 @@ class TestLeaderboardAggregate:
 
         # All runs have 100% pass rate
         assert agg.average == 1.0
-        assert agg.ci == 0.0
+        assert agg.ci_low is None
+        assert agg.ci_high is None
         assert agg.pass_hat_5 is None  # Not enough runs
 
 
@@ -670,7 +676,8 @@ class TestLeaderboard:
         assert agg.total == 10
         # Should fall back to pass rate (resolved/total) from the run
         assert agg.average == 0.6  # 6/10 = 0.6
-        assert agg.ci is None
+        assert agg.ci_low is None
+        assert agg.ci_high is None
         assert agg.pass_hat_5 is None
 
     def test_aggregate_includes_benchmark_version_from_runs(self):

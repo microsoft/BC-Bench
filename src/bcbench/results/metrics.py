@@ -1,24 +1,29 @@
 import math
-from typing import Any
 
 import numpy as np
+from scipy.stats import bootstrap as scipy_bootstrap
 
 
-def bootstrap_ci(values: list[float] | np.ndarray, n_bootstrap: int = 10000, ci_level: float = 0.95) -> dict[str, Any]:
-    data = np.asarray(values)
+def bootstrap_ci(values: list[float] | np.ndarray, n_bootstrap: int = 10000, ci_level: float = 0.95) -> dict[str, float | None]:
+    data = np.asarray(values, dtype=float)
+    mean = float(data.mean()) if len(data) >= 1 else 0.0
     if len(data) < 2:
-        return {"mean": float(data.mean()) if len(data) == 1 else 0.0, "ci_low": None, "ci_high": None, "ci_half": None}
-    rng = np.random.default_rng(42)
-    bootstrap_means = np.array([rng.choice(data, size=len(data), replace=True).mean() for _ in range(n_bootstrap)])
-    alpha = 1 - ci_level
-    ci_low = float(np.percentile(bootstrap_means, alpha / 2 * 100))
-    ci_high = float(np.percentile(bootstrap_means, (1 - alpha / 2) * 100))
+        return {"mean": mean, "ci_low": None, "ci_high": None}
+    # BCa is undefined for zero-variance data (jackknife acceleration divides by zero)
+    if np.all(data == data[0]):
+        return {"mean": mean, "ci_low": None, "ci_high": None}
+    result = scipy_bootstrap(
+        (data,),
+        statistic=np.mean,
+        n_resamples=n_bootstrap,
+        confidence_level=ci_level,
+        method="BCa",
+        rng=np.random.default_rng(42),
+    )
     return {
-        "mean": float(data.mean()),
-        "ci_low": ci_low,
-        "ci_high": ci_high,
-        "ci_half": round((ci_high - ci_low) / 2, 3),
-        "bootstrap_means": bootstrap_means,
+        "mean": mean,
+        "ci_low": float(result.confidence_interval.low),
+        "ci_high": float(result.confidence_interval.high),
     }
 
 
