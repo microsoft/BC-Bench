@@ -147,6 +147,7 @@ source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
     { name = "mini-swe-agent" },
+    { name = "numpy" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
@@ -177,6 +178,7 @@ dev = [
 requires-dist = [
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "mini-swe-agent", specifier = ">=1.0.0" },
+    { name = "numpy", specifier = ">=2.3.5" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
