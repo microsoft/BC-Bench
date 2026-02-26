@@ -146,14 +146,8 @@ class LeaderboardAggregate(BaseModel):
         total: int = first_run.total
         num_runs: int = len(runs)
 
-        # Check for version mismatches - this is an error since results may not be comparable
-        unique_versions: set[str] = {r.benchmark_version for r in runs if r.benchmark_version}
-        if len(unique_versions) > 1:
-            raise ValueError(
-                f"Cannot aggregate runs with different benchmark versions for: {sorted(unique_versions)}. "
-                "Results from different versions may not be comparable. Re-run evaluations with the same benchmark version."
-            )
-        benchmark_version: str = unique_versions.pop()
+        # All runs should have the same benchmark_version (enforced by _get_combination_key grouping)
+        benchmark_version: str = first_run.benchmark_version
 
         # Warn if runs have different instance counts
         unique_totals = {r.total for r in runs}

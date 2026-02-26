@@ -694,45 +694,6 @@ class TestLeaderboard:
         assert agg.benchmark_version == run1.benchmark_version
         assert agg.benchmark_version is not None
 
-    def test_aggregate_rejects_different_benchmark_versions(self):
-        from bcbench.results.evaluation_result import LeaderboardAggregate
-
-        run1 = EvaluationResultSummary(
-            total=3,
-            resolved=2,
-            failed=1,
-            build=3,
-            percentage=66.7,
-            date=date.today(),
-            model="gpt-4o",
-            agent_name="copilot",
-            category=EvaluationCategory.BUG_FIX,
-            average_duration=100.0,
-            average_prompt_tokens=1000.0,
-            average_completion_tokens=500.0,
-            instance_results={"test__1": True, "test__2": True, "test__3": False},
-            benchmark_version="0.1.0",
-        )
-        run2 = EvaluationResultSummary(
-            total=3,
-            resolved=1,
-            failed=2,
-            build=3,
-            percentage=33.3,
-            date=date.today(),
-            model="gpt-4o",
-            agent_name="copilot",
-            category=EvaluationCategory.BUG_FIX,
-            average_duration=100.0,
-            average_prompt_tokens=1000.0,
-            average_completion_tokens=500.0,
-            instance_results={"test__1": False, "test__2": True, "test__3": False},
-            benchmark_version="0.2.0",  # Different version!
-        )
-
-        with pytest.raises(ValueError, match="Cannot aggregate runs with different benchmark versions"):
-            LeaderboardAggregate.from_runs([run1, run2])
-
     def test_aggregate_allows_same_benchmark_versions(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 

@@ -2702,11 +2702,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.455,
+      "ci_low": 0.434,
+      "ci_high": 0.489,
       "pass_hat_5": 0.208,
       "average_duration": 169.0,
-      "benchmark_version": "0.1.0",
-      "ci_low": 0.43,
-      "ci_high": 0.48
+      "benchmark_version": "0.1.0"
     },
     {
       "model": "claude-opus-4-5",
@@ -2721,11 +2721,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.386,
+      "ci_low": 0.354,
+      "ci_high": 0.41,
       "pass_hat_5": 0.119,
       "average_duration": 194.8,
-      "benchmark_version": "0.1.0",
-      "ci_low": 0.358,
-      "ci_high": 0.414
+      "benchmark_version": "0.1.0"
     },
     {
       "model": "claude-opus-4-6",
@@ -2735,11 +2735,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.604,
+      "ci_low": 0.586,
+      "ci_high": 0.62,
       "pass_hat_5": 0.376,
       "average_duration": 468.9,
-      "benchmark_version": "0.2.0",
-      "ci_low": 0.588,
-      "ci_high": 0.62
+      "benchmark_version": "0.2.0"
     },
     {
       "model": "gpt-5-3-codex",
@@ -2749,11 +2749,11 @@
       "total": 101,
       "num_runs": 5,
       "average": 0.453,
+      "ci_low": 0.426,
+      "ci_high": 0.481,
       "pass_hat_5": 0.208,
       "average_duration": 154.7,
-      "benchmark_version": "0.2.2",
-      "ci_low": 0.425,
-      "ci_high": 0.481
+      "benchmark_version": "0.2.2"
     }
   ]
 }
