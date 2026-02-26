@@ -152,6 +152,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "scipy" },
     { name = "textual" },
     { name = "typer" },
     { name = "typing-extensions" },
@@ -164,7 +165,6 @@ analysis = [
     { name = "nbformat" },
     { name = "pandas" },
     { name = "plotly" },
-    { name = "scipy" },
 ]
 dev = [
     { name = "pre-commit" },
@@ -183,6 +183,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.0" },
+    { name = "scipy", specifier = ">=1.16.3" },
     { name = "textual", specifier = ">=7.0" },
     { name = "typer", specifier = ">=0.9.0" },
     { name = "typing-extensions", specifier = ">=4.0" },
@@ -195,7 +196,6 @@ analysis = [
     { name = "nbformat", specifier = ">=5.10.4" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "plotly", specifier = ">=6.5.0" },
-    { name = "scipy", specifier = ">=1.16.3" },
 ]
 dev = [
     { name = "pre-commit", specifier = ">=4.3.0" },

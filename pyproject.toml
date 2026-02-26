@@ -25,6 +25,7 @@ dependencies = [
     "pydantic>=2.0",
     "textual>=7.0",
     "numpy>=2.3.5",
+    "scipy>=1.16.3",
 ]
 
 [project.scripts]
@@ -76,7 +77,6 @@ analysis = [
     "nbformat>=5.10.4",
     "pandas>=2.3.3",
     "plotly>=6.5.0",
-    "scipy>=1.16.3",
 ]
 dev = [
     "pytest>=8.0",
