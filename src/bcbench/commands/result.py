@@ -118,15 +118,15 @@ def result_summarize(
     summary.save(run_dir, summary_output)
 
 
-def _get_combination_key(result: EvaluationResultSummary) -> tuple[str, str, str | None]:
+def _get_combination_key(result: EvaluationResultSummary) -> tuple[str, str, str | None, str]:
     exp_key = None
     if result.experiment and not result.experiment.is_empty():
         exp_key = json.dumps(result.experiment.model_dump(mode="json"), sort_keys=True)
-    return (result.agent_name, result.model, exp_key)
+    return (result.agent_name, result.model, exp_key, result.benchmark_version)
 
 
 def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:
-    grouped: defaultdict[tuple[str, str, str | None], list[EvaluationResultSummary]] = defaultdict(list)
+    grouped: defaultdict[tuple[str, str, str | None, str], list[EvaluationResultSummary]] = defaultdict(list)
     for run in runs:
         grouped[_get_combination_key(run)].append(run)
     return [LeaderboardAggregate.from_runs(group) for group in grouped.values()]
