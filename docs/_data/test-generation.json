@@ -3414,8 +3414,9 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
-      "pass_hat_1": 0.44,
-      "pass_hat_3": 0.242,
+      "average": 0.44,
+      "ci_low": 0.408,
+      "ci_high": 0.485,
       "pass_hat_5": 0.168,
       "average_duration": 290.8,
       "benchmark_version": "0.2.2"
