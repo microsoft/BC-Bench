@@ -62,7 +62,7 @@ class BaseDatasetEntry(BaseModel):
     def get_task(self, transform_image_paths: bool = False) -> str:
         """Get the task description.
 
-        problem_statment and hints_text stored in the README.md file under the problem statement directory.
+        problem_statement and hints_text stored in the README.md file under the problem statement directory.
 
         Args:
             transform_image_paths: Whether to transform relative image paths to include the problem statement directory. Needed when passing to Agents.
