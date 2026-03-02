@@ -1,16 +1,31 @@
 """Utilities for loading dataset entries from JSONL files."""
 
-from pathlib import Path
+from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from bcbench.dataset.base import BaseDatasetEntry, create_entry_from_json
 from bcbench.dataset.dataset_entry import DatasetEntry
 from bcbench.exceptions import EntryNotFoundError
+
+if TYPE_CHECKING:
+    from bcbench.types import EvaluationCategory
 
 __all__ = ["load_dataset_entries"]
 
 
-def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[DatasetEntry]:
+def load_dataset_entries(
+    dataset_path: Path,
+    entry_id: str | None = None,
+    random: int | None = None,
+    category: EvaluationCategory | None = None,
+) -> list[BaseDatasetEntry]:
     """
     Load dataset entries from a JSONL file.
+
+    When category is provided, creates category-specific entry instances via factory.
+    When category is None, creates DatasetEntry instances (backward compatible).
 
     Examples:
         # Load a single entry by ID
@@ -18,11 +33,14 @@ def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random
 
         # Load 2 random entries
         entries = load_dataset_entries(path, random=2)
+
+        # Load entries for a specific category
+        entries = load_dataset_entries(path, category=EvaluationCategory.BUG_FIX)
     """
     if not dataset_path.exists():
         raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
 
-    entries: list[DatasetEntry] = []
+    entries: list[BaseDatasetEntry] = []
 
     with open(dataset_path, encoding="utf-8") as file:
         for line in file:
@@ -30,7 +48,7 @@ def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random
             if not stripped_line:
                 continue
 
-            entry = DatasetEntry.model_validate_json(stripped_line)
+            entry = create_entry_from_json(stripped_line, category) if category is not None else DatasetEntry.model_validate_json(stripped_line)
 
             # If searching for specific entry_id, return immediately when found
             if entry_id:

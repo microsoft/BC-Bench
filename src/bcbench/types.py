@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict
 from bcbench.logger import get_logger
 
 if TYPE_CHECKING:
+    # TODO: Consider using BaseDatasetEntry for more generic typing once category-specific
+    # dataset entries are fully adopted across the codebase
     from bcbench.dataset import DatasetEntry
 
 __all__ = ["AgentMetrics", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
