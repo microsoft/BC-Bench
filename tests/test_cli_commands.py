@@ -388,8 +388,9 @@ def sample_leaderboard_and_summary(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 120.5,
-                "pass_hat_1": 0.6,
-                "pass_hat_3": None,
+                "average": 0.6,
+                "ci_low": None,
+                "ci_high": None,
                 "pass_hat_5": None,
                 "benchmark_version": "0.1.0",
             },
@@ -401,8 +402,9 @@ def sample_leaderboard_and_summary(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 95.0,
-                "pass_hat_1": 0.7,
-                "pass_hat_3": None,
+                "average": 0.7,
+                "ci_low": None,
+                "ci_high": None,
                 "pass_hat_5": None,
                 "benchmark_version": "0.1.0",
             },
@@ -447,8 +449,9 @@ def sample_leaderboard_and_summary(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 110.0,
-                "pass_hat_1": 0.5,
-                "pass_hat_3": None,
+                "average": 0.5,
+                "ci_low": None,
+                "ci_high": None,
                 "pass_hat_5": None,
                 "benchmark_version": "0.1.0",
             },
@@ -671,8 +674,8 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
     without_servers = next((a for a in copilot_gpt4o_aggs if (a.get("experiment") or {}).get("mcp_servers") is None), None)
 
     assert with_servers is not None and without_servers is not None
-    assert with_servers["pass_hat_1"] == 0.6, "Original aggregate should be unchanged"
-    assert without_servers["pass_hat_1"] == 0.7, "New aggregate should have new values"
+    assert with_servers["average"] == 0.6, "Original aggregate should be unchanged"
+    assert without_servers["average"] == 0.7, "New aggregate should have new values"
 
 
 @pytest.mark.integration
@@ -881,7 +884,7 @@ def test_result_refresh_recalculates_aggregates(sample_leaderboard_and_summary):
         leaderboard = json.load(f)
 
     for agg in leaderboard["aggregate"]:
-        agg["pass_hat_1"] = 999.0  # Invalid value
+        agg["average"] = 999.0  # Invalid value
 
     with open(bugfix_leaderboard_path, "w") as f:
         json.dump(leaderboard, f, indent=2)
@@ -897,10 +900,10 @@ def test_result_refresh_recalculates_aggregates(sample_leaderboard_and_summary):
     # Should have 2 aggregates (copilot with servers, mini without)
     assert len(refreshed["aggregate"]) == 2
 
-    # All pass_hat_1 values should be recalculated (not 999)
+    # All average values should be recalculated (not 999)
     for agg in refreshed["aggregate"]:
-        assert agg["pass_hat_1"] != 999.0
-        assert agg["pass_hat_1"] > 0
+        assert agg["average"] != 999.0
+        assert agg["average"] > 0
 
 
 @pytest.mark.integration
@@ -950,9 +953,9 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
                 "total": 10,
                 "num_runs": 1,
                 "average_duration": 100.0,
-                "pass_hat_1": 0.0,  # Incorrectly set to 0
-                "pass_hat_3": None,
-                "pass_hat_5": None,
+                "average": 0.0,  # Incorrectly set to 0
+                "ci_low": None,
+                "ci_high": None,
                 "benchmark_version": "0.1.0",
             },
         ],
@@ -968,4 +971,172 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
         refreshed = json.load(f)
 
     # Should fall back to pass rate (resolved/total) from run
-    assert refreshed["aggregate"][0]["pass_hat_1"] == 0.6
+    assert refreshed["aggregate"][0]["average"] == 0.6
+
+
+@pytest.mark.integration
+def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
+    """Test that runs with different benchmark versions produce separate aggregates."""
+    leaderboard_path = tmp_path / "bug-fix.json"
+
+    # Create runs with same agent/model but different benchmark versions
+    data = {
+        "runs": [
+            {
+                "total": 10,
+                "resolved": 6,
+                "failed": 4,
+                "build": 10,
+                "percentage": 60.0,
+                "date": "2025-01-10",
+                "model": "gpt-4o",
+                "category": "bug-fix",
+                "agent_name": "copilot",
+                "average_duration": 100.0,
+                "average_prompt_tokens": 4000.0,
+                "average_completion_tokens": 1200.0,
+                "average_llm_duration": 70.0,
+                "github_run_id": "run_v1",
+                "experiment": None,
+                "instance_results": {f"test__inst_{i}": (i < 6) for i in range(10)},
+                "benchmark_version": "0.1.0",
+            },
+            {
+                "total": 10,
+                "resolved": 8,
+                "failed": 2,
+                "build": 10,
+                "percentage": 80.0,
+                "date": "2025-01-15",
+                "model": "gpt-4o",
+                "category": "bug-fix",
+                "agent_name": "copilot",
+                "average_duration": 95.0,
+                "average_prompt_tokens": 4200.0,
+                "average_completion_tokens": 1300.0,
+                "average_llm_duration": 65.0,
+                "github_run_id": "run_v2",
+                "experiment": None,
+                "instance_results": {f"test__inst_{i}": (i < 8) for i in range(10)},
+                "benchmark_version": "0.2.0",
+            },
+        ],
+        "aggregate": [],
+    }
+
+    with open(leaderboard_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+    result = runner.invoke(app, ["result", "refresh", "--leaderboard-dir", str(tmp_path)])
+    assert result.exit_code == 0
+
+    with open(leaderboard_path) as f:
+        refreshed = json.load(f)
+
+    # Should have 2 separate aggregates (one per version)
+    assert len(refreshed["aggregate"]) == 2
+
+    versions = {agg["benchmark_version"] for agg in refreshed["aggregate"]}
+    assert versions == {"0.1.0", "0.2.0"}
+
+    # Verify correct averages per version
+    v1_agg = next(a for a in refreshed["aggregate"] if a["benchmark_version"] == "0.1.0")
+    v2_agg = next(a for a in refreshed["aggregate"] if a["benchmark_version"] == "0.2.0")
+    assert v1_agg["average"] == 0.6
+    assert v2_agg["average"] == 0.8
+
+
+@pytest.mark.integration
+def test_result_update_groups_by_benchmark_version(tmp_path):
+    """Test that result update respects benchmark_version in combination key."""
+    leaderboard_dir = tmp_path / "leaderboard"
+    leaderboard_dir.mkdir()
+    leaderboard_path = leaderboard_dir / "bug-fix.json"
+
+    # Initial data with v0.1.0
+    initial_data = {
+        "runs": [
+            {
+                "total": 10,
+                "resolved": 5,
+                "failed": 5,
+                "build": 10,
+                "percentage": 50.0,
+                "date": "2025-01-10",
+                "model": "gpt-4o",
+                "category": "bug-fix",
+                "agent_name": "copilot",
+                "average_duration": 100.0,
+                "average_prompt_tokens": 4000.0,
+                "average_completion_tokens": 1200.0,
+                "average_llm_duration": 70.0,
+                "github_run_id": "run_v1",
+                "experiment": None,
+                "instance_results": {f"test__inst_{i}": (i < 5) for i in range(10)},
+                "benchmark_version": "0.1.0",
+            },
+        ],
+        "aggregate": [
+            {
+                "model": "gpt-4o",
+                "agent_name": "copilot",
+                "category": "bug-fix",
+                "experiment": None,
+                "total": 10,
+                "num_runs": 1,
+                "average_duration": 100.0,
+                "average": 0.5,
+                "ci_low": None,
+                "ci_high": None,
+                "pass_hat_5": None,
+                "benchmark_version": "0.1.0",
+            },
+        ],
+    }
+
+    with open(leaderboard_path, "w") as f:
+        json.dump(initial_data, f, indent=2)
+
+    # Add a new run with v0.2.0 (same agent/model, different version)
+    summary_path = tmp_path / "new_summary.json"
+    new_summary = {
+        "total": 10,
+        "resolved": 7,
+        "failed": 3,
+        "build": 10,
+        "percentage": 70.0,
+        "date": "2025-01-15",
+        "model": "gpt-4o",
+        "category": "bug-fix",
+        "agent_name": "copilot",
+        "average_duration": 95.0,
+        "average_prompt_tokens": 4200.0,
+        "average_completion_tokens": 1300.0,
+        "average_llm_duration": 65.0,
+        "github_run_id": "run_v2",
+        "experiment": None,
+        "instance_results": {f"test__inst_{i}": (i < 7) for i in range(10)},
+        "benchmark_version": "0.2.0",
+    }
+
+    with open(summary_path, "w") as f:
+        json.dump(new_summary, f, indent=2)
+
+    result = runner.invoke(
+        app,
+        ["result", "update", str(summary_path), "--leaderboard-dir", str(leaderboard_dir), "--n", "5"],
+    )
+    assert result.exit_code == 0
+
+    with open(leaderboard_path) as f:
+        updated = json.load(f)
+
+    # Should have 2 runs and 2 aggregates (not merged)
+    assert len(updated["runs"]) == 2
+    assert len(updated["aggregate"]) == 2
+
+    # Verify both versions exist separately
+    run_versions = {r["benchmark_version"] for r in updated["runs"]}
+    agg_versions = {a["benchmark_version"] for a in updated["aggregate"]}
+    assert run_versions == {"0.1.0", "0.2.0"}
+    assert agg_versions == {"0.1.0", "0.2.0"}

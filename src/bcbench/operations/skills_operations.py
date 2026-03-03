@@ -8,6 +8,7 @@ from bcbench.types import AgentType
 
 logger = get_logger(__name__)
 
+
 def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
     """
     Setup skills in the repository if available.
@@ -37,6 +38,3 @@ def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path,
 
         logger.info(f"Skills copied from {source_skills_dir} to {skills_dir}")
     return skills_enabled
-
-
-

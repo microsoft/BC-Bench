@@ -85,3 +85,38 @@ This ensures the leaderboard always compares apples-to-apples. When bumping vers
 2. Create a GitHub release with release notes describing the changes
 3. Clear old results from `docs/_data/*.json` if needed
 4. Re-run evaluations with the new version
+
+## Frequently Used Operations
+
+### Bump Coding Agent/Tool versions
+
+Below are the steps you can follow to update coding agents' version, usually needed in scenarios like new model release.
+
+Similar process to bump AL MCP's version, search for "Microsoft.Dynamics.BusinessCentral.Development.Tools" to identify files to modify.
+
+1. Find the corresponding workflow file `.github/workflows/<agent-name>-evaluation.yml`
+2. In the file, find the step that installs the coding agent (e.g. Install GitHub Copilot)
+3. Manually change the hardcoded version (it's by design that version is hardcoded)
+4. When you are done, bump BC-Bench's version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy
+5. Commit your changes, and merge into `main` branch
+6. [Create a new release](https://github.com/microsoft/BC-Bench/releases/new)
+
+### Add new models
+
+You usually need to bump the coding agents' version first to be able to use the newly released model.
+
+1. Find the corresponding workflow file `.github/workflows/<agent-name>-evaluation.yml`
+2. Add the model as a new input option in the `workflow_dispatch` trigger
+3. Add the model into the corresponding list in [cli_options.py](https://github.com/microsoft/BC-Bench/blob/main/src/bcbench/cli_options.py)
+4. Commit your changes, and merge into `main` branch
+5. Do a test run before a full one
+
+### Create a new release
+
+After you bump the version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy, you should then [Create a new release](https://github.com/microsoft/BC-Bench/releases/new) after pushing your changes.
+
+The process is straightforward, when you are not sure, check the previous releases for reference.
+
+1. Create a new tag following the version in `pyproject.toml` (e.g. v1.1.2)
+2. Title can simply be the same as the newly created tag
+3. Describe what is changed since the last release, **only mention things that might affect evaluation result**.

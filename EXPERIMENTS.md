@@ -125,3 +125,15 @@ You can find all results in the GitHub Action (workflow: `copilot-evaluation`) d
   - Copilot CLI logs
 
 The workflow `claude-evaluation` follows the same procedure.
+
+## Frequently Asked Questions
+
+### What if some jobs fail?
+
+It is normal to have some instabilities, inspect the failure messages to determine if it's indeed an instability. If so, simply re-queue the failed jobs; if not, implement the fix and you will have to trigger a brand new run afterwards.
+
+### My runs have successfully finished, what now?
+
+If you would like to display your results on the GitHub Page, you should be able to find a newly created branch as a result of the workflow run. Use that branch to create a Pull Request and make sure everything is correct, merge that Pull Request and you should be able to see it on GitHub Page after a few minutes.
+
+If the created branch has merge conflict, this is very common. You will need to manually resolve the conflict by appending the latest runs (ignore the aggregate). The aggregate can be manually re-calculated by running `uv run bcbench result refresh`.

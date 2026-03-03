@@ -29,18 +29,18 @@ prompt:
   test-generation-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
     {% if is_gold_patch and is_problem_statement %}
-    Task: Generate ONE test case that reproduce the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+    Task: Generate ONE NEW test case that reproduce the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
       The fix has already been applied as local unstaged changes. Write a test that passes with this fix and would fail without it.
     {% elif is_gold_patch %}
-    Task: Generate ONE test case that verifies the unstaged changes in *.al files {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+    Task: Generate ONE NEW test case that verifies the unstaged changes in *.al files {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
       The fix has already been applied as local unstaged changes. Write a test that passes with this fix and would fail without it.
     {% else %}
-    Task: Generate ONE test case that reproduce the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+    Task: Generate ONE NEW test case that reproduce the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
       The tests should fail against the current codebase (unfixed) and should pass once the issue is fixed.
     {% endif %}
 
     Important constraints:
-    - Do NOT modify any production code
+    - Do NOT modify any production code or existing tests
     - Focus solely on generating tests {% if is_gold_patch %}that verify the fix works correctly{% else %}for the reported issue{% endif %}
     {% if al_mcp %}
     - Do NOT try to run tests

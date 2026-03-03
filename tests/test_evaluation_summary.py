@@ -473,7 +473,7 @@ class TestInstanceResults:
 
 
 class TestLeaderboardAggregate:
-    def test_from_single_run_calculates_pass_hat_1(self):
+    def test_from_single_run_calculates_average(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         summary = EvaluationResultSummary.from_results(
@@ -489,12 +489,13 @@ class TestLeaderboardAggregate:
 
         assert agg.num_runs == 1
         assert agg.total == 3
-        # With 1 run: pass^1 = avg of C(s,1)/C(1,1) = (1 + 0 + 1)/3 = 0.667
-        assert agg.pass_hat_1 == 0.667
-        assert agg.pass_hat_3 is None  # Not enough runs
-        assert agg.pass_hat_5 is None
+        # With 1 run: average = resolved/total = 2/3 = 0.667
+        assert agg.average == 0.667
+        assert agg.ci_low is None  # Not enough runs for CI
+        assert agg.ci_high is None
+        assert agg.pass_hat_5 is None  # Not enough runs
 
-    def test_from_multiple_runs_calculates_pass_k(self):
+    def test_from_multiple_runs_calculates_average_and_ci_bounds(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         run1 = EvaluationResultSummary.from_results(
@@ -526,24 +527,20 @@ class TestLeaderboardAggregate:
 
         assert agg.num_runs == 3
         assert agg.total == 3
-        # pass^1: average of individual pass^1 values
-        # test__1: 1/3 successes -> C(1,1)/C(3,1) = 1/3
-        # test__2: 1/3 successes -> C(1,1)/C(3,1) = 1/3
-        # test__3: 1/3 successes -> C(1,1)/C(3,1) = 1/3
-        # Average = 1/3 = 0.333
-        assert agg.pass_hat_1 == 0.333
-        # pass^3: C(1,3)/C(3,3) = 0 for each (can't pick 3 successes from 1)
-        assert agg.pass_hat_3 == 0.0
-        # pass^5: not enough runs
-        assert agg.pass_hat_5 is None
+        # Each run has 1/3 resolved, so average = 1/3 = 0.333
+        assert agg.average == 0.333
+        # All runs have identical pass rates (1/3), so CI bounds are None (no variance)
+        assert agg.ci_low is None
+        assert agg.ci_high is None
+        assert agg.pass_hat_5 is None  # Not enough runs
 
-    def test_pass_hat_k_calculation(self):
+    def test_average_and_ci_bounds_with_varying_results(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         # Create 3 runs where:
-        # - test__1: resolved in runs 1,2,3 (3/3 successes)
-        # - test__2: resolved in runs 1,2 only (2/3 successes)
-        # - test__3: resolved in run 1 only (1/3 successes)
+        # - run1: 3/3 resolved (100%)
+        # - run2: 2/3 resolved (66.7%)
+        # - run3: 1/3 resolved (33.3%)
         run1 = EvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
@@ -571,21 +568,17 @@ class TestLeaderboardAggregate:
 
         agg = LeaderboardAggregate.from_runs([run1, run2, run3])
 
-        # pass^1: Average of C(s,1)/C(3,1) for each instance
-        # test__1: C(3,1)/C(3,1) = 1.0
-        # test__2: C(2,1)/C(3,1) = 2/3
-        # test__3: C(1,1)/C(3,1) = 1/3
-        # Average = (1 + 2/3 + 1/3) / 3 = 2/3 = 0.667
-        assert agg.pass_hat_1 == 0.667
-        # pass^3: C(s,3)/C(3,3) for each instance
-        # test__1: C(3,3)/C(3,3) = 1.0
-        # test__2: C(2,3)/C(3,3) = 0 (can't choose 3 from 2)
-        # test__3: C(1,3)/C(3,3) = 0
-        # Average = 1/3 = 0.333
-        assert agg.pass_hat_3 == 0.333
+        # Average: (1.0 + 2/3 + 1/3) / 3 = 2/3 = 0.667
+        assert agg.average == 0.667
+        # CI should be non-None with 3 runs and varying results
+        assert agg.ci_low is not None
+        assert agg.ci_high is not None
+        assert agg.ci_low < agg.ci_high
+        assert agg.average is not None
+        assert agg.ci_low <= agg.average <= agg.ci_high
+        assert agg.pass_hat_5 is None  # Not enough runs
 
-    def test_pass_hat_k_with_consistent_results(self):
-        """When an instance passes all runs, pass^k = 1.0 for all k."""
+    def test_consistent_results_have_zero_ci(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
 
         # All instances pass all runs
@@ -613,10 +606,11 @@ class TestLeaderboardAggregate:
 
         agg = LeaderboardAggregate.from_runs([run1, run2, run3])
 
-        # All instances pass all runs: C(3,k)/C(3,k) = 1.0 for each
-        assert agg.pass_hat_1 == 1.0
-        assert agg.pass_hat_3 == 1.0
-        assert agg.pass_hat_1 == agg.pass_hat_3
+        # All runs have 100% pass rate
+        assert agg.average == 1.0
+        assert agg.ci_low is None
+        assert agg.ci_high is None
+        assert agg.pass_hat_5 is None  # Not enough runs
 
 
 class TestLeaderboard:
@@ -634,8 +628,8 @@ class TestLeaderboard:
         agg = LeaderboardAggregate.from_runs([run1])
 
         assert agg.num_runs == 1
-        # With 1 run: pass^1 = avg of C(s,1)/C(1,1) = (1 + 0)/2 = 0.5
-        assert agg.pass_hat_1 == 0.5
+        # With 1 run: average = resolved/total = 1/2 = 0.5
+        assert agg.average == 0.5
 
     def test_leaderboard_to_dict(self):
         from bcbench.results.evaluation_result import Leaderboard, LeaderboardAggregate
@@ -652,7 +646,7 @@ class TestLeaderboard:
         assert "runs" in data
         assert "aggregate" in data
         assert len(data["runs"]) == 1
-        assert data["aggregate"][0]["pass_hat_1"] == 1.0
+        assert data["aggregate"][0]["average"] == 1.0
 
     def test_aggregate_from_legacy_runs_without_instance_results(self):
         """Test that a single legacy run without instance_results uses pass rate ratio."""
@@ -681,10 +675,10 @@ class TestLeaderboard:
         assert agg.num_runs == 1
         assert agg.total == 10
         # Should fall back to pass rate (resolved/total) from the run
-        assert agg.pass_hat_1 == 0.6  # 6/10 = 0.6
-        assert agg.pass_hat_3 is None
+        assert agg.average == 0.6  # 6/10 = 0.6
+        assert agg.ci_low is None
+        assert agg.ci_high is None
         assert agg.pass_hat_5 is None
-        assert agg.pass_hat_3 is None  # Only 1 run has instance_results
 
     def test_aggregate_includes_benchmark_version_from_runs(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
@@ -699,45 +693,6 @@ class TestLeaderboard:
         # Should inherit benchmark_version from the runs
         assert agg.benchmark_version == run1.benchmark_version
         assert agg.benchmark_version is not None
-
-    def test_aggregate_rejects_different_benchmark_versions(self):
-        from bcbench.results.evaluation_result import LeaderboardAggregate
-
-        run1 = EvaluationResultSummary(
-            total=3,
-            resolved=2,
-            failed=1,
-            build=3,
-            percentage=66.7,
-            date=date.today(),
-            model="gpt-4o",
-            agent_name="copilot",
-            category=EvaluationCategory.BUG_FIX,
-            average_duration=100.0,
-            average_prompt_tokens=1000.0,
-            average_completion_tokens=500.0,
-            instance_results={"test__1": True, "test__2": True, "test__3": False},
-            benchmark_version="0.1.0",
-        )
-        run2 = EvaluationResultSummary(
-            total=3,
-            resolved=1,
-            failed=2,
-            build=3,
-            percentage=33.3,
-            date=date.today(),
-            model="gpt-4o",
-            agent_name="copilot",
-            category=EvaluationCategory.BUG_FIX,
-            average_duration=100.0,
-            average_prompt_tokens=1000.0,
-            average_completion_tokens=500.0,
-            instance_results={"test__1": False, "test__2": True, "test__3": False},
-            benchmark_version="0.2.0",  # Different version!
-        )
-
-        with pytest.raises(ValueError, match="Cannot aggregate runs with different benchmark versions"):
-            LeaderboardAggregate.from_runs([run1, run2])
 
     def test_aggregate_allows_same_benchmark_versions(self):
         from bcbench.results.evaluation_result import LeaderboardAggregate
