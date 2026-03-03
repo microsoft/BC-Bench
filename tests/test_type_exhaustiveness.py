@@ -1,14 +1,22 @@
+from pathlib import Path
+
 from bcbench.dataset import DatasetEntry
 from bcbench.evaluate import create_pipeline
 from bcbench.results.bceval_export import get_info_from_dataset_entry
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentType, EvaluationCategory
 
+
+def test_all_agent_types_have_target_dir():
+    repo_path = Path("C:/test/repo")
+    for agent_type in AgentType:
+        target_dir = agent_type.get_target_dir(repo_path)
+        assert isinstance(target_dir, Path)
+        assert str(target_dir).startswith(str(repo_path))
 
 def test_all_categories_have_pipelines():
     for category in EvaluationCategory:
         pipeline = create_pipeline(category)
         assert pipeline is not None
-
 
 def test_all_categories_handled_in_get_info_from_dataset_entry(sample_dataset_entry_with_problem_statement: DatasetEntry):
     for category in EvaluationCategory:
