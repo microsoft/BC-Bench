@@ -1,11 +1,14 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import asyncio
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import yaml
+from copilot import CopilotClient, MCPServerConfig, SessionConfig
+from copilot.generated.session_events import SessionEventType
 
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.shared import build_mcp_config, build_prompt
@@ -13,6 +16,7 @@ from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
+from bcbench.operations.skills_operations import setup_copilot_skills
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 
@@ -32,8 +36,10 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
+    mcp_config: dict[str, MCPServerConfig] | None = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
+    copilot_skills: list[str] | None = setup_copilot_skills(copilot_config, entry, repo_path)
+    config = ExperimentConfiguration(mcp_servers=list(mcp_config.keys()) if mcp_config else None, custom_instructions=instructions_enabled, custom_agent=custom_agent)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
     config = ExperimentConfiguration(
@@ -64,12 +70,42 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")
-        if mcp_config_json:
-            cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 
         logger.debug(f"Copilot command args: {cmd_args}")
+
+        # Copilot SDK
+        async def run_copilot():
+            client = CopilotClient({"cli_path": copilot_cmd})
+            await client.start()
+
+            session = await client.create_session(
+                SessionConfig(
+                    model=model,
+                    mcp_servers=mcp_config if mcp_config else {},
+                    streaming=True,
+                    skill_directories=copilot_skills if copilot_skills else [],
+                )
+            )
+
+            # Listen for response chunks
+            def handle_event(event):
+                if event.type == SessionEventType.ASSISTANT_MESSAGE_DELTA:
+                    sys.stdout.write(event.data.delta_content)
+                    sys.stdout.flush()
+
+            session.on(handle_event)
+
+            await session.send_and_wait(
+                {"prompt": prompt},
+                timeout=_config.timeout.agent_execution,
+            )
+            print()  # newline after streaming
+
+            await client.stop()
+
+        asyncio.run(run_copilot())
 
         result = subprocess.run(
             cmd_args,

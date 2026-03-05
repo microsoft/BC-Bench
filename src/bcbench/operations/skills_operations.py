@@ -1,4 +1,7 @@
 from pathlib import Path
+from shutil import copytree
+
+from bcbench.config import get_config
 from shutil import copytree, rmtree
 
 from bcbench.dataset.dataset_entry import DatasetEntry

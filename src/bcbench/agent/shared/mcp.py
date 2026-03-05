@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from copilot import MCPLocalServerConfig, MCPRemoteServerConfig, MCPServerConfig
 from jinja2 import Template
 
 from bcbench.dataset import DatasetEntry
@@ -39,33 +40,33 @@ class _ALMcpServerManager:
 _mcp_server_manager = _ALMcpServerManager()
 
 
-def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> dict[str, MCPServerConfig]:
     server_type: str = server["type"]
     server_name: str = server["name"]
     tools: list[str] = server["tools"]
 
     match server_type:
         case "http":
-            return server_name, {
-                "type": server_type,
-                "url": server["url"],
-                "tools": tools,
-            }
+            return {server_name: MCPRemoteServerConfig(
+                tools=tools,
+                url=server["url"],
+                type=server_type
+            )}
         case "local":
             args: list[str] = server["args"]
             rendered_args = [Template(arg).render(**template_context) for arg in args]
-            return server_name, {
-                "type": server_type,
-                "command": server["command"],
-                "args": rendered_args,
-                "tools": tools,
-            }
+            return {server_name: MCPLocalServerConfig(
+                tools=tools,
+                command=server["command"],
+                args=rendered_args,
+                type=server_type,
+            )}
         case _:
             logger.error(f"Unsupported MCP server type: {server_type}, {server}")
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
-def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
+def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> dict[str, MCPServerConfig] | None:
     # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
@@ -78,11 +79,15 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
         logger.info("AL MCP server enabled via --al-mcp flag")
 
     if not mcp_servers:
-        return None, None
+        return None
 
     template_context = {"repo_path": repo_path}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
-    mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
+    # mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
+    mcp_config : dict[str, MCPServerConfig] = {}
+    for server in mcp_servers:
+        server_entry = _build_server_entry(server, template_context)
+        mcp_config.update(server_entry)
 
     if al_mcp:
         # Launch MCP server with all project paths separated by semicolons
@@ -92,4 +97,4 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
     logger.info(f"Using MCP servers: {mcp_server_names}")
     logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
 
-    return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names
+    return mcp_config

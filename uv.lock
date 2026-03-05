@@ -145,6 +145,7 @@ name = "bcbench"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
+    { name = "github-copilot-sdk" },
     { name = "jsonschema" },
     { name = "mini-swe-agent" },
     { name = "numpy" },
@@ -176,6 +177,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "github-copilot-sdk", specifier = ">=0.1.18" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "mini-swe-agent", specifier = ">=1.0.0" },
     { name = "numpy", specifier = ">=2.3.5" },
@@ -581,6 +583,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/24/7f/2747c0d332b9acfa75dc84447a066fdf812b5a6b8d30472b74d309bfe8cb/fsspec-2025.10.0.tar.gz", hash = "sha256:b6789427626f068f9a83ca4e8a3cc050850b6c0f71f99ddb4f542b8266a26a59", size = 309285, upload-time = "2025-10-30T14:58:44.036Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/02/a6b21098b1d5d6249b7c5ab69dde30108a71e4e819d4a9778f1de1d5b70d/fsspec-2025.10.0-py3-none-any.whl", hash = "sha256:7c7712353ae7d875407f97715f0e1ffcc21e33d5b24556cb1e090ae9409ec61d", size = 200966, upload-time = "2025-10-30T14:58:42.53Z" },
+]
+
+[[package]]
+name = "github-copilot-sdk"
+version = "0.1.18"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bf/00/be64b9b33015d5e79fb5e5e95d871484e79a907b3792935b855ab40308ce/github_copilot_sdk-0.1.18.tar.gz", hash = "sha256:b2d56d40c0f48e81f2899d32fb4a8d2b8df22620913547da93fddf9b2f368e9e", size = 81318, upload-time = "2026-01-24T18:09:57.617Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/0f/f832b32bca9d89a26a2b810c69fdc37ac925e34855ee93a11bb3d90ca2b7/github_copilot_sdk-0.1.18-py3-none-any.whl", hash = "sha256:99cfdf4d4d0da6d92d5bf36a952546157785df83d6b0783b3f7a8e93a2762171", size = 33740, upload-time = "2026-01-24T18:09:55.696Z" },
 ]
 
 [[package]]
