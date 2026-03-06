@@ -76,7 +76,7 @@ def run_copilot(
     For full evaluation including building and running tests, use 'bcbench evaluate' instead.
 
     Example:
-        uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix
+        uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
@@ -101,7 +101,7 @@ def run_claude(
     For full evaluation including building and running tests, use 'bcbench evaluate' instead.
 
     Example:
-        uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix
+        uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
