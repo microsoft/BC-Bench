@@ -99,7 +99,7 @@ How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
 2. **Copilot**: The `skills/` folder is copied to `NAV/.github/skills/` (replaces existing skills directory)
 3. **Claude**: The `skills/` folder is copied to `NAV/.claude/skills/`
-4. If `enabled: false`, skills are simply not copied(Copilot auto-discovers from `.github/skills/`)
+4. If `enabled: false`, skills are simply not copied
 
 ### Custom Agents
 
