@@ -92,7 +92,6 @@ class FilePatternConfig:
     result_pattern: str
     instruction_source_naming: str
     copilot_instructions_dirname: str
-    copilot_instructions_pattern: str
     test_project_identifiers: tuple[str, ...]
     problem_statement_readme: str
     problem_statement_dest_dir: str
@@ -107,7 +106,6 @@ class FilePatternConfig:
             result_pattern=".jsonl",
             instruction_source_naming="AGENTS.md",
             copilot_instructions_dirname="instructions",
-            copilot_instructions_pattern="*.instructions.md",
             test_project_identifiers=("test", "tests"),
             problem_statement_readme="README.md",
             problem_statement_dest_dir="problem",

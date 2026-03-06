@@ -107,25 +107,6 @@ def test_overwrite_existing_instructions():
         assert new_content == source_file.read_text(), "Content should match source"
 
 
-def test_path_specific_instructions_copied():
-    with TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
-        config = {"instructions": {"enabled": True}}
-
-        # Setup instructions
-        setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.COPILOT)
-
-        # Verify path-specific instructions were copied
-        target_instructions_dir = repo_path / ".github" / _config.file_patterns.copilot_instructions_dirname
-        assert target_instructions_dir.exists(), "Instructions folder should be created"
-
-        # Verify that at least some instruction files exist
-        instruction_files = list(target_instructions_dir.glob(_config.file_patterns.copilot_instructions_pattern))
-        assert len(instruction_files) > 0, "At least one instruction file should be copied"
-
-
 def test_path_specific_instructions_removed_before_copy():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
