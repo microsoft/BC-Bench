@@ -1,11 +1,24 @@
 """Utilities for loading dataset entries from JSONL files."""
 
+import json
 from pathlib import Path
 
-from bcbench.dataset.dataset_entry import DatasetEntry
+from bcbench.dataset.dataset_entry import BugFixEntry, DatasetEntry, TestGenerationEntry
 from bcbench.exceptions import EntryNotFoundError
+from bcbench.types import EvaluationCategory
 
 __all__ = ["load_dataset_entries"]
+
+
+def _parse_entry(data: dict) -> DatasetEntry:
+    category = EvaluationCategory(data.get("category", EvaluationCategory.BUG_FIX.value))
+    match category:
+        case EvaluationCategory.BUG_FIX:
+            return BugFixEntry.model_validate(data)
+        case EvaluationCategory.TEST_GENERATION:
+            return TestGenerationEntry.model_validate(data)
+        case _:
+            raise ValueError(f"Unknown dataset entry category: {category}")
 
 
 def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[DatasetEntry]:
@@ -30,7 +43,7 @@ def load_dataset_entries(dataset_path: Path, entry_id: str | None = None, random
             if not stripped_line:
                 continue
 
-            entry = DatasetEntry.model_validate_json(stripped_line)
+            entry = _parse_entry(json.loads(stripped_line))
 
             # If searching for specific entry_id, return immediately when found
             if entry_id:

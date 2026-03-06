@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import DatasetEntry, TestEntry
+from bcbench.dataset import BugFixEntry, DatasetEntry, TestEntry
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext
@@ -49,7 +49,7 @@ def create_dataset_entry(
     created_at: str = VALID_CREATED_AT,
     fail_to_pass: list[TestEntry] | None = None,
     pass_to_pass: list[TestEntry] | None = None,
-) -> DatasetEntry:
+) -> BugFixEntry:
     if project_paths is None:
         project_paths = VALID_PROJECT_PATHS.copy()
     if fail_to_pass is None:
@@ -57,7 +57,7 @@ def create_dataset_entry(
     if pass_to_pass is None:
         pass_to_pass = []
 
-    return DatasetEntry(
+    return BugFixEntry(
         instance_id=instance_id,
         repo=repo,
         base_commit=base_commit,
@@ -159,6 +159,7 @@ def create_dataset_file(tmp_path: Path, entries: list[DatasetEntry] | None = Non
     with open(dataset_path, "w") as f:
         for entry in entries:
             entry_dict = {
+                "category": entry.category.value,
                 "instance_id": entry.instance_id,
                 "repo": entry.repo,
                 "base_commit": entry.base_commit,
@@ -188,7 +189,7 @@ def sample_test_entry() -> TestEntry:
 
 
 @pytest.fixture
-def sample_dataset_entry() -> DatasetEntry:
+def sample_dataset_entry() -> BugFixEntry:
     return create_dataset_entry()
 
 
@@ -225,7 +226,7 @@ def sample_bugfix_result_with_metrics() -> BugFixResult:
 
 
 @pytest.fixture
-def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[DatasetEntry]:
+def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[BugFixEntry]:
     problem_dir = create_problem_statement_dir(tmp_path)
     entry = create_dataset_entry()
 

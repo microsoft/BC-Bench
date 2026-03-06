@@ -1,7 +1,7 @@
 import json
 from unittest.mock import patch
 
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BugFixEntry
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.types import AgentMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
@@ -12,7 +12,7 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
                 out_dir=output_dir,
@@ -43,7 +43,7 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_testgen_result],
                 out_dir=output_dir,
@@ -65,7 +65,7 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics, sample_testgen_result],
                 out_dir=output_dir,
@@ -94,7 +94,7 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
                 out_dir=output_dir,
@@ -148,7 +148,7 @@ class TestWriteBcevalResults:
 
         result = create_bugfix_result(metrics=AgentMetrics(execution_time=100.0, prompt_tokens=None, completion_tokens=1500))
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[result],
                 out_dir=output_dir,

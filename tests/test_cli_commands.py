@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BugFixEntry
 from bcbench.types import AgentMetrics
 from tests.conftest import (
     create_bugfix_result,
@@ -95,7 +95,7 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     base_path, run_id, dataset_path = sample_results_directory
     results_dir = base_path / run_id
 
-    with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+    with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
         result = runner.invoke(
             app,
             [
@@ -126,7 +126,7 @@ def test_result_summarize_verifies_summary_calculations(sample_results_directory
     base_path, run_id, dataset_path = sample_results_directory
     results_dir = base_path / run_id
 
-    with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+    with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
         result = runner.invoke(
             app,
             [
@@ -201,7 +201,7 @@ def test_result_summarize_no_matching_files_fails_gracefully(tmp_path):
 def test_result_summarize_with_custom_pattern(sample_results_directory, problem_statement_dir):
     base_path, run_id, dataset_path = sample_results_directory
 
-    with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+    with patch.object(BugFixEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
         result = runner.invoke(
             app,
             [
