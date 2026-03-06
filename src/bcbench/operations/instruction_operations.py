@@ -10,12 +10,12 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
+def setup_instructions_from_config(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
     """
     Setup custom instructions from config if enabled.
 
     Args:
-        copilot_config: Copilot agent configuration dictionary
+        agent_config: Agent configuration dictionary
         entry: Dataset entry containing repo information
         repo_path: Path to repository where instructions will be copied
         agent_type: Type of agent (Copilot or Claude)
@@ -23,7 +23,7 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     Returns:
         True if instructions are enabled, False otherwise
     """
-    instructions_config: dict = copilot_config["instructions"]
+    instructions_config: dict = agent_config["instructions"]
     instructions_enabled: bool = instructions_config["enabled"]
 
     if instructions_enabled:
@@ -47,11 +47,11 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
     return instructions_enabled
 
 
-def setup_custom_agent(copilot_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> str | None:
+def setup_custom_agent(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> str | None:
     """
     Setup custom agents in the repository if available.
     """
-    custom_agent_config: dict = copilot_config["agents"]
+    custom_agent_config: dict = agent_config["agents"]
     custom_agent_enabled: bool = custom_agent_config["enabled"]
 
     if custom_agent_enabled:
