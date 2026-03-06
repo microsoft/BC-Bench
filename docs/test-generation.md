@@ -15,7 +15,7 @@ This category "reverses" the SWE-Bench workflow: instead of generating a fix, th
     <tr>
       <th>Agent</th>
       <th>Model</th>
-      mean (95% bootstap CI)
+      <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
       <th>Version</th>
@@ -43,13 +43,13 @@ This category "reverses" the SWE-Bench workflow: instead of generating a fix, th
 
 ## ALTest Custom Agent
 
-Comparing experimental configurations for GitHub Copilot CLI with `ALTest` custom agent using **claude-opus-4-5**.
+Comparing experimental configurations for GitHub Copilot CLI with `ALTest` custom agent using **claude-opus-4-6**.
 
 <table>
   <thead>
     <tr>
       <th>Custom Agent</th>
-      mean (95% bootstap CI)
+      <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
       <th>Ver</th>
@@ -58,7 +58,7 @@ Comparing experimental configurations for GitHub Copilot CLI with `ALTest` custo
   <tbody>
     {% assign sorted_results = site.data.test-generation.aggregate | sort: "average" | reverse %}
     {% for agg in sorted_results %}
-      {% if agg.model == "claude-opus-4-5" and agg.agent_name == "GitHub Copilot" %}
+      {% if agg.model == "claude-opus-4-6" and agg.agent_name == "GitHub Copilot" %}
     <tr>
       <td>{% if agg.experiment == null %}Default{% else %}{{ agg.experiment.custom_agent }}{% endif %}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>

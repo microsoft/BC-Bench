@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     # dataset entries are fully adopted across the codebase
     from bcbench.dataset import DatasetEntry
 
-__all__ = ["AgentMetrics", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = ["AgentMetrics", "AgentType", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
 logger = get_logger(__name__)
 
@@ -71,6 +71,30 @@ class ExperimentConfiguration(BaseModel):
         This is useful for comparing with None (no experiment) vs default experiment.
         """
         return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
+
+
+class AgentType(str, Enum):
+    COPILOT = "copilot"
+    CLAUDE = "claude"
+
+    @property
+    def instruction_filename(self) -> str:
+        match self:
+            case AgentType.COPILOT:
+                return "copilot-instructions.md"
+            case AgentType.CLAUDE:
+                return "CLAUDE.md"
+            case _:
+                raise ValueError(f"Unknown AgentType: {self}")
+
+    def get_target_dir(self, repo_path: Path) -> Path:
+        match self:
+            case AgentType.COPILOT:
+                return repo_path / ".github"
+            case AgentType.CLAUDE:
+                return repo_path / ".claude"
+            case _:
+                raise ValueError(f"Unknown AgentType: {self}")
 
 
 class EvaluationCategory(str, Enum):

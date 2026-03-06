@@ -14,7 +14,7 @@ This category follows the [SWE-Bench](https://www.swebench.com/) methodology. Th
     <tr>
       <th>Agent</th>
       <th>Model</th>
-      mean (95% bootstap CI)
+      <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
       <th>Ver</th>
@@ -45,7 +45,7 @@ Comparing experimental configurations for GitHub Copilot CLI with **claude-opus-
   <thead>
     <tr>
       <th>MCP Servers</th>
-      mean (95% bootstap CI)
+      <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
       <th>Ver</th>
