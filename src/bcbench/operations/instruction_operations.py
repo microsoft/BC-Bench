@@ -75,7 +75,7 @@ def _get_source_instructions_path(repo_name: str) -> Path:
         FileNotFoundError: If instruction file doesn't exist
     """
     sanitized_name = repo_name.replace("/", "-")
-    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.copilot_instructions_dirname / sanitized_name
+    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.instructions_dirname / sanitized_name
 
     if not instructions_path.exists():
         raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for repository: {repo_name}")

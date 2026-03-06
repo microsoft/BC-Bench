@@ -91,7 +91,7 @@ class FilePatternConfig:
     instance_pattern: str
     result_pattern: str
     instruction_source_naming: str
-    copilot_instructions_dirname: str
+    instructions_dirname: str
     test_project_identifiers: tuple[str, ...]
     problem_statement_readme: str
     problem_statement_dest_dir: str
@@ -105,7 +105,7 @@ class FilePatternConfig:
             instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
             result_pattern=".jsonl",
             instruction_source_naming="AGENTS.md",
-            copilot_instructions_dirname="instructions",
+            instructions_dirname="instructions",
             test_project_identifiers=("test", "tests"),
             problem_statement_readme="README.md",
             problem_statement_dest_dir="problem",
