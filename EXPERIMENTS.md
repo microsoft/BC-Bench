@@ -64,7 +64,7 @@ instructions:
 Replace the files below with your instructions:
 ```
 src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
-  copilot-instructions.md
+  AGENTS.md
   instructions/
     tables.instructions.md
     pages.instructions.md
@@ -73,9 +73,11 @@ src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
 
 How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
-2. **Copilot**: All files are copied into `NAV/.github/` (overwrite if exists)
-3. **Claude**: All files are copied into `NAV/.claude/`
+2. **All files** are copied into the agent's target directory (`.github/` for Copilot, `.claude/` for Claude)
+3. `AGENTS.md` is renamed to the agent-specific filename (`copilot-instructions.md` for Copilot, `CLAUDE.md` for Claude)
 4. If `enabled: false`, Copilot gets `--no-custom-instructions` flag; Claude skips the file
+
+> **Warning:** Enabling instructions copies the **entire** `instructions/<sanitized-repo>/` folder, including `skills/` and `agents/` subdirectories. If you only want custom instructions without skills or agents, remove those subdirectories from the source folder.
 
 ### Skills
 

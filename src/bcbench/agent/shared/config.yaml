@@ -56,10 +56,12 @@ prompt:
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
-#    - Copilot: copies to repo/.github/
-#    - Claude: copies to repo/.claude/
+#    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
+#    - Claude: copies to repo/.claude/ and renames AGENTS.md to CLAUDE.md
 # 2. whether to pass --disable-custom-instructions to copilot
 # NOTE: this will copy any files in the instructions/<sanitized-repo>/ folder, including skills and custom agents
+# NOTE: the canonical source file is AGENTS.md; it is automatically renamed
+#       to the agent-specific filename (AgentType.instruction_filename) during setup
 instructions:
   enabled: false
 

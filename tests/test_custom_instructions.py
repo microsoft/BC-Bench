@@ -42,9 +42,10 @@ def test_setup_custom_instructions():
         target_path = repo_path / ".github"
         assert target_path.exists(), ".github directory should be created"
 
-        # Verify files were copied
+        # Verify files were copied (AGENTS.md gets renamed to agent-specific filename)
+        source_naming = _config.file_patterns.instruction_source_naming
         for item in instructions_source.iterdir():
-            target_item = target_path / item.name
+            target_item = target_path / AgentType.COPILOT.instruction_filename if item.name == source_naming else target_path / item.name
             assert target_item.exists(), f"{target_item} should exist"
 
             # Verify file content matches
@@ -91,7 +92,7 @@ def test_overwrite_existing_instructions():
         # Create initial instruction file with different content
         github_dir = repo_path / ".github"
         github_dir.mkdir(parents=True, exist_ok=True)
-        target_path = github_dir / _config.file_patterns.copilot_instruction_naming
+        target_path = github_dir / AgentType.COPILOT.instruction_filename
         original_content = "# Original instructions\nThis should be overwritten"
         target_path.write_text(original_content)
 
@@ -102,7 +103,7 @@ def test_overwrite_existing_instructions():
         assert target_path.exists(), "Instruction file should exist"
         new_content = target_path.read_text()
         assert new_content != original_content, "Content should be overwritten"
-        source_file = instructions_source / _config.file_patterns.copilot_instruction_naming
+        source_file = instructions_source / _config.file_patterns.instruction_source_naming
         assert new_content == source_file.read_text(), "Content should match source"
 
 
@@ -145,7 +146,7 @@ def test_path_specific_instructions_removed_before_copy():
         assert not (github_dir / "old.md").exists(), "Old file should be removed"
         # Verify new structure was copied
         assert github_dir.exists(), ".github directory should exist after setup"
-        assert (github_dir / _config.file_patterns.copilot_instruction_naming).exists(), "Main instruction file should exist"
+        assert (github_dir / AgentType.COPILOT.instruction_filename).exists(), "Main instruction file should exist"
 
 
 def test_no_path_specific_instructions_warning():
@@ -161,7 +162,7 @@ def test_no_path_specific_instructions_warning():
         # Verify repository-level instructions were created
         github_dir = repo_path / ".github"
         assert github_dir.exists(), ".github directory should be created"
-        assert (github_dir / _config.file_patterns.copilot_instruction_naming).exists(), "Main instruction file should exist"
+        assert (github_dir / AgentType.COPILOT.instruction_filename).exists(), "Main instruction file should exist"
 
 
 def test_empty_instructions_folder_warning():
@@ -177,4 +178,29 @@ def test_empty_instructions_folder_warning():
         # Verify .github directory was created
         github_dir = repo_path / ".github"
         assert github_dir.exists(), ".github directory should be created"
-        assert (github_dir / _config.file_patterns.copilot_instruction_naming).exists(), "Main instruction file should exist"
+        assert (github_dir / AgentType.COPILOT.instruction_filename).exists(), "Main instruction file should exist"
+
+
+def test_claude_instructions_renamed():
+    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
+
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=DatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"instructions": {"enabled": True}}
+
+        result = setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.CLAUDE)
+        assert result is True
+
+        claude_dir = repo_path / ".claude"
+        assert claude_dir.exists(), ".claude directory should be created"
+
+        # AGENTS.md should be renamed to CLAUDE.md
+        assert not (claude_dir / _config.file_patterns.instruction_source_naming).exists(), "Source file should be renamed"
+        claude_md = claude_dir / AgentType.CLAUDE.instruction_filename
+        assert claude_md.exists(), "CLAUDE.md should exist"
+
+        # Content should match the original source file
+        source_content = (instructions_source / _config.file_patterns.instruction_source_naming).read_text()
+        assert claude_md.read_text() == source_content, "CLAUDE.md content should match source"

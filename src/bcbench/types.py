@@ -75,8 +75,17 @@ class AgentType(str, Enum):
     COPILOT = "copilot"
     CLAUDE = "claude"
 
+    @property
+    def instruction_filename(self) -> str:
+        match self:
+            case AgentType.COPILOT:
+                return "copilot-instructions.md"
+            case AgentType.CLAUDE:
+                return "CLAUDE.md"
+            case _:
+                raise ValueError(f"Unknown AgentType: {self}")
+
     def get_target_dir(self, repo_path: Path) -> Path:
-        """Get target directory for agent-specific files based on agent type."""
         match self:
             case AgentType.COPILOT:
                 return repo_path / ".github"

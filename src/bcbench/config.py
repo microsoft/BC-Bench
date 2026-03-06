@@ -90,7 +90,7 @@ class FilePatternConfig:
     patch_pattern: str
     instance_pattern: str
     result_pattern: str
-    copilot_instruction_naming: str
+    instruction_source_naming: str
     copilot_instructions_dirname: str
     copilot_instructions_pattern: str
     test_project_identifiers: tuple[str, ...]
@@ -105,7 +105,7 @@ class FilePatternConfig:
             patch_pattern=".patch",
             instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
             result_pattern=".jsonl",
-            copilot_instruction_naming="copilot-instructions.md",
+            instruction_source_naming="AGENTS.md",
             copilot_instructions_dirname="instructions",
             copilot_instructions_pattern="*.instructions.md",
             test_project_identifiers=("test", "tests"),

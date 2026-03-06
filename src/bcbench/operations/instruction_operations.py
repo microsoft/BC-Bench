@@ -28,13 +28,20 @@ def setup_instructions_from_config(copilot_config: dict, entry: DatasetEntry, re
 
     if instructions_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.repo)
-        # Copilot reads from .github automatically, Claude reads from .claude automatically
         target_dir: Path = agent_type.get_target_dir(repo_path)
 
         logger.info(f"Setting up custom instructions for repository: {entry.repo}")
         if target_dir.exists():
             rmtree(target_dir)
         copytree(source_instructions, target_dir)
+
+        # Rename canonical instruction file to agent-specific name
+        canonical = target_dir / _config.file_patterns.instruction_source_naming
+        expected = target_dir / agent_type.instruction_filename
+        if canonical.exists() and canonical != expected:
+            canonical.rename(expected)
+            logger.info(f"Renamed {canonical.name} -> {expected.name}")
+
         logger.info(f"{target_dir.name} dir is overwritten with {source_instructions}")
 
     return instructions_enabled
