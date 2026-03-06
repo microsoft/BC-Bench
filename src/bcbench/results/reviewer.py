@@ -159,14 +159,24 @@ class BaseReviewer(App):
                 lines.append(escaped)
         return "\n".join(lines)
 
-    def _format_status(self, result: dict) -> tuple[str, str, str]:
+    def _format_status(self, result: dict) -> str:
         scores = result.get("scores", {})
         build = scores.get("BuildRate", 0) == 1
         resolved = scores.get("ResolutionRate", 0) == 1
         build_str = "[green]✓[/green]" if build else "[red]✗[/red]"
         resolved_str = "[green]✓[/green]" if resolved else "[red]✗[/red]"
         current_category = result.get("review", {}).get("failure_category") or "[dim]None[/dim]"
-        return build_str, resolved_str, current_category
+        parts = [f"Build: {build_str}"]
+        if self.category == EvaluationCategory.TEST_GENERATION:
+            post_passed = scores.get("PostPatchPassedRate", 0) == 1
+            pre_failed = scores.get("PrePatchFailedRate", 0) == 1
+            post_str = "[green]✓[/green]" if post_passed else "[red]✗[/red]"
+            pre_str = "[green]✓[/green]" if pre_failed else "[red]✗[/red]"
+            parts.append(f"PrePatchFailed: {pre_str}")
+            parts.append(f"PostPatchPassed: {post_str}")
+        parts.append(f"Resolved: {resolved_str}")
+        parts.append(f"Category: {current_category}")
+        return " | ".join(parts)
 
     def _set_category(self, idx: int) -> None:
         result = self._get_current_result()
@@ -241,8 +251,8 @@ class InstanceAcrossRunsReviewer(BaseReviewer):
 
     def _get_progress_text(self, result: dict) -> str:
         run_id = self.run_results[self.current_index][0]
-        build_str, resolved_str, current_category = self._format_status(result)
-        return f"[{self.current_index + 1}/{len(self.run_results)} runs] (reviewed: {self._get_reviewed_count()}) | Run: {run_id} | Build: {build_str} Resolved: {resolved_str} | Category: {current_category} | {self.instance_id}"
+        status = self._format_status(result)
+        return f"[{self.current_index + 1}/{len(self.run_results)} runs] (reviewed: {self._get_reviewed_count()}) | Run: {run_id} | {status} | {self.instance_id}"
 
     def _get_actual_panel_title(self) -> str:
         run_id = self.run_results[self.current_index][0]
@@ -337,8 +347,8 @@ class FailureModeAnalysis(BaseReviewer):
 
     def _get_progress_text(self, result: dict) -> str:
         instance_id = result.get("instance_id") or result.get("InstanceID", "unknown")
-        build_str, resolved_str, current_category = self._format_status(result)
-        return f"[{self.current_index + 1}/{len(self.unresolved_indices)}] (reviewed: {self._get_reviewed_count()}) | Build: {build_str} Resolved: {resolved_str} | Category: {current_category} | {instance_id}"
+        status = self._format_status(result)
+        return f"[{self.current_index + 1}/{len(self.unresolved_indices)}] (reviewed: {self._get_reviewed_count()}) | {status} | {instance_id}"
 
     def _get_actual_panel_title(self) -> str:
         return "Actual (Agent)"
