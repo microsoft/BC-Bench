@@ -59,6 +59,7 @@ prompt:
 #    - Copilot: copies to repo/.github/
 #    - Claude: copies to repo/.claude/
 # 2. whether to pass --disable-custom-instructions to copilot
+# NOTE: this will copy any files in the instructions/<sanitized-repo>/ folder, including skills and custom agents
 instructions:
   enabled: false
 
