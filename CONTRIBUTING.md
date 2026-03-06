@@ -51,7 +51,7 @@ uv run bcbench --help
 
 # Run Copilot CLI on a single task (generate patch only, no build/test)
 # This is very fast, give it a go and see it live!
-uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix
+uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
 ```
 
 ## Development
