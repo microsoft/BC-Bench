@@ -83,13 +83,11 @@ agents:
 #     - name: "mslearn"
 #       type: "http"
 #       url: "https://learn.microsoft.com/api/mcp"
-#       tools: ["*"]
 
 #     - name: "filesystem"
-#       type: "local"
+#       type: "stdio"
 #       command: "npx"
 #       args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
-#       tools: ["*"]
 
 # AL MCP server configuration (flag-gated via --al-mcp CLI flag)
 # https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools
@@ -98,4 +96,3 @@ al-mcp:
   name: "altool"
   type: "http"
   url: "http://localhost:5000"
-  tools: ["*"]

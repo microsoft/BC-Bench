@@ -10,7 +10,6 @@ from jinja2 import Template
 from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import AgentType
 
 logger = get_logger(__name__)
 
@@ -40,69 +39,30 @@ class _ALMcpServerManager:
 _mcp_server_manager = _ALMcpServerManager()
 
 
-def _get_mcp_tools(tools: list[str], agent_type: AgentType) -> list[str]:
-    """
-    Get MCP tools based on agent type.
-    """
-    match agent_type:
-        case AgentType.COPILOT:
-            return tools
-        case AgentType.CLAUDE:
-            return []
-        case _:
-            logger.error(f"Unsupported agent type: {agent_type}")
-            raise AgentError(f"Unsupported agent type: {agent_type}")
-
-
-def _get_mcp_server_type(server_type: str, agent_type: AgentType) -> str:
-    """
-    Get MCP server type based on agent type.
-    """
-    match server_type:
-        case "http":
-            return server_type
-        case "local" | "stdio":
-            match agent_type:
-                case AgentType.COPILOT:
-                    return "local"
-                case AgentType.CLAUDE:
-                    return "stdio"
-                case _:
-                    logger.error(f"Unsupported agent type: {agent_type}")
-                    raise AgentError(f"Unsupported agent type: {agent_type}")
-        case _:
-            logger.error(f"Unsupported MCP server type: {server_type}")
-            raise AgentError(f"Unsupported MCP server type: {server_type}")
-
-
-def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any], agent_type: AgentType) -> tuple[str, dict[str, Any]]:
-    server_type: str = _get_mcp_server_type(server["type"], agent_type)
+def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    server_type: str = server["type"]
     server_name: str = server["name"]
-    tools: list[str] = _get_mcp_tools(server["tools"], agent_type)
 
     match server_type:
         case "http":
             return server_name, {
                 "type": server_type,
                 "url": server["url"],
-                "tools": tools,
             }
-        case "local" | "stdio":
+        case "stdio":
             args: list[str] = server["args"]
             rendered_args = [Template(arg).render(**template_context) for arg in args]
             return server_name, {
                 "type": server_type,
                 "command": server["command"],
                 "args": rendered_args,
-                "tools": tools,
             }
         case _:
             logger.error(f"Unsupported MCP server type: {server_type}, {server}")
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
-def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, agent_type: AgentType, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
-    # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
+def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
     # Handle AL MCP server (special-cased, flag-gated)
@@ -118,7 +78,7 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
 
     template_context = {"repo_path": repo_path}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
-    mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context, agent_type), mcp_servers))}
+    mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     if al_mcp:
         # Launch MCP server with all project paths separated by semicolons

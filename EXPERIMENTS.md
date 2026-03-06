@@ -50,7 +50,6 @@ mcp:
     - name: "mslearn"
       type: "http"
       url: "https://learn.microsoft.com/api/mcp"
-      tools: ["*"]
 ```
 
 ### Custom Instructions
