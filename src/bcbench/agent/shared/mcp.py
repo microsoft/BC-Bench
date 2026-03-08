@@ -42,23 +42,20 @@ _mcp_server_manager = _ALMcpServerManager()
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     server_type: str = server["type"]
     server_name: str = server["name"]
-    tools: list[str] = server["tools"]
 
     match server_type:
         case "http":
             return server_name, {
                 "type": server_type,
                 "url": server["url"],
-                "tools": tools,
             }
-        case "local":
+        case "stdio":
             args: list[str] = server["args"]
             rendered_args = [Template(arg).render(**template_context) for arg in args]
             return server_name, {
                 "type": server_type,
                 "command": server["command"],
                 "args": rendered_args,
-                "tools": tools,
             }
         case _:
             logger.error(f"Unsupported MCP server type: {server_type}, {server}")
@@ -66,7 +63,6 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
 
 
 def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
-    # following docs: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/coding-agent/extend-coding-agent-with-mcp
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
     # Handle AL MCP server (special-cased, flag-gated)

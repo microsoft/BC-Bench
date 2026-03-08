@@ -31,6 +31,10 @@ A minimal agent loop based on [mini-swe-agent](https://github.com/SWE-agent/mini
 
 The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP servers, tools, and agent mode. It closely simulates real developers' workflow (both VS Code and Coding Agent), making it an ideal candidate for evaluating automated workflows.
 
+### Claude Code
+
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) is Anthropic's agentic coding tool. It supports MCP servers, custom system prompts, and agent mode. BC-Bench integrates with Claude Code using the same shared configuration as Copilot.
+
 ## Getting Started
 
 - **[Run experiments](EXPERIMENTS.md)** - Evaluate models with MCP servers, custom instructions, and agents

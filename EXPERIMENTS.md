@@ -25,7 +25,7 @@ By default, Copilot CLI runs with `--no-custom-instructions` and no MCP Servers 
 
 Steps for an experiment:
 1. Create a new branch: `git checkout -b experiment/<meaningful-name>`
-2. Edit `src/bcbench/agent/shared/config.yaml` and optionally modify instruction markdown under `src/bcbench/agent/copilot/instructions/<sanitized-repo>/` (see below)
+2. Edit `src/bcbench/agent/shared/config.yaml` and optionally modify instruction markdown under `src/bcbench/agent/shared/instructions/<sanitized-repo>/` (see below)
 3. Locally run one entry: `uv run bcbench run copilot <entry_id>` to ensure everything is setup correctly
 4. Create a draft PR (the default template will let you switch to the experiment template)
 5. In GitHub Actions: run workflow `copilot-evaluation` after selecting your branch & model
@@ -33,6 +33,12 @@ Steps for an experiment:
 7. Run full evaluation
 
 > Test runs are faster (~1h) and help confirm MCP reachability & instruction copying before a longer full run.
+
+## Experimenting with Claude Code
+
+Same steps as Copilot above, but use `uv run bcbench run claude <entry_id>` locally and trigger the `claude-evaluation` workflow.
+
+## Shared Configuration
 
 ### MCP Servers
 
@@ -44,7 +50,6 @@ mcp:
     - name: "mslearn"
       type: "http"
       url: "https://learn.microsoft.com/api/mcp"
-      tools: ["*"]
 ```
 
 ### Custom Instructions
@@ -58,8 +63,8 @@ instructions:
 
 Replace the files below with your instructions:
 ```
-src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
-  copilot-instructions.md
+src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
+  AGENTS.md
   instructions/
     tables.instructions.md
     pages.instructions.md
@@ -68,8 +73,11 @@ src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
 
 How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
-2. All files under `microsoftInternal-NAV` will be copied into `NAV/.github/` (overwrite if exists)
-3. If `enabled: false`, a `--no-custom-instructions` flag is passed instead.
+2. **All files** are copied into the agent's target directory (`.github/` for Copilot, `.claude/` for Claude)
+3. `AGENTS.md` is renamed to the agent-specific filename (`copilot-instructions.md` for Copilot, `CLAUDE.md` for Claude)
+4. If `enabled: false`, Copilot gets `--no-custom-instructions` flag; Claude skips the file
+
+> **Warning:** Enabling instructions copies the **entire** `instructions/<sanitized-repo>/` folder, including `skills/` and `agents/` subdirectories. If you only want custom instructions without skills or agents, remove those subdirectories from the source folder.
 
 ### Skills
 
@@ -82,7 +90,7 @@ skills:
 
 Replace the folder and files below with your skills:
 ```
-src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
+src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
   skills/
     al-test-generation/
       SKILL.md
@@ -90,8 +98,9 @@ src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
 
 How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
-2. The `skills/` folder is copied to `NAV/.github/skills/` (replaces existing skills directory)
-3. If `enabled: false`, skills are simply not copied (Copilot auto-discovers from `.github/skills/`)
+2. **Copilot**: The `skills/` folder is copied to `NAV/.github/skills/` (replaces existing skills directory)
+3. **Claude**: The `skills/` folder is copied to `NAV/.claude/skills/`
+4. If `enabled: false`, skills are simply not copied
 
 ### Custom Agents
 
@@ -99,10 +108,12 @@ Enable instruction in the [config.yaml](src/bcbench/agent/shared/config.yaml):
 
 ```yaml
 # controls:
-# 1. whether to copy custom agents (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/agents/`) into the repo
-# 2. whether to pass --agent=<agent-name> to copilot
+# 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`
+#    - Copilot: copies to repo/.github/agents/
+#    - Claude: copies to repo/.claude/agents/
+# 2. whether to pass --agent=<agent-name> to copilot or claude
 agents:
-  enabled: true
+  enabled: false
   name: ALTest
 ```
 
@@ -113,6 +124,8 @@ You can find all results in the GitHub Action (workflow: `copilot-evaluation`) d
 - Artifacts:
   - per-entry result JSONL (with all metrics)
   - Copilot CLI logs
+
+The workflow `claude-evaluation` follows the same procedure.
 
 ## Frequently Asked Questions
 
