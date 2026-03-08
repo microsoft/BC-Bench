@@ -95,7 +95,8 @@ mcp:
           "--yes",
           "--",
           "launchmcpserver",
-          "{{project_paths}}",
+          "--transport",
+          "stdio",
         ]
 
     # - name: "mslearn"
