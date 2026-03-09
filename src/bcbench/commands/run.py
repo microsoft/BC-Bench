@@ -94,6 +94,7 @@ def run_claude(
     dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
+    al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
 ):
     """
     Run Claude Code on a single entry to generate a patch (without building/testing).
@@ -108,7 +109,7 @@ def run_claude(
     setup_repo_prebuild(entry, repo_path)
     setup_repo_postbuild(entry, repo_path, category)
 
-    run_claude_code(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir)
+    run_claude_code(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp)
 
 
 @run_app.command("mini-inspector")
