@@ -102,7 +102,7 @@ jobs:
           dotnet-version: "10.x"
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.47
+        run: npm install -g @anthropic-ai/claude-code@2.1.69
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 90
