@@ -142,6 +142,7 @@ def evaluate_copilot(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp,
+            container_name=ctx.container_name,
         ),
     )
 
@@ -201,6 +202,7 @@ def evaluate_claude_code(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp,
+            container_name=ctx.container_name,
         ),
     )
 

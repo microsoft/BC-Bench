@@ -34,7 +34,7 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
-def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False) -> tuple[str | None, list[str] | None]:
+def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False, container_name: str = "bcbench") -> tuple[str | None, list[str] | None]:
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
     if al_mcp:  # append project paths as separate positional args, no tools will be loaded if project path doesn't contain app.json
@@ -47,11 +47,16 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
     if not mcp_servers:
         return None, None
 
-    template_context: dict[str, str | Path] = {"repo_path": repo_path}
+    assembly_path = Path(r"C:\ProgramData\BcContainerHelper\compiler") / container_name / "dlls"
+    template_context: dict[str, str | Path] = {"repo_path": repo_path, "assembly_probing_path": str(assembly_path)}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
+    if assembly_path.exists():
+        logger.info(f"Assembly probing path: {assembly_path}")
+    else:
+        logger.warning(f"Assembly probing path not found: {assembly_path}. Run New-BCCompilerFolderSync to create it.")
     logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
 
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names

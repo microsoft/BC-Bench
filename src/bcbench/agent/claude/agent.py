@@ -18,7 +18,9 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+def run_claude_code(
+    entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False, container_name: str = "bcbench"
+) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
 
     Returns:
@@ -30,7 +32,7 @@ def run_claude_code(entry: DatasetEntry, model: str, category: EvaluationCategor
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp)
+    mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)

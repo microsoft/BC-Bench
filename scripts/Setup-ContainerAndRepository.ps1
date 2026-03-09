@@ -73,6 +73,9 @@ Write-Log "Retrieved artifact URL: $url" -Level Info
 # Create container synchronously with NAV folder shared
 New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath)
 
+# Create compiler folder synchronously
+New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
+
 Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 
 # Set output for GitHub Actions or return path

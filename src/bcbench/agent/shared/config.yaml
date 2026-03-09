@@ -97,6 +97,8 @@ mcp:
           "launchmcpserver",
           "--transport",
           "stdio",
+          "--assemblyprobingpaths",
+          "{{assembly_probing_path}}",
         ]
 
     # - name: "mslearn"
