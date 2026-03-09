@@ -36,7 +36,7 @@ def repo_path() -> Path:
 
 
 class TestAlMcpProjectPaths:
-    def test_project_paths_are_separate_positional_args(self, entry, repo_path):
+    def test_project_paths_inserted_after_launchmcpserver(self, entry, repo_path):
         config = _make_config(ALTOOL_SERVER)
 
         config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=True)
@@ -44,8 +44,9 @@ class TestAlMcpProjectPaths:
 
         parsed = json.loads(config_json)
         args = parsed["mcpServers"]["altool"]["args"]
-        assert args[-2] == str(repo_path / "src/App")
-        assert args[-1] == str(repo_path / "src/TestApp")
+        launch_idx = args.index("launchmcpserver")
+        assert args[launch_idx + 1] == str(repo_path / "src/App")
+        assert args[launch_idx + 2] == str(repo_path / "src/TestApp")
 
     def test_transport_stdio_is_present(self, entry, repo_path):
         config = _make_config(ALTOOL_SERVER)

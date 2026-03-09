@@ -37,9 +37,11 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
 def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False, container_name: str = "bcbench") -> tuple[str | None, list[str] | None]:
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
-    if al_mcp:  # append project paths as separate positional args, no tools will be loaded if project path doesn't contain app.json
+    if al_mcp:  # insert project paths right after "launchmcpserver" (positional args must precede options)
         al_server = next(s for s in mcp_servers if s["name"] == "altool")
-        al_server["args"].extend(str(repo_path / p) for p in entry.project_paths)
+        insert_idx = al_server["args"].index("launchmcpserver") + 1
+        project_paths = [str(repo_path / p) for p in entry.project_paths]
+        al_server["args"][insert_idx:insert_idx] = project_paths
         logger.info("AL MCP server enabled")
     else:
         mcp_servers = list(filter(lambda s: s.get("name") != "altool", mcp_servers))
@@ -47,7 +49,7 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
     if not mcp_servers:
         return None, None
 
-    assembly_path = Path(r"C:\ProgramData\BcContainerHelper\compiler") / container_name / "dlls"
+    assembly_path = Path(r"C:\ProgramData\BcContainerHelper\compiler") / f"{container_name}-compiler" / "dlls"
     template_context: dict[str, str | Path] = {"repo_path": repo_path, "assembly_probing_path": str(assembly_path)}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
