@@ -49,7 +49,7 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
     if not mcp_servers:
         return None, None
 
-    assembly_path = Path(r"C:\ProgramData\BcContainerHelper\compiler") / f"{container_name}-compiler" / "dlls"
+    assembly_path = Path(r"C:\ProgramData\BcContainerHelper\compiler") / container_name / "dlls"
     template_context: dict[str, str | Path] = {"repo_path": repo_path, "assembly_probing_path": str(assembly_path)}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}

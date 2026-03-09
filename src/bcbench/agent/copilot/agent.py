@@ -59,6 +59,7 @@ def run_copilot_agent(
             "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
             "--disable-builtin-mcps",
             f"--model={model}",
+            "--log-level=debug",
             f"--log-dir={output_dir.resolve()}",
             f"-p={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
