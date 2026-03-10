@@ -95,41 +95,12 @@ jobs:
         with:
           node-version: 24
 
-      - name: Setup .NET
+      - name: Install AL Tool
         if: ${{ inputs.al-mcp }}
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: |
-            8.x
-            10.x
+        run: dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.33.30146-beta
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.69
-
-      - name: Diagnose AL MCP tool
-        if: ${{ inputs.al-mcp }}
-        run: |
-          Write-Host "=== dotnet --version ==="
-          dotnet --version
-          Write-Host "=== dotnet --list-sdks ==="
-          dotnet --list-sdks
-          Write-Host "=== dotnet --list-runtimes ==="
-          dotnet --list-runtimes
-          Write-Host "=== PATH ==="
-          $env:PATH -split ';' | Where-Object { $_ -match 'dotnet|dnx' }
-          Write-Host "=== which dotnet ==="
-          Get-Command dotnet | Format-List Name, Source
-          Write-Host "=== which dnx ==="
-          Get-Command dnx -ErrorAction SilentlyContinue | Format-List Name, Source, CommandType
-          Write-Host "=== Test: dotnet dnx --help ==="
-          dotnet dnx --help 2>&1 | Select-Object -First 5
-          Write-Host "=== Test: dotnet dnx launch ==="
-          dotnet dnx Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.33.30146-beta --yes -- launchmcpserver --help 2>&1
-          Write-Host "=== Test: Node.js spawn (same as Claude Code) ==="
-          node -e "const {spawnSync}=require('child_process'); const r=spawnSync('dotnet',['dnx','Microsoft.Dynamics.BusinessCentral.Development.Tools','--version','18.0.33.30146-beta','--yes','--','launchmcpserver','--help'],{timeout:30000}); console.log('exit:',r.status); console.log('stdout:',r.stdout?.toString().slice(0,300)); console.log('stderr:',r.stderr?.toString().slice(0,500)); console.log('error:',r.error)"
-          Write-Host "=== Test: DOTNET_ROOT and env ==="
-          Write-Host "DOTNET_ROOT=$env:DOTNET_ROOT"
-          Write-Host "DOTNET_INSTALL_DIR=$env:DOTNET_INSTALL_DIR"
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 90

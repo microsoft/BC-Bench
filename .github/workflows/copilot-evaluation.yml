@@ -103,13 +103,9 @@ jobs:
         with:
           node-version: 24
 
-      - name: Setup .NET
+      - name: Install AL Tool
         if: ${{ inputs.al-mcp }}
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: |
-            8.x
-            10.x
+        run: dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.33.30146-beta
 
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot@1.0.2
