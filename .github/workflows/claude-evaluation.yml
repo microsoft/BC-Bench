@@ -95,11 +95,13 @@ jobs:
         with:
           node-version: 24
 
-      - name: Setup .NET 10
+      - name: Setup .NET
         if: ${{ inputs.al-mcp }}
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "10.x"
+          dotnet-version: |
+            8.x
+            10.x
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.69
