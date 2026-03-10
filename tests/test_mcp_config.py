@@ -14,8 +14,8 @@ def _make_config(*servers: dict) -> dict:
 ALTOOL_SERVER = {
     "name": "altool",
     "type": "stdio",
-    "command": "dnx",
-    "args": ["Microsoft.Dynamics.BusinessCentral.Development.Tools", "--", "launchmcpserver", "--transport", "stdio"],
+    "command": "dotnet",
+    "args": ["dnx", "Microsoft.Dynamics.BusinessCentral.Development.Tools", "--", "launchmcpserver", "--transport", "stdio"],
 }
 
 MSLEARN_SERVER = {

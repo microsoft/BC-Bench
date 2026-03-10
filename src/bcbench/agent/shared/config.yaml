@@ -86,9 +86,10 @@ mcp:
     # AL MCP server (toggled via --al-mcp CLI flag), https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools
     - name: "altool"
       type: "stdio"
-      command: "dnx"
+      command: "dotnet"
       args:
         [
+          "dnx",
           "Microsoft.Dynamics.BusinessCentral.Development.Tools",
           "--version",
           "18.0.33.30146-beta",
