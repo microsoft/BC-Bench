@@ -322,4 +322,21 @@ function New-BCContainerSync {
     Write-Log "Container created successfully: $ContainerName" -Level Success
 }
 
-Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync
+function New-BCCompilerFolderSync {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ContainerName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ArtifactUrl
+    )
+
+    Write-Log "Creating compiler folder for container: $ContainerName" -Level Info
+
+    [string]$compilerFolder = New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
+
+    Write-Log "Compiler folder created at: $compilerFolder" -Level Success
+}
+
+Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync, New-BCCompilerFolderSync

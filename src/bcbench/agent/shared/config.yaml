@@ -81,21 +81,26 @@ agents:
   enabled: false
   name: ALTest
 
-# mcp:
-#   servers:
-#     - name: "mslearn"
-#       type: "http"
-#       url: "https://learn.microsoft.com/api/mcp"
+mcp:
+  servers:
+    # AL MCP server (toggled via --al-mcp CLI flag), https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools
+    - name: "altool"
+      type: "stdio"
+      command: "al"
+      args:
+        [
+          "launchmcpserver",
+          "--transport",
+          "stdio",
+          "--assemblyprobingpaths",
+          "{{assembly_probing_path}}",
+        ]
 
-#     - name: "filesystem"
-#       type: "stdio"
-#       command: "npx"
-#       args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
+    # - name: "mslearn"
+    #   type: "http"
+    #   url: "https://learn.microsoft.com/api/mcp"
 
-# AL MCP server configuration (flag-gated via --al-mcp CLI flag)
-# https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools
-# This provides foundational AL development functions like compile
-al-mcp:
-  name: "altool"
-  type: "http"
-  url: "http://localhost:5000"
+    # - name: "filesystem"
+    #   type: "stdio"
+    #   command: "npx"
+    #   args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
