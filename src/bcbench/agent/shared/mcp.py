@@ -25,7 +25,7 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
         case "stdio":
             args: list[str] = server["args"]
             rendered_args = [Template(arg).render(**template_context) for arg in args]
-            command: str = shutil.which(server["command"]) if shutil.which(server["command"]) else server["command"]
+            command: str = shutil.which(server["command"]) or server["command"]
             return server_name, {
                 "type": server_type,
                 "command": command,

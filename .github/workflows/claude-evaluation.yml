@@ -97,7 +97,9 @@ jobs:
 
       - name: Install AL Tool
         if: ${{ inputs.al-mcp }}
-        run: dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.33.30146-beta
+        run: |
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.33.30146-beta
+          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.69
