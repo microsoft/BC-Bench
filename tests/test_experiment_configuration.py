@@ -9,6 +9,7 @@ class TestExperimentConfiguration:
 
         assert config.mcp_servers is None
         assert config.custom_instructions is False
+        assert config.skills_enabled is False
         assert config.custom_agent is None
 
     def test_with_mcp_servers(self):
@@ -17,6 +18,7 @@ class TestExperimentConfiguration:
 
         assert config.mcp_servers == mcp_servers
         assert config.custom_instructions is False
+        assert config.skills_enabled is False
         assert config.custom_agent is None
 
     def test_with_custom_instructions(self):
@@ -24,6 +26,7 @@ class TestExperimentConfiguration:
 
         assert config.mcp_servers is None
         assert config.custom_instructions is True
+        assert config.skills_enabled is False
         assert config.custom_agent is None
 
     def test_with_custom_agent(self):
@@ -31,7 +34,16 @@ class TestExperimentConfiguration:
 
         assert config.mcp_servers is None
         assert config.custom_instructions is False
+        assert config.skills_enabled is False
         assert config.custom_agent == "my-custom-agent"
+
+    def test_with_skills_enabled(self):
+        config = ExperimentConfiguration(skills_enabled=True)
+
+        assert config.mcp_servers is None
+        assert config.custom_instructions is False
+        assert config.skills_enabled is True
+        assert config.custom_agent is None
 
     def test_with_all_fields(self):
         mcp_servers = ["server-1"]
@@ -40,11 +52,13 @@ class TestExperimentConfiguration:
         config = ExperimentConfiguration(
             mcp_servers=mcp_servers,
             custom_instructions=True,
+            skills_enabled=True,
             custom_agent=custom_agent,
         )
 
         assert config.mcp_servers == mcp_servers
         assert config.custom_instructions is True
+        assert config.skills_enabled is True
         assert config.custom_agent == custom_agent
 
     def test_empty_mcp_servers_list(self):
@@ -52,4 +66,5 @@ class TestExperimentConfiguration:
 
         assert config.mcp_servers == []
         assert config.custom_instructions is False
+        assert config.skills_enabled is False
         assert config.custom_agent is None
