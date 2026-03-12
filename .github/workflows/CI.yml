@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
@@ -63,7 +63,7 @@ jobs:
     name: Test Run for ${{ matrix.entry }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
