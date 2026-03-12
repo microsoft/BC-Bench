@@ -16,9 +16,13 @@ To setup your local environment, follow [Setup](CONTRIBUTING.md) first.
 
 ## Step-by-Step
 
-### 1. Create your experiment branch
+### 1. Fork and create your experiment branch
 
 ```bash
+# Fork the repo (one-time setup, skip if already forked)
+gh repo fork microsoft/BC-Bench --clone
+
+# Create your experiment branch
 git checkout -b experiment/<meaningful-name>
 ```
 
