@@ -106,7 +106,7 @@ jobs:
       - name: Install AL Tool
         if: ${{ inputs.al-mcp }}
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.33.30146-beta
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.33.55542
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install GitHub Copilot CLI
