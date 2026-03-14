@@ -7,7 +7,7 @@ import yaml
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.logger import get_logger
-from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
+from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, commit_changes
 from bcbench.operations.instruction_operations import copy_problem_statement_folder
 from bcbench.types import EvaluationCategory
 
@@ -83,6 +83,7 @@ def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
     _remove_table_scope_onprem(repo_path)
+    commit_changes(repo_path, "Remove Scope = OnPrem from Table.al files")
 
 
 def setup_repo_postbuild(entry: DatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
