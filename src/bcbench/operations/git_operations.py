@@ -64,7 +64,7 @@ def commit_changes(repo_path: Path, message: str) -> None:
     logger.info(f"Committing changes: {message}")
     subprocess.run(["git", "add", "-A"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", message],
+        ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit", "--allow-empty", "-m", message],
         cwd=repo_path,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
