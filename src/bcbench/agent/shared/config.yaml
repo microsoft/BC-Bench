@@ -92,8 +92,6 @@ mcp:
           "launchmcpserver",
           "--transport",
           "stdio",
-          "--packagecachepath",
-          "{{package_cache_path}}",
           "--assemblyprobingpaths",
           "{{assembly_probing_path}}",
         ]

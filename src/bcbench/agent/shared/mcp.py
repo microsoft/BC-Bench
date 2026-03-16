@@ -73,6 +73,40 @@ def _build_assembly_probing_paths(compiler_folder: Path) -> str:
     return ";".join(paths)
 
 
+def _setup_package_cache(compiler_folder: Path, project_paths: list[str]) -> None:
+    """Copy symbol packages from the compiler folder into each project's .alpackages.
+
+    Mirrors BCContainerHelper's Compile-AppWithBcCompilerFolder.ps1 (lines 175-206),
+    which copies full symbol .app files into .alpackages before compiling. The AL MCP
+    workspace loads packages from .alpackages at startup; --packagecachepath doesn't
+    reliably override this.
+    """
+    symbols_folder = compiler_folder / "symbols"
+    if not symbols_folder.is_dir():
+        logger.warning(f"Symbols folder not found: {symbols_folder}")
+        return
+
+    symbol_apps = list(symbols_folder.glob("*.app"))
+    if not symbol_apps:
+        logger.warning(f"No symbol packages found in {symbols_folder}")
+        return
+
+    for project_path in project_paths:
+        alpackages = Path(project_path) / ".alpackages"
+        try:
+            alpackages.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            logger.warning(f"Cannot create .alpackages at {alpackages}")
+            continue
+
+        for app in symbol_apps:
+            dest = alpackages / app.name
+            if not dest.exists():
+                shutil.copy2(app, dest)
+
+        logger.info(f"Copied {len(symbol_apps)} symbol packages to {alpackages}")
+
+
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     server_type: str = server["type"]
     server_name: str = server["name"]
@@ -114,11 +148,14 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
 
     compiler_folder = Path(r"C:\ProgramData\BcContainerHelper\compiler") / container_name
     assembly_probing_paths = _build_assembly_probing_paths(compiler_folder)
-    package_cache_path = str(compiler_folder / "symbols")
+
+    if al_mcp:
+        project_paths = [str(repo_path / p) for p in entry.project_paths]
+        _setup_package_cache(compiler_folder, project_paths)
+
     template_context: dict[str, str | Path] = {
         "repo_path": repo_path,
         "assembly_probing_path": assembly_probing_paths,
-        "package_cache_path": package_cache_path,
     }
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
