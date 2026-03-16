@@ -8,7 +8,8 @@ from typing import Literal
 from pydantic import TypeAdapter
 
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry, TestEntry
+from bcbench.dataset import TestEntry
+from bcbench.dataset.dataset_entry import BugFixTestGenEntry
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger
 
@@ -157,7 +158,7 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
     logger.info("All projects built and published")
 
 
-def run_tests(entry: DatasetEntry, container_name: str, username: str, password: str) -> None:
+def run_tests(entry: BugFixTestGenEntry, container_name: str, username: str, password: str) -> None:
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
         run_test_suite(entry.fail_to_pass, "Pass", container_name, username, password)

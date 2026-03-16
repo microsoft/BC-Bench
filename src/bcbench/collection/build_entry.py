@@ -1,4 +1,4 @@
-"""Builder functions for creating DatasetEntry from ADO sources."""
+"""Builder functions for creating BugFixTestGenEntry from ADO sources."""
 
 from pathlib import Path
 from typing import Any
@@ -7,7 +7,7 @@ from bcbench.collection.ado_utils import extract_creation_date, extract_problem_
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, extract_patches, find_project_paths_from_diff
 from bcbench.collection.version_resolver import determine_environment_setup_version
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BugFixTestGenEntry
 from bcbench.operations.git_operations import checkout_commit
 from bcbench.operations.test_operations import extract_tests_from_patch
 
@@ -51,7 +51,7 @@ def build_dataset_entry_from_ado(
     base_commit: str,
     commit: str,
     diff_path: list[str] | None = None,
-) -> DatasetEntry:
+) -> BugFixTestGenEntry:
     created_at = extract_creation_date(pr_data)
     patch, patch_fix, patch_test = extract_patches(repo_path, base_commit, commit, diff_path=diff_path)
     problem_statement, hints = extract_problem_statement(work_item_data)
@@ -73,7 +73,7 @@ def build_dataset_entry_from_ado(
         hints=hints,
     )
 
-    return DatasetEntry(
+    return BugFixTestGenEntry(
         instance_id=instance_id,
         base_commit=base_commit,
         created_at=created_at,

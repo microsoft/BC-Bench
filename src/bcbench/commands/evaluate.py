@@ -21,16 +21,29 @@ from bcbench.cli_options import (
     RunId,
 )
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset import BaseDatasetEntry, get_entry_class
 from bcbench.evaluate import EvaluationPipeline, create_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
+
+
+def _load_entry(category: EvaluationCategory, entry_id: str, dataset_path: Path) -> BaseDatasetEntry:
+    entry_cls = get_entry_class(category)
+    return entry_cls.load(dataset_path, entry_id=entry_id)[0]
+
+
+def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
+    run_dir = output_dir / run_id
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True)
+    return run_dir
 
 
 @evaluate_app.command("mini")
@@ -40,8 +53,8 @@ def evaluate_mini(
     username: ContainerUsername,
     password: ContainerPassword,
     category: EvaluationCategoryOption,
+    dataset_path: DatasetPath,
     model: FoundryModel = "gpt-5.1-codex-mini",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mini_test_run",
@@ -51,14 +64,8 @@ def evaluate_mini(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run mini' instead.
     """
-    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
-    entry: DatasetEntry = entries[0]
-    logger.info(f"Loaded {entry_id} entry from dataset")
-
-    run_dir: Path = output_dir / run_id
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True)
+    entry = _load_entry(category, entry_id, dataset_path)
+    run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mini-bc-agent")
 
@@ -97,8 +104,8 @@ def evaluate_copilot(
     username: ContainerUsername,
     password: ContainerPassword,
     category: EvaluationCategoryOption,
+    dataset_path: DatasetPath,
     model: CopilotModel = "claude-haiku-4.5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
@@ -109,14 +116,8 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
-    entry: DatasetEntry = entries[0]
-    logger.info(f"Loaded {entry_id} entry from dataset")
-
-    run_dir: Path = output_dir / run_id
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True)
+    entry = _load_entry(category, entry_id, dataset_path)
+    run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
@@ -157,8 +158,8 @@ def evaluate_claude_code(
     username: ContainerUsername,
     password: ContainerPassword,
     category: EvaluationCategoryOption,
+    dataset_path: DatasetPath,
     model: ClaudeCodeModel = "claude-haiku-4-5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_code_test_run",
@@ -169,14 +170,8 @@ def evaluate_claude_code(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
-    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
-    entry: DatasetEntry = entries[0]
-    logger.info(f"Loaded {entry_id} entry from dataset")
-
-    run_dir: Path = output_dir / run_id
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True)
+    entry = _load_entry(category, entry_id, dataset_path)
+    run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
 
@@ -214,21 +209,15 @@ def evaluate_claude_code(
 def evaluate_mock(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    dataset_path: DatasetPath = _config.paths.dataset_path,
+    dataset_path: DatasetPath,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mock_run",
 ):
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
-    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
-    entry: DatasetEntry = entries[0]
-    logger.info(f"Loaded {entry_id} entry from dataset")
-
-    run_dir: Path = output_dir / run_id
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True)
+    entry = _load_entry(category, entry_id, dataset_path)
+    run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")
 

@@ -15,7 +15,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Footer, Header, Label, Static
 
-from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset.dataset_entry import BugFixTestGenEntry
 
 
 class DatasetReviewer(App):
@@ -57,7 +57,7 @@ class DatasetReviewer(App):
         super().__init__()
         self.dataset_path = dataset_path
         self.results_dir = results_dir
-        self.entries: list[DatasetEntry] = []
+        self.entries: list[BugFixTestGenEntry] = []
         self.current_index = 0
         self.resolution_cache: dict[str, tuple[int, int, list[str]]] = {}  # instance_id -> (resolved, total, failure_categories)
 
@@ -77,7 +77,7 @@ class DatasetReviewer(App):
         self._update_display()
 
     def _load_data(self) -> None:
-        self.entries = load_dataset_entries(self.dataset_path)
+        self.entries = BugFixTestGenEntry.load(dataset_path=self.dataset_path)
         if self.results_dir:
             self._load_resolution_stats()
 
@@ -118,7 +118,7 @@ class DatasetReviewer(App):
                     except json.JSONDecodeError:
                         continue
 
-    def _get_current_entry(self) -> DatasetEntry | None:
+    def _get_current_entry(self) -> BugFixTestGenEntry | None:
         if not self.entries or self.current_index >= len(self.entries):
             return None
         return self.entries[self.current_index]
@@ -144,7 +144,7 @@ class DatasetReviewer(App):
             return f" | [red]{resolved}/{total} resolved[/red]{failure_text}"
         return f" | [yellow]{resolved}/{total} resolved[/yellow]{failure_text}"
 
-    def _format_entry_info_left(self, entry: DatasetEntry) -> str:
+    def _format_entry_info_left(self, entry: BugFixTestGenEntry) -> str:
         lines = [
             f"[cyan bold]Repo:[/cyan bold] {entry.repo}",
             f"[cyan bold]Instance ID:[/cyan bold] {entry.instance_id}",
@@ -161,7 +161,7 @@ class DatasetReviewer(App):
 
         return "\n".join(lines)
 
-    def _format_entry_info_right(self, entry: DatasetEntry) -> str:
+    def _format_entry_info_right(self, entry: BugFixTestGenEntry) -> str:
         lines = []
 
         # Metadata

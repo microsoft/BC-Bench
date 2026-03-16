@@ -1,12 +1,21 @@
 """Dataset module for querying, validating and analyze dataset entries."""
 
-from bcbench.dataset.dataset_entry import DatasetEntry, TestEntry
-from bcbench.dataset.dataset_loader import load_dataset_entries
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixTestGenEntry, TestEntry
 from bcbench.dataset.reviewer import run_dataset_reviewer
+from bcbench.types import EvaluationCategory
 
 __all__ = [
-    "DatasetEntry",
+    "BaseDatasetEntry",
+    "BugFixTestGenEntry",
     "TestEntry",
-    "load_dataset_entries",
+    "get_entry_class",
     "run_dataset_reviewer",
 ]
+
+
+def get_entry_class(category: EvaluationCategory) -> type[BaseDatasetEntry]:
+    match category:
+        case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            return BugFixTestGenEntry
+        case _:
+            raise ValueError(f"Unknown evaluation category: {category}")

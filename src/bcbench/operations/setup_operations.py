@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixTestGenEntry
 from bcbench.logger import get_logger
 from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, commit_changes
 from bcbench.operations.instruction_operations import copy_problem_statement_folder
@@ -70,7 +70,7 @@ def _remove_table_scope_onprem(repo_path: Path) -> None:
         logger.info(f"Removed 'Scope = OnPrem;' from {modified_count} Table.al files")
 
 
-def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
+def setup_repo_prebuild(entry: BaseDatasetEntry, repo_path: Path) -> None:
     """Setup repository before building - clean and checkout base commit.
 
     This is the first phase of repo setup that should be called BEFORE build_and_publish_projects.
@@ -86,17 +86,12 @@ def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
     commit_changes(repo_path, "Remove Scope = OnPrem from Table.al files")
 
 
-def setup_repo_postbuild(entry: DatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
+def setup_repo_postbuild(entry: BugFixTestGenEntry, repo_path: Path, category: EvaluationCategory) -> None:
     """Setup repository after building - apply patches and copy problem statements.
 
     This is the second phase of repo setup that should be called AFTER build_and_publish_projects.
     For test-generation, this ensures the gold patch is applied only after the base code is built,
     so the agent sees the fixed code but tests run against the unfixed published app.
-
-    Args:
-        entry: Dataset entry with instance metadata
-        repo_path: Path to the repository
-        category: Evaluation category (bug-fix or test-generation)
     """
     if category == EvaluationCategory.TEST_GENERATION:
         input_mode: str = _get_test_generation_input_mode()

@@ -2,11 +2,11 @@ from pathlib import Path
 
 from jinja2 import Template
 
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.types import EvaluationCategory
 
 
-def build_prompt(entry: DatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
+def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")

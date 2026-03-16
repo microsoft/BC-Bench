@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.operations.instruction_operations import (
     _get_source_instructions_path,
     setup_instructions_from_config,
@@ -30,7 +30,7 @@ def test_setup_custom_instructions():
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"instructions": {"enabled": True}}
 
@@ -85,7 +85,7 @@ def test_overwrite_existing_instructions():
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"instructions": {"enabled": True}}
 
@@ -110,7 +110,7 @@ def test_overwrite_existing_instructions():
 def test_path_specific_instructions_removed_before_copy():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"instructions": {"enabled": True}}
 
@@ -133,7 +133,7 @@ def test_path_specific_instructions_removed_before_copy():
 def test_no_path_specific_instructions_warning():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"instructions": {"enabled": True}}
 
@@ -149,7 +149,7 @@ def test_no_path_specific_instructions_warning():
 def test_empty_instructions_folder_warning():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"instructions": {"enabled": True}}
 
@@ -167,7 +167,7 @@ def test_claude_instructions_renamed():
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"instructions": {"enabled": True}}
 

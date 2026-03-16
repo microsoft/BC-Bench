@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from bcbench.logger import get_logger
 
 if TYPE_CHECKING:
-    from bcbench.dataset import DatasetEntry
+    from bcbench.dataset import BaseDatasetEntry
 
 __all__ = ["AgentMetrics", "AgentType", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
@@ -111,7 +111,7 @@ class EvaluationContext:
     """
 
     # Core configuration
-    entry: DatasetEntry
+    entry: BaseDatasetEntry
     repo_path: Path
     result_dir: Path
 

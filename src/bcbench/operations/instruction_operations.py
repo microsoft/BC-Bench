@@ -2,7 +2,8 @@ from pathlib import Path
 from shutil import copytree, rmtree
 
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset.dataset_entry import BugFixTestGenEntry
 from bcbench.logger import get_logger
 from bcbench.types import AgentType
 
@@ -10,7 +11,7 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def setup_instructions_from_config(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
+def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
     """
     Setup custom instructions from config if enabled.
 
@@ -47,7 +48,7 @@ def setup_instructions_from_config(agent_config: dict, entry: DatasetEntry, repo
     return instructions_enabled
 
 
-def setup_custom_agent(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> str | None:
+def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType) -> str | None:
     """
     Setup custom agents in the repository if available.
     """
@@ -83,7 +84,7 @@ def _get_source_instructions_path(repo_name: str) -> Path:
     return instructions_path
 
 
-def copy_problem_statement_folder(entry: DatasetEntry, repo_path: Path) -> None:
+def copy_problem_statement_folder(entry: BugFixTestGenEntry, repo_path: Path) -> None:
     """
     Copy problem statement folder to the testbed repository root.
 

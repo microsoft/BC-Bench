@@ -1,9 +1,9 @@
 import json
 from unittest.mock import patch
 
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BugFixTestGenEntry
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentMetrics
+from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
 
 
@@ -12,13 +12,14 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
                 out_dir=output_dir,
                 run_id="test_run_123",
                 dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -43,13 +44,14 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_testgen_result],
                 out_dir=output_dir,
                 run_id="test_run_456",
                 dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -65,13 +67,14 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics, sample_testgen_result],
                 out_dir=output_dir,
                 run_id="test_run_789",
                 dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -94,13 +97,14 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
                 out_dir=output_dir,
                 run_id="test_run_abc",
                 dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -133,6 +137,7 @@ class TestWriteBcevalResults:
             run_id="test_run_xyz",
             dataset_path=sample_dataset_file,
             output_filename="results.jsonl",
+            category=EvaluationCategory.BUG_FIX,
         )
 
         output_file = output_dir / "results.jsonl"
@@ -148,13 +153,14 @@ class TestWriteBcevalResults:
 
         result = create_bugfix_result(metrics=AgentMetrics(execution_time=100.0, prompt_tokens=None, completion_tokens=1500))
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
             write_bceval_results(
                 results=[result],
                 out_dir=output_dir,
                 run_id="test_run_partial",
                 dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"

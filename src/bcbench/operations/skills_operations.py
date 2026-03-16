@@ -1,7 +1,7 @@
 from pathlib import Path
 from shutil import copytree, rmtree
 
-from bcbench.dataset.dataset_entry import DatasetEntry
+from bcbench.dataset.dataset_entry import BaseDatasetEntry
 from bcbench.logger import get_logger
 from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentType
@@ -9,7 +9,7 @@ from bcbench.types import AgentType
 logger = get_logger(__name__)
 
 
-def setup_agent_skills(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
+def setup_agent_skills(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
     """
     Setup skills in the repository if available.
 

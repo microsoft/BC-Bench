@@ -20,7 +20,7 @@ from bcbench.cli_options import (
     RepoPath,
 )
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset import BaseDatasetEntry, get_entry_class
 from bcbench.logger import get_logger
 from bcbench.operations import setup_repo_postbuild, setup_repo_prebuild
 
@@ -34,8 +34,8 @@ run_app = typer.Typer(help="Run agents on single dataset entry")
 def run_mini(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
+    dataset_path: DatasetPath,
     model: FoundryModel = "gpt-5.1-codex-mini",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
 ):
@@ -47,7 +47,7 @@ def run_mini(
     Example:
         uv run bcbench run mini microsoft__BCApps-5633 --step-limit 5 --category bug-fix
     """
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = get_entry_class(category).load(dataset_path, entry_id=entry_id)[0]
 
     setup_repo_prebuild(entry, repo_path)
     setup_repo_postbuild(entry, repo_path, category)
@@ -66,8 +66,8 @@ def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName,
+    dataset_path: DatasetPath,
     model: CopilotModel = "claude-haiku-4.5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
@@ -80,7 +80,7 @@ def run_copilot(
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = get_entry_class(category).load(dataset_path, entry_id=entry_id)[0]
 
     setup_repo_prebuild(entry, repo_path)
     setup_repo_postbuild(entry, repo_path, category)
@@ -93,8 +93,8 @@ def run_claude(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName,
+    dataset_path: DatasetPath,
     model: ClaudeCodeModel = "claude-haiku-4-5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
@@ -107,7 +107,7 @@ def run_claude(
     Example:
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = get_entry_class(category).load(dataset_path, entry_id=entry_id)[0]
 
     setup_repo_prebuild(entry, repo_path)
     setup_repo_postbuild(entry, repo_path, category)

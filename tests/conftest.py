@@ -1,7 +1,7 @@
 """
 Shared test fixtures for BC-Bench tests.
 
-This module provides reusable fixtures that create valid DatasetEntry objects
+This module provides reusable fixtures that create valid BugFixTestGenEntry objects
 meeting all Pydantic validation requirements.
 """
 
@@ -12,12 +12,12 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import DatasetEntry, TestEntry
+from bcbench.dataset import BugFixTestGenEntry, TestEntry
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext
 
-# Valid test data that passes all DatasetEntry validation rules
+# Valid test data that passes all BugFixTestGenEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
 VALID_REPO = "microsoftInternal/NAV"
 VALID_BASE_COMMIT = "a" * 40  # 40-character hex string
@@ -49,7 +49,7 @@ def create_dataset_entry(
     created_at: str = VALID_CREATED_AT,
     fail_to_pass: list[TestEntry] | None = None,
     pass_to_pass: list[TestEntry] | None = None,
-) -> DatasetEntry:
+) -> BugFixTestGenEntry:
     if project_paths is None:
         project_paths = VALID_PROJECT_PATHS.copy()
     if fail_to_pass is None:
@@ -57,7 +57,7 @@ def create_dataset_entry(
     if pass_to_pass is None:
         pass_to_pass = []
 
-    return DatasetEntry(
+    return BugFixTestGenEntry(
         instance_id=instance_id,
         repo=repo,
         base_commit=base_commit,
@@ -73,7 +73,7 @@ def create_dataset_entry(
 
 def create_evaluation_context(
     tmp_path: Path,
-    entry: DatasetEntry | None = None,
+    entry: BugFixTestGenEntry | None = None,
     agent_name: str = "test-agent",
     model: str = "test-model",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
@@ -151,7 +151,7 @@ def create_testgen_result(
     )
 
 
-def create_dataset_file(tmp_path: Path, entries: list[DatasetEntry] | None = None) -> Path:
+def create_dataset_file(tmp_path: Path, entries: list[BugFixTestGenEntry] | None = None) -> Path:
     if entries is None:
         entries = [create_dataset_entry()]
 
@@ -188,7 +188,7 @@ def sample_test_entry() -> TestEntry:
 
 
 @pytest.fixture
-def sample_dataset_entry() -> DatasetEntry:
+def sample_dataset_entry() -> BugFixTestGenEntry:
     return create_dataset_entry()
 
 
@@ -225,10 +225,9 @@ def sample_bugfix_result_with_metrics() -> BugFixResult:
 
 
 @pytest.fixture
-def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[DatasetEntry]:
+def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[BugFixTestGenEntry]:
     problem_dir = create_problem_statement_dir(tmp_path)
     entry = create_dataset_entry()
 
-    # Patch the problem_statement_dir property to return our temp directory
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
         yield entry

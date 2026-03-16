@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
@@ -52,7 +52,7 @@ def _create_bc_agent_class():
 
 
 def run_mini_agent(
-    entry: DatasetEntry,
+    entry: BaseDatasetEntry,
     repo_path: Path,
     model: str,
     category: EvaluationCategory,

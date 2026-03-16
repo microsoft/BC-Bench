@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset import BaseDatasetEntry, get_entry_class
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.testgeneration import TestGenerationResult
@@ -15,9 +15,10 @@ from bcbench.types import EvaluationCategory
 logger = get_logger(__name__)
 
 
-def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str) -> None:
+def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str, category: EvaluationCategory) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path)
+    entry_cls = get_entry_class(category)
+    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(dataset_path)
 
     output_file = out_dir / output_filename
     with open(output_file, "w") as f:
@@ -28,7 +29,8 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 logger.error(f"No matching dataset entry found for instance_id: {result.instance_id}")
                 continue
 
-            input, expected = get_info_from_dataset_entry(matching_entries[0], result.category)
+            matched_entry = matching_entries[0]
+            input, expected = matched_entry.get_task(), matched_entry.get_expected_output(result.category)
 
             metadata: dict[str, Any] = {
                 "model": result.model,
@@ -61,22 +63,3 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
             f.write(json.dumps(bceval_result) + "\n")
 
     logger.info(f"Wrote bceval results to: {output_file}")
-
-
-def get_info_from_dataset_entry(entry: DatasetEntry, category: EvaluationCategory) -> tuple[str, str]:
-    """
-    Extract relevant info from DatasetEntry for bceval results.
-
-    Args:
-        entry: The DatasetEntry instance
-        category: The evaluation category
-    Returns:
-        A tuple of (input, expected output)
-    """
-    match category:
-        case EvaluationCategory.BUG_FIX:
-            return entry.get_task(), entry.patch
-        case EvaluationCategory.TEST_GENERATION:
-            return entry.get_task(), entry.test_patch
-        case _:
-            raise ValueError(f"Unsupported evaluation category: {category}")
