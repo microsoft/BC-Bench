@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.agent.shared.mcp import build_mcp_config
+from bcbench.agent.shared.mcp import _build_assembly_probing_paths, build_mcp_config
 from tests.conftest import create_dataset_entry
 
 
@@ -84,3 +84,33 @@ class TestAlMcpProjectPaths:
         assert names is not None
 
         assert set(names) == {"altool", "mslearn"}
+
+
+class TestBuildAssemblyProbingPaths:
+    def test_nonexistent_compiler_folder_has_no_dlls_paths(self, tmp_path):
+        result = _build_assembly_probing_paths(tmp_path / "nonexistent")
+        assert "dlls" not in result
+
+    def test_includes_dlls_folder(self, tmp_path):
+        (tmp_path / "dlls").mkdir()
+
+        result = _build_assembly_probing_paths(tmp_path)
+        paths = result.split(";")
+
+        assert str(tmp_path / "dlls") in paths
+
+    def test_shared_folder_suppresses_system_dotnet(self, tmp_path):
+        dlls = tmp_path / "dlls"
+        dlls.mkdir()
+        (dlls / "shared").mkdir()
+
+        result = _build_assembly_probing_paths(tmp_path)
+
+        assert "Program Files" not in result
+
+    def test_semicolon_separator(self, tmp_path):
+        (tmp_path / "dlls").mkdir()
+
+        result = _build_assembly_probing_paths(tmp_path)
+
+        assert "," not in result
