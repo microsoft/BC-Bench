@@ -40,20 +40,20 @@ def _detect_dotnet_runtime_version() -> Version | None:
     return max(versions) if versions else None
 
 
-def _build_assembly_probing_paths(compiler_folder: Path) -> str:
-    """Build semicolon-separated assembly probing paths for the AL compiler.
+def _build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
+    """Build list of assembly probing paths for the AL compiler.
 
     The AL compiler recursively searches subdirectories (AssemblyLocatorBase.cs uses
-    SearchOption.AllDirectories), so ``dlls`` covers Service, OpenXML, Mock Assemblies, etc.
-    System .NET runtime paths must be added separately since they live outside the
-    compiler folder and are needed for DotNet interop (System.Net.Http, System.Text.Json, etc.).
+    SearchOption.AllDirectories), so a single ``dlls`` entry covers Service, OpenXML,
+    Mock Assemblies, etc. System .NET runtime paths must be added separately since
+    they live outside the compiler folder.
 
-    AL MCP's --assemblyprobingpaths expects semicolons as separators
-    (see ALMcpOptions.AddPaths in BC-DeveloperExperience).
+    Each path must be a separate CLI argument (System.CommandLine with
+    AllowMultipleArgumentsPerToken expects space-separated values, NOT semicolons).
     """
     paths: list[str] = []
-
     dlls_path = compiler_folder / "dlls"
+
     if dlls_path.is_dir():
         paths.append(str(dlls_path))
 
@@ -70,41 +70,7 @@ def _build_assembly_probing_paths(compiler_folder: Path) -> str:
         else:
             logger.warning("No compatible .NET runtime found. DotNet interop types may not resolve.")
 
-    return ";".join(paths)
-
-
-def _setup_package_cache(compiler_folder: Path, project_paths: list[str]) -> None:
-    """Copy symbol packages from the compiler folder into each project's .alpackages.
-
-    Mirrors BCContainerHelper's Compile-AppWithBcCompilerFolder.ps1 (lines 175-206),
-    which copies full symbol .app files into .alpackages before compiling. The AL MCP
-    workspace loads packages from .alpackages at startup; --packagecachepath doesn't
-    reliably override this.
-    """
-    symbols_folder = compiler_folder / "symbols"
-    if not symbols_folder.is_dir():
-        logger.warning(f"Symbols folder not found: {symbols_folder}")
-        return
-
-    symbol_apps = list(symbols_folder.glob("*.app"))
-    if not symbol_apps:
-        logger.warning(f"No symbol packages found in {symbols_folder}")
-        return
-
-    for project_path in project_paths:
-        alpackages = Path(project_path) / ".alpackages"
-        try:
-            alpackages.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            logger.warning(f"Cannot create .alpackages at {alpackages}")
-            continue
-
-        for app in symbol_apps:
-            dest = alpackages / app.name
-            if not dest.exists():
-                shutil.copy2(app, dest)
-
-        logger.info(f"Copied {len(symbol_apps)} symbol packages to {alpackages}")
+    return paths
 
 
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -147,23 +113,23 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
         return None, None
 
     compiler_folder = Path(r"C:\ProgramData\BcContainerHelper\compiler") / container_name
+    symbols_path = str(compiler_folder / "symbols")
     assembly_probing_paths = _build_assembly_probing_paths(compiler_folder)
 
     if al_mcp:
-        project_paths = [str(repo_path / p) for p in entry.project_paths]
-        _setup_package_cache(compiler_folder, project_paths)
+        al_server = next(s for s in mcp_servers if s["name"] == "altool")
 
-    template_context: dict[str, str | Path] = {
-        "repo_path": repo_path,
-        "assembly_probing_path": assembly_probing_paths,
-    }
+        # Each path must be a separate arg (System.CommandLine expects space-separated values)
+        if assembly_probing_paths:
+            al_server["args"].extend(["--assemblyprobingpaths", *assembly_probing_paths])
+            logger.info(f"Assembly probing paths: {assembly_probing_paths}")
+
+    template_context: dict[str, str | Path] = {"repo_path": repo_path, "package_cache_path": symbols_path}
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
-    if (compiler_folder / "dlls").exists():
-        logger.info(f"Assembly probing paths: {assembly_probing_paths}")
-    else:
+    if not (compiler_folder / "dlls").exists():
         logger.warning(f"Compiler folder not found: {compiler_folder}. Run New-BCCompilerFolderSync to create it.")
     logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
 

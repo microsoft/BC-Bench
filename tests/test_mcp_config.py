@@ -87,17 +87,16 @@ class TestAlMcpProjectPaths:
 
 
 class TestBuildAssemblyProbingPaths:
-    def test_nonexistent_compiler_folder_has_no_dlls_paths(self, tmp_path):
+    def test_nonexistent_compiler_folder_has_no_dlls(self, tmp_path):
         result = _build_assembly_probing_paths(tmp_path / "nonexistent")
-        assert "dlls" not in result
+        assert not any("dlls" in p for p in result)
 
     def test_includes_dlls_folder(self, tmp_path):
         (tmp_path / "dlls").mkdir()
 
         result = _build_assembly_probing_paths(tmp_path)
-        paths = result.split(";")
 
-        assert str(tmp_path / "dlls") in paths
+        assert str(tmp_path / "dlls") in result
 
     def test_shared_folder_suppresses_system_dotnet(self, tmp_path):
         dlls = tmp_path / "dlls"
@@ -106,11 +105,11 @@ class TestBuildAssemblyProbingPaths:
 
         result = _build_assembly_probing_paths(tmp_path)
 
-        assert "Program Files" not in result
+        assert not any("Program Files" in p for p in result)
 
-    def test_semicolon_separator(self, tmp_path):
+    def test_returns_list(self, tmp_path):
         (tmp_path / "dlls").mkdir()
 
         result = _build_assembly_probing_paths(tmp_path)
 
-        assert "," not in result
+        assert isinstance(result, list)
