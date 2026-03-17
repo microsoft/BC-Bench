@@ -98,6 +98,14 @@ class TestBuildAssemblyProbingPaths:
 
         assert str(tmp_path / "dlls") in result
 
+    def test_dlls_after_dotnet(self, tmp_path):
+        (tmp_path / "dlls").mkdir()
+
+        result = _build_assembly_probing_paths(tmp_path)
+
+        dlls_idx = next(i for i, p in enumerate(result) if "dlls" in p)
+        assert dlls_idx == len(result) - 1
+
     def test_shared_folder_suppresses_system_dotnet(self, tmp_path):
         dlls = tmp_path / "dlls"
         dlls.mkdir()

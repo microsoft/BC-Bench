@@ -48,20 +48,21 @@ def _build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
     Mock Assemblies, etc. System .NET runtime paths must be added separately since
     they live outside the compiler folder.
 
+    Path order matters: .NET runtime paths must come BEFORE dlls to avoid stale
+    type-forwarding stubs (e.g. XrmV91's 5.0.0.0 DLLs) shadowing the real types.
+    This matches BCContainerHelper's ordering (OpenXML → dotnet → Service).
+
     Each path must be a separate CLI argument (System.CommandLine with
     AllowMultipleArgumentsPerToken expects space-separated values, NOT semicolons).
     """
     paths: list[str] = []
     dlls_path = compiler_folder / "dlls"
 
-    if dlls_path.is_dir():
-        paths.append(str(dlls_path))
-
-    # .NET runtime: needed for BaseApp's DotNet interop types.
-    # If New-BcCompilerFolder bundled a shared\ folder (dotnet < minimum), it's already
-    # covered by the recursive dlls\ search above. Otherwise, add system dotnet paths.
+    # .NET runtime paths first — avoids stale type-forwarding stubs in dlls\ subfolders
     shared_folder = dlls_path / "shared"
-    if not shared_folder.is_dir():
+    if shared_folder.is_dir():
+        paths.append(str(shared_folder))
+    else:
         dotnet_version = _detect_dotnet_runtime_version()
         if dotnet_version:
             paths.append(str(_DOTNET_SHARED / "Microsoft.NETCore.App" / str(dotnet_version)))
@@ -69,6 +70,10 @@ def _build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
             logger.info(f"Using system .NET runtime {dotnet_version} for assembly probing")
         else:
             logger.warning("No compatible .NET runtime found. DotNet interop types may not resolve.")
+
+    # dlls\ after dotnet — recursively covers Service, OpenXML, Mock Assemblies, etc.
+    if dlls_path.is_dir():
+        paths.append(str(dlls_path))
 
     return paths
 
