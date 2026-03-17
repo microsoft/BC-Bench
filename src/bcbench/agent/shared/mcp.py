@@ -17,6 +17,11 @@ logger = get_logger(__name__)
 _EXCLUDED_DOTNET_MAJORS = {9, 10}
 _DOTNET_SHARED = Path(r"C:\Program Files\dotnet\shared")
 
+# Offset from BC platform major version to AL runtime version.
+# E.g. platform 25.0 (BC 2024w2) → runtime 14.0, platform 27.0 → runtime 16.0
+# See: BC-DeveloperExperience RuntimeVersion.cs
+_PLATFORM_TO_RUNTIME_OFFSET = 11
+
 
 def _detect_dotnet_runtime_version() -> Version | None:
     dotnet_shared = _DOTNET_SHARED
@@ -78,6 +83,43 @@ def _build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
     return paths
 
 
+def _set_runtime_version(project_paths: list[str]) -> None:
+    """Set the AL runtime version in each project's app.json based on platform version.
+
+    The AL MCP compiler (altool 17.0+) defaults to the latest runtime when "runtime"
+    is not set in app.json, enabling newer validation rules that reject older code.
+    Setting the runtime to match the platform version makes the compiler behave
+    like the version that originally compiled the code.
+    """
+    for project_path in project_paths:
+        app_json_path = Path(project_path) / "app.json"
+        if not app_json_path.is_file():
+            continue
+
+        try:
+            app_json = json.loads(app_json_path.read_text(encoding="utf-8-sig"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        if app_json.get("runtime"):
+            continue
+
+        platform = app_json.get("platform", "")
+        try:
+            platform_major = int(platform.split(".")[0])
+        except (ValueError, IndexError):
+            continue
+
+        runtime_major = platform_major - _PLATFORM_TO_RUNTIME_OFFSET
+        if runtime_major < 1:
+            continue
+
+        runtime = f"{runtime_major}.0"
+        app_json["runtime"] = runtime
+        app_json_path.write_text(json.dumps(app_json, indent=2, ensure_ascii=False), encoding="utf-8")
+        logger.info(f"Set runtime={runtime} in {app_json_path} (platform {platform})")
+
+
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     server_type: str = server["type"]
     server_name: str = server["name"]
@@ -123,6 +165,10 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
 
     if al_mcp:
         al_server = next(s for s in mcp_servers if s["name"] == "altool")
+        project_paths = [str(repo_path / p) for p in entry.project_paths]
+
+        # Set runtime version before MCP loads the projects
+        _set_runtime_version(project_paths)
 
         # Each path must be a separate arg (System.CommandLine expects space-separated values)
         if assembly_probing_paths:
