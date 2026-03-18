@@ -121,7 +121,7 @@ jobs:
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 90
         env:
-          GH_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' && secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' && secrets.COPILOT_PAT2 || secrets.COPILOT_PAT3) }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' && secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' && secrets.COPILOT_PAT2 || secrets.COPILOT_PAT3) }}
         run: |
           uv run bcbench evaluate copilot "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `

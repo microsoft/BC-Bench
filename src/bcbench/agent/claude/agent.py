@@ -54,7 +54,6 @@ def run_claude_code(
         debug_log_path: Path = output_dir.resolve() / "claude_debug.log"
         cmd_args = [
             claude_cmd,
-            "--print",  # Non-interactive mode
             "--output-format=json",
             "--no-session-persistence",
             f"--debug-file={debug_log_path}",
@@ -62,12 +61,21 @@ def run_claude_code(
             "--strict-mcp-config",  # Only use MCP servers from --mcp-config, ignoring all other MCP configurations
             f"--model={model}",
             "--permission-mode=bypassPermissions",  # bypassPermissions is needed to use tools and mcp servers
-            prompt.replace("\r", "").replace("\n", " "),
+            "--disallowedTools",
+            "WebFetch",
+            "Bash(curl *)",
+            "Bash(wget *)",
         ]
         if mcp_config_json:
             cmd_args.append(f"--mcp-config={mcp_config_json}")
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
+        cmd_args.extend(
+            [
+                "--print",  # Non-interactive mode
+                prompt.replace("\r", "").replace("\n", " "),
+            ]
+        )
 
         logger.debug(f"Claude Code command args: {cmd_args}")
 

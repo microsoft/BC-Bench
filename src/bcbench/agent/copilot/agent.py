@@ -56,12 +56,11 @@ def run_copilot_agent(
         cmd_args = [
             copilot_cmd,
             "--allow-all-tools",  # required for non-interactive mode
-            "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
             "--disable-builtin-mcps",
             f"--model={model}",
             "--log-level=debug",
             f"--log-dir={output_dir.resolve()}",
-            f"-p={prompt.replace('\r', '').replace('\n', ' ')}",
+            f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")

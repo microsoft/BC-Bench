@@ -57,7 +57,7 @@ def test_setup_custom_instructions():
                     if source_file.is_file():
                         target_file = target_item / source_file.relative_to(item)
                         assert target_file.exists(), f"{target_file} should exist"
-                        assert target_file.read_text() == source_file.read_text(), f"Content mismatch for {target_file}"
+                        assert target_file.read_text(encoding="utf-8") == source_file.read_text(encoding="utf-8"), f"Content mismatch for {target_file}"
 
 
 def test_sanitization():
@@ -101,10 +101,10 @@ def test_overwrite_existing_instructions():
 
         # Verify file was overwritten
         assert target_path.exists(), "Instruction file should exist"
-        new_content = target_path.read_text()
+        new_content = target_path.read_text(encoding="utf-8")
         assert new_content != original_content, "Content should be overwritten"
         source_file = instructions_source / _config.file_patterns.instruction_source_naming
-        assert new_content == source_file.read_text(), "Content should match source"
+        assert new_content == source_file.read_text(encoding="utf-8"), "Content should match source"
 
 
 def test_path_specific_instructions_removed_before_copy():
@@ -183,5 +183,5 @@ def test_claude_instructions_renamed():
         assert claude_md.exists(), "CLAUDE.md should exist"
 
         # Content should match the original source file
-        source_content = (instructions_source / _config.file_patterns.instruction_source_naming).read_text()
-        assert claude_md.read_text() == source_content, "CLAUDE.md content should match source"
+        source_content = (instructions_source / _config.file_patterns.instruction_source_naming).read_text(encoding="utf-8")
+        assert claude_md.read_text(encoding="utf-8") == source_content, "CLAUDE.md content should match source"

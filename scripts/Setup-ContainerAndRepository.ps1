@@ -54,7 +54,7 @@ if (Test-Path $RepoPath) {
 [string] $commitSha = $entries[0].base_commit
 
 Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
-Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha
+Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
