@@ -182,6 +182,43 @@ def view_entry(
         console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
 
+@dataset_app.command("cf-extract")
+def cf_extract(
+    entry_id: Annotated[str, typer.Argument(help="Base entry ID to extract workspace from")],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o", help="Directory to create workspace in")] = Path("cf-workspace"),
+    repo_path: Annotated[Path | None, typer.Option("--repo-path", "-r", help="Repository path for full-fidelity extraction")] = None,
+    dataset_path: DatasetPath = _config.paths.dataset_path,
+):
+    """Extract patch hunks into an editable workspace for counterfactual authoring."""
+    from bcbench.dataset.cf_workspace import extract_workspace
+
+    entries = load_dataset_entries(dataset_path, entry_id=entry_id)
+    entry = entries[0]
+
+    workspace = extract_workspace(entry, output_dir, repo_path)
+
+    typer.echo(f"Workspace created at: {workspace}")
+    typer.echo(f"  fix/after/   — edit these files to change the fix")
+    typer.echo(f"  test/after/  — edit these files to change the tests")
+    typer.echo(f"Run 'bcbench dataset cf-create {workspace}' when done editing.")
+
+
+@dataset_app.command("cf-create")
+def cf_create(
+    workspace_dir: Annotated[Path, typer.Argument(help="Path to the workspace directory")],
+    variant_description: Annotated[str, typer.Option("--variant-description", "-d", help="Description of the counterfactual variant")],
+    intervention_type: Annotated[str | None, typer.Option("--intervention-type", "-t", help="Type of intervention")] = None,
+):
+    """Create a counterfactual entry from an edited workspace."""
+    from bcbench.dataset.cf_workspace import create_cf_entry
+
+    cf_entry = create_cf_entry(workspace_dir, variant_description, intervention_type)
+
+    typer.echo(f"Created counterfactual entry: {cf_entry.instance_id}")
+    typer.echo(f"Problem statement: {cf_entry.problem_statement_override}")
+    typer.echo("Edit the problem statement README.md, then commit the changes.")
+
+
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
     instance_ids = []
 
