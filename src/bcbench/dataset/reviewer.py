@@ -15,7 +15,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Footer, Header, Label, Static
 
-from bcbench.dataset.dataset_entry import BugFixTestGenEntry
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixTestGenEntry
 
 
 class DatasetReviewer(App):
@@ -53,11 +53,12 @@ class DatasetReviewer(App):
         Binding("escape", "quit", "Quit"),
     ]
 
-    def __init__(self, dataset_path: Path, results_dir: Path | None = None):
+    def __init__(self, dataset_path: Path, entry_cls: type[BaseDatasetEntry], results_dir: Path | None = None):
         super().__init__()
         self.dataset_path = dataset_path
+        self.entry_cls = entry_cls
         self.results_dir = results_dir
-        self.entries: list[BugFixTestGenEntry] = []
+        self.entries: list[BaseDatasetEntry] = []
         self.current_index = 0
         self.resolution_cache: dict[str, tuple[int, int, list[str]]] = {}  # instance_id -> (resolved, total, failure_categories)
 
@@ -77,7 +78,7 @@ class DatasetReviewer(App):
         self._update_display()
 
     def _load_data(self) -> None:
-        self.entries = BugFixTestGenEntry.load(dataset_path=self.dataset_path)
+        self.entries = self.entry_cls.load(dataset_path=self.dataset_path)
         if self.results_dir:
             self._load_resolution_stats()
 
@@ -118,7 +119,7 @@ class DatasetReviewer(App):
                     except json.JSONDecodeError:
                         continue
 
-    def _get_current_entry(self) -> BugFixTestGenEntry | None:
+    def _get_current_entry(self) -> BaseDatasetEntry | None:
         if not self.entries or self.current_index >= len(self.entries):
             return None
         return self.entries[self.current_index]
@@ -144,7 +145,7 @@ class DatasetReviewer(App):
             return f" | [red]{resolved}/{total} resolved[/red]{failure_text}"
         return f" | [yellow]{resolved}/{total} resolved[/yellow]{failure_text}"
 
-    def _format_entry_info_left(self, entry: BugFixTestGenEntry) -> str:
+    def _format_entry_info_left(self, entry: BaseDatasetEntry) -> str:
         lines = [
             f"[cyan bold]Repo:[/cyan bold] {entry.repo}",
             f"[cyan bold]Instance ID:[/cyan bold] {entry.instance_id}",
@@ -161,7 +162,7 @@ class DatasetReviewer(App):
 
         return "\n".join(lines)
 
-    def _format_entry_info_right(self, entry: BugFixTestGenEntry) -> str:
+    def _format_entry_info_right(self, entry: BaseDatasetEntry) -> str:
         lines = []
 
         # Metadata
@@ -174,22 +175,23 @@ class DatasetReviewer(App):
                     lines.append(f"  [dim]{display_name}:[/dim] {field_value}")
             lines.append("")
 
-        # FAIL_TO_PASS tests
-        lines.append("[bold]FAIL_TO_PASS:[/bold]")
-        if entry.fail_to_pass:
-            for test in entry.fail_to_pass:
-                lines.append(f"  [magenta]{test.codeunitID}[/magenta]: {', '.join(test.functionName)}")
-        else:
-            lines.append("  [dim]None[/dim]")
+        if isinstance(entry, BugFixTestGenEntry):
+            # FAIL_TO_PASS tests
+            lines.append("[bold]FAIL_TO_PASS:[/bold]")
+            if entry.fail_to_pass:
+                for test in entry.fail_to_pass:
+                    lines.append(f"  [magenta]{test.codeunitID}[/magenta]: {', '.join(test.functionName)}")
+            else:
+                lines.append("  [dim]None[/dim]")
 
-        # PASS_TO_PASS tests
-        lines.append("")
-        lines.append("[bold]PASS_TO_PASS:[/bold]")
-        if entry.pass_to_pass:
-            for test in entry.pass_to_pass:
-                lines.append(f"  [magenta]{test.codeunitID}[/magenta]: {', '.join(test.functionName)}")
-        else:
-            lines.append("  [dim]None[/dim]")
+            # PASS_TO_PASS tests
+            lines.append("")
+            lines.append("[bold]PASS_TO_PASS:[/bold]")
+            if entry.pass_to_pass:
+                for test in entry.pass_to_pass:
+                    lines.append(f"  [magenta]{test.codeunitID}[/magenta]: {', '.join(test.functionName)}")
+            else:
+                lines.append("  [dim]None[/dim]")
 
         return "\n".join(lines)
 
@@ -229,6 +231,6 @@ class DatasetReviewer(App):
         self.exit()
 
 
-def run_dataset_reviewer(dataset_path: Path, results_dir: Path | None = None) -> None:
-    app = DatasetReviewer(dataset_path, results_dir)
+def run_dataset_reviewer(dataset_path: Path, entry_cls: type[BaseDatasetEntry], results_dir: Path | None = None) -> None:
+    app = DatasetReviewer(dataset_path, entry_cls, results_dir)
     app.run()

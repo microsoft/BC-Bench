@@ -37,7 +37,8 @@ def review_dataset(
     If --results-dir is provided, shows resolution stats (e.g., "2/5 resolved")
     for each entry based on the results in that directory.
     """
-    run_dataset_reviewer(dataset_path, results_dir)
+    entry_cls = get_entry_class(category)
+    run_dataset_reviewer(dataset_path, entry_cls, results_dir)
 
 
 @dataset_app.command("list")

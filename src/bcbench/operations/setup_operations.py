@@ -86,13 +86,16 @@ def setup_repo_prebuild(entry: BaseDatasetEntry, repo_path: Path) -> None:
     commit_changes(repo_path, "Remove Scope = OnPrem from Table.al files")
 
 
-def setup_repo_postbuild(entry: BugFixTestGenEntry, repo_path: Path, category: EvaluationCategory) -> None:
+def setup_repo_postbuild(entry: BaseDatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
     """Setup repository after building - apply patches and copy problem statements.
 
     This is the second phase of repo setup that should be called AFTER build_and_publish_projects.
     For test-generation, this ensures the gold patch is applied only after the base code is built,
     so the agent sees the fixed code but tests run against the unfixed published app.
     """
+    if not isinstance(entry, BugFixTestGenEntry):
+        raise TypeError(f"setup_repo_postbuild requires BugFixTestGenEntry, got {type(entry).__name__}")
+
     if category == EvaluationCategory.TEST_GENERATION:
         input_mode: str = _get_test_generation_input_mode()
         logger.info(f"Test generation input mode: {input_mode}")

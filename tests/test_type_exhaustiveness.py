@@ -28,6 +28,8 @@ def test_all_categories_have_pipelines():
 
 def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixTestGenEntry):
     for category in EvaluationCategory:
+        input_text = sample_dataset_entry_with_problem_statement.get_task()
         expected_output = sample_dataset_entry_with_problem_statement.get_expected_output(category)
+        assert isinstance(input_text, str)
         assert isinstance(expected_output, str)
         assert len(expected_output) > 0

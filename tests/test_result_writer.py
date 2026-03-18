@@ -51,7 +51,7 @@ class TestWriteBcevalResults:
                 run_id="test_run_456",
                 dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
-                category=EvaluationCategory.BUG_FIX,
+                category=EvaluationCategory.TEST_GENERATION,
             )
 
         output_file = output_dir / "results.jsonl"

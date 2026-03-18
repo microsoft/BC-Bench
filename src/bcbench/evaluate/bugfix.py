@@ -53,6 +53,7 @@ class BugFixPipeline(EvaluationPipeline):
         entry = self._get_entry(context)
         test_projects, _app_projects = categorize_projects(entry.project_paths)
 
+        # Clean test projects to revert any unintended agent changes before capturing diff
         clean_project_paths(context.repo_path, test_projects)
 
         generated_patch = stage_and_get_diff(context.repo_path)

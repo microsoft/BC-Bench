@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from abc import abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Self
 
@@ -86,8 +87,11 @@ class BaseDatasetEntry(BaseModel):
             json.dump(self.model_dump(by_alias=True, mode="json"), handle, ensure_ascii=False)
             handle.write("\n")
 
-    def get_task(self, transform_image_paths: bool = False) -> str:
-        raise NotImplementedError(f"{type(self).__name__} must implement get_task()")
+    @abstractmethod
+    def get_task(self, transform_image_paths: bool = False) -> str: ...
+
+    @abstractmethod
+    def get_expected_output(self, category: EvaluationCategory) -> str: ...
 
     def extract_project_name(self) -> str:
         if not self.project_paths:
@@ -100,9 +104,6 @@ class BaseDatasetEntry(BaseModel):
             return parts[-2] if parts[-1].lower() in ("app", "test") else parts[-1]
 
         return parts[-1] if parts else ""
-
-    def get_expected_output(self, category: EvaluationCategory) -> str:
-        return self.patch
 
 
 class BugFixTestGenEntry(BaseDatasetEntry):
