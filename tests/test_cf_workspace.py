@@ -352,8 +352,15 @@ class TestCreateCfEntry:
 
         data = json.loads(cf_path.read_text().strip())
         expected_order = [
-            "instance_id", "base_instance_id", "variant_description", "intervention_type",
-            "problem_statement_override", "FAIL_TO_PASS", "PASS_TO_PASS", "test_patch", "patch",
+            "instance_id",
+            "base_instance_id",
+            "variant_description",
+            "intervention_type",
+            "problem_statement_override",
+            "FAIL_TO_PASS",
+            "PASS_TO_PASS",
+            "test_patch",
+            "patch",
         ]
         assert list(data.keys()) == expected_order
 
