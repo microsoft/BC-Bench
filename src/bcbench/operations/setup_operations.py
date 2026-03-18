@@ -7,7 +7,7 @@ import yaml
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry
 from bcbench.logger import get_logger
-from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo, commit_changes
+from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
 from bcbench.operations.instruction_operations import copy_problem_statement_folder
 from bcbench.types import EvaluationCategory
 
@@ -37,39 +37,6 @@ def _get_test_generation_input_mode() -> str:
     return input_mode
 
 
-def _is_under_symlink(path: Path, root: Path) -> bool:
-    current = path
-    while current != root and current != current.parent:
-        if current.is_symlink():
-            return True
-        current = current.parent
-    return False
-
-
-def _remove_table_scope_onprem(repo_path: Path) -> None:
-    """Remove 'Scope = OnPrem;' from the top 50 lines of all *.Table.al files under the repo."""
-    table_files = [f for f in repo_path.rglob("*.Table.al") if not _is_under_symlink(f, repo_path)]
-    if not table_files:
-        return
-
-    logger.info(f"Removing 'Scope = OnPrem;' from {len(table_files)} Table.al files")
-    modified_count = 0
-    for table_file in table_files:
-        try:
-            lines = table_file.read_text(encoding="utf-8-sig").splitlines(keepends=True)
-        except (UnicodeDecodeError, OSError):
-            continue
-        head = lines[:50]
-        target_index = next((i for i, line in enumerate(head) if line.strip() == "Scope = OnPrem;"), None)
-        if target_index is not None:
-            del lines[target_index]
-            table_file.write_text("".join(lines), encoding="utf-8")
-            modified_count += 1
-
-    if modified_count:
-        logger.info(f"Removed 'Scope = OnPrem;' from {modified_count} Table.al files")
-
-
 def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
     """Setup repository before building - clean and checkout base commit.
 
@@ -82,8 +49,6 @@ def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
     """
     clean_repo(repo_path)
     checkout_commit(repo_path, entry.base_commit)
-    _remove_table_scope_onprem(repo_path)
-    commit_changes(repo_path, "Remove Scope = OnPrem from Table.al files")
 
 
 def setup_repo_postbuild(entry: DatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
