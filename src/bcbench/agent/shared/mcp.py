@@ -120,42 +120,6 @@ def _set_runtime_version(project_paths: list[str]) -> None:
         logger.info(f"Set runtime={runtime} in {app_json_path} (platform {platform})")
 
 
-def _remove_conflicting_symbols(symbols_folder: Path, project_paths: list[str]) -> None:
-    """Remove symbol packages that conflict with loaded source projects.
-
-    When both an app and its test are loaded as source projects, the symbols folder
-    may contain a newer .app version of the app with different method signatures.
-    The compiler resolves the test's dependency against the .app symbol instead of
-    the source project, causing false errors. Removing conflicting symbols forces
-    resolution from the loaded source.
-    """
-    if not symbols_folder.is_dir():
-        return
-
-    loaded_prefixes: set[str] = set()
-    for project_path in project_paths:
-        app_json_path = Path(project_path) / "app.json"
-        if not app_json_path.is_file():
-            continue
-        try:
-            app_json = json.loads(app_json_path.read_text(encoding="utf-8-sig"))
-            publisher = app_json.get("publisher", "")
-            name = app_json.get("name", "")
-            if publisher and name:
-                loaded_prefixes.add(f"{publisher}_{name}_")
-        except (json.JSONDecodeError, OSError):
-            continue
-
-    removed = 0
-    for app_file in symbols_folder.glob("*.app"):
-        if any(app_file.name.startswith(prefix) for prefix in loaded_prefixes):
-            app_file.unlink()
-            removed += 1
-
-    if removed:
-        logger.info(f"Removed {removed} conflicting symbol(s) from {symbols_folder}")
-
-
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     server_type: str = server["type"]
     server_name: str = server["name"]
@@ -203,7 +167,6 @@ def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Pat
         al_server["args"][insert_idx:insert_idx] = project_paths
 
         _set_runtime_version(project_paths)
-        _remove_conflicting_symbols(compiler_folder / "symbols", project_paths)
 
         # Each path must be a separate arg (System.CommandLine expects space-separated values)
         assembly_probing_paths = _build_assembly_probing_paths(compiler_folder)
