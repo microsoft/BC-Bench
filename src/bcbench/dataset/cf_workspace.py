@@ -5,6 +5,7 @@ from __future__ import annotations
 import difflib
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -451,6 +452,9 @@ def _scaffold_problem_statement(cf_instance_id: str, base_instance_id: str, ps_d
     if base_readme.exists():
         content = base_readme.read_text(encoding="utf-8")
         cf_readme.write_text(content, encoding="utf-8")
+        for asset in base_dir.iterdir():
+            if asset.name != readme_name and asset.is_file():
+                shutil.copy2(asset, cf_dir / asset.name)
         logger.info(f"Scaffolded problem statement from {base_readme}")
     else:
         cf_readme.write_text(

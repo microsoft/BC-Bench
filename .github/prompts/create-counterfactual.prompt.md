@@ -63,11 +63,12 @@ uv run bcbench dataset cf-create ./cf-<short-name> \
 - `FAIL_TO_PASS` auto-detection from [Test] procedures in test patch
 - `PASS_TO_PASS` auto-population from the base entry
 - Canonical key ordering in counterfactual.jsonl
-- Problem statement directory scaffolding (copies base README as template)
+- Problem statement directory scaffolding (copies base README **and all image/asset files** as template)
 
 ### Step 5: Edit problem statement README
 - If user provided a pre-written README, copy it to the scaffolded directory at `dataset/problemstatement/<cf_instance_id>/README.md`
 - Otherwise, edit the scaffolded README to describe the variant
+- **Images & assets are copied automatically** by `cf-create`. Verify with `Get-ChildItem dataset/problemstatement/<cf_instance_id>/` that all referenced images are present.
 
 ### Step 6: Verify
 ```bash
