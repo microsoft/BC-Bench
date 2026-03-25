@@ -107,7 +107,10 @@ function Invoke-GitCloneWithRetry {
         [string]$CommitSha,
 
         [Parameter(Mandatory = $false)]
-        [int]$FetchDepth = 200
+        [int]$FetchDepth = 200,
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$SparseCheckoutPaths = @()
     )
 
     # Extract domain and path from URL for authentication
@@ -141,6 +144,19 @@ function Invoke-GitCloneWithRetry {
             $remoteAddResult = & git -C $ClonePath remote add origin $authenticatedUrl 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to add remote origin with exit code $LASTEXITCODE`: $remoteAddResult"
+            }
+
+            # Configure sparse-checkout if paths are specified (limits which directories are checked out)
+            if ($SparseCheckoutPaths.Count -gt 0) {
+                Write-Log "Configuring sparse-checkout for paths: $($SparseCheckoutPaths -join ', ')" -Level Info
+                $sparseInitResult = & git -C $ClonePath sparse-checkout init --cone 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to initialize sparse-checkout with exit code $LASTEXITCODE`: $sparseInitResult"
+                }
+                $sparseSetResult = & git -C $ClonePath sparse-checkout set @SparseCheckoutPaths 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to set sparse-checkout paths with exit code $LASTEXITCODE`: $sparseSetResult"
+                }
             }
 
             # Fetch the specific commit with history
@@ -443,15 +459,17 @@ function Get-RepoCloneInfo {
 
     if ($isGitHub) {
         return @{
-            Url   = "https://github.com/$($Entry.repo).git"
-            Token = $env:GITHUB_TOKEN
+            Url                 = "https://github.com/$($Entry.repo).git"
+            Token               = $env:GITHUB_TOKEN
+            SparseCheckoutPaths = @()
         }
     }
     else {
-        # ADO internal NAV repository
+        # ADO internal NAV repository — sparse-checkout to only include application code
         return @{
-            Url   = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
-            Token = $env:ADO_TOKEN
+            Url                 = 'https://dynamicssmb2.visualstudio.com/Dynamics%20SMB/_git/NAV'
+            Token               = $env:ADO_TOKEN
+            SparseCheckoutPaths = @('App/Apps', 'App/Layers')
         }
     }
 }

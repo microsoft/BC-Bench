@@ -166,7 +166,7 @@ class BaseReviewer(App):
         build_str = "[green]✓[/green]" if build else "[red]✗[/red]"
         resolved_str = "[green]✓[/green]" if resolved else "[red]✗[/red]"
         current_category = result.get("review", {}).get("failure_category") or "[dim]None[/dim]"
-        parts = [f"Build: {build_str}"]
+        parts: list[str] = [f"Build: {build_str}"]
         if self.category == EvaluationCategory.TEST_GENERATION:
             post_passed = scores.get("PostPatchPassedRate", 0) == 1
             pre_failed = scores.get("PrePatchFailedRate", 0) == 1

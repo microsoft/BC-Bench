@@ -98,14 +98,14 @@ jobs:
       - name: Install AL Tool
         if: ${{ inputs.al-mcp }}
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.33.30146-beta
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.33.55542
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.69
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
-        timeout-minutes: 90
+        timeout-minutes: 120
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -117,7 +117,7 @@ jobs:
             ${{ inputs.al-mcp && '--al-mcp' || '' }}
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
