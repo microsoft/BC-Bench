@@ -14,13 +14,15 @@ from bcbench.dataset import DatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
 
-def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+def run_copilot_agent(
+    entry: DatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False, container_name: str = "bcbench"
+) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
     Returns:
@@ -32,10 +34,10 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp)
-    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path)
-    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path)
-    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path)
+    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
+    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
         custom_instructions=instructions_enabled,
@@ -54,13 +56,11 @@ def run_copilot_agent(entry: DatasetEntry, model: str, category: EvaluationCateg
         cmd_args = [
             copilot_cmd,
             "--allow-all-tools",  # required for non-interactive mode
-            "--allow-all-paths",  # might be required for non-interactive mode, seems to hang when trying to access files outside allowed dirs
             "--disable-builtin-mcps",
             f"--model={model}",
             "--log-level=debug",
-            "--disable-parallel-tools-execution",
             f"--log-dir={output_dir.resolve()}",
-            f"-p={prompt.replace('\r', '').replace('\n', ' ')}",
+            f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
         if not instructions_enabled:
             cmd_args.append("--no-custom-instructions")

@@ -6,37 +6,64 @@ This guide covers how to run BC-Bench evaluations with different configurations.
 
 To setup your local environment, follow [Setup](CONTRIBUTING.md) first.
 
-## Workflow Tips
+## How Experiments Work
 
-### Check for Running Workflows
+1. **You** create a PR with your experiment configuration
+2. **A Microsoft reviewer** reviews the PR for correctness and safety
+3. **The reviewer** triggers a test run (2 entries) to verify your setup
+4. **The reviewer** triggers 5 full evaluation runs
+5. **Results** are published in a results branch linked back to your PR
 
-Before queueing a new run, check if there's already one running:
+## Step-by-Step
+
+### 1. Fork and create your experiment branch
 
 ```bash
-# List running workflows for Copilot
-gh run list --workflow=copilot-evaluation --status=in_progress
+# Fork the repo (one-time setup, skip if already forked)
+gh repo fork microsoft/BC-Bench --clone
+
+# Create your experiment branch
+git checkout -b experiment/<meaningful-name>
 ```
 
-Avoid queueing multiple full evaluations simultaneously - they compete for resources and can cause timeouts.
+### 2. Configure your experiment
 
-## Experimenting with GitHub Copilot CLI
+Edit [`src/bcbench/agent/shared/config.yaml`](src/bcbench/agent/shared/config.yaml) and optionally add instruction/skill files under `src/bcbench/agent/shared/instructions/<sanitized-repo>/`.
 
-By default, Copilot CLI runs with `--no-custom-instructions` and no MCP Servers (`--disable-builtin-mcps`).
+See [Configuration Reference](#configuration-reference) below for details on each option.
 
-Steps for an experiment:
-1. Create a new branch: `git checkout -b experiment/<meaningful-name>`
-2. Edit `src/bcbench/agent/shared/config.yaml` and optionally modify instruction markdown under `src/bcbench/agent/copilot/instructions/<sanitized-repo>/` (see below)
-3. Locally run one entry: `uv run bcbench run copilot <entry_id>` to ensure everything is setup correctly
-4. Create a draft PR (the default template will let you switch to the experiment template)
-5. In GitHub Actions: run workflow `copilot-evaluation` after selecting your branch & model
-6. Start with **Test Run** (2 entries) → verify the changes are picked up in logs
-7. Run full evaluation
+> **Important:** Only modify files under `src/bcbench/agent/shared/`. Changes to other files (workflows, Python code, dataset, prompts) will not be accepted.
 
-> Test runs are faster (~1h) and help confirm MCP reachability & instruction copying before a longer full run.
+### 3. Test locally
+
+Run a single entry to verify your config is picked up and function as expected.
+
+```bash
+uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
+```
+
+### 4. Open a Pull Request
+
+Create a PR using the **Experiment** template. Fill in:
+- What you're testing and your hypothesis
+- Which configuration options you changed
+- Which agent, model, and category to evaluate
+
+The template includes a reviewer checklist — you don't need to fill that part in.
+
+### 5. Wait for review and results
+
+A Microsoft reviewer will:
+1. Review your configuration changes
+2. Run a test evaluation (2 entries) to verify the setup
+3. Trigger 5 full evaluation runs
+4. Link the results back to your PR
+
+## Configuration Reference
 
 ### MCP Servers
 
-Uncomment the `mcp:` section in [config.yaml](src/bcbench/agent/shared/config.yaml), and replace the example MCP Servers with yours:
+Update the `mcp:` section in [config.yaml](src/bcbench/agent/shared/config.yaml), and replace the example MCP Servers with yours:
 
 ```yaml
 mcp:
@@ -44,12 +71,11 @@ mcp:
     - name: "mslearn"
       type: "http"
       url: "https://learn.microsoft.com/api/mcp"
-      tools: ["*"]
 ```
 
 ### Custom Instructions
 
-Enable instruction in the [config.yaml](src/bcbench/agent/shared/config.yaml):
+Enable instructions in [config.yaml](src/bcbench/agent/shared/config.yaml):
 
 ```yaml
 instructions:
@@ -58,8 +84,8 @@ instructions:
 
 Replace the files below with your instructions:
 ```
-src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
-  copilot-instructions.md
+src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
+  AGENTS.md
   instructions/
     tables.instructions.md
     pages.instructions.md
@@ -68,12 +94,15 @@ src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
 
 How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
-2. All files under `microsoftInternal-NAV` will be copied into `NAV/.github/` (overwrite if exists)
-3. If `enabled: false`, a `--no-custom-instructions` flag is passed instead.
+2. **All files** are copied into the agent's target directory (`.github/` for Copilot, `.claude/` for Claude)
+3. `AGENTS.md` is renamed to the agent-specific filename (`copilot-instructions.md` for Copilot, `CLAUDE.md` for Claude)
+4. If `enabled: false`, Copilot gets `--no-custom-instructions` flag; Claude skips the file
+
+> **Warning:** Enabling instructions copies the **entire** `instructions/<sanitized-repo>/` folder, including `skills/` and `agents/` subdirectories. If you only want custom instructions without skills or agents, remove those subdirectories from the source folder.
 
 ### Skills
 
-Enable skills in the [config.yaml](src/bcbench/agent/shared/config.yaml):
+Enable skills in [config.yaml](src/bcbench/agent/shared/config.yaml):
 
 ```yaml
 skills:
@@ -82,7 +111,7 @@ skills:
 
 Replace the folder and files below with your skills:
 ```
-src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
+src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
   skills/
     al-test-generation/
       SKILL.md
@@ -90,38 +119,36 @@ src/bcbench/agent/copilot/instructions/microsoftInternal-NAV/
 
 How it works (take `NAV` repo as example):
 1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
-2. The `skills/` folder is copied to `NAV/.github/skills/` (replaces existing skills directory)
-3. If `enabled: false`, skills are simply not copied (Copilot auto-discovers from `.github/skills/`)
+2. **Copilot**: The `skills/` folder is copied to `NAV/.github/skills/` (replaces existing skills directory)
+3. **Claude**: The `skills/` folder is copied to `NAV/.claude/skills/`
+4. If `enabled: false`, skills are simply not copied
 
 ### Custom Agents
 
-Enable instruction in the [config.yaml](src/bcbench/agent/shared/config.yaml):
+Enable agents in [config.yaml](src/bcbench/agent/shared/config.yaml):
 
 ```yaml
-# controls:
-# 1. whether to copy custom agents (`src/bcbench/agent/copilot/instructions/<sanitized-repo>/agents/`) into the repo
-# 2. whether to pass --agent=<agent-name> to copilot
 agents:
-  enabled: true
+  enabled: false
   name: ALTest
 ```
 
+This controls:
+1. Whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/` (Copilot: `.github/agents/`, Claude: `.claude/agents/`)
+2. Whether to pass `--agent=<agent-name>` to the coding agent
+
 ## Results & Metrics
 
-You can find all results in the GitHub Action (workflow: `copilot-evaluation`) directly:
-- Logs: select one instance, find the step called `Run GitHub Copilot CLI ...`, and see how copilot solve an issue
-- Artifacts:
-  - per-entry result JSONL (with all metrics)
-  - Copilot CLI logs
+Results are available in two places:
+- **GitHub Actions artifacts**: per-entry result JSONL with all metrics, plus agent logs
+- **Results branch**: created automatically after a successful run, can be merged to update the leaderboard
 
 ## Frequently Asked Questions
 
 ### What if some jobs fail?
 
-It is normal to have some instabilities, inspect the failure messages to determine if it's indeed an instability. If so, simply re-queue the failed jobs; if not, implement the fix and you will have to trigger a brand new run afterwards.
+Some instability is normal. The reviewer will inspect failure messages — if it's infrastructure flakiness, they'll re-queue the failed jobs. If it's a configuration issue, they'll let you know so you can update your PR.
 
-### My runs have successfully finished, what now?
+### How long does an evaluation take?
 
-If you would like to display your results on the GitHub Page, you should be able to find a newly created branch as a result of the workflow run. Use that branch to create a Pull Request and make sure everything is correct, merge that Pull Request and you should be able to see it on GitHub Page after a few minutes.
-
-If the created branch has merge conflict, this is very common. You will need to manually resolve the conflict by appending the latest runs (ignore the aggregate). The aggregate can be manually re-calculated by running `uv run bcbench result refresh`.
+A test run (2 entries) takes roughly 1 hour. A full run takes longer depending on the dataset size. You'll be notified on the PR when results are ready.

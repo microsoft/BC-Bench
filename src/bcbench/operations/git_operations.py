@@ -60,6 +60,19 @@ def checkout_commit(repo_path: Path, commit: str) -> None:
     logger.info(f"Commit {commit} checked out")
 
 
+def commit_changes(repo_path: Path, message: str) -> None:
+    logger.info(f"Committing changes: {message}")
+    subprocess.run(["git", "add", "-A"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit", "--allow-empty", "-m", message],
+        cwd=repo_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    logger.info("Changes committed")
+
+
 def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") -> None:
     logger.info(f"Applying {patch_name}")
 

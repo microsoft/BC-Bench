@@ -37,6 +37,7 @@ def create_console_summary(results: list[BaseEvaluationResult]) -> None:
     table.add_column("Status", justify="center")
     table.add_column("MCP Servers", style="yellow")
     table.add_column("Custom Instructions", style="yellow")
+    table.add_column("Skills", style="yellow")
     table.add_column("Custom Agent", style="yellow")
     table.add_column("Error Message", style="dim")
 
@@ -44,8 +45,9 @@ def create_console_summary(results: list[BaseEvaluationResult]) -> None:
         status = "[green]Success[/green]" if result.resolved else "[red]Failed[/red]"
         mcp_servers = ", ".join(result.experiment.mcp_servers) if result.experiment and result.experiment.mcp_servers else "N/A"
         custom_instructions = "Yes" if result.experiment and result.experiment.custom_instructions else "No"
+        skills = "Yes" if result.experiment and result.experiment.skills_enabled else "No"
         custom_agent = result.experiment.custom_agent if result.experiment and result.experiment.custom_agent else "N/A"
-        table.add_row(result.instance_id, result.project, status, mcp_servers, custom_instructions, custom_agent, result.error_message or "")
+        table.add_row(result.instance_id, result.project, status, mcp_servers, custom_instructions, skills, custom_agent, result.error_message or "")
 
     console.print(table)
     console.print()
@@ -68,6 +70,7 @@ def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
 
     mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
     custom_instructions = "Yes" if results[0].experiment and results[0].experiment.custom_instructions else "No"
+    skills = "Yes" if results[0].experiment and results[0].experiment.skills_enabled else "No"
     custom_agent = results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else "N/A"
 
     # Calculate average tool usage
@@ -84,6 +87,7 @@ def create_github_job_summary(results: list[BaseEvaluationResult]) -> None:
 - Category: `{results[0].category.value}`
 - MCP Servers used: {mcp_servers}
 - Custom Instructions: {custom_instructions}
+- Skills: {skills}
 - Custom Agent: {custom_agent}
 - Successful evaluations: {resolved} :white_check_mark:
 - Failed evaluations: {failed} {success_icon}{tool_usage_section}

@@ -1,10 +1,21 @@
+import re
+from collections import Counter
+from pathlib import Path
+
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
 logger = get_logger(__name__)
 
+TOOL_USE_PATTERN = re.compile(r"executePreToolHooks called for tool: (.+)")
 
-def parse_metrics(data: dict) -> AgentMetrics | None:
+
+def parse_debug_log(log_path: Path) -> dict[str, int]:
+    content = log_path.read_text(encoding="utf-8")
+    return dict(Counter(TOOL_USE_PATTERN.findall(content)))
+
+
+def parse_metrics(data: dict, debug_log_path: Path | None = None) -> AgentMetrics | None:
     """Parse metrics from Claude Code result object.
 
     The Claude Code CLI outputs JSON when run with --output-format json.
@@ -62,9 +73,11 @@ def parse_metrics(data: dict) -> AgentMetrics | None:
 
         completion_tokens = usage.get("output_tokens")
 
-    # Tool usage is not directly available in the JSON output for baseline
-    # Could be parsed from session logs in future if needed
-    tool_usage = None
+    if debug_log_path and debug_log_path.exists():
+        try:
+            tool_usage = parse_debug_log(debug_log_path) or None
+        except Exception as e:
+            logger.warning(f"Failed to parse tool usage from {debug_log_path}: {e}")
 
     if any(v is not None for v in [execution_time, llm_duration, turn_count, prompt_tokens, completion_tokens]):
         return AgentMetrics(

@@ -1,6 +1,7 @@
 name: Evaluation with Claude Code
 permissions:
   contents: read
+  actions: write
 
 on:
   workflow_dispatch:
@@ -26,6 +27,11 @@ on:
         description: "Indicate this is a test run (with few entries)"
         required: false
         default: true
+        type: boolean
+      al-mcp:
+        description: "Enable AL MCP server"
+        required: false
+        default: false
         type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
@@ -70,7 +76,7 @@ jobs:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup BC container
         id: setup-env
@@ -89,11 +95,17 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install AL Tool
+        if: ${{ inputs.al-mcp }}
+        run: |
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.33.55542
+          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
+
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.47
+        run: npm install -g @anthropic-ai/claude-code@2.1.69
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
-        timeout-minutes: 90
+        timeout-minutes: 120
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -101,10 +113,11 @@ jobs:
             --model "${{ inputs.model }}" `
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
+            ${{ inputs.al-mcp && '--al-mcp' || '' }}
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
@@ -136,4 +149,4 @@ jobs:
       workflow-file: claude-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}

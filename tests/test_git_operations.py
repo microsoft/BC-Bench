@@ -5,7 +5,44 @@ from pathlib import Path
 import pytest
 
 from bcbench.exceptions import EmptyDiffError
-from bcbench.operations.git_operations import clean_project_paths, stage_and_get_diff
+from bcbench.operations.git_operations import clean_project_paths, commit_changes, stage_and_get_diff
+
+
+class TestCommitChanges:
+    @pytest.fixture
+    def temp_git_repo(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True, capture_output=True)
+            (repo_path / "file.al").write_text("original")
+            subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_path, check=True, capture_output=True)
+            yield repo_path
+
+    def test_committed_changes_excluded_from_diff(self, temp_git_repo):
+        (temp_git_repo / "file.al").write_text("setup change")
+        commit_changes(temp_git_repo, "setup")
+
+        (temp_git_repo / "file.al").write_text("agent change")
+        diff = stage_and_get_diff(temp_git_repo)
+
+        assert "agent change" in diff
+        # The diff should be against the committed "setup change", not the original "original"
+        assert "-original" not in diff
+        assert "-setup change" in diff
+
+    def test_commit_works_without_global_git_identity(self, temp_git_repo):
+        # Unset local user config to simulate CI environment
+        subprocess.run(["git", "config", "--unset", "user.email"], cwd=temp_git_repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "--unset", "user.name"], cwd=temp_git_repo, check=True, capture_output=True)
+
+        (temp_git_repo / "file.al").write_text("changed")
+        commit_changes(temp_git_repo, "should work without identity")
+
+        result = subprocess.run(["git", "log", "--oneline", "-1"], cwd=temp_git_repo, capture_output=True, text=True, check=True)
+        assert "should work without identity" in result.stdout
 
 
 class TestStageAndGetDiff:

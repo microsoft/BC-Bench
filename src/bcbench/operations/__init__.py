@@ -12,6 +12,7 @@ from bcbench.operations.git_operations import (
     checkout_commit,
     clean_project_paths,
     clean_repo,
+    commit_changes,
     stage_and_get_diff,
 )
 from bcbench.operations.instruction_operations import copy_problem_statement_folder, setup_custom_agent, setup_instructions_from_config
@@ -30,6 +31,7 @@ __all__ = [
     "checkout_commit",
     "clean_project_paths",
     "clean_repo",
+    "commit_changes",
     "copy_problem_statement_folder",
     "extract_tests_from_patch",
     "run_tests",

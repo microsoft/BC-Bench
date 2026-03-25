@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from bcbench.dataset import DatasetEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
+from bcbench.types import AgentType
 
 
 def test_setup_agent_skills_path():
@@ -28,7 +29,7 @@ def test_setup_agent_skills():
         config = {"skills": {"enabled": True}}
 
         # Setup skills
-        result = setup_agent_skills(config, entry, repo_path)
+        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
         assert result is True
 
         # Verify
@@ -73,7 +74,7 @@ def test_nonexistent_skills():
         config = {"skills": {"enabled": True}}
 
         try:
-            setup_agent_skills(config, entry, repo_path)
+            setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
             raise AssertionError("Expected FileNotFoundError for nonexistent repo")
         except FileNotFoundError as e:
             # Error comes from _get_source_instructions_path when repo folder doesn't exist
@@ -109,7 +110,7 @@ def test_overwrite_skill_folder_files():
         extra_file.write_text("SHOULD BE REMOVED")
 
         # Run setup
-        setup_agent_skills(config, entry, repo_path)
+        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Assert overwrite happened
         assert target_file.read_text() == source_file.read_text()
@@ -126,7 +127,7 @@ def test_path_specific_skills_copied():
         config = {"skills": {"enabled": True}}
 
         # Setup skills
-        setup_agent_skills(config, entry, repo_path)
+        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Verify path-specific skills were copied
         target_skills_dir = repo_path / ".github" / "skills"
@@ -151,7 +152,7 @@ def test_path_specific_skills_removed_before_copy():
         old_file.write_text("OLD SKILL CONTENT")
 
         # Setup skills
-        setup_agent_skills(config, entry, repo_path)
+        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         # Verify old file was removed
         assert not old_file.exists(), "Old skill file should be removed"
@@ -169,7 +170,7 @@ def test_skills_disabled():
         entry.repo = "microsoftInternal/NAV"
         config = {"skills": {"enabled": False}}
 
-        result = setup_agent_skills(config, entry, repo_path)
+        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
         assert result is False
         assert not (repo_path / ".github" / "skills").exists()

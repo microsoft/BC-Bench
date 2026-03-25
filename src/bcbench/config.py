@@ -78,7 +78,7 @@ class TimeoutConfig:
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
-            agent_execution=30 * 60,  # 30 minutes for coding agent (claude and copilot) execution
+            agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
         )
 
 
@@ -90,9 +90,8 @@ class FilePatternConfig:
     patch_pattern: str
     instance_pattern: str
     result_pattern: str
-    copilot_instruction_naming: str
-    copilot_instructions_dirname: str
-    copilot_instructions_pattern: str
+    instruction_source_naming: str
+    instructions_dirname: str
     test_project_identifiers: tuple[str, ...]
     problem_statement_readme: str
     problem_statement_dest_dir: str
@@ -105,9 +104,8 @@ class FilePatternConfig:
             patch_pattern=".patch",
             instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
             result_pattern=".jsonl",
-            copilot_instruction_naming="copilot-instructions.md",
-            copilot_instructions_dirname="instructions",
-            copilot_instructions_pattern="*.instructions.md",
+            instruction_source_naming="AGENTS.md",
+            instructions_dirname="instructions",
             test_project_identifiers=("test", "tests"),
             problem_statement_readme="README.md",
             problem_statement_dest_dir="problem",

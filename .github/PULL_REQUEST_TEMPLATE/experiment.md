@@ -1,16 +1,38 @@
 ## Experiment Description
 
-<!-- Brief description of what you're testing, and what do you expect to happen? -->
+<!-- Describe your hypothesis. What change do you expect to see in the benchmark results? -->
 
-## Evaluation Plan
+### Configuration Changes
 
-- [ ] Local run
-- [ ] Test run (2 entries) completed
-- [ ] Full evaluation queued
+- [ ] Custom instructions (`instructions.enabled: true`)
+- [ ] Skills (`skills.enabled: true`)
+- [ ] Custom agents (`agents.enabled: true`, name: ___)
+- [ ] MCP servers (list URLs below)
+- [ ] Other (describe)
 
-## Results
+### Agent & Model
 
-<!-- Fill in after evaluation completes, link to completed GitHub Actions -->
+<!-- Which agent(s) and model(s) should this run against? -->
+
+- **Agent:** <!-- Copilot / Claude -->
+- **Model:** <!-- e.g. claude-sonnet-4.6, gpt-5.4 -->
+- **Category:** <!-- bug-fix / test-generation -->
+
+### Expected Outcome
+
+<!-- What metric movement do you expect? e.g. "resolution rate +5% from custom AL instructions" -->
+
+---
+
+### Reviewer Checklist (Microsoft)
+
+- [ ] Configuration reviewed — no changes outside `src/bcbench/agent/shared/`
+- [ ] Test run (2 entries) passed
+- [ ] Full evaluation triggered (5 runs)
+- [ ] Results branch created and linked below
+
+**Run IDs:**
+<!-- Filled by reviewer after triggering runs -->
 
 ## Notes
 

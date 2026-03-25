@@ -1,0 +1,147 @@
+name: Download JSONL from latest evaluation run (test-generation)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to find evaluation runs for (default: current branch)"
+        required: false
+        default: ""
+      last:
+        description: "How many recent runs to search (default: 20)"
+        required: false
+        default: "20"
+      runId:
+        description: "If set, download artifacts from this run id (overrides search)"
+        required: false
+        default: ""
+      workflow:
+        description: "Evaluation workflow file name"
+        required: false
+        default: "evaluation.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  download-jsonl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth GitHub CLI
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh auth status
+
+      - name: Resolve evaluation Run ID (latest for branch)
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          REPO="${GITHUB_REPOSITORY}"
+          WORKFLOW="${{ inputs.workflow }}"
+          LAST="${{ inputs.last }}"
+
+          # Default branch input: current ref name
+          BRANCH_INPUT="${{ inputs.branch }}"
+          if [ -z "$BRANCH_INPUT" ]; then
+            BRANCH_INPUT="${GITHUB_REF_NAME}"
+          fi
+
+          # If user provided runId, use it
+          if [ -n "${{ inputs.runId }}" ]; then
+            echo "run_id=${{ inputs.runId }}" >> "$GITHUB_OUTPUT"
+            echo "branch=$BRANCH_INPUT" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # List recent runs for this workflow and branch, pick the newest
+          RUN_ID=$(gh run list \
+            --repo "$REPO" \
+            --workflow "$WORKFLOW" \
+            --branch "$BRANCH_INPUT" \
+            --limit "$LAST" \
+            --json databaseId,status,conclusion,createdAt,displayTitle \
+            --jq '.[0].databaseId')
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No runs found for workflow=$WORKFLOW branch=$BRANCH_INPUT" >&2
+            exit 1
+          fi
+
+          echo "Selected run id: $RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH_INPUT" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts for evaluation run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="${GITHUB_REPOSITORY}"
+          RUN_ID="${{ steps.resolve.outputs.run_id }}"
+
+          mkdir -p "out/artifacts/run-$RUN_ID"
+          gh run download "$RUN_ID" --repo "$REPO" --dir "out/artifacts/run-$RUN_ID"
+
+      - name: Extract ZIPs and collect JSONL
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_ID="${{ steps.resolve.outputs.run_id }}"
+          ROOT="out/artifacts/run-$RUN_ID"
+          OUT="out/jsonl/run-$RUN_ID"
+
+          mkdir -p "$OUT"
+
+          # Find all zips, extract each to a sibling folder
+          mapfile -t ZIPS < <(find "$ROOT" -type f \( -iname "*.zip" \))
+          echo "Found ZIPs: ${#ZIPS[@]}"
+
+          for z in "${ZIPS[@]}"; do
+            dest="${z%.*}_extracted"
+            mkdir -p "$dest"
+            unzip -o "$z" -d "$dest" >/dev/null
+          done
+
+          # Copy all jsonl found anywhere under ROOT (including extracted)
+          mapfile -t JSONLS < <(find "$ROOT" -type f \( -iname "*.jsonl" \))
+          echo "Found JSONL: ${#JSONLS[@]}"
+
+          # If none found, fail with helpful debug output
+          if [ "${#JSONLS[@]}" -eq 0 ]; then
+            echo "No .jsonl found. Listing artifact contents for debugging:"
+            find "$ROOT" -maxdepth 4 -type f | head -n 200
+            exit 2
+          fi
+
+          # Copy with collision handling
+          i=0
+          for f in "${JSONLS[@]}"; do
+            base="$(basename "$f")"
+            target="$OUT/$base"
+            if [ -e "$target" ]; then
+              i=$((i+1))
+              target="$OUT/${i}_$base"
+            fi
+            cp "$f" "$target"
+          done
+
+          echo "JSONL copied to $OUT"
+          ls -lah "$OUT" | head -n 50
+
+      - name: Upload JSONL bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: jsonl-from-evaluation-run-${{ steps.resolve.outputs.run_id }}
+          path: out/jsonl

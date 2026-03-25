@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
@@ -63,7 +63,7 @@ jobs:
     name: Test Run for ${{ matrix.entry }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
@@ -72,7 +72,7 @@ jobs:
         run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ needs.select-category.outputs.category }} --output-dir evaluation_results --run-id ${{ github.run_id }}
 
       - name: Upload mock evaluation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/
