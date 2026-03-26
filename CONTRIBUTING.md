@@ -1,7 +1,5 @@
 # Contributing to BC-Bench
 
-**Looking to run experiments?** Finish reading below and head over to [EXPERIMENTS.md](EXPERIMENTS.md).
-
 ## Before You Start
 
 Please [create an issue](https://github.com/microsoft/BC-Bench/issues/new) before making significant changes. This helps us:
