@@ -64,7 +64,9 @@ jobs:
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.get-entries.outputs.entries != '[]'
-    environment: ado-read
+    environment:
+      name: ado-read
+      deployment: false
     permissions:
       contents: read
       id-token: write

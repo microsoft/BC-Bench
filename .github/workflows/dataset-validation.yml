@@ -24,7 +24,9 @@ jobs:
     runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
     needs: get-entries
     if: needs.get-entries.outputs.entries != '[]'
-    environment: ado-read
+    environment:
+      name: ado-read
+      deployment: false
     permissions:
       contents: read
       id-token: write

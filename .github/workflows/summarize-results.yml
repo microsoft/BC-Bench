@@ -32,7 +32,9 @@ env:
 jobs:
   summarize-results:
     name: Results
-    environment: ado-read
+    environment:
+      name: ado-read
+      deployment: false
     permissions:
       contents: write
       id-token: write
