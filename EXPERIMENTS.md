@@ -84,7 +84,7 @@ instructions:
 
 Replace the files below with your instructions:
 ```
-src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
+src/bcbench/agent/shared/instructions/microsoft-BCApps/
   AGENTS.md
   instructions/
     tables.instructions.md
@@ -92,8 +92,8 @@ src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
     codeunits.instructions.md
 ```
 
-How it works (take `NAV` repo as example):
-1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
+How it works (take `microsoft/BCApps` repo as example):
+1. Repo name (`microsoft/BCApps`) is sanitized to `microsoft-BCApps`
 2. **All files** are copied into the agent's target directory (`.github/` for Copilot, `.claude/` for Claude)
 3. `AGENTS.md` is renamed to the agent-specific filename (`copilot-instructions.md` for Copilot, `CLAUDE.md` for Claude)
 4. If `enabled: false`, Copilot gets `--no-custom-instructions` flag; Claude skips the file
@@ -111,16 +111,16 @@ skills:
 
 Replace the folder and files below with your skills:
 ```
-src/bcbench/agent/shared/instructions/microsoftInternal-NAV/
+src/bcbench/agent/shared/instructions/microsoft-BCApps/
   skills/
     al-test-generation/
       SKILL.md
 ```
 
-How it works (take `NAV` repo as example):
-1. Repo name (`microsoftInternal/NAV`) is sanitized to `microsoftInternal-NAV`
-2. **Copilot**: The `skills/` folder is copied to `NAV/.github/skills/` (replaces existing skills directory)
-3. **Claude**: The `skills/` folder is copied to `NAV/.claude/skills/`
+How it works (take `microsoft/BCApps` repo as example):
+1. Repo name (`microsoft/BCApps`) is sanitized to `microsoft-BCApps`
+2. **Copilot**: The `skills/` folder is copied to `BCApps/.github/skills/` (replaces existing skills directory)
+3. **Claude**: The `skills/` folder is copied to `BCApps/.claude/skills/`
 4. If `enabled: false`, skills are simply not copied
 
 ### Custom Agents
@@ -134,7 +134,7 @@ agents:
 ```
 
 This controls:
-1. Whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/` (Copilot: `.github/agents/`, Claude: `.claude/agents/`)
+1. Whether to copy custom agent files from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/` (Copilot: `.github/agents/`, Claude: `.claude/agents/`)
 2. Whether to pass `--agent=<agent-name>` to the coding agent
 
 ## Results & Metrics
