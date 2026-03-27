@@ -100,6 +100,7 @@ class BaseEvaluationResult(BaseModel):
         with open(output_file, "a", encoding="utf-8") as f:
             result_dict = self.model_dump(mode="json")
             result_dict["category"] = self.category.value
+            # Per-instance JSONL result files are uploaded as workflow artifacts and are the only inputs required by the summarize-results workflow.
             f.write(json.dumps(result_dict) + "\n")
 
         logger.info(f"Saved evaluation result for {self.instance_id} to {output_file}")
