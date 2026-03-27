@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bcbench.dataset import BugFixTestGenEntry
+from bcbench.dataset import BugFixTestGenEntry, get_entry_class
 from bcbench.evaluate import create_pipeline
 from bcbench.types import AgentType, EvaluationCategory
 
@@ -24,6 +24,12 @@ def test_all_categories_have_pipelines():
     for category in EvaluationCategory:
         pipeline = create_pipeline(category)
         assert pipeline is not None
+
+
+def test_all_categories_have_entry_classes():
+    for category in EvaluationCategory:
+        entry_cls = get_entry_class(category)
+        assert entry_cls is not None
 
 
 def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixTestGenEntry):

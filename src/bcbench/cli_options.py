@@ -9,8 +9,6 @@ from bcbench.types import EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
-DatasetPath = Annotated[Path, typer.Option(help="Path to dataset file")]
-
 RepoPath = Annotated[Path, typer.Option(help="Path to repository")]
 
 SchemaPath = Annotated[Path, typer.Option(help="Path to schema file")]

@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, BugFixTestGenEntry
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixTestGenEntry
 from bcbench.logger import get_logger
 from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
 from bcbench.operations.instruction_operations import copy_problem_statement_folder
@@ -14,7 +14,7 @@ from bcbench.types import EvaluationCategory
 logger = get_logger(__name__)
 _config = get_config()
 
-__all__ = ["_get_test_generation_input_mode", "setup_repo_postbuild", "setup_repo_prebuild"]
+__all__ = ["_get_test_generation_input_mode", "setup_repo", "setup_repo_postbuild", "setup_repo_prebuild"]
 
 
 def _get_test_generation_input_mode() -> str:
@@ -51,16 +51,24 @@ def setup_repo_prebuild(entry: BaseDatasetEntry, repo_path: Path) -> None:
     checkout_commit(repo_path, entry.base_commit)
 
 
-def setup_repo_postbuild(entry: BaseDatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
-    """Setup repository after building - apply patches and copy problem statements.
+def setup_repo(entry: BaseDatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
+    """Full repository setup: clean, checkout, and apply category-specific postbuild steps."""
+    setup_repo_prebuild(entry, repo_path)
+    match category:
+        case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            assert isinstance(entry, BugFixTestGenEntry)
+            setup_repo_postbuild(entry, repo_path, category)
+
+
+def setup_repo_postbuild(entry: BugFixTestGenEntry, repo_path: Path, category: EvaluationCategory) -> None:
+    """Setup repository after building for bug-fix and test-generation categories.
 
     This is the second phase of repo setup that should be called AFTER build_and_publish_projects.
     For test-generation, this ensures the gold patch is applied only after the base code is built,
     so the agent sees the fixed code but tests run against the unfixed published app.
-    """
-    if not isinstance(entry, BugFixTestGenEntry):
-        raise TypeError(f"setup_repo_postbuild requires BugFixTestGenEntry, got {type(entry).__name__}")
 
+    Note: Other categories should implement their own postbuild setup.
+    """
     if category == EvaluationCategory.TEST_GENERATION:
         input_mode: str = _get_test_generation_input_mode()
         logger.info(f"Test generation input mode: {input_mode}")

@@ -101,6 +101,15 @@ class EvaluationCategory(str, Enum):
     # CODE_REVIEW = "code-review"
     # EVENT_REQUEST = "event-request"
 
+    @property
+    def dataset_path(self) -> Path:
+        from bcbench.config import get_config
+
+        config = get_config()
+        if self not in config.paths.dataset_paths:
+            raise ValueError(f"No dataset path configured for category: {self.value}")
+        return config.paths.dataset_paths[self]
+
 
 @dataclass
 class EvaluationContext:

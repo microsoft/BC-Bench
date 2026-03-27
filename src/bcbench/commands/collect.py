@@ -17,7 +17,7 @@ collect_app = typer.Typer(help="Collect dataset entries from various sources")
 @collect_app.command("nav")
 def collect_nav(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
-    output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_path,
+    output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
     repo_path: RepoPath = _config.paths.testbed_path,
     diff_path: Annotated[
         list[str] | None,
@@ -37,7 +37,7 @@ def collect_nav(
 @collect_app.command("gh")
 def collect_gh(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
-    output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_path,
+    output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
 ):
     """

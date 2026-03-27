@@ -15,10 +15,10 @@ from bcbench.types import EvaluationCategory
 logger = get_logger(__name__)
 
 
-def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str, category: EvaluationCategory) -> None:
+def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, output_filename: str, category: EvaluationCategory) -> None:
     """Write results into a JSONL file for bceval consumption."""
     entry_cls = get_entry_class(category)
-    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(dataset_path)
+    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
 
     output_file = out_dir / output_filename
     with open(output_file, "w") as f:

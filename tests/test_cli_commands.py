@@ -1,14 +1,14 @@
 """Integration tests for CLI commands using Typer's CliRunner."""
 
 import json
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
 from bcbench.dataset import BugFixTestGenEntry
-from bcbench.types import AgentMetrics
+from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -95,7 +95,10 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     base_path, run_id, dataset_path = sample_results_directory
     results_dir = base_path / run_id
 
-    with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+    with (
+        patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+    ):
         result = runner.invoke(
             app,
             [
@@ -107,8 +110,6 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
                 run_id,
                 "--result-dir",
                 str(base_path),
-                "--dataset-path",
-                str(dataset_path),
             ],
         )
 
@@ -128,7 +129,10 @@ def test_result_summarize_verifies_summary_calculations(sample_results_directory
     base_path, run_id, dataset_path = sample_results_directory
     results_dir = base_path / run_id
 
-    with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+    with (
+        patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+    ):
         result = runner.invoke(
             app,
             [
@@ -140,8 +144,6 @@ def test_result_summarize_verifies_summary_calculations(sample_results_directory
                 run_id,
                 "--result-dir",
                 str(base_path),
-                "--dataset-path",
-                str(dataset_path),
             ],
         )
 
@@ -168,8 +170,6 @@ def test_result_summarize_missing_directory_fails_gracefully(tmp_path):
             "summarize",
             "--category",
             "bug-fix",
-            "--dataset-path",
-            str(tmp_path / "dummy.jsonl"),
             "--run-id",
             "nonexistent_run",
             "--result-dir",
@@ -197,8 +197,6 @@ def test_result_summarize_no_matching_files_fails_gracefully(tmp_path):
             "summarize",
             "--category",
             "bug-fix",
-            "--dataset-path",
-            str(tmp_path / "dummy.jsonl"),
             "--run-id",
             run_id,
             "--result-dir",
@@ -213,7 +211,10 @@ def test_result_summarize_no_matching_files_fails_gracefully(tmp_path):
 def test_result_summarize_with_custom_pattern(sample_results_directory, problem_statement_dir):
     base_path, run_id, dataset_path = sample_results_directory
 
-    with patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+    with (
+        patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+    ):
         result = runner.invoke(
             app,
             [
@@ -225,8 +226,6 @@ def test_result_summarize_with_custom_pattern(sample_results_directory, problem_
                 run_id,
                 "--result-dir",
                 str(base_path),
-                "--dataset-path",
-                str(dataset_path),
                 "--result-pattern",
                 "*.jsonl",
             ],
@@ -237,15 +236,14 @@ def test_result_summarize_with_custom_pattern(sample_results_directory, problem_
 
 @pytest.mark.integration
 def test_dataset_list_displays_all_entries(sample_dataset_file_for_cli):
-    result = runner.invoke(
-        app,
-        [
-            "dataset",
-            "list",
-            "--dataset-path",
-            str(sample_dataset_file_for_cli),
-        ],
-    )
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
+        result = runner.invoke(
+            app,
+            [
+                "dataset",
+                "list",
+            ],
+        )
 
     assert result.exit_code == 0
     assert "microsoftInternal__NAV-1" in result.stdout
@@ -258,15 +256,14 @@ def test_dataset_list_displays_all_entries(sample_dataset_file_for_cli):
 def test_dataset_list_missing_file_fails_gracefully(tmp_path):
     nonexistent_path = tmp_path / "nonexistent.jsonl"
 
-    result = runner.invoke(
-        app,
-        [
-            "dataset",
-            "list",
-            "--dataset-path",
-            str(nonexistent_path),
-        ],
-    )
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=nonexistent_path):
+        result = runner.invoke(
+            app,
+            [
+                "dataset",
+                "list",
+            ],
+        )
 
     assert result.exit_code != 0
 
@@ -276,15 +273,14 @@ def test_dataset_list_empty_file_shows_zero_entries(tmp_path):
     empty_dataset = tmp_path / "empty.jsonl"
     empty_dataset.write_text("")
 
-    result = runner.invoke(
-        app,
-        [
-            "dataset",
-            "list",
-            "--dataset-path",
-            str(empty_dataset),
-        ],
-    )
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=empty_dataset):
+        result = runner.invoke(
+            app,
+            [
+                "dataset",
+                "list",
+            ],
+        )
 
     assert result.exit_code == 0
     assert "Found 0 entry(ies)" in result.stdout
@@ -295,15 +291,14 @@ def test_dataset_list_single_entry(tmp_path):
     entry = create_dataset_entry(instance_id="microsoftInternal__NAV-100")
     dataset_path = create_dataset_file(tmp_path, [entry])
 
-    result = runner.invoke(
-        app,
-        [
-            "dataset",
-            "list",
-            "--dataset-path",
-            str(dataset_path),
-        ],
-    )
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path):
+        result = runner.invoke(
+            app,
+            [
+                "dataset",
+                "list",
+            ],
+        )
 
     assert result.exit_code == 0
     assert "microsoftInternal__NAV-100" in result.stdout
@@ -312,15 +307,14 @@ def test_dataset_list_single_entry(tmp_path):
 
 @pytest.mark.integration
 def test_dataset_list_verifies_entry_format(sample_dataset_file_for_cli):
-    result = runner.invoke(
-        app,
-        [
-            "dataset",
-            "list",
-            "--dataset-path",
-            str(sample_dataset_file_for_cli),
-        ],
-    )
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
+        result = runner.invoke(
+            app,
+            [
+                "dataset",
+                "list",
+            ],
+        )
 
     assert result.exit_code == 0
     # Should contain instance_id of first entry
