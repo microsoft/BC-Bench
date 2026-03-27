@@ -1,13 +1,10 @@
 # Contributing to BC-Bench
 
-**Looking to run experiments?** Finish reading below and head over to [EXPERIMENTS.md](EXPERIMENTS.md).
+## Contribution Model
 
-## Before You Start
+BC-Bench is open source for reference and reuse, but this repository does not accept external code contributions. We welcome feedback and suggestions through [GitHub Issues](https://github.com/microsoft/BC-Bench/issues/new).
 
-Please [create an issue](https://github.com/microsoft/BC-Bench/issues/new) before making significant changes. This helps us:
-- Avoid duplicate work
-- Discuss the approach before implementation
-- Provide guidance on the codebase
+The instructions below are for teams that fork BC-Bench and replace the dataset with their own tasks.
 
 ## Repo Structure
 
@@ -31,10 +28,10 @@ Prerequisites:
 
 ```bash
 # Folder layout example
-#   C:\depot\BCApps     -> cloned https://github.com/microsoft/BCApps
-#   C:\depot\BC-Bench   -> this repo
+#   C:\depot\BCApps     -> cloned evaluation target repository
+#   C:\depot\BC-Bench   -> your fork of this repo
 
-gh repo clone microsoft/BC-Bench
+gh repo fork microsoft/BC-Bench --clone
 cd BC-Bench
 
 # Install python

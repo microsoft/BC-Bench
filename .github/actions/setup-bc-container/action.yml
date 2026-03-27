@@ -53,6 +53,8 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
+        Write-Output "::add-mask::$env:GITHUB_TOKEN"
+
         # Get Azure DevOps access token via OIDC
         $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
         Write-Output "::add-mask::$env:ADO_TOKEN"

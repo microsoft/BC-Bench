@@ -64,7 +64,9 @@ jobs:
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.get-entries.outputs.entries != '[]'
-    environment: ado-read
+    environment:
+      name: ado-read
+      deployment: false
     permissions:
       contents: read
       id-token: write
@@ -105,10 +107,12 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.69
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
-        timeout-minutes: 90
+        timeout-minutes: 120
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          Write-Output "::add-mask::$env:ANTHROPIC_API_KEY"
+
           uv run bcbench evaluate claude "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
             --category "${{ inputs.category }}" `
@@ -121,7 +125,7 @@ jobs:
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:

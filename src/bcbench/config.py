@@ -78,7 +78,7 @@ class TimeoutConfig:
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
-            agent_execution=30 * 60,  # 30 minutes for coding agent (claude and copilot) execution
+            agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
         )
 
 

@@ -84,6 +84,7 @@ agents:
 mcp:
   servers:
     # AL MCP server (toggled via --al-mcp CLI flag), https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools
+    # NOTE: --assemblyprobingpaths are injected programmatically by mcp.py (requires runtime detection)
     - name: "altool"
       type: "stdio"
       command: "al"
@@ -92,8 +93,8 @@ mcp:
           "launchmcpserver",
           "--transport",
           "stdio",
-          "--assemblyprobingpaths",
-          "{{assembly_probing_path}}",
+          "--packagecachepath",
+          "{{package_cache_path}}",
         ]
 
     # - name: "mslearn"

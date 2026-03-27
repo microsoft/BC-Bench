@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: 1
 
   summarize-results:

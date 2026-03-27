@@ -45,7 +45,9 @@ jobs:
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.get-entries.outputs.entries != '[]'
-    environment: ado-read
+    environment:
+      name: ado-read
+      deployment: false
     permissions:
       contents: read
       id-token: write
@@ -85,6 +87,7 @@ jobs:
           AZURE_API_BASE: ${{ secrets.AZURE_API_BASE }}
         run: |
           $env:AZURE_AD_TOKEN = az account get-access-token --resource https://cognitiveservices.azure.com --query accessToken -o tsv
+          Write-Output "::add-mask::$env:AZURE_AD_TOKEN"
 
           uv run bcbench evaluate mini "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
@@ -97,7 +100,7 @@ jobs:
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
