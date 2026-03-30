@@ -2,7 +2,9 @@
 
 ## Contribution Model
 
-BC-Bench is open source for reference and reuse, but this repository does not accept external code contributions. We welcome feedback and suggestions through [GitHub Issues](https://github.com/microsoft/BC-Bench/issues/new).
+Thank you for your interest in BC-Bench.
+
+BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time.
 
 The instructions below are for teams that fork BC-Bench and replace the dataset with their own tasks.
 
@@ -19,6 +21,7 @@ BC-Bench/
 ├── evaluator/      # Braintrust scorer integration, used only when uploading result to Braintrust
 └── docs/           # GitHub Page for the leaderboard site
 ```
+
 ## Setup
 
 Prerequisites:
