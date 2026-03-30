@@ -2,7 +2,7 @@ from pathlib import Path
 
 from jinja2 import Template
 
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import DatasetEntry, ExtensibilityDatasetEntry
 from bcbench.types import EvaluationCategory
 
 
@@ -23,5 +23,20 @@ def build_prompt(entry: DatasetEntry, repo_path: Path, config: dict, category: E
         include_project_paths=include_project_paths,
         is_gold_patch=is_gold_patch,  # only relevant for test-generation
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
+        al_mcp=al_mcp,  # whether AL MCP server is enabled
+    )
+
+
+def build_prompt_ext(entry: ExtensibilityDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
+    prompt_config = config.get("prompt", {})
+    template_str = prompt_config.get(f"{category.value}-template")
+    include_project_paths = prompt_config.get("include_project_paths")
+
+    template = Template(template_str)
+    return template.render(
+        repo_path=repo_path,
+        task=entry.get_task(),
+        project_paths=", ".join(entry.project_paths),
+        include_project_paths=include_project_paths,
         al_mcp=al_mcp,  # whether AL MCP server is enabled
     )

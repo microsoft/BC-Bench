@@ -6,9 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset import DatasetEntry, ExtensibilityDatasetEntry, load_dataset_entries, load_ext_dataset_entries
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.extensibility import ExtensibilityResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 
@@ -17,7 +18,13 @@ logger = get_logger(__name__)
 
 def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, dataset_path: Path, output_filename: str) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path)
+
+    is_extensibility = dataset_path.suffix.lower() == ".yaml"
+
+    if is_extensibility:
+        dataset_entries: list[ExtensibilityDatasetEntry] = load_ext_dataset_entries(dataset_path)
+    else:
+        dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path)
 
     output_file = out_dir / output_filename
     with open(output_file, "w") as f:
@@ -28,7 +35,10 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 logger.error(f"No matching dataset entry found for instance_id: {result.instance_id}")
                 continue
 
-            input, expected = get_info_from_dataset_entry(matching_entries[0], result.category)
+            if is_extensibility:
+                input, expected = get_info_from_dataset_entry_ext(matching_entries[0])
+            else:
+                input, expected = get_info_from_dataset_entry(matching_entries[0], result.category)
 
             metadata: dict[str, Any] = {
                 "model": result.model,
@@ -49,11 +59,14 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 metadata["pre_patch_failed"] = result.pre_patch_failed
                 metadata["post_patch_passed"] = result.post_patch_passed
 
+            if isinstance(result, ExtensibilityResult):
+                metadata["json_output"] = result.json_output
+
             bceval_result = {
                 "id": result.instance_id,
                 "input": input,
                 "expected": expected,
-                "output": result.generated_patch,
+                "output": result.generated_patch if not is_extensibility else result.json_output,
                 "context": "",
                 "metadata": metadata,
                 "tags": [],
@@ -80,3 +93,15 @@ def get_info_from_dataset_entry(entry: DatasetEntry, category: EvaluationCategor
             return entry.get_task(), entry.test_patch
         case _:
             raise ValueError(f"Unsupported evaluation category: {category}")
+
+
+def get_info_from_dataset_entry_ext(entry: ExtensibilityDatasetEntry) -> tuple[str, str]:
+    """
+    Extract relevant info from ExtensibilityDatasetEntry for bceval results.
+
+    Args:
+        entry: The ExtensibilityDatasetEntry instance
+    Returns:
+        A tuple of (input, expected output)
+    """
+    return entry.get_task(), json.dumps(entry.expected)

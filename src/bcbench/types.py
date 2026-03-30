@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from bcbench.logger import get_logger
 
 if TYPE_CHECKING:
-    from bcbench.dataset import DatasetEntry
+    from bcbench.dataset import DatasetEntry, ExtensibilityDatasetEntry
 
 __all__ = ["AgentMetrics", "AgentType", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
@@ -39,6 +39,31 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+
+class ExtAgentMetrics(BaseModel):
+    """Metrics collected during extensibility agent execution.
+
+    Separates runtime execution data from experiment configuration.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    # Total execution time in seconds
+    execution_time: float | None = None
+    llm_duration: float | None = None
+
+    turn_count: int | None = None
+
+    # Token usage from LLM calls
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+    # Tool usage statistics from agent logs
+    tool_usage: dict[str, int] | None = None
+
+    # JSON output produced by the extensibility agent
+    json_output: str | None = None
 
 
 class ExperimentConfiguration(BaseModel):
@@ -98,6 +123,7 @@ class AgentType(str, Enum):
 class EvaluationCategory(str, Enum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
+    EXTENSIBILITY_REQUEST = "extensibility-request"
     # CODE_REVIEW = "code-review"
     # EVENT_REQUEST = "event-request"
 
@@ -111,7 +137,7 @@ class EvaluationContext:
     """
 
     # Core configuration
-    entry: DatasetEntry
+    entry: DatasetEntry | ExtensibilityDatasetEntry
     repo_path: Path
     result_dir: Path
 

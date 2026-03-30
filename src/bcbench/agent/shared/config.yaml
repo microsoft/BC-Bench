@@ -54,6 +54,22 @@ prompt:
     {{task}}
     {% endif %}
 
+  extensibility-request-template: |
+    You are working with a Business Central (AL) code repository at {{repo_path}}.
+
+    Task: Analyze and process the extensibility request using the custom agent - "Argus extensibility agent"
+
+    Request details:
+    {{task}}
+
+    Important constraints:
+    - Do NOT modify any existing code or test files
+    - Do NOT commit any changes to the repository
+    - Do NOT try to build or run tests
+
+    CRITICAL OUTPUT REQUIREMENT:
+    After completing the analysis, you MUST produce a comprehensive JSON output.
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
@@ -63,7 +79,7 @@ prompt:
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentType.instruction_filename) during setup
 instructions:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
@@ -78,8 +94,8 @@ skills:
 #    - Claude: copies to repo/.claude/agents/
 # 2. whether to pass --agent=<agent-name> to copilot or claude
 agents:
-  enabled: false
-  name: ALTest
+  enabled: true
+  name: Argus
 
 mcp:
   servers:

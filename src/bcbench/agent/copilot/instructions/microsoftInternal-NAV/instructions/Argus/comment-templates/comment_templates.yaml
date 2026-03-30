@@ -1,0 +1,490 @@
+comment_templates:
+
+  # =============================================================================
+  # APPROVAL COMMENTS (Success Path)
+  # =============================================================================
+  #
+  # ⚠️ CRITICAL RULES FOR APPROVAL COMMENTS:
+  # 1. Follow the template EXACTLY - do not add extra sections
+  # 2. NEVER add "Analysis Summary", "Team Assignment", or similar metadata
+  # 3. NEVER add "Correction Required" or explain differences from author's proposal
+  # 4. NEVER add footer like "This issue has been analyzed by Argus Agent"
+  # 5. NEVER add "Thank you" messages or greetings
+  # 6. Show ONLY what will be implemented - no explanations of WHY
+  # 7. If request passed validation, just show the final implementation code
+  # =============================================================================
+
+  approved_event_request:
+    description: "Posted when event-request issue is approved"
+    applies_to: ["event-request"]
+    template: |
+      ✅ **Analysis complete - approved for implementation**
+
+      ---
+
+      **Implementation:**
+
+      {implementation_description}
+
+      {code_location_description}
+
+      ```al
+      {code_with_event_call}
+      ```
+
+      **Event Publisher (add at the end of the codeunit with other events):**
+
+      ```al
+      {event_publisher_code}
+      ```
+
+      ---
+
+      **File:** `{filename_only}`
+
+    placeholders:
+      implementation_description:
+        description: "Brief description of what needs to be added/changed"
+        example: "Add a new integration event in the `Code()` procedure of Codeunit 5880 \"Phys. Invt. Order-Finish\" before `TempInvtOrderTrackingBuffer.Modify()` in the loop."
+
+      code_location_description:
+        description: "Description of where in the code the change goes"
+        example: "**Location in `Code()` procedure (around line 149):**"
+
+      code_with_event_call:
+        description: "Code snippet showing event call in context"
+        example: |
+          TempInvtOrderTrackingBuffer.Reset();
+          if TempInvtOrderTrackingBuffer.Find('-') then
+              repeat
+                  TempInvtOrderTrackingBuffer."Qty. To Transfer" :=
+                      TempInvtOrderTrackingBuffer."Qty. Recorded (Base)" - TempInvtOrderTrackingBuffer."Qty. Expected (Base)";
+                  OnCodeOnBeforeModifyInvtOrderTracking(TempInvtOrderTrackingBuffer);  // <-- New event
+                  TempInvtOrderTrackingBuffer.Modify();
+              until TempInvtOrderTrackingBuffer.Next() = 0;
+
+      event_publisher_code:
+        description: "The event publisher procedure to add"
+        example: |
+          [IntegrationEvent(false, false)]
+          local procedure OnCodeOnBeforeModifyInvtOrderTracking(var TempInvtOrderTracking: Record "Invt. Order Tracking" temporary)
+          begin
+          end;
+
+      filename_only:
+        description: "Just the filename without full path (e.g., PhysInvtOrderFinish.Codeunit.al)"
+        format: "{ObjectName}.{ObjectType}.al"
+        example: "PhysInvtOrderFinish.Codeunit.al"
+
+  approved_request_for_external:
+    description: "Posted when request-for-external issue is approved"
+    applies_to: ["request-for-external"]
+    template: |
+      ✅ **Analysis complete - approved for implementation**
+
+      ---
+
+      **Implementation:**
+
+      {implementation_description}
+
+      **Current code:**
+
+      ```al
+      {current_code}
+      ```
+
+      **Proposed change:**
+
+      ```al
+      {proposed_code}
+      ```
+
+      ---
+
+      **File:** `{filename_only}`
+
+  approved_enum_request:
+    description: "Posted when enum-request issue is approved"
+    applies_to: ["enum-request"]
+    template: |
+      ✅ **Analysis complete - approved for implementation**
+
+      ---
+
+      **Implementation:**
+
+      {implementation_description}
+
+      ```al
+      {enum_code}
+      ```
+
+      ---
+
+      **File:** `{filename_only}`
+
+  # =============================================================================
+  # ALREADY IMPLEMENTED COMMENTS
+  # =============================================================================
+
+  already_implemented:
+    description: "Posted when ALL requested changes already exist in the codebase (100% match)"
+    applies_to: ["all"]
+    template: |
+      ✅ **Good news! This is already implemented in the codebase.**
+
+      The requested change already exists:
+
+      **Existing implementation:**
+
+      ```al
+      {existing_code}
+      ```
+
+      **File:** `{filename_only}`
+
+      You can use this existing {implementation_type} in your extension. Closing this issue as the request is already satisfied.
+
+    placeholders:
+      existing_code:
+        description: "The existing code that matches the request"
+        example: |
+          [IntegrationEvent(false, false)]
+          local procedure OnAfterConfirmPost(var PurchaseHeader: Record "Purchase Header"; var IsHandled: Boolean)
+          begin
+          end;
+
+      filename_only:
+        description: "Just the filename without full path"
+        example: "PurchPostPrint.Codeunit.al"
+
+      implementation_type:
+        description: "Type of implementation (event, procedure, enum value, etc.)"
+        examples:
+          - "event"
+          - "procedure"
+          - "enum value"
+
+  partial_already_implemented:
+    description: "Posted when some requests already exist and others are approved for implementation"
+    applies_to: ["all"]
+    template: |
+      ✅ **Analysis complete - partial implementation already exists**
+
+      ---
+
+      **Already Implemented (no changes needed):**
+
+      {already_implemented_section}
+
+      ---
+
+      **Approved for Implementation:**
+
+      {pending_implementation_section}
+
+      ---
+
+      **Note:** This issue will remain open for the pending implementation(s). The existing code above is already available for use in your extension.
+
+    placeholders:
+      already_implemented_section:
+        description: "Section showing all changes that already exist"
+        format: |
+          For each already_implemented_change:
+
+          **{n}. {description}**
+
+          ```al
+          {existing_code}
+          ```
+
+          **File:** `{filename_only}`
+        example: |
+          **1. Add var to PurchaseHeader parameter**
+
+          ```al
+          [IntegrationEvent(false, false)]
+          local procedure OnAfterConfirmPost(var PurchaseHeader: Record "Purchase Header"; var IsHandled: Boolean)
+          begin
+          end;
+          ```
+
+          **File:** `PurchPostPrint.Codeunit.al`
+
+      pending_implementation_section:
+        description: "Section showing all changes approved for implementation (follows standard approval format)"
+        format: |
+          For each pending_change:
+
+          **{n}. {implementation_description}**
+
+          {code_location_description}
+
+          ```al
+          {code_with_event_call}
+          ```
+
+          **Event Publisher:**
+
+          ```al
+          {event_publisher_code}
+          ```
+
+          **File:** `{filename_only}`
+
+  # =============================================================================
+  # MISSING INFORMATION COMMENTS
+  # =============================================================================
+
+  missing_info_requirements:
+    description: "Posted when issue fails requirements validation"
+    applies_to: ["all"]
+    template: |
+      Hi @{author_name},
+
+      Thanks for submitting this extensibility request. To help us process it efficiently, please update the issue to include the required information.
+
+      📚 [Extensibility Guidelines](https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-contribute-extensibility)
+
+      **Missing Information:**
+
+      {missing_items_list}
+
+      Please update the issue with the missing details. We'll automatically re-analyze once updated.
+
+    placeholders:
+      author_name:
+        description: "GitHub username of issue author"
+      missing_items_list:
+        description: "Bullet list of missing requirements"
+        format: "- **{requirement_name}**: {explanation}"
+
+
+  missing_info_procedure_not_found:
+    description: "Posted when target procedure/trigger not found in codebase"
+    applies_to: ["event-request"]
+    template: |
+      Hi @{author_name},
+
+      We couldn't locate the specified procedure/trigger in the codebase.
+
+      **Target:** `{target_procedure}` in `{target_object}`
+
+      {suggestion_section}
+
+      Please verify the procedure/trigger name and update the issue. We'll automatically re-analyze once updated.
+
+    placeholders:
+      target_procedure:
+        description: "The procedure name that wasn't found"
+      target_object:
+        description: "The object where procedure was expected"
+      suggestion_section:
+        description: "Fuzzy match suggestions if available"
+        format: |
+          **Did you mean one of these?**
+          {fuzzy_matches}
+
+  missing_info_multiple_types:
+    description: "Posted when issue contains multiple distinct request types"
+    applies_to: ["all"]
+    template: |
+      Hi @{author_name},
+
+      This issue contains multiple distinct request types:
+
+      {detected_types_list}
+
+      Please create separate issues for each type to ensure proper processing and tracking.
+
+      We'll automatically process each issue once they are created separately.
+
+  # =============================================================================
+  # ALTERNATIVE SUGGESTION COMMENTS
+  # =============================================================================
+
+  suggest_alternative_event:
+    description: "Posted when similar event already exists"
+    applies_to: ["event-request"]
+    template: |
+      Hi @{author_name},
+
+      A similar event already exists in this location that may serve your purpose:
+
+      **Existing event:** `{existing_event_name}`
+
+      ```al
+      {existing_event_signature}
+      ```
+
+      **Location:** `{filename_only}`
+
+      Would this existing event work for your scenario? If not, please explain why a new event is needed.
+
+      Please respond with confirmation or additional details. We'll re-analyze once you respond.
+
+  suggest_alternative_approach:
+    description: "Posted when alternative approach is recommended"
+    applies_to: ["event-request"]
+    template: |
+      Hi @{author_name},
+
+      {alternative_explanation}
+
+      **Recommended approach:**
+
+      {recommended_approach}
+
+      Please confirm if this alternative approach works for your scenario, or explain why the original approach is required.
+
+  suggest_alternative_location:
+    description: "Posted when agent finds the solution should be in a different location than requested"
+    applies_to: ["event-request", "enum-request", "request-for-external"]
+    template: |
+      Hi @{author_name},
+
+      Thank you for your extensibility request. After analyzing the codebase, I found that the functionality you're looking to extend is actually located in a different place than specified.
+
+      **Your request:** {original_request_summary}
+
+      **What I found:** {analysis_finding}
+
+      **Suggested alternative:**
+
+      {suggested_implementation}
+
+      ```al
+      {suggested_code}
+      ```
+
+      **File:** `{filename_only}`
+
+      {manual_binding_note}
+
+      Please confirm if this alternative approach works for your scenario,
+      or let us know if you specifically need change like it is requested and what are the reasons.
+
+    placeholders:
+      original_request_summary:
+        description: "Brief summary of what the author originally requested"
+        example: "Add OnAfterIsCancellationSupported event in TestPurchaseLines procedure of Codeunit 1313"
+      analysis_finding:
+        description: "Explanation of what the codebase analysis revealed"
+        example: "The `IsCancellationSupported()` logic is actually implemented in Table 123 \"Purch. Inv. Line\", which is called from `TestPurchaseLines`."
+      suggested_implementation:
+        description: "Description of the recommended implementation"
+        example: "Add the event in Table 123 \"Purch. Inv. Line\" in the `IsCancellationSupported()` procedure"
+      suggested_code:
+        description: "Code showing the suggested implementation"
+      filename_only:
+        description: "Filename where the suggested implementation would go"
+      manual_binding_note:
+        description: "Optional note about manual binding for public procedures"
+        format: |
+          📝 **Note:** This event is in a public procedure that may be called from multiple places. If you need to control when your event subscriber fires, consider using [Manual Event Subscription Binding](https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/properties/devenv-eventsubscriberinstance-property#manual-binding).
+        when_to_include: "Include when target procedure is public (not local or internal)"
+
+  # =============================================================================
+  # REJECTION COMMENT
+  # =============================================================================
+
+  rejected_request:
+    description: "Posted when request is rejected due to blocking rules"
+    applies_to: ["all"]
+    template: |
+      This request cannot be implemented.
+
+      **Reason:** {rejection_reason}
+
+    placeholders:
+      rejection_reason:
+        description: "Brief explanation of why the request was rejected"
+        examples:
+          - "The target code is marked as obsolete and cannot be modified"
+          - "Implementation would require changing a public procedure signature, which may break existing code"
+          - "The implementation would expose sensitive/private data that should not be made accessible"
+
+  # =============================================================================
+  # STALE ISSUE COMMENT
+  # =============================================================================
+
+  stale_issue_closure:
+    description: "Posted when closing stale issue (30+ days with missing-info)"
+    applies_to: ["all"]
+    template: |
+      No activities, will be closed
+
+# =============================================================================
+# FORMATTING RULES
+# =============================================================================
+
+formatting_rules:
+
+  filename_format:
+    description: "How to format file references in comments"
+    rule: "Use only the filename, not the full path"
+    format: "{ObjectName}.{ObjectType}.al"
+    examples:
+      correct: "PhysInvtOrderFinish.Codeunit.al"
+      incorrect: "App\\Layers\\W1\\BaseApp\\Inventory\\Counting\\Document\\PhysInvtOrderFinish.Codeunit.al"
+
+  code_blocks:
+    description: "How to format code in comments"
+    language: "al"
+    format: |
+      ```al
+      {code}
+      ```
+
+  headers:
+    description: "Use bold markdown for section headers"
+    format: "**{header_text}:**"
+
+  status_icons:
+    approved: "✅"
+    missing_info: "⚠️"
+    blocked: "❌"
+    stale: "⏱️"
+    reprocessing: "🔄"
+
+  manual_binding_note:
+    description: "When to include manual binding guidance in comments"
+    rule: "Include this note when adding events to procedures that are heavily used across the codebase for different scenarios"
+    format: |
+      📝 **Note:** This procedure is called from multiple places in the codebase for different scenarios. If you need your event subscriber to fire only in specific scenarios, consider using [Manual Event Subscription Binding](https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/properties/devenv-eventsubscriberinstance-property#manual-binding).
+    when_to_include:
+      - "Procedure is called from multiple places in the codebase"
+      - "Procedure serves different business scenarios (e.g., used by both Sales and Purchase flows)"
+      - "Procedure is a utility/helper function used broadly"
+      - "Public procedures that can be called from extensions"
+      - "The event doesn't have inherent filtering (e.g., specific document type parameter)"
+    when_to_exclude:
+      - "Procedure has very limited/specific usage (only called from one logical flow)"
+      - "Event parameters naturally filter the scenario (e.g., specific document type parameter)"
+      - "Event is in a page/report trigger where context is clear"
+      - "Procedure is only relevant to one business process"
+
+# =============================================================================
+# EXCLUDED ELEMENTS
+# =============================================================================
+
+excluded_from_comments:
+  description: "Elements that should NOT be included in approval comments"
+  items:
+    - "Thank you for your extensibility request. The requested event is feasible and has been analyzed."
+    - "Team: {team_name}"
+    - "Full file paths (use filename only)"
+    - "Internal implementation rules or guidelines (e.g., 'new parameters must be added at the end')"
+    - "Notes about BC extensibility guidelines or best practices"
+    - "Any rule explanations - rules should be applied silently, not explained in comments"
+    - "Suggestions for additional changes outside the scope of the request (e.g., 'the same change could be applied to other similar objects')"
+    - "Recommendations to extend the request to other files, objects, or pages not explicitly mentioned by the author"
+
+  rationale:
+    thank_you_message: "Redundant - the approval header is sufficient"
+    team_assignment: "Team is indicated by label, not needed in comment"
+    full_paths: "Clutters the comment - filename is sufficient for identification"
+    internal_rules: "Implementation rules are for agent behavior, not user-facing documentation. Apply rules silently without explaining them in comments."
+    out_of_scope_suggestions: "Agent must only address exactly what is requested. Never suggest additional changes to other objects, files, or pages that were not explicitly asked for by the author. The goal is to satisfy the request as stated, not to expand its scope."

@@ -36,6 +36,9 @@ class PathConfig:
 
     bc_bench_root: Path
     dataset_path: Path
+    ext_dataset_path: Path
+    ext_dataset_dir: Path
+    ext_dataset_default_setup_path: Path
     dataset_dir: Path
     problem_statement_dir: Path
     testbed_path: Path
@@ -52,6 +55,9 @@ class PathConfig:
             bc_bench_root=root,
             dataset_dir=root / "dataset",
             dataset_path=root / "dataset" / "bcbench.jsonl",
+            ext_dataset_dir=root / "dataset" / "extensibility_requests",
+            ext_dataset_path=root / "dataset" / "extensibility_requests" / "extensibility_dataset.yaml",
+            ext_dataset_default_setup_path=root / "dataset" / "extensibility_requests" / "default_setup.json",
             problem_statement_dir=root / "dataset" / "problemstatement",
             testbed_path=root.parent / "NAV",
             ps_script_path=root / "scripts",

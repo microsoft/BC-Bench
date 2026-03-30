@@ -1,0 +1,144 @@
+# General Requirements Configuration
+# Defines common requirements that apply to ALL request types
+# Version: 1.0
+
+general_requirements:
+  description: "Common requirements that must be met by all extensibility requests"
+
+  mandatory_requirements:
+    - id: clear_title
+      name: "Clear Title"
+      description: "Issue title must clearly describe the request type and target"
+      mandatory: true
+      validation_hints: ["title", "clear", "descriptive", "specific"]
+      quality_standards:
+        reject_generic_statements: true
+        unacceptable_patterns:
+          - "Need help"
+          - "Extension issue"
+          - "Problem with"
+          - "Question about"
+          - "Request"
+          - "Enhancement needed"
+        requires_specifics:
+          - "Include request type (Event, Public Access, Enum, etc.)"
+          - "Mention specific object/procedure name"
+          - "Be descriptive and actionable"
+        good_examples:
+          - "Add OnBeforePostSalesInvoice event to Sales Invoice posting"
+          - "Change ValidateCustomerData procedure from local to public in Codeunit 123"
+          - "Add Electronic Signature option to Document Approval Type enum"
+        bad_examples:
+          - "Need event"
+          - "Extension request"
+          - "Problem with sales"
+
+    - id: clear_description
+      name: "Clear Description"
+      description: "Issue description must provide comprehensive context and details"
+      mandatory: true
+      validation_hints: ["description", "context", "details", "comprehensive"]
+      quality_standards:
+        minimum_elements:
+          - "What you're trying to accomplish"
+          - "Current limitation or problem"
+          - "Proposed solution"
+          - "Business/technical justification"
+        good_structure: |
+          **Problem:** [What can't be done today]
+          **Proposed Solution:** [Exact change requested]
+          **Justification:** [Why this is needed - see meaningful justification standards]
+          **Implementation:** [Specific code/design changes]
+
+    - id: meaningful_justification
+      name: "Meaningful Justification"
+      description: "All requests must include meaningful business/technical justification with specific scenarios"
+      mandatory: true
+      validation_hints: ["justification", "business", "scenario", "specific", "meaningful"]
+      quality_standards:
+        reject_generic_statements: true
+        unacceptable_patterns:
+          - "We need this for our extension"
+          - "This is important for us"
+          - "It has been requested by our customers"
+          - "We need it for customization"
+          - "This would be useful"
+          - "Customers are asking for this"
+          - "We need better extensibility"
+          - "Required for our business"
+          - "Essential for our solution"
+          - "Standard requirement"
+        requires_specifics:
+          - "Technical intent or specific business scenario"
+          - "What functionality is needed (e.g., filter data, validate records, access information)"
+          - "Enough context to understand the extensibility gap being addressed"
+        validation_criteria:
+          - "Should include concrete business scenario OR technical intent"
+          - "Should explain current technical limitation OR desired functionality"
+          - "Accept statements showing clear technical need (e.g., 'set additional filters', 'validate before X', 'access Y data')"
+          - "Reject only completely generic statements with no technical context"
+        good_examples_by_type:
+          event_request: "We need to validate custom tax rules before invoice posting. Currently, there's no way to intercept the posting process before tax calculation occurs, which causes incorrect tax amounts when country-specific rules differ from standard BC logic."
+          request_for_external: "Our extension needs to call ValidateCustomerData() from external codeunit. This procedure is currently local but contains shared validation logic that multiple extensions require. Making it public would eliminate code duplication across 3 different customer-specific extensions."
+          request_for_external_simple: "I need this to avoid making duplicate code, as I need to check the same scenario."
+          enum_request: "We need to add 'Electronic Signature' option to Document Approval Type enum. Our compliance extension must track electronic signatures as a distinct approval method, but current enum values don't cover this regulatory requirement in our industry."
+          extensibility_enhancement: "The Purchase Header table's OnValidate trigger for Vendor No. field doesn't expose the vendor record to extensions. We need access to vendor data during validation to implement vendor-specific business rules without re-querying the database."
+          bug: "When posting a sales invoice with multiple lines containing items that have different VAT rates, the VAT calculation is incorrect. Expected: Each line should calculate VAT based on its item's VAT rate. Actual: All lines use the VAT rate from the first line."
+
+        # Special case: Request-for-external with code duplication avoidance
+        request_for_external_simplified_acceptance:
+          description: "For request-for-external, simpler justification is acceptable when procedure is safe"
+          acceptable_simple_justifications:
+            - "I need this to avoid making duplicate code"
+            - "I need to reuse this logic in my extension"
+            - "I need to call the same check/validation"
+            - "To avoid copying this code to my extension"
+          condition: "Agent must verify procedure is NOT risky (no sensitive data, no security implications, no XPIA risk)"
+          rationale: "Code duplication avoidance is a valid technical reason - the intent is clear and the benefit is obvious"
+
+        bad_examples:
+          - "We need this event to implement customization for customer"
+          - "This is important for our business requirements"
+          - "Customers have requested this functionality"
+          - "We need this to be public so we can call it"
+          - "This enum needs more options for our extension"
+
+    - id: no_images_use_code_snippets
+      name: "No Images - Use Code Snippets"
+      description: "Images are not allowed - code must be provided as text using code snippets"
+      mandatory: true
+      validation_hints: ["image", "screenshot", "picture", "code snippet", "text"]
+      quality_standards:
+        reject_images: true
+        rationale: |
+          - Code in images cannot be analyzed by the agent
+          - Images cannot be searched or indexed
+          - Code snippets allow for proper syntax highlighting and copying
+          - Text-based code is accessible and easier to work with
+        required_format: |
+          All code must be provided as text using proper markdown code blocks with AL language syntax:
+          ```al
+          // Your AL code here
+          procedure Example()
+          begin
+              // Implementation
+          end;
+          ```
+        polite_message_template: |
+          Thank you for your request!
+
+          I noticed that you've included an image in your submission. To help us analyze your request more effectively, could you please replace the image with a text-based code snippet?
+
+          Please use the following format for AL code:
+
+          ```al
+          // Your AL code here
+          procedure YourProcedureName()
+          begin
+              // Your implementation
+          end;
+          ```
+
+          This will allow us to better understand your request and provide more accurate guidance.
+
+          Thank you for your cooperation!

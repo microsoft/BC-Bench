@@ -1,0 +1,61 @@
+event_request_ishandled_warnings:
+  description: "Warning rules specific to event-request/ishandled subtype"
+
+  rules:
+    - id: ishandled_in_loops
+      applies_to: ["event-request/ishandled"]
+      severity: "warning"
+      description: "IsHandled event placement inside loops"
+      action: "suggest_alternative"
+      warning_message: "IsHandled events inside loops can cause severe performance degradation as the bypass logic is evaluated on every iteration."
+      guidance: |
+        Instead of placing an IsHandled event inside the loop, consider adding a regular event **before the loop** after all filtering is complete.
+
+        **Recommended approach:**
+        1. Apply all necessary filters to the record (e.g., `DetailedVendorLedgEntry.SetRange(...)`)
+        2. Add a regular IntegrationEvent AFTER filtering, before the loop starts
+        3. Subscribers can then modify the filtered set without bypassing critical code inside the loop
+
+        This approach:
+        - ✅ Avoids repeated IsHandled checks in the loop
+        - ✅ Allows extensions to modify filtering logic
+        - ✅ Maintains performance (event fires once, not per iteration)
+        - ✅ Achieves the same extensibility goal
+
+    - id: ishandled_large_code_block_extraction
+      applies_to: ["event-request/ishandled"]
+      severity: "warning"
+      description: "Large code blocks with IsHandled should be extracted to separate procedures"
+      action: "suggest_alternative"
+      rule: "When adding an IsHandled event that surrounds a larger block of code, consider extracting that code into a separate procedure and adding an OnBefore[ProcedureName] event with IsHandled."
+      guidance: |
+        **Recommended Practice:** When an IsHandled event would wrap a significant block of code (typically 5+ lines with related logic), the agent should evaluate whether extracting that code into a separate procedure would be a better approach.
+
+        **Rationale:**
+        - Improves code organization and readability
+        - Creates a clear, named operation that can be bypassed
+        - Makes the code's intent more explicit
+        - Easier for subscribers to understand what they're bypassing
+        - Better maintainability and testability
+        - Follows single responsibility principle
+
+        **Agent Analysis Required:**
+        Before suggesting extraction, the agent MUST verify:
+        1. **Code Cohesion:** Are the values/variables in the code block logically connected?
+        2. **Single Purpose:** Does the code block perform a single, identifiable operation?
+        3. **Meaningful Name:** Can a descriptive procedure name be assigned that clearly describes the operation?
+        4. **Parameter Set:** Can the required inputs/outputs be clearly defined as procedure parameters?
+
+        **When NOT to Extract:**
+        - Code block is very small (1-3 lines)
+        - Variables in the block are not logically related
+        - No meaningful procedure name can be derived
+        - Extraction would require passing too many unrelated parameters
+
+        **Decision Criteria for Agent:**
+        | Factor | Extract | Keep Inline |
+        |--------|---------|-------------|
+        | Lines of code | 5+ lines | 1-4 lines |
+        | Variables related | Yes, single purpose | No, mixed concerns |
+        | Meaningful name possible | Yes | No clear name |
+        | Parameter count | Reasonable (1-5) | Too many (6+) |

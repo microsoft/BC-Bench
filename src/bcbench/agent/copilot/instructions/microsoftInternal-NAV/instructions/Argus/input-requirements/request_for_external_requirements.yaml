@@ -1,0 +1,80 @@
+# Request for External Specific Requirements Configuration
+# Defines ADDITIONAL requirements specific to request-for-external type issues
+# NOTE: General requirements (title, description, meaningful justification) are defined in ea_config_general_requirements.yaml
+# Version: 1.0
+
+request_for_external:
+  enabled: true
+  description: "Requests to change procedure/property access from local/internal to public/global, or to remove OnPrem Scope restrictions - ADDITIONAL requirements beyond general ones"
+  detection_keywords: ["local", "global", "public", "accessibility", "access level", "external", "OnPrem", "Scope", "remove OnPrem", "remove Scope"]
+  max_iterations: 3
+
+  # Simplified validation for safe procedures
+  simplified_validation:
+    enabled: true
+    description: "When author wants to avoid code duplication and procedure is safe, accept with minimal justification"
+    trigger_conditions:
+      - "Author mentions avoiding duplicate code"
+      - "Author mentions reusing existing logic"
+      - "Author mentions calling the same validation/check"
+    trigger_keywords: ["duplicate", "duplication", "reuse", "same logic", "same scenario", "same check", "same validation", "avoid copying"]
+    procedure_safety_check:
+      description: "Agent must verify the procedure is safe before applying simplified validation"
+      risky_indicators:
+        - "Accesses or modifies private/sensitive data (passwords, tokens, secrets)"
+        - "Performs security-related operations (authentication, authorization)"
+        - "Could be exploited for XPIA (Cross-Partner Integration Attack)"
+        - "Modifies critical system state that should remain internal"
+        - "Handles encryption/decryption operations"
+        - "Accesses user credentials or session data"
+        - "Could bypass permission checks if made public"
+      safe_indicators:
+        - "Simple validation/check procedure"
+        - "Read-only data access"
+        - "Formatting or calculation helpers"
+        - "UI-related utilities"
+        - "Standard business logic that extensions need to reuse"
+    when_safe_and_avoiding_duplication:
+      accept_minimal_justification: true
+      skip_detailed_usage_scenario: true
+      rationale: "Code duplication avoidance is a valid technical reason when the procedure poses no security or stability risk"
+
+  additional_requirements:
+    - id: proposed_code_change
+      name: "Proposed Code Change"
+      description: "Exact access level change needed with current and proposed declarations"
+      mandatory: true
+      validation_hints: ["code", "procedure", "access", "level", "local", "public"]
+      flexible_validation: true
+      validation_notes: |
+        This requirement can be satisfied in two ways:
+        1. Author explicitly provides current and proposed code structure, OR
+        2. Agent can determine the target object/procedure/variable from the description and locate it in the codebase
+
+        Only mark as missing-info if:
+        - Author's description is too vague to identify the target, AND
+        - Codebase search cannot locate the referenced object/procedure/variable
+      #documentation_link: "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-al-procedures"
+
+    - id: usage_scenario
+      name: "Usage Scenario"
+      description: "How the public procedure will be used and from which context"
+      mandatory: true
+      validation_hints: ["usage", "scenario", "context", "how", "where"]
+      flexible_validation: true
+      validation_notes: |
+        This requirement can be relaxed when:
+        1. Author explicitly mentions avoiding code duplication, AND
+        2. Agent verifies the procedure is safe (no risky indicators)
+
+        In such cases, the justification "avoid duplicate code" or "reuse existing logic"
+        is sufficient - detailed usage scenario is NOT required.
+
+        The intent is clear: author wants to call the same logic from their extension
+        instead of copying it.
+
+# Validation Messages
+validation_messages:
+  insufficient_detail: "The provided information is insufficient for processing. Please add:"
+  #requirement_reference: "For more details, see our Extensibility Guidelines: {link}"
+  resubmit_after_update: "Please update the issue with the missing details. We'll automatically re-analyze once updated."

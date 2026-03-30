@@ -1,0 +1,94 @@
+request_for_external_implementation:
+  description: "Implementation rules specific to request-for-external type - ensure alignment with coding standards"
+
+  rules:
+    - id: procedure_access_level
+      applies_to: ["request-for-external"]
+      severity: "notice"
+      description: "Making procedure publically accessible"
+      action: "internal_warning"
+      guidance: |
+        **Implementation:** Making a procedure externally accessible implies:
+        - Removing `local` scope modifier (if present) or
+        - Removing `[Scope('OnPrem')]` attribute (if present)
+
+        **Example 1 - Removing local scope:**
+        ```al
+        // Before:
+        local procedure CalculateDiscount(var SalesLine: Record "Sales Line")
+        begin
+            // Internal logic
+        end;
+
+        // After:
+        procedure CalculateDiscount(var SalesLine: Record "Sales Line")
+        begin
+            // Now accessible externally
+        end;
+        ```
+
+        **Example 2 - Removing OnPrem scope:**
+        ```al
+        // Before:
+        [Scope('OnPrem')]
+        procedure ValidateCustomer(CustomerNo: Code[20])
+        begin
+            // OnPrem only logic
+        end;
+
+        // After:
+        procedure ValidateCustomer(CustomerNo: Code[20])
+        begin
+            // Now accessible externally
+        end;
+        ```
+
+    - id: variable_access_level
+      applies_to: ["request-for-external"]
+      severity: "notice"
+      description: "Variable access level change from var to protected var"
+      action: "internal_warning"
+      guidance: |
+        When changing variable access level from 'var' to 'protected var', ensure proper code structure:
+
+        **Structure Requirements:**
+        1. If object currently has NO 'protected var' section, create it AFTER all 'var' declarations
+        2. Place all protected var declarations in the dedicated 'protected var' section
+        3. Proper order: var declarations → protected var section → procedure declarations
+
+        **Example - Correct Structure:**
+        ```al
+        codeunit 50100 "Example Codeunit"
+        {
+            var
+                ExistingGlobalVar: Text[100];
+                AnotherGlobalVar: Integer;
+
+            protected var
+                NewlyProtectedVar1: Text[50];
+                NewlyProtectedVar2: Boolean;
+
+            procedure MyProcedure()
+            begin
+                // ...
+            end;
+        }
+        ```
+
+        **Common Mistake - Don't do this:**
+        ```al
+        // ❌ Wrong - mixing protected var with var
+        var
+            ExistingGlobalVar: Text[100];
+        protected var
+            NewlyProtectedVar1: Text[50];
+        var
+            AnotherGlobalVar: Integer;  // Wrong location
+        ```
+
+        **Migration Steps:**
+        1. Identify all variables that need to be protected
+        2. Check if object already has 'protected var' section
+        3. If no protected var section exists: Add 'protected var' section after all 'var' declarations
+        4. Move/add variables to protected var section
+        5. Ensure no var declarations appear after protected var section

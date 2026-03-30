@@ -1,0 +1,6 @@
+event_request_ishandled_alternative_suggestions:
+  description: "Alternative suggestion rules specific to event-request/ishandled subtype - check if existing functionality can satisfy the request"
+
+  rules: []
+  # No specific alternative suggestion rules for ishandled subtype yet.
+  # Type-level alternative suggestion rules still apply.

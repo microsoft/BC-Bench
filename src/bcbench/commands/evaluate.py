@@ -7,6 +7,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.agent import run_claude_code, run_copilot_agent, run_mini_agent
+from bcbench.agent.copilot.agent import run_copilot_agent_ext
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -22,10 +23,12 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset.dataset_entry import ExtensibilityDatasetEntry
+from bcbench.dataset.dataset_loader import load_ext_dataset_entries
 from bcbench.evaluate import EvaluationPipeline, create_pipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -98,7 +101,7 @@ def evaluate_copilot(
     password: ContainerPassword,
     category: EvaluationCategoryOption,
     model: CopilotModel = "claude-haiku-4.5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
+    dataset_path: DatasetPath | None = None,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
@@ -109,8 +112,16 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
-    entry: DatasetEntry = entries[0]
+    if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
+        if dataset_path is None:
+            dataset_path = _config.paths.ext_dataset_path
+        entries: list[ExtensibilityDatasetEntry] = load_ext_dataset_entries(dataset_path, entry_id=entry_id)
+        entry: ExtensibilityDatasetEntry = entries[0]
+    else:
+        if dataset_path is None:
+            dataset_path = _config.paths.dataset_path
+        entries: list[DatasetEntry] = load_dataset_entries(dataset_path, entry_id=entry_id)
+        entry: DatasetEntry = entries[0]
     logger.info(f"Loaded {entry_id} entry from dataset")
 
     run_dir: Path = output_dir / run_id
@@ -133,18 +144,31 @@ def evaluate_copilot(
     )
 
     pipeline = create_pipeline(category)
-    pipeline.execute(
-        context,
-        lambda ctx: run_copilot_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            al_mcp=al_mcp,
-            container_name=ctx.container_name,
-        ),
-    )
+    if category == EvaluationCategory.EXTENSIBILITY_REQUEST:
+        pipeline.execute(
+            context,
+            lambda ctx: run_copilot_agent_ext(
+                entry=ctx.entry,
+                repo_path=ctx.repo_path,
+                model=ctx.model,
+                category=category,
+                output_dir=ctx.result_dir,
+                al_mcp=al_mcp,
+            ),
+        )
+    else:
+        pipeline.execute(
+            context,
+            lambda ctx: run_copilot_agent(
+                entry=ctx.entry,
+                repo_path=ctx.repo_path,
+                category=category,
+                model=ctx.model,
+                output_dir=ctx.result_dir,
+                al_mcp=al_mcp,
+                container_name=ctx.container_name,
+            ),
+        )
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")

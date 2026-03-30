@@ -104,6 +104,7 @@ class EvaluationPipeline(ABC):
 def create_pipeline(category: EvaluationCategory) -> EvaluationPipeline:
     """Factory function to create evaluation pipeline based on category."""
     from bcbench.evaluate.bugfix import BugFixPipeline
+    from bcbench.evaluate.extensibility import ExtensibilityPipeline
     from bcbench.evaluate.testgeneration import TestGenerationPipeline
 
     match category:
@@ -113,6 +114,9 @@ def create_pipeline(category: EvaluationCategory) -> EvaluationPipeline:
         case EvaluationCategory.TEST_GENERATION:
             logger.info(f"Using TestGenerationPipeline for category: {category}")
             return TestGenerationPipeline()
+        case EvaluationCategory.EXTENSIBILITY_REQUEST:
+            logger.info(f"Using ExtensibilityPipeline for category: {category}")
+            return ExtensibilityPipeline()
         case _:
             raise ValueError(f"Unknown evaluation category: {category}")
     raise RuntimeError("Unreachable: no pipeline returned")

@@ -1,0 +1,220 @@
+general_blockers:
+  description: "Blocker rules that apply to ALL request types - auto-reject scenarios"
+
+  rules:
+    - id: obsolete_code
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Target code marked as obsolete or inside NOT CLEAN region"
+      check_patterns: ["[Obsolete", "ObsoleteState", "ObsoleteReason", "NOT CLEAN"]
+      action: "auto_reject"
+      rejection_reason: "The target code is marked as obsolete and cannot be modified"
+      guidance: |
+        Code marked with `[Obsolete]` attribute or inside `// NOT CLEAN` regions is deprecated
+        and should not be modified. Such code is scheduled for removal or replacement.
+
+        **Example 1 - Obsolete procedure:**
+        ```al
+        [Obsolete('Use GetCustomerBalance instead', '25.0')]
+        procedure GetBalance(CustomerNo: Code[20]): Decimal
+        begin
+            // This procedure is obsolete - do not add events here
+            exit(Customer.GetBalanceLCY());
+        end;
+        ```
+
+        **Example 2 - NOT CLEAN region:**
+        ```al
+        #if not CLEAN28
+        local procedure LegacyCalculation(var Amount: Decimal)
+        begin
+            // This procedure is obsolete - do not add events here
+            Amount := Amount * 1.25;
+        end;
+        #endif
+        ```
+
+    - id: public_signature_change
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Requires public procedure signature change"
+      action: "auto_reject"
+      rejection_reason: "Implementation would require changing a public procedure signature, which may break existing code"
+      exceptions: "Adding name to existing exit parameter to public procedures is allowed"
+      guidance: |
+        Changing the signature of public procedures is not allowed as it may break existing code.
+        Extensions and other dependent code rely on the exact signature of public procedures.
+
+        **What is NOT Allowed:**
+        - Adding new parameters
+        - Removing existing parameters
+        - Changing parameter types
+        - Changing parameter order
+        - Changing return type
+        - Adding/removing `var` modifier on parameters
+
+        **What IS Allowed:**
+        - Adding a name to an unnamed return value (non-breaking change)
+
+        **Example 1 - NOT Allowed (adding parameter):**
+        ```al
+        // Before:
+        procedure PostSalesDocument(var SalesHeader: Record "Sales Header")
+        begin
+            // ...
+        end;
+
+        // ❌ NOT Allowed - adding new parameter breaks existing callers:
+        procedure PostSalesDocument(var SalesHeader: Record "Sales Header"; Preview: Boolean)
+        begin
+            // ...
+        end;
+        ```
+
+        **Example 2 - NOT Allowed (changing parameter type):**
+        ```al
+        // Before:
+        procedure GetCustomerName(CustomerNo: Code[20]): Text[100]
+        begin
+            // ...
+        end;
+
+        // ❌ NOT Allowed - changing Code[20] to Code[50] breaks existing callers:
+        procedure GetCustomerName(CustomerNo: Code[50]): Text[100]
+        begin
+            // ...
+        end;
+        ```
+
+        **Example 3 - Allowed (naming return value):**
+        ```al
+        // Before:
+        procedure IsInvoiceDocType(): Boolean
+        begin
+            exit(true);
+        end;
+
+        // ✅ Allowed - adding name to return value is non-breaking:
+        procedure IsInvoiceDocType() Result: Boolean
+        begin
+            Result := true;
+        end;
+        ```
+
+    - id: sensitive_data_exposure
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Implementation would expose sensitive or private data"
+      action: "auto_reject"
+      rejection_reason: "The implementation would expose sensitive/private data that should not be made accessible"
+      guidance: |
+        This rule applies to any request that would result in exposing sensitive data:
+        - Making a procedure public that accesses/handles sensitive data
+        - Adding event parameters that expose private/sensitive information
+        - Changing access levels on variables containing sensitive data
+
+        **Examples of Sensitive Data:**
+        - DotNet components
+        - SecretText variables
+        - Personal identifiable information (PII)
+        - Financial credentials or tokens
+        - Password hashes or authentication data
+        - Internal system configuration
+        - Audit trail data that should remain protected
+
+    - id: multi_change_policy
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "All-or-nothing rule for requests with multiple changes"
+      rejection_reason: "If ANY proposed change is blocked or infeasible, REJECT ALL changes in the request"
+      guidance: |
+        When a request contains multiple changes (e.g., multiple events, multiple procedure modifications),
+        all changes must be feasible for the request to be approved. If any single change is blocked,
+        the entire request must be rejected.
+
+        **Rationale:**
+        - Multiple changes in a single request are often interdependent
+        - Partial implementation may leave the system in an inconsistent state
+        - The author expects all requested changes to be implemented together
+        - Prevents confusion about which parts were implemented
+
+        **How to Detect Multi-Change Requests:**
+        - Request mentions multiple procedures/triggers
+        - Request asks for events in multiple locations
+        - Request includes numbered items (1, 2, 3...) or bullet points
+        - Request uses "and" to connect multiple actions
+
+        **Example - Multi-Change Request:**
+        ```
+        Please add the following events:
+        1. OnBeforePost in Codeunit 80 "Sales-Post"
+        2. OnAfterValidate in Table 36 "Sales Header"
+        3. OnBeforeInsert in Table 37 "Sales Line"
+        ```
+
+        **If change #2 is blocked (e.g., obsolete code):**
+        - ❌ Do NOT implement changes #1 and #3 only
+        - ✅ Reject the entire request
+        - ✅ Explain which change is blocked and why
+        - ✅ Ask author to submit separate requests or modify the blocked change
+
+    - id: potential_security_risk
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Potential exposure of sensitive data or security mechanisms based on keywords"
+      action: "include_human"
+      rejection_reason: "The requested change involves code handling sensitive security data. This requires manual security review."
+      guidance: |
+        **Security Risk Assessment:**
+        Procedures or events containing keywords related to security, authentication, or sensitive data require careful review.
+
+        **Risky Keywords:**
+        - password, secret, token, key
+        - permission, user, login, auth
+        - credential, encryption
+
+        **Validation Steps:**
+        1. Check if the code exposes raw secrets or credentials.
+        2. Check if the change allows bypassing security checks (e.g., permission validation).
+        3. If the code is purely for logic (e.g., "ValidateUserStatus") and doesn't expose secrets, it MAY be safe.
+        4. If in doubt, flag for manual review (apply 'agent-not-processable' label).
+
+    - id: entity_not_found
+      applies_to: ["all"]
+      severity: "blocking"
+      description: "Target procedure/trigger/variable not found in expected location"
+      action: "request_clarification"
+      rejection_reason: "The specified procedure/trigger/variable was not found in the codebase"
+      exceptions: "In case of adding NEW code (e.g., an event) inside a trigger, it is acceptable that the trigger does not yet exist"
+      guidance: |
+        If the agent cannot locate the specified procedure, trigger, or variable in the expected
+        object or location, it must request clarification from the author.
+
+        **Possible Reasons for Not Found:**
+        - Typographical errors in names
+        - Incorrect object type or ID specified
+        - The codebase has changed since the request was made
+        - The requested entity does not exist
+
+        **Exception - Triggers That Don't Exist Yet:**
+        When the request is to add a new event inside a trigger (e.g., OnInsert, OnAfterGetRecord, OnValidate, OnOpenPage, etc.),
+        it is acceptable if the trigger does not currently exist in the object. The agent should:
+        - Create the trigger with the requested event inside it
+        - This is a valid implementation pattern in AL
+
+        **Example - Acceptable (trigger doesn't exist):**
+        ```al
+        // Request: "Add OnBeforeInsert event in Table 18 Customer"
+        // Table 18 currently has no OnInsert trigger
+
+        // ✅ Agent creates the trigger with the event:
+        trigger OnInsert()
+        begin
+            OnBeforeInsertCustomer(Rec);
+        end;
+        ```
+
+        **Agent Actions (when NOT an exception):**
+        1. Apply `missing-info` label
+        2. Do NOT apply team label or `agent-analyzed`
+        3. Post a comment asking the author to verify the target location and names

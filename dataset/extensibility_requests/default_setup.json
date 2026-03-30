@@ -1,0 +1,8 @@
+{
+    "repo": "microsoftInternal/NAV",
+    "base_commit": "06e095c485e474431177e2170c0e22182bfdcc28",
+    "environment_setup_version": "27.0",
+    "project_paths": [
+        "App\\Layers"
+    ]
+}
