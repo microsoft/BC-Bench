@@ -27,14 +27,12 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
 
     def setup(self, context: EvaluationContext) -> None:
         entry = self._get_entry(context)
-        container = context.get_container()
-
         setup_repo_prebuild(entry, context.repo_path)
 
         build_and_publish_projects(
             context.repo_path,
             entry.project_paths,
-            container,
+            context.get_container(),
             entry.environment_setup_version,
         )
 

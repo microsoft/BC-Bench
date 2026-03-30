@@ -131,8 +131,8 @@ class _BugFixTestGenBase(BaseDatasetEntry):
         if self.extract_project_name() != "BaseApp":
             return self
 
-        for p in (self.patch, self.test_patch):
-            patch_paths = re.findall(r"^diff --git a/(.+?) b/", p, re.MULTILINE)
+        for patch in (self.patch, self.test_patch):
+            patch_paths = re.findall(r"^diff --git a/(.+?) b/", patch, re.MULTILINE)
 
             for patch_path in patch_paths:
                 match = re.match(r"App/Layers/([^/]+)/", patch_path)
