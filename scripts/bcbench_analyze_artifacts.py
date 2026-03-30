@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""bcbench_analyze_artifacts.py
+"""
+bcbench_analyze_artifacts.py
 
 Analyze BC-Bench GitHub Actions artifacts that you already downloaded.
 
@@ -7,17 +8,23 @@ Supports TWO input modes (no GitHub API, no tokens):
 
 1) ZIP mode: point to a folder of artifact .zip files you downloaded from Actions UI
    - Uses --zips-dir <folder> or repeated --zip <file.zip>
+   - Supports run subfolders like:
+       artifacts/manual/1/*.zip
+       artifacts/manual/2/*.zip
+       artifacts/manual/3/*.zip
+     Each immediate subfolder is treated as one "run".
 
 2) EXTRACTED mode: point to a folder that ALREADY contains extracted artifact content
    - Uses --extracted-dir <folder>
    - Also works if you point --zips-dir to a folder with *no zip files* but with extracted subfolders.
 
 Outputs (under --out):
-  artifacts_extracted/    (only in ZIP mode)
-  files/                  (collected *.jsonl/*.txt)
+  artifacts_extracted/ (only in ZIP mode)
+  files/ (collected *.jsonl/*.txt)
   summary.csv
   top_failures.csv
   errors_summary.csv
+  grouped_errors.csv (+ grouped_errors.xlsx if openpyxl is available)
   extracted_tests/<test_id>/meta.json + extraction_report.json + error_variations.json
   extracted_tests/<test_id>/<run_id>.diff/.al/.txt + <run_id>_error.txt when available
 
@@ -33,6 +40,7 @@ import json
 import re
 import sys
 import zipfile
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -67,8 +75,154 @@ def rglob_files(root: Path, pattern: str) -> List[Path]:
     return [p for p in root.rglob(pattern) if p.is_file()]
 
 
-# ---------------------------- Record parsing ----------------------------
+# ---------------------------- Grouped error reporting ----------------------------
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_TIME_RE = re.compile(r"\[[0-2]\d:[0-5]\d:[0-5]\d\]")
+_WINPATH_RE = re.compile(r"[A-Z]:\\[^\n]+")
 
+
+def _normalize_error_message(msg: str) -> str:
+    """Normalize error messages so similar failures group together."""
+    if msg is None:
+        return ""
+    msg = str(msg).replace("\r\n", "\n")
+    msg = _ANSI_RE.sub("", msg)
+    msg = _TIME_RE.sub("[HH:MM:SS]", msg)
+    msg = _WINPATH_RE.sub("<path>", msg)
+
+    # Normalize common variable parts
+    msg = re.sub(r"Setting test codeunit range '\d+'", "Setting test codeunit range '<id>'", msg)
+    msg = re.sub(r"\bCodeunit\s+\d+\b", "Codeunit <id>", msg)
+    msg = re.sub(r"\bline\s+\d+\b", "line <n>", msg, flags=re.IGNORECASE)
+    msg = re.sub(r"Line No\. = '.*?'", "Line No. = '<n>'", msg)
+
+    # Collapse whitespace and drop empty lines
+    msg = "\n".join([ln.rstrip() for ln in msg.strip().splitlines() if ln.strip()])
+    return msg
+
+
+def _bucket_error(msg: str) -> str:
+    m = (msg or "").lower()
+    if "agent timed out" in m or "timed out" in m:
+        return "timeout"
+    if "build or publish failed" in m:
+        return "build/publish"
+    if "passed pre-patch" in m and "expected: fail" in m:
+        return "expectation_mismatch_prepatch_pass"
+    if "failed post-patch" in m and "expected: pass" in m:
+        return "expectation_mismatch_postpatch_fail"
+    if "ui handlers were not executed" in m:
+        return "missing_ui_handler"
+    if "must assign a lot number" in m or "must assign a serial number" in m or "checkitemtracking" in m:
+        return "item_tracking_not_handled"
+    if "assert.areequal failed" in m and ("integer" in m and "biginteger" in m):
+        return "assert_type_mismatch"
+    if "assert." in m and ("recordcount failed" in m or "areequal failed" in m or "isfalse failed" in m):
+        return "assert_failed"
+    return "other"
+
+
+def write_grouped_errors_report(errors_summary_csv: Path, out_root: Path) -> Tuple[Optional[Path], Optional[Path]]:
+    """
+    Create grouped_errors.csv (+ grouped_errors.xlsx if openpyxl is available) next to errors_summary.csv.
+
+    Note: errors_summary.csv contains error variations for the TOP failing tests only (based on --top).
+    """
+    if not errors_summary_csv.exists():
+        return (None, None)
+
+    rows: List[Tuple[str, str, str, int]] = []
+    with errors_summary_csv.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            test_id = r.get("test_id", "")
+            try:
+                count = int(r.get("count", "1") or 1)
+            except ValueError:
+                count = 1
+            msg = r.get("error_message", "")
+            msg_norm = _normalize_error_message(msg)
+            bucket = _bucket_error(msg)
+            rows.append((bucket, msg_norm, test_id, count))
+
+    if not rows:
+        return (None, None)
+
+    agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for bucket, msg_norm, test_id, count in rows:
+        key = (bucket, msg_norm)
+        a = agg.setdefault(key, {"occurrences": 0, "tests": set()})
+        a["occurrences"] += count
+        a["tests"].add(test_id)
+
+    out_rows: List[Dict[str, Any]] = []
+    for (bucket, msg_norm), a in agg.items():
+        tests = sorted(a["tests"])
+        out_rows.append(
+            {
+                "bucket": bucket,
+                "occurrences": a["occurrences"],
+                "distinct_tests": len(tests),
+                "example_test_ids": ",".join(tests[:5]),
+                "error_message_norm": msg_norm,
+            }
+        )
+
+    out_rows.sort(key=lambda r: (r["occurrences"], r["distinct_tests"]), reverse=True)
+
+    grouped_csv = out_root / "grouped_errors.csv"
+    with grouped_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=["bucket", "occurrences", "distinct_tests", "example_test_ids", "error_message_norm"],
+        )
+        w.writeheader()
+        w.writerows(out_rows)
+
+    grouped_xlsx = out_root / "grouped_errors.xlsx"
+    try:
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "grouped_errors"
+
+        headers = ["bucket", "occurrences", "distinct_tests", "example_test_ids", "error_message_norm"]
+        ws.append(headers)
+        for r in out_rows:
+            ws.append([r[h] for h in headers])
+
+        ws.column_dimensions["A"].width = 34
+        ws.column_dimensions["B"].width = 12
+        ws.column_dimensions["C"].width = 14
+        ws.column_dimensions["D"].width = 60
+        ws.column_dimensions["E"].width = 140
+
+        ws2 = wb.create_sheet("bucket_summary")
+        ws2.append(["bucket", "occurrences", "distinct_tests"])
+        bs = defaultdict(lambda: {"occ": 0, "tests": set()})
+        for bucket, _msg_norm, test_id, count in rows:
+            bs[bucket]["occ"] += count
+            bs[bucket]["tests"].add(test_id)
+
+        bs_rows = [{"bucket": b, "occurrences": v["occ"], "distinct_tests": len(v["tests"])} for b, v in bs.items()]
+        bs_rows.sort(key=lambda r: r["occurrences"], reverse=True)
+
+        for r in bs_rows:
+            ws2.append([r["bucket"], r["occurrences"], r["distinct_tests"]])
+
+        ws2.column_dimensions["A"].width = 34
+        ws2.column_dimensions["B"].width = 12
+        ws2.column_dimensions["C"].width = 14
+
+        wb.save(grouped_xlsx)
+    except Exception:
+        grouped_xlsx = None
+
+    return (grouped_csv, grouped_xlsx)
+
+
+# ---------------------------- Record parsing ----------------------------
 def try_parse_jsonl_line(line: str) -> Optional[Dict[str, Any]]:
     line = line.strip()
     if not line:
@@ -101,13 +255,13 @@ def parse_kv_record(block: str) -> Dict[str, Any]:
         start = m.end()
         m2 = re.search(r"\nerror_message\s", b[start:])
         if m2:
-            gen_patch = b[start:start + m2.start()]
-            rest = b[start + m2.start():]
-            head = b[:m.start()]
+            gen_patch = b[start : start + m2.start()]
+            rest = b[start + m2.start() :]
+            head = b[: m.start()]
         else:
             gen_patch = b[start:]
             rest = ""
-            head = b[:m.start()]
+            head = b[: m.start()]
     else:
         head = b
         rest = ""
@@ -199,6 +353,7 @@ def get_success_fail(rec: Dict[str, Any]) -> Optional[str]:
         return "success" if rec["passed"] else "fail"
     if isinstance(rec.get("success"), bool):
         return "success" if rec["success"] else "fail"
+
     for k in ["status", "result", "outcome", "conclusion"]:
         v = rec.get(k)
         if isinstance(v, str):
@@ -207,17 +362,20 @@ def get_success_fail(rec: Dict[str, Any]) -> Optional[str]:
                 return "success"
             if vl in ["failed", "fail", "error", "timeout", "cancelled", "canceled"]:
                 return "fail"
+
     return None
 
 
 def extract_code_text(rec: Dict[str, Any]) -> Optional[Tuple[str, str]]:
     if isinstance(rec.get("generated_patch"), str) and rec["generated_patch"].strip():
         return (".diff", rec["generated_patch"])
+
     for k in ["test_code", "testCode", "generated_code", "generatedCode", "code", "al", "al_code", "source"]:
         v = rec.get(k)
         if isinstance(v, str) and v.strip():
             ext = ".al" if ("codeunit" in v.lower() or "procedure" in v.lower()) else ".txt"
             return (ext, v)
+
     return None
 
 
@@ -231,7 +389,14 @@ class Agg:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--zip", dest="zips", action="append", default=[], help="Path to an artifact .zip (repeatable)")
-    ap.add_argument("--zips-dir", default=None, help="Directory containing artifact .zip files (recursively). If it contains no zips, it's treated as extracted content.")
+    ap.add_argument(
+        "--zips-dir",
+        default=None,
+        help=(
+            "Directory containing artifact .zip files. If it contains run subfolders, each subfolder is treated as one run. "
+            "If it contains no zips, it's treated as extracted content."
+        ),
+    )
     ap.add_argument("--extracted-dir", default=None, help="Directory containing already extracted artifact content")
     ap.add_argument("--zip-depth", type=int, default=3, help="How deep to extract nested zip files (ZIP mode)")
     ap.add_argument("--category", default="test-generation", help="Filter records by category")
@@ -256,52 +421,81 @@ def main() -> None:
         sub = [p for p in root.iterdir() if p.is_dir()]
         extracted_dirs = sorted(sub) if sub else [root]
         print(f"Using extracted content: {root} (runs={len(extracted_dirs)})")
-
     else:
-        # ZIP mode: gather zip inputs
-        zip_inputs: List[Path] = []
-        for z in args.zips:
-            zip_inputs.extend(find_zip_files(Path(z)))
+        # ZIP mode: gather zip inputs and group by run folder when applicable
+        run_groups: List[Tuple[str, List[Path]]] = []
+
+        # Group by immediate subfolders under --zips-dir (manual/1, manual/2, manual/3)
         if args.zips_dir:
-            zip_inputs.extend(find_zip_files(Path(args.zips_dir)))
+            root_dir = Path(args.zips_dir)
+            if root_dir.exists() and root_dir.is_dir():
+                subdirs = sorted([d for d in root_dir.iterdir() if d.is_dir()])
+                if subdirs:
+                    for sd in subdirs:
+                        zips_in_sd = find_zip_files(sd)
+                        if zips_in_sd:
+                            run_groups.append((sd.name, zips_in_sd))
 
-        zip_inputs = sorted(set(zip_inputs))
+                    # Also include zips directly under root as one group (optional)
+                    root_zips = sorted([z for z in root_dir.glob("*.zip") if z.is_file()])
+                    if root_zips:
+                        run_groups.insert(0, (root_dir.name, root_zips))
+                else:
+                    # No subdirs; treat root as a single run
+                    zips_in_root = find_zip_files(root_dir)
+                    if zips_in_root:
+                        run_groups.append((root_dir.name, zips_in_root))
 
-        if zip_inputs:
-            # ZIP mode extraction
+        # Explicit --zip files become their own run group if not already included
+        explicit_zip_inputs: List[Path] = []
+        for z in args.zips:
+            explicit_zip_inputs.extend(find_zip_files(Path(z)))
+        explicit_zip_inputs = sorted(set(explicit_zip_inputs))
+        if explicit_zip_inputs:
+            in_group = set(zp for _, zs in run_groups for zp in zs)
+            for zp in explicit_zip_inputs:
+                if zp not in in_group:
+                    run_groups.append((zp.stem, [zp]))
+
+        if run_groups:
             extract_root.mkdir(parents=True, exist_ok=True)
-            for i, zip_path in enumerate(zip_inputs, start=1):
-                tag = safe_name(zip_path.stem)
-                dest = extract_root / f"{i:03d}_{tag}"
-                print(f"Extract [{i}/{len(zip_inputs)}]: {zip_path} -> {dest}")
-                extract_zip_file(zip_path, dest)
+            for run_i, (run_name, zips_for_run) in enumerate(run_groups, start=1):
+                tag = safe_name(run_name)
+                dest = extract_root / f"{run_i:03d}_{tag}"
+                dest.mkdir(parents=True, exist_ok=True)
+                print(f"Extract run [{run_i}/{len(run_groups)}]: {run_name} (zips={len(zips_for_run)}) -> {dest}")
 
-                # Nested extraction
-                cur_level = [dest]
-                for _depth in range(1, args.zip_depth + 1):
-                    next_level: List[Path] = []
-                    for d in cur_level:
-                        for nested in rglob_files(d, "*.zip"):
-                            nested_tag = safe_name(nested.stem)
-                            nested_dest = nested.parent / f"{nested_tag}__unzipped"
-                            if nested_dest.exists():
-                                continue
-                            try:
-                                extract_zip_file(nested, nested_dest)
-                                next_level.append(nested_dest)
-                            except zipfile.BadZipFile:
-                                continue
-                    cur_level = next_level
-                    if not cur_level:
-                        break
+                for i, zip_path in enumerate(zips_for_run, start=1):
+                    zip_tag = safe_name(zip_path.stem)
+                    zip_dest = dest / f"{i:03d}_{zip_tag}"
+                    print(f"  - Extract zip [{i}/{len(zips_for_run)}]: {zip_path} -> {zip_dest}")
+                    extract_zip_file(zip_path, zip_dest)
+
+                    # Nested extraction inside this zip subtree
+                    cur_level = [zip_dest]
+                    for _depth in range(1, args.zip_depth + 1):
+                        next_level: List[Path] = []
+                        for d in cur_level:
+                            for nested in rglob_files(d, "*.zip"):
+                                nested_tag = safe_name(nested.stem)
+                                nested_dest = nested.parent / f"{nested_tag}__unzipped"
+                                if nested_dest.exists():
+                                    continue
+                                try:
+                                    extract_zip_file(nested, nested_dest)
+                                    next_level.append(nested_dest)
+                                except zipfile.BadZipFile:
+                                    continue
+                        cur_level = next_level
+                        if not cur_level:
+                            break
 
                 extracted_dirs.append(dest)
-
         else:
-            # No zips found. If --zips-dir was provided and exists, treat it as extracted content.
+            # No zips found. If --zips-dir exists, treat it as extracted content.
             if args.zips_dir and Path(args.zips_dir).exists():
                 root = Path(args.zips_dir)
-                sub = [p for p in root.iterdir() if p.is_dir()]
+                sub = [d for d in root.iterdir() if d.is_dir()]
                 extracted_dirs = sorted(sub) if sub else [root]
                 print(f"No .zip files found under --zips-dir; treating as extracted content: {root} (runs={len(extracted_dirs)})")
             else:
@@ -313,10 +507,12 @@ def main() -> None:
         run_index += 1
         run_out = files_root / f"run-{run_index:03d}"
         run_out.mkdir(parents=True, exist_ok=True)
+
         candidates = rglob_files(d, "*.jsonl") + rglob_files(d, "*.txt")
         if not candidates:
             print(f"[run {run_index:03d}] No .jsonl/.txt found under {d}")
             continue
+
         seen: Dict[str, int] = {}
         for p in candidates:
             base = p.name
@@ -327,6 +523,7 @@ def main() -> None:
                 seen[base] = 0
                 target = run_out / base
             target.write_bytes(p.read_bytes())
+
         print(f"[run {run_index:03d}] collected {len(candidates)} files -> {run_out}")
 
     # ---------- Analyze ----------
@@ -341,16 +538,19 @@ def main() -> None:
                 cat = get_category(rec)
                 if category_filter and (not cat or cat.strip().lower() != category_filter):
                     continue
+
                 tid = get_test_id(rec)
                 status = get_success_fail(rec)
                 if status is None:
                     continue
+
                 a = agg.setdefault(tid, Agg())
                 a.total += 1
                 if status == "success":
                     a.success += 1
                 else:
                     a.fail += 1
+
                 rec_cache.setdefault(tid, []).append((run_id, rec))
 
     if not agg:
@@ -365,6 +565,7 @@ def main() -> None:
             w.writerow([tid, args.category, a.total, a.success, a.fail, f"{rate:.4f}"])
 
     top = sorted(agg.items(), key=lambda kv: (kv[1].fail, kv[1].total), reverse=True)[: args.top]
+
     top_csv = out_root / "top_failures.csv"
     with top_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -387,13 +588,16 @@ def main() -> None:
             test_folder.mkdir(parents=True, exist_ok=True)
 
             (test_folder / "meta.json").write_text(
-                json.dumps({
-                    "test_id": tid,
-                    "category": args.category,
-                    "total": a.total,
-                    "success": a.success,
-                    "fail": a.fail,
-                }, indent=2),
+                json.dumps(
+                    {
+                        "test_id": tid,
+                        "category": args.category,
+                        "total": a.total,
+                        "success": a.success,
+                        "fail": a.fail,
+                    },
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
 
@@ -401,9 +605,10 @@ def main() -> None:
             for run_id, rec in rec_cache.get(tid, [])[:10]:
                 code_piece = extract_code_text(rec)
                 if code_piece:
-                    ext, text = code_piece
-                    (test_folder / f"{run_id}{ext}").write_text(text, encoding="utf-8")
+                    ext, txt = code_piece
+                    (test_folder / f"{run_id}{ext}").write_text(txt, encoding="utf-8")
                     saved += 1
+
                 em = rec.get("error_message")
                 if isinstance(em, str) and em.strip():
                     (test_folder / f"{run_id}_error.txt").write_text(em, encoding="utf-8")
@@ -426,18 +631,24 @@ def main() -> None:
             variants_sorted = sorted(variants.items(), key=lambda kv: kv[1], reverse=True)
 
             (test_folder / "error_variations.json").write_text(
-                json.dumps({
-                    "test_id": tid,
-                    "total_failures": a.fail,
-                    "distinct_error_messages": len(variants_sorted),
-                    "variants": [{"count": c, "error_message": msg} for msg, c in variants_sorted],
-                }, indent=2),
+                json.dumps(
+                    {
+                        "test_id": tid,
+                        "total_failures": a.fail,
+                        "distinct_error_messages": len(variants_sorted),
+                        "variants": [{"count": c, "error_message": msg} for msg, c in variants_sorted],
+                    },
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
 
             for rank, (msg, c) in enumerate(variants_sorted, start=1):
                 msg_csv = msg if len(msg) <= 3000 else (msg[:3000] + "…")
                 w.writerow([tid, rank, c, msg_csv])
+
+    # ---------- Grouped errors report (normalized) ----------
+    grouped_csv, grouped_xlsx = write_grouped_errors_report(errors_summary_csv, out_root)
 
     print("\nDONE ✅")
     if extract_root.exists():
@@ -446,6 +657,10 @@ def main() -> None:
     print(f"- Summary -> {summary_csv}")
     print(f"- Top failures -> {top_csv}")
     print(f"- Error variations -> {errors_summary_csv}")
+    if grouped_csv is not None:
+        print(f"- Grouped errors (CSV) -> {grouped_csv}")
+    if grouped_xlsx is not None:
+        print(f"- Grouped errors (XLSX) -> {grouped_xlsx}")
     print(f"- Extracted tests -> {extracted_tests_root}")
 
 
