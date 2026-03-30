@@ -57,6 +57,7 @@ jobs:
     uses: ./.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run }}
+      category: ${{ inputs.category }}
 
   evaluate-with-claude-code:
     runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]

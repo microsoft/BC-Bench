@@ -53,7 +53,7 @@ jobs:
           merge-multiple: true
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}"
+        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}"
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@v6
