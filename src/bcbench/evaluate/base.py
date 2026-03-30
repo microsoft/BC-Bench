@@ -1,24 +1,33 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from typing import TypeVar, cast
 
 from bcbench.config import get_config
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
+
+E = TypeVar("E", bound=BaseDatasetEntry)
 
 logger = get_logger(__name__)
 _config = get_config()
 
-__all__ = ["EvaluationPipeline", "create_pipeline"]
+__all__ = ["EvaluationPipeline"]
 
 
-class EvaluationPipeline(ABC):
+class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     """Abstract base class for evaluation pipelines.
 
     Subclasses implement category-specific setup, agent execution, and validation logic.
     The execute() method provides a template orchestrating the overall evaluation flow.
     """
+
+    def _get_entry(self, context: EvaluationContext) -> E:
+        return cast(E, context.entry)
 
     @abstractmethod
     def setup(self, context: EvaluationContext) -> None:
@@ -99,20 +108,3 @@ class EvaluationPipeline(ABC):
         """
 
         result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
-
-
-def create_pipeline(category: EvaluationCategory) -> EvaluationPipeline:
-    """Factory function to create evaluation pipeline based on category."""
-    from bcbench.evaluate.bugfix import BugFixPipeline
-    from bcbench.evaluate.testgeneration import TestGenerationPipeline
-
-    match category:
-        case EvaluationCategory.BUG_FIX:
-            logger.info(f"Using BugFixPipeline for category: {category}")
-            return BugFixPipeline()
-        case EvaluationCategory.TEST_GENERATION:
-            logger.info(f"Using TestGenerationPipeline for category: {category}")
-            return TestGenerationPipeline()
-        case _:
-            raise ValueError(f"Unknown evaluation category: {category}")
-    raise RuntimeError("Unreachable: no pipeline returned")

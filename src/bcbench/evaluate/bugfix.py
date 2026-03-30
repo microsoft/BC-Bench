@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from bcbench.dataset.dataset_entry import BugFixTestGenEntry
+from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
@@ -22,24 +22,19 @@ logger = get_logger(__name__)
 __all__ = ["BugFixPipeline"]
 
 
-class BugFixPipeline(EvaluationPipeline):
+class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
     """Pipeline for bug-fix evaluation category."""
-
-    def _get_entry(self, context: EvaluationContext) -> BugFixTestGenEntry:
-        assert isinstance(context.entry, BugFixTestGenEntry)
-        return context.entry
 
     def setup(self, context: EvaluationContext) -> None:
         entry = self._get_entry(context)
+        container = context.get_container()
 
         setup_repo_prebuild(entry, context.repo_path)
 
         build_and_publish_projects(
             context.repo_path,
             entry.project_paths,
-            context.container_name,
-            context.username,
-            context.password,
+            container,
             entry.environment_setup_version,
         )
 
@@ -51,6 +46,7 @@ class BugFixPipeline(EvaluationPipeline):
 
     def evaluate(self, context: EvaluationContext) -> None:
         entry = self._get_entry(context)
+        container = context.get_container()
         test_projects, _app_projects = categorize_projects(entry.project_paths)
 
         # Clean test projects to revert any unintended agent changes before capturing diff
@@ -64,12 +60,10 @@ class BugFixPipeline(EvaluationPipeline):
             build_and_publish_projects(
                 context.repo_path,
                 entry.project_paths,
-                context.container_name,
-                context.username,
-                context.password,
+                container,
                 entry.environment_setup_version,
             )
-            run_tests(entry, context.container_name, context.username, context.password)
+            run_tests(entry, container)
 
             result = BugFixResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {entry.instance_id}")

@@ -4,19 +4,16 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Self
+from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
 
-if TYPE_CHECKING:
-    from bcbench.types import EvaluationCategory
-
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixTestGenEntry", "TestEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -91,7 +88,7 @@ class BaseDatasetEntry(BaseModel):
     def get_task(self, transform_image_paths: bool = False) -> str: ...
 
     @abstractmethod
-    def get_expected_output(self, category: EvaluationCategory) -> str: ...
+    def get_expected_output(self) -> str: ...
 
     def extract_project_name(self) -> str:
         if not self.project_paths:
@@ -106,8 +103,8 @@ class BaseDatasetEntry(BaseModel):
         return parts[-1] if parts else ""
 
 
-class BugFixTestGenEntry(BaseDatasetEntry):
-    """Dataset entry for bug-fix and test-generation categories."""
+class _BugFixTestGenBase(BaseDatasetEntry):
+    """Shared schema for bug-fix and test-generation entries (same JSONL, different semantics)."""
 
     fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
     pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
@@ -127,15 +124,8 @@ class BugFixTestGenEntry(BaseDatasetEntry):
         dest_dir = _config.file_patterns.problem_statement_dest_dir
         return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
-    def get_expected_output(self, category: EvaluationCategory) -> str:
-        from bcbench.types import EvaluationCategory as EC
-
-        if category == EC.TEST_GENERATION:
-            return self.test_patch
-        return self.patch
-
     @model_validator(mode="after")
-    def validate_baseapp_patches_are_w1_only(self) -> BugFixTestGenEntry:
+    def validate_baseapp_patches_are_w1_only(self) -> Self:
         if self.extract_project_name() != "BaseApp":
             return self
 
@@ -150,3 +140,17 @@ class BugFixTestGenEntry(BaseDatasetEntry):
                         raise ValueError(f"Patch modifies non-W1 layer '{layer}': {patch_path}")
 
         return self
+
+
+class BugFixEntry(_BugFixTestGenBase):
+    """Dataset entry for the bug-fix category."""
+
+    def get_expected_output(self) -> str:
+        return self.patch
+
+
+class TestGenEntry(_BugFixTestGenBase):
+    """Dataset entry for the test-generation category."""
+
+    def get_expected_output(self) -> str:
+        return self.test_patch

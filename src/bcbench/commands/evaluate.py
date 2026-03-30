@@ -20,21 +20,15 @@ from bcbench.cli_options import (
     RunId,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, get_entry_class
-from bcbench.evaluate import EvaluationPipeline, create_pipeline
+from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, ContainerConfig, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
-
-
-def _load_entry(category: EvaluationCategory, entry_id: str) -> BaseDatasetEntry:
-    entry_cls = get_entry_class(category)
-    return entry_cls.load(category.dataset_path, entry_id=entry_id)[0]
 
 
 def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
@@ -62,7 +56,7 @@ def evaluate_mini(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run mini' instead.
     """
-    entry = _load_entry(category, entry_id)
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mini-bc-agent")
@@ -71,15 +65,13 @@ def evaluate_mini(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container_name=container_name,
-        username=username,
-        password=password,
+        container=ContainerConfig(name=container_name, username=username, password=password),
         model=model,
         agent_name="mini-bc-agent",
         category=category,
     )
 
-    pipeline = create_pipeline(category)
+    pipeline = category.pipeline
     pipeline.execute(
         context,
         lambda ctx: run_mini_agent(
@@ -113,7 +105,7 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    entry = _load_entry(category, entry_id)
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
@@ -122,15 +114,13 @@ def evaluate_copilot(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container_name=container_name,
-        username=username,
-        password=password,
+        container=ContainerConfig(name=container_name, username=username, password=password),
         model=model,
         agent_name="GitHub Copilot",
         category=category,
     )
 
-    pipeline = create_pipeline(category)
+    pipeline = category.pipeline
     pipeline.execute(
         context,
         lambda ctx: run_copilot_agent(
@@ -140,7 +130,7 @@ def evaluate_copilot(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp,
-            container_name=ctx.container_name,
+            container_name=ctx.get_container().name,
         ),
     )
 
@@ -166,7 +156,7 @@ def evaluate_claude_code(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
-    entry = _load_entry(category, entry_id)
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
@@ -175,15 +165,13 @@ def evaluate_claude_code(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container_name=container_name,
-        username=username,
-        password=password,
+        container=ContainerConfig(name=container_name, username=username, password=password),
         model=model,
         agent_name="Claude Code",
         category=category,
     )
 
-    pipeline = create_pipeline(category)
+    pipeline = category.pipeline
     pipeline.execute(
         context,
         lambda ctx: run_claude_code(
@@ -193,7 +181,7 @@ def evaluate_claude_code(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp,
-            container_name=ctx.container_name,
+            container_name=ctx.get_container().name,
         ),
     )
 
@@ -211,7 +199,7 @@ def evaluate_mock(
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
-    entry = _load_entry(category, entry_id)
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")
@@ -220,9 +208,6 @@ def evaluate_mock(
         entry=entry,
         repo_path=Path(),
         result_dir=run_dir,
-        container_name="no container",
-        username="",
-        password="",
         model="mock-model",
         agent_name="mock-agent",
         category=category,

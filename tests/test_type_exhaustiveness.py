@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from bcbench.dataset import BugFixTestGenEntry, get_entry_class
-from bcbench.evaluate import create_pipeline
+from bcbench.dataset import BugFixEntry
 from bcbench.types import AgentType, EvaluationCategory
 
 
@@ -22,20 +21,23 @@ def test_all_agent_types_have_instruction_filename():
 
 def test_all_categories_have_pipelines():
     for category in EvaluationCategory:
-        pipeline = create_pipeline(category)
+        pipeline = category.pipeline
         assert pipeline is not None
 
 
 def test_all_categories_have_entry_classes():
     for category in EvaluationCategory:
-        entry_cls = get_entry_class(category)
+        entry_cls = category.entry_class
         assert entry_cls is not None
 
 
-def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixTestGenEntry):
+def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry):
     for category in EvaluationCategory:
-        input_text = sample_dataset_entry_with_problem_statement.get_task()
-        expected_output = sample_dataset_entry_with_problem_statement.get_expected_output(category)
+        entry_cls = category.entry_class
+        # Reconstruct entry as the category-specific type so get_expected_output() works
+        entry = entry_cls.model_validate(sample_dataset_entry_with_problem_statement.model_dump(by_alias=True))
+        input_text = entry.get_task()
+        expected_output = entry.get_expected_output()
         assert isinstance(input_text, str)
         assert isinstance(expected_output, str)
         assert len(expected_output) > 0

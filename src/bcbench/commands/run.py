@@ -19,7 +19,6 @@ from bcbench.cli_options import (
     RepoPath,
 )
 from bcbench.config import get_config
-from bcbench.dataset import get_entry_class
 from bcbench.logger import get_logger
 from bcbench.operations import setup_repo
 
@@ -45,7 +44,7 @@ def run_mini(
     Example:
         uv run bcbench run mini microsoft__BCApps-5633 --step-limit 5 --category bug-fix
     """
-    entry = get_entry_class(category).load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     setup_repo(entry, repo_path, category)
 
     run_mini_agent(
@@ -75,7 +74,7 @@ def run_copilot(
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    entry = get_entry_class(category).load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     setup_repo(entry, repo_path, category)
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
@@ -99,7 +98,7 @@ def run_claude(
     Example:
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    entry = get_entry_class(category).load(category.dataset_path, entry_id=entry_id)[0]
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     setup_repo(entry, repo_path, category)
 
     run_claude_code(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)

@@ -6,14 +6,10 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 
 from bcbench.exceptions import ConfigurationError
-
-if TYPE_CHECKING:
-    from bcbench.types import EvaluationCategory
 
 __all__ = ["Config", "get_config"]
 
@@ -40,7 +36,6 @@ class PathConfig:
 
     bc_bench_root: Path
     dataset_dir: Path
-    dataset_paths: dict[EvaluationCategory, Path]
     problem_statement_dir: Path
     testbed_path: Path
     ps_script_path: Path
@@ -51,16 +46,9 @@ class PathConfig:
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
         """Create path configuration from repository root."""
-        from bcbench.types import EvaluationCategory
-
-        dataset_file = root / "dataset" / "bcbench.jsonl"
         return cls(
             bc_bench_root=root,
             dataset_dir=root / "dataset",
-            dataset_paths={
-                EvaluationCategory.BUG_FIX: dataset_file,
-                EvaluationCategory.TEST_GENERATION: dataset_file,
-            },
             problem_statement_dir=root / "dataset" / "problemstatement",
             testbed_path=root.parent / "NAV",
             ps_script_path=root / "scripts",

@@ -1,8 +1,7 @@
 from collections.abc import Callable
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.dataset import TestEntry
-from bcbench.dataset.dataset_entry import BugFixTestGenEntry
+from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
@@ -25,12 +24,8 @@ logger = get_logger(__name__)
 __all__ = ["TestGenerationPipeline"]
 
 
-class TestGenerationPipeline(EvaluationPipeline):
+class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
     """Pipeline for test-generation evaluation category."""
-
-    def _get_entry(self, context: EvaluationContext) -> BugFixTestGenEntry:
-        assert isinstance(context.entry, BugFixTestGenEntry)
-        return context.entry
 
     def setup(self, context: EvaluationContext) -> None:
         entry = self._get_entry(context)
@@ -39,9 +34,7 @@ class TestGenerationPipeline(EvaluationPipeline):
         build_and_publish_projects(
             context.repo_path,
             entry.project_paths,
-            context.container_name,
-            context.username,
-            context.password,
+            context.get_container(),
             entry.environment_setup_version,
         )
 
@@ -53,6 +46,7 @@ class TestGenerationPipeline(EvaluationPipeline):
 
     def evaluate(self, context: EvaluationContext) -> None:
         entry = self._get_entry(context)
+        container = context.get_container()
         test_projects, app_projects = categorize_projects(entry.project_paths)
 
         # Clean app projects to revert any unintended agent changes before capturing diff
@@ -76,24 +70,20 @@ class TestGenerationPipeline(EvaluationPipeline):
             build_and_publish_projects(
                 context.repo_path,
                 test_projects,
-                context.container_name,
-                context.username,
-                context.password,
+                container,
                 entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Fail", context.container_name, context.username, context.password)
+            run_test_suite(generated_tests, "Fail", container)
 
             apply_patch(context.repo_path, entry.patch, f"{entry.instance_id} patch")
 
             build_and_publish_projects(
                 context.repo_path,
                 app_projects,
-                context.container_name,
-                context.username,
-                context.password,
+                container,
                 entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Pass", context.container_name, context.username, context.password)
+            run_test_suite(generated_tests, "Pass", container)
 
             result = TestGenerationResult.create_success(context, generated_patch, pre_patch_failed=True, post_patch_passed=True)
             logger.info(f"Successfully completed {entry.instance_id}")

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bcbench.dataset import BaseDatasetEntry, get_entry_class
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.testgeneration import TestGenerationResult
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, output_filename: str, category: EvaluationCategory) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entry_cls = get_entry_class(category)
+    entry_cls = category.entry_class
     dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
 
     output_file = out_dir / output_filename
@@ -30,7 +30,7 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 continue
 
             matched_entry = matching_entries[0]
-            input, expected = matched_entry.get_task(), matched_entry.get_expected_output(result.category)
+            input, expected = matched_entry.get_task(), matched_entry.get_expected_output()
 
             metadata: dict[str, Any] = {
                 "model": result.model,

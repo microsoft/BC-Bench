@@ -5,6 +5,7 @@ import pytest
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.operations import bc_operations
+from bcbench.types import ContainerConfig
 
 _config = get_config()
 
@@ -225,9 +226,7 @@ class TestRunTestSuite:
         bc_operations.run_test_suite(
             test_entries=test_entries,
             expectation="Pass",
-            container_name="bcserver",
-            username="admin",
-            password="Test123",
+            container=ContainerConfig(name="bcserver", username="admin", password="Test123"),
         )
 
         assert len(mock_subprocess) == 1
@@ -248,9 +247,7 @@ class TestRunTestSuite:
         bc_operations.run_test_suite(
             test_entries=test_entries,
             expectation="Pass",
-            container_name="bcserver",
-            username="admin",
-            password="Test123",
+            container=ContainerConfig(name="bcserver", username="admin", password="Test123"),
         )
 
         assert len(mock_subprocess) == 1

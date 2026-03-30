@@ -13,8 +13,9 @@ from bcbench.logger import get_logger
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
+    from bcbench.evaluate.base import EvaluationPipeline
 
-__all__ = ["AgentMetrics", "AgentType", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
 logger = get_logger(__name__)
 
@@ -105,10 +106,44 @@ class EvaluationCategory(str, Enum):
     def dataset_path(self) -> Path:
         from bcbench.config import get_config
 
-        config = get_config()
-        if self not in config.paths.dataset_paths:
-            raise ValueError(f"No dataset path configured for category: {self.value}")
-        return config.paths.dataset_paths[self]
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return get_config().paths.dataset_dir / "bcbench.jsonl"
+            case EvaluationCategory.TEST_GENERATION:
+                return get_config().paths.dataset_dir / "bcbench.jsonl"
+            case _:
+                raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def entry_class(self) -> type[BaseDatasetEntry]:
+        from bcbench.dataset import BugFixEntry, TestGenEntry
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return BugFixEntry
+            case EvaluationCategory.TEST_GENERATION:
+                return TestGenEntry
+            case _:
+                raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def pipeline(self) -> EvaluationPipeline:
+        from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return BugFixPipeline()
+            case EvaluationCategory.TEST_GENERATION:
+                return TestGenerationPipeline()
+            case _:
+                raise ValueError(f"Unknown evaluation category: {self}")
+
+
+@dataclass(frozen=True)
+class ContainerConfig:
+    name: str
+    username: str
+    password: str
 
 
 @dataclass
@@ -124,11 +159,6 @@ class EvaluationContext:
     repo_path: Path
     result_dir: Path
 
-    # BC Container configuration
-    container_name: str
-    password: str
-    username: str
-
     # Agent metadata
     agent_name: str
     model: str
@@ -136,8 +166,16 @@ class EvaluationContext:
     # Evaluation category
     category: EvaluationCategory
 
+    # BC Container configuration (optional — not all categories require a container)
+    container: ContainerConfig | None = None
+
     # Agent execution metrics
     metrics: AgentMetrics | None = None
 
     # Experiment configuration
     experiment: ExperimentConfiguration | None = None
+
+    def get_container(self) -> ContainerConfig:
+        if self.container is None:
+            raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
+        return self.container

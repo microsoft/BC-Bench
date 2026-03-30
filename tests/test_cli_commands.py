@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
-from bcbench.dataset import BugFixTestGenEntry
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
@@ -96,7 +96,7 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     results_dir = base_path / run_id
 
     with (
-        patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+        patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
     ):
         result = runner.invoke(
@@ -130,7 +130,7 @@ def test_result_summarize_verifies_summary_calculations(sample_results_directory
     results_dir = base_path / run_id
 
     with (
-        patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+        patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
     ):
         result = runner.invoke(
@@ -212,7 +212,7 @@ def test_result_summarize_with_custom_pattern(sample_results_directory, problem_
     base_path, run_id, dataset_path = sample_results_directory
 
     with (
-        patch.object(BugFixTestGenEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+        patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
     ):
         result = runner.invoke(

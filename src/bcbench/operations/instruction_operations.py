@@ -3,7 +3,7 @@ from shutil import copytree, rmtree
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.dataset.dataset_entry import BugFixTestGenEntry
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.logger import get_logger
 from bcbench.types import AgentType
 
@@ -84,7 +84,7 @@ def _get_source_instructions_path(repo_name: str) -> Path:
     return instructions_path
 
 
-def copy_problem_statement_folder(entry: BugFixTestGenEntry, repo_path: Path) -> None:
+def copy_problem_statement_folder(entry: _BugFixTestGenBase, repo_path: Path) -> None:
     """
     Copy problem statement folder to the testbed repository root.
 
