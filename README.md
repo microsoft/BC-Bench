@@ -37,6 +37,6 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP ser
 
 ## Getting Started
 
-BC-Bench is open source for reference and reuse, but this repository does not accept external code contributions. To use it, fork the repo and run evaluations on your own machine. You can replace the dataset under `dataset/` with tasks from your own codebase to benchmark agents in your environment.
+BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time. You can run evaluations locally and replace the dataset under `dataset/` with tasks from your own codebase.
 
-- **[Setup for Forks](CONTRIBUTING.md)** - Environment setup and guidance for adapting BC-Bench to your own dataset
+- **[Setup for Forks](CONTRIBUTING.md)**
