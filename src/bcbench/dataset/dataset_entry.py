@@ -85,10 +85,12 @@ class BaseDatasetEntry(BaseModel):
             handle.write("\n")
 
     @abstractmethod
-    def get_task(self, transform_image_paths: bool = False) -> str: ...
+    def get_task(self, transform_image_paths: bool = False) -> str:
+        pass
 
     @abstractmethod
-    def get_expected_output(self) -> str: ...
+    def get_expected_output(self) -> str:
+        pass
 
     def extract_project_name(self) -> str:
         if not self.project_paths:

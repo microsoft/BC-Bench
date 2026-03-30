@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.config import get_config
-from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, TestGenEntry
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, _BugFixTestGenBase
 from bcbench.logger import get_logger
 from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
 from bcbench.operations.instruction_operations import copy_problem_statement_folder
@@ -14,7 +14,7 @@ from bcbench.types import EvaluationCategory
 logger = get_logger(__name__)
 _config = get_config()
 
-__all__ = ["_get_test_generation_input_mode", "setup_repo", "setup_repo_postbuild", "setup_repo_prebuild"]
+__all__ = ["_get_test_generation_input_mode", "setup_repo_postbuild", "setup_repo_prebuild"]
 
 
 def _get_test_generation_input_mode() -> str:
@@ -51,14 +51,7 @@ def setup_repo_prebuild(entry: BaseDatasetEntry, repo_path: Path) -> None:
     checkout_commit(repo_path, entry.base_commit)
 
 
-def setup_repo(entry: BaseDatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
-    """Full repository setup: clean, checkout, and apply category-specific postbuild steps."""
-    setup_repo_prebuild(entry, repo_path)
-    assert isinstance(entry, (BugFixEntry, TestGenEntry))
-    setup_repo_postbuild(entry, repo_path, category)
-
-
-def setup_repo_postbuild(entry: BugFixEntry | TestGenEntry, repo_path: Path, category: EvaluationCategory) -> None:
+def setup_repo_postbuild(entry: _BugFixTestGenBase, repo_path: Path, category: EvaluationCategory) -> None:
     """Setup repository after building for bug-fix and test-generation categories.
 
     This is the second phase of repo setup that should be called AFTER build_and_publish_projects.

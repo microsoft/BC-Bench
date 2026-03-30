@@ -111,8 +111,8 @@ class EvaluationCategory(str, Enum):
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
-            case _:
-                raise ValueError(f"Unknown evaluation category: {self}")
+
+        raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
@@ -123,8 +123,8 @@ class EvaluationCategory(str, Enum):
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
-            case _:
-                raise ValueError(f"Unknown evaluation category: {self}")
+
+        raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def pipeline(self) -> EvaluationPipeline:
@@ -135,8 +135,8 @@ class EvaluationCategory(str, Enum):
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
-            case _:
-                raise ValueError(f"Unknown evaluation category: {self}")
+
+        raise ValueError(f"Unknown evaluation category: {self}")
 
 
 @dataclass(frozen=True)
