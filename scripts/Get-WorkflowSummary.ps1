@@ -401,6 +401,12 @@ try {
 
     foreach ($run in $runs) {
         $currentRunId = $run.databaseId
+        
+        if ($run.conclusion -in @("cancelled", "skipped")) {
+            Write-Log "Skipping run $currentRunId because conclusion is $($run.conclusion)" -Level Warning
+            continue
+        }
+
         Write-Log "`nProcessing run $currentRunId..." -Level Info
 
         if ($run.displayTitle) { Write-Log "  Title: $($run.displayTitle)" -Level Info }
@@ -421,7 +427,13 @@ try {
             }
 
             Write-Log "  Downloading artifacts for run $currentRunId..." -Level Info
-            Download-RunArtifacts -Repo $Repository -RunId $currentRunId -Destination $artifactsDir
+            try {
+                Download-RunArtifacts -Repo $Repository -RunId $currentRunId -Destination $artifactsDir
+            }
+            catch {
+                Write-Log "No artifacts for run $currentRunId, continuing..." -Level Warning
+                $jsonlFiles = @()
+            }
 
             $jsonlFiles = Get-JsonlFilesFromDownloadedArtifacts -ArtifactsRoot $artifactsDir
 
