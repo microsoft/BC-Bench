@@ -10,6 +10,11 @@ on:
         required: false
         type: boolean
         default: false
+      base-ref:
+        description: Git ref to diff against when using modified-only (e.g., HEAD~1, a commit SHA)
+        required: false
+        type: string
+        default: origin/main
       test-run:
         description: Indicate this is a test run (with 2 entries)
         required: false
@@ -45,7 +50,7 @@ jobs:
           cmd="uv run bcbench dataset list --github-output entries"
 
           if [[ "${{ inputs.modified-only }}" == "true" ]]; then
-            cmd="$cmd --modified-only"
+            cmd="$cmd --modified-only --base-ref '${{ inputs.base-ref }}'"
           elif [[ "${{ inputs.test-run }}" == "true" ]]; then
             cmd="$cmd --test-run"
           fi

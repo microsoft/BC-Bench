@@ -45,6 +45,7 @@ def list_entries(
     dataset_path: DatasetPath = _config.paths.dataset_path,
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
+    base_ref: Annotated[str, typer.Option(help="Git ref to diff against when using --modified-only (e.g., HEAD~1, a commit SHA, or a branch name)")] = "origin/main",
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
     include_counterfactual: Annotated[bool, typer.Option(help="Include counterfactual entries from counterfactual.jsonl")] = True,
 ):
@@ -52,17 +53,10 @@ def list_entries(
     if modified_only:
         import subprocess
 
+        diff_cmd = ["git", "diff", base_ref, "HEAD", "--unified=0", "--no-color", "--diff-filter=AM"]
+
         result = subprocess.run(
-            [
-                "git",
-                "diff",
-                "origin/main",
-                "--unified=0",
-                "--no-color",
-                "--diff-filter=AM",
-                "--",
-                str(dataset_path),
-            ],
+            [*diff_cmd, "--", str(dataset_path)],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -76,16 +70,7 @@ def list_entries(
             cf_path = dataset_path.parent / "counterfactual.jsonl"
             if cf_path.exists():
                 cf_diff_result = subprocess.run(
-                    [
-                        "git",
-                        "diff",
-                        "origin/main",
-                        "--unified=0",
-                        "--no-color",
-                        "--diff-filter=AM",
-                        "--",
-                        str(cf_path),
-                    ],
+                    [*diff_cmd, "--", str(cf_path)],
                     capture_output=True,
                     text=True,
                     encoding="utf-8",

@@ -3,6 +3,11 @@ permissions:
   contents: read
 
 on:
+  push:
+    branches:
+      - master_thesis
+    paths:
+      - "dataset/**"
   workflow_dispatch:
     inputs:
       test-run:
@@ -10,6 +15,11 @@ on:
         required: false
         default: true
         type: boolean
+      base-ref:
+        description: "Git ref to diff against for modified-only (e.g., HEAD~1)"
+        required: false
+        default: "origin/main"
+        type: string
   schedule:
     - cron: "0 0 * * 0" # Weekly on Sundays at midnight
 
@@ -17,7 +27,8 @@ jobs:
   get-entries:
     uses: ./.github/workflows/get-entries.yml
     with:
-      modified-only: false
+      modified-only: ${{ github.event_name == 'push' }}
+      base-ref: ${{ inputs.base-ref || 'HEAD~1' }}
       test-run: ${{ inputs.test-run || false }}
 
   verify-build-and-tests:
