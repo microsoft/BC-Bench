@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import TypeVar, cast
+from typing import cast
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -10,8 +10,6 @@ from bcbench.exceptions import AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
-
-E = TypeVar("E", bound=BaseDatasetEntry)
 
 logger = get_logger(__name__)
 _config = get_config()
