@@ -11,7 +11,7 @@ on:
         default: true
         type: boolean
   schedule:
-    - cron: "0 0 * * 0" # Weekly on Sundays at midnight
+    - cron: "0 0 * * 0"
 
 jobs:
   get-entries:
@@ -19,6 +19,7 @@ jobs:
     with:
       modified-only: false
       test-run: ${{ inputs.test-run || false }}
+      category: "bug-fix"
 
   verify-build-and-tests:
     runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]

@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, _BugFixTestGenBase
 from bcbench.logger import get_logger
 from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_repo
 from bcbench.operations.instruction_operations import copy_problem_statement_folder
@@ -37,7 +37,7 @@ def _get_test_generation_input_mode() -> str:
     return input_mode
 
 
-def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
+def setup_repo_prebuild(entry: BaseDatasetEntry, repo_path: Path) -> None:
     """Setup repository before building - clean and checkout base commit.
 
     This is the first phase of repo setup that should be called BEFORE build_and_publish_projects.
@@ -51,17 +51,14 @@ def setup_repo_prebuild(entry: DatasetEntry, repo_path: Path) -> None:
     checkout_commit(repo_path, entry.base_commit)
 
 
-def setup_repo_postbuild(entry: DatasetEntry, repo_path: Path, category: EvaluationCategory) -> None:
-    """Setup repository after building - apply patches and copy problem statements.
+def setup_repo_postbuild(entry: _BugFixTestGenBase, repo_path: Path, category: EvaluationCategory) -> None:
+    """Setup repository after building for bug-fix and test-generation categories.
 
     This is the second phase of repo setup that should be called AFTER build_and_publish_projects.
     For test-generation, this ensures the gold patch is applied only after the base code is built,
     so the agent sees the fixed code but tests run against the unfixed published app.
 
-    Args:
-        entry: Dataset entry with instance metadata
-        repo_path: Path to the repository
-        category: Evaluation category (bug-fix or test-generation)
+    Note: Other categories should implement their own postbuild setup.
     """
     if category == EvaluationCategory.TEST_GENERATION:
         input_mode: str = _get_test_generation_input_mode()

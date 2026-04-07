@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Self
 
 from pydantic import BaseModel
 
@@ -10,9 +10,6 @@ from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
-
-# Type variable for proper return type hints in class methods
-T = TypeVar("T", bound="BaseEvaluationResult")
 
 
 class BaseEvaluationResult(BaseModel):
@@ -36,14 +33,14 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def _create_from_context(
-        cls: type[T],
+        cls,
         context: "EvaluationContext",
         resolved: bool,
         build: bool,
         error_message: str | None = None,
         generated_patch: str = "",
         **kwargs: Any,
-    ) -> T:
+    ) -> Self:
         """Create result from EvaluationContext with validation and metric extraction.
 
         Args:
@@ -80,19 +77,19 @@ class BaseEvaluationResult(BaseModel):
         )
 
     @classmethod
-    def create_success(cls: type[T], context: "EvaluationContext", generated_patch: str, **kwargs: Any) -> T:
+    def create_success(cls, context: "EvaluationContext", generated_patch: str, **kwargs: Any) -> Self:
         return cls._create_from_context(context, resolved=True, build=True, generated_patch=generated_patch, **kwargs)
 
     @classmethod
-    def create_build_failure(cls: type[T], context: "EvaluationContext", generated_patch: str, error_msg: str, **kwargs: Any) -> T:
+    def create_build_failure(cls, context: "EvaluationContext", generated_patch: str, error_msg: str, **kwargs: Any) -> Self:
         return cls._create_from_context(context, resolved=False, build=False, error_message=error_msg, generated_patch=generated_patch, **kwargs)
 
     @classmethod
-    def create_test_failure(cls: type[T], context: "EvaluationContext", generated_patch: str, error_msg: str = "Tests failed", **kwargs: Any) -> T:
+    def create_test_failure(cls, context: "EvaluationContext", generated_patch: str, error_msg: str = "Tests failed", **kwargs: Any) -> Self:
         return cls._create_from_context(context, resolved=False, build=True, error_message=error_msg, generated_patch=generated_patch, **kwargs)
 
     @classmethod
-    def create_agent_timeout_failure(cls: type[T], context: "EvaluationContext", **kwargs: Any) -> T:
+    def create_agent_timeout_failure(cls, context: "EvaluationContext", **kwargs: Any) -> Self:
         return cls._create_from_context(context, resolved=False, build=False, timeout=True, error_message="Agent timed out", **kwargs)
 
     def save(self, output_dir: Path, result_file: str) -> None:

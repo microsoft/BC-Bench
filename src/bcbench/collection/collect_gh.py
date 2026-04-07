@@ -9,7 +9,7 @@ from bcbench.collection.build_entry import save_problem_statement
 from bcbench.collection.gh_client import GHClient
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BugFixEntry
 from bcbench.exceptions import CollectionError
 from bcbench.logger import get_logger
 from bcbench.operations.test_operations import extract_tests_from_patch
@@ -58,7 +58,7 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/BCApps
 
         save_problem_statement(instance_id=instance_id, problem_statement=problem_statement)
 
-        entry = DatasetEntry(
+        entry = BugFixEntry(
             repo=repo,
             instance_id=instance_id,
             base_commit=base_commit,

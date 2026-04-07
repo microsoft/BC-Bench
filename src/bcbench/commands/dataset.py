@@ -1,52 +1,34 @@
 """CLI commands for dataset operations."""
 
 import json
-from pathlib import Path
 
 import typer
 from typing_extensions import Annotated
 
-from bcbench.cli_options import DatasetPath
+from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry
-from bcbench.dataset.dataset_loader import load_dataset_entries
-from bcbench.dataset.reviewer import run_dataset_reviewer
+from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.exceptions import ConfigurationError
 from bcbench.logger import get_logger
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
-_config = get_config()
 
 dataset_app = typer.Typer(help="Query and analyze dataset")
 
 
-@dataset_app.command("review")
-def review_dataset(
-    dataset_path: Annotated[Path, typer.Argument(help="Path to dataset JSONL file")] = _config.paths.dataset_path,
-    results_dir: Annotated[
-        Path | None, typer.Option("--results-dir", "-r", help="Directory containing result JSONL files to show resolution stats", exists=True, file_okay=False, dir_okay=True)
-    ] = None,
-):
-    """
-    Review dataset entries using a TUI.
-
-    Opens a split-pane view showing entry information and problem statement.
-    Use arrow keys to navigate between entries.
-
-    If --results-dir is provided, shows resolution stats (e.g., "2/5 resolved")
-    for each entry based on the results in that directory.
-    """
-    run_dataset_reviewer(dataset_path, results_dir)
-
-
 @dataset_app.command("list")
 def list_entries(
-    dataset_path: DatasetPath = _config.paths.dataset_path,
+    category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
 ):
     """List dataset entry IDs."""
+    entry_cls = category.entry_class
+    resolved_path = category.dataset_path
+
     if modified_only:
         import subprocess
 
@@ -59,19 +41,19 @@ def list_entries(
                 "--no-color",
                 "--diff-filter=AM",
                 "--",
-                str(dataset_path),
+                str(resolved_path),
             ],
             capture_output=True,
             text=True,
             encoding="utf-8",
             check=True,
-            cwd=dataset_path.parent,
+            cwd=resolved_path.parent,
         )
         diff_output: str = result.stdout
         entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
     else:
-        dataset_entries: list[DatasetEntry] = load_dataset_entries(dataset_path, random=2 if test_run else None)
-        entry_ids: list[str] = [e.instance_id for e in dataset_entries]
+        entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=2 if test_run else None)
+        entry_ids: list[str] = [e.instance_id for e in entries]
 
     print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")
     for entry_id in entry_ids:
@@ -84,7 +66,7 @@ def list_entries(
 @dataset_app.command("view")
 def view_entry(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to view")],
-    dataset_path: DatasetPath = _config.paths.dataset_path,
+    category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     show_patch: Annotated[bool, typer.Option(help="Show patch in output")] = False,
 ):
     """View a specific dataset entry with rich formatting."""
@@ -92,7 +74,7 @@ def view_entry(
     from rich.panel import Panel
     from rich.table import Table
 
-    entry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
+    entry: BaseDatasetEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     console = Console()
 
     info_table = Table(show_header=False, box=None)
@@ -109,7 +91,6 @@ def view_entry(
         "\n".join(entry.project_paths) if entry.project_paths else "N/A",
     )
 
-    # Add metadata fields dynamically
     metadata_dict = entry.metadata.model_dump()
     for field_name, field_value in metadata_dict.items():
         display_name = field_name.replace("_", " ").title()
@@ -123,33 +104,35 @@ def view_entry(
     if show_patch:
         console.print("\n[bold cyan]Patch:[/bold cyan]")
         console.print(Panel(entry.patch or "[dim]Empty[/dim]", border_style="magenta"))
-        console.print("\n[bold cyan]Test Patch:[/bold cyan]")
-        console.print(Panel(entry.test_patch or "[dim]Empty[/dim]", border_style="magenta"))
 
-    console.print("\n[bold cyan]FAIL_TO_PASS Tests:[/bold cyan]")
-    if entry.fail_to_pass:
-        test_table = Table()
-        test_table.add_column("Codeunit ID", style="magenta")
-        test_table.add_column("Functions", style="yellow")
-        for test in entry.fail_to_pass:
-            test_table.add_row(str(test.codeunitID), ", ".join(test.functionName))
-        console.print(test_table)
-    else:
-        console.print("[dim]No FAIL_TO_PASS tests[/dim]")
+    # Display category-specific fields
+    if isinstance(entry, _BugFixTestGenBase):
+        bugfix_entry = entry
+        if show_patch:
+            console.print("\n[bold cyan]Test Patch:[/bold cyan]")
+            console.print(Panel(bugfix_entry.test_patch or "[dim]Empty[/dim]", border_style="magenta"))
 
-    console.print("\n[bold cyan]PASS_TO_PASS Tests:[/bold cyan]")
-    if entry.pass_to_pass:
-        test_table = Table()
-        test_table.add_column("Codeunit ID", style="magenta")
-        test_table.add_column("Functions", style="yellow")
-        for test in entry.pass_to_pass:
-            test_table.add_row(
-                str(test.codeunitID),
-                ", ".join(test.functionName),
-            )
-        console.print(test_table)
-    else:
-        console.print("[dim]No PASS_TO_PASS tests[/dim]")
+        console.print("\n[bold cyan]FAIL_TO_PASS Tests:[/bold cyan]")
+        if bugfix_entry.fail_to_pass:
+            test_table = Table()
+            test_table.add_column("Codeunit ID", style="magenta")
+            test_table.add_column("Functions", style="yellow")
+            for test in bugfix_entry.fail_to_pass:
+                test_table.add_row(str(test.codeunitID), ", ".join(test.functionName))
+            console.print(test_table)
+        else:
+            console.print("[dim]No FAIL_TO_PASS tests[/dim]")
+
+        console.print("\n[bold cyan]PASS_TO_PASS Tests:[/bold cyan]")
+        if bugfix_entry.pass_to_pass:
+            test_table = Table()
+            test_table.add_column("Codeunit ID", style="magenta")
+            test_table.add_column("Functions", style="yellow")
+            for test in bugfix_entry.pass_to_pass:
+                test_table.add_row(str(test.codeunitID), ", ".join(test.functionName))
+            console.print(test_table)
+        else:
+            console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
 
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:

@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentType
@@ -24,7 +24,7 @@ def test_setup_agent_skills():
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"skills": {"enabled": True}}
 
@@ -69,7 +69,7 @@ def test_nonexistent_skills():
     """Test that setup_agent_skills raises FileNotFoundError for nonexistent repo."""
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "nonexistent/repo"
         config = {"skills": {"enabled": True}}
 
@@ -92,7 +92,7 @@ def test_overwrite_skill_folder_files():
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"skills": {"enabled": True}}
 
@@ -122,7 +122,7 @@ def test_overwrite_skill_folder_files():
 def test_path_specific_skills_copied():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"skills": {"enabled": True}}
 
@@ -141,7 +141,7 @@ def test_path_specific_skills_copied():
 def test_path_specific_skills_removed_before_copy():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"skills": {"enabled": True}}
 
@@ -166,7 +166,7 @@ def test_skills_disabled():
     """When skills disabled, should return False and not create directory."""
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=DatasetEntry)
+        entry = MagicMock(spec=BaseDatasetEntry)
         entry.repo = "microsoftInternal/NAV"
         config = {"skills": {"enabled": False}}
 

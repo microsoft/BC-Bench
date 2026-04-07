@@ -8,9 +8,11 @@ from typing import Literal
 from pydantic import TypeAdapter
 
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry, TestEntry
+from bcbench.dataset import TestEntry
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger
+from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -116,7 +118,7 @@ def build_ps_dataset_tests_script(container_name: str, username: str, password: 
     )
 
 
-def build_and_publish_projects(repo_path: Path, project_paths: list[str], container_name: str, username: str, password: str, version: str) -> None:
+def build_and_publish_projects(repo_path: Path, project_paths: list[str], container: ContainerConfig, version: str) -> None:
     """Build and publish all projects."""
     logger.info(f"Building and publishing {len(project_paths)} projects")
 
@@ -125,9 +127,9 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
         logger.info(f"Building project: {full_project_path}")
 
         ps_script = build_ps_app_build_and_publish(
-            container_name=container_name,
-            username=username,
-            password=password,
+            container_name=container.name,
+            username=container.username,
+            password=container.password,
             project_path=full_project_path,
             version=version,
         )
@@ -157,26 +159,26 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
     logger.info("All projects built and published")
 
 
-def run_tests(entry: DatasetEntry, container_name: str, username: str, password: str) -> None:
+def run_tests(entry: _BugFixTestGenBase, container: ContainerConfig) -> None:
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
-        run_test_suite(entry.fail_to_pass, "Pass", container_name, username, password)
+        run_test_suite(entry.fail_to_pass, "Pass", container)
 
     if entry.pass_to_pass:
         logger.info(f"Running {len(entry.pass_to_pass)} pass-to-pass tests")
-        run_test_suite(entry.pass_to_pass, "Pass", container_name, username, password)
+        run_test_suite(entry.pass_to_pass, "Pass", container)
 
     logger.info("All tests completed")
 
 
-def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container_name: str, username: str, password: str) -> None:
+def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container: ContainerConfig) -> None:
     """Run a suite of tests."""
     test_entries_json: str = TypeAdapter(list[TestEntry]).dump_json(test_entries).decode()
 
     ps_script = build_ps_dataset_tests_script(
-        container_name=container_name,
-        username=username,
-        password=password,
+        container_name=container.name,
+        username=container.username,
+        password=container.password,
         test_entries_json=test_entries_json,
         expectation=expectation,
     )

@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
@@ -21,42 +22,30 @@ logger = get_logger(__name__)
 __all__ = ["BugFixPipeline"]
 
 
-class BugFixPipeline(EvaluationPipeline):
-    """Pipeline for bug-fix evaluation category.
+class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
+    """Pipeline for bug-fix evaluation category."""
 
-    Workflow:
-    1. Setup: clean repo, checkout base commit, copy problem statement, build
-    2. Run agent: execute agent to generate fix patch
-    3. evaluate: apply test patch, build, run tests
-    """
-
-    def setup(self, context: EvaluationContext) -> None:
+    def setup(self, context: EvaluationContext[BugFixEntry]) -> None:
         setup_repo_prebuild(context.entry, context.repo_path)
 
         build_and_publish_projects(
             context.repo_path,
             context.entry.project_paths,
-            context.container_name,
-            context.username,
-            context.password,
+            context.get_container(),
             context.entry.environment_setup_version,
         )
 
         setup_repo_postbuild(context.entry, context.repo_path, context.category)
 
-    def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
-    def evaluate(self, context: EvaluationContext) -> None:
-        """Apply test patch, build, and run tests.
-
-        Creates and saves appropriate result based on validation outcome.
-        """
+    def evaluate(self, context: EvaluationContext[BugFixEntry]) -> None:
+        container = context.get_container()
         test_projects, _app_projects = categorize_projects(context.entry.project_paths)
 
         # Clean test projects to revert any unintended agent changes before capturing diff
-        # Evaluation focuses on valid changes (app code), treating unintended modifications as out-of-scope noise
         clean_project_paths(context.repo_path, test_projects)
 
         generated_patch = stage_and_get_diff(context.repo_path)
@@ -67,12 +56,10 @@ class BugFixPipeline(EvaluationPipeline):
             build_and_publish_projects(
                 context.repo_path,
                 context.entry.project_paths,
-                context.container_name,
-                context.username,
-                context.password,
+                container,
                 context.entry.environment_setup_version,
             )
-            run_tests(context.entry, context.container_name, context.username, context.password)
+            run_tests(context.entry, container)
 
             result = BugFixResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
