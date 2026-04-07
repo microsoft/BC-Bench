@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import cast
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -24,11 +23,8 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     The execute() method provides a template orchestrating the overall evaluation flow.
     """
 
-    def _get_entry(self, context: EvaluationContext) -> E:
-        return cast(E, context.entry)
-
     @abstractmethod
-    def setup(self, context: EvaluationContext) -> None:
+    def setup(self, context: EvaluationContext[E]) -> None:
         """Setup environment: e.g. clean repo, checkout base commit, initial build.
 
         Args:
@@ -40,7 +36,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[E], agent_runner: Callable) -> None:
         """Run the agent and capture metrics.
 
         Args:
@@ -53,7 +49,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def evaluate(self, context: EvaluationContext) -> None:
+    def evaluate(self, context: EvaluationContext[E]) -> None:
         """Evaluate results: e.g. apply patches, build, run tests.
 
         Implementation should raise category-specific exceptions on failure.
@@ -68,8 +64,8 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
 
     def execute(
         self,
-        context: EvaluationContext,
-        agent_runner: Callable[[EvaluationContext], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
+        context: EvaluationContext[E],
+        agent_runner: Callable[[EvaluationContext[E]], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 
@@ -97,7 +93,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
 
         self.evaluate(context)
 
-    def save_result(self, context: EvaluationContext, result: BaseEvaluationResult) -> None:
+    def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.
 
         Args:

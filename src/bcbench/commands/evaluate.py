@@ -20,6 +20,7 @@ from bcbench.cli_options import (
     RunId,
 )
 from bcbench.config import get_config
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
@@ -220,17 +221,17 @@ def evaluate_mock(
     logger.info(f"Results saved to: {run_dir}")
 
 
-class MockEvaluationPipeline(EvaluationPipeline):
+class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     """Mock pipeline for testing evaluation infrastructure.
 
     This pipeline simulates agent execution without requiring actual BC container setup.
     It randomly generates different scenarios to test result handling and serialization.
     """
 
-    def setup(self, context: EvaluationContext) -> None:
+    def setup(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         logger.info("Mock pipeline: Skipping setup")
 
-    def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: Callable) -> None:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 
@@ -259,7 +260,7 @@ class MockEvaluationPipeline(EvaluationPipeline):
         logger.info(f"Using agent metrics: {context.metrics}")
         logger.info(f"Using experiment configuration: {context.experiment}")
 
-    def evaluate(self, context: EvaluationContext) -> None:
+    def evaluate(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 

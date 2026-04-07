@@ -147,7 +147,7 @@ class ContainerConfig:
 
 
 @dataclass
-class EvaluationContext:
+class EvaluationContext[E: BaseDatasetEntry]:
     """Context object containing all configuration for evaluation pipeline.
 
     This bundles related configuration together to avoid long parameter lists
@@ -155,7 +155,7 @@ class EvaluationContext:
     """
 
     # Core configuration
-    entry: BaseDatasetEntry
+    entry: E
     repo_path: Path
     result_dir: Path
 

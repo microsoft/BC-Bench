@@ -1,4 +1,6 @@
-from bcbench.results.base import BaseEvaluationResult, T
+from typing import Self
+
+from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import EvaluationContext
 
 
@@ -13,5 +15,5 @@ class TestGenerationResult(BaseEvaluationResult):
     post_patch_passed: bool = False
 
     @classmethod
-    def create_no_tests_extracted(cls: type[T], context: "EvaluationContext", generated_patch: str, error_message: str) -> T:
+    def create_no_tests_extracted(cls, context: "EvaluationContext", generated_patch: str, error_message: str) -> Self:
         return cls._create_from_context(context, resolved=False, build=False, generated_patch=generated_patch, error_message=error_message)

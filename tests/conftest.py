@@ -81,11 +81,11 @@ def create_evaluation_context(
     container_name: str = "test-container",
     password: str = "test-password",
     username: str = "test-user",
-) -> EvaluationContext:
+) -> EvaluationContext[BugFixEntry]:
     if entry is None:
         entry = create_dataset_entry()
 
-    return EvaluationContext(
+    return EvaluationContext[BugFixEntry](
         entry=entry,
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
@@ -192,7 +192,7 @@ def sample_dataset_entry() -> BugFixEntry:
 
 
 @pytest.fixture
-def sample_evaluation_context(tmp_path: Path) -> EvaluationContext:
+def sample_evaluation_context(tmp_path: Path) -> EvaluationContext[BugFixEntry]:
     return create_evaluation_context(tmp_path)
 
 
