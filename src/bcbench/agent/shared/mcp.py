@@ -6,7 +6,7 @@ from typing import Any
 from jinja2 import Template
 from packaging.version import Version
 
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
@@ -144,7 +144,7 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
-def build_mcp_config(config: dict[str, Any], entry: DatasetEntry, repo_path: Path, al_mcp: bool = False, container_name: str = "bcbench") -> tuple[str | None, list[str] | None]:
+def build_mcp_config(config: dict[str, Any], entry: BaseDatasetEntry, repo_path: Path, al_mcp: bool = False, container_name: str = "bcbench") -> tuple[str | None, list[str] | None]:
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
     if not al_mcp:

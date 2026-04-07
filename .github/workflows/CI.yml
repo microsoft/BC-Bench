@@ -32,11 +32,6 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing
 
-  get-entries:
-    uses: ./.github/workflows/get-entries.yml
-    with:
-      test-run: true
-
   select-category:
     runs-on: ubuntu-latest
     outputs:
@@ -49,6 +44,13 @@ jobs:
           $categories = @("bug-fix", "test-generation")
           $selected = $categories | Get-Random
           echo "category=$selected" >> $env:GITHUB_OUTPUT
+
+  get-entries:
+    needs: select-category
+    uses: ./.github/workflows/get-entries.yml
+    with:
+      test-run: true
+      category: ${{ needs.select-category.outputs.category }}
 
   mock-evaluation:
     runs-on: ubuntu-latest
@@ -79,7 +81,7 @@ jobs:
           retention-days: 1
 
   summarize-results:
-    needs: mock-evaluation
+    needs: [mock-evaluation, select-category]
     uses: ./.github/workflows/summarize-results.yml
     permissions:
       contents: write
@@ -89,5 +91,5 @@ jobs:
       model: ${{ github.run_id }}
       agent: "mock-agent"
       mock: true
-      category: "delete"
+      category: ${{ needs.select-category.outputs.category }}
     secrets: inherit

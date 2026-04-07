@@ -13,14 +13,13 @@ from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
     CopilotModel,
-    DatasetPath,
     EvaluationCategoryOption,
     FoundryModel,
     OutputDir,
     RepoPath,
 )
 from bcbench.config import get_config
-from bcbench.dataset import DatasetEntry, load_dataset_entries
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.logger import get_logger
 from bcbench.operations import setup_repo_postbuild, setup_repo_prebuild
 
@@ -35,7 +34,6 @@ def run_mini(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     model: FoundryModel = "gpt-5.1-codex-mini",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
 ):
@@ -47,10 +45,10 @@ def run_mini(
     Example:
         uv run bcbench run mini microsoft__BCApps-5633 --step-limit 5 --category bug-fix
     """
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
-
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     setup_repo_prebuild(entry, repo_path)
-    setup_repo_postbuild(entry, repo_path, category)
+    if isinstance(entry, _BugFixTestGenBase):
+        setup_repo_postbuild(entry, repo_path, category)
 
     run_mini_agent(
         entry=entry,
@@ -67,7 +65,6 @@ def run_copilot(
     category: EvaluationCategoryOption,
     container_name: ContainerName,
     model: CopilotModel = "claude-haiku-4.5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
@@ -80,10 +77,10 @@ def run_copilot(
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
-
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     setup_repo_prebuild(entry, repo_path)
-    setup_repo_postbuild(entry, repo_path, category)
+    if isinstance(entry, _BugFixTestGenBase):
+        setup_repo_postbuild(entry, repo_path, category)
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
 
@@ -94,7 +91,6 @@ def run_claude(
     category: EvaluationCategoryOption,
     container_name: ContainerName,
     model: ClaudeCodeModel = "claude-haiku-4-5",
-    dataset_path: DatasetPath = _config.paths.dataset_path,
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
@@ -107,10 +103,10 @@ def run_claude(
     Example:
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
-
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     setup_repo_prebuild(entry, repo_path)
-    setup_repo_postbuild(entry, repo_path, category)
+    if isinstance(entry, _BugFixTestGenBase):
+        setup_repo_postbuild(entry, repo_path, category)
 
     run_claude_code(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
 

@@ -1,9 +1,9 @@
 import json
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
-from bcbench.dataset import DatasetEntry
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentMetrics
+from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
 
 
@@ -12,13 +12,16 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
                 out_dir=output_dir,
                 run_id="test_run_123",
-                dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -43,13 +46,16 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
             write_bceval_results(
                 results=[sample_testgen_result],
                 out_dir=output_dir,
                 run_id="test_run_456",
-                dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.TEST_GENERATION,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -65,13 +71,16 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics, sample_testgen_result],
                 out_dir=output_dir,
                 run_id="test_run_789",
-                dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -94,13 +103,16 @@ class TestWriteBcevalResults:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
             write_bceval_results(
                 results=[sample_bugfix_result_with_metrics],
                 out_dir=output_dir,
                 run_id="test_run_abc",
-                dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"
@@ -127,13 +139,14 @@ class TestWriteBcevalResults:
             metrics=AgentMetrics(prompt_tokens=1000, completion_tokens=200),
         )
 
-        write_bceval_results(
-            results=[non_matching_result],
-            out_dir=output_dir,
-            run_id="test_run_xyz",
-            dataset_path=sample_dataset_file,
-            output_filename="results.jsonl",
-        )
+        with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file):
+            write_bceval_results(
+                results=[non_matching_result],
+                out_dir=output_dir,
+                run_id="test_run_xyz",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
 
         output_file = output_dir / "results.jsonl"
         with open(output_file) as f:
@@ -148,13 +161,16 @@ class TestWriteBcevalResults:
 
         result = create_bugfix_result(metrics=AgentMetrics(execution_time=100.0, prompt_tokens=None, completion_tokens=1500))
 
-        with patch.object(DatasetEntry, "problem_statement_dir", property(lambda self: problem_statement_dir)):
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
             write_bceval_results(
                 results=[result],
                 out_dir=output_dir,
                 run_id="test_run_partial",
-                dataset_path=sample_dataset_file,
                 output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
             )
 
         output_file = output_dir / "results.jsonl"

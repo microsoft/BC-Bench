@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 from bcbench.config import get_config
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
-__all__ = ["EvaluationPipeline", "create_pipeline"]
+__all__ = ["EvaluationPipeline"]
 
 
-class EvaluationPipeline(ABC):
+class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     """Abstract base class for evaluation pipelines.
 
     Subclasses implement category-specific setup, agent execution, and validation logic.
@@ -21,7 +24,7 @@ class EvaluationPipeline(ABC):
     """
 
     @abstractmethod
-    def setup(self, context: EvaluationContext) -> None:
+    def setup(self, context: EvaluationContext[E]) -> None:
         """Setup environment: e.g. clean repo, checkout base commit, initial build.
 
         Args:
@@ -33,7 +36,7 @@ class EvaluationPipeline(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def run_agent(self, context: EvaluationContext, agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[E], agent_runner: Callable) -> None:
         """Run the agent and capture metrics.
 
         Args:
@@ -46,7 +49,7 @@ class EvaluationPipeline(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def evaluate(self, context: EvaluationContext) -> None:
+    def evaluate(self, context: EvaluationContext[E]) -> None:
         """Evaluate results: e.g. apply patches, build, run tests.
 
         Implementation should raise category-specific exceptions on failure.
@@ -61,8 +64,8 @@ class EvaluationPipeline(ABC):
 
     def execute(
         self,
-        context: EvaluationContext,
-        agent_runner: Callable[[EvaluationContext], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
+        context: EvaluationContext[E],
+        agent_runner: Callable[[EvaluationContext[E]], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 
@@ -90,7 +93,7 @@ class EvaluationPipeline(ABC):
 
         self.evaluate(context)
 
-    def save_result(self, context: EvaluationContext, result: BaseEvaluationResult) -> None:
+    def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.
 
         Args:
@@ -99,20 +102,3 @@ class EvaluationPipeline(ABC):
         """
 
         result.save(context.result_dir, f"{context.entry.instance_id}{_config.file_patterns.result_pattern}")
-
-
-def create_pipeline(category: EvaluationCategory) -> EvaluationPipeline:
-    """Factory function to create evaluation pipeline based on category."""
-    from bcbench.evaluate.bugfix import BugFixPipeline
-    from bcbench.evaluate.testgeneration import TestGenerationPipeline
-
-    match category:
-        case EvaluationCategory.BUG_FIX:
-            logger.info(f"Using BugFixPipeline for category: {category}")
-            return BugFixPipeline()
-        case EvaluationCategory.TEST_GENERATION:
-            logger.info(f"Using TestGenerationPipeline for category: {category}")
-            return TestGenerationPipeline()
-        case _:
-            raise ValueError(f"Unknown evaluation category: {category}")
-    raise RuntimeError("Unreachable: no pipeline returned")
