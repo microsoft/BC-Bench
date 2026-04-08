@@ -43,10 +43,9 @@ import json
 import re
 import sys
 import zipfile
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 def die(msg: str, code: int = 2) -> None:
@@ -66,7 +65,7 @@ def extract_zip_file(zip_path: Path, dest_dir: Path) -> None:
         z.extractall(dest_dir)
 
 
-def find_zip_files(root: Path) -> List[Path]:
+def find_zip_files(root: Path) -> list[Path]:
     if root.is_file() and root.suffix.lower() == ".zip":
         return [root]
     if root.is_dir():
@@ -74,7 +73,7 @@ def find_zip_files(root: Path) -> List[Path]:
     return []
 
 
-def rglob_files(root: Path, pattern: str) -> List[Path]:
+def rglob_files(root: Path, pattern: str) -> list[Path]:
     return [p for p in root.rglob(pattern) if p.is_file()]
 
 
@@ -100,8 +99,7 @@ def _normalize_error_message(msg: str) -> str:
     msg = re.sub(r"Line No\. = '.*?'", "Line No. = '<n>'", msg)
 
     # Collapse whitespace and drop empty lines
-    msg = "\n".join([ln.rstrip() for ln in msg.strip().splitlines() if ln.strip()])
-    return msg
+    return "\n".join(ln.rstrip() for ln in msg.strip().splitlines() if ln.strip())
 
 
 def _bucket_error(msg: str) -> str:
@@ -126,7 +124,7 @@ def _bucket_error(msg: str) -> str:
 
 
 # ---------------------------- Record parsing ----------------------------
-def try_parse_jsonl_line(line: str) -> Optional[Dict[str, Any]]:
+def try_parse_jsonl_line(line: str) -> dict[str, Any] | None:
     line = line.strip()
     if not line:
         return None
@@ -138,7 +136,7 @@ def try_parse_jsonl_line(line: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def split_kv_records(text: str) -> List[str]:
+def split_kv_records(text: str) -> list[str]:
     text = text.strip()
     if not text:
         return []
@@ -148,7 +146,7 @@ def split_kv_records(text: str) -> List[str]:
     return [text]
 
 
-def parse_kv_record(block: str) -> Dict[str, Any]:
+def parse_kv_record(block: str) -> dict[str, Any]:
     b = block.replace("\r\n", "\n").replace("\r", "\n")
 
     # Extract generated_patch multiline
@@ -170,7 +168,7 @@ def parse_kv_record(block: str) -> Dict[str, Any]:
         rest = ""
 
     head_tokens = re.split(r"\s+", head.strip())
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
     i = 0
     while i < len(head_tokens) - 1:
         key = head_tokens[i]
@@ -208,11 +206,11 @@ def parse_kv_record(block: str) -> Dict[str, Any]:
     return data
 
 
-def iter_records_from_file(path: Path) -> List[Dict[str, Any]]:
+def iter_records_from_file(path: Path) -> list[dict[str, Any]]:
     content = path.read_text(encoding="utf-8", errors="replace")
 
     # JSONL
-    recs: List[Dict[str, Any]] = []
+    recs: list[dict[str, Any]] = []
     json_hits = 0
     for line in content.splitlines():
         obj = try_parse_jsonl_line(line)
@@ -226,7 +224,7 @@ def iter_records_from_file(path: Path) -> List[Dict[str, Any]]:
     return [parse_kv_record(block) for block in split_kv_records(content)]
 
 
-def get_test_id(rec: Dict[str, Any]) -> str:
+def get_test_id(rec: dict[str, Any]) -> str:
     if isinstance(rec.get("instance_id"), str) and rec["instance_id"].strip():
         return rec["instance_id"].strip()
     for k in ["test_name", "testName", "name", "id", "testId", "test_id", "title"]:
@@ -236,12 +234,12 @@ def get_test_id(rec: Dict[str, Any]) -> str:
     return "unknown_test"
 
 
-def get_category(rec: Dict[str, Any]) -> Optional[str]:
+def get_category(rec: dict[str, Any]) -> str | None:
     v = rec.get("category")
     return v.strip() if isinstance(v, str) and v.strip() else None
 
 
-def get_success_fail(rec: Dict[str, Any]) -> Optional[str]:
+def get_success_fail(rec: dict[str, Any]) -> str | None:
     # KV schema
     if isinstance(rec.get("resolved"), bool) or isinstance(rec.get("build"), bool) or isinstance(rec.get("timeout"), bool):
         resolved = rec.get("resolved")
@@ -269,7 +267,7 @@ def get_success_fail(rec: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def extract_code_text(rec: Dict[str, Any]) -> Optional[Tuple[str, str]]:
+def extract_code_text(rec: dict[str, Any]) -> tuple[str, str] | None:
     if isinstance(rec.get("generated_patch"), str) and rec["generated_patch"].strip():
         return (".diff", rec["generated_patch"])
 
@@ -314,7 +312,7 @@ def main() -> None:
     files_root.mkdir(parents=True, exist_ok=True)
 
     # ---------- Decide input mode (both --zips-dir and --extracted-dir can be combined) ----------
-    extracted_dirs: List[Path] = []
+    extracted_dirs: list[Path] = []
 
     # EXTRACTED mode: pre-extracted content folders
     if args.extracted_dir:
@@ -326,7 +324,7 @@ def main() -> None:
         print(f"Using extracted content: {root} (runs={len(extracted_dirs)})")
 
     # ZIP mode: gather zip inputs and group by run folder when applicable
-    run_groups: List[Tuple[str, List[Path]]] = []
+    run_groups: list[tuple[str, list[Path]]] = []
 
     # Group by immediate subfolders under --zips-dir (manual/1, manual/2, manual/3)
     if args.zips_dir:
@@ -350,12 +348,12 @@ def main() -> None:
                     run_groups.append((root_dir.name, zips_in_root))
 
     # Explicit --zip files become their own run group if not already included
-    explicit_zip_inputs: List[Path] = []
+    explicit_zip_inputs: list[Path] = []
     for z in args.zips:
         explicit_zip_inputs.extend(find_zip_files(Path(z)))
     explicit_zip_inputs = sorted(set(explicit_zip_inputs))
     if explicit_zip_inputs:
-        in_group = set(zp for _, zs in run_groups for zp in zs)
+        in_group = {zp for _, zs in run_groups for zp in zs}
         for zp in explicit_zip_inputs:
             if zp not in in_group:
                 run_groups.append((zp.stem, [zp]))
@@ -377,7 +375,7 @@ def main() -> None:
                 # Nested extraction inside this zip subtree
                 cur_level = [zip_dest]
                 for _depth in range(1, args.zip_depth + 1):
-                    next_level: List[Path] = []
+                    next_level: list[Path] = []
                     for d in cur_level:
                         for nested in rglob_files(d, "*.zip"):
                             nested_tag = safe_name(nested.stem)
@@ -418,7 +416,7 @@ def main() -> None:
             print(f"[run {run_index:03d}] No .jsonl/.txt found under {d}")
             continue
 
-        seen: Dict[str, int] = {}
+        seen: dict[str, int] = {}
         for p in candidates:
             base = p.name
             if base in seen:
@@ -433,8 +431,8 @@ def main() -> None:
 
     # ---------- Analyze ----------
     category_filter = args.category.strip().lower()
-    agg: Dict[str, Agg] = {}
-    rec_cache: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
+    agg: dict[str, Agg] = {}
+    rec_cache: dict[str, list[tuple[str, dict[str, Any]]]] = {}
 
     for run_folder in sorted(files_root.glob("run-*")):
         run_id = run_folder.name
@@ -523,8 +521,8 @@ def main() -> None:
                 encoding="utf-8",
             )
 
-            variants: Dict[str, int] = {}
-            for run_id, rec in rec_cache.get(tid, []):
+            variants: dict[str, int] = {}
+            for _run_id, rec in rec_cache.get(tid, []):
                 em = rec.get("error_message")
                 if not isinstance(em, str):
                     continue

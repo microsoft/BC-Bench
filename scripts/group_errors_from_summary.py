@@ -2,8 +2,8 @@
 
 import csv
 import sys
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 # ----------------------------
 # Configuration
@@ -31,8 +31,8 @@ def extract_error_group(error_message: str) -> str:
     if not error_message:
         return "Unknown"
 
-    for line in error_message.splitlines():
-        line = line.strip()
+    for raw_line in error_message.splitlines():
+        line = raw_line.strip()
         if not line:
             continue
 
