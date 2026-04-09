@@ -13,7 +13,7 @@ from bcbench.exceptions import EntryNotFoundError
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -150,3 +150,16 @@ class TestGenEntry(_BugFixTestGenBase):
 
     def get_expected_output(self) -> str:
         return self.test_patch
+
+
+class NL2ALEntry(BaseDatasetEntry):
+    """Dataset entry for NL2AL category — generate AL code from natural language."""
+
+    base_commit: str | None = None
+    nl_prompt: Annotated[str, Field(min_length=1)]
+
+    def get_task(self) -> str:
+        return self.nl_prompt
+
+    def get_expected_output(self) -> str:
+        return self.patch

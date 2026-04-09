@@ -12,9 +12,10 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BugFixEntry, TestEntry
+from bcbench.dataset import BugFixEntry, NL2ALEntry, TestEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.results.bugfix import BugFixResult
+from bcbench.results.nl2al import NL2ALResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext
 
@@ -230,3 +231,65 @@ def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[Bug
 
     with patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_dir)):
         yield entry
+
+
+VALID_NL_PROMPT = "Create a report showing budgeted cost vs actual cost broken down by job task."
+
+
+def create_nl2al_entry(
+    instance_id: str = "nl2al__job-budget-report-1",
+    repo: str = "nl2al/template",
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    patch: str = VALID_PATCH,
+    nl_prompt: str = VALID_NL_PROMPT,
+    created_at: str = VALID_CREATED_AT,
+) -> NL2ALEntry:
+    if project_paths is None:
+        project_paths = ["JobBudgetVsActualReport"]
+
+    return NL2ALEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=None,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths,
+        patch=patch,
+        nl_prompt=nl_prompt,
+        created_at=created_at,
+    )
+
+
+def create_nl2al_result(
+    instance_id: str = "nl2al__job-budget-report-1",
+    project: str = "JobBudgetVsActualReport",
+    model: str = "gpt-4o",
+    agent_name: str = "copilot-cli",
+    resolved: bool = True,
+    build: bool = True,
+    generated_patch: str = "diff --git a/test.al b/test.al\n+report code",
+    error_message: str | None = None,
+    metrics: AgentMetrics | None = None,
+) -> NL2ALResult:
+    return NL2ALResult(
+        instance_id=instance_id,
+        project=project,
+        model=model,
+        agent_name=agent_name,
+        category=EvaluationCategory.NL2AL,
+        resolved=resolved,
+        build=build,
+        generated_patch=generated_patch,
+        error_message=error_message,
+        metrics=metrics,
+    )
+
+
+@pytest.fixture
+def sample_nl2al_entry() -> NL2ALEntry:
+    return create_nl2al_entry()
+
+
+@pytest.fixture
+def sample_nl2al_result() -> NL2ALResult:
+    return create_nl2al_result()

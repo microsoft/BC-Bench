@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from pathlib import Path
 
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
@@ -9,8 +10,8 @@ from bcbench.operations import (
     build_and_publish_projects,
     categorize_projects,
     clean_project_paths,
+    copy_problem_statement_folder,
     run_tests,
-    setup_repo_postbuild,
     setup_repo_prebuild,
     stage_and_get_diff,
 )
@@ -25,6 +26,10 @@ __all__ = ["BugFixPipeline"]
 class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
     """Pipeline for bug-fix evaluation category."""
 
+    def setup_workspace(self, entry: BugFixEntry, repo_path: Path) -> None:
+        setup_repo_prebuild(entry, repo_path)
+        copy_problem_statement_folder(entry, repo_path)
+
     def setup(self, context: EvaluationContext[BugFixEntry]) -> None:
         setup_repo_prebuild(context.entry, context.repo_path)
 
@@ -35,7 +40,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
             context.entry.environment_setup_version,
         )
 
-        setup_repo_postbuild(context.entry, context.repo_path, context.category)
+        copy_problem_statement_folder(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):

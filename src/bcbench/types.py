@@ -99,8 +99,7 @@ class AgentType(str, Enum):
 class EvaluationCategory(str, Enum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
-    # CODE_REVIEW = "code-review"
-    # EVENT_REQUEST = "event-request"
+    NL2AL = "nl2al"
 
     @property
     def dataset_path(self) -> Path:
@@ -111,30 +110,36 @@ class EvaluationCategory(str, Enum):
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
+            case EvaluationCategory.NL2AL:
+                return get_config().paths.dataset_dir / "nl2al.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, NL2ALEntry, TestGenEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
+            case EvaluationCategory.NL2AL:
+                return NL2ALEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
+        from bcbench.evaluate import BugFixPipeline, NL2ALPipeline, TestGenerationPipeline
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
+            case EvaluationCategory.NL2AL:
+                return NL2ALPipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

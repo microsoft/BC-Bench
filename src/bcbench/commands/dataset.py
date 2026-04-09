@@ -93,12 +93,13 @@ def view_entry(
 
     metadata_dict = entry.metadata.model_dump()
     for field_name, field_value in metadata_dict.items():
-        display_name = field_name.replace("_", " ").title()
-        info_table.add_row(f"[dim]Metadata:[/dim] {display_name}", str(field_value) if field_value else "N/A")
+        if field_value is not None:
+            display_name = field_name.replace("_", " ").title()
+            info_table.add_row(f"[dim]Metadata:[/dim] {display_name}", str(field_value))
 
     console.print(Panel(info_table, title="[bold]Entry Information[/bold]", border_style="blue"))
 
-    console.print("\n[bold cyan]Problem Statement with Hints:[/bold cyan]")
+    console.print("\n[bold cyan]Problem Statement:[/bold cyan]")
     console.print(Panel(entry.get_task() or "[dim]Empty[/dim]", border_style="green"))
 
     if show_patch:

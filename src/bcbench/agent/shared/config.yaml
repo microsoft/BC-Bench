@@ -54,6 +54,18 @@ prompt:
     {{task}}
     {% endif %}
 
+  nl2al-template: |
+    You are working with an empty Business Central (AL) code repository at {{repo_path}}.
+
+    Task: Create AL code for the following request:
+    {{task}}
+
+    Important constraints:
+    - Do NOT commit any changes to the repository
+    {% if al_mcp %}
+    - Use the AL compiler to validate your code builds successfully
+    {% endif %}
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

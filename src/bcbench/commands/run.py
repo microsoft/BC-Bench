@@ -19,9 +19,7 @@ from bcbench.cli_options import (
     RepoPath,
 )
 from bcbench.config import get_config
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.logger import get_logger
-from bcbench.operations import setup_repo_postbuild, setup_repo_prebuild
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -46,9 +44,7 @@ def run_mini(
         uv run bcbench run mini microsoft__BCApps-5633 --step-limit 5 --category bug-fix
     """
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    setup_repo_prebuild(entry, repo_path)
-    if isinstance(entry, _BugFixTestGenBase):
-        setup_repo_postbuild(entry, repo_path, category)
+    category.pipeline.setup_workspace(entry, repo_path)
 
     run_mini_agent(
         entry=entry,
@@ -78,9 +74,7 @@ def run_copilot(
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    setup_repo_prebuild(entry, repo_path)
-    if isinstance(entry, _BugFixTestGenBase):
-        setup_repo_postbuild(entry, repo_path, category)
+    category.pipeline.setup_workspace(entry, repo_path)
 
     run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
 
@@ -104,9 +98,7 @@ def run_claude(
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    setup_repo_prebuild(entry, repo_path)
-    if isinstance(entry, _BugFixTestGenBase):
-        setup_repo_postbuild(entry, repo_path, category)
+    category.pipeline.setup_workspace(entry, repo_path)
 
     run_claude_code(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
 
