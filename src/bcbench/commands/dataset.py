@@ -28,8 +28,55 @@ def list_entries(
     base_ref: Annotated[str, typer.Option(help="Git ref to diff against when using --modified-only (e.g., HEAD~1, a commit SHA, or a branch name)")] = "origin/main",
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
     include_counterfactual: Annotated[bool, typer.Option(help="Include counterfactual entries from counterfactual.jsonl")] = True,
+    batch: Annotated[int, typer.Option(help="Batch index (1-based) when splitting entries across multiple runs")] = 0,
+    batch_count: Annotated[int, typer.Option(help="Total number of batches to split into (0 = no splitting)")] = 0,
 ):
     """List dataset entry IDs."""
+    is_cf = category == EvaluationCategory.COUNTERFACTUAL_EVALUATION
+
+    entry_ids = _list_counterfactual_entries(modified_only, base_ref, test_run) if is_cf else _list_base_entries(category, modified_only, base_ref, test_run, include_counterfactual)
+
+    if batch_count > 0 and batch > 0:
+        entry_ids = _select_batch(entry_ids, batch, batch_count)
+
+    print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}{f' (batch {batch}/{batch_count})' if batch_count > 0 else ''}:")
+    for entry_id in entry_ids:
+        print(f"  - {entry_id}")
+
+    if github_output:
+        _write_github_output(github_output, json.dumps(entry_ids))
+
+
+def _list_counterfactual_entries(modified_only: bool, base_ref: str, test_run: bool) -> list[str]:
+    from bcbench.config import get_config
+
+    config = get_config()
+    cf_path = config.paths.counterfactual_dataset_path
+    base_path = config.paths.dataset_dir / "bcbench.jsonl"
+
+    if modified_only:
+        import subprocess
+
+        diff_cmd = ["git", "diff", base_ref, "HEAD", "--unified=0", "--no-color", "--diff-filter=AM"]
+        result = subprocess.run(
+            [*diff_cmd, "--", str(cf_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            cwd=cf_path.parent,
+        )
+        return _modified_instance_ids_from_diff(result.stdout)
+
+    cf_pairs = load_counterfactual_entries(cf_path, base_path)
+    entry_ids = [cf_entry.instance_id for cf_entry, _ in cf_pairs]
+
+    if test_run:
+        return entry_ids[:2]
+    return entry_ids
+
+
+def _list_base_entries(category, modified_only: bool, base_ref: str, test_run: bool, include_counterfactual: bool) -> list[str]:
     entry_cls = category.entry_class
     resolved_path = category.dataset_path
 
@@ -37,7 +84,6 @@ def list_entries(
         import subprocess
 
         diff_cmd = ["git", "diff", base_ref, "HEAD", "--unified=0", "--no-color", "--diff-filter=AM"]
-
         result = subprocess.run(
             [*diff_cmd, "--", str(resolved_path)],
             capture_output=True,
@@ -46,8 +92,7 @@ def list_entries(
             check=True,
             cwd=resolved_path.parent,
         )
-        diff_output: str = result.stdout
-        entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
+        entry_ids: list[str] = _modified_instance_ids_from_diff(result.stdout)
 
         if include_counterfactual:
             cf_path = resolved_path.parent / "counterfactual.jsonl"
@@ -61,22 +106,25 @@ def list_entries(
                     cwd=cf_path.parent,
                 )
                 entry_ids.extend(_modified_instance_ids_from_diff(cf_diff_result.stdout))
-    else:
-        entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=2 if test_run else None)
-        entry_ids: list[str] = [e.instance_id for e in entries]
+        return entry_ids
 
-        if include_counterfactual:
-            cf_path = resolved_path.parent / "counterfactual.jsonl"
-            if cf_path.exists():
-                cf_pairs = load_counterfactual_entries(cf_path, resolved_path)
-                entry_ids.extend(cf_entry.instance_id for cf_entry, _ in cf_pairs)
+    entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=2 if test_run else None)
+    entry_ids = [e.instance_id for e in entries]
 
-    print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")
-    for entry_id in entry_ids:
-        print(f"  - {entry_id}")
+    if include_counterfactual:
+        cf_path = resolved_path.parent / "counterfactual.jsonl"
+        if cf_path.exists():
+            cf_pairs = load_counterfactual_entries(cf_path, resolved_path)
+            entry_ids.extend(cf_entry.instance_id for cf_entry, _ in cf_pairs)
 
-    if github_output:
-        _write_github_output(github_output, json.dumps(entry_ids))
+    return entry_ids
+
+
+def _select_batch(entry_ids: list[str], batch: int, batch_count: int) -> list[str]:
+    total = len(entry_ids)
+    chunk_size = (total + batch_count - 1) // batch_count
+    start = (batch - 1) * chunk_size
+    return entry_ids[start : start + chunk_size]
 
 
 @dataset_app.command("view")

@@ -30,6 +30,16 @@ on:
         required: false
         type: boolean
         default: true
+      batch:
+        description: "Batch index (1-based) for splitting large datasets across runs"
+        required: false
+        type: number
+        default: 0
+      batch-count:
+        description: "Total number of batches (0 = no splitting)"
+        required: false
+        type: number
+        default: 0
     outputs:
       entries:
         description: JSON array of dataset entries
@@ -62,6 +72,10 @@ jobs:
 
           if [[ "${{ inputs.include-counterfactual }}" == "false" ]]; then
             cmd="$cmd --no-include-counterfactual"
+          fi
+
+          if [[ "${{ inputs.batch-count }}" != "0" ]]; then
+            cmd="$cmd --batch ${{ inputs.batch }} --batch-count ${{ inputs.batch-count }}"
           fi
 
           eval "$cmd"

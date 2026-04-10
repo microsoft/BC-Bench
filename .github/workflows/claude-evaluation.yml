@@ -59,6 +59,7 @@ jobs:
     with:
       test-run: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
+      include-counterfactual: false
 
   evaluate-with-claude-code:
     runs-on: [GitHub-BCBench]

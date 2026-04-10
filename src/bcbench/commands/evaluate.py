@@ -38,8 +38,8 @@ def _load_entry(entry_id: str, category) -> BugFixEntry:
     """Load a dataset entry, auto-detecting counterfactual entries by ID pattern."""
     if _CF_PATTERN.search(entry_id):
         cf_path = _config.paths.counterfactual_dataset_path
-        dataset_path = category.dataset_path
-        pairs = load_counterfactual_entries(cf_path, dataset_path, entry_id=entry_id)
+        base_path = _config.paths.dataset_dir / "bcbench.jsonl"
+        pairs = load_counterfactual_entries(cf_path, base_path, entry_id=entry_id)
         cf_entry, base_entry = pairs[0]
         merged = cf_entry.to_dataset_entry(base_entry)
         logger.info(f"Loaded counterfactual entry {cf_entry.instance_id} (base: {cf_entry.base_instance_id})")

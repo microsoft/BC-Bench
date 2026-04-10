@@ -17,8 +17,16 @@ logger = get_logger(__name__)
 
 def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, output_filename: str, category: EvaluationCategory) -> None:
     """Write results into a JSONL file for bceval consumption."""
-    entry_cls = category.entry_class
-    dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
+    if category == EvaluationCategory.COUNTERFACTUAL_EVALUATION:
+        from bcbench.config import get_config
+        from bcbench.dataset import load_counterfactual_entries
+
+        config = get_config()
+        cf_pairs = load_counterfactual_entries(config.paths.counterfactual_dataset_path, config.paths.dataset_dir / "bcbench.jsonl")
+        dataset_entries: list[BaseDatasetEntry] = [cf.to_dataset_entry(base) for cf, base in cf_pairs]
+    else:
+        entry_cls = category.entry_class
+        dataset_entries = entry_cls.load(category.dataset_path)
 
     output_file = out_dir / output_filename
     with open(output_file, "w") as f:

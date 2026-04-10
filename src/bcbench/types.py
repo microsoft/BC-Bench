@@ -111,7 +111,7 @@ class EvaluationCategory(str, Enum):
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
-                return get_config().paths.dataset_dir / "bcbench.jsonl"
+                return get_config().paths.counterfactual_dataset_path
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
