@@ -11,7 +11,7 @@ class FamilyFragilityRate:
 
 
 class FamilySeverity:
-    """Fraction of CFs that fail within a family (0.0–1.0)."""
+    """Fraction of CFs that fail within a family (0.0-1.0)."""
 
     def __call__(self, *, metadata: dict, **kwargs) -> float | None:
         return metadata.get("severity")
