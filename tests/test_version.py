@@ -1,6 +1,6 @@
 """Tests for version utility."""
 
-from bcbench.results.evaluation_result import _get_benchmark_version
+from bcbench.results.summary import _get_benchmark_version
 
 
 def test_get_benchmark_version_returns_string():
