@@ -3,7 +3,7 @@ from collections.abc import Callable
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
+from bcbench.exceptions import BuildError, NoTestsExtractedError, PatchApplicationError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import (
     apply_patch,
@@ -101,6 +101,14 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         except NoTestsExtractedError:
             result = TestGenerationResult.create_no_tests_extracted(context, generated_patch, "No tests extracted from generated patch")
             raise
+
+        except PatchApplicationError as e:
+            result = TestGenerationResult.create_build_failure(context, generated_patch, f"Patch application failed: {e}")
+            logger.error(f"Patch application failed for {context.entry.instance_id}: {e}")
+
+        except Exception as e:
+            result = TestGenerationResult.create_build_failure(context, generated_patch, f"Unexpected error: {e}")
+            logger.error(f"Unexpected error during evaluation of {context.entry.instance_id}: {e}")
 
         finally:
             if result is not None:

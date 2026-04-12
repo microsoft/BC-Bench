@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import BuildError, TestExecutionError
+from bcbench.exceptions import BuildError, PatchApplicationError, TestExecutionError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import (
     apply_patch,
@@ -71,6 +71,14 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
         except TestExecutionError as e:
             result = BugFixResult.create_test_failure(context, generated_patch, error_msg="Test failed\n" + str(e))
             logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
+
+        except PatchApplicationError as e:
+            result = BugFixResult.create_build_failure(context, generated_patch, f"Test patch application failed: {e}")
+            logger.error(f"Test patch application failed for {context.entry.instance_id}: {e}")
+
+        except Exception as e:
+            result = BugFixResult.create_build_failure(context, generated_patch, f"Unexpected error: {e}")
+            logger.error(f"Unexpected error during evaluation of {context.entry.instance_id}: {e}")
 
         finally:
             if result is not None:
