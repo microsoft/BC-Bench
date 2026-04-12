@@ -140,7 +140,6 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
             "resolved": self.resolved,
             "failed": self.failed,
             "build": self.build,
-            "percentage": self.percentage,
         }
 
     @classmethod

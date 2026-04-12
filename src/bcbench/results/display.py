@@ -73,9 +73,6 @@ def _get_short_error_message(error_message: str | None) -> str:
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
     display_metrics: dict[str, int | float | bool] = summary.display_summary()
-    errors = sum(1 for r in results if r.error_message or r.timeout)
-
-    success_icon = ":white_check_mark:" if errors == 0 else ":x:"
 
     mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
     custom_instructions = "Yes" if results[0].experiment and results[0].experiment.custom_instructions else "No"
@@ -101,8 +98,11 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
 - Custom Instructions: {custom_instructions}
 - Skills: {skills}
 - Custom Agent: {custom_agent}
+
+## Result Summary
 {display_lines}
-- Errors: {errors} {success_icon}{tool_usage_section}
+
+{tool_usage_section}
 
 ## Detailed Results
 
