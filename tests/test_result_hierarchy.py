@@ -279,7 +279,7 @@ class TestDisplaySummary:
             benchmark_version="0.1.0",
         )
         display = summary.display_summary()
-        assert display == {"resolved": 7, "failed": 3, "build": 9, "percentage": 70.0}
+        assert display == {"resolved": 7, "failed": 3, "build": 9}
 
 
 # ---------------------------------------------------------------------------
