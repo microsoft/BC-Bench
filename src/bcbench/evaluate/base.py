@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -22,6 +23,14 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     Subclasses implement category-specific setup, agent execution, and validation logic.
     The execute() method provides a template orchestrating the overall evaluation flow.
     """
+
+    @abstractmethod
+    def setup_workspace(self, entry: E, repo_path: Path) -> None:
+        """Prepare the workspace for agent execution (no build).
+
+        Used by the `run` command to set up the repo without building.
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def setup(self, context: EvaluationContext[E]) -> None:

@@ -14,6 +14,9 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - Uses `uv` for dependency management: e.g. `uv add <package>` to add packages, `uv run <command>` to run commands
 - Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
 
+## Categories
+BC-Bench is category-based and designed to grow over time. It currently has two categories, `bug-fix` and `test-generation`. They share the same dataset tasks and execution-based setup, but use different prompts, expected outputs, and evaluation pipelines. Future categories such as `code-review` can be added within the same overall benchmark structure, though they may require different inputs, setup, or evaluation methods.
+
 ## Coding Patterns and Guidelines
 
 - Prefer strong typing and type hints

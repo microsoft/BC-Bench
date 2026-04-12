@@ -14,6 +14,10 @@ inputs:
   github-token:
     description: GitHub token for accessing public repositories
     required: true
+  skip-container:
+    description: Skip BC container setup (only clone repository)
+    required: false
+    default: "false"
 
 outputs:
   repo_path:
@@ -24,6 +28,7 @@ runs:
   using: composite
   steps:
     - name: Generate BC container name and credentials
+      if: inputs.skip-container != 'true'
       run: |
         # Generate a 32-character random password using Get-Random
         # The password is short-lived and only used for the duration of the workflow
@@ -38,6 +43,7 @@ runs:
       shell: pwsh
 
     - name: Install BcContainerHelper module
+      if: inputs.skip-container != 'true'
       run: Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
       shell: pwsh
 
@@ -59,5 +65,5 @@ runs:
         $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
         Write-Output "::add-mask::$env:ADO_TOKEN"
 
-        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}"
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }}
       shell: pwsh

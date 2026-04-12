@@ -23,7 +23,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult
+from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult
 from bcbench.types import AgentMetrics, ContainerConfig, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -228,6 +228,9 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     It randomly generates different scenarios to test result handling and serialization.
     """
 
+    def setup_workspace(self, entry: BaseDatasetEntry, repo_path: Path) -> None:
+        logger.info("Mock pipeline: Skipping workspace setup")
+
     def setup(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         logger.info("Mock pipeline: Skipping setup")
 
@@ -271,11 +274,11 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         result: BaseEvaluationResult
         match scenario:
             case "success":
-                result = BaseEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
+                result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
             case "build-fail":
-                result = BaseEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+                result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
             case "test-fail":
-                result = BaseEvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
+                result = ExecutionBasedEvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

@@ -1,9 +1,5 @@
-from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.base import ExecutionBasedEvaluationResult
 
 
-class BugFixResult(BaseEvaluationResult):
-    """Result class for bug-fix evaluation category.
-
-    Inherits all shared metrics from BaseEvaluationResult.
-    Category-specific fields can be added here as needed.
-    """
+class BugFixResult(ExecutionBasedEvaluationResult):
+    """Result class for bug-fix evaluation category."""
