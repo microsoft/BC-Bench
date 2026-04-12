@@ -22,7 +22,7 @@ jobs:
       category: "bug-fix"
 
   verify-build-and-tests:
-    runs-on: [self-hosted, 1ES.Pool=GitHub-BCBench]
+    runs-on: [GitHub-BCBench]
     needs: get-entries
     if: needs.get-entries.outputs.entries != '[]'
     environment:
