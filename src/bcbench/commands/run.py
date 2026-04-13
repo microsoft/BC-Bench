@@ -59,7 +59,7 @@ def run_mini(
 def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    container_name: ContainerName,
+    container_name: ContainerName = "",
     model: CopilotModel = "claude-haiku-4.5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -83,7 +83,7 @@ def run_copilot(
 def run_claude(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    container_name: ContainerName,
+    container_name: ContainerName = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,

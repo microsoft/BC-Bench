@@ -43,10 +43,10 @@ def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
 @evaluate_app.command("mini")
 def evaluate_mini(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
     model: FoundryModel = "gpt-5.1-codex-mini",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -62,11 +62,13 @@ def evaluate_mini(
 
     logger.info(f"Running evaluation on entry {entry_id} with mini-bc-agent")
 
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
+        container=container,
         model=model,
         agent_name="mini-bc-agent",
         category=category,
@@ -91,10 +93,10 @@ def evaluate_mini(
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
     model: CopilotModel = "claude-haiku-4.5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -111,11 +113,13 @@ def evaluate_copilot(
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
+        container=container,
         model=model,
         agent_name="GitHub Copilot",
         category=category,
@@ -142,10 +146,10 @@ def evaluate_copilot(
 @evaluate_app.command("claude")
 def evaluate_claude_code(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -162,11 +166,13 @@ def evaluate_claude_code(
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
 
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
+        container=container,
         model=model,
         agent_name="Claude Code",
         category=category,
