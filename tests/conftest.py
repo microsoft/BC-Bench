@@ -187,19 +187,16 @@ def create_codereview_result(
     project: str = "Shopify",
     model: str = "gpt-4o",
     agent_name: str = "copilot-cli",
-    generated_comments: list[ReviewComment] | None = None,
+    output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
     metrics: AgentMetrics | None = None,
 ) -> CodeReviewResult:
-    if generated_comments is None:
-        generated_comments = [ReviewComment(file="test.al", line_start=5, body="Good catch")]
-
     return CodeReviewResult(
         instance_id=instance_id,
         project=project,
         model=model,
         agent_name=agent_name,
         category=EvaluationCategory.CODE_REVIEW,
-        generated_comments=generated_comments,
+        output=output,
         metrics=metrics,
     )
 

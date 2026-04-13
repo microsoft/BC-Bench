@@ -51,10 +51,10 @@ class TestCodeReviewResult:
         assert len(result.generated_comments) == 1
 
     def test_round_trip_serialization(self, tmp_path):
-        comments = [ReviewComment(file="test.al", line_start=5, body="Good catch")]
+        output = json.dumps([{"file": "test.al", "line_start": 5, "body": "Good catch"}])
         original = create_codereview_result(
             instance_id="codereview-round-trip",
-            generated_comments=comments,
+            output=output,
         )
 
         original.save(tmp_path, "test.jsonl")

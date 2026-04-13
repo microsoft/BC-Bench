@@ -1,8 +1,7 @@
-import json
 from collections.abc import Callable
 from pathlib import Path
 
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
+from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import apply_patch, setup_repo_prebuild
@@ -14,37 +13,6 @@ logger = get_logger(__name__)
 REVIEW_OUTPUT_FILE = "review.json"
 
 __all__ = ["CodeReviewPipeline"]
-
-
-def _parse_review_json(repo_path: Path) -> list[ReviewComment]:
-    """Parse review.json produced by the agent into ReviewComment objects.
-
-    NOTE: This is a minimal parser for the POC. The owning team should make this more robust.
-    """
-    review_path = repo_path / REVIEW_OUTPUT_FILE
-    if not review_path.exists():
-        logger.warning(f"No {REVIEW_OUTPUT_FILE} found at {review_path}")
-        return []
-
-    try:
-        raw = json.loads(review_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        logger.warning(f"Failed to parse {review_path} as JSON")
-        return []
-
-    if not isinstance(raw, list):
-        logger.warning(f"Expected JSON array in {review_path}, got {type(raw).__name__}")
-        return []
-
-    comments: list[ReviewComment] = []
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        try:
-            comments.append(ReviewComment.model_validate(item))
-        except Exception:
-            logger.debug(f"Skipping malformed comment: {item}")
-    return comments
 
 
 class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
@@ -66,10 +34,17 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[CodeReviewEntry]) -> None:
-        generated_comments: list[ReviewComment] = _parse_review_json(context.repo_path)
-        logger.info(f"Parsed {len(generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
-        result = CodeReviewResult.create_success(context, generated_comments=generated_comments)
+        review_output_file: Path = context.repo_path / REVIEW_OUTPUT_FILE
+
+        if review_output_file.exists():
+            output = review_output_file.read_text(encoding="utf-8")
+        else:
+            logger.error(f"No review generated for {context.entry.instance_id}")
+            raise RuntimeError(f"No review generated for {context.entry.instance_id}")
+
+        result = CodeReviewResult.create_success(context, output=output)
+        logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
         # TODO: Code Review team should implement the real evaluation logic and populate metrics in the result
-        for comment in generated_comments:
+        for comment in result.generated_comments:
             logger.debug(f"  {comment}")
         self.save_result(context, result)
