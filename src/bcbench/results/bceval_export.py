@@ -9,7 +9,6 @@ from typing import Any
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
@@ -39,23 +38,18 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 "llm_duration": (result.metrics.llm_duration if result.metrics else None) or 0,
                 "latency": (result.metrics.execution_time if result.metrics else None) or 0,
                 "turn_count": (result.metrics.turn_count if result.metrics else None) or 0,
-                "resolved": result.resolved,
-                "build": result.build,
+                **result.category_metrics,
                 "run_id": run_id,
                 "project": result.project,
                 "error_message": result.error_message,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
             }
 
-            if isinstance(result, TestGenerationResult):
-                metadata["pre_patch_failed"] = result.pre_patch_failed
-                metadata["post_patch_passed"] = result.post_patch_passed
-
             bceval_result = {
                 "id": result.instance_id,
                 "input": input,
                 "expected": expected,
-                "output": result.generated_patch,
+                "output": result.output,
                 "context": "",
                 "metadata": metadata,
                 "tags": [],

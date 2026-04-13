@@ -14,6 +14,8 @@ from bcbench.logger import get_logger
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
+    from bcbench.results.base import BaseEvaluationResult
+    from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
@@ -126,6 +128,35 @@ class EvaluationCategory(str, Enum):
                 return TestGenEntry
             case EvaluationCategory.NL2AL:
                 return NL2ALEntry
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def result_class(self) -> type[BaseEvaluationResult]:
+        from bcbench.results.bugfix import BugFixResult
+        from bcbench.results.nl2al import NL2ALResult
+        from bcbench.results.testgeneration import TestGenerationResult
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return BugFixResult
+            case EvaluationCategory.TEST_GENERATION:
+                return TestGenerationResult
+            case EvaluationCategory.NL2AL:
+                return NL2ALResult
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def summary_class(self) -> type[EvaluationResultSummary]:
+        """Returns the EvaluationResultSummary subclass for this category."""
+        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedEvaluationResultSummary
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedEvaluationResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

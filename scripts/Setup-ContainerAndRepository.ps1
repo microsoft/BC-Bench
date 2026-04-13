@@ -25,7 +25,10 @@ param(
     [SecureString]$Password,
 
     [Parameter(Mandatory = $false)]
-    [string]$RepoPath
+    [string]$RepoPath,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipContainer
 )
 
 [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -Version $Version -InstanceId $InstanceId
@@ -37,9 +40,7 @@ else {
     Write-Log "Found $($entries.Count) dataset entries to process." -Level Info
 }
 
-Write-Log "Setting up BC container and repository for version $Version, Dataset Path: $DatasetPath" -Level Info
-
-[PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
+Write-Log "Setting up repository for version $Version, Dataset Path: $DatasetPath" -Level Info
 
 if (-not $RepoPath) {
     $RepoPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "testbed"
@@ -56,27 +57,34 @@ if (Test-Path $RepoPath) {
 Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
 Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
 
-Import-Module BcContainerHelper -Force -DisableNameChecking
+if (-not $SkipContainer) {
+    [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
-Write-Log "Container name: $ContainerName" -Level Info
+    Import-Module BcContainerHelper -Force -DisableNameChecking
 
-if (Test-ContainerExists -containerName $ContainerName) {
-    throw "Container $ContainerName already exists. This indicates the machine was not properly cleaned up from a previous run."
+    Write-Log "Container name: $ContainerName" -Level Info
+
+    if (Test-ContainerExists -containerName $ContainerName) {
+        throw "Container $ContainerName already exists. This indicates the machine was not properly cleaned up from a previous run."
+    }
+
+    Write-Log "Creating container $ContainerName for version $Version..." -Level Info
+
+    # Get BC artifact URL
+    [string] $url = Get-BCArtifactUrl -version $Version -Country $Country
+    Write-Log "Retrieved artifact URL: $url" -Level Info
+
+    # Create container synchronously with NAV folder shared
+    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath)
+
+    # Create compiler folder synchronously
+    New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
+
+    Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 }
-
-Write-Log "Creating container $ContainerName for version $Version..." -Level Info
-
-# Get BC artifact URL
-[string] $url = Get-BCArtifactUrl -version $Version -Country $Country
-Write-Log "Retrieved artifact URL: $url" -Level Info
-
-# Create container synchronously with NAV folder shared
-New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath)
-
-# Create compiler folder synchronously
-New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
-
-Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
+else {
+    Write-Log "Skipping BC container setup (SkipContainer flag set)" -Level Info
+}
 
 # Set output for GitHub Actions or return path
 if ($env:GITHUB_OUTPUT) {

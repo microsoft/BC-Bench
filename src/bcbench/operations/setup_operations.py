@@ -18,7 +18,7 @@ def setup_repo_prebuild(entry: BaseDatasetEntry, repo_path: Path) -> None:
 
     This is the first phase of repo setup that should be called BEFORE build_and_publish_projects.
     It prepares a clean slate at the base commit without any patches or problem statements.
-    Skips for entries without a base_commit (e.g. NL2AL which starts from a blank project).
+    Skips for entries without a base_commit (e.g. categories that start from a blank project).
 
     Args:
         entry: Dataset entry with instance metadata
