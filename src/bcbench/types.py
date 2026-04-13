@@ -164,32 +164,6 @@ class EvaluationCategory(str, Enum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
-    def result_class(self) -> type[BaseEvaluationResult]:
-        from bcbench.results.bugfix import BugFixResult
-        from bcbench.results.testgeneration import TestGenerationResult
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return BugFixResult
-            case EvaluationCategory.TEST_GENERATION:
-                return TestGenerationResult
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
-    def summary_class(self) -> type[EvaluationResultSummary]:
-        """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
-
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.TEST_GENERATION:
-                return ExecutionBasedEvaluationResultSummary
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
     def pipeline(self) -> EvaluationPipeline:
         from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, TestGenerationPipeline
 
