@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from bcbench.results.base import BaseEvaluationResult
     from bcbench.results.summary import EvaluationResultSummary
 
-__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration", "FailureLayer"]
 
 logger = get_logger(__name__)
 
@@ -96,6 +96,14 @@ class AgentType(str, Enum):
                 return repo_path / ".claude"
             case _:
                 raise ValueError(f"Unknown AgentType: {self}")
+
+
+class FailureLayer(str, Enum):
+    L1_SYNTAX = "L1-syntax-representation"
+    L2_EXECUTION = "L2-execution-validation"
+    L3_EVENT = "L3-event-driven-paradigm"
+    L4_WORKFLOW = "L4-workflow-business-logic"
+    L5_TOOLCHAIN = "L5-toolchain-ecosystem"
 
 
 class EvaluationCategory(str, Enum):
