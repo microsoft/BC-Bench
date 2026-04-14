@@ -1,4 +1,4 @@
-using module .\BCBenchUtils.psm1
+using module ..\..\scripts\BCBenchUtils.psm1
 
 <#
     .SYNOPSIS
