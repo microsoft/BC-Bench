@@ -73,7 +73,9 @@ def run_mini_agent(
 
     logger.info(f"Running mini-bc-agent on: {entry.instance_id}")
 
-    task: str = entry.get_task(transform_image_paths=True)
+    from bcbench.agent.shared.prompt import _transform_image_paths
+
+    task: str = _transform_image_paths(entry.get_task())
 
     # Lazy import and create agent
     from minisweagent.models.litellm_model import LitellmModel

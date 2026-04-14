@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from bcbench.results.base import create_result_from_json
-from bcbench.results.evaluation_result import EvaluationResultSummary
+from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_testgen_result
 
@@ -55,10 +55,10 @@ class TestCategorySerialization:
             "category": "bug-fix",
             "resolved": True,
             "build": True,
-            "generated_patch": "patch",
+            "output": "patch",
         }
 
-        result = create_result_from_json(payload)
+        result = BaseEvaluationResult.from_json(payload)
 
         assert result.category == EvaluationCategory.BUG_FIX
 
@@ -71,10 +71,10 @@ class TestCategorySerialization:
             "category": "test-generation",
             "resolved": False,
             "build": True,
-            "generated_patch": "test patch",
+            "output": "test patch",
         }
 
-        result = create_result_from_json(payload)
+        result = BaseEvaluationResult.from_json(payload)
 
         assert result.category == EvaluationCategory.TEST_GENERATION
 
@@ -88,7 +88,7 @@ class TestCategorySerialization:
         with open(tmp_path / "test.jsonl") as f:
             data = json.loads(f.readline())
 
-        loaded = create_result_from_json(data)
+        loaded = BaseEvaluationResult.from_json(data)
 
         assert loaded.category == original.category
         assert loaded.category == EvaluationCategory.BUG_FIX
@@ -103,7 +103,7 @@ class TestCategorySerialization:
         with open(tmp_path / "test.jsonl") as f:
             data = json.loads(f.readline())
 
-        loaded = create_result_from_json(data)
+        loaded = BaseEvaluationResult.from_json(data)
 
         assert loaded.category == original.category
         assert loaded.category == EvaluationCategory.TEST_GENERATION
@@ -136,7 +136,9 @@ class TestCategorySerialization:
             "benchmark_version": "0.1.0",
         }
 
-        summary = EvaluationResultSummary.model_validate(payload)
+        from bcbench.results.summary import EvaluationResultSummary
+
+        summary = EvaluationResultSummary.from_json(payload)
 
         # Pydantic handles the enum conversion automatically
         assert summary.category == EvaluationCategory.TEST_GENERATION
@@ -210,7 +212,7 @@ class TestCategorySerialization:
             "category": "bug-fix",
             "resolved": True,
             "build": True,
-            "generated_patch": "patch",
+            "output": "patch",
             "metrics": {
                 "execution_time": 100.0,
                 "prompt_tokens": 5000,
@@ -219,7 +221,7 @@ class TestCategorySerialization:
             },
         }
 
-        result = create_result_from_json(payload)
+        result = BaseEvaluationResult.from_json(payload)
 
         assert result.metrics is not None
         assert result.metrics.tool_usage is not None
@@ -243,10 +245,22 @@ class TestCategorySerialization:
         with open(tmp_path / "test.jsonl") as f:
             data = json.loads(f.readline())
 
-        loaded = create_result_from_json(data)
+        loaded = BaseEvaluationResult.from_json(data)
 
         assert loaded.metrics is not None
         assert loaded.metrics.tool_usage is not None
         assert original.metrics is not None
         assert original.metrics.tool_usage is not None
         assert loaded.metrics.tool_usage == original.metrics.tool_usage
+
+    def test_model_dump_json_serializes_category_as_string_value(self):
+        bug_fix = create_bugfix_result()
+        test_gen = create_testgen_result()
+
+        bug_fix_dump = bug_fix.model_dump(mode="json")
+        test_gen_dump = test_gen.model_dump(mode="json")
+
+        assert bug_fix_dump["category"] == "bug-fix"
+        assert test_gen_dump["category"] == "test-generation"
+        assert isinstance(bug_fix_dump["category"], str)
+        assert isinstance(test_gen_dump["category"], str)
