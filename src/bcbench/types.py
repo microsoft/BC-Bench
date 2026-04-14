@@ -101,6 +101,7 @@ class AgentType(str, Enum):
 class EvaluationCategory(str, Enum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
+    COUNTERFACTUAL_EVALUATION = "counterfactual-evaluation"
     # CODE_REVIEW = "code-review"
     # EVENT_REQUEST = "event-request"
 
@@ -113,18 +114,23 @@ class EvaluationCategory(str, Enum):
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
+            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
+                return get_config().paths.dataset_dir / "counterfactual.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
         from bcbench.dataset import BugFixEntry, TestGenEntry
+        from bcbench.dataset.counterfactual_entry import CounterfactualEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
+            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
+                return CounterfactualEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -138,6 +144,8 @@ class EvaluationCategory(str, Enum):
                 return BugFixResult
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationResult
+            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
+                return BugFixResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -151,6 +159,8 @@ class EvaluationCategory(str, Enum):
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedEvaluationResultSummary
+            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
+                return ExecutionBasedEvaluationResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -163,6 +173,8 @@ class EvaluationCategory(str, Enum):
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
+            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
+                return BugFixPipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
