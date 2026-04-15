@@ -37,12 +37,12 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    repo: str = Field(default="microsoftInternal/NAV", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
+    repo: str = Field(default="microsoft/BCApps", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
     base_commit: str = Field(pattern=r"^[a-fA-F0-9]{40}$")
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
-    project_paths: Annotated[list[str], Field(min_length=2)]
+    project_paths: list[str] = []
     patch: Annotated[str, Field(min_length=1)]
 
     @classmethod
@@ -85,7 +85,7 @@ class BaseDatasetEntry(BaseModel):
             handle.write("\n")
 
     @abstractmethod
-    def get_task(self, transform_image_paths: bool = False) -> str:
+    def get_task(self) -> str:
         pass
 
     @abstractmethod
@@ -116,15 +116,9 @@ class _BugFixTestGenBase(BaseDatasetEntry):
     def problem_statement_dir(self) -> Path:
         return _config.paths.problem_statement_dir / self.instance_id
 
-    def get_task(self, transform_image_paths: bool = False) -> str:
+    def get_task(self) -> str:
         readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
-        content: str = readme_path.read_text(encoding="utf-8")
-
-        if not transform_image_paths:
-            return content
-
-        dest_dir = _config.file_patterns.problem_statement_dest_dir
-        return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
+        return readme_path.read_text(encoding="utf-8")
 
     @model_validator(mode="after")
     def validate_baseapp_patches_are_w1_only(self) -> Self:

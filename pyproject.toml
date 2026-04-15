@@ -79,7 +79,7 @@ analysis = [
     "plotly>=6.5.0",
 ]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-cov>=7.0",
     "ruff>=0.13.0",
     "pre-commit>=4.3.0",

@@ -342,6 +342,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "failed": 4,
                 "build": 9,
                 "percentage": 60.0,
+                "instance_results": copilot_instance_results,
                 "date": "2025-01-10",
                 "model": "gpt-4o",
                 "category": "bug-fix",
@@ -356,7 +357,6 @@ def sample_leaderboard_and_summary(tmp_path):
                     "custom_instructions": True,
                     "custom_agent": None,
                 },
-                "instance_results": copilot_instance_results,
                 "benchmark_version": "0.1.0",
             },
             {
@@ -365,6 +365,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "failed": 3,
                 "build": 10,
                 "percentage": 70.0,
+                "instance_results": mini_instance_results,
                 "date": "2025-01-12",
                 "model": "gpt-4o",
                 "category": "bug-fix",
@@ -379,7 +380,6 @@ def sample_leaderboard_and_summary(tmp_path):
                     "custom_instructions": False,
                     "custom_agent": None,
                 },
-                "instance_results": mini_instance_results,
                 "benchmark_version": "0.1.0",
             },
         ],
@@ -430,6 +430,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "failed": 5,
                 "build": 8,
                 "percentage": 50.0,
+                "instance_results": testgen_instance_results,
                 "date": "2025-01-11",
                 "model": "gpt-4-turbo",
                 "category": "test-generation",
@@ -444,7 +445,6 @@ def sample_leaderboard_and_summary(tmp_path):
                     "custom_instructions": False,
                     "custom_agent": None,
                 },
-                "instance_results": testgen_instance_results,
                 "benchmark_version": "0.1.0",
             },
         ],
@@ -477,10 +477,11 @@ def sample_leaderboard_and_summary(tmp_path):
 
     new_summary = {
         "total": 10,
-        "resolved": 8,  # Improved from 6 to 8
+        "resolved": 8,
         "failed": 2,
-        "build": 10,  # Improved from 9 to 10
+        "build": 10,
         "percentage": 80.0,
+        "instance_results": new_summary_instance_results,
         "date": "2025-01-15",
         "model": "gpt-4o",
         "category": "bug-fix",
@@ -495,7 +496,6 @@ def sample_leaderboard_and_summary(tmp_path):
             "custom_instructions": True,
             "custom_agent": None,
         },
-        "instance_results": new_summary_instance_results,
         "benchmark_version": "0.1.0",
     }
 
@@ -561,6 +561,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "failed": 1,
         "build": 10,
         "percentage": 90.0,
+        "instance_results": new_agent_instance_results,
         "date": "2025-01-16",
         "model": "gpt-4o",
         "category": "test-generation",
@@ -575,7 +576,6 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
             "custom_instructions": False,
             "custom_agent": None,
         },
-        "instance_results": new_agent_instance_results,
         "benchmark_version": "0.1.0",
     }
 
@@ -629,6 +629,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "failed": 3,
         "build": 9,
         "percentage": 70.0,
+        "instance_results": diff_mcp_instance_results,
         "date": "2025-01-17",
         "model": "gpt-4o",
         "category": "bug-fix",
@@ -643,7 +644,6 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
             "custom_instructions": False,  # Different from existing True
             "custom_agent": None,
         },
-        "instance_results": diff_mcp_instance_results,
         "benchmark_version": "0.1.0",
     }
 
@@ -771,6 +771,7 @@ def test_result_update_stores_multiple_results_with_default_n(sample_leaderboard
         "failed": 2,
         "build": 10,
         "percentage": 80.0,
+        "instance_results": multi_results_instance,
         "date": "2025-01-15",
         "model": "gpt-4o",
         "category": "bug-fix",
@@ -785,7 +786,6 @@ def test_result_update_stores_multiple_results_with_default_n(sample_leaderboard
             "custom_instructions": True,
             "custom_agent": None,
         },
-        "instance_results": multi_results_instance,
         "benchmark_version": "0.1.0",
     }
 
@@ -824,6 +824,7 @@ def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_s
         "failed": 3,
         "build": 9,
         "percentage": 70.0,
+        "instance_results": oldest_instance_results,
         "model": "gpt-4o",
         "category": "bug-fix",
         "agent_name": "copilot",
@@ -836,7 +837,6 @@ def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_s
             "custom_instructions": True,
             "custom_agent": None,
         },
-        "instance_results": oldest_instance_results,
         "benchmark_version": "0.1.0",
     }
 
@@ -858,7 +858,16 @@ def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_s
 
     # Now add a 6th result - should replace oldest (2025-01-10)
     newest_instance_results = {f"test__inst_{i}": (i < 9) for i in range(10)}  # 9 resolved
-    summary_new = {**base_summary, "date": "2025-01-20", "github_run_id": "run_sixth", "resolved": 9, "instance_results": newest_instance_results}
+    summary_new = {
+        **base_summary,
+        "date": "2025-01-20",
+        "github_run_id": "run_sixth",
+        "resolved": 9,
+        "failed": 1,
+        "build": 10,
+        "percentage": 90.0,
+        "instance_results": newest_instance_results,
+    }
     with open(summary_path, "w") as f:
         json.dump(summary_new, f, indent=2)
 
@@ -927,17 +936,13 @@ def test_result_refresh_handles_empty_leaderboard(tmp_path):
 
 @pytest.mark.integration
 def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
-    """Test that refresh handles legacy runs that don't have instance_results."""
+    """Test that refresh handles runs without instance_results."""
     leaderboard_path = tmp_path / "bug-fix.json"
 
     legacy_data = {
         "runs": [
             {
                 "total": 10,
-                "resolved": 6,
-                "failed": 4,
-                "build": 9,
-                "percentage": 60.0,
                 "date": "2025-01-10",
                 "model": "gpt-4o",
                 "category": "bug-fix",
@@ -948,8 +953,11 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
                 "average_llm_duration": 70.0,
                 "github_run_id": "run_legacy",
                 "experiment": None,
-                "instance_results": None,  # Legacy: no instance_results
                 "benchmark_version": "0.1.0",
+                "resolved": 6,
+                "failed": 4,
+                "build": 9,
+                "percentage": 60.0,
             },
         ],
         "aggregate": [
@@ -996,6 +1004,7 @@ def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
                 "failed": 4,
                 "build": 10,
                 "percentage": 60.0,
+                "instance_results": {f"test__inst_{i}": (i < 6) for i in range(10)},
                 "date": "2025-01-10",
                 "model": "gpt-4o",
                 "category": "bug-fix",
@@ -1006,7 +1015,6 @@ def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
                 "average_llm_duration": 70.0,
                 "github_run_id": "run_v1",
                 "experiment": None,
-                "instance_results": {f"test__inst_{i}": (i < 6) for i in range(10)},
                 "benchmark_version": "0.1.0",
             },
             {
@@ -1015,6 +1023,7 @@ def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
                 "failed": 2,
                 "build": 10,
                 "percentage": 80.0,
+                "instance_results": {f"test__inst_{i}": (i < 8) for i in range(10)},
                 "date": "2025-01-15",
                 "model": "gpt-4o",
                 "category": "bug-fix",
@@ -1025,7 +1034,6 @@ def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
                 "average_llm_duration": 65.0,
                 "github_run_id": "run_v2",
                 "experiment": None,
-                "instance_results": {f"test__inst_{i}": (i < 8) for i in range(10)},
                 "benchmark_version": "0.2.0",
             },
         ],
@@ -1070,6 +1078,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
                 "failed": 5,
                 "build": 10,
                 "percentage": 50.0,
+                "instance_results": {f"test__inst_{i}": (i < 5) for i in range(10)},
                 "date": "2025-01-10",
                 "model": "gpt-4o",
                 "category": "bug-fix",
@@ -1080,7 +1089,6 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
                 "average_llm_duration": 70.0,
                 "github_run_id": "run_v1",
                 "experiment": None,
-                "instance_results": {f"test__inst_{i}": (i < 5) for i in range(10)},
                 "benchmark_version": "0.1.0",
             },
         ],
@@ -1113,6 +1121,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
         "failed": 3,
         "build": 10,
         "percentage": 70.0,
+        "instance_results": {f"test__inst_{i}": (i < 7) for i in range(10)},
         "date": "2025-01-15",
         "model": "gpt-4o",
         "category": "bug-fix",
@@ -1123,7 +1132,6 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
         "average_llm_duration": 65.0,
         "github_run_id": "run_v2",
         "experiment": None,
-        "instance_results": {f"test__inst_{i}": (i < 7) for i in range(10)},
         "benchmark_version": "0.2.0",
     }
 

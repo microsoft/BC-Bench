@@ -5,6 +5,7 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
+- **Tools** (`tools/`): Standalone scripts for downloading and analyzing GitHub Actions artifacts
 - **Agent Evaluations**: Focuses on GitHub Copilot CLI and Claude Code
 - **Experiments**: MCP Servers, custom instructions, custom agents, skills, etc. and their performance on the benchmark
 - **Notebooks** (`notebooks/`): Analysis and visualization of benchmark results
@@ -13,6 +14,9 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - Primary language: Python (with AL/Business Central as the target evaluation language)
 - Uses `uv` for dependency management: e.g. `uv add <package>` to add packages, `uv run <command>` to run commands
 - Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
+
+## Categories
+BC-Bench is category-based and designed to grow over time. It currently has two categories, `bug-fix` and `test-generation`. They share the same dataset tasks and execution-based setup, but use different prompts, expected outputs, and evaluation pipelines. Future categories such as `code-review` can be added within the same overall benchmark structure, though they may require different inputs, setup, or evaluation methods.
 
 ## Coding Patterns and Guidelines
 

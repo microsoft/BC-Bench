@@ -198,6 +198,47 @@ def test_parse_metrics_minimal_real_output():
     assert result.completion_tokens == 1500
 
 
+def test_parse_metrics_new_format_full():
+    output_lines = [
+        "Changes   +17 -0\n",
+        "Requests  0.33 Premium (1m 45s)\n",
+        "Tokens    ↑ 317.5k • ↓ 4.3k • 255.0k (cached)\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.execution_time == 105.0
+    assert result.prompt_tokens == 317500
+    assert result.completion_tokens == 4300
+
+
+def test_parse_metrics_new_format_seconds_only():
+    output_lines = [
+        "Requests  1 Premium (45s)\n",
+        "Tokens    ↑ 125.5k • ↓ 3.6k • 0 (cached)\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.execution_time == 45.0
+    assert result.prompt_tokens == 125500
+    assert result.completion_tokens == 3600
+
+
+def test_parse_metrics_new_format_tokens_with_m():
+    output_lines = [
+        "Tokens    ↑ 1.3m • ↓ 11.6k • 1.2m (cached)\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.prompt_tokens == 1300000
+    assert result.completion_tokens == 11600
+
+
 def test_parse_session_log_extracts_turn_count():
     log_content = """
 2026-01-20T08:55:10.767Z [INFO] --- Start of group: Sending request to the AI model ---
