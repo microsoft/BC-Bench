@@ -217,7 +217,7 @@ class LeaderboardAggregate(BaseModel):
                 instance_resolved[instance_id].append(bool(outcome))
 
         # Per-run scores for average and CI
-        per_run_rates = [run.percentage / 100.0 for run in runs]
+        per_run_rates = [run.resolved / run.total for run in runs if run.total > 0]
         avg = round(sum(per_run_rates) / len(per_run_rates), 3) if per_run_rates else None
         ci_result = bootstrap_ci(per_run_rates)
         ci_low = round(ci_result["ci_low"], 3) if ci_result["ci_low"] is not None else None
