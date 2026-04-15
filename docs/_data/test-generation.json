@@ -2,10 +2,6 @@
   "runs": [
     {
       "total": 101,
-      "resolved": 44,
-      "failed": 57,
-      "build": 95,
-      "percentage": 43.6,
       "date": "2026-01-30",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -27,6 +23,11 @@
       },
       "github_run_id": "21494125521",
       "experiment": null,
+      "benchmark_version": "0.1.0",
+      "resolved": 44,
+      "failed": 57,
+      "build": 95,
+      "percentage": 43.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -129,15 +130,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 44,
-      "failed": 57,
-      "build": 97,
-      "percentage": 43.6,
       "date": "2026-01-30",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -159,6 +155,11 @@
       },
       "github_run_id": "21508267649",
       "experiment": null,
+      "benchmark_version": "0.1.0",
+      "resolved": 44,
+      "failed": 57,
+      "build": 97,
+      "percentage": 43.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -261,15 +262,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 43,
-      "failed": 58,
-      "build": 92,
-      "percentage": 42.6,
       "date": "2026-01-30",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -291,6 +287,11 @@
       },
       "github_run_id": "21516559607",
       "experiment": null,
+      "benchmark_version": "0.1.0",
+      "resolved": 43,
+      "failed": 58,
+      "build": 92,
+      "percentage": 42.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -393,15 +394,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": true,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 50,
-      "failed": 51,
-      "build": 94,
-      "percentage": 49.5,
       "date": "2026-01-30",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -423,6 +419,11 @@
       },
       "github_run_id": "21522741756",
       "experiment": null,
+      "benchmark_version": "0.1.0",
+      "resolved": 50,
+      "failed": 51,
+      "build": 94,
+      "percentage": 49.5,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -525,15 +526,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 49,
-      "failed": 52,
-      "build": 93,
-      "percentage": 48.5,
       "date": "2026-01-30",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -555,6 +551,11 @@
       },
       "github_run_id": "21528598171",
       "experiment": null,
+      "benchmark_version": "0.1.0",
+      "resolved": 49,
+      "failed": 52,
+      "build": 93,
+      "percentage": 48.5,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -657,15 +658,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 34,
-      "failed": 67,
-      "build": 92,
-      "percentage": 33.7,
       "date": "2026-01-31",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -693,6 +689,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.1.0",
+      "resolved": 34,
+      "failed": 67,
+      "build": 92,
+      "percentage": 33.7,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -795,15 +796,10 @@
         "microsoftInternal__NAV-177493": false,
         "microsoftInternal__NAV-206527": true,
         "microsoftInternal__NAV-227153": false
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 40,
-      "failed": 61,
-      "build": 89,
-      "percentage": 39.6,
       "date": "2026-01-31",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -830,6 +826,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.1.0",
+      "resolved": 40,
+      "failed": 61,
+      "build": 89,
+      "percentage": 39.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -932,15 +933,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 37,
-      "failed": 64,
-      "build": 87,
-      "percentage": 36.6,
       "date": "2026-02-01",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -968,6 +964,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.1.0",
+      "resolved": 37,
+      "failed": 64,
+      "build": 87,
+      "percentage": 36.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -1070,15 +1071,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 41,
-      "failed": 60,
-      "build": 91,
-      "percentage": 40.6,
       "date": "2026-02-01",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -1106,6 +1102,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.1.0",
+      "resolved": 41,
+      "failed": 60,
+      "build": 91,
+      "percentage": 40.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -1208,15 +1209,10 @@
         "microsoftInternal__NAV-177493": false,
         "microsoftInternal__NAV-206527": true,
         "microsoftInternal__NAV-227153": false
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 43,
-      "failed": 58,
-      "build": 91,
-      "percentage": 42.6,
       "date": "2026-02-01",
       "model": "claude-opus-4-5",
       "agent_name": "GitHub Copilot",
@@ -1243,6 +1239,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.1.0",
+      "resolved": 43,
+      "failed": 58,
+      "build": 91,
+      "percentage": 42.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": true,
         "microsoftInternal__NAV-176150": false,
@@ -1345,15 +1346,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "benchmark_version": "0.1.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 58,
-      "failed": 43,
-      "build": 96,
-      "percentage": 57.4,
       "date": "2026-02-13",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -1379,6 +1375,11 @@
       },
       "github_run_id": "21960130114",
       "experiment": null,
+      "benchmark_version": "0.2.0",
+      "resolved": 58,
+      "failed": 43,
+      "build": 96,
+      "percentage": 57.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -1481,15 +1482,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 60,
-      "failed": 41,
-      "build": 98,
-      "percentage": 59.4,
       "date": "2026-02-13",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -1515,6 +1511,11 @@
       },
       "github_run_id": "21971049109",
       "experiment": null,
+      "benchmark_version": "0.2.0",
+      "resolved": 60,
+      "failed": 41,
+      "build": 98,
+      "percentage": 59.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -1617,15 +1618,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 63,
-      "failed": 38,
-      "build": 97,
-      "percentage": 62.4,
       "date": "2026-02-13",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -1650,6 +1646,11 @@
       },
       "github_run_id": "21975757866",
       "experiment": null,
+      "benchmark_version": "0.2.0",
+      "resolved": 63,
+      "failed": 38,
+      "build": 97,
+      "percentage": 62.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -1752,15 +1753,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 63,
-      "failed": 38,
-      "build": 100,
-      "percentage": 62.4,
       "date": "2026-02-13",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -1786,6 +1782,11 @@
       },
       "github_run_id": "21986425056",
       "experiment": null,
+      "benchmark_version": "0.2.0",
+      "resolved": 63,
+      "failed": 38,
+      "build": 100,
+      "percentage": 62.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -1888,15 +1889,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 61,
-      "failed": 40,
-      "build": 99,
-      "percentage": 60.4,
       "date": "2026-02-13",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -1921,6 +1917,11 @@
       },
       "github_run_id": "21999339328",
       "experiment": null,
+      "benchmark_version": "0.2.0",
+      "resolved": 61,
+      "failed": 40,
+      "build": 99,
+      "percentage": 60.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -2023,15 +2024,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 42,
-      "failed": 59,
-      "build": 91,
-      "percentage": 41.6,
       "date": "2026-02-22",
       "model": "gpt-5-3-codex",
       "agent_name": "GitHub Copilot",
@@ -2054,6 +2050,11 @@
       },
       "github_run_id": "22278317514",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 42,
+      "failed": 59,
+      "build": 91,
+      "percentage": 41.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -2156,15 +2157,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 51,
-      "failed": 50,
-      "build": 89,
-      "percentage": 50.5,
       "date": "2026-02-23",
       "model": "gpt-5-3-codex",
       "agent_name": "GitHub Copilot",
@@ -2187,6 +2183,11 @@
       },
       "github_run_id": "22287896344",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 51,
+      "failed": 50,
+      "build": 89,
+      "percentage": 50.5,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -2289,15 +2290,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 42,
-      "failed": 59,
-      "build": 91,
-      "percentage": 41.6,
       "date": "2026-02-23",
       "model": "gpt-5-3-codex",
       "agent_name": "GitHub Copilot",
@@ -2322,6 +2318,11 @@
       },
       "github_run_id": "22297039449",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 42,
+      "failed": 59,
+      "build": 91,
+      "percentage": 41.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -2424,15 +2425,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 47,
-      "failed": 54,
-      "build": 95,
-      "percentage": 46.5,
       "date": "2026-02-23",
       "model": "gpt-5-3-codex",
       "agent_name": "GitHub Copilot",
@@ -2454,6 +2450,11 @@
       },
       "github_run_id": "22306626057",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 47,
+      "failed": 54,
+      "build": 95,
+      "percentage": 46.5,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -2556,15 +2557,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 47,
-      "failed": 54,
-      "build": 90,
-      "percentage": 46.5,
       "date": "2026-02-24",
       "model": "gpt-5-3-codex",
       "agent_name": "GitHub Copilot",
@@ -2587,6 +2583,11 @@
       },
       "github_run_id": "22325803723",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 47,
+      "failed": 54,
+      "build": 90,
+      "percentage": 46.5,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -2689,15 +2690,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 43,
-      "failed": 58,
-      "build": 95,
-      "percentage": 42.6,
       "date": "2026-02-25",
       "model": "gpt-5-2-codex",
       "agent_name": "GitHub Copilot",
@@ -2717,6 +2713,11 @@
       },
       "github_run_id": "22355688850",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 43,
+      "failed": 58,
+      "build": 95,
+      "percentage": 42.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -2819,15 +2820,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 38,
-      "failed": 63,
-      "build": 92,
-      "percentage": 37.6,
       "date": "2026-02-25",
       "model": "gpt-5-2-codex",
       "agent_name": "GitHub Copilot",
@@ -2846,6 +2842,11 @@
       },
       "github_run_id": "22387259304",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 38,
+      "failed": 63,
+      "build": 92,
+      "percentage": 37.6,
       "instance_results": {
         "microsoftInternal__NAV-204450": false,
         "microsoftInternal__NAV-176150": false,
@@ -2948,15 +2949,10 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 52,
-      "failed": 49,
-      "build": 96,
-      "percentage": 51.5,
       "date": "2026-02-26",
       "model": "gpt-5-2-codex",
       "agent_name": "GitHub Copilot",
@@ -2978,6 +2974,11 @@
       },
       "github_run_id": "22395089273",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 52,
+      "failed": 49,
+      "build": 96,
+      "percentage": 51.5,
       "instance_results": {
         "microsoftInternal__NAV-220452": false,
         "microsoftInternal__NAV-224009": true,
@@ -3080,15 +3081,10 @@
         "microsoftInternal__NAV-193853": true,
         "microsoftInternal__NAV-215645": true,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 44,
-      "failed": 57,
-      "build": 95,
-      "percentage": 43.6,
       "date": "2026-02-26",
       "model": "gpt-5-2-codex",
       "agent_name": "GitHub Copilot",
@@ -3108,6 +3104,11 @@
       },
       "github_run_id": "22427822610",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 44,
+      "failed": 57,
+      "build": 95,
+      "percentage": 43.6,
       "instance_results": {
         "microsoftInternal__NAV-220452": false,
         "microsoftInternal__NAV-224009": false,
@@ -3210,15 +3211,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 45,
-      "failed": 56,
-      "build": 92,
-      "percentage": 44.6,
       "date": "2026-02-26",
       "model": "gpt-5-2-codex",
       "agent_name": "GitHub Copilot",
@@ -3239,6 +3235,11 @@
       },
       "github_run_id": "22433750501",
       "experiment": null,
+      "benchmark_version": "0.2.2",
+      "resolved": 45,
+      "failed": 56,
+      "build": 92,
+      "percentage": 44.6,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": false,
@@ -3341,15 +3342,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": true,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.2.2"
+      }
     },
     {
       "total": 101,
-      "resolved": 62,
-      "failed": 39,
-      "build": 96,
-      "percentage": 61.4,
       "date": "2026-03-03",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -3376,6 +3372,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.3.0",
+      "resolved": 62,
+      "failed": 39,
+      "build": 96,
+      "percentage": 61.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -3478,15 +3479,10 @@
         "microsoftInternal__NAV-193853": true,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.3.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 67,
-      "failed": 34,
-      "build": 97,
-      "percentage": 66.3,
       "date": "2026-03-03",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -3516,6 +3512,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.3.0",
+      "resolved": 67,
+      "failed": 34,
+      "build": 97,
+      "percentage": 66.3,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -3618,15 +3619,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.3.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 58,
-      "failed": 43,
-      "build": 96,
-      "percentage": 57.4,
       "date": "2026-03-04",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -3655,6 +3651,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.3.0",
+      "resolved": 58,
+      "failed": 43,
+      "build": 96,
+      "percentage": 57.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -3757,15 +3758,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.3.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 64,
-      "failed": 37,
-      "build": 99,
-      "percentage": 63.4,
       "date": "2026-03-05",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -3792,6 +3788,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.3.0",
+      "resolved": 64,
+      "failed": 37,
+      "build": 99,
+      "percentage": 63.4,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -3894,15 +3895,10 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.3.0"
+      }
     },
     {
       "total": 101,
-      "resolved": 66,
-      "failed": 35,
-      "build": 97,
-      "percentage": 65.3,
       "date": "2026-03-05",
       "model": "claude-opus-4-6",
       "agent_name": "GitHub Copilot",
@@ -3932,6 +3928,11 @@
         "skills_enabled": false,
         "custom_agent": "ALTest"
       },
+      "benchmark_version": "0.3.0",
+      "resolved": 66,
+      "failed": 35,
+      "build": 97,
+      "percentage": 65.3,
       "instance_results": {
         "microsoftInternal__NAV-220452": true,
         "microsoftInternal__NAV-224009": true,
@@ -4034,8 +4035,7 @@
         "microsoftInternal__NAV-193853": true,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "benchmark_version": "0.3.0"
+      }
     }
   ],
   "aggregate": [
