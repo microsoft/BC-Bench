@@ -5,6 +5,7 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
+- **Tools** (`tools/`): Standalone scripts for downloading and analyzing GitHub Actions artifacts
 - **Agent Evaluations**: Focuses on GitHub Copilot CLI and Claude Code
 - **Experiments**: MCP Servers, custom instructions, custom agents, skills, etc. and their performance on the benchmark
 - **Notebooks** (`notebooks/`): Analysis and visualization of benchmark results
