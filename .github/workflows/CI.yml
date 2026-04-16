@@ -41,7 +41,7 @@ jobs:
         id: random
         shell: pwsh
         run: |
-          $categories = @("bug-fix", "test-generation")
+          $categories = @("bug-fix", "test-generation", "cf-1", "cf-2", "cf-3", "cf-4")
           $selected = $categories | Get-Random
           echo "category=$selected" >> $env:GITHUB_OUTPUT
 
