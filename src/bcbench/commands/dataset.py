@@ -29,6 +29,8 @@ def list_entries(
     entry_cls = category.entry_class
     resolved_path = category.dataset_path
 
+    cf_suffix = f"__cf-{category.cf_variant}" if category.cf_variant is not None else None
+
     if modified_only:
         import subprocess
 
@@ -51,8 +53,16 @@ def list_entries(
         )
         diff_output: str = result.stdout
         entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
+        if cf_suffix:
+            entry_ids = [eid for eid in entry_ids if eid.endswith(cf_suffix)]
     else:
-        entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=2 if test_run else None)
+        entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path)
+        if cf_suffix:
+            entries = [e for e in entries if e.instance_id.endswith(cf_suffix)]
+        if test_run:
+            import random
+
+            entries = random.sample(entries, min(2, len(entries)))
         entry_ids: list[str] = [e.instance_id for e in entries]
 
     print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")

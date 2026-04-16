@@ -109,21 +109,39 @@ class FailureLayer(str, Enum):
 class EvaluationCategory(str, Enum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
-    COUNTERFACTUAL_EVALUATION = "counterfactual-evaluation"
-    # CODE_REVIEW = "code-review"
-    # EVENT_REQUEST = "event-request"
+    CF_1 = "cf-1"
+    CF_2 = "cf-2"
+    CF_3 = "cf-3"
+    CF_4 = "cf-4"
+
+    @property
+    def is_counterfactual(self) -> bool:
+        return self in (EvaluationCategory.CF_1, EvaluationCategory.CF_2, EvaluationCategory.CF_3, EvaluationCategory.CF_4)
+
+    @property
+    def cf_variant(self) -> int | None:
+        if not self.is_counterfactual:
+            return None
+        return int(self.value.split("-")[1])
+
+    @property
+    def prompt_template_key(self) -> str:
+        if self.is_counterfactual:
+            return "counterfactual"
+        return self.value
 
     @property
     def dataset_path(self) -> Path:
         from bcbench.config import get_config
+
+        if self.is_counterfactual:
+            return get_config().paths.dataset_dir / "counterfactual.jsonl"
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
-            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
-                return get_config().paths.dataset_dir / "counterfactual.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -132,13 +150,14 @@ class EvaluationCategory(str, Enum):
         from bcbench.dataset import BugFixEntry, TestGenEntry
         from bcbench.dataset.counterfactual_entry import CounterfactualEntry
 
+        if self.is_counterfactual:
+            return CounterfactualEntry
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
-            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
-                return CounterfactualEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -147,13 +166,14 @@ class EvaluationCategory(str, Enum):
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.testgeneration import TestGenerationResult
 
+        if self.is_counterfactual:
+            return BugFixResult
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixResult
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationResult
-            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
-                return BugFixResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -162,27 +182,20 @@ class EvaluationCategory(str, Enum):
         """Returns the EvaluationResultSummary subclass for this category."""
         from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.TEST_GENERATION:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
-                return ExecutionBasedEvaluationResultSummary
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return ExecutionBasedEvaluationResultSummary
 
     @property
     def pipeline(self) -> EvaluationPipeline:
         from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
+
+        if self.is_counterfactual:
+            return BugFixPipeline()
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
-            case EvaluationCategory.COUNTERFACTUAL_EVALUATION:
-                return BugFixPipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

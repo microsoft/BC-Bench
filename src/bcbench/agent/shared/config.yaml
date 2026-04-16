@@ -26,7 +26,7 @@ prompt:
     Issue details:
     {{task}}
 
-  counterfactual-evaluation-template: |
+  counterfactual-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
     Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}

@@ -33,7 +33,7 @@ def test_all_categories_have_entry_classes():
 
 def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry):
     for category in EvaluationCategory:
-        if category == EvaluationCategory.COUNTERFACTUAL_EVALUATION:
+        if category.is_counterfactual:
             continue  # CF entries are loaded via resolution from base; tested separately in test_counterfactual.py
         entry_cls = category.entry_class
         # Reconstruct entry as the category-specific type so get_expected_output() works

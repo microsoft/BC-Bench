@@ -16,7 +16,7 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - Uses `pre-commit` for code quality checks (ruff linting/formatting, trailing whitespace, etc.)
 
 ## Categories
-BC-Bench is category-based and designed to grow over time. It currently has two categories, `bug-fix` and `test-generation`. They share the same dataset tasks and execution-based setup, but use different prompts, expected outputs, and evaluation pipelines. Future categories such as `code-review` can be added within the same overall benchmark structure, though they may require different inputs, setup, or evaluation methods.
+BC-Bench is category-based and designed to grow over time. It currently has two base categories, `bug-fix` and `test-generation`, plus four counterfactual categories (`cf-1`, `cf-2`, `cf-3`, `cf-4`) that split CF variants for batched evaluation. The base categories share the same dataset tasks and execution-based setup, but use different prompts, expected outputs, and evaluation pipelines. CF categories reuse the bug-fix pipeline with entries from `counterfactual.jsonl`. Future categories such as `code-review` can be added within the same overall benchmark structure, though they may require different inputs, setup, or evaluation methods.
 
 ## Coding Patterns and Guidelines
 
