@@ -116,7 +116,7 @@ jobs:
       - name: Select PAT based on job index
         id: select-pat
         run: |
-          $patIndex = ${{ strategy.job-index }} % 3
+          $patIndex = ${{ strategy.job-index }} % 4
           echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
@@ -124,7 +124,8 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' &&
             secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' &&
-            secrets.COPILOT_PAT2 || secrets.COPILOT_PAT3) }}
+            secrets.COPILOT_PAT2 || (steps.select-pat.outputs.pat_index == '2'&&
+            secrets.COPILOT_PAT3 || secrets.COPILOT_PAT4)) }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
