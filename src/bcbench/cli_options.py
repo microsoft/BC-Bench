@@ -25,12 +25,10 @@ EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Cate
 
 CopilotModel = Annotated[
     Literal[
-        "claude-sonnet-4.5",
         "claude-sonnet-4.6",
         "claude-haiku-4.5",
-        "claude-opus-4.5",
         "claude-opus-4.6",
-        "claude-opus-4.6-fast",
+        "claude-opus-4.7",
         "gpt-5.4",
         "gpt-5.3-codex",
         "gpt-5.2-codex",
@@ -48,7 +46,7 @@ FoundryModel = Annotated[
 ClaudeCodeModel = Annotated[
     Literal[
         "claude-sonnet-4-6",
-        "claude-opus-4-6",
+        "claude-opus-4-7",
         "claude-haiku-4-5",
     ],
     typer.Option(help="Claude Code model to use"),
