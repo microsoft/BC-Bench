@@ -27,6 +27,7 @@ class DatasetEntry {
     # Properties based on the dataset schema
     [string]$repo
     [string]$instance_id
+    [string]$base_instance_id
     [string]$patch
     [string]$base_commit
     [string]$hints_text
@@ -42,6 +43,7 @@ class DatasetEntry {
     DatasetEntry([PSObject]$jsonObject) {
         $this.repo = $jsonObject.repo
         $this.instance_id = $jsonObject.instance_id
+        $this.base_instance_id = $jsonObject.base_instance_id
         $this.patch = $jsonObject.patch
         $this.base_commit = $jsonObject.base_commit
         $this.hints_text = $jsonObject.hints_text
@@ -104,6 +106,40 @@ function Get-DatasetEntries {
         }
         catch {
             Write-Warning "Failed to parse JSON object: $_"
+        }
+    }
+
+    # Merge base-entry fields into counterfactual entries (which only carry CF-specific overrides).
+    $needsBaseMerge = $entries | Where-Object { $_.base_instance_id -and -not $_.repo }
+    if ($needsBaseMerge) {
+        $baseDatasetPath = Join-Path -Path (Split-Path -Parent $DatasetPath) -ChildPath "bcbench.jsonl"
+        if (-not (Test-Path $baseDatasetPath)) {
+            throw "Base dataset file not found at: $baseDatasetPath (required to resolve counterfactual entries)"
+        }
+        Write-Verbose "Loading base entries from $baseDatasetPath to resolve $($needsBaseMerge.Count) CF entries"
+        $baseEntriesById = @{}
+        $baseContent = Get-Content $baseDatasetPath -Raw
+        $baseObjects = $baseContent -split '(?<=})\s*\n(?=\{)' | Where-Object { $_.Trim().Length -gt 0 }
+        foreach ($baseJson in $baseObjects) {
+            try {
+                $baseObj = $baseJson.Trim() | ConvertFrom-Json
+                $baseEntriesById[$baseObj.instance_id] = [DatasetEntry]::new($baseObj)
+            }
+            catch {
+                Write-Warning "Failed to parse base entry: $_"
+            }
+        }
+        foreach ($cf in $needsBaseMerge) {
+            $base = $baseEntriesById[$cf.base_instance_id]
+            if (-not $base) {
+                throw "Base entry '$($cf.base_instance_id)' not found in $baseDatasetPath for CF entry '$($cf.instance_id)'"
+            }
+            if (-not $cf.repo) { $cf.repo = $base.repo }
+            if (-not $cf.base_commit) { $cf.base_commit = $base.base_commit }
+            if (-not $cf.environment_setup_version) { $cf.environment_setup_version = $base.environment_setup_version }
+            if (-not $cf.created_at) { $cf.created_at = $base.created_at }
+            if (-not $cf.hints_text) { $cf.hints_text = $base.hints_text }
+            if (-not $cf.project_paths -or $cf.project_paths.Count -eq 0) { $cf.project_paths = $base.project_paths }
         }
     }
 
