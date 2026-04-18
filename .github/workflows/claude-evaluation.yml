@@ -13,7 +13,7 @@ on:
         type: choice
         options:
           - "claude-sonnet-4-6"
-          - "claude-opus-4-6"
+          - "claude-opus-4-7"
           - "claude-haiku-4-5"
       category:
         description: "Evaluation category to run"
@@ -64,7 +64,7 @@ jobs:
       category: ${{ inputs.category }}
 
   evaluate-with-claude-code:
-    runs-on: [GitHub-BCBench]
+    runs-on: [ GitHub-BCBench ]
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
@@ -109,7 +109,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.69
+        run: npm install -g @anthropic-ai/claude-code@2.1.112
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120

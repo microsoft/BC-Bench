@@ -12,12 +12,10 @@ on:
         default: "claude-haiku-4.5"
         type: choice
         options:
-          - "claude-sonnet-4.5"
           - "claude-sonnet-4.6"
           - "claude-haiku-4.5"
-          - "claude-opus-4.5"
           - "claude-opus-4.6"
-          - "claude-opus-4.6-fast"
+          - "claude-opus-4.7"
           - "gpt-5.4"
           - "gpt-5.3-codex"
           - "gpt-5.2-codex"
@@ -72,7 +70,7 @@ jobs:
       category: ${{ inputs.category }}
 
   evaluate-with-copilot-cli:
-    runs-on: [GitHub-BCBench]
+    runs-on: [ GitHub-BCBench ]
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
@@ -86,7 +84,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 24
+      max-parallel: 32
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -117,18 +115,21 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@1.0.2
+        run: npm install -g @github/copilot@1.0.31
 
       - name: Select PAT based on job index
         id: select-pat
         run: |
-          $patIndex = ${{ strategy.job-index }} % 3
+          $patIndex = ${{ strategy.job-index }} % 4
           echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
         env:
-          COPILOT_GITHUB_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' && secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' && secrets.COPILOT_PAT2 || secrets.COPILOT_PAT3) }}
+          COPILOT_GITHUB_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' &&
+            secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' &&
+            secrets.COPILOT_PAT2 || (steps.select-pat.outputs.pat_index == '2'&&
+            secrets.COPILOT_PAT3 || secrets.COPILOT_PAT4)) }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
