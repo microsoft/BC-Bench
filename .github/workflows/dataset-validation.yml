@@ -10,21 +10,53 @@ on:
         required: false
         default: true
         type: boolean
+      category:
+        description: "Dataset category to validate"
+        required: false
+        default: "bug-fix"
+        type: choice
+        options:
+          - "bug-fix"
+          - "cf-1"
+          - "cf-2"
+          - "cf-3"
+          - "cf-4"
+      entries-override:
+        description: "Optional JSON array of entry IDs to validate (overrides get-entries)"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "0 0 * * 0"
 
 jobs:
   get-entries:
+    if: ${{ inputs.entries-override == '' || inputs.entries-override == null }}
     uses: ./.github/workflows/get-entries.yml
     with:
       modified-only: false
       test-run: ${{ inputs.test-run || false }}
-      category: "bug-fix"
+      category: ${{ inputs.category || 'bug-fix' }}
+
+  resolve-entries:
+    runs-on: ubuntu-latest
+    needs: get-entries
+    if: always()
+    outputs:
+      entries: ${{ steps.pick.outputs.entries }}
+    steps:
+      - id: pick
+        run: |
+          if [[ -n "${{ inputs.entries-override }}" ]]; then
+            echo "entries=${{ inputs.entries-override }}" >> "$GITHUB_OUTPUT"
+          else
+            echo 'entries=${{ needs.get-entries.outputs.entries }}' >> "$GITHUB_OUTPUT"
+          fi
 
   verify-build-and-tests:
     runs-on: [GitHub-BCBench]
-    needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
+    needs: resolve-entries
+    if: needs.resolve-entries.outputs.entries != '[]' && needs.resolve-entries.outputs.entries != ''
     environment:
       name: ado-read
       deployment: false
@@ -35,7 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry: ${{ fromJson(needs.resolve-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
