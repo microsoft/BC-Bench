@@ -342,13 +342,16 @@ function Invoke-GitApplyPatch {
         # Create temporary patch file
         [string]$patchPath = Join-Path -Path $env:TEMP -ChildPath "patch_$PatchId.diff"
         Write-Log "Saving patch to temporary file: $patchPath" -Level Debug
-        $PatchContent | Out-File -FilePath $patchPath -Encoding utf8 -Force
+        # Write raw bytes preserving LF line endings — git apply context matching is sensitive
+        # to BOM and CRLF, both of which Out-File -Encoding utf8 introduces on Windows.
+        [string]$normalizedContent = $PatchContent -replace "`r`n", "`n"
+        [System.IO.File]::WriteAllBytes($patchPath, [System.Text.UTF8Encoding]::new($false).GetBytes($normalizedContent))
 
         if ($RepositoryPath) {
-            $applyResult = git -C $RepositoryPath apply --whitespace=nowarn $patchPath 2>&1
+            $applyResult = git -C $RepositoryPath apply --whitespace=nowarn --ignore-whitespace $patchPath 2>&1
         }
         else {
-            $applyResult = git apply --whitespace=nowarn $patchPath 2>&1
+            $applyResult = git apply --whitespace=nowarn --ignore-whitespace $patchPath 2>&1
         }
 
         if ($LASTEXITCODE -ne 0) {
