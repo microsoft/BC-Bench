@@ -52,7 +52,7 @@ def list_entries(
         diff_output: str = result.stdout
         entry_ids: list[str] = _modified_instance_ids_from_diff(diff_output)
     else:
-        entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=2 if test_run else None)
+        entries: list[BaseDatasetEntry] = entry_cls.load(resolved_path, random=4 if test_run else None)
         entry_ids: list[str] = [e.instance_id for e in entries]
 
     print(f"Found {len(entry_ids)} entry(ies){' (modified only)' if modified_only else ''}:")
