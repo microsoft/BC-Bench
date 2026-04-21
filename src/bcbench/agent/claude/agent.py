@@ -51,13 +51,9 @@ def run_claude_code(
         raise AgentError("Claude Code not found in PATH. Please ensure it is installed and available.")
 
     try:
-        debug_log_path: Path = output_dir.resolve() / "claude_debug.log"
         cmd_args = [
             claude_cmd,
             "--output-format=json",
-            "--no-session-persistence",
-            f"--debug-file={debug_log_path}",
-            # "--verbose",  # required for when using --print, --output-format=stream-json
             "--strict-mcp-config",  # Only use MCP servers from --mcp-config, ignoring all other MCP configurations
             f"--model={model}",
             "--permission-mode=bypassPermissions",  # bypassPermissions is needed to use tools and mcp servers
@@ -98,7 +94,7 @@ def run_claude_code(
                     data = json.loads(striped_line)
                     if "result" in data:
                         print(data["result"], flush=True)
-                        metrics = parse_metrics(data, debug_log_path=debug_log_path)
+                        metrics = parse_metrics(data, session_cwd=repo_path)
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping non-JSON line: {striped_line}")
 

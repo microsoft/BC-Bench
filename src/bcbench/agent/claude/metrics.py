@@ -1,3 +1,4 @@
+import json
 import re
 from collections import Counter
 from pathlib import Path
@@ -7,18 +8,48 @@ from bcbench.types import AgentMetrics
 
 logger = get_logger(__name__)
 
-TOOL_USE_PATTERN = re.compile(r"executePreToolHooks called for tool: (.+)")
+
+def encode_project_dir(cwd: Path | str) -> str:
+    # Claude Code encodes the project directory by replacing path separators and colons with dashes.
+    # Example: C:\depot\BC-Bench -> C--depot-BC-Bench ; /home/u/foo -> -home-u-foo
+    return re.sub(r"[:\\/]", "-", str(cwd))
 
 
-def parse_debug_log(log_path: Path) -> dict[str, int]:
-    content = log_path.read_text(encoding="utf-8")
-    return dict(Counter(TOOL_USE_PATTERN.findall(content)))
+def find_session_transcript(session_id: str, cwd: Path) -> Path | None:
+    path = Path.home() / ".claude" / "projects" / encode_project_dir(cwd) / f"{session_id}.jsonl"
+    return path if path.exists() else None
 
 
-def parse_metrics(data: dict, debug_log_path: Path | None = None) -> AgentMetrics | None:
+def parse_tool_usage_from_transcript(transcript_path: Path) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for raw_line in transcript_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = entry.get("message", {}).get("content", [])
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                name = block.get("name")
+                if name:
+                    counts[name] += 1
+    return dict(counts)
+
+
+def parse_metrics(data: dict, session_cwd: Path) -> AgentMetrics | None:
     """Parse metrics from Claude Code result object.
 
     The Claude Code CLI outputs JSON when run with --output-format json.
+    Tool usage is parsed from the session transcript at
+    `~/.claude/projects/<encoded-cwd>/<session_id>.jsonl`.
+
     Expected format:
     {
         "type": "result",
@@ -73,11 +104,16 @@ def parse_metrics(data: dict, debug_log_path: Path | None = None) -> AgentMetric
 
         completion_tokens = usage.get("output_tokens")
 
-    if debug_log_path and debug_log_path.exists():
-        try:
-            tool_usage = parse_debug_log(debug_log_path) or None
-        except Exception as e:
-            logger.warning(f"Failed to parse tool usage from {debug_log_path}: {e}")
+    session_id: str | None = data.get("session_id")
+    if session_id:
+        transcript = find_session_transcript(session_id, session_cwd)
+        if transcript is not None:
+            try:
+                tool_usage = parse_tool_usage_from_transcript(transcript) or None
+            except Exception as e:
+                logger.warning(f"Failed to parse tool usage from transcript {transcript}: {e}")
+        else:
+            logger.debug(f"Session transcript not found for session_id={session_id}, cwd={session_cwd}")
 
     if any(v is not None for v in [execution_time, llm_duration, turn_count, prompt_tokens, completion_tokens]):
         return AgentMetrics(
