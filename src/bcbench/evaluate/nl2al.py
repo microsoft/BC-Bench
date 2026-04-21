@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -56,6 +57,12 @@ def _create_al_project_scaffold(project_dir: Path, entry: NL2ALEntry) -> None:
     app_json_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
 
 
+def _reset_repo_path(repo_path: Path) -> None:
+    if repo_path.exists():
+        shutil.rmtree(repo_path)
+    repo_path.mkdir(parents=True, exist_ok=True)
+
+
 def _git_init_and_commit(repo_path: Path) -> None:
     subprocess.run(["git", "init"], cwd=repo_path, capture_output=True, check=True)
     subprocess.run(["git", "add", "."], cwd=repo_path, capture_output=True, check=True)
@@ -75,6 +82,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         project_path = entry.project_paths[0] if entry.project_paths else "App"
         project_dir = repo_path / project_path
 
+        _reset_repo_path(repo_path)
         _create_al_project_scaffold(project_dir, entry)
         _git_init_and_commit(repo_path)
 
@@ -96,21 +104,14 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
                 context.get_container(),
                 context.entry.environment_setup_version,
             )
-
-            # TODO: LLM-as-judge evaluation
-            # Compare generated_patch against context.entry.get_expected_output()
-            # to assess functional correctness beyond just "it builds"
-
-            result = NL2ALResult.create_success(context, generated_patch)
-            logger.info(f"Successfully completed {context.entry.instance_id}")
-
         except BuildError as e:
-            result = NL2ALResult.create_build_failure(context, generated_patch, str(e))
-            logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
+            result = NL2ALResult._create_from_context(context, output=generated_patch, error_message=str(e), build=False)
+            logger.error(f"Build failed for {context.entry.instance_id}: {e}")
+        else:
+            # TODO: LLM-as-judge evaluation against context.entry.get_expected_output()
+            llm_judge_score = None
 
-        finally:
-            if result is not None:
-                self.save_result(context, result)
-            else:
-                logger.error(f"No result generated for {context.entry.instance_id}")
-                raise RuntimeError(f"No result generated for {context.entry.instance_id}")
+            result = NL2ALResult._create_from_context(context, output=generated_patch, build=True, llm_judge_score=llm_judge_score)
+            logger.info(f"Build succeeded for {context.entry.instance_id}")
+
+        self.save_result(context, result)
