@@ -12,6 +12,7 @@ _config = get_config()
 
 def setup_hooks(repo_path: Path, agent_type: AgentType, output_dir: Path) -> Path:
     tool_log_path = output_dir / _config.file_patterns.tool_usage_log
+    tool_log_path.unlink(missing_ok=True)
     script_path = str(_config.paths.hook_script_path.resolve())
 
     match agent_type:
