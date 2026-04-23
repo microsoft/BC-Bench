@@ -47,9 +47,12 @@ class TestSetupHooks:
         assert len(settings["hooks"]["PreToolUse"]) == 1
 
         hook = settings["hooks"]["PreToolUse"][0]
-        assert hook["type"] == "command"
-        assert "command" in hook
-        assert "BCBENCH_TOOL_LOG" in hook["env"]
+        assert hook["matcher"] == ""
+        assert len(hook["hooks"]) == 1
+        inner_hook = hook["hooks"][0]
+        assert inner_hook["type"] == "command"
+        assert "BCBENCH_TOOL_LOG" in inner_hook["command"]
+        assert "log-tool-usage.ps1" in inner_hook["command"]
 
         assert tool_log_path == output_dir / "tool_usage.jsonl"
 

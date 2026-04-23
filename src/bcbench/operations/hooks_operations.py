@@ -60,13 +60,17 @@ def _setup_claude_hooks(repo_path: Path, script_path: str, tool_log_path: Path) 
         with contextlib.suppress(json.JSONDecodeError):
             existing_settings = json.loads(settings_file.read_text(encoding="utf-8"))
 
+    tool_log_resolved = str(tool_log_path.resolve())
     existing_settings["hooks"] = {
         "PreToolUse": [
             {
-                "type": "command",
-                "command": f'powershell -ExecutionPolicy Bypass -File "{script_path}"',
-                "env": {"BCBENCH_TOOL_LOG": str(tool_log_path.resolve())},
-                "timeout": 5000,
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'BCBENCH_TOOL_LOG="{tool_log_resolved}" powershell -ExecutionPolicy Bypass -File "{script_path}"',
+                    }
+                ],
             }
         ]
     }

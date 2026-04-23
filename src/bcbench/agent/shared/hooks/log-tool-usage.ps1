@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 try {
     $inputJson = [Console]::In.ReadToEnd() | ConvertFrom-Json
-    $toolName = $inputJson.toolName
+    $toolName = if ($inputJson.tool_name) { $inputJson.tool_name } else { $inputJson.toolName }
     $timestamp = $inputJson.timestamp
 
     if ($toolName -and $env:BCBENCH_TOOL_LOG) {
