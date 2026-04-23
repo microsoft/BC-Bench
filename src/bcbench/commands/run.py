@@ -7,8 +7,9 @@ from typing_extensions import Annotated
 
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.copilot.metrics import parse_session_log
+from bcbench.agent.copilot.metrics import parse_turn_count_from_log
 from bcbench.agent.mini import run_mini_agent
+from bcbench.agent.shared.hooks_parser import parse_tool_usage_from_hooks
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -138,7 +139,8 @@ def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directo
         uv run bcbench run copilot-inspector ./evaluation_results/
     """
 
-    usage, turn_count = parse_session_log(path)
+    usage = parse_tool_usage_from_hooks(path) or {}
+    turn_count = parse_turn_count_from_log(path) if path.suffix == ".log" else 0
 
     print("Tool Usage Summary:")
     print("-" * 40)

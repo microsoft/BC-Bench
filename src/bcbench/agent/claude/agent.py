@@ -6,12 +6,12 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.claude.metrics import parse_metrics
-from bcbench.agent.shared import build_mcp_config, build_prompt
+from bcbench.agent.shared import build_mcp_config, build_prompt, parse_tool_usage_from_hooks
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
 from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -36,6 +36,7 @@ def run_claude_code(
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
+    tool_log_path: Path = setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
         custom_instructions=instructions_enabled,
@@ -94,9 +95,13 @@ def run_claude_code(
                     data = json.loads(striped_line)
                     if "result" in data:
                         print(data["result"], flush=True)
-                        metrics = parse_metrics(data, session_cwd=repo_path)
+                        metrics = parse_metrics(data)
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping non-JSON line: {striped_line}")
+
+        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
+        if metrics and tool_usage:
+            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
 
         return metrics, config
     except subprocess.TimeoutExpired:
