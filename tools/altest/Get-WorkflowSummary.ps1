@@ -1,4 +1,4 @@
-using module ..\..\scripts\BCBenchUtils.psm1
+using module .\BCBenchUtils.psm1
 
 <#
     .SYNOPSIS
@@ -74,6 +74,26 @@ param(
     [string]$Category
 )
 
+function Invoke-WithRetry {
+    param(
+        [scriptblock]$ScriptBlock,
+        [int]$MaxRetries = 3,
+        [int]$BaseDelaySec = 2
+    )
+
+    for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+        try {
+            return & $ScriptBlock
+        }
+        catch {
+            if ($attempt -eq $MaxRetries) { throw }
+            $delay = $BaseDelaySec * [math]::Pow(2, $attempt - 1)
+            Write-Log "  Attempt $attempt failed, retrying in ${delay}s..." -Level Warning
+            Start-Sleep -Seconds $delay
+        }
+    }
+}
+
 function Get-WorkflowRuns {
     param(
         [string]$Repo,
@@ -108,12 +128,13 @@ function Get-RunDetails {
         [string]$RunId
     )
 
-    $json = gh run view $RunId --repo $Repo --json "databaseId,displayTitle,conclusion,status,createdAt,headBranch,url" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to fetch run details for run $RunId`: $json"
+    return Invoke-WithRetry {
+        $json = gh run view $RunId --repo $Repo --json "databaseId,displayTitle,conclusion,status,createdAt,headBranch,url" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to fetch run details for run $RunId`: $json"
+        }
+        $json | ConvertFrom-Json
     }
-
-    return $json | ConvertFrom-Json
 }
 
 function Get-JobSummary {
@@ -122,12 +143,13 @@ function Get-JobSummary {
         [string]$RunId
     )
 
-    $jobs = gh run view $RunId --repo $Repo --json jobs 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to fetch jobs for run $RunId`: $jobs"
+    return Invoke-WithRetry {
+        $jobs = gh run view $RunId --repo $Repo --json jobs 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to fetch jobs for run $RunId`: $jobs"
+        }
+        ($jobs | ConvertFrom-Json).jobs
     }
-
-    return ($jobs | ConvertFrom-Json).jobs
 }
 
 function Get-SummarizeJobOutput {
@@ -527,14 +549,19 @@ try {
             Write-Log "  Could not retrieve summary for run $currentRunId" -Level Warning
 
             # At minimum, show job-level failures
-            $jobs = Get-JobSummary -Repo $Repository -RunId $currentRunId
-            $failedJobs = $jobs | Where-Object { $_.conclusion -eq "failure" }
+            try {
+                $jobs = Get-JobSummary -Repo $Repository -RunId $currentRunId
+                $failedJobs = $jobs | Where-Object { $_.conclusion -eq "failure" }
 
-            if ($failedJobs) {
-                Write-Log "  Failed jobs: $($failedJobs.Count)" -Level Error
-                foreach ($job in $failedJobs) {
-                    Write-Log "    - $($job.name): $($job.conclusion)" -Level Warning
+                if ($failedJobs) {
+                    Write-Log "  Failed jobs: $($failedJobs.Count)" -Level Error
+                    foreach ($job in $failedJobs) {
+                        Write-Log "    - $($job.name): $($job.conclusion)" -Level Warning
+                    }
                 }
+            }
+            catch {
+                Write-Log "  Could not fetch job details for run $currentRunId (GitHub API error). Skipping." -Level Warning
             }
         }
 
