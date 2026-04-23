@@ -84,8 +84,7 @@ class TestSetupHooks:
 
         # The command should contain an absolute path to the script
         assert "log-tool-usage.ps1" in powershell_cmd
-        # Path should be absolute (contains drive letter on Windows or / on Unix)
-        assert ":" in powershell_cmd or powershell_cmd.startswith("/")
+        assert Path(powershell_cmd.split('"')[1]).is_absolute()
 
     def test_tool_log_path_is_absolute_in_env(self, tmp_path: Path):
         repo_path = tmp_path / "repo"
