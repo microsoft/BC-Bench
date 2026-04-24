@@ -7,7 +7,6 @@ from typing_extensions import Annotated
 
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.copilot.metrics import parse_session_log
 from bcbench.agent.mini import run_mini_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
@@ -127,25 +126,3 @@ def run_mini_inspector(
 
     inspector = TrajectoryInspector(trajectory_files)
     inspector.run()
-
-
-@run_app.command("copilot-inspector")
-def run_copilot_tool_analyzer(path: Annotated[Path, typer.Argument(help="Directory to search for log files or specific log file", exists=True, file_okay=True, dir_okay=False)]):
-    """
-    Inspect GitHub Copilot CLI session log(s)
-
-    Example:
-        uv run bcbench run copilot-inspector ./evaluation_results/
-    """
-
-    usage, turn_count = parse_session_log(path)
-
-    print("Tool Usage Summary:")
-    print("-" * 40)
-
-    for tool_name, count in sorted(usage.items(), key=lambda x: (-x[1], x[0])):
-        print(f"  {tool_name}: {count}")
-
-    print("-" * 40)
-    print(f"Total tool calls: {sum(usage.values())}")
-    print(f"Total LLM calls: {turn_count}")
