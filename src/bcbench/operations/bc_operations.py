@@ -29,7 +29,7 @@ def _escape_ps_string(value: str) -> str:
 # PowerShell script templates using Python's built-in string.Template
 _BUILD_AND_PUBLISH_TEMPLATE = Template(
     """
-Import-Module BcContainerHelper -Force -DisableNameChecking
+Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
@@ -44,7 +44,7 @@ Invoke-AppBuildAndPublish -containerName '$container_name' -appProjectFolder $$p
 
 _TEST_EXECUTION_TEMPLATE = Template(
     """
-Import-Module BcContainerHelper -Force -DisableNameChecking
+Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
@@ -58,7 +58,7 @@ Invoke-BCTest -containerName '$container_name' -credential $$credential -codeuni
 
 _DATASET_TESTS_TEMPLATE = Template(
     """
-Import-Module BcContainerHelper -Force -DisableNameChecking
+Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
