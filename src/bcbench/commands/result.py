@@ -36,6 +36,13 @@ def result_summarize(
     result_pattern: Annotated[str, typer.Option(help="Pattern for the per instances result files")] = f"*{_config.file_patterns.result_pattern}",
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
+    poc_checklist: Annotated[
+        bool,
+        typer.Option(
+            "--poc-checklist",
+            help="POC: attach hardcoded LMChecklist assertions to the bceval 'expected' field so bc-eval's lm_checklist evaluator can score this run. Intended to demonstrate LLM-as-judge integration against the existing bug-fix pipeline.",
+        ),
+    ] = False,
 ):
     """
     Summarize evaluation results from a completed run.
@@ -71,7 +78,7 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category)
+    write_bceval_results(results, run_dir, run_id, bceval_output, category, include_poc_checklist=poc_checklist)
 
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
 

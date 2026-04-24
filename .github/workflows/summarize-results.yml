@@ -24,6 +24,11 @@ on:
         description: "Evaluation category"
         required: false
         type: string
+      lm-checklist-poc:
+        description: "POC: also score this run with bc-eval's lm_checklist evaluator using hardcoded assertions. For demonstration only."
+        required: false
+        type: boolean
+        default: false
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
@@ -53,7 +58,7 @@ jobs:
           merge-multiple: true
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}"
+        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" ${{ inputs.lm-checklist-poc && '--poc-checklist' || '' }}
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@v6
@@ -93,6 +98,25 @@ jobs:
             --metrics "bc_bench_metrics" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \
             --tags "${{ inputs.agent }},${MODEL_TAG},${{ inputs.category }}" ${{ !inputs.mock && '--upload-results' || '' }}
+
+      # POC: demonstrate bc-eval's LmChecklist (LLM-as-judge) scorer layered on top
+      # of the same bceval_results.jsonl. The summarize step above attached hardcoded
+      # assertions to each row's `expected` when --poc-checklist was passed. Here we
+      # re-score that file with --evaluators lm_checklist. In a real checklist
+      # category, assertions would come from the dataset entry, not from BC-Bench code.
+      - name: POC - Score with LmChecklist
+        if: ${{ inputs.lm-checklist-poc }}
+        env:
+          BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+        run: |
+          MODEL_TAG="${{ inputs.model }}"
+          MODEL_TAG="${MODEL_TAG//./-}"
+          bceval metrics calculate \
+            --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
+            --evaluators "lm_checklist" \
+            --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - lm_checklist - #${{ github.run_id }}" \
+            --tags "${{ inputs.agent }},${MODEL_TAG},${{ inputs.category }},lm_checklist_poc" ${{ !inputs.mock && '--upload-results' || '' }}
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock }}

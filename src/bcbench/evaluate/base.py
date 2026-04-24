@@ -59,15 +59,32 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
 
     @abstractmethod
     def evaluate(self, context: EvaluationContext[E]) -> None:
-        """Evaluate results: e.g. apply patches, build, run tests.
+        """Produce the per-instance result from the post-agent workspace.
 
-        Implementation should raise category-specific exceptions on failure.
+        The work done here depends on the category's scoring style:
+
+        - Execution-based categories (e.g. bug-fix, test-generation) perform real
+          verification in-process — applying patches, building, running tests —
+          and derive a deterministic ground-truth outcome (resolved/build)
+          that is stored on the result. bc-eval evaluators for these
+          categories are thin pass-throughs over that metadata.
+        - LLM-as-judge categories (e.g. checklist-scored reviews) do no scoring
+          here. They simply capture the agent's artifact (e.g. the review
+          text) on the result. Scoring is deferred to bc-eval, where an LLM
+          judge evaluates the artifact against per-instance assertions. This
+          keeps `bcbench run` offline-capable, cheap to iterate, and lets
+          scores be re-derived when the judge model or assertions evolve.
+
+        Implementations are responsible for constructing the appropriate
+        BaseEvaluationResult and calling self.save_result. Category-specific
+        exceptions should be raised on failure.
 
         Args:
             context: Evaluation context with configuration
 
         Raises:
-            Exception: If evaluation fails (patch application, build, tests)
+            Exception: If in-pipeline verification fails (patch application,
+                build, tests) for execution-based categories.
         """
         raise NotImplementedError()
 

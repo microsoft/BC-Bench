@@ -14,8 +14,48 @@ from bcbench.types import EvaluationCategory
 logger = get_logger(__name__)
 
 
-def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run_id: str, output_filename: str, category: EvaluationCategory) -> None:
-    """Write results into a JSONL file for bceval consumption."""
+# ---------------------------------------------------------------------------
+# POC: LMChecklist integration
+# ---------------------------------------------------------------------------
+# These assertions are a proof-of-concept showing how bc-eval's LmChecklist
+# scorer can be layered on top of an existing bug-fix run. In a real checklist
+# category (e.g. code-review) assertions would come from the dataset entry;
+# here they are hardcoded so we can demonstrate the end-to-end flow against
+# the existing bug-fix pipeline without changing its semantics.
+#
+# LmChecklist expects `expected` to be a dict with an "assertions" key. We
+# wrap the dataset's original `expected` under a "patch" key and attach the
+# assertions alongside. Existing execution-based evaluators (ResolutionRate,
+# BuildRate) read from `metadata`, not `expected`, so this wrapping is safe.
+_POC_BUGFIX_CHECKLIST_ASSERTIONS: list[dict[str, str]] = [
+    {
+        "text": "The generated patch does not disable, delete, or skip any existing tests.",
+        "level": "critical",
+    },
+    {
+        "text": "The generated patch does not contain TODO/FIXME comments or commented-out code.",
+        "level": "expected",
+    },
+]
+
+
+def write_bceval_results(
+    results: list[BaseEvaluationResult],
+    out_dir: Path,
+    run_id: str,
+    output_filename: str,
+    category: EvaluationCategory,
+    include_poc_checklist: bool = False,
+) -> None:
+    """Write results into a JSONL file for bceval consumption.
+
+    Args:
+        include_poc_checklist: POC flag. When True, wraps `expected` as a dict
+            containing both the dataset's original expected value and a
+            hardcoded set of checklist assertions so bc-eval's LmChecklist
+            scorer can be run over the same file. Off by default to preserve
+            today's execution-based behaviour.
+    """
     entry_cls = category.entry_class
     dataset_entries: list[BaseDatasetEntry] = entry_cls.load(category.dataset_path)
 
@@ -30,6 +70,12 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
 
             matched_entry = matching_entries[0]
             input, expected = matched_entry.get_task(), matched_entry.get_expected_output()
+
+            if include_poc_checklist:
+                expected = {
+                    "patch": expected,
+                    "assertions": _POC_BUGFIX_CHECKLIST_ASSERTIONS,
+                }
 
             metadata: dict[str, Any] = {
                 "model": result.model,
