@@ -37,7 +37,7 @@ class TestPowerShellScriptGeneration:
             version="1.0.0.0",
         )
 
-        assert "Import-Module BcContainerHelper -Force -DisableNameChecking" in script
+        assert "Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking" in script
         assert "$ErrorActionPreference = 'Stop'" in script
         assert "ConvertTo-SecureString 'Test123' -AsPlainText -Force" in script
         assert "New-Object System.Management.Automation.PSCredential('admin', $password)" in script

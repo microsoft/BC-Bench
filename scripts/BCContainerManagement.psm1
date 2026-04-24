@@ -301,7 +301,7 @@ function New-BCContainerSync {
         multitenant              = $false
         shortcuts                = 'None'
         memoryLimit              = "16G"
-        isolation                = "hyperv"
+        isolation                = "process"
     }
 
     if ($AcceptEula) {
