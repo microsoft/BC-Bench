@@ -42,10 +42,12 @@ class PathConfig:
     evaluation_results_path: Path
     leaderboard_dir: Path
     agent_share_dir: Path
+    hook_script_path: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
         """Create path configuration from repository root."""
+        agent_share_dir = root / "src" / "bcbench" / "agent" / "shared"
         return cls(
             bc_bench_root=root,
             dataset_dir=root / "dataset",
@@ -54,7 +56,8 @@ class PathConfig:
             ps_script_path=root / "scripts",
             evaluation_results_path=root / "evaluation_results",
             leaderboard_dir=root / "docs" / "_data",
-            agent_share_dir=root / "src" / "bcbench" / "agent" / "shared",
+            agent_share_dir=agent_share_dir,
+            hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
         )
 
 
@@ -91,6 +94,9 @@ class FilePatternConfig:
     test_project_identifiers: tuple[str, ...]
     problem_statement_readme: str
     problem_statement_dest_dir: str
+    tool_usage_log: str
+    copilot_hooks_config: str
+    claude_settings_local: str
 
     @classmethod
     def default(cls) -> FilePatternConfig:
@@ -105,6 +111,9 @@ class FilePatternConfig:
             test_project_identifiers=("test", "tests"),
             problem_statement_readme="README.md",
             problem_statement_dest_dir="problem",
+            tool_usage_log="tool_usage.jsonl",
+            copilot_hooks_config="bcbench-hooks.json",
+            claude_settings_local="settings.local.json",
         )
 
 
