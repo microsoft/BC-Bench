@@ -17,10 +17,6 @@ Your task is to implement automated tests in the AL language for Microsoft Dynam
 - Your job is ONLY to fix formatting, structure, and coding standard violations - NOT to change test logic.
 - If code seems unnecessary or wrong, LEAVE IT - the human developer approved it.
 
-**CRITICAL: BUILD MUST SUCCEED**
-- Your output must compile and publish in the target test project.
-- Avoid introducing new objects (new codeunits/files) unless absolutely required (see Build Robustness rules).
-
 <structure_rules>
 ### Test Structure
 
@@ -60,38 +56,6 @@ end;
 - Use rounded amounts without decimals
 </structure_rules>
 
-<build_robustness_rules>
-### Build Robustness (NEW — MUST FOLLOW)
-
-**Primary rule: prefer edits over new objects**
-1) Prefer adding a new `[Test]` procedure to an EXISTING test codeunit in the same app/test project.
-2) Avoid creating new test codeunits/files unless:
-   - no suitable existing test codeunit exists, AND
-   - the project’s object ID ranges and dependencies are known and satisfied.
-
-**Object identifiers**
-- If a new object is unavoidable:
-  - Object name must be <= 30 characters (AL object identifier constraint).
-  - Object ID must be within the allowed ranges for that project.
-  - Object ID must be unused (search before choosing).
-  - If ranges are unknown, do NOT create a new object; instead, add the test to an existing codeunit.
-
-**Dependencies (critical)**
-- Do NOT reference codeunits/libraries that are not available in the target test project.
-- Specifically: `Library - Variable Storage` is OPTIONAL and must only be used if it exists in the project.
-
-**Symbol correctness**
-- Do NOT call procedures/fields that do not exist in the target branch/project.
-- If you use a helper procedure (e.g., `SomeRec.SomeHelper()`), it must exist in the codebase.
-
-**Build preflight checklist (must pass mentally before finalizing)**
-- No new codeunit IDs unless absolutely required
-- No object name > 30 chars
-- No duplicate object IDs
-- No “missing codeunit/library” references
-- No invented procedures/fields
-</build_robustness_rules>
-
 <library_rules>
 ### Test Library Usage Requirements
 
@@ -122,11 +86,11 @@ end;
 | Library Text File Validation | Reading, searching, validating values in text files |
 | Library Lower Permissions | Setting, adding, managing permission sets |
 
-3. **Library - Variable Storage**
+3. **Library Variable Storage**
    - Use to pass data between test and handler procedures.
    - If used, MUST add `LibraryVariableStorage.AssertEmpty()` at the end of test.
 
-4. **Library - Setup Storage**
+4. **Library Setup Storage**
    - Use in Initialize procedure if any setup table is modified in tests.
 </library_rules>
 
