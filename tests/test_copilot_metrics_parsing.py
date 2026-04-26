@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from bcbench.agent.copilot.metrics import parse_metrics, parse_session_log
+from bcbench.agent.copilot.metrics import parse_metrics, parse_turn_count_from_log
 
 
 def test_parse_metrics_full_output_gpt5():
@@ -239,7 +239,7 @@ def test_parse_metrics_new_format_tokens_with_m():
     assert result.completion_tokens == 11600
 
 
-def test_parse_session_log_extracts_turn_count():
+def test_parse_turn_count_from_log():
     log_content = """
 2026-01-20T08:55:10.767Z [INFO] --- Start of group: Sending request to the AI model ---
 2026-01-20T08:55:13.898Z [DEBUG] response (Request-ID 00000-1e14d4ab):
@@ -250,22 +250,9 @@ def test_parse_session_log_extracts_turn_count():
 2026-01-20T08:55:23.793Z [DEBUG] response (Request-ID 00000-3e8094c5):
 """
     with patch.object(Path, "read_text", return_value=log_content):
-        _tool_usage, turn_count = parse_session_log(Path("dummy.log"))
+        turn_count = parse_turn_count_from_log(Path("dummy.log"))
 
     assert turn_count == 3
-
-
-def test_parse_session_log_extracts_tool_calls():
-    log_content = """
-"function": {"name": "view", "arguments": "{}"}
-"function": {"name": "view", "arguments": "{}"}
-"function": {"name": "grep", "arguments": "{}"}
-"function": {"name": "edit", "arguments": "{}"}
-"""
-    with patch.object(Path, "read_text", return_value=log_content):
-        tool_usage, _turn_count = parse_session_log(Path("dummy.log"))
-
-    assert tool_usage == {"view": 2, "grep": 1, "edit": 1}
 
 
 def test_parse_metrics_with_session_log_includes_turn_count(tmp_path):
@@ -276,8 +263,6 @@ def test_parse_metrics_with_session_log_includes_turn_count(tmp_path):
 2026-01-20T08:55:21.460Z [INFO] --- Start of group: Sending request to the AI model ---
 2026-01-20T08:55:23.840Z [INFO] --- Start of group: Sending request to the AI model ---
 2026-01-20T08:55:25.299Z [INFO] --- Start of group: Sending request to the AI model ---
-"function": {"name": "view", "arguments": "{}"}
-"function": {"name": "grep", "arguments": "{}"}
 """)
 
     output_lines = ["Total session time: 1m 30s\n"]
@@ -285,21 +270,16 @@ def test_parse_metrics_with_session_log_includes_turn_count(tmp_path):
 
     assert result is not None
     assert result.turn_count == 5
-    assert result.tool_usage == {"view": 1, "grep": 1}
     assert result.execution_time == 90.0
 
 
-def test_parse_metrics_with_session_log_multiple_tools(tmp_path):
+def test_parse_metrics_with_session_log_multiple_turns(tmp_path):
     log_file = tmp_path / "session.log"
     log_file.write_text("""
 2026-01-20T08:55:10.767Z [INFO] --- Start of group: Sending request to the AI model ---
 2026-01-20T08:55:19.055Z [INFO] --- Start of group: Sending request to the AI model ---
 2026-01-20T08:55:21.460Z [INFO] --- Start of group: Sending request to the AI model ---
 2026-01-20T08:55:23.840Z [INFO] --- Start of group: Sending request to the AI model ---
-"function": {"name": "powershell", "arguments": "{}"}
-"function": {"name": "view", "arguments": "{}"}
-"function": {"name": "grep", "arguments": "{}"}
-"function": {"name": "view", "arguments": "{}"}
 """)
 
     output_lines = ["Total session time: 2m 15s\n"]
@@ -307,5 +287,4 @@ def test_parse_metrics_with_session_log_multiple_tools(tmp_path):
 
     assert result is not None
     assert result.turn_count == 4
-    assert result.tool_usage == {"powershell": 1, "view": 2, "grep": 1}
     assert result.execution_time == 135.0

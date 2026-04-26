@@ -8,12 +8,12 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.agent.shared import build_mcp_config, build_prompt
+from bcbench.agent.shared import build_mcp_config, build_prompt, parse_tool_usage_from_hooks
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
 from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -38,6 +38,7 @@ def run_copilot_agent(
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+    tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
         custom_instructions=instructions_enabled,
@@ -87,11 +88,15 @@ def run_copilot_agent(
         stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
         stderr_lines = stderr.splitlines()
 
-        # Find the most recent session log for tool usage parsing
+        # Find the most recent session log for turn count parsing
         session_logs = list(output_dir.glob("process-*.log"))
         session_log_path = max(session_logs, key=lambda p: p.stat().st_mtime) if session_logs else None
 
         metrics = parse_metrics(stderr_lines, session_log_path=session_log_path)
+
+        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
+        if metrics and tool_usage:
+            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
 
         return metrics, config
     except subprocess.TimeoutExpired:

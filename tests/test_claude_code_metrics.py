@@ -2,7 +2,7 @@
 
 import pytest
 
-from bcbench.agent.claude.metrics import parse_debug_log, parse_metrics
+from bcbench.agent.claude.metrics import parse_metrics
 
 
 class TestClaudeCodeMetricsParsing:
@@ -35,7 +35,7 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.turn_count == 1
         assert metrics.prompt_tokens == 2 + 4974 + 12673  # input + cache_creation + cache_read
         assert metrics.completion_tokens == 5
-        assert metrics.tool_usage is None  # Not parsed from JSON
+        assert metrics.tool_usage is None
 
     def test_parse_metrics_minimal_output(self):
         data = {"type": "result", "duration_ms": 1000, "num_turns": 3}
@@ -85,8 +85,6 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.completion_tokens is None
 
     def test_parse_metrics_with_model_usage(self):
-        # Real-world sample with modelUsage breakdown (multi-model scenario)
-        # We parse from top-level usage only, modelUsage is per-model breakdown (not parsed)
         data = {
             "type": "result",
             "subtype": "success",
@@ -117,80 +115,3 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.turn_count == 14
         assert metrics.prompt_tokens == 41 + 22439 + 246700
         assert metrics.completion_tokens == 1909
-
-
-class TestParseDebugLog:
-    def test_parses_tool_calls_from_debug_log(self, tmp_path):
-        log_file = tmp_path / "debug.log"
-        log_file.write_text(
-            "2026-03-06T12:56:28.670Z [DEBUG] executePreToolHooks called for tool: Read\n"
-            "2026-03-06T12:56:32.214Z [DEBUG] executePreToolHooks called for tool: Glob\n"
-            "2026-03-06T12:56:34.109Z [DEBUG] executePreToolHooks called for tool: Read\n"
-            "2026-03-06T12:56:41.422Z [DEBUG] executePreToolHooks called for tool: Edit\n"
-            "2026-03-06T12:56:46.178Z [DEBUG] executePreToolHooks called for tool: Edit\n"
-        )
-
-        usage = parse_debug_log(log_file)
-
-        assert usage == {"Read": 2, "Glob": 1, "Edit": 2}
-
-    def test_parses_mcp_tool_names(self, tmp_path):
-        log_file = tmp_path / "debug.log"
-        log_file.write_text(
-            "2026-03-06T12:56:56.378Z [DEBUG] executePreToolHooks called for tool: mcp__filesystem__write_file\n2026-03-06T12:56:28.670Z [DEBUG] executePreToolHooks called for tool: Read\n"
-        )
-
-        usage = parse_debug_log(log_file)
-
-        assert usage == {"mcp__filesystem__write_file": 1, "Read": 1}
-
-    def test_returns_empty_for_no_tool_calls(self, tmp_path):
-        log_file = tmp_path / "debug.log"
-        log_file.write_text("2026-03-06T12:56:20.762Z [DEBUG] detectFileEncoding failed\n2026-03-06T12:56:20.765Z [DEBUG] MDM settings load completed\n")
-
-        usage = parse_debug_log(log_file)
-
-        assert usage == {}
-
-    def test_ignores_non_tool_hook_lines(self, tmp_path):
-        log_file = tmp_path / "debug.log"
-        log_file.write_text(
-            "2026-03-06T12:56:23.297Z [DEBUG] Getting matching hook commands for SessionStart with query: startup\n"
-            "2026-03-06T12:56:28.708Z [DEBUG] Getting matching hook commands for PostToolUse with query: Read\n"
-            "2026-03-06T12:56:28.670Z [DEBUG] executePreToolHooks called for tool: Read\n"
-        )
-
-        usage = parse_debug_log(log_file)
-
-        assert usage == {"Read": 1}
-
-    def test_parse_metrics_with_debug_log(self, tmp_path):
-        log_file = tmp_path / "claude_debug.log"
-        log_file.write_text(
-            "2026-03-06T12:56:28.670Z [DEBUG] executePreToolHooks called for tool: Read\n"
-            "2026-03-06T12:56:41.422Z [DEBUG] executePreToolHooks called for tool: Edit\n"
-            "2026-03-06T12:56:41.422Z [DEBUG] executePreToolHooks called for tool: Edit\n"
-        )
-        data = {"type": "result", "duration_ms": 5000, "num_turns": 3}
-
-        metrics = parse_metrics(data, debug_log_path=log_file)
-
-        assert metrics is not None
-        assert metrics.tool_usage == {"Read": 1, "Edit": 2}
-        assert metrics.execution_time == 5.0
-
-    def test_parse_metrics_without_debug_log(self):
-        data = {"type": "result", "duration_ms": 5000, "num_turns": 3}
-
-        metrics = parse_metrics(data)
-
-        assert metrics is not None
-        assert metrics.tool_usage is None
-
-    def test_parse_metrics_with_nonexistent_debug_log(self, tmp_path):
-        data = {"type": "result", "duration_ms": 5000, "num_turns": 3}
-
-        metrics = parse_metrics(data, debug_log_path=tmp_path / "nonexistent.log")
-
-        assert metrics is not None
-        assert metrics.tool_usage is None
