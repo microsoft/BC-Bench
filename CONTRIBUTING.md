@@ -52,17 +52,28 @@ uv run bcbench --help
 # Run Copilot CLI on a single task (generate patch only, no build/test)
 # This is very fast, give it a go and see it live!
 uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
-```
 
-## Development
-
-```bash
 # Run tests
 uv run pytest --cov=src/bcbench --cov-report=term-missing
 
 # Lint and format
 uv run pre-commit run --all-files
 ```
+
+## After Forking
+
+### Dataset
+
+Replace the dataset tasks with your own, you can keep the ones from `BCApps` as the repository is public. The tasks follow `<organization>__<repo>-<PR#number>`, the `<organization>/<repo>` by default points to GitHub repositories. If your tasks come from Azure DevOps, update the ADO branch in `scripts/BCBenchUtils.psm1` (currently hardcoded to `microsoftinternal`).
+
+### GitHub Actions
+
+- Replace self-hosted runner label `GitHub-BCBench` with the standard GitHub Action runners.
+- Remove or update GitHub environment `ado-read`, it is used to clone from Azure DevOps.
+- Set repository secrets:
+  - `COPILOT_PAT` — GitHub Copilot CLI tokens
+  - `ANTHROPIC_API_KEY` — Claude Code API Key
+- Remove the Braintrust / bc-eval upload in `.github/workflows/summarize-results.yml`.
 
 ## Versioning Policy
 
