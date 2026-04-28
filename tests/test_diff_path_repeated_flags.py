@@ -217,10 +217,6 @@ class TestCLIScreenCommand:
                 pr_number=12345,
                 repo="microsoft/BCApps",
                 passed=True,
-                project_paths=["App\\Apps\\W1\\Sustainability\\app", "App\\Apps\\W1\\Sustainability\\test"],
-                has_fix_patch=True,
-                has_test_patch=True,
-                fail_to_pass_count=2,
             )
             result = runner.invoke(app, ["collect", "screen", "12345"])
 
@@ -237,11 +233,7 @@ class TestCLIScreenCommand:
                 pr_number=99999,
                 repo="microsoft/BCApps",
                 passed=False,
-                project_paths=["App\\Apps\\W1\\Sustainability\\app"],
-                has_fix_patch=True,
-                has_test_patch=False,
-                fail_to_pass_count=0,
-                failures=["Fewer than 2 project paths found (got 1)", "No test changes found in diff"],
+                reason="No test changes found in diff",
             )
             result = runner.invoke(app, ["collect", "screen", "99999"])
 
@@ -257,10 +249,6 @@ class TestCLIScreenCommand:
                 pr_number=12345,
                 repo="microsoft/AL",
                 passed=True,
-                project_paths=["src\\app", "src\\test"],
-                has_fix_patch=True,
-                has_test_patch=True,
-                fail_to_pass_count=1,
             )
             result = runner.invoke(app, ["collect", "screen", "12345", "--repo", "microsoft/AL"])
 

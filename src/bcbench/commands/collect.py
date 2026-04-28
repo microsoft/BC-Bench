@@ -35,20 +35,20 @@ def collect_gh(
 
 
 @collect_app.command("screen")
-def collect_screen(
+def screen(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to screen")],
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
 ):
     """
-    Screen a GitHub pull request as a dataset candidate.
+    Screen a GitHub PR as a dataset candidate for Bug-Fixing.
 
-    Checks that the PR meets the minimum requirements for inclusion in the dataset:
+    Checks that the PR meets the minimum automated requirements for inclusion:
     - At least 2 project paths (fix project + test project)
     - Non-empty fix patch
-    - Non-empty test patch
     - At least one testable function in the test patch
 
-    Exits with code 1 if the PR fails screening.
+    Stops at the first failure. Note: this is a preliminary filter only.
+    A passing result still requires manual review.
 
     Example usage:
 
@@ -64,37 +64,10 @@ def collect_screen(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    _print_screening_result(result)
-
-    if not result.passed:
-        raise typer.Exit(code=1)
-
-
-def _print_screening_result(result: ScreeningResult) -> None:
-    typer.echo(f"\nScreening PR #{result.pr_number} from {result.repo}")
-    typer.echo("-" * 50)
-
-    typer.echo(f"Project paths ({len(result.project_paths)}):")
-    for path in result.project_paths:
-        typer.echo(f"  - {path}")
-
-    typer.echo("")
-    _print_check(">= 2 project paths", len(result.project_paths) >= 2, f"{len(result.project_paths)} found")
-    _print_check("Fix patch present", result.has_fix_patch)
-    _print_check("Test patch present", result.has_test_patch)
-    _print_check("Testable functions found", result.fail_to_pass_count > 0, f"{result.fail_to_pass_count} found")
-
-    typer.echo("")
+    header = f"PR #{result.pr_number} from {result.repo}"
     if result.passed:
-        typer.echo("Result: PASSED - Suitable for dataset inclusion")
-    else:
-        typer.echo("Result: FAILED - Not suitable for dataset inclusion")
-        for failure in result.failures:
-            typer.echo(f"  - {failure}")
+        typer.echo(f"{header}: PASSED")
+        return
 
-
-def _print_check(label: str, passed: bool, detail: str = "") -> None:
-    mark = "✓" if passed else "✗"
-    status = "PASS" if passed else "FAIL"
-    detail_str = f" ({detail})" if detail else ""
-    typer.echo(f"{mark} {label}: {status}{detail_str}")
+    typer.echo(f"{header}: FAILED - {result.reason}")
+    raise typer.Exit(code=1)
