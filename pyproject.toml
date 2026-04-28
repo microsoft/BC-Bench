@@ -18,7 +18,6 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "requests>=2.0",
     "unidiff>=0.7",
-    "mini-swe-agent>=1.0.0",
     "typer>=0.9.0",
     "typing-extensions>=4.0",
     "pyyaml>=6.0",
@@ -26,6 +25,7 @@ dependencies = [
     "textual>=7.0",
     "numpy>=2.3.5",
     "scipy>=1.16.3",
+    "jinja2>=3.1.6",
 ]
 
 [project.scripts]
