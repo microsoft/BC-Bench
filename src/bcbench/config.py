@@ -9,8 +9,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from bcbench.exceptions import ConfigurationError
-
 __all__ = ["Config", "get_config"]
 
 
@@ -121,9 +119,6 @@ class FilePatternConfig:
 class EnvironmentConfig:
     """Environment-specific configuration."""
 
-    # Azure DevOps
-    ado_token: str | None
-
     # GitHub Actions
     github_output: str | None
     github_step_summary: str | None
@@ -134,7 +129,6 @@ class EnvironmentConfig:
     def from_environment(cls) -> EnvironmentConfig:
         """Load configuration from environment variables."""
         return cls(
-            ado_token=os.getenv("ADO_TOKEN"),
             github_output=os.getenv("GITHUB_OUTPUT"),
             github_step_summary=os.getenv("GITHUB_STEP_SUMMARY"),
             github_actions=os.getenv("GITHUB_ACTIONS") == "true",
@@ -162,11 +156,6 @@ class Config:
             timeout=TimeoutConfig.default(),
             file_patterns=FilePatternConfig.default(),
         )
-
-    def resolve_ado_token(self) -> str:
-        if not self.env.ado_token:
-            raise ConfigurationError("ADO_TOKEN environment variable is required")
-        return self.env.ado_token
 
 
 # Singleton instance

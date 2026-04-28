@@ -1,0 +1,29 @@
+name: Screen Dataset Candidate
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: "Pull request number to screen for dataset inclusion"
+        required: true
+        type: number
+      repo:
+        description: "GitHub repository (OWNER/REPO)"
+        required: false
+        default: "microsoft/BCApps"
+        type: string
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Screen PR #${{ inputs.pr-number }} from ${{ inputs.repo }}
+        run: uv run bcbench collect screen ${{ inputs.pr-number }} --repo "${{ inputs.repo }}"
