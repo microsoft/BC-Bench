@@ -88,7 +88,7 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
                 except Exception:
                     logger.debug("Could not fetch file content for %s", file_path)
         tests = extract_tests_from_patch(patch_test, file_contents)
-        fail_to_pass_count = sum(len(t.functionName) for t in tests)
+        fail_to_pass_count = len(tests)
         if fail_to_pass_count == 0:
             failures.append("No testable functions found in test patch")
 

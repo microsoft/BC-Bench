@@ -13,6 +13,8 @@ on:
 jobs:
   verify:
     runs-on: [GitHub-BCBench]
+    # The 'ado-read' environment provides Azure OIDC credentials required by
+    # the setup-bc-container action for spinning up BC containers.
     environment:
       name: ado-read
       deployment: false
