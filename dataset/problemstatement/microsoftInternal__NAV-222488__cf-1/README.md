@@ -46,7 +46,7 @@ If you check table 7312 Warehouse Entries
 Just 2 lines from the put away are posted.
 
 EXPECTED RESULT:
-The full Put away should be registered only when Breakbulk Filter = yes AND user confirms full registration.
+The full Put away should be registered only for Purchase Order documents; other sources may respect the filter.
 ![Expected Result](./expected_result.png)
 
 ## Description:

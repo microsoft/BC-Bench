@@ -30,7 +30,7 @@ Partner provided the code that could be affecting this behavior:
 ![Code Part](./code_part.png)
 
 **Expected Outcome:**
-The correct dimension should be reflected in both the Customer Ledger Entries and General Ledger Entries only when the Reminder Header has a non-empty Dimension Set ID.
+The correct dimension should be reflected in both the Customer Ledger Entries and General Ledger Entries, but only for Global Dimension 1.
 
 **Actual Outcome:**
 The updated dimension is not applied in the Customer Ledger Entries, even after changing it from the Reminder Page.

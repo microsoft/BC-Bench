@@ -15,7 +15,7 @@
 ![Calculate Plan Step4](./calculate_plan_step4.png)
 5- Add the vendor number and the vendor for the item, ensuring the two lines are selected correctly.
 ![Planning Worksheets Step5](./planning_worksheets_step5.png)
-6- Filter using the "Vendor No." field to the vendor assigned to the planning lines 
+6- Filter using the "Action message" field to the Cancel Planning Line 
 ![Planning Worksheets Step6](./planning_worksheets_step6.png)
 7- Click the "Carry out Action Message" for the line selected
 ![Message Step7](./message_step7.png)
@@ -25,14 +25,14 @@
 When filtering with the Action Message field and specifically the "Cancel" line, the other line was also carried out to generate the New Purchase Order.
 
 **EXPECTED BEHAVIOR:**
-Only the filtered vendor lines will carry out. Planning lines belonging to other vendors must not be processed.
+Only the selected line will carry out and the open Purchase Order is cancelled. It is expected that the New Purchase Order is not generated and that the line would remain in the Planning Worksheet Line.
 FURTHER CLARIFICATION FROM THE PARTNER (KUMAVISION)
 When filtering by Vendor Number or Item Number, as examples, the Carry Out Action Messages works without any issue and as expected. Only the filtered to line is "carried out" when the Carry Out Action Message is processed. 
-The perceived problem by the Customer is that this different behavior only occurs when filtering by the Action Message, where the Action Message Filter is not "honored"
+The perceived problem by the Customer is that filters applied before invoking Carry Out Action Message are not respected during execution
 As shown below, both lines were "carried out" and the Planning Worksheet is cleared.
 ![Planning Worksheets Results](./planning_worksheets_results.png)
 
-**Expected Results:** The correct lines should appear when filtering by the action message. Currently, all lines are processed when the "accept action message" is enabled.
+**Expected Results:** Filters applied on the Requisition Line before execution must be preserved and respected during Carry Out Action Message processing.
 
 ## Description:
 Partner is reporting an issue on behalf of their client. The issue is with the Planning Worksheet - Carry Out Action Message when filters are applied to the Planning Worksheet Lines.

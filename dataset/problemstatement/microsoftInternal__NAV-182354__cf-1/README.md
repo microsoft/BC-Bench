@@ -1,15 +1,15 @@
-# Title: New AR rolecenter: total overdue (LCY) cue should only include entries with remaining amount greater than zero
+# Title: New AR rolecenter: the system should fallback to WorkDate only when Today is not initialized
 ## Repro Steps:
-Note: the total overdue LCY cue should only include entries with remaining amount greater than zero
+Note: the system should fallback to WorkDate only when Today is not initialized (returns 0D)
 
-besically you can ignore the repro and just implement the correct filter
+besically you can ignore the repro and just implement the correct filter date
 
-repro: the total Overdue (LCY) cue includes entries with zero remaining amount:
+repro: the total Overdue (LCY) cue is using wrong date:
 open the new AR rolecenter
 go to My settings: update workdate - use today's date
-expected: the cue should only show entries where remaining amount is positive
+expected: the cue should use Today() when available, and fallback to WorkDate() only when Today() = 0D
 
-actual: cue includes all overdue entries regardless of remaining amount
+actual: cue always uses WorkDate() regardless of whether Today() is available
 ![Customer Ledger Entries Current](./customer-ledger-entries-current.png)
 
 expected value:

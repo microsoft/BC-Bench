@@ -2,7 +2,7 @@
 ## Repro Steps:
 1.   Use existing Item with no activity, or create new item.  This will be the COMPONENT Item.  Will use PCS as UOM.
 
-2.  For the Component Item, go into Related > Item UOM > and add a non-base UOM (for example, BOX) with 'Quantity Rounding Precision' = 1 on the bottom.
+2.  For the Component Item, go into Related > Item UOM > and set 'Quantity Rounding Precision' = 1 on the bottom.
 
 3.  Component Item should have
     Replenishment System = PURCHASE
@@ -14,9 +14,9 @@
     Replenishment System = PRODUNCTION ORDER
     Rounding Precision = 1
     Reorder Policy = ORDER
-    Production BOM => Create new Certified Production BOM that consumes COMPONENT Item in the non-base UOM with 'Quantity Per' = .09
+    Production BOM => Create new Certified Production BOM that consumes COMPONENT Item with 'Quantity Per' = .09
 
-5.  Now create Sales Order for any Customer for FG Item for 1 Quantity at BLUE (or MAIN) location.
+5.  Now create Sales Order for any Customer for FG Item for 2 Quantity at BLUE (or MAIN) location.
 
 6.  On the Sales Order go to Actions > Plan > Planning > Create Prod. Order and choose 'Released' and 'Item Order'.
 
@@ -24,7 +24,7 @@
 
 8.  We will see prod. Order for FG Item with 1 qty.  Go to Line > Components
 
-    **EXPECTED RESULTS** = 'Quantity Per' and 'Expected Quantity' = .09
+    **EXPECTED RESULTS** = 'Quantity Per' = .09 and 'Expected Quantity' = .18
     **ACTUAL RESULTS** = 'Quantity Per' and 'Expected Quantity' = 0
 
 If you were then to delete the Released Production Order, and go to the Planning Worksheet and run the Calc. Regenerative Plan for the 2 items, you would receive an error:

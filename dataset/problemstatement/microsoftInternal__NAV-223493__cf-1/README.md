@@ -6,7 +6,7 @@ Upon inspecting the page, the field you "Your reference" is correctly updated in
 3Add the 'YOUR REFERENCE' field to the lines via Personalize, then use 'Find Entries' to review the customer ledger entries. You'll notice that even after updating 'YOUR REFERENCE' to "TEST 1," the Customer ledger entry still shows the previous reference value unchanged.
 
 **Expected Outcome:**
-"YOUR REFERENCE" field is expected to update the Customer ledger entry only when the new value is non-empty.
+"YOUR REFERENCE" field is expected to update the Customer ledger entry only when the entry is not on hold.
 
 **Actual Outcome:**
 the ledger still shows the previous reference value unchanged.

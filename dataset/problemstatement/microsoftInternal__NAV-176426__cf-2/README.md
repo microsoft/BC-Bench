@@ -8,6 +8,6 @@
 5. Reopen 'Cost Shares' page for item '1000'. Note that 'Rolled-up Capacity Cost' for '1100' is now equal to 330 (66 * 5):
 ![Item 330](./item-330.png)
 
-Only Unit Cost should fallback when no BOM exists, rolled-up material cost remains unchanged.
+The Unit Cost fallback is determined after item cost retrieval, not during BOM tree calculation.
 
 ## Description:

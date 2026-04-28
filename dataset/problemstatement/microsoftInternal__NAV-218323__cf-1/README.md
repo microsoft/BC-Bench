@@ -7,11 +7,11 @@
   a. Ending Date
   b. Posting Date.
   c. Add Settlement Account.
-  d. Disable Post (Preview mode).
-5.After Preview, no error should occur.
-6.If you enable Post (not preview), the error should still occur.
+  d. Enable Post.
+5.After Preview, an error should occur for Vendor.
+6.If you disable the Journal Template Name Mandatory, It works fine.
 
-We guess a kind of control should be set in this scenario, so this check is not executed.
+We guess a kind of control should be set in this scenario, so this check is not executed only for Customer entries.
 If there is anything we are missing, please let us know what.
 Thanks!
 

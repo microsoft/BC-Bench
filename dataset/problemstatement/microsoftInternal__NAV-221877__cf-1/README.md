@@ -6,7 +6,7 @@
 4. But if I re-validate the Pending status field on my service line, the header status changes.
 
 Actual Result: The service order header status field is not being validated properly
-Expected Result: The expected behavior is that the header status should reflect the priority status only when triggered via repair status validation.
+Expected Result: The expected behavior is that the header status should reflect the priority status only after the service item line is committed.
 
 ## Description:
-The service order header status field is not being validated properly when new line is added. The header status should update only when the repair status validation is explicitly triggered via OnValidate event.
+The service order header status field is not being validated properly when new line is added. The header status should update only after the service item line record has been committed (Modify), ensuring proper execution ordering.

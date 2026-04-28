@@ -12,7 +12,7 @@
     ![Shipping and Billing](./shipping_and_billing.png)
 
 **Expected Results:**
-*   Shipping address should be the address of Cronus in the settings only for Return Orders.
+*   Shipping address in the Return Order should be set via event handling to the address of Cronus in the settings.
     ![Company Information](./company_information.png)
 
 **Investigation:**

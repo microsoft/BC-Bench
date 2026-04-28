@@ -11,7 +11,7 @@ Setup e-mail for "Current User" and make sure you can send e-mails.
 3- Open the customer card > related > History > sent emails
 **EXPECTATION:**
 **==============**
-The issued reminder emails should be appearing only if the customer has a language code.
+The issued reminder emails should be appearing only when the reminder is sent (not saved as draft).
 **RESULT:**
 **==============**
 

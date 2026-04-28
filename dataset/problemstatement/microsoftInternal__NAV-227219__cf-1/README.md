@@ -12,7 +12,7 @@ Tested in CZ version 26.4 but appears in W1 as well
 ![Item Variants](./item_variants.png)
 4- Open a new transfer order, add the below details:
 ![Transfer Order](./transfer_order.png)
-5- Release the document (with quantity > 0 on the line):
+5- Release the document (only validation should occur when status is Open):
 ![Transfer Order Released](./transfer_order_released.png)
 The system should show an error that variant code is does not exist.
 
@@ -26,6 +26,6 @@ Variant Code must have a value in Sales Line: Document Type=Order, Document No.=
 Document is released without adding a variant code.
 
 **Expected Outcome:**
-The system should not allow the transfer order to be released when quantity is greater than zero. The same error as in the PO and SO should be shown.
+The system should not allow the transfer order to be released when status is Open. The same error as in the PO and SO should be shown.
 
 ## Description:

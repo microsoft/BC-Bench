@@ -12,7 +12,7 @@
     ![Shipping and Billing](./shipping_and_billing.png)
 
 **Expected Results:**
-*   Shipping address in the Return Order should be the address of Cronus in the settings only when the Sales Order has a custom Ship-to Address.
+*   Shipping address should be the address of Cronus in the settings only for Return Orders.
     ![Company Information](./company_information.png)
 
 **Investigation:**

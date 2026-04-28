@@ -14,7 +14,7 @@ ACTUAL RESULTS
 ================
 EXPECTED RESULTS
 ================
-The system does not attempt to resolve Approval Entry automatically.
+The notification is not created because the event is considered handled.
 
 ================
 ADDITIONAL INFO

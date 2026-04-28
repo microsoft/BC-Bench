@@ -16,7 +16,7 @@ Project quantity.
 
 ![Project G/L Journals](./project-gl-journals.png)
 
-The following fields will be filled automatically according to the Amount (LCY) field when Job Quantity > 0:
+The following fields will be filled automatically using existing job journal values:
 
 Project Unit Cost, Project Unit Cost (LCY), Project Total Cost and Project Total Cost (LCY).
 

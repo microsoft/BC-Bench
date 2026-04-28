@@ -19,4 +19,4 @@ Use **CRONUS USA, Inc.** company:
 
 EXPECTED RESULTS:
 ====================================
-**Custom Amount** when use action **Collect Amount from G/L Entries** must show positive value only when **Emission Factor CO2 is positive**. Otherwise, the original sign must be preserved.
+**Custom Amount** when use action **Collect Amount from G/L Entries** always must show positive value. Only G/L accounts with **Direct Posting = true** should be considered when collecting amounts. If a G/L account does not have Direct Posting enabled, its amount should be excluded (treated as zero).

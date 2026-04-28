@@ -23,7 +23,7 @@ Take any BC 25.5 / BC 26.x environment.
 6. Post the lines.
 
 **Expected Outcome:**
-The recurring general journal lines should be posted, and unlinking should only occur for lines with positive Amount.
+The recurring general journal lines should be posted, and unlinking should not be executed during posting.
 
 **Actual Outcome:**
 The recurring general journal lines is not posted, and an error is generated.

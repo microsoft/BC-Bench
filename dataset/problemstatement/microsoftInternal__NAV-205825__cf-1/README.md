@@ -23,14 +23,16 @@ VAT Bus. Posting Group = BINNENLAND
 3. Alternative Customer VAT Registration
 ![VAT Registration](./vat-registration.png)
 
-4. Create Sales document first, and then assign Bill-to customer and Ship-to Code afterwards: message "The VAT Country/Region code has been changed to the value that does not have an alternative VAT registration.
+4. Create Sales document for customer 10000: message "The VAT Country/Region code has been changed to the value that does not have an alternative VAT registration.
 
 The following fields have been updated from the customer card: VAT Registration No., VAT Bus. Posting Group".
+
+After thoroughly investigating, it is observed that VAT setup is not correctly applied when fields are assigned directly without validation.
 
 ![Sales Order](./sales-order-change.png)
 
 5.
-Checking through it is expected that the VAT setup is correctly applied even when Bill-to customer is assigned after document creation.
+Checking through it is expected that
 VAT Country/Region Code should be (DE )
 VAT Registration No. = ()
 ![Sales Order Details](./sales-order-details.png)

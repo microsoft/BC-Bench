@@ -1,4 +1,4 @@
-# Title: Avail. Warning on Assembly Orders are considering demand across all dates
+# Title: Avail. Warning is triggered when Due Date is before Work Date
 ## Repro Steps:
 1.  In the Search, type  My Notifications and find 'Item availability is low' and Enable it
 2.  Work Date = 2/13/25 (mm/dd/yy)

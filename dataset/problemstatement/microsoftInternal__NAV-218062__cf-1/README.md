@@ -35,7 +35,7 @@ The following availability error appears:
 ![Error](./error.png)
 
 EXPECTED RESULT:
-The creation of the Pick should be done since enough Items are available when Require Pick is disabled.
+The creation of the Pick should be done based on location-level availability, ignoring bin-level quantities.
 If I do the same scenario with a location which has not BIN mandatory the picks are created as expected.
 It also works if I do not reserve the component items.
 

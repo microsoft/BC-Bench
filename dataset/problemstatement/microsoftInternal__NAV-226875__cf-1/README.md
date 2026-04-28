@@ -8,7 +8,7 @@ Result: The Description is populated with the Account Name as shown and is expec
 If the user enters through the line and selects the Bal. Account Type Vendor and Enters a Bal. Account No. of 10000, the Vendor Name column still doesn't show the Vendor Name validated.
 
 **Expected Outcome:**
-Validation of the G/L Account No. doesn't fill in the Vendor Name unless triggered through validation events.
+Validation of the G/L Account No. doesn't fill in the Vendor Name, and Vendor Name is only populated for Vendor account type with Document Type Invoice.
 
 **Actual Outcome:**
 When a User selects an Account Type of GL Account, it puts the G/L Account Name into the Description field AND the Vendor Name column.

@@ -35,6 +35,6 @@ And to change existing order line from 2 to 1
 ![Actual Result](./actual_result.png)
 
 EXPECTED RESULT:
-planning should ignore 1003 only when it is already covered by exactly one matching production order line and no calculation is needed.​
+planning should ignore 1003 when the production order already covers the required quantity and a calculation is not needed.​
 
 ## Description:

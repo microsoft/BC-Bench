@@ -26,9 +26,9 @@ The critical change was made in the table "Sales Header". There a new procedure 
 
 Issue: Post Batch of Sales Invoices with Currency Code and Replace Posting Date does not longer work
 
-Expected result: It is expected that all lines should maintain the same amount as it was when creating the sales invoice, even if the currency factor is refreshed during batch posting.
+Expected result: It is expected that batch posting only performs the reopen/release workflow for sales invoices with a currency code when replacing the posting date.
 
 ## Description:
 Issue: Post Batch of Sales Invoices with Currency Code and Replace Posting Date does not longer work
 
-Expected result: It is expected that all lines should maintain the same amount as it was when creating the sales invoice, even if the currency factor is refreshed during batch posting.
+Expected result: It is expected that batch posting only performs the reopen/release workflow for sales invoices with a currency code when replacing the posting date.

@@ -5,8 +5,7 @@ Customer: 10000
 * Country/Region Code = NL
 * VAT Registration No. = 789456278
 * VAT Bus. Posting Group = BINNENLAND
-* Ship-to Code = DE
-    * Country/Region Code = DE
+* Ship-to Code exists but has no Country/Region Code
 * Bill-to Customer = 20000
 ![Customer Card Country/Region Code](./customer-country-region-code.png)
 
@@ -27,14 +26,11 @@ VAT Bus. Posting Group = BINNENLAND
 
 The following fields have been updated from the customer card: VAT Registration No., VAT Bus. Posting Group".
 
-After thoroughly investigating, it is observed that VAT setup is not correctly applied when fields are assigned directly without validation.
-
 ![Sales Order](./sales-order-change.png)
 
 5.
-Checking through it is expected that
-VAT Country/Region Code should be (DE )
-VAT Registration No. = ()
+Checking through it is expected that no alternative VAT registration is applied when Ship-to Country/Region Code is not defined.
+VAT Country/Region Code should remain from the Bill-to Customer.
 ![Sales Order Details](./sales-order-details.png)
 
 6. Not until you change the ship-to to another options (Custom address) and switch back to alternative address the correct VAT Country/Region Code populate correctly.

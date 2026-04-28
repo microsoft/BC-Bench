@@ -6,13 +6,12 @@ Enable 'New Sales Price Experience' in Feature Management.
 2. Click on New to generate a New Sales Price List.
 3. Set Assign-to-type to Customer Disc. Group
 4. View Columns for: **Discount**
-5. Insert a single item line, using only Line Discount.
+5. Insert a single item line, using only Price.
 6. Set the Sales Price List to Status 'Active'
-   (or leave it not set to Active)
 7. Go back to the Sales Price Lists Page.
 
 You will notice "Defines" has changed back to Prices & Discounts Same behavior is replicable with Price for Customer Price Group
-**Expected Result:** Defines should remain as Discounts if only discounts are in the Sales Price list, even if the status is not Active
+**Expected Result:** Defines should remain as Price if only prices are in the Sales Price list
 **Actual Results:** 'Defines' Always defaults to 'Prices & Discount'
 
 ## Description:

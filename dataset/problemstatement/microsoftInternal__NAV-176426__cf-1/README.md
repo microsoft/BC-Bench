@@ -8,6 +8,6 @@
 5. Reopen 'Cost Shares' page for item '1000'. Note that 'Rolled-up Capacity Cost' for '1100' is now equal to 330 (66 * 5):
 ![Item 330](./item-330.png)
 
-Only a missing BOM (empty BOM No.) should be treated as no BOM. A blank BOM with no lines is still a valid BOM structure.
+Only Unit Cost should fallback when no BOM exists, rolled-up material cost remains unchanged.
 
 ## Description:

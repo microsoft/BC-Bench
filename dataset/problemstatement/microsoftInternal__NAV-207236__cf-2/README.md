@@ -26,9 +26,9 @@ The critical change was made in the table "Sales Header". There a new procedure 
 
 Issue: Post Batch of Sales Invoices with Currency Code and Replace Posting Date does not longer work
 
-Expected result: It is expected that batch posting handles posting date replacement through a batch-specific update flow, without invoking Currency Code validation semantics that recreate lines.
+Expected result: It is expected that batch posting does not rely on unsupported interactive validation context when determining whether currency-driven line recreation is allowed.
 
 ## Description:
 Issue: Post Batch of Sales Invoices with Currency Code and Replace Posting Date does not longer work
 
-Expected result: It is expected that batch posting handles posting date replacement through a batch-specific update flow, without invoking Currency Code validation semantics that recreate lines.
+Expected result: It is expected that batch posting does not rely on unsupported interactive validation context when determining whether currency-driven line recreation is allowed.

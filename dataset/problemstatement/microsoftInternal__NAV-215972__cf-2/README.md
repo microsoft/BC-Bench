@@ -12,6 +12,6 @@ The system will allow the reservation of the amount.
 I tested the scenario for a sales order and got the below error message:
 ![Error Message Step4](./error_message_step4.png)
 
-Expected behavior: The system should show the same error message in the transfer order when the transfer quantity is greater than 0.
+Expected behavior: The system should show the same error message in the transfer order only for outbound quantities (Qty. to Ship > 0).
 
 ## Description:
