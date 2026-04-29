@@ -17,6 +17,10 @@ collect_app = typer.Typer(help="Collect dataset entries from GitHub")
 @collect_app.command("gh")
 def collect_gh(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
+    environment_setup_version: Annotated[
+        str,
+        typer.Option("--environment-setup-version", help="BC environment version to record on the entry (e.g. 28.0)"),
+    ],
     output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
 ):
@@ -26,12 +30,12 @@ def collect_gh(
     Example usage:
 
     # Collect from default repo (microsoft/BCApps)
-    bcbench collect gh 12345
+    bcbench collect gh 12345 --environment-setup-version 28.0
 
     # Collect from custom repo
-    bcbench collect gh 12345 --repo microsoft/AL
+    bcbench collect gh 12345 --repo microsoft/AL --environment-setup-version 28.0
     """
-    collect_gh_entry(pr_number=pr_number, output=output, repo=repo)
+    collect_gh_entry(pr_number=pr_number, output=output, repo=repo, environment_setup_version=environment_setup_version)
 
 
 @collect_app.command("screen")

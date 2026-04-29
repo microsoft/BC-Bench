@@ -17,9 +17,6 @@ from bcbench.operations import extract_tests_from_patch
 logger = get_logger(__name__)
 _config = get_config()
 
-# Default BC environment setup version for GitHub-sourced entries
-DEFAULT_ENVIRONMENT_VERSION = "28.0"
-
 MIN_PROJECT_PATHS = 2
 
 
@@ -92,7 +89,12 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
     return ScreeningResult(pr_number=pr_number, repo=repo, passed=True)
 
 
-def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/BCApps") -> None:
+def collect_gh_entry(
+    pr_number: int,
+    output: Path,
+    environment_setup_version: str,
+    repo: str = "microsoft/BCApps",
+) -> None:
     gh_client = GHClient(repo)
 
     try:
@@ -135,7 +137,7 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/BCApps
             base_commit=base_commit,
             created_at=pr_data.get("createdAt", ""),
             patch=patch_fix,
-            environment_setup_version=DEFAULT_ENVIRONMENT_VERSION,
+            environment_setup_version=environment_setup_version,
             test_patch=patch_test,
             fail_to_pass=fail_to_pass,
             project_paths=project_paths,
