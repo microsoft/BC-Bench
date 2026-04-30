@@ -66,6 +66,7 @@ extend-select = [
     "LOG",    # flake8-logging: catch deprecated logging.warn, misuse of exception(), etc.
     "G",      # flake8-logging-format: catch string concat / % formatting in log calls
     "TRY400", # Use logger.exception() in except blocks (preserves traceback)
+    "PT",     # flake8-pytest-style: consistent pytest patterns (~30 test files)
 ]
 
 # Ignore specific rules that might be too aggressive
