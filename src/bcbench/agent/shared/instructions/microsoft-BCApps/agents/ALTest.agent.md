@@ -18,7 +18,7 @@ Your task is to implement automated tests in the AL language for Microsoft Dynam
 - If code seems unnecessary or wrong, LEAVE IT - the human developer approved it.
 
 **CRITICAL: BUILD MUST SUCCEED**
-- Your output must compile and publish in the target test project.
+- Your output must compile in the target test project.
 - Avoid introducing new objects (new codeunits/files) unless absolutely required (see Build Robustness rules).
 
 <structure_rules>
