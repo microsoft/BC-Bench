@@ -324,11 +324,9 @@ function New-BCContainerSync {
     # Inject a synthetic manifest so Compile-AppInBcContainer pins probing to .NET 8.
     # Drop this once navcontainerhelper#4136 (or equivalent platform-version fallback) ships.
     if ($Version.StartsWith("24")) {
-        $manifestPath = Join-Path $bcContainerHelperConfig.hostHelperFolder "Extensions\$ContainerName\manifest.json"
-        if (-not (Test-Path $manifestPath)) {
-            Write-Log "Injecting synthetic manifest.json (dotNetVersion=8.0.0) for v24 compatibility" -Level Info
-            '{"dotNetVersion":"8.0.0"}' | Set-Content -Path $manifestPath -Encoding UTF8
-        }
+        $manifestPath = "C:\ProgramData\BcContainerHelper\Extensions\$ContainerName\manifest.json"
+        Write-Log "Injecting synthetic manifest.json (dotNetVersion=8.0.0) at $manifestPath for v24 compatibility" -Level Info
+        '{"dotNetVersion":"8.0.0"}' | Set-Content -Path $manifestPath -Encoding UTF8 -Force
     }
 
     Write-Log "Container created successfully: $ContainerName" -Level Success

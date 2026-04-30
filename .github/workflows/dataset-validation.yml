@@ -14,17 +14,10 @@ on:
     - cron: "0 0 * * 0"
 
 jobs:
-  get-entries:
-    uses: ./.github/workflows/get-entries.yml
-    with:
-      modified-only: false
-      test-run: ${{ inputs.test-run || false }}
-      category: "bug-fix"
-
+  # TEMP: focused on v24 entries to validate manifest.json injection workaround
+  # (see scripts/BCContainerManagement.psm1). Restore get-entries job before merging.
   verify-build-and-tests:
     runs-on: [GitHub-BCBench]
-    needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
       deployment: false
@@ -35,7 +28,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry:
+          - microsoftInternal__NAV-178045
+          - microsoftInternal__NAV-176426
+          - microsoftInternal__NAV-180484
+          - microsoftInternal__NAV-185792
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
