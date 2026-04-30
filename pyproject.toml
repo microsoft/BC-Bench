@@ -63,6 +63,7 @@ extend-select = [
     "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
     "RUF",   # Ruff-specific rules
     "TID252", # Ban relative imports
+    "LOG",    # flake8-logging: catch deprecated logging.warn, misuse of exception(), etc.
     "TRY400", # Use logger.exception() in except blocks (preserves traceback)
 ]
 
