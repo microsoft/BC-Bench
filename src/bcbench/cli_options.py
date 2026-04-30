@@ -38,11 +38,6 @@ CopilotModel = Annotated[
     typer.Option(help="Copilot model to use"),
 ]
 
-FoundryModel = Annotated[
-    Literal["gpt-5.1-codex-mini"],
-    typer.Option(help="Microsoft Foundry Model to use"),
-]
-
 ClaudeCodeModel = Annotated[
     Literal[
         "claude-sonnet-4-6",

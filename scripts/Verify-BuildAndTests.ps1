@@ -46,7 +46,7 @@ if (-not (Test-Path $RepoPath)) {
     exit 1
 }
 
-Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
+Import-Module BcContainerHelper -Force -DisableNameChecking
 
 [ValidationResult[]]$validationResults = @()
 

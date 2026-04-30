@@ -6,7 +6,7 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import run_claude_code, run_copilot_agent, run_mini_agent
+from bcbench.agent import run_claude_code, run_copilot_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -14,7 +14,6 @@ from bcbench.cli_options import (
     ContainerUsername,
     CopilotModel,
     EvaluationCategoryOption,
-    FoundryModel,
     OutputDir,
     RepoPath,
     RunId,
@@ -38,54 +37,6 @@ def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
     return run_dir
-
-
-@evaluate_app.command("mini")
-def evaluate_mini(
-    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
-    category: EvaluationCategoryOption,
-    model: FoundryModel = "gpt-5.1-codex-mini",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
-    run_id: RunId = "mini_test_run",
-):
-    """
-    Evaluate mini-bc-agent on single dataset entry.
-
-    To only run the agent to generate a patch without building/testing, use 'bcbench run mini' instead.
-    """
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with mini-bc-agent")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
-        model=model,
-        agent_name="mini-bc-agent",
-        category=category,
-    )
-
-    pipeline = category.pipeline
-    pipeline.execute(
-        context,
-        lambda ctx: run_mini_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model="azure/" + model,
-            output_dir=ctx.result_dir,
-        ),
-    )
-
-    logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
 
 
 @evaluate_app.command("copilot")
