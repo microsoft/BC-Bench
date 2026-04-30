@@ -71,13 +71,13 @@ def collect_gh_entry(pr_number: int, output: Path, repo: str = "microsoft/BCApps
         )
 
     except Exception as exc:
-        logger.error("Failed to collect dataset entry: %s", exc)
+        logger.exception("Failed to collect dataset entry: %s", exc)
         raise typer.Exit(code=1) from exc
 
     try:
         entry.save_to_file(output)
     except OSError as exc:
-        logger.error("Failed to write dataset entry: %s", exc)
+        logger.exception("Failed to write dataset entry: %s", exc)
         raise typer.Exit(code=1) from exc
 
     logger.info(f"Saved dataset entry {entry.instance_id} to {output}")

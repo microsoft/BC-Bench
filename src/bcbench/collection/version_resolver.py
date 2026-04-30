@@ -22,7 +22,7 @@ def determine_environment_setup_version(commit: str) -> str:
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to retrieve Directory.App.Props.json: {e.stderr}")
+        logger.exception(f"Failed to retrieve Directory.App.Props.json: {e.stderr}")
         raise
 
     props_data = json.loads(result.stdout)

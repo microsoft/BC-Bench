@@ -123,7 +123,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
 
         except BuildError as e:
             result = TestGenerationResult.create_build_failure(context, generated_patch, str(e))
-            logger.error(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
+            logger.exception(f"Build failed during evaluation of {context.entry.instance_id}: {e}")
 
         except TestExecutionError as e:
             if e.expectation == "Fail":
@@ -131,7 +131,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             else:
                 result = TestGenerationResult.create_test_failure(context, generated_patch, "Generated tests Failed post-patch\n" + str(e), pre_patch_failed=True, post_patch_passed=False)
 
-            logger.error(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
+            logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}: {e}")
 
         except NoTestsExtractedError:
             result = TestGenerationResult.create_no_tests_extracted(context, generated_patch, "No tests extracted from generated patch")

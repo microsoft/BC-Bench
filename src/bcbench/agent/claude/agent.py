@@ -105,11 +105,11 @@ def run_claude_code(
 
         return metrics, config
     except subprocess.TimeoutExpired:
-        logger.error(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
+        logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Claude Code timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
-        logger.error(f"Claude Code execution failed with error {e.stderr}")
+        logger.exception(f"Claude Code execution failed with error {e.stderr}")
         raise AgentError(f"Claude Code execution failed: {e.stderr}") from e
     except Exception as e:
         logger.exception(f"Unexpected error running Claude Code: {e}")
