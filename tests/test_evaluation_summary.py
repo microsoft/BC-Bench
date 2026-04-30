@@ -61,7 +61,7 @@ class TestEvaluationResultSummary:
             date=date(2025, 1, 20),
             model="gpt-4",
             category=EvaluationCategory.TEST_GENERATION,
-            agent_name="mini-bc-agent",
+            agent_name="GitHub Copilot",
             average_duration=90.0,
             average_prompt_tokens=3000.0,
             average_completion_tokens=800.0,
