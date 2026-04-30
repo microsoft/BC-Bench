@@ -60,7 +60,7 @@ Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -CloneP
 if (-not $SkipContainer) {
     [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
 
-    Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
+    Import-Module BcContainerHelper -Force -DisableNameChecking
 
     Write-Log "Container name: $ContainerName" -Level Info
 
