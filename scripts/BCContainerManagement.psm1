@@ -319,6 +319,18 @@ function New-BCContainerSync {
 
     New-BCContainer @params
 
+    # Workaround: BC v24 artifacts predate manifest.json, so BcContainerHelper cannot determine the required .NET major
+    # and falls back to "C:\Program Files\dotnet\shared", which causes AL0196 ambiguous TimeSpan.FromSeconds errors on runner images shipping .NET 10.
+    # Inject a synthetic manifest so Compile-AppInBcContainer pins probing to .NET 8.
+    # Drop this once navcontainerhelper#4136 (or equivalent platform-version fallback) ships.
+    if ($Version.StartsWith("24")) {
+        $manifestPath = Join-Path $bcContainerHelperConfig.hostHelperFolder "Extensions\$ContainerName\manifest.json"
+        if (-not (Test-Path $manifestPath)) {
+            Write-Log "Injecting synthetic manifest.json (dotNetVersion=8.0.0) for v24 compatibility" -Level Info
+            '{"dotNetVersion":"8.0.0"}' | Set-Content -Path $manifestPath -Encoding UTF8
+        }
+    }
+
     Write-Log "Container created successfully: $ContainerName" -Level Success
 }
 
