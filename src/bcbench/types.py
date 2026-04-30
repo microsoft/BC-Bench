@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -70,7 +70,7 @@ class ExperimentConfiguration(BaseModel):
         return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
 
 
-class AgentType(str, Enum):
+class AgentType(StrEnum):
     COPILOT = "copilot"
     CLAUDE = "claude"
 
@@ -94,7 +94,7 @@ class AgentType(str, Enum):
                 raise ValueError(f"Unknown AgentType: {self}")
 
 
-class EvaluationCategory(str, Enum):
+class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
     # CODE_REVIEW = "code-review"

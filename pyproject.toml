@@ -81,7 +81,7 @@ analysis = [
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.0",
-    "ruff>=0.13.0",
+    "ruff>=0.15.0",
     "pre-commit>=4.3.0",
-    "ty>=0.0.1a25",
+    "ty>=0.0.33",
 ]

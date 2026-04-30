@@ -19,6 +19,7 @@ ERROR_GROUPS = [
 # Helpers
 # ----------------------------
 
+
 def die(msg: str, code: int = 2) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(code)
@@ -49,6 +50,7 @@ def extract_error_group(error_message: str) -> str:
 # ----------------------------
 # Core logic
 # ----------------------------
+
 
 def group_errors(errors_summary_csv: Path, out_dir: Path) -> Path:
     groups = {}
@@ -128,6 +130,7 @@ def group_errors(errors_summary_csv: Path, out_dir: Path) -> Path:
 # ----------------------------
 # Entry point
 # ----------------------------
+
 
 def main() -> None:
     if len(sys.argv) != 3:
