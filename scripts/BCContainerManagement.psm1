@@ -38,7 +38,7 @@ function Invoke-SqlCommand() {
 
 <#
     .SYNOPSIS
-    Checks existance of database
+    Checks existence of database
     .DESCRIPTION
     Checks if the specified database exists on the SQL server
     .PARAMETER DatabaseName
@@ -318,6 +318,12 @@ function New-BCContainerSync {
     }
 
     New-BCContainer @params
+
+    Write-Log "Removing .NET 10 assemblies from container to ensure compatibility with older BC versions" -Level Info
+    Invoke-ScriptInBcContainer -containerName $ContainerName -scriptblock {
+        Remove-Item -Path 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.*' -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.*' -Recurse -Force -ErrorAction SilentlyContinue
+    }
 
     Write-Log "Container created successfully: $ContainerName" -Level Success
 }
