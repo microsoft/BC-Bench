@@ -59,6 +59,61 @@ class TestBaseEvaluationResult:
     def test_testgen_inherits_execution_based(self):
         assert issubclass(TestGenerationResult, ExecutionBasedEvaluationResult)
 
+    def test_base_status_label_completed(self):
+        result = BaseEvaluationResult(
+            instance_id="test__1",
+            project="MyProject",
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+        )
+        assert result.status_label == "Completed"
+
+    def test_base_status_label_error(self):
+        result = BaseEvaluationResult(
+            instance_id="test__1",
+            project="MyProject",
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            error_message="Something went wrong",
+        )
+        assert result.status_label == "Error"
+
+    def test_base_status_label_timeout(self):
+        result = BaseEvaluationResult(
+            instance_id="test__1",
+            project="MyProject",
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            timeout=True,
+        )
+        assert result.status_label == "Timeout"
+
+    def test_base_category_metrics_is_empty(self):
+        result = BaseEvaluationResult(
+            instance_id="test__1",
+            project="MyProject",
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+        )
+        assert result.category_metrics == {}
+
+    def test_create_from_context_warns_on_partial_metrics(self, tmp_path, caplog):
+        import logging
+
+        ctx = create_evaluation_context(tmp_path)
+        ctx.metrics = AgentMetrics(execution_time=60.0)  # Only one field set
+
+        with caplog.at_level(logging.WARNING, logger="bcbench.results.base"):
+            BugFixResult.create_success(ctx, "patch")
+
+        warning_messages = [msg for msg in caplog.messages if "missing metrics" in msg]
+        assert warning_messages, "Expected a warning about missing metrics"
+        assert ctx.entry.instance_id in warning_messages[0]
+
 
 # ---------------------------------------------------------------------------
 # status_label
@@ -351,6 +406,19 @@ class TestConsoleSummary:
         assert "Yes" in captured.out
         assert "test__1" in captured.out
 
+    def test_console_summary_shows_tool_usage(self, capsys):
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                resolved=True,
+                metrics=AgentMetrics(execution_time=100.0, tool_usage={"bash": 5, "view": 3}),
+            ),
+        ]
+        create_console_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        captured = capsys.readouterr()
+        assert "Tool Usage" in captured.out
+        assert "bash" in captured.out
+
 
 class TestGitHubJobSummary:
     def test_github_summary_renders_markdown(self, tmp_path, monkeypatch):
@@ -391,3 +459,40 @@ class TestGitHubJobSummary:
         content = summary_file.read_text()
         assert "Tool Usage" in content
         assert "bash" in content
+
+
+# ---------------------------------------------------------------------------
+# _get_short_error_message
+# ---------------------------------------------------------------------------
+
+
+class TestGetShortErrorMessage:
+    def test_returns_empty_string_for_none(self):
+        from bcbench.results.display import _get_short_error_message
+
+        assert _get_short_error_message(None) == ""
+
+    def test_returns_first_line_only(self):
+        from bcbench.results.display import _get_short_error_message
+
+        result = _get_short_error_message("First line\nSecond line\nThird line")
+        assert result == "First line"
+
+    def test_strips_trailing_colon(self):
+        from bcbench.results.display import _get_short_error_message
+
+        result = _get_short_error_message("Error occurred:")
+        assert result == "Error occurred"
+
+    def test_escapes_pipe_characters(self):
+        from bcbench.results.display import _get_short_error_message
+
+        result = _get_short_error_message("Build failed | reason")
+        assert "\\|" in result
+        assert result == "Build failed \\| reason"
+
+    def test_single_line_message(self):
+        from bcbench.results.display import _get_short_error_message
+
+        result = _get_short_error_message("Build failed")
+        assert result == "Build failed"

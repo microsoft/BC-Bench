@@ -201,7 +201,7 @@ def parse_kv_record(block: str) -> dict[str, Any]:
         if k in data:
             v = str(data[k]).strip().lower()
             if v in ("true", "false"):
-                data[k] = (v == "true")
+                data[k] = v == "true"
 
     return data
 
@@ -293,10 +293,7 @@ def main() -> None:
     ap.add_argument(
         "--zips-dir",
         default=None,
-        help=(
-            "Directory containing artifact .zip files. If it contains run subfolders, each subfolder is treated as one run. "
-            "If it contains no zips, it's treated as extracted content."
-        ),
+        help=("Directory containing artifact .zip files. If it contains run subfolders, each subfolder is treated as one run. If it contains no zips, it's treated as extracted content."),
     )
     ap.add_argument("--extracted-dir", default=None, help="Directory containing already extracted artifact content")
     ap.add_argument("--zip-depth", type=int, default=3, help="How deep to extract nested zip files (ZIP mode)")
@@ -549,7 +546,6 @@ def main() -> None:
             for rank, (msg, c) in enumerate(variants_sorted, start=1):
                 msg_csv = msg if len(msg) <= 3000 else (msg[:3000] + "…")
                 w.writerow([tid, rank, c, msg_csv])
-
 
     print("\nDONE ✅")
     if extract_root.exists():

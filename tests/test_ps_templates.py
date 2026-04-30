@@ -257,3 +257,178 @@ class TestRunTestSuite:
         assert '"codeunitID":200' in command
         assert '"functionName":' in command
         assert "TestEntry(" not in command
+
+
+class TestBuildAndPublishProjects:
+    @pytest.fixture
+    def mock_subprocess_success(self, monkeypatch):
+        import subprocess
+
+        calls = []
+
+        def mock_run(*args, **kwargs):
+            calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+        return calls
+
+    def test_calls_subprocess_for_each_project(self, mock_subprocess_success, tmp_path):
+        from bcbench.operations.bc_operations import build_and_publish_projects
+        from bcbench.types import ContainerConfig
+
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+        build_and_publish_projects(tmp_path, ["App/Project1", "App/Project2"], container, "25.0")
+
+        assert len(mock_subprocess_success) == 2
+
+    def test_raises_build_error_on_failure(self, monkeypatch, tmp_path):
+        import subprocess
+
+        from bcbench.exceptions import BuildError
+        from bcbench.operations.bc_operations import build_and_publish_projects
+        from bcbench.types import ContainerConfig
+
+        def mock_run(*args, **kwargs):
+            raise subprocess.CalledProcessError(1, args[0], output="build output", stderr="error")
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+        with pytest.raises(BuildError):
+            build_and_publish_projects(tmp_path, ["App/Project1"], container, "25.0")
+
+    def test_raises_build_timeout_on_timeout(self, monkeypatch, tmp_path):
+        import subprocess
+
+        from bcbench.exceptions import BuildTimeoutExpired
+        from bcbench.operations.bc_operations import build_and_publish_projects
+        from bcbench.types import ContainerConfig
+
+        def mock_run(*args, **kwargs):
+            raise subprocess.TimeoutExpired(args[0], 30)
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+        with pytest.raises(BuildTimeoutExpired):
+            build_and_publish_projects(tmp_path, ["App/Project1"], container, "25.0")
+
+
+class TestRunTests:
+    @pytest.fixture
+    def mock_subprocess_success(self, monkeypatch):
+        import subprocess
+
+        def mock_run(*args, **kwargs):
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+    def test_run_tests_executes_fail_to_pass(self, mock_subprocess_success):
+        from unittest.mock import patch
+
+        from bcbench.operations.bc_operations import run_tests
+        from bcbench.types import ContainerConfig
+        from tests.conftest import create_dataset_entry
+
+        entry = create_dataset_entry()
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+
+        with patch("bcbench.operations.bc_operations.run_test_suite") as mock_suite:
+            run_tests(entry, container)
+
+        # Should be called for fail_to_pass tests
+        assert mock_suite.call_count >= 1
+
+    def test_run_tests_skips_empty_pass_to_pass(self, mock_subprocess_success):
+        from unittest.mock import patch
+
+        from bcbench.operations.bc_operations import run_tests
+        from bcbench.types import ContainerConfig
+        from tests.conftest import create_dataset_entry
+
+        entry = create_dataset_entry(pass_to_pass=[])
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+
+        with patch("bcbench.operations.bc_operations.run_test_suite") as mock_suite:
+            run_tests(entry, container)
+
+        # Called once for fail_to_pass, not for empty pass_to_pass
+        assert mock_suite.call_count == 1
+
+    def test_run_tests_also_runs_pass_to_pass_when_present(self, mock_subprocess_success):
+        from unittest.mock import patch
+
+        from bcbench.dataset import TestEntry
+        from bcbench.operations.bc_operations import run_tests
+        from bcbench.types import ContainerConfig
+        from tests.conftest import create_dataset_entry
+
+        pass_to_pass = [TestEntry(codeunitID=200, functionName=frozenset({"TestPassToPass"}))]
+        entry = create_dataset_entry(pass_to_pass=pass_to_pass)
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+
+        with patch("bcbench.operations.bc_operations.run_test_suite") as mock_suite:
+            run_tests(entry, container)
+
+        # Called twice: once for fail_to_pass, once for pass_to_pass
+        assert mock_suite.call_count == 2
+
+
+class TestRunTestSuiteErrors:
+    def test_raises_test_execution_error_on_failure(self, monkeypatch):
+        import subprocess
+
+        from bcbench.dataset import TestEntry
+        from bcbench.exceptions import TestExecutionError
+        from bcbench.operations.bc_operations import run_test_suite
+        from bcbench.types import ContainerConfig
+
+        def mock_run(*args, **kwargs):
+            raise subprocess.CalledProcessError(1, args[0], output="test failed", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        test_entries = [TestEntry(codeunitID=100, functionName=frozenset({"TestFunc"}))]
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+
+        with pytest.raises(TestExecutionError):
+            run_test_suite(test_entries, "Pass", container)
+
+    def test_raises_timeout_error_on_timeout(self, monkeypatch):
+        import subprocess
+
+        from bcbench.dataset import TestEntry
+        from bcbench.exceptions import TestExecutionTimeoutExpired
+        from bcbench.operations.bc_operations import run_test_suite
+        from bcbench.types import ContainerConfig
+
+        def mock_run(*args, **kwargs):
+            raise subprocess.TimeoutExpired(args[0], 30)
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        test_entries = [TestEntry(codeunitID=100, functionName=frozenset({"TestFunc"}))]
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+
+        with pytest.raises(TestExecutionTimeoutExpired):
+            run_test_suite(test_entries, "Pass", container)
+
+    def test_success_with_stdout_output(self, monkeypatch):
+        import subprocess
+
+        from bcbench.dataset import TestEntry
+        from bcbench.operations.bc_operations import run_test_suite
+        from bcbench.types import ContainerConfig
+
+        def mock_run(*args, **kwargs):
+            return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="All tests passed", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        test_entries = [TestEntry(codeunitID=100, functionName=frozenset({"TestFunc"}))]
+        container = ContainerConfig(name="bcserver", username="admin", password="Test123")
+
+        # Should not raise
+        run_test_suite(test_entries, "Pass", container)

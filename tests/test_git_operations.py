@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.exceptions import EmptyDiffError
-from bcbench.operations.git_operations import clean_project_paths, commit_changes, stage_and_get_diff
+from bcbench.exceptions import EmptyDiffError, PatchApplicationError
+from bcbench.operations.git_operations import apply_patch, checkout_commit, clean_project_paths, clean_repo, commit_changes, stage_and_get_diff
 
 
 class TestCommitChanges:
@@ -198,3 +198,81 @@ class TestCleanProjectPaths:
     def test_clean_project_paths_empty_list_raises_error(self, temp_git_repo):
         with pytest.raises(ValueError, match="No project paths provided"):
             clean_project_paths(temp_git_repo, [])
+
+
+class TestCleanRepo:
+    @pytest.fixture
+    def temp_git_repo(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True, capture_output=True)
+            (repo_path / "file.al").write_text("original")
+            subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_path, check=True, capture_output=True)
+            yield repo_path
+
+    def test_clean_repo_reverts_modified_files(self, temp_git_repo):
+        (temp_git_repo / "file.al").write_text("modified")
+        clean_repo(temp_git_repo)
+        assert (temp_git_repo / "file.al").read_text() == "original"
+
+    def test_clean_repo_removes_untracked_files(self, temp_git_repo):
+        (temp_git_repo / "new_file.al").write_text("untracked")
+        clean_repo(temp_git_repo)
+        assert not (temp_git_repo / "new_file.al").exists()
+
+    def test_clean_repo_unstages_staged_changes(self, temp_git_repo):
+        (temp_git_repo / "file.al").write_text("staged change")
+        subprocess.run(["git", "add", "file.al"], cwd=temp_git_repo, check=True, capture_output=True)
+        clean_repo(temp_git_repo)
+        result = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=temp_git_repo, capture_output=True, text=True, check=True)
+        assert "file.al" not in result.stdout
+
+
+class TestCheckoutCommit:
+    @pytest.fixture
+    def temp_git_repo(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True, capture_output=True)
+            (repo_path / "file.al").write_text("v1")
+            subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "v1"], cwd=repo_path, check=True, capture_output=True)
+            first_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_path, capture_output=True, text=True, check=True).stdout.strip()
+            (repo_path / "file.al").write_text("v2")
+            subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "v2"], cwd=repo_path, check=True, capture_output=True)
+            yield repo_path, first_commit
+
+    def test_checkout_restores_previous_state(self, temp_git_repo):
+        repo_path, first_commit = temp_git_repo
+        checkout_commit(repo_path, first_commit)
+        assert (repo_path / "file.al").read_text() == "v1"
+
+
+class TestApplyPatch:
+    @pytest.fixture
+    def temp_git_repo(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True, capture_output=True)
+            (repo_path / "file.al").write_text("line1\nline2\nline3\n")
+            subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_path, check=True, capture_output=True)
+            yield repo_path
+
+    def test_apply_patch_modifies_file(self, temp_git_repo):
+        # Create a valid patch
+        patch_content = "diff --git a/file.al b/file.al\nindex 1234567..abcdefg 100644\n--- a/file.al\n+++ b/file.al\n@@ -1,3 +1,3 @@\n line1\n-line2\n+line2_modified\n line3\n"
+        apply_patch(temp_git_repo, patch_content, "test patch")
+        assert "line2_modified" in (temp_git_repo / "file.al").read_text()
+
+    def test_apply_invalid_patch_raises_patch_error(self, temp_git_repo):
+        with pytest.raises(PatchApplicationError):
+            apply_patch(temp_git_repo, "this is not a valid patch", "bad patch")

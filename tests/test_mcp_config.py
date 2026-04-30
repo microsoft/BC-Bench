@@ -153,3 +153,55 @@ class TestSetRuntimeVersion:
 
     def test_skips_missing_app_json(self, tmp_path):
         _set_runtime_version([str(tmp_path)])  # should not raise
+
+
+class TestBuildServerEntry:
+    def test_http_server_includes_url(self, entry, repo_path):
+        config = _make_config(MSLEARN_SERVER)
+
+        config_json, _names = build_mcp_config(config, entry, repo_path, al_mcp=False)
+
+        assert config_json is not None
+        parsed = json.loads(config_json)
+        assert parsed["mcpServers"]["mslearn"]["type"] == "http"
+        assert parsed["mcpServers"]["mslearn"]["url"] == "https://learn.microsoft.com/api/mcp"
+
+    def test_unsupported_server_type_raises(self, entry, repo_path):
+        from bcbench.exceptions import AgentError
+
+        bad_server = {"name": "weird", "type": "websocket", "url": "ws://localhost"}
+        config = _make_config(bad_server)
+
+        with pytest.raises(AgentError, match="Unsupported MCP server type"):
+            build_mcp_config(config, entry, repo_path, al_mcp=False)
+
+    def test_empty_servers_returns_none(self, entry, repo_path):
+        config = {"mcp": {"servers": []}}
+
+        result = build_mcp_config(config, entry, repo_path)
+
+        assert result == (None, None)
+
+    def test_no_mcp_key_returns_none(self, entry, repo_path):
+        config = {}
+
+        result = build_mcp_config(config, entry, repo_path)
+
+        assert result == (None, None)
+
+    def test_stdio_server_renders_template_args(self, entry, repo_path):
+        stdio_server = {
+            "name": "mytool",
+            "type": "stdio",
+            "command": "mytool",
+            "args": ["--repo", "{{ repo_path }}"],
+        }
+        config = _make_config(stdio_server)
+
+        config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=False)
+        assert config_json is not None
+
+        parsed = json.loads(config_json)
+        args = parsed["mcpServers"]["mytool"]["args"]
+        # Template variable should be rendered with repo_path value
+        assert str(repo_path) in args[1]
