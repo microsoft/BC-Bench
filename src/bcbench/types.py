@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from bcbench.logger import get_logger
-
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
@@ -18,8 +16,6 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
-
-logger = get_logger(__name__)
 
 
 class AgentMetrics(BaseModel):
