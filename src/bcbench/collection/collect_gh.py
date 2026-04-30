@@ -10,7 +10,7 @@ from bcbench.collection.gh_client import GHClient
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
 from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
-from bcbench.exceptions import CollectionError
+from bcbench.exceptions import CollectionError, NoTestsExtractedError
 from bcbench.logger import get_logger
 from bcbench.operations import extract_tests_from_patch
 
@@ -83,7 +83,9 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
                 file_contents[file_path] = gh_client.get_file_content(file_path, commit_id)
             except Exception:
                 logger.debug("Could not fetch file content for %s", file_path)
-    if not extract_tests_from_patch(patch_test, file_contents):
+    try:
+        extract_tests_from_patch(patch_test, file_contents)
+    except NoTestsExtractedError:
         return fail("No testable functions found in test patch")
 
     return ScreeningResult(pr_number=pr_number, repo=repo, passed=True)
