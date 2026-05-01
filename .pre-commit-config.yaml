@@ -34,6 +34,6 @@ repos:
     hooks:
       - id: ty
         name: ty check
-        entry: uvx ty check . --ignore=unresolved-import
+        entry: uv run ty check . --ignore=unresolved-import
         language: python
         pass_filenames: false
