@@ -30,35 +30,25 @@ class BaseEvaluationResult(BaseModel):
     experiment: ExperimentConfiguration | None = None
 
     @classmethod
-    def _create_from_context(
-        cls,
-        context: "EvaluationContext",
-        error_message: str | None = None,
-        output: str = "",
-        **kwargs: Any,
-    ) -> Self:
+    def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
         elif missing_metrics := [name for name in AgentMetrics.model_fields if getattr(context.metrics, name) is None]:
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
-        project = context.entry.extract_project_name()
-        return cls(
-            instance_id=context.entry.instance_id,
-            project=project,
-            model=context.model.replace(".", "-"),
-            category=context.category,
-            agent_name=context.agent_name,
-            output=output,
-            error_message=error_message,
-            metrics=context.metrics,
-            experiment=context.experiment,
-            **kwargs,
-        )
+        return {
+            "instance_id": context.entry.instance_id,
+            "project": context.entry.extract_project_name(),
+            "model": context.model.replace(".", "-"),
+            "category": context.category,
+            "agent_name": context.agent_name,
+            "metrics": context.metrics,
+            "experiment": context.experiment,
+        }
 
     @classmethod
-    def create_agent_timeout_failure(cls, context: "EvaluationContext", **kwargs: Any) -> Self:
-        return cls._create_from_context(context, timeout=True, error_message="Agent timed out", **kwargs)
+    def create_agent_timeout_failure(cls, context: "EvaluationContext") -> Self:
+        return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
 
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
@@ -109,16 +99,12 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     build: bool = False
 
     @classmethod
-    def create_success(cls, context: "EvaluationContext", output: str, **kwargs: Any) -> Self:
-        return cls._create_from_context(context, output=output, resolved=True, build=True, **kwargs)
+    def create_success(cls, context: "EvaluationContext", output: str) -> Self:
+        return cls(**cls._base_fields(context), output=output, resolved=True, build=True)
 
     @classmethod
-    def create_build_failure(cls, context: "EvaluationContext", output: str, error_msg: str, **kwargs: Any) -> Self:
-        return cls._create_from_context(context, output=output, error_message=error_msg, resolved=False, build=False, **kwargs)
-
-    @classmethod
-    def create_test_failure(cls, context: "EvaluationContext", output: str, error_msg: str = "Tests failed", **kwargs: Any) -> Self:
-        return cls._create_from_context(context, output=output, error_message=error_msg, resolved=False, build=True, **kwargs)
+    def create_build_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
 
     @property
     def status_label(self) -> str:
