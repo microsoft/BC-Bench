@@ -35,7 +35,7 @@ class DatasetError(BCBenchError):
 class EntryNotFoundError(DatasetError):
     """Dataset entry not found."""
 
-    def __init__(self, entry_id: str):
+    def __init__(self, entry_id: str) -> None:
         self.entry_id = entry_id
         super().__init__(f"Entry with instance_id '{entry_id}' not found in dataset")
 
@@ -43,7 +43,7 @@ class EntryNotFoundError(DatasetError):
 class InvalidEntryFormatError(DatasetError):
     """Invalid format in dataset entry."""
 
-    def __init__(self, entry: str, details: str = ""):
+    def __init__(self, entry: str, details: str = "") -> None:
         self.entry = entry
         self.details = details
         message = f"Invalid entry format: {entry}"
@@ -55,7 +55,7 @@ class InvalidEntryFormatError(DatasetError):
 class NoEntriesFoundError(DatasetError):
     """No entries found matching the specified criteria."""
 
-    def __init__(self, criteria: str = ""):
+    def __init__(self, criteria: str = "") -> None:
         self.criteria = criteria
         message = "No entries matched the filter criteria"
         if criteria:
@@ -70,7 +70,7 @@ class GitOperationError(BCBenchError):
 class PatchApplicationError(GitOperationError):
     """Failed to apply a patch."""
 
-    def __init__(self, patch_name: str, stderr: str = ""):
+    def __init__(self, patch_name: str, stderr: str = "") -> None:
         self.patch_name = patch_name
         self.stderr = stderr
         message = f"Failed to apply {patch_name}"
@@ -82,7 +82,7 @@ class PatchApplicationError(GitOperationError):
 class EmptyDiffError(GitOperationError):
     """Generated diff is empty."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         message = "Generated diff is empty. Agent did not make any changes."
         super().__init__(message)
 
@@ -139,7 +139,7 @@ def _extract_test_errors(output: str, max_lines: int = 20) -> str:
 class BuildError(BCBenchError):
     """Build or publish operation failures."""
 
-    def __init__(self, project_path: str, output: str = ""):
+    def __init__(self, project_path: str, output: str = "") -> None:
         self.project_path = project_path
         self.output = output
         self.errors = _extract_compiler_errors(output)
@@ -151,7 +151,7 @@ class BuildError(BCBenchError):
 class BuildTimeoutExpired(BCBenchError):
     """Build and publish operation timed out."""
 
-    def __init__(self, project_path: str, timeout: int):
+    def __init__(self, project_path: str, timeout: int) -> None:
         self.project_path = project_path
         self.timeout = timeout
         message = f"Build and publish timed out for {project_path} after {timeout} seconds"
@@ -161,7 +161,7 @@ class BuildTimeoutExpired(BCBenchError):
 class TestExecutionError(BCBenchError):
     """Test execution failures."""
 
-    def __init__(self, expectation: str, stderr: str = "", stdout: str = ""):
+    def __init__(self, expectation: str, stderr: str = "", stdout: str = "") -> None:
         self.expectation = expectation
         self.stderr = stderr
         self.stdout = stdout
@@ -175,7 +175,7 @@ class TestExecutionError(BCBenchError):
 class TestExecutionTimeoutExpired(BCBenchError):
     """Test execution timed out."""
 
-    def __init__(self, tests: str, timeout: int):
+    def __init__(self, tests: str, timeout: int) -> None:
         self.tests = tests
         self.timeout = timeout
         message = f"Test execution timed out (tests: {tests}) after {timeout} seconds"
@@ -185,7 +185,7 @@ class TestExecutionTimeoutExpired(BCBenchError):
 class NoTestsExtractedError(BCBenchError):
     """No tests extracted from the generated patch."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         message = "No tests extracted from the generated patch."
         super().__init__(message)
 
@@ -197,7 +197,7 @@ class AgentError(BCBenchError):
 class AgentTimeoutError(BCBenchError):
     """Agent execution timeout errors."""
 
-    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None):
+    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None) -> None:
         self.metrics = metrics
         self.config = config
         super().__init__(message)
@@ -210,6 +210,6 @@ class ConfigurationError(BCBenchError):
 class CollectionError(BCBenchError):
     """Dataset collection related errors. Note: Collection is WIP with hardcoded values."""
 
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> None:
         message = f"Collection error (Note: Collection is WIP with hardcoded values): {message}"
         super().__init__(message)

@@ -3,6 +3,7 @@
 import logging
 import re
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import ClassVar
 
@@ -67,7 +68,7 @@ class SensitiveDataFilter(logging.Filter):
 
         return True
 
-    def _redact_value(self, value):
+    def _redact_value(self, value: object) -> object:
         """Redact sensitive information from a single value."""
         if isinstance(value, str):
             redacted = value
@@ -94,7 +95,7 @@ class ColoredFormatter(logging.Formatter):
         logging.CRITICAL: (RED, "[%(asctime)s] %(name)s - CRITICAL: %(message)s"),
     }
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         color, log_fmt = self.FORMATS.get(record.levelno, self.FORMATS[logging.INFO])
         formatter = logging.Formatter(log_fmt, datefmt="%H:%M:%S")
         formatted = formatter.format(record)
@@ -219,7 +220,7 @@ def get_logger(name: str) -> logging.Logger:
 
 
 @contextmanager
-def github_log_group(title: str):
+def github_log_group(title: str) -> Iterator[None]:
     config = get_config()
 
     if config.env.github_actions:

@@ -23,7 +23,7 @@ def collect_nav(
         list[str] | None,
         typer.Option(help="Filter git diff to only show changes under this path. Can be specified multiple times."),
     ] = None,
-):
+) -> None:
     """
     Collect dataset entry from Azure DevOps NAV pull request.
 
@@ -39,7 +39,7 @@ def collect_gh(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
     output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
-):
+) -> None:
     """
     Collect dataset entry from public GitHub repositories.
 

@@ -15,7 +15,7 @@ BASE_URL = "https://dev.azure.com/dynamicssmb2/Dynamics%20SMB/_apis/git/reposito
 
 
 class ADOClient:
-    def __init__(self, token: str):
+    def __init__(self, token: str) -> None:
         self.token = token
 
     def get_pr_info(self, pr_number: int) -> dict[str, Any]:
