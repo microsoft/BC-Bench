@@ -68,6 +68,7 @@ extend-select = [
     "TRY400", # Use logger.exception() in except blocks (preserves traceback)
     "PT",     # flake8-pytest-style: consistent pytest patterns (~30 test files)
     "ANN",    # flake8-annotations: enforce type hints (we prefer strong typing)
+    "T20",    # flake8-print: prefer logger over print (we have a proper logger)
 ]
 
 # Ignore specific rules that might be too aggressive
@@ -75,14 +76,16 @@ ignore = [
     "UP035",   # deprecated-import (typing.Dict, etc. still valid)
     "PTH123",  # Allow open() for now, Path.open() migration can be gradual
     "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible
-    "ANN401",  # any-type: sometimes Any is the honest answer (dynamic JSON, **kwargs)
+    "ANN401",  # Any in **kwargs: needed for kwarg forwarding through inheritance; revisit later
 ]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests don't need return type annotations (test_foo() always returns None)
 # Notebooks are exploratory by design
 "tests/**" = ["ANN"]
-"notebooks/**" = ["ANN"]
+"notebooks/**" = ["ANN", "T20"]   # notebooks routinely print() for analysis output
+"src/bcbench/commands/**" = ["T20"]   # CLI commands print user-facing output
+"tools/**" = ["T20"]                  # standalone CLI scripts
 
 [dependency-groups]
 analysis = [

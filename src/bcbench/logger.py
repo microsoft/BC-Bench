@@ -143,7 +143,7 @@ class GitHubActionsHandler(logging.Handler):
             annotation = f"::{command} title={title}::{msg}"
 
             # Output to stdout (GitHub Actions reads workflow commands from stdout)
-            print(annotation, flush=True)
+            print(annotation, flush=True)  # noqa: T201
 
         except Exception:
             self.handleError(record)
@@ -224,10 +224,10 @@ def github_log_group(title: str) -> Iterator[None]:
     config = get_config()
 
     if config.env.github_actions:
-        print(f"::group::{title}", flush=True)
+        print(f"::group::{title}", flush=True)  # noqa: T201
 
     try:
         yield
     finally:
         if config.env.github_actions:
-            print("::endgroup::", flush=True)
+            print("::endgroup::", flush=True)  # noqa: T201

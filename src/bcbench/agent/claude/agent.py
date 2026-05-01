@@ -94,7 +94,7 @@ def run_claude_code(
                 try:
                     data = json.loads(striped_line)
                     if "result" in data:
-                        print(data["result"], flush=True)
+                        logger.info(data["result"])
                         metrics = parse_metrics(data)
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping non-JSON line: {striped_line}")
