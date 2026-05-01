@@ -1,0 +1,83 @@
+name: Collect and Screen Dataset Candidates
+permissions:
+  contents: write
+  actions: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      since-days:
+        description: "Look at PRs merged within the last N days"
+        required: false
+        default: "7"
+        type: string
+      repo:
+        description: "Source GitHub repository (OWNER/REPO)"
+        required: false
+        default: "microsoft/BCApps"
+        type: string
+      limit:
+        description: "Maximum number of merged PRs to consider"
+        required: false
+        default: "200"
+        type: string
+      base-branch:
+        description: "Only consider PRs merged into this base branch"
+        required: false
+        default: "main"
+        type: string
+  schedule:
+    - cron: "0 4 * * 1"
+
+jobs:
+  collect-and-screen:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.run.outputs.branch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Discover, screen, and collect passing PRs
+        id: run
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $week = [System.Globalization.ISOWeek]::GetWeekOfYear((Get-Date).ToUniversalTime()).ToString('00')
+          $branch = "dataset/week-$week"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -B $branch
+
+          .\scripts\Collect-And-Screen.ps1 `
+            -Repo '${{ inputs.repo || 'microsoft/BCApps' }}' `
+            -SinceDays ${{ inputs.since-days || '7' }} `
+            -Limit ${{ inputs.limit || '200' }} `
+            -BaseBranch '${{ inputs.base-branch || 'main' }}' `
+            -SummaryFile $env:GITHUB_STEP_SUMMARY
+
+          if (-not (git status --porcelain)) {
+            Write-Host 'No dataset changes; nothing to push.'
+            Add-Content -Path $env:GITHUB_OUTPUT -Value 'branch='
+            return
+          }
+
+          git add dataset/bcbench.jsonl dataset/problemstatement
+          git commit -m "auto: collect candidates from ${{ inputs.repo || 'microsoft/BCApps' }}"
+          git push --force origin $branch
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "branch=$branch"
+
+      - name: Trigger dataset validation on pushed branch
+        if: steps.run.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run dataset-validation.yml --ref "${{ steps.run.outputs.branch }}" -f modified-only=true -f test-run=false

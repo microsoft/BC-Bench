@@ -5,50 +5,73 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from bcbench.cli_options import RepoPath
-from bcbench.collection import collect_gh_entry, collect_nav_entry
+from bcbench.collection import ScreeningResult, collect_gh_entry, screen_gh_candidate
 from bcbench.config import get_config
+from bcbench.exceptions import CollectionError
 
 _config = get_config()
 
-collect_app = typer.Typer(help="Collect dataset entries from various sources")
-
-
-@collect_app.command("nav")
-def collect_nav(
-    pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
-    output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    diff_path: Annotated[
-        list[str] | None,
-        typer.Option(help="Filter git diff to only show changes under this path. Can be specified multiple times."),
-    ] = None,
-):
-    """
-    Collect dataset entry from Azure DevOps NAV pull request.
-
-    Try it out with: bcbench collect nav 210528 --output dataset/bcbench_nav.jsonl
-
-    For BaseApp Data, use diff_path: .\\App\\Layers\\W1\\:
-    """
-    collect_nav_entry(pr_number=pr_number, output=output, repo_path=repo_path, diff_path=diff_path)
+collect_app = typer.Typer(help="Collect dataset entries from GitHub")
 
 
 @collect_app.command("gh")
 def collect_gh(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to collect")],
+    environment_setup_version: Annotated[
+        str,
+        typer.Option("--environment-setup-version", help="BC environment version to record on the entry (e.g. 28.0)"),
+    ],
     output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
 ):
     """
-    Collect dataset entry from public GitHub repositories.
+    Collect dataset entry from a GitHub pull request.
 
     Example usage:
 
     # Collect from default repo (microsoft/BCApps)
-    bcbench collect gh 12345
+    bcbench collect gh 12345 --environment-setup-version 28.0
 
     # Collect from custom repo
-    bcbench collect gh 12345 --repo microsoft/AL
+    bcbench collect gh 12345 --repo microsoft/AL --environment-setup-version 28.0
     """
-    collect_gh_entry(pr_number=pr_number, output=output, repo=repo)
+    collect_gh_entry(pr_number=pr_number, output=output, repo=repo, environment_setup_version=environment_setup_version)
+
+
+@collect_app.command("screen")
+def screen(
+    pr_number: Annotated[int, typer.Argument(help="Pull request number to screen")],
+    repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
+):
+    """
+    Screen a GitHub PR as a dataset candidate for Bug-Fixing.
+
+    Checks that the PR meets the minimum automated requirements for inclusion:
+    - At least 2 project paths (fix project + test project)
+    - Non-empty fix patch
+    - At least one testable function in the test patch
+
+    Stops at the first failure. Note: this is a preliminary filter only.
+    A passing result still requires manual review.
+
+    Example usage:
+
+    # Screen a PR from default repo (microsoft/BCApps)
+    bcbench collect screen 12345
+
+    # Screen from custom repo
+    bcbench collect screen 12345 --repo microsoft/AL
+    """
+    try:
+        result: ScreeningResult = screen_gh_candidate(pr_number=pr_number, repo=repo)
+    except CollectionError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    header = f"PR #{result.pr_number} from {result.repo}"
+    if result.passed:
+        typer.echo(f"{header}: PASSED")
+        return
+
+    typer.echo(f"{header}: FAILED - {result.reason}")
+    raise typer.Exit(code=1)
