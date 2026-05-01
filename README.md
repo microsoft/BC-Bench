@@ -23,10 +23,6 @@ We follow the [SWE-Bench schema](https://huggingface.co/datasets/SWE-bench/SWE-b
 
 ## Agents Under Evaluation
 
-### mini-BC-agent
-
-A minimal agent loop based on [mini-swe-agent](https://github.com/SWE-agent/mini-SWE-agent). Its simplicity makes it perfect for establishing baseline performance. See [mini-bc-agent](src/bcbench/agent/mini/agent.py).
-
 ### GitHub Copilot CLI
 
 The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP servers, tools, and agent mode. It closely simulates real developers' workflow (both VS Code and Coding Agent), making it an ideal candidate for evaluating automated workflows.
@@ -40,3 +36,4 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP ser
 BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time. You can run evaluations locally and replace the dataset under `dataset/` with tasks from your own codebase.
 
 - **[Setup for Forks](CONTRIBUTING.md)**
+- **[Running Experiments](EXPERIMENT.md)**
