@@ -106,6 +106,6 @@ def run_copilot_agent(
     except subprocess.CalledProcessError as e:
         logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
         raise AgentError(f"Copilot CLI execution failed: {e}") from None
-    except Exception as e:
-        logger.exception(f"Unexpected error running Copilot CLI: {e}")
+    except Exception:
+        logger.exception("Unexpected error running Copilot CLI")
         raise

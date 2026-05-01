@@ -111,6 +111,6 @@ def run_claude_code(
     except subprocess.CalledProcessError as e:
         logger.exception(f"Claude Code execution failed with error {e.stderr}")
         raise AgentError(f"Claude Code execution failed: {e.stderr}") from e
-    except Exception as e:
-        logger.exception(f"Unexpected error running Claude Code: {e}")
+    except Exception:
+        logger.exception("Unexpected error running Claude Code")
         raise

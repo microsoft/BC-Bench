@@ -62,33 +62,33 @@ extend-select = [
     "RET",   # flake8-return (simplify return statements)
     "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
     "RUF",   # Ruff-specific rules
-    "TID252", # Ban relative imports
-    "LOG",    # flake8-logging: catch deprecated logging.warn, misuse of exception(), etc.
-    "G",      # flake8-logging-format: catch string concat / % formatting in log calls
-    "TRY400", # Use logger.exception() in except blocks (preserves traceback)
-    "PT",     # flake8-pytest-style: consistent pytest patterns (~30 test files)
-    "ANN",    # flake8-annotations: enforce type hints (we prefer strong typing)
-    "T20",    # flake8-print: prefer logger over print (we have a proper logger)
-    "FURB",   # refurb: modern Python idioms (e.g. x or y over x if x else y)
-    "ISC",    # implicit string concat (catches missing comma in lists of strings)
-    "ICN",    # import conventions (np, pd, plt aliases)
-    "FA",     # future annotations (cleaner type hints)
-    "PYI",    # type stubs (no-op now, guard for future)
-    "SLOT",   # require __slots__ on str/tuple/namedtuple subclasses
-    "ASYNC",  # async best practices (no-op now, guard for future)
+    "TID",   # flake8-tidy-imports (ban relative imports + extensible banned-API list)
+    "LOG",   # flake8-logging: catch deprecated logging.warn, misuse of exception(), etc.
+    "G",     # flake8-logging-format: catch string concat / % formatting in log calls
+    "TRY",   # tryceratops: better exception handling
+    "PT",    # flake8-pytest-style: consistent pytest patterns (~30 test files)
+    "ANN",   # flake8-annotations: enforce type hints (we prefer strong typing)
+    "T20",   # flake8-print: prefer logger over print (we have a proper logger)
+    "FURB",  # refurb: modern Python idioms (e.g. x or y over x if x else y)
+    "ISC",   # implicit string concat (catches missing comma in lists of strings)
+    "ICN",   # import conventions (np, pd, plt aliases)
+    "FA",    # future annotations (cleaner type hints)
+    "PYI",   # type stubs (no-op now, guard for future)
+    "SLOT",  # require __slots__ on str/tuple/namedtuple subclasses
+    "ASYNC", # async best practices (no-op now, guard for future)
 ]
 
-# Ignore specific rules that might be too aggressive
 ignore = [
     "UP035",   # deprecated-import (typing.Dict, etc. still valid)
     "PTH123",  # Allow open() for now, Path.open() migration can be gradual
     "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible
     "ANN401",  # Any in **kwargs: needed for kwarg forwarding through inheritance; revisit later
+    "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message
+    "TRY300",  # try-consider-else: stylistic; often hurts readability
+    "TRY301",  # raise-within-try: suggested "abstract to inner function" refactor adds indirection
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests don't need return type annotations (test_foo() always returns None)
-# Notebooks are exploratory by design
 "tests/**" = ["ANN"]
 "notebooks/**" = ["ANN", "T20"]   # notebooks routinely print() for analysis output
 "src/bcbench/commands/**" = ["T20"]   # CLI commands print user-facing output
