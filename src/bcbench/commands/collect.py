@@ -23,7 +23,7 @@ def collect_gh(
     ],
     output: Annotated[Path, typer.Option(help="Path to output dataset file")] = _config.paths.dataset_dir / "bcbench.jsonl",
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
-):
+) -> None:
     """
     Collect dataset entry from a GitHub pull request.
 
@@ -42,7 +42,7 @@ def collect_gh(
 def screen(
     pr_number: Annotated[int, typer.Argument(help="Pull request number to screen")],
     repo: Annotated[str, typer.Option(help="GitHub repository in OWNER/REPO format")] = "microsoft/BCApps",
-):
+) -> None:
     """
     Screen a GitHub PR as a dataset candidate for Bug-Fixing.
 

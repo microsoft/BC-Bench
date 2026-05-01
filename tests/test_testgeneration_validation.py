@@ -45,10 +45,9 @@ def test_get_test_generation_input_mode_defaults_to_problem_statement():
 def test_get_test_generation_input_mode_invalid_with_underscore():
     config_content = yaml.dump({"prompt": {"test-generation-input": "gold_patch"}})
 
-    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError) as exc_info:
+    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError, match="Invalid test-generation-input mode: 'gold_patch'") as exc_info:
         _get_test_generation_input_mode()
 
-    assert "Invalid test-generation-input mode: 'gold_patch'" in str(exc_info.value)
     assert "gold-patch" in str(exc_info.value)
     assert "Use hyphens, not underscores" in str(exc_info.value)
 
@@ -56,10 +55,9 @@ def test_get_test_generation_input_mode_invalid_with_underscore():
 def test_get_test_generation_input_mode_invalid_random_value():
     config_content = yaml.dump({"prompt": {"test-generation-input": "invalid-mode"}})
 
-    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError) as exc_info:
+    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError, match="Invalid test-generation-input mode: 'invalid-mode'") as exc_info:
         _get_test_generation_input_mode()
 
-    assert "Invalid test-generation-input mode: 'invalid-mode'" in str(exc_info.value)
     assert "gold-patch" in str(exc_info.value)
     assert "problem-statement" in str(exc_info.value)
     assert "both" in str(exc_info.value)
@@ -68,7 +66,5 @@ def test_get_test_generation_input_mode_invalid_random_value():
 def test_get_test_generation_input_mode_empty_string():
     config_content = yaml.dump({"prompt": {"test-generation-input": ""}})
 
-    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError) as exc_info:
+    with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError, match="Invalid test-generation-input mode: ''"):
         _get_test_generation_input_mode()
-
-    assert "Invalid test-generation-input mode: ''" in str(exc_info.value)
