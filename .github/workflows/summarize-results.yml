@@ -85,7 +85,7 @@ jobs:
           echo "::add-mask::$ADO_TOKEN"
 
           # Install bc-eval from ADO feed using Python 3.11 (bc-eval's private feed only has cp311 wheels)
-          uv tool install bc-eval==0.2.3 --python 3.11 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
+          uv tool install bc-eval[capi]==0.3.0 --python 3.11 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
 
           # Upload summary to Braintrust using bc-eval
           MODEL_TAG="${{ inputs.model }}"
@@ -116,7 +116,8 @@ jobs:
             --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluators "lm_checklist" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - lm_checklist - #${{ github.run_id }}" \
-            --tags "${{ inputs.agent }},${MODEL_TAG},${{ inputs.category }},lm_checklist_poc" ${{ !inputs.mock && '--upload-results' || '' }}
+            --tags "${{ inputs.agent }},${MODEL_TAG},${{ inputs.category }},lm_checklist_poc" ${{ !inputs.mock && '--upload-results' || '' }} \
+            --use-capi
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock }}
