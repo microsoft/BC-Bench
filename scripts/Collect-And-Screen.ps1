@@ -57,7 +57,7 @@ if ($LASTEXITCODE -ne 0) { throw "gh pr list failed" }
 [int[]]$prs = ($prsJson | ConvertFrom-Json)
 Write-Log "Found $($prs.Count) merged PR(s) labeled exclusively '$requiredLabel'" -Level Info
 
-$passed = New-Object System.Collections.Generic.List[string]
+$passed = New-Object System.Collections.Generic.List[PSObject]
 foreach ($pr in $prs) {
     if ($env:CI -eq 'true') { Write-Host "::group::PR #$pr" }
     Write-Log "Screening PR #$pr" -Level Info
@@ -69,7 +69,7 @@ foreach ($pr in $prs) {
         & uv run bcbench collect gh $pr --repo $Repo --environment-setup-version $envVersion
         if ($LASTEXITCODE -eq 0) {
             $instanceId = "$($Repo -replace '/', '__')-$pr"
-            $passed.Add($instanceId)
+            $passed.Add([PSCustomObject]@{ Id = $instanceId; Url = "https://github.com/$Repo/pull/$pr" })
             Write-Log "Collected PR #$pr -> $instanceId" -Level Success
         }
         else {
@@ -87,11 +87,18 @@ if ($SummaryFile) {
     $summary = @()
     $summary += '## Screening summary'
     $summary += ''
-    $summary += "Repo: ``$Repo``  |  Base: ``$BaseBranch``  |  Env: ``$envVersion``  |  Window: last $SinceDays day(s) (since $since)"
+    $summary += "Repo: ``$Repo``"
+    $summary += ''
+    $summary += "Base: ``$BaseBranch``"
+    $summary += ''
+    $summary += "Env: ``$envVersion``"
+    $summary += ''
+    $summary += "Window: last $SinceDays day(s) (since $since)"
     $summary += ''
     $summary += "Considered: $($prs.Count)"
+    $summary += ''
     $summary += "Passed screening + collected: $($passed.Count)"
     $summary += ''
-    foreach ($id in $passed) { $summary += "- ``$id``" }
+    foreach ($item in $passed) { $summary += "- [$($item.Id)]($($item.Url))" }
     Add-Content -Path $SummaryFile -Value ($summary -join [Environment]::NewLine)
 }

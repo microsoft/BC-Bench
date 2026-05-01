@@ -118,7 +118,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             )
             run_test_suite(generated_tests, "Pass", container)
 
-            result = TestGenerationResult.create_success(context, generated_patch, pre_patch_failed=True, post_patch_passed=True)
+            result = TestGenerationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
 
         except BuildError as e:
@@ -127,9 +127,9 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
 
         except TestExecutionError as e:
             if e.expectation == "Fail":
-                result = TestGenerationResult.create_test_failure(context, generated_patch, "Generated tests Passed pre-patch\n" + str(e), pre_patch_failed=False)
+                result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, "Generated tests Passed pre-patch\n" + str(e))
             else:
-                result = TestGenerationResult.create_test_failure(context, generated_patch, "Generated tests Failed post-patch\n" + str(e), pre_patch_failed=True, post_patch_passed=False)
+                result = TestGenerationResult.create_post_patch_failure(context, generated_patch, "Generated tests Failed post-patch\n" + str(e))
 
             logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}")
 
