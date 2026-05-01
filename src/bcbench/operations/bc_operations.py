@@ -29,7 +29,7 @@ def _escape_ps_string(value: str) -> str:
 # PowerShell script templates using Python's built-in string.Template
 _BUILD_AND_PUBLISH_TEMPLATE = Template(
     """
-Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
+Import-Module BcContainerHelper -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
@@ -44,7 +44,7 @@ Invoke-AppBuildAndPublish -containerName '$container_name' -appProjectFolder $$p
 
 _TEST_EXECUTION_TEMPLATE = Template(
     """
-Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
+Import-Module BcContainerHelper -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
@@ -58,7 +58,7 @@ Invoke-BCTest -containerName '$container_name' -credential $$credential -codeuni
 
 _DATASET_TESTS_TEMPLATE = Template(
     """
-Import-Module BcContainerHelper -RequiredVersion 6.1.12 -Force -DisableNameChecking
+Import-Module BcContainerHelper -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
@@ -151,7 +151,7 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
             logger.debug(f"Full command output: {e.stdout}")
             raise BuildError(project_path, e.stdout) from None
         except subprocess.TimeoutExpired:
-            logger.error(f"Build timed out for {project_path} after {timeout} seconds")
+            logger.exception(f"Build timed out for {project_path} after {timeout} seconds")
             raise BuildTimeoutExpired(project_path, timeout) from None
 
         logger.info(f"Successfully built and published: {project_path}")
@@ -201,5 +201,5 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
         logger.debug(f"Full test output: {e.stdout}")
         raise TestExecutionError(expectation, e.stderr, e.stdout) from None
     except subprocess.TimeoutExpired:
-        logger.error(f"Test execution timed out after {_config.timeout.test_execution} seconds")
+        logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
         raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None

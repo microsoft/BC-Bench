@@ -489,4 +489,42 @@ function Get-BCBenchDatasetPath {
     return Join-Path $projectRoot "dataset" $DatasetName
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo
+<#
+.SYNOPSIS
+    Returns the latest BCApps release branch name (e.g. "releases/28.5").
+.DESCRIPTION
+    Lists all refs under refs/heads/releases/ via the GitHub API and returns
+    the branch with the highest <major>.<minor> version. Branches whose name
+    after "releases/" does not parse as a version are ignored.
+.PARAMETER Repo
+    OWNER/REPO. Defaults to microsoft/BCApps.
+.OUTPUTS
+    String like "releases/28.5", or $null if no release branch is found.
+#>
+function Get-LatestReleaseBranch {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [string]$Repo = 'microsoft/BCApps'
+    )
+
+    $refsJson = & gh api "repos/$Repo/git/matching-refs/heads/releases/" --jq '[.[].ref]'
+    if ($LASTEXITCODE -ne 0) { throw "gh api matching-refs failed for $Repo" }
+
+    $latest = $refsJson | ConvertFrom-Json |
+    ForEach-Object { $_ -replace '^refs/heads/', '' } |
+    ForEach-Object {
+        $name = $_
+        $suffix = $name -replace '^releases/', ''
+        $version = $null
+        if ([Version]::TryParse($suffix, [ref]$version)) {
+            [pscustomobject]@{ Name = $name; Version = $version }
+        }
+    } |
+    Sort-Object Version -Descending |
+    Select-Object -First 1
+
+    return $latest.Name
+}
+
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo, Get-LatestReleaseBranch

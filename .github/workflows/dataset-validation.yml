@@ -26,6 +26,11 @@ on:
         required: false
         default: ""
         type: string
+      modified-only:
+        description: "Only verify modified entries"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "0 0 * * 0"
 
@@ -34,7 +39,7 @@ jobs:
     if: ${{ inputs.entries-override == '' || inputs.entries-override == null }}
     uses: ./.github/workflows/get-entries.yml
     with:
-      modified-only: false
+      modified-only: ${{ inputs.modified-only || false }}
       test-run: ${{ inputs.test-run || false }}
       category: ${{ inputs.category || 'bug-fix' }}
 

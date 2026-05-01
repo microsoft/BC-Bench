@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
-
-from bcbench.logger import get_logger
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -17,9 +15,7 @@ if TYPE_CHECKING:
     from bcbench.results.base import BaseEvaluationResult
     from bcbench.results.summary import EvaluationResultSummary
 
-__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration", "FailureLayer"]
-
-logger = get_logger(__name__)
+__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
 
 
 class AgentMetrics(BaseModel):
@@ -74,7 +70,7 @@ class ExperimentConfiguration(BaseModel):
         return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
 
 
-class AgentType(str, Enum):
+class AgentType(StrEnum):
     COPILOT = "copilot"
     CLAUDE = "claude"
 
@@ -98,15 +94,7 @@ class AgentType(str, Enum):
                 raise ValueError(f"Unknown AgentType: {self}")
 
 
-class FailureLayer(str, Enum):
-    L1_SYNTAX = "L1-syntax-representation"
-    L2_EXECUTION = "L2-execution-validation"
-    L3_EVENT = "L3-event-driven-paradigm"
-    L4_WORKFLOW = "L4-workflow-business-logic"
-    L5_TOOLCHAIN = "L5-toolchain-ecosystem"
-
-
-class EvaluationCategory(str, Enum):
+class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
     CF_1 = "cf-1"

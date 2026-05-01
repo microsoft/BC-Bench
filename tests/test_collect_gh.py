@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from bcbench.collection.collect_gh import screen_gh_candidate
 from bcbench.collection.gh_client import GHClient
 from bcbench.collection.patch_utils import extract_file_paths_from_patch, find_project_paths_from_diff, separate_patches
 from bcbench.exceptions import CollectionError
@@ -208,6 +209,38 @@ class TestGHClient:
             result = client.get_file_content("test.al", "abc123")
 
             assert "codeunit 12345" in result
+
+
+class TestScreenGHCandidate:
+    def test_returns_failed_result_when_test_patch_has_no_testable_functions(self):
+        diff = """diff --git a/App/Apps/W1/Foo/app/Foo.Codeunit.al b/App/Apps/W1/Foo/app/Foo.Codeunit.al
+--- a/App/Apps/W1/Foo/app/Foo.Codeunit.al
++++ b/App/Apps/W1/Foo/app/Foo.Codeunit.al
+@@ -1,3 +1,4 @@
++// Fix code
+ procedure Main()
+ begin
+ end;
+diff --git a/App/Apps/W1/Foo/test/FooTests.Codeunit.al b/App/Apps/W1/Foo/test/FooTests.Codeunit.al
+--- a/App/Apps/W1/Foo/test/FooTests.Codeunit.al
++++ b/App/Apps/W1/Foo/test/FooTests.Codeunit.al
+@@ -1,3 +1,4 @@
++// Not a test procedure
+ procedure Helper()
+ begin
+ end;
+"""
+
+        with patch("bcbench.collection.collect_gh.GHClient") as mock_client_class:
+            mock_client = mock_client_class.return_value
+            mock_client.get_pr_info.return_value = {"mergeCommit": {"oid": "abc123"}}
+            mock_client.get_pr_diff.return_value = diff
+            mock_client.get_file_content.return_value = 'codeunit 12345 "Foo Tests"'
+
+            result = screen_gh_candidate(12345)
+
+            assert not result.passed
+            assert result.reason == "No testable functions found in test patch"
 
 
 class TestExtractFilePathsFromPatch:

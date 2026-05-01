@@ -94,7 +94,7 @@ def run_claude_code(
                 try:
                     data = json.loads(striped_line)
                     if "result" in data:
-                        print(data["result"], flush=True)
+                        logger.info(data["result"])
                         metrics = parse_metrics(data)
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping non-JSON line: {striped_line}")
@@ -105,12 +105,12 @@ def run_claude_code(
 
         return metrics, config
     except subprocess.TimeoutExpired:
-        logger.error(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
+        logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Claude Code timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
-        logger.error(f"Claude Code execution failed with error {e.stderr}")
+        logger.exception(f"Claude Code execution failed with error {e.stderr}")
         raise AgentError(f"Claude Code execution failed: {e.stderr}") from e
-    except Exception as e:
-        logger.exception(f"Unexpected error running Claude Code: {e}")
+    except Exception:
+        logger.exception("Unexpected error running Claude Code")
         raise
