@@ -69,6 +69,13 @@ extend-select = [
     "PT",     # flake8-pytest-style: consistent pytest patterns (~30 test files)
     "ANN",    # flake8-annotations: enforce type hints (we prefer strong typing)
     "T20",    # flake8-print: prefer logger over print (we have a proper logger)
+    "FURB",   # refurb: modern Python idioms (e.g. x or y over x if x else y)
+    "ISC",    # implicit string concat (catches missing comma in lists of strings)
+    "ICN",    # import conventions (np, pd, plt aliases)
+    "FA",     # future annotations (cleaner type hints)
+    "PYI",    # type stubs (no-op now, guard for future)
+    "SLOT",   # require __slots__ on str/tuple/namedtuple subclasses
+    "ASYNC",  # async best practices (no-op now, guard for future)
 ]
 
 # Ignore specific rules that might be too aggressive
