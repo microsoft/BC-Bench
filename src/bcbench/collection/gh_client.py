@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 
 class GHClient:
-    def __init__(self, repo: str):
+    def __init__(self, repo: str) -> None:
         self.repo = repo
 
     def get_pr_info(self, pr_number: int) -> dict[str, Any]:

@@ -116,6 +116,6 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
         logger.warning("No metrics found in output")
         return None
 
-    except Exception as e:
-        logger.error(f"Failed to parse metrics from output: {e}")
+    except Exception:
+        logger.exception("Failed to parse metrics from output")
         return None

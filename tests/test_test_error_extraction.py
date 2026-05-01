@@ -31,7 +31,6 @@ class TestExtractTestErrors:
     def test_extracts_codeunit_line(self):
         result = _extract_test_errors(SAMPLE_TEST_OUTPUT)
         assert "Codeunit 148181 Sustainability Journal Test" in result
-        print(result)
 
     def test_extracts_testfunction_failure(self):
         result = _extract_test_errors(SAMPLE_TEST_OUTPUT)

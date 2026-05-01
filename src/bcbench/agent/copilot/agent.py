@@ -100,12 +100,12 @@ def run_copilot_agent(
 
         return metrics, config
     except subprocess.TimeoutExpired:
-        logger.error(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
+        logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
-        logger.error(f"Copilot CLI execution failed with error {e.stderr}")
+        logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
         raise AgentError(f"Copilot CLI execution failed: {e}") from None
-    except Exception as e:
-        logger.exception(f"Unexpected error running Copilot CLI: {e}")
+    except Exception:
+        logger.exception("Unexpected error running Copilot CLI")
         raise

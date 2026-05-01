@@ -6,6 +6,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
+import pytest
+
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
@@ -73,12 +75,9 @@ def test_nonexistent_skills():
         entry.repo = "nonexistent/repo"
         config = {"skills": {"enabled": True}}
 
-        try:
+        # Error comes from _get_source_instructions_path when repo folder doesn't exist
+        with pytest.raises(FileNotFoundError, match="not found"):
             setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
-            raise AssertionError("Expected FileNotFoundError for nonexistent repo")
-        except FileNotFoundError as e:
-            # Error comes from _get_source_instructions_path when repo folder doesn't exist
-            assert "not found" in str(e)
 
 
 def test_overwrite_skill_folder_files():

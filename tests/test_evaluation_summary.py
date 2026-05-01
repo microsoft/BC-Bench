@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 
 from bcbench.config import get_config
-from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
+from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_testgen_result
 
@@ -118,7 +118,7 @@ class TestFromResults:
         ]
 
     def test_from_results_creates_correct_summary(self, sample_results):
-        summary = EvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
 
         assert summary.total == 3
         assert summary.resolved == 2
@@ -130,7 +130,7 @@ class TestFromResults:
         assert summary.date == date.today()
 
     def test_from_results_calculates_averages_correctly(self, sample_results):
-        summary = EvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
 
         # Average duration: (100 + 150 + 80) / 3 = 110
         assert summary.average_duration == pytest.approx(110.0)
@@ -157,7 +157,7 @@ class TestFromResults:
             ),
         ]
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
         # Should only average non-None values
         assert summary.average_duration == pytest.approx(100.0)
@@ -176,7 +176,7 @@ class TestFromResults:
             ),
         ]
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
         assert summary.average_duration == 0.0
         assert summary.average_prompt_tokens == 0.0
@@ -204,7 +204,7 @@ class TestFromResults:
             ),
         ]
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run")
 
         assert summary.average_tool_usage is not None
         # bash: (10 + 6) / 2 = 8
@@ -224,7 +224,7 @@ class TestFromResults:
             ),
         ]
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run")
 
         assert summary.average_tool_usage is None
 
@@ -381,7 +381,7 @@ class TestExperimentConfiguration:
         # Set experiment on the first result
         results[0].experiment = experiment
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
         assert summary.experiment is not None
         assert summary.experiment.mcp_servers == ["pylance", "filesystem"]
@@ -398,7 +398,7 @@ class TestExperimentConfiguration:
             ),
         ]
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
         assert summary.experiment is None
 
@@ -414,7 +414,7 @@ class TestExperimentConfiguration:
         # Set an empty experiment config (all defaults)
         results[0].experiment = ExperimentConfiguration()
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
         # Should be normalized to None
         assert summary.experiment is None
@@ -431,7 +431,7 @@ class TestExperimentConfiguration:
         # Set an explicitly empty experiment config
         results[0].experiment = ExperimentConfiguration(mcp_servers=None, custom_instructions=False, custom_agent=None)
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
         # Should be normalized to None
         assert summary.experiment is None
@@ -448,7 +448,7 @@ class TestExperimentConfiguration:
         ]
         results[0].experiment = experiment
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
         # Should preserve non-empty experiment
         assert summary.experiment is not None
@@ -464,7 +464,7 @@ class TestInstanceResults:
             create_bugfix_result(instance_id="test__3", resolved=True),
         ]
 
-        summary = EvaluationResultSummary.from_results(results, run_id="test_run")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run")
 
         instance_results = summary.instance_results
         assert len(instance_results) == 3
@@ -477,7 +477,7 @@ class TestLeaderboardAggregate:
     def test_from_single_run_calculates_average(self):
         from bcbench.results.summary import LeaderboardAggregate
 
-        summary = EvaluationResultSummary.from_results(
+        summary = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=False),
@@ -499,7 +499,7 @@ class TestLeaderboardAggregate:
     def test_from_multiple_runs_calculates_average_and_ci_bounds(self):
         from bcbench.results.summary import LeaderboardAggregate
 
-        run1 = EvaluationResultSummary.from_results(
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=False),
@@ -507,7 +507,7 @@ class TestLeaderboardAggregate:
             ],
             run_id="run_1",
         )
-        run2 = EvaluationResultSummary.from_results(
+        run2 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=False),
                 create_bugfix_result(instance_id="test__2", resolved=True),
@@ -515,7 +515,7 @@ class TestLeaderboardAggregate:
             ],
             run_id="run_2",
         )
-        run3 = EvaluationResultSummary.from_results(
+        run3 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=False),
                 create_bugfix_result(instance_id="test__2", resolved=False),
@@ -542,7 +542,7 @@ class TestLeaderboardAggregate:
         # - run1: 3/3 resolved (100%)
         # - run2: 2/3 resolved (66.7%)
         # - run3: 1/3 resolved (33.3%)
-        run1 = EvaluationResultSummary.from_results(
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=True),
@@ -550,7 +550,7 @@ class TestLeaderboardAggregate:
             ],
             run_id="run_1",
         )
-        run2 = EvaluationResultSummary.from_results(
+        run2 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=True),
@@ -558,7 +558,7 @@ class TestLeaderboardAggregate:
             ],
             run_id="run_2",
         )
-        run3 = EvaluationResultSummary.from_results(
+        run3 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=False),
@@ -583,21 +583,21 @@ class TestLeaderboardAggregate:
         from bcbench.results.summary import LeaderboardAggregate
 
         # All instances pass all runs
-        run1 = EvaluationResultSummary.from_results(
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=True),
             ],
             run_id="run_1",
         )
-        run2 = EvaluationResultSummary.from_results(
+        run2 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=True),
             ],
             run_id="run_2",
         )
-        run3 = EvaluationResultSummary.from_results(
+        run3 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=True),
@@ -618,7 +618,7 @@ class TestLeaderboard:
     def test_aggregate_from_runs(self):
         from bcbench.results.summary import LeaderboardAggregate
 
-        run1 = EvaluationResultSummary.from_results(
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__1", resolved=True),
                 create_bugfix_result(instance_id="test__2", resolved=False),
@@ -635,7 +635,7 @@ class TestLeaderboard:
     def test_leaderboard_to_dict(self):
         from bcbench.results.summary import Leaderboard, LeaderboardAggregate
 
-        run1 = EvaluationResultSummary.from_results(
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [create_bugfix_result(instance_id="test__1", resolved=True)],
             run_id="run_1",
         )
@@ -682,7 +682,7 @@ class TestLeaderboard:
     def test_aggregate_includes_benchmark_version_from_runs(self):
         from bcbench.results.summary import LeaderboardAggregate
 
-        run1 = EvaluationResultSummary.from_results(
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [create_bugfix_result(instance_id="test__1", resolved=True)],
             run_id="run_1",
         )
