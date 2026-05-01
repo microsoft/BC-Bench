@@ -31,7 +31,7 @@ def run_copilot(
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Run GitHub Copilot CLI on a single entry to generate a patch (without building/testing).
 
@@ -55,7 +55,7 @@ def run_claude(
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Run Claude Code on a single entry to generate a patch (without building/testing).
 

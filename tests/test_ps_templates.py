@@ -186,7 +186,9 @@ class TestPowerShellScriptGeneration:
         )
 
         # Path will be in Windows format with spaces preserved
-        assert "Program Files" in script and "NAV" in script and "App" in script
+        assert "Program Files" in script
+        assert "NAV" in script
+        assert "App" in script
 
     def test_version_is_not_quoted(self):
         script = bc_operations.build_ps_app_build_and_publish(

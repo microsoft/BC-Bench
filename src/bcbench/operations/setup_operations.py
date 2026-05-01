@@ -2,13 +2,11 @@
 
 from pathlib import Path
 
-from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
 from bcbench.logger import get_logger
 from bcbench.operations.git_operations import checkout_commit, clean_repo
 
 logger = get_logger(__name__)
-_config = get_config()
 
 __all__ = ["setup_repo_prebuild"]
 

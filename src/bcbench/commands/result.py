@@ -43,7 +43,7 @@ def result_summarize(
             help="POC: attach hardcoded LMChecklist assertions to the bceval 'expected' field so bc-eval's lm_checklist evaluator can score this run. Intended to demonstrate LLM-as-judge integration against the existing bug-fix pipeline.",
         ),
     ] = False,
-):
+) -> None:
     """
     Summarize evaluation results from a completed run.
 
@@ -109,7 +109,7 @@ def result_update(
     evaluation_summary: Annotated[Path, typer.Argument(help="Path to a single evaluation run's summary JSON", exists=True, file_okay=True, dir_okay=False)],
     leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_dir,
     n: Annotated[int, typer.Option(help="Max number of runs to store per agent+model+experiment combination")] = 5,
-):
+) -> None:
     """
     Update the public leaderboard with a new evaluation summary.
 
@@ -159,7 +159,7 @@ def result_update(
 @result_app.command("refresh")
 def result_refresh(
     leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_dir,
-):
+) -> None:
     """
     Refresh all leaderboard aggregates without adding new data.
 

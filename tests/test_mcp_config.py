@@ -25,12 +25,12 @@ MSLEARN_SERVER = {
 }
 
 
-@pytest.fixture()
+@pytest.fixture
 def entry():
     return create_dataset_entry(project_paths=["src/App", "src/TestApp"])
 
 
-@pytest.fixture()
+@pytest.fixture
 def repo_path() -> Path:
     return Path("/repo")
 

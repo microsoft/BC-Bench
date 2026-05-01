@@ -32,8 +32,10 @@ class TestBootstrapCI:
     def test_wider_ci_for_more_variance(self):
         low_var = bootstrap_ci([0.49, 0.50, 0.51])
         high_var = bootstrap_ci([0.3, 0.5, 0.7])
-        assert low_var["ci_high"] is not None and low_var["ci_low"] is not None
-        assert high_var["ci_high"] is not None and high_var["ci_low"] is not None
+        assert low_var["ci_high"] is not None
+        assert low_var["ci_low"] is not None
+        assert high_var["ci_high"] is not None
+        assert high_var["ci_low"] is not None
         low_width = low_var["ci_high"] - low_var["ci_low"]
         high_width = high_var["ci_high"] - high_var["ci_low"]
         assert high_width > low_width
@@ -41,8 +43,10 @@ class TestBootstrapCI:
     def test_narrower_ci_for_more_samples(self):
         few = bootstrap_ci([0.4, 0.6])
         many = bootstrap_ci([0.4, 0.5, 0.5, 0.5, 0.6])
-        assert few["ci_high"] is not None and few["ci_low"] is not None
-        assert many["ci_high"] is not None and many["ci_low"] is not None
+        assert few["ci_high"] is not None
+        assert few["ci_low"] is not None
+        assert many["ci_high"] is not None
+        assert many["ci_low"] is not None
         few_width = few["ci_high"] - few["ci_low"]
         many_width = many["ci_high"] - many["ci_low"]
         assert many_width < few_width
@@ -72,7 +76,9 @@ class TestBootstrapCI:
         ci_low = result["ci_low"]
         ci_high = result["ci_high"]
         mean = result["mean"]
-        assert ci_low is not None and ci_high is not None and mean is not None
+        assert ci_low is not None
+        assert ci_high is not None
+        assert mean is not None
         assert ci_low <= mean <= ci_high
 
 
