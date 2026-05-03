@@ -64,6 +64,7 @@ jobs:
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
       - name: Azure Login with OIDC for bceval package
+        if: ${{ inputs.category != 'cf' }}
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -71,6 +72,7 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Upload result with bceval to Braintrust
+        if: ${{ inputs.category != 'cf' }}
         env:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
@@ -95,7 +97,10 @@ jobs:
             --tags "${{ inputs.agent }},${MODEL_TAG},${{ inputs.category }}" ${{ !inputs.mock && '--upload-results' || '' }}
 
       - name: Update leaderboard in a new branch
-        if: ${{ !inputs.mock }}
+        # CF runs only save raw results (per-instance result files + summary artifact);
+        # they do not contribute to the public leaderboard. Metrics for CF are
+        # computed offline from the raw results in notebooks.
+        if: ${{ !inputs.mock && inputs.category != 'cf' }}
         run: |
           git fetch origin main
 

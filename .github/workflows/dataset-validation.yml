@@ -17,10 +17,7 @@ on:
         type: choice
         options:
           - "bug-fix"
-          - "cf-1"
-          - "cf-2"
-          - "cf-3"
-          - "cf-4"
+          - "cf"
       entries-override:
         description: "Optional JSON array of entry IDs to validate (overrides get-entries)"
         required: false

@@ -29,10 +29,7 @@ on:
         options:
           - "bug-fix"
           - "test-generation"
-          - "cf-1"
-          - "cf-2"
-          - "cf-3"
-          - "cf-4"
+          - "cf"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false

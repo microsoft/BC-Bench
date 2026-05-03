@@ -97,20 +97,11 @@ class AgentType(StrEnum):
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
-    CF_1 = "cf-1"
-    CF_2 = "cf-2"
-    CF_3 = "cf-3"
-    CF_4 = "cf-4"
+    CF = "cf"
 
     @property
     def is_counterfactual(self) -> bool:
-        return self in (EvaluationCategory.CF_1, EvaluationCategory.CF_2, EvaluationCategory.CF_3, EvaluationCategory.CF_4)
-
-    @property
-    def cf_variant(self) -> int | None:
-        if not self.is_counterfactual:
-            return None
-        return int(self.value.split("-")[1])
+        return self == EvaluationCategory.CF
 
     @property
     def prompt_template_key(self) -> str:

@@ -174,10 +174,9 @@ class TestCounterfactualEntrySchema:
 
 class TestCounterfactualCategory:
     def test_category_properties(self):
-        cat = EvaluationCategory.CF_1
-        assert cat.value == "cf-1"
+        cat = EvaluationCategory.CF
+        assert cat.value == "cf"
         assert cat.is_counterfactual
-        assert cat.cf_variant == 1
         assert cat.prompt_template_key == "counterfactual"
         assert cat.dataset_path.name == "counterfactual.jsonl"
         assert cat.entry_class is CounterfactualEntry
@@ -185,26 +184,12 @@ class TestCounterfactualCategory:
         assert cat.summary_class is not None
         assert cat.result_class is not None
 
-    def test_all_cf_categories_share_properties(self):
-        for cat in (EvaluationCategory.CF_1, EvaluationCategory.CF_2, EvaluationCategory.CF_3, EvaluationCategory.CF_4):
-            assert cat.is_counterfactual
-            assert cat.dataset_path.name == "counterfactual.jsonl"
-            assert cat.entry_class is CounterfactualEntry
-            assert cat.prompt_template_key == "counterfactual"
-
-    def test_cf_variant_numbers(self):
-        assert EvaluationCategory.CF_1.cf_variant == 1
-        assert EvaluationCategory.CF_2.cf_variant == 2
-        assert EvaluationCategory.CF_3.cf_variant == 3
-        assert EvaluationCategory.CF_4.cf_variant == 4
-
     def test_non_cf_categories_are_not_counterfactual(self):
         assert not EvaluationCategory.BUG_FIX.is_counterfactual
         assert not EvaluationCategory.TEST_GENERATION.is_counterfactual
-        assert EvaluationCategory.BUG_FIX.cf_variant is None
 
     def test_reuses_bugfix_pipeline(self):
         from bcbench.evaluate import BugFixPipeline
 
-        pipeline = EvaluationCategory.CF_1.pipeline
+        pipeline = EvaluationCategory.CF.pipeline
         assert isinstance(pipeline, BugFixPipeline)
