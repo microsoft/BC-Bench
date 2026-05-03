@@ -1,6 +1,53 @@
-# Title: "Calculate Regenerative Plan" does not plan component — wrong CalcLevels parameter
+# Title: "Calculate Regenerative Plan" in a planning worksheet does not plan the component when Stockkeeping Units are setup for the items.
 ## Repro Steps:
-Same as NAV-223790 base repro.
+1.  Open BC 26.1 W1 on Prem
+2.  Open the manufacturing Setup
+    ![manufacturing setup](./manufacturing_setup.png)
+3.  Search for Items
+    Create a new Item
+    Item: Component (70065)
+    use the Item Template do nothing else
+    Create SKU for Location BLUE
+    Open the SKU -> Related -> Warehouse -> Stockkeeping Units
+    Replenishment System: Purchase
+    Reorder Policy: Order
+4.  Search for Production BOM
+    Create the following BOM
+    ![P00020 bom](./P00020_bom.png)
+5.  Search for Items
+    Create a new Item
+    Item: Main (70066)
+    use the Item Template do nothing else
+    Create SKU for Location BLUE
+    Open the SKU -> Related -> Warehouse -> Stockkeeping Units
+    Replenishment System: Prod. Order
+    Manufacturing Policy: Make to Stock
+    Production BOM No.: P00020
+    Reorder Policy: Lot for Lot
+6.  Search for Sales Orders
+    Create a new Sales Order
+    Customer: 10000
+    Item: 70066 (Main)
+    Location: BLUE
+    Quantity: 10
+7.  Open Your Settings
+    Change the Workdate to: 01.01.2027
+8.  Search for Planning Worksheet
+    Prepare -> Calculate Regenerative Plan
+    ![calculate plan](./calculate_plan.png)
+
+ACTUAL RESULT:
+Just one line was created for the Main Item but the component was not planned:
+![planning worksheets 1](./planning_worksheets_1.png)
+Run the Calculate Regenerative Plan again.
+Now the Component is planned also:
+![planning worksheets 2](./planning_worksheets_2.png)
+
+EXPECTED RESULT:
+Both lines should be calculated with the first Calculate Regenerative Plan.
+
+ADDITIONAL INFORMATION:
+This works as expected in BC 25.7.
 
 ## Description:
-Variant of NAV-223790 where the CalcLevels procedure is called with the wrong first parameter (0 instead of 1). The first parameter controls the calculation type semantic — 0 produces an incorrect LLC value that leaves the planning BOM expansion stale. This is an L1 (API/signature misuse) variant: the code compiles and the trigger fires, but the parameter semantic is wrong, causing the LLC to remain incorrect.
+When you run "Calculate Regenerative Plan" in a planning worksheet, the component is not planned in the first run, but in the second attempt it is planned. The Stockkeeping Unit setup on the parent item should trigger the Low-Level Code recalculation so that the BOM expansion is up to date before planning runs; today this does not happen until something else forces a recalculation, which is why the second pass succeeds.
