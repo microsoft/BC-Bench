@@ -7,6 +7,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
+import pytest
+
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.operations.instruction_operations import (
@@ -73,11 +75,8 @@ def test_sanitization():
 
 
 def test_nonexistent_instructions():
-    try:
+    with pytest.raises(FileNotFoundError, match="nonexistent/repo"):
         _get_source_instructions_path("nonexistent/repo")
-        raise AssertionError("Should raise FileNotFoundError")
-    except FileNotFoundError as e:
-        assert "nonexistent/repo" in str(e)
 
 
 def test_overwrite_existing_instructions():

@@ -51,7 +51,7 @@ def evaluate_copilot(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
 
@@ -102,7 +102,7 @@ def evaluate_claude_code(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_code_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Evaluate Claude Code on single dataset entry.
 
@@ -147,7 +147,7 @@ def evaluate_mock(
     category: EvaluationCategoryOption,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mock_run",
-):
+) -> None:
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
@@ -218,8 +218,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
-        # Randomly choose success, build failure, or test failure
-        scenario = random.choice(["success", "build-fail", "test-fail"])
+        # Randomly choose success or build failure
+        scenario = random.choice(["success", "build-fail"])
         logger.info(f"Mock pipeline: Selected scenario: {scenario}")
 
         result: BaseEvaluationResult
@@ -228,8 +228,6 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
             case "build-fail":
                 result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
-            case "test-fail":
-                result = ExecutionBasedEvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

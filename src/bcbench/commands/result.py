@@ -36,7 +36,7 @@ def result_summarize(
     result_pattern: Annotated[str, typer.Option(help="Pattern for the per instances result files")] = f"*{_config.file_patterns.result_pattern}",
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
-):
+) -> None:
     """
     Summarize evaluation results from a completed run.
 
@@ -102,7 +102,7 @@ def result_update(
     evaluation_summary: Annotated[Path, typer.Argument(help="Path to a single evaluation run's summary JSON", exists=True, file_okay=True, dir_okay=False)],
     leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_dir,
     n: Annotated[int, typer.Option(help="Max number of runs to store per agent+model+experiment combination")] = 5,
-):
+) -> None:
     """
     Update the public leaderboard with a new evaluation summary.
 
@@ -152,7 +152,7 @@ def result_update(
 @result_app.command("refresh")
 def result_refresh(
     leaderboard_dir: Annotated[Path, typer.Option(help="Path to the directory containing category-specific leaderboard files")] = _config.paths.leaderboard_dir,
-):
+) -> None:
     """
     Refresh all leaderboard aggregates without adding new data.
 

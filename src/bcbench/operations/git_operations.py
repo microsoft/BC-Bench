@@ -85,7 +85,7 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
 
         logger.info(f"{patch_name.capitalize()} applied successfully")
     except subprocess.CalledProcessError as e:
-        logger.error(f"{patch_name.capitalize()} application failed: {e.stderr}")
+        logger.exception(f"{patch_name.capitalize()} application failed: {e.stderr}")
         raise PatchApplicationError(patch_name, e.stderr) from e
     finally:
         Path(patch_file).unlink(missing_ok=True)

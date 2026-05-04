@@ -10,6 +10,11 @@ on:
         required: false
         default: true
         type: boolean
+      modified-only:
+        description: "Only verify modified entries"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "0 0 * * 0"
 
@@ -17,7 +22,7 @@ jobs:
   get-entries:
     uses: ./.github/workflows/get-entries.yml
     with:
-      modified-only: false
+      modified-only: ${{ inputs.modified-only || false }}
       test-run: ${{ inputs.test-run || false }}
       category: "bug-fix"
 
