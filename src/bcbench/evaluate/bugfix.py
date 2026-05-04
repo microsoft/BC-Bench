@@ -74,7 +74,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
-            result = BugFixResult.create_test_failure(context, generated_patch, error_msg="Test failed\n" + str(e))
+            result = BugFixResult.create_test_failure(context, generated_patch, error_message="Test failed\n" + str(e))
             logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}")
 
         finally:

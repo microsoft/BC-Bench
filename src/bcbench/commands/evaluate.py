@@ -218,8 +218,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
-        # Randomly choose success, build failure, or test failure
-        scenario = random.choice(["success", "build-fail", "test-fail"])
+        # Randomly choose success or build failure
+        scenario = random.choice(["success", "build-fail"])
         logger.info(f"Mock pipeline: Selected scenario: {scenario}")
 
         result: BaseEvaluationResult
@@ -228,8 +228,6 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
             case "build-fail":
                 result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
-            case "test-fail":
-                result = ExecutionBasedEvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

@@ -16,6 +16,7 @@ on:
           - "claude-haiku-4.5"
           - "claude-opus-4.6"
           - "claude-opus-4.7"
+          - "gpt-5.5"
           - "gpt-5.4"
           - "gpt-5.3-codex"
           - "gpt-5.2-codex"
@@ -116,7 +117,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@1.0.31
+        run: npm install -g @github/copilot@1.0.39
 
       - name: Select PAT based on job index
         id: select-pat
