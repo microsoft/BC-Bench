@@ -44,6 +44,11 @@ on:
           - "3"
           - "4"
           - "5"
+      lm-checklist-poc:
+        description: "POC: score results with bc-eval's lm_checklist evaluator after the run"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: claude-evaluation-${{ inputs.test-run && 'test' || 'full' }}
@@ -141,6 +146,7 @@ jobs:
       agent: "Claude Code"
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
+      lm-checklist-poc: ${{ inputs.lm-checklist-poc }}
     secrets: inherit
 
   requeue:
