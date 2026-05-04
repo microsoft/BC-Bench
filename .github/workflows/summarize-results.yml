@@ -84,8 +84,8 @@ jobs:
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$ADO_TOKEN"
 
-          # Install bc-eval from ADO feed using Python 3.11 (bc-eval's private feed only has cp311 wheels)
-          uv tool install bc-eval[capi]==0.3.0 --python 3.11 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
+          # Install bc-eval from ADO feed using Python 3.12 (bc-eval's private feed only has cp312 wheels)
+          uv tool install bc-eval[capi]==0.3.0 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/PythonPackages%40Local/pypi/simple/"
 
           # Upload summary to Braintrust using bc-eval
           MODEL_TAG="${{ inputs.model }}"
