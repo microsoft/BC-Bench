@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bcbench"
-version = "0.5.1"
+version = "0.5.3"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -15,10 +15,9 @@ authors = [
 classifiers = ["Private :: Do Not Upload"]
 dependencies = [
     "jsonschema>=4.0",
-    "python-dotenv>=1.0",
+    "python-dotenv>=1.2.2",
     "requests>=2.0",
     "unidiff>=0.7",
-    "mini-swe-agent>=1.0.0",
     "typer>=0.9.0",
     "typing-extensions>=4.0",
     "pyyaml>=6.0",
@@ -26,6 +25,7 @@ dependencies = [
     "textual>=7.0",
     "numpy>=2.3.5",
     "scipy>=1.16.3",
+    "jinja2>=3.1.6",
 ]
 
 [project.scripts]
@@ -62,14 +62,36 @@ extend-select = [
     "RET",   # flake8-return (simplify return statements)
     "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
     "RUF",   # Ruff-specific rules
-    "TID252", # Ban relative imports
+    "TID",   # flake8-tidy-imports (ban relative imports + extensible banned-API list)
+    "LOG",   # flake8-logging: catch deprecated logging.warn, misuse of exception(), etc.
+    "G",     # flake8-logging-format: catch string concat / % formatting in log calls
+    "TRY",   # tryceratops: better exception handling
+    "PT",    # flake8-pytest-style: consistent pytest patterns (~30 test files)
+    "ANN",   # flake8-annotations: enforce type hints (we prefer strong typing)
+    "T20",   # flake8-print: prefer logger over print (we have a proper logger)
+    "FURB",  # refurb: modern Python idioms (e.g. x or y over x if x else y)
+    "ISC",   # implicit string concat (catches missing comma in lists of strings)
+    "ICN",   # import conventions (np, pd, plt aliases)
+    "FA",    # future annotations (cleaner type hints)
+    "PYI",   # type stubs (no-op now, guard for future)
+    "SLOT",  # require __slots__ on str/tuple/namedtuple subclasses
+    "ASYNC", # async best practices (no-op now, guard for future)
 ]
 
-# Ignore specific rules that might be too aggressive
 ignore = [
     "UP035",   # deprecated-import (typing.Dict, etc. still valid)
     "PTH123",  # Allow open() for now, Path.open() migration can be gradual
+    "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible
+    "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message
+    "TRY300",  # try-consider-else: stylistic; often hurts readability
+    "TRY301",  # raise-within-try: suggested "abstract to inner function" refactor adds indirection
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN"]
+"notebooks/**" = ["ANN", "T20"]   # notebooks routinely print() for analysis output
+"src/bcbench/commands/**" = ["T20"]   # CLI commands print user-facing output
+"tools/**" = ["T20"]                  # standalone CLI scripts
 
 [dependency-groups]
 analysis = [
@@ -81,7 +103,7 @@ analysis = [
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.0",
-    "ruff>=0.13.0",
+    "ruff>=0.15.0",
     "pre-commit>=4.3.0",
-    "ty>=0.0.1a25",
+    "ty>=0.0.33",
 ]
