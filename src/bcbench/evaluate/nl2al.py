@@ -109,6 +109,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
             logger.exception(f"Build failed for {context.entry.instance_id}")
         else:
             # TODO: LLM-as-judge evaluation against context.entry.get_expected_output()
+            # This step might just store the generated patch, the scoring logic might happen later in the workflow using LMchecklist (i.e. LLM-as-judge)
             llm_judge_score = None
 
             result = NL2ALResult.create_build_success(context, output=generated_patch, llm_judge_score=llm_judge_score)
