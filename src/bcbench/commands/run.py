@@ -1,5 +1,7 @@
 """CLI commands for running agents."""
 
+from typing import cast
+
 import typer
 from typing_extensions import Annotated
 
@@ -84,19 +86,18 @@ def run_claude(
 @run_app.command("bcal")
 def run_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
 ) -> None:
     """
-    Run bc-al dotnet tool on a single nl2al entry to generate AL code (without building).
+    Run bc-al dotnet tool on a single nl2al entry to generate AL code.
 
-    For full evaluation including building, use 'bcbench evaluate bcal' instead.
+    For full evaluation, use 'bcbench evaluate bcal' instead.
 
     Example:
-        uv run bcbench run bcal nl2al-entry-id --repo-path /path/to/workspace
+        uv run bcbench run bcal nl2al__job-budget-report-1
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]  # type: ignore[assignment]
-    category.pipeline.setup_workspace(entry, repo_path)
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    category.pipeline.setup_workspace(entry, output_dir)
 
-    run_bcal_agent(entry=entry, repo_path=repo_path, output_dir=output_dir)
+    run_bcal_agent(entry=entry, output_dir=output_dir)

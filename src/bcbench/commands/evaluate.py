@@ -2,6 +2,7 @@ import random
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import typer
 from typing_extensions import Annotated
@@ -148,10 +149,6 @@ def evaluate_claude_code(
 @evaluate_app.command("bcal")
 def evaluate_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName = "",
-    username: ContainerUsername = "",
-    password: ContainerPassword = "",
-    repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
 ) -> None:
@@ -161,18 +158,16 @@ def evaluate_bcal(
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
     category = EvaluationCategory.NL2AL
-    entry: NL2ALEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]  # type: ignore[assignment]
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with bc-al")
 
-    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
-
     context = EvaluationContext(
         entry=entry,
-        repo_path=repo_path,
+        repo_path=output_dir,
         result_dir=run_dir,
-        container=container,
+        container=None,
         model="",
         agent_name="bc-al",
         category=category,
@@ -181,8 +176,7 @@ def evaluate_bcal(
     category.pipeline.execute(
         context,
         lambda ctx: run_bcal_agent(
-            entry=ctx.entry,  # type: ignore[arg-type]
-            repo_path=ctx.repo_path,
+            entry=cast(NL2ALEntry, ctx.entry),
             output_dir=ctx.result_dir,
         ),
     )

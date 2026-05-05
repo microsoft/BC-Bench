@@ -20,7 +20,6 @@ _config = get_config()
 
 def run_bcal_agent(
     entry: NL2ALEntry,
-    repo_path: Path,
     output_dir: Path,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
@@ -28,7 +27,7 @@ def run_bcal_agent(
 
     logger.info(f"Running bc-al on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, agent_config, EvaluationCategory.NL2AL)
+    prompt: str = build_prompt(entry, output_dir, agent_config, EvaluationCategory.NL2AL)
 
     bc_al_cmd = shutil.which("bc-al")  # TODO: download from DynamicsSMBTest feed, Microsoft.BusinessCentral.BCal.CLI
     if not bc_al_cmd:
@@ -36,11 +35,11 @@ def run_bcal_agent(
 
     cmd_args = [
         bc_al_cmd,
-        f"--workspace={repo_path.resolve()}",
+        f"--workspace={output_dir.resolve()}",
         f"--prompt={prompt}",
     ]
 
-    logger.info(f"Executing bc-al in directory: {repo_path}")
+    logger.info(f"Executing bc-al in directory: {output_dir}")
     logger.debug(f"Using prompt:\n{prompt}")
     logger.debug(f"bc-al command args: {cmd_args}")
 
@@ -48,7 +47,7 @@ def run_bcal_agent(
         start = time.monotonic()
         subprocess.run(
             cmd_args,
-            cwd=str(repo_path),
+            cwd=str(output_dir),
             timeout=_config.timeout.agent_execution,
             check=True,
         )
