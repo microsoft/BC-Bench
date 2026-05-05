@@ -265,9 +265,8 @@ def create_nl2al_result(
     project: str = "JobBudgetVsActualReport",
     model: str = "gpt-4o",
     agent_name: str = "copilot-cli",
-    resolved: bool = True,
     build: bool = True,
-    generated_patch: str = "diff --git a/test.al b/test.al\n+report code",
+    output: str = "diff --git a/test.al b/test.al\n+report code",
     error_message: str | None = None,
     metrics: AgentMetrics | None = None,
 ) -> NL2ALResult:
@@ -277,9 +276,8 @@ def create_nl2al_result(
         model=model,
         agent_name=agent_name,
         category=EvaluationCategory.NL2AL,
-        resolved=resolved,
         build=build,
-        generated_patch=generated_patch,
+        output=output,
         error_message=error_message,
         metrics=metrics,
     )

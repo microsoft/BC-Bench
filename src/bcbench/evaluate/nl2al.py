@@ -105,13 +105,13 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
                 context.entry.environment_setup_version,
             )
         except BuildError as e:
-            result = NL2ALResult._create_from_context(context, output=generated_patch, error_message=str(e), build=False)
-            logger.error(f"Build failed for {context.entry.instance_id}: {e}")
+            result = NL2ALResult.create_build_failure(context, output=generated_patch, error_message=str(e))
+            logger.exception(f"Build failed for {context.entry.instance_id}")
         else:
             # TODO: LLM-as-judge evaluation against context.entry.get_expected_output()
             llm_judge_score = None
 
-            result = NL2ALResult._create_from_context(context, output=generated_patch, build=True, llm_judge_score=llm_judge_score)
+            result = NL2ALResult.create_build_success(context, output=generated_patch, llm_judge_score=llm_judge_score)
             logger.info(f"Build succeeded for {context.entry.instance_id}")
 
         self.save_result(context, result)
