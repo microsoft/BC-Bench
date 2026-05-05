@@ -57,9 +57,14 @@ def _create_al_project_scaffold(project_dir: Path, entry: NL2ALEntry) -> None:
     app_json_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
 
 
+def _force_remove_readonly(func: Callable, path: str, _: object) -> None:
+    Path(path).chmod(0o666)
+    func(path)
+
+
 def _reset_repo_path(repo_path: Path) -> None:
     if repo_path.exists():
-        shutil.rmtree(repo_path)
+        shutil.rmtree(repo_path, onexc=_force_remove_readonly)
     repo_path.mkdir(parents=True, exist_ok=True)
 
 
