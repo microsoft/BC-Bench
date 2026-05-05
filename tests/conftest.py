@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BugFixEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.results.bugfix import BugFixResult
@@ -76,18 +76,18 @@ def create_dataset_entry(
 
 def create_evaluation_context(
     tmp_path: Path,
-    entry: BugFixEntry | None = None,
+    entry: BaseDatasetEntry | None = None,
     agent_name: str = "test-agent",
     model: str = "test-model",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
     password: str = "test-password",
     username: str = "test-user",
-) -> EvaluationContext[BugFixEntry]:
+) -> EvaluationContext[BaseDatasetEntry]:
     if entry is None:
         entry = create_dataset_entry()
 
-    return EvaluationContext[BugFixEntry](
+    return EvaluationContext[BaseDatasetEntry](
         entry=entry,
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
@@ -243,7 +243,7 @@ def sample_dataset_entry() -> BugFixEntry:
 
 
 @pytest.fixture
-def sample_evaluation_context(tmp_path: Path) -> EvaluationContext[BugFixEntry]:
+def sample_evaluation_context(tmp_path: Path) -> EvaluationContext[BaseDatasetEntry]:
     return create_evaluation_context(tmp_path)
 
 

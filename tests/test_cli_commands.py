@@ -681,7 +681,8 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
     with_servers = next((a for a in copilot_gpt4o_aggs if (a.get("experiment") or {}).get("mcp_servers") == ["server1", "server2"]), None)
     without_servers = next((a for a in copilot_gpt4o_aggs if (a.get("experiment") or {}).get("mcp_servers") is None), None)
 
-    assert with_servers is not None and without_servers is not None
+    assert with_servers is not None
+    assert without_servers is not None
     assert with_servers["average"] == 0.6, "Original aggregate should be unchanged"
     assert without_servers["average"] == 0.7, "New aggregate should have new values"
 

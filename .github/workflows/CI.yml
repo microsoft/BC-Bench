@@ -26,8 +26,8 @@ jobs:
         with:
           all-extras: true
 
-      - name: Run Ruff
-        run: uv run ruff check --output-format=github .
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
 
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing

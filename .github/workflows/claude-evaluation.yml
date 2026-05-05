@@ -107,7 +107,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.112
+        run: npm install -g @anthropic-ai/claude-code@2.1.116
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120

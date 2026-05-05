@@ -24,7 +24,7 @@ def list_entries(
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
     test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
-):
+) -> None:
     """List dataset entry IDs."""
     entry_cls = category.entry_class
     resolved_path = category.dataset_path
@@ -68,7 +68,7 @@ def view_entry(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to view")],
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     show_patch: Annotated[bool, typer.Option(help="Show patch in output")] = False,
-):
+) -> None:
     """View a specific dataset entry with rich formatting."""
     from rich.console import Console
     from rich.panel import Panel

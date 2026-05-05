@@ -1,4 +1,4 @@
-from typing import Any, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 
@@ -63,13 +63,8 @@ class CodeReviewResult(BaseEvaluationResult):
         cls,
         context: "EvaluationContext",
         output: str,
-        **kwargs: Any,
     ) -> Self:
-        return cls._create_from_context(
-            context,
-            output=output,
-            **kwargs,
-        )
+        return cls(**cls._base_fields(context), output=output)
 
     @property
     def category_metrics(self) -> dict[str, int | float | bool]:
