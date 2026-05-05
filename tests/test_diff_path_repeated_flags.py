@@ -207,75 +207,50 @@ diff --git a/App/Layers/W1/Tests/ERM/SalesTest.Codeunit.al b/App/Layers/W1/Tests
             assert "App/Apps/W1/Test Project" in call_args
 
 
-class TestCLIRepeatedFlags:
+class TestCLIScreenCommand:
     @pytest.mark.integration
-    def test_cli_accepts_multiple_diff_path_flags(self, tmp_path):
-        repo_path = tmp_path / "repo"
-        repo_path.mkdir()
+    def test_cli_screen_passes_for_valid_pr(self):
+        from bcbench.collection.collect_gh import ScreeningResult
 
-        with patch("bcbench.commands.collect.collect_nav_entry") as mock_collect:
-            result = runner.invoke(
-                app,
-                [
-                    "collect",
-                    "nav",
-                    "12345",
-                    "--repo-path",
-                    str(repo_path),
-                    "--diff-path",
-                    "App/Layers/W1/BaseApp",
-                    "--diff-path",
-                    "App/Apps/W1/Shopify",
-                ],
+        with patch("bcbench.commands.collect.screen_gh_candidate") as mock_screen:
+            mock_screen.return_value = ScreeningResult(
+                pr_number=12345,
+                repo="microsoft/BCApps",
+                passed=True,
             )
+            result = runner.invoke(app, ["collect", "screen", "12345"])
 
             assert result.exit_code == 0, f"CLI failed: {result.output}"
-            mock_collect.assert_called_once()
-            call_kwargs = mock_collect.call_args[1]
-            assert call_kwargs["diff_path"] == ["App/Layers/W1/BaseApp", "App/Apps/W1/Shopify"]
+            assert "PASSED" in result.output
+            mock_screen.assert_called_once_with(pr_number=12345, repo="microsoft/BCApps")
 
     @pytest.mark.integration
-    def test_cli_accepts_single_diff_path_flag(self, tmp_path):
-        repo_path = tmp_path / "repo"
-        repo_path.mkdir()
+    def test_cli_screen_fails_for_invalid_pr(self):
+        from bcbench.collection.collect_gh import ScreeningResult
 
-        with patch("bcbench.commands.collect.collect_nav_entry") as mock_collect:
-            result = runner.invoke(
-                app,
-                [
-                    "collect",
-                    "nav",
-                    "12345",
-                    "--repo-path",
-                    str(repo_path),
-                    "--diff-path",
-                    "App/Layers/W1/BaseApp",
-                ],
+        with patch("bcbench.commands.collect.screen_gh_candidate") as mock_screen:
+            mock_screen.return_value = ScreeningResult(
+                pr_number=99999,
+                repo="microsoft/BCApps",
+                passed=False,
+                reason="No test changes found in diff",
             )
+            result = runner.invoke(app, ["collect", "screen", "99999"])
 
-            assert result.exit_code == 0, f"CLI failed: {result.output}"
-            mock_collect.assert_called_once()
-            call_kwargs = mock_collect.call_args[1]
-            assert call_kwargs["diff_path"] == ["App/Layers/W1/BaseApp"]
+            assert result.exit_code == 1
+            assert "FAILED" in result.output
 
     @pytest.mark.integration
-    def test_cli_works_without_diff_path_flag(self, tmp_path):
-        repo_path = tmp_path / "repo"
-        repo_path.mkdir()
+    def test_cli_screen_accepts_custom_repo(self):
+        from bcbench.collection.collect_gh import ScreeningResult
 
-        with patch("bcbench.commands.collect.collect_nav_entry") as mock_collect:
-            result = runner.invoke(
-                app,
-                [
-                    "collect",
-                    "nav",
-                    "12345",
-                    "--repo-path",
-                    str(repo_path),
-                ],
+        with patch("bcbench.commands.collect.screen_gh_candidate") as mock_screen:
+            mock_screen.return_value = ScreeningResult(
+                pr_number=12345,
+                repo="microsoft/AL",
+                passed=True,
             )
+            result = runner.invoke(app, ["collect", "screen", "12345", "--repo", "microsoft/AL"])
 
             assert result.exit_code == 0, f"CLI failed: {result.output}"
-            mock_collect.assert_called_once()
-            call_kwargs = mock_collect.call_args[1]
-            assert call_kwargs["diff_path"] is None
+            mock_screen.assert_called_once_with(pr_number=12345, repo="microsoft/AL")

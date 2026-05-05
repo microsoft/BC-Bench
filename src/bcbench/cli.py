@@ -38,7 +38,7 @@ app.add_typer(result_app, name="result")
 @app.callback()
 def logging_callback(
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging")] = False,
-):
+) -> None:
     """Setup logging for all commands."""
     setup_logger(verbose)
 

@@ -7,7 +7,7 @@ from tests.conftest import create_dataset_entry
 
 class TestProjectExtraction:
     @pytest.mark.parametrize(
-        "project_paths,expected_project",
+        ("project_paths", "expected_project"),
         [
             (["App\\Apps\\W1\\Sustainability\\app", "App\\Apps\\W1\\Sustainability\\test"], "Sustainability"),
             (["App\\Apps\\W1\\Sustainability\\test", "App\\Apps\\W1\\Sustainability\\app"], "Sustainability"),

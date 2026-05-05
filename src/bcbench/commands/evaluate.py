@@ -42,16 +42,16 @@ def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
     model: CopilotModel = "claude-haiku-4.5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
 
@@ -62,11 +62,13 @@ def evaluate_copilot(
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
+        container=container,
         model=model,
         agent_name="GitHub Copilot",
         category=category,
@@ -81,8 +83,8 @@ def evaluate_copilot(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            al_mcp=al_mcp,
-            container_name=ctx.get_container().name,
+            al_mcp=al_mcp if ctx.container else False,
+            container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
 
@@ -93,16 +95,16 @@ def evaluate_copilot(
 @evaluate_app.command("claude")
 def evaluate_claude_code(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_code_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Evaluate Claude Code on single dataset entry.
 
@@ -113,11 +115,13 @@ def evaluate_claude_code(
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
 
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
+        container=container,
         model=model,
         agent_name="Claude Code",
         category=category,
@@ -132,8 +136,8 @@ def evaluate_claude_code(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            al_mcp=al_mcp,
-            container_name=ctx.get_container().name,
+            al_mcp=al_mcp if ctx.container else False,
+            container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
 
@@ -147,7 +151,7 @@ def evaluate_mock(
     category: EvaluationCategoryOption,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mock_run",
-):
+) -> None:
     """
     Evaluate mock agent on single dataset entry for testing purposes.
     """
@@ -218,8 +222,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
-        # Randomly choose success, build failure, or test failure
-        scenario = random.choice(["success", "build-fail", "test-fail"])
+        # Randomly choose success or build failure
+        scenario = random.choice(["success", "build-fail"])
         logger.info(f"Mock pipeline: Selected scenario: {scenario}")
 
         result: BaseEvaluationResult
@@ -228,8 +232,6 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
             case "build-fail":
                 result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
-            case "test-fail":
-                result = ExecutionBasedEvaluationResult.create_test_failure(context, "MOCK_PATCH_CONTENT", "Mock test failure")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

@@ -26,12 +26,12 @@ run_app = typer.Typer(help="Run agents on single dataset entry")
 def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    container_name: ContainerName,
+    container_name: ContainerName = "",
     model: CopilotModel = "claude-haiku-4.5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Run GitHub Copilot CLI on a single entry to generate a patch (without building/testing).
 
@@ -43,19 +43,27 @@ def run_copilot(
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
-    run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
+    run_copilot_agent(
+        entry=entry,
+        repo_path=repo_path,
+        model=model,
+        category=category,
+        output_dir=output_dir,
+        al_mcp=al_mcp if container_name else False,
+        container_name=container_name or "",
+    )
 
 
 @run_app.command("claude")
 def run_claude(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    container_name: ContainerName,
+    container_name: ContainerName = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
-):
+) -> None:
     """
     Run Claude Code on a single entry to generate a patch (without building/testing).
 
