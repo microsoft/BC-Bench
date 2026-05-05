@@ -3,6 +3,7 @@
 import typer
 from typing_extensions import Annotated
 
+from bcbench.agent.bcal import run_bcal_agent
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
 from bcbench.cli_options import (
@@ -14,7 +15,9 @@ from bcbench.cli_options import (
     RepoPath,
 )
 from bcbench.config import get_config
+from bcbench.dataset import NL2ALEntry
 from bcbench.logger import get_logger
+from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -76,3 +79,24 @@ def run_claude(
     category.pipeline.setup_workspace(entry, repo_path)
 
     run_claude_code(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
+
+
+@run_app.command("bcal")
+def run_bcal(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    repo_path: RepoPath = _config.paths.testbed_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+) -> None:
+    """
+    Run bc-al dotnet tool on a single nl2al entry to generate AL code (without building).
+
+    For full evaluation including building, use 'bcbench evaluate bcal' instead.
+
+    Example:
+        uv run bcbench run bcal nl2al-entry-id --repo-path /path/to/workspace
+    """
+    category = EvaluationCategory.NL2AL
+    entry: NL2ALEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]  # type: ignore[assignment]
+    category.pipeline.setup_workspace(entry, repo_path)
+
+    run_bcal_agent(entry=entry, repo_path=repo_path, output_dir=output_dir)

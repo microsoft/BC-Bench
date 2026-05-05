@@ -6,7 +6,7 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import run_claude_code, run_copilot_agent
+from bcbench.agent import run_bcal_agent, run_claude_code, run_copilot_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -19,11 +19,11 @@ from bcbench.cli_options import (
     RunId,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult
-from bcbench.types import AgentMetrics, ContainerConfig, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -138,6 +138,52 @@ def evaluate_claude_code(
             output_dir=ctx.result_dir,
             al_mcp=al_mcp if ctx.container else False,
             container_name=ctx.get_container().name if ctx.container else "",
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("bcal")
+def evaluate_bcal(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
+    repo_path: RepoPath = _config.paths.testbed_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    run_id: RunId = "bcal_test_run",
+) -> None:
+    """
+    Evaluate bc-al dotnet tool on single nl2al dataset entry.
+
+    To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
+    """
+    category = EvaluationCategory.NL2AL
+    entry: NL2ALEntry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]  # type: ignore[assignment]
+    run_dir = _prepare_run_dir(output_dir, run_id)
+
+    logger.info(f"Running evaluation on entry {entry_id} with bc-al")
+
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container=container,
+        model="",
+        agent_name="bc-al",
+        category=category,
+    )
+
+    category.pipeline.execute(
+        context,
+        lambda ctx: run_bcal_agent(
+            entry=ctx.entry,  # type: ignore[arg-type]
+            repo_path=ctx.repo_path,
+            output_dir=ctx.result_dir,
         ),
     )
 
