@@ -5,6 +5,7 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError
@@ -57,6 +58,19 @@ def _create_al_project_scaffold(project_dir: Path, entry: NL2ALEntry) -> None:
     app_json_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
 
 
+def _copy_application_app(project_dir: Path) -> None:
+    cache_dir = get_config().paths.bcbench_cache_dir
+    app_files = sorted(cache_dir.glob("Microsoft_Application_*.app"))
+    if not app_files:
+        raise FileNotFoundError(f"No Microsoft_Application_*.app found in {cache_dir}. The NL2AL workflow must download it before evaluation.")
+
+    alpackages_dir = project_dir / ".alpackages"
+    alpackages_dir.mkdir(parents=True, exist_ok=True)
+    for app_file in app_files:
+        shutil.copy2(app_file, alpackages_dir / app_file.name)
+        logger.info(f"Copied {app_file.name} to {alpackages_dir}")
+
+
 def _force_remove_readonly(func: Callable, path: str, _: object) -> None:
     Path(path).chmod(0o666)
     func(path)
@@ -89,6 +103,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
 
         _reset_repo_path(repo_path)
         _create_al_project_scaffold(project_dir, entry)
+        _copy_application_app(project_dir)
         _git_init_and_commit(repo_path)
 
     def setup(self, context: EvaluationContext[NL2ALEntry]) -> None:

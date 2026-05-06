@@ -30,6 +30,7 @@ on:
         options:
           - "bug-fix"
           - "test-generation"
+          - "nl2al"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -113,6 +114,12 @@ jobs:
 
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot@1.0.39
+
+      - name: Download Application.app for NL2AL
+        if: ${{ inputs.category == 'nl2al' }}
+        shell: pwsh
+        run: |
+          .\scripts\Download-ApplicationApp.ps1 -InstanceId "${{ matrix.entry }}"
 
       - name: Select PAT based on job index
         id: select-pat
