@@ -5,7 +5,6 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError
@@ -17,6 +16,8 @@ from bcbench.types import EvaluationContext
 logger = get_logger(__name__)
 
 __all__ = ["NL2ALPipeline"]
+
+_BCCONTAINERHELPER_CACHE = Path(r"C:\bcartifacts.cache")
 
 _APP_JSON_TEMPLATE = {
     "id": "00000000-0000-0000-0000-000000000001",
@@ -58,17 +59,16 @@ def _create_al_project_scaffold(project_dir: Path, entry: NL2ALEntry) -> None:
     app_json_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
 
 
-def _copy_application_app(project_dir: Path) -> None:
-    cache_dir = get_config().paths.bcbench_cache_dir
-    app_files = sorted(cache_dir.glob("Microsoft_Application_*.app"))
+def _copy_application_app(project_dir: Path, version: str) -> None:
+    app_files = sorted(_BCCONTAINERHELPER_CACHE.rglob(f"Microsoft_Application_{version}.*.app"))
     if not app_files:
-        raise FileNotFoundError(f"No Microsoft_Application_*.app found in {cache_dir}. The NL2AL workflow must download it before evaluation.")
+        raise FileNotFoundError(f"No Microsoft_Application_{version}.*.app found under {_BCCONTAINERHELPER_CACHE}. Run scripts/Download-ApplicationApp.ps1 to populate the BCContainerHelper cache.")
 
+    app_file = app_files[-1]  # newest revision
     alpackages_dir = project_dir / ".alpackages"
     alpackages_dir.mkdir(parents=True, exist_ok=True)
-    for app_file in app_files:
-        shutil.copy2(app_file, alpackages_dir / app_file.name)
-        logger.info(f"Copied {app_file.name} to {alpackages_dir}")
+    shutil.copy2(app_file, alpackages_dir / app_file.name)
+    logger.info(f"Copied {app_file.name} from {app_file.parent} to {alpackages_dir}")
 
 
 def _force_remove_readonly(func: Callable, path: str, _: object) -> None:
@@ -103,7 +103,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
 
         _reset_repo_path(repo_path)
         _create_al_project_scaffold(project_dir, entry)
-        _copy_application_app(project_dir)
+        _copy_application_app(project_dir, entry.environment_setup_version)
         _git_init_and_commit(repo_path)
 
     def setup(self, context: EvaluationContext[NL2ALEntry]) -> None:

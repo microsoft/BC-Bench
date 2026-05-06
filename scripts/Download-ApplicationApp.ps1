@@ -3,17 +3,19 @@ using module .\BCBenchUtils.psm1
 
 <#
 .SYNOPSIS
-    Downloads the BC Application.app symbol file for an NL2AL dataset entry.
+    Downloads the BC artifact for an NL2AL dataset entry into the BCContainerHelper cache.
 .DESCRIPTION
-    Looks up the BC version for the given InstanceId in the NL2AL dataset, downloads the
-    matching BC artifact via BcContainerHelper, and copies Microsoft_Application_*.app
-    into <repo_root>/.bcbench-cache/, preserving the original filename.
+    Looks up the BC version for the given InstanceId in the NL2AL dataset and downloads the matching BC artifact via BcContainerHelper.
+    The artifact (including Microsoft_Application_*.app) lands in BCContainerHelper's default cache (using default path: C:\bcartifacts.cache),
+    where the NL2AL pipeline looks it up at evaluation time.
 .PARAMETER InstanceId
     The NL2AL dataset instance_id to resolve the BC version for.
 .PARAMETER DatasetPath
     Path to the NL2AL dataset (.jsonl). Defaults to dataset/nl2al.jsonl in the repo.
 .PARAMETER Country
     BC artifact country (default: w1).
+.EXAMPLE
+    .\scripts\Download-ApplicationApp.ps1 -InstanceId nl2al__job-budget-report-1
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -35,8 +37,6 @@ if (-not $entries -or $entries.Count -eq 0) {
 [string] $version = $entries[0].environment_setup_version
 Write-Log "Resolved BC version $version for InstanceId $InstanceId" -Level Info
 
-[string] $destinationDir = Join-Path (Split-Path $PSScriptRoot -Parent) ".bcbench-cache"
-
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
 [string] $artifactUrl = Get-BCArtifactUrl -version $version -country $Country -select 'Latest'
@@ -45,11 +45,7 @@ Write-Log "Downloading artifact: $artifactUrl" -Level Info
 
 $paths = Download-Artifacts -artifactUrl $artifactUrl -includePlatform
 
-$appFile = Get-ChildItem -Path $paths -Recurse -File -Filter 'Microsoft_Application_*.app' -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $appFile) { throw "Microsoft_Application_*.app not found in artifacts: $($paths -join ', ')" }
+$appFile = Get-ChildItem -Path $paths -Recurse -File -Filter "Microsoft_Application_$version.*.app" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $appFile) { throw "Microsoft_Application_$version.*.app not found in artifacts: $($paths -join ', ')" }
 
-New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
-$destinationPath = Join-Path $destinationDir $appFile.Name
-Copy-Item -Path $appFile.FullName -Destination $destinationPath -Force
-
-Write-Log "Copied $($appFile.Name) to $destinationPath" -Level Success
+Write-Log "Artifact ready at $($appFile.FullName)" -Level Success
