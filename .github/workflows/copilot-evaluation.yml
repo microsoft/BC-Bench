@@ -119,7 +119,7 @@ jobs:
         if: ${{ inputs.category == 'nl2al' }}
         shell: pwsh
         run: |
-          .\scripts\Download-ApplicationApp.ps1 -InstanceId "${{ matrix.entry }}"
+          .\scripts\Download-BCSymbols.ps1 -InstanceId "${{ matrix.entry }}"
 
       - name: Select PAT based on job index
         id: select-pat

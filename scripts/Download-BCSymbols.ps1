@@ -6,8 +6,8 @@ using module .\BCBenchUtils.psm1
     Downloads the BC artifact for an NL2AL dataset entry into the BCContainerHelper cache.
 .DESCRIPTION
     Looks up the BC version for the given InstanceId in the NL2AL dataset and downloads the matching BC artifact via BcContainerHelper.
-    The artifact (including Microsoft_Application_*.app) lands in BCContainerHelper's default cache (using default path: C:\bcartifacts.cache),
-    where the NL2AL pipeline looks it up at evaluation time.
+    The artifact (including all *.app symbol packages) lands in BCContainerHelper's default cache (using default path: C:\bcartifacts.cache),
+    where the NL2AL pipeline copies them at evaluation time.
 .PARAMETER InstanceId
     The NL2AL dataset instance_id to resolve the BC version for.
 .PARAMETER DatasetPath
@@ -15,7 +15,7 @@ using module .\BCBenchUtils.psm1
 .PARAMETER Country
     BC artifact country (default: w1).
 .EXAMPLE
-    .\scripts\Download-ApplicationApp.ps1 -InstanceId nl2al__job-budget-report-1
+    .\scripts\Download-BCSymbols.ps1 -InstanceId nl2al__job-budget-report-1
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -45,7 +45,7 @@ Write-Log "Downloading artifact: $artifactUrl" -Level Info
 
 $paths = Download-Artifacts -artifactUrl $artifactUrl -includePlatform
 
-$appFile = Get-ChildItem -Path $paths -Recurse -File -Filter "Microsoft_Application_$version.*.app" -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $appFile) { throw "Microsoft_Application_$version.*.app not found in artifacts: $($paths -join ', ')" }
+$appCount = (Get-ChildItem -Path $paths -Recurse -File -Filter '*.app' -ErrorAction SilentlyContinue | Measure-Object).Count
+if ($appCount -eq 0) { throw "No *.app symbol files found under: $($paths -join ', ')" }
 
-Write-Log "Artifact ready at $($appFile.FullName)" -Level Success
+Write-Log "Artifact ready: $appCount *.app files cached under $($paths -join ', ')" -Level Success

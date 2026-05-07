@@ -59,16 +59,21 @@ def _create_al_project_scaffold(project_dir: Path, entry: NL2ALEntry) -> None:
     app_json_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
 
 
-def _copy_application_app(project_dir: Path, version: str) -> None:
-    app_files = sorted(_BCCONTAINERHELPER_CACHE.rglob(f"Microsoft_Application_{version}.*.app"))
-    if not app_files:
-        raise FileNotFoundError(f"No Microsoft_Application_{version}.*.app found under {_BCCONTAINERHELPER_CACHE}. Run scripts/Download-ApplicationApp.ps1 to populate the BCContainerHelper cache.")
+def _copy_symbol_apps(project_dir: Path, version: str) -> None:
+    version_roots = sorted((_BCCONTAINERHELPER_CACHE / "sandbox").glob(f"{version}.*"))
+    if not version_roots:
+        raise FileNotFoundError(f"No BC artifact for version {version} under {_BCCONTAINERHELPER_CACHE / 'sandbox'}. Run scripts/Download-BCSymbols.ps1 to populate the cache.")
+    version_root = version_roots[-1]  # newest revision
 
-    app_file = app_files[-1]  # newest revision
+    app_files = list(version_root.rglob("*.app"))
+    if not app_files:
+        raise FileNotFoundError(f"No *.app files found under {version_root}.")
+
     alpackages_dir = project_dir / ".alpackages"
     alpackages_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(app_file, alpackages_dir / app_file.name)
-    logger.info(f"Copied {app_file.name} from {app_file.parent} to {alpackages_dir}")
+    for app_file in app_files:
+        shutil.copy2(app_file, alpackages_dir / app_file.name)
+    logger.info(f"Copied {len(app_files)} *.app files from {version_root} to {alpackages_dir}")
 
 
 def _force_remove_readonly(func: Callable, path: str, _: object) -> None:
@@ -103,7 +108,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
 
         _reset_repo_path(repo_path)
         _create_al_project_scaffold(project_dir, entry)
-        _copy_application_app(project_dir, entry.environment_setup_version)
+        _copy_symbol_apps(project_dir, entry.environment_setup_version)
         _git_init_and_commit(repo_path)
 
     def setup(self, context: EvaluationContext[NL2ALEntry]) -> None:
