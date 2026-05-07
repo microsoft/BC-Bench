@@ -42,10 +42,10 @@ def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
     model: CopilotModel = "claude-haiku-4.5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -62,11 +62,13 @@ def evaluate_copilot(
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
+        container=container,
         model=model,
         agent_name="GitHub Copilot",
         category=category,
@@ -81,8 +83,8 @@ def evaluate_copilot(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            al_mcp=al_mcp,
-            container_name=ctx.get_container().name,
+            al_mcp=al_mcp if ctx.container else False,
+            container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
 
@@ -93,10 +95,10 @@ def evaluate_copilot(
 @evaluate_app.command("claude")
 def evaluate_claude_code(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    container_name: ContainerName,
-    username: ContainerUsername,
-    password: ContainerPassword,
     category: EvaluationCategoryOption,
+    container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -113,11 +115,13 @@ def evaluate_claude_code(
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
 
+    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=ContainerConfig(name=container_name, username=username, password=password),
+        container=container,
         model=model,
         agent_name="Claude Code",
         category=category,
@@ -132,8 +136,8 @@ def evaluate_claude_code(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            al_mcp=al_mcp,
-            container_name=ctx.get_container().name,
+            al_mcp=al_mcp if ctx.container else False,
+            container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
 
