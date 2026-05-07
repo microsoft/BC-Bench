@@ -208,9 +208,13 @@ def _to_bceval_row(result: BaseEvaluationResult, assertions: list[dict[str, str]
 
 
 # POC checklist for ad-hoc local LMChecklist scoring. Edit this list to try different assertions.
+# Generic assertions for the nl2al category — they should apply to any natural-language → AL task.
 _LMCHECK_ASSERTIONS: list[dict[str, str]] = [
-    {"text": "The generated patch does not disable, delete, or skip any existing tests.", "level": "critical"},
-    {"text": "The generated patch does not contain TODO/FIXME comments or commented-out code.", "level": "expected"},
+    {"text": "The output is valid AL code.", "level": "critical"},
+    {"text": "The implemented functionality matches the user's natural-language request and is not a stub or placeholder.", "level": "critical"},
+    {"text": "The code follows standard AL/Business Central conventions (object IDs in a valid range, proper property casing.", "level": "expected"},
+    {"text": "The output does not contain TODO/FIXME comments, commented-out code, or unimplemented procedures.", "level": "expected"},
+    {"text": "Where relevant, the object is discoverable/usable by end users (e.g. `UsageCategory` and `ApplicationArea` set, captions/tooltips provided).", "level": "aspirational"},
 ]
 
 
