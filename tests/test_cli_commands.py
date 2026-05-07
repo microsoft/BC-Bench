@@ -1,6 +1,7 @@
 """Integration tests for CLI commands using Typer's CliRunner."""
 
 import json
+from pathlib import Path
 from unittest.mock import PropertyMock, patch
 
 import pytest
@@ -1157,3 +1158,49 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
     agg_versions = {a["benchmark_version"] for a in updated["aggregate"]}
     assert run_versions == {"0.1.0", "0.2.0"}
     assert agg_versions == {"0.1.0", "0.2.0"}
+
+
+class TestResultToBceval:
+    """Unit tests for `bcbench result to-bceval` — the BaseEvaluationResult → bceval JSONL converter."""
+
+    def _make_result_file(self, tmp_path, output: str = "Whales are large mammals.") -> Path:
+        result = create_bugfix_result(instance_id="microsoftInternal__NAV-7", output=output)
+        result_file = tmp_path / "microsoftInternal__NAV-7.jsonl"
+        result_file.write_text(json.dumps(result.model_dump(mode="json")) + "\n", encoding="utf-8")
+        return result_file
+
+    def test_to_bceval_writes_row_with_hardcoded_assertions(self, tmp_path):
+        from bcbench.commands.result import _LMCHECK_ASSERTIONS
+
+        result_file = self._make_result_file(tmp_path)
+        output_file = tmp_path / "out" / "bceval.jsonl"
+
+        result = runner.invoke(app, ["result", "to-bceval", str(result_file), "--output", str(output_file)])
+        assert result.exit_code == 0, result.output
+
+        lines = output_file.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1
+        row = json.loads(lines[0])
+        assert row["id"] == "microsoftInternal__NAV-7"
+        assert row["output"] == "Whales are large mammals."
+        assert row["input"] == ""
+        assert row["expected"]["assertions"] == _LMCHECK_ASSERTIONS
+        assert row["metadata"]["category"] == "bug-fix"
+        assert row["metadata"]["agent_name"] == "copilot-cli"
+        assert row["tags"] == []
+
+    def test_to_bceval_resets_output_directory(self, tmp_path):
+        result_file = self._make_result_file(tmp_path)
+        output_dir = tmp_path / "out"
+        output_dir.mkdir()
+        # Stale artefacts from a previous run that should be wiped:
+        (output_dir / "stale.txt").write_text("old", encoding="utf-8")
+        (output_dir / "subdir").mkdir()
+        (output_dir / "subdir" / "leftover.json").write_text("{}", encoding="utf-8")
+
+        result = runner.invoke(app, ["result", "to-bceval", str(result_file), "--output", str(output_dir / "bceval.jsonl")])
+        assert result.exit_code == 0, result.output
+
+        assert not (output_dir / "stale.txt").exists()
+        assert not (output_dir / "subdir").exists()
+        assert (output_dir / "bceval.jsonl").exists()

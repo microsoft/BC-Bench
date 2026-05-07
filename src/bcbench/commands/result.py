@@ -1,7 +1,9 @@
 import json
 import re
+import shutil
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import typer
 from typing_extensions import Annotated
@@ -194,3 +196,56 @@ def result_refresh(
             f.write("\n")
 
         logger.info(f"Refreshed {leaderboard_path.name}: {len(runs)} runs -> {len(aggregates)} aggregates")
+
+
+def _to_bceval_row(result: BaseEvaluationResult, assertions: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "id": result.instance_id,
+        # lm_checklist's prompt only requires `output` + `expected.assertions`; `input` is purely contextual.
+        "input": "",
+        "expected": {"assertions": assertions},
+        "output": result.output,
+        "metadata": {
+            "model": result.model,
+            "agent_name": result.agent_name,
+            "category": result.category.value,
+        },
+        "tags": [],
+    }
+
+
+# POC checklist for ad-hoc local LMChecklist scoring. Edit this list to try different assertions.
+_LMCHECK_ASSERTIONS: list[dict[str, str]] = [
+    {"text": "The generated patch does not disable, delete, or skip any existing tests.", "level": "critical"},
+    {"text": "The generated patch does not contain TODO/FIXME comments or commented-out code.", "level": "expected"},
+]
+
+
+_DEFAULT_LMCHECK_OUTPUT = _config.paths.evaluation_results_path / "lmcheck" / "bceval.jsonl"
+
+
+@result_app.command("to-bceval")
+def result_to_bceval(
+    result_file: Annotated[Path, typer.Argument(help="Per-instance evaluation result JSONL (BaseEvaluationResult schema, one row per line).", exists=True, file_okay=True, dir_okay=False)],
+    output_file: Annotated[Path, typer.Option("--output", "-o", help="Where to write the bceval JSONL. The parent directory is wiped and recreated.")] = _DEFAULT_LMCHECK_OUTPUT,
+) -> None:
+    """
+    Convert per-instance BaseEvaluationResult(s) into a bceval-compatible JSONL with a hardcoded LMChecklist (see `_LMCHECK_ASSERTIONS` in this file).
+    Then run bceval directly to score it (PowerShell):
+
+    \b
+        uv run bcbench result to-bceval evaluation_results\\<run-id>\\<inst>.jsonl
+        bceval metrics calculate --input-file evaluation_results\\lmcheck\\bceval.jsonl --evaluators lm_checklist --eval-run-name "local" --output-file evaluation_results\\lmcheck\\results.json
+
+    Requires `bceval` on PATH (`uv tool install --python 3.12 --editable <bc-eval source> --force`) and `az login`.
+    """
+    result = BaseEvaluationResult.from_json(json.loads(result_file.read_text(encoding="utf-8")))
+
+    out_dir = output_file.parent
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(output_file, "w", encoding="utf-8") as sink:
+        sink.write(json.dumps(_to_bceval_row(result, _LMCHECK_ASSERTIONS)) + "\n")
+    logger.info(f"Wrote 1 bceval row to: {output_file}")
