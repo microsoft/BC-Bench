@@ -159,14 +159,13 @@ def evaluate_bcal(
     """
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
-    run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with bc-al")
 
     context = EvaluationContext(
         entry=entry,
         repo_path=output_dir,
-        result_dir=run_dir,
+        result_dir=output_dir,
         container=None,
         model="",
         agent_name="bc-al",
@@ -182,7 +181,7 @@ def evaluate_bcal(
     )
 
     logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
+    logger.info(f"Results saved to: {output_dir}")
 
 
 @evaluate_app.command("mock", hidden=True)

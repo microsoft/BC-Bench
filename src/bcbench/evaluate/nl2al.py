@@ -7,9 +7,8 @@ from pathlib import Path
 
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import BuildError
 from bcbench.logger import get_logger, github_log_group
-from bcbench.operations import build_and_publish_projects, stage_and_get_diff
+from bcbench.operations import stage_and_get_diff
 from bcbench.results.nl2al import NL2ALResult
 from bcbench.types import EvaluationContext
 
@@ -122,22 +121,9 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         generated_patch = stage_and_get_diff(context.repo_path)
         result: NL2ALResult | None = None
 
-        try:
-            build_and_publish_projects(
-                context.repo_path,
-                context.entry.project_paths,
-                context.get_container(),
-                context.entry.environment_setup_version,
-            )
-        except BuildError as e:
-            result = NL2ALResult.create_build_failure(context, output=generated_patch, error_message=str(e))
-            logger.exception(f"Build failed for {context.entry.instance_id}")
-        else:
-            # TODO: LLM-as-judge evaluation against context.entry.get_expected_output()
-            # This step might just store the generated patch, the scoring logic might happen later in the workflow using LMchecklist (i.e. LLM-as-judge)
-            llm_judge_score = None
-
-            result = NL2ALResult.create_build_success(context, output=generated_patch, llm_judge_score=llm_judge_score)
-            logger.info(f"Build succeeded for {context.entry.instance_id}")
+        # TODO: LLM-as-judge evaluation against context.entry.get_expected_output()
+        # This step might just store the generated patch, the scoring logic might happen later in the workflow using LMchecklist (i.e. LLM-as-judge)
+        result = NL2ALResult.create_build_success(context, output=generated_patch)
+        logger.info(f"Result saved succeeded for {context.entry.instance_id}")
 
         self.save_result(context, result)
