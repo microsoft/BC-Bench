@@ -24,6 +24,9 @@
     "[yaml]": {
         "editor.defaultFormatter": "redhat.vscode-yaml"
     },
+    "[html]": {
+        "editor.formatOnSave": false // HTML files are copied as-is, so we don't want to format them on save
+    },
     "git.autofetch": true,
     "git.confirmSync": false
 }
