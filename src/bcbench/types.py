@@ -97,12 +97,24 @@ class AgentType(StrEnum):
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
-    # CODE_REVIEW = "code-review"
-    # EVENT_REQUEST = "event-request"
+    CF = "cf"
+
+    @property
+    def is_counterfactual(self) -> bool:
+        return self == EvaluationCategory.CF
+
+    @property
+    def prompt_template_key(self) -> str:
+        if self.is_counterfactual:
+            return "counterfactual"
+        return self.value
 
     @property
     def dataset_path(self) -> Path:
         from bcbench.config import get_config
+
+        if self.is_counterfactual:
+            return get_config().paths.dataset_dir / "counterfactual.jsonl"
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -115,6 +127,10 @@ class EvaluationCategory(StrEnum):
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
         from bcbench.dataset import BugFixEntry, TestGenEntry
+        from bcbench.dataset.counterfactual_entry import CounterfactualEntry
+
+        if self.is_counterfactual:
+            return CounterfactualEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -129,6 +145,9 @@ class EvaluationCategory(StrEnum):
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.testgeneration import TestGenerationResult
 
+        if self.is_counterfactual:
+            return BugFixResult
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixResult
@@ -142,17 +161,14 @@ class EvaluationCategory(StrEnum):
         """Returns the EvaluationResultSummary subclass for this category."""
         from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.TEST_GENERATION:
-                return ExecutionBasedEvaluationResultSummary
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return ExecutionBasedEvaluationResultSummary
 
     @property
     def pipeline(self) -> EvaluationPipeline:
         from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
+
+        if self.is_counterfactual:
+            return BugFixPipeline()
 
         match self:
             case EvaluationCategory.BUG_FIX:
