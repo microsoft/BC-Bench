@@ -21,7 +21,7 @@ prompt:
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
     - Do NOT commit any changes to the repository
-    - Focus on W1 localization, do NOT worry about other localiations (e.g. DK, APAC)
+    - Focus on W1 localization, do NOT worry about other localizations (e.g. DK, APAC)
 
     Issue details:
     {{task}}
@@ -48,7 +48,7 @@ prompt:
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
     - Do NOT commit any changes to the repository
-    - Focus on W1 localization, do NOT worry about other localiations (e.g. DK, APAC)
+    - Focus on W1 localization, do NOT worry about other localizations (e.g. DK, APAC)
     {% if is_problem_statement %}
     Issue details:
     {{task}}

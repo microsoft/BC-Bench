@@ -29,6 +29,7 @@ CopilotModel = Annotated[
         "claude-haiku-4.5",
         "claude-opus-4.6",
         "claude-opus-4.7",
+        "gpt-5.5",
         "gpt-5.4",
         "gpt-5.3-codex",
         "gpt-5.2-codex",
@@ -36,11 +37,6 @@ CopilotModel = Annotated[
         "gpt-4.1",
     ],
     typer.Option(help="Copilot model to use"),
-]
-
-FoundryModel = Annotated[
-    Literal["gpt-5.1-codex-mini"],
-    typer.Option(help="Microsoft Foundry Model to use"),
 ]
 
 ClaudeCodeModel = Annotated[

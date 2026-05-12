@@ -1,9 +1,9 @@
 """Unified logging configuration for bcbench."""
 
 import logging
-import os
 import re
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import ClassVar
 
@@ -68,7 +68,7 @@ class SensitiveDataFilter(logging.Filter):
 
         return True
 
-    def _redact_value(self, value):
+    def _redact_value(self, value: object) -> object:
         """Redact sensitive information from a single value."""
         if isinstance(value, str):
             redacted = value
@@ -95,7 +95,7 @@ class ColoredFormatter(logging.Formatter):
         logging.CRITICAL: (RED, "[%(asctime)s] %(name)s - CRITICAL: %(message)s"),
     }
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         color, log_fmt = self.FORMATS.get(record.levelno, self.FORMATS[logging.INFO])
         formatter = logging.Formatter(log_fmt, datefmt="%H:%M:%S")
         formatted = formatter.format(record)
@@ -143,7 +143,7 @@ class GitHubActionsHandler(logging.Handler):
             annotation = f"::{command} title={title}::{msg}"
 
             # Output to stdout (GitHub Actions reads workflow commands from stdout)
-            print(annotation, flush=True)
+            print(annotation, flush=True)  # noqa: T201
 
         except Exception:
             self.handleError(record)
@@ -173,10 +173,6 @@ def setup_logger(verbose: bool = False) -> None:
         return
 
     config = get_config()
-
-    # Suppress mini-swe-agent startup message
-    # This prevents encoding errors from emoji characters on Windows
-    os.environ.setdefault("MSWEA_SILENT_STARTUP", "1")
 
     bcbench_level = logging.DEBUG if verbose else logging.INFO
 
@@ -224,14 +220,14 @@ def get_logger(name: str) -> logging.Logger:
 
 
 @contextmanager
-def github_log_group(title: str):
+def github_log_group(title: str) -> Iterator[None]:
     config = get_config()
 
     if config.env.github_actions:
-        print(f"::group::{title}", flush=True)
+        print(f"::group::{title}", flush=True)  # noqa: T201
 
     try:
         yield
     finally:
         if config.env.github_actions:
-            print("::endgroup::", flush=True)
+            print("::endgroup::", flush=True)  # noqa: T201
