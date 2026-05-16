@@ -4,6 +4,7 @@ from bcbench.results.display import create_console_summary, create_github_job_su
 from bcbench.results.metrics import bootstrap_ci, pass_at_k, pass_hat_k
 from bcbench.results.summary import (
     BaseEvaluationResult,
+    CodeReviewResultSummary,
     EvaluationResultSummary,
     ExecutionBasedEvaluationResultSummary,
     Leaderboard,
@@ -12,6 +13,7 @@ from bcbench.results.summary import (
 
 __all__ = [
     "BaseEvaluationResult",
+    "CodeReviewResultSummary",
     "EvaluationResultSummary",
     "ExecutionBasedEvaluationResult",
     "ExecutionBasedEvaluationResultSummary",

@@ -31,6 +31,11 @@ def run_copilot_agent(
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
 
+    is_code_review_bcapps = category == EvaluationCategory.CODE_REVIEW and entry.repo == "microsoft/BCApps"
+    if is_code_review_bcapps:
+        copilot_config.setdefault("instructions", {})["enabled"] = True
+        copilot_config.setdefault("skills", {})["enabled"] = True
+
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
@@ -49,7 +54,9 @@ def run_copilot_agent(
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
+    # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
+    # which re-parses arguments and corrupts prompts containing double quotes (e.g. JSON examples).
+    copilot_cmd = shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 

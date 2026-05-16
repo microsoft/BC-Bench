@@ -30,6 +30,7 @@ on:
         options:
           - "bug-fix"
           - "test-generation"
+          - "code-review"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -97,6 +98,7 @@ jobs:
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-container: ${{ inputs.category == 'code-review' }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv

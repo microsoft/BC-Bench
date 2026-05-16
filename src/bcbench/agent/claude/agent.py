@@ -29,6 +29,11 @@ def run_claude_code(
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     claude_config = yaml.safe_load(config_file.read_text())
 
+    is_code_review_bcapps = category == EvaluationCategory.CODE_REVIEW and entry.repo == "microsoft/BCApps"
+    if is_code_review_bcapps:
+        claude_config.setdefault("instructions", {})["enabled"] = True
+        claude_config.setdefault("skills", {})["enabled"] = True
+
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)

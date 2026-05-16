@@ -54,6 +54,16 @@ prompt:
     {{task}}
     {% endif %}
 
+  code-review-template: |
+    @al-code-review
+
+    Review the following code patch and return findings using the output schema defined by the al-code-review skill.
+
+    Code Patch:
+    {{task}}
+
+    Save the findings JSON to a file named "review.json" in the current directory without remapping fields.
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

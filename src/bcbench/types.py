@@ -97,7 +97,7 @@ class AgentType(StrEnum):
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
-    # CODE_REVIEW = "code-review"
+    CODE_REVIEW = "code-review"
     # EVENT_REQUEST = "event-request"
 
     @property
@@ -109,24 +109,29 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
+            case EvaluationCategory.CODE_REVIEW:
+                return get_config().paths.dataset_dir / "codereview.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, CodeReviewEntry, TestGenEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
+            case EvaluationCategory.CODE_REVIEW:
+                return CodeReviewEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
         from bcbench.results.bugfix import BugFixResult
+        from bcbench.results.codereview import CodeReviewResult
         from bcbench.results.testgeneration import TestGenerationResult
 
         match self:
@@ -134,31 +139,37 @@ class EvaluationCategory(StrEnum):
                 return BugFixResult
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationResult
+            case EvaluationCategory.CODE_REVIEW:
+                return CodeReviewResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
+        from bcbench.results.summary import CodeReviewResultSummary, ExecutionBasedEvaluationResultSummary
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedEvaluationResultSummary
+            case EvaluationCategory.CODE_REVIEW:
+                return CodeReviewResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
+        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, TestGenerationPipeline
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
+            case EvaluationCategory.CODE_REVIEW:
+                return CodeReviewPipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
