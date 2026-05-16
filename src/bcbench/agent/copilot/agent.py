@@ -31,6 +31,11 @@ def run_copilot_agent(
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
 
+    is_code_review_bcapps = category == EvaluationCategory.CODE_REVIEW and entry.repo == "microsoft/BCApps"
+    if is_code_review_bcapps:
+        copilot_config.setdefault("instructions", {})["enabled"] = True
+        copilot_config.setdefault("skills", {})["enabled"] = True
+
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)

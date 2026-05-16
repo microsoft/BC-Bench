@@ -55,12 +55,14 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    /review Review the unstaged changes in this repository and provide feedback as a code reviewer.
+    @al-code-review
 
-    Output your review as a JSON array of comment objects with the following schema:
-    [{"file": "path/to/file.al", "line_start": 10, "line_end": 15, "body": "Your review comment", "severity": "one of: suggestion, warning, error"}]
+    Review the following code patch and return findings using the output schema defined by the al-code-review skill.
 
-    Save the JSON array to a file named "review.json" in the current directory.
+    Code Patch:
+    {{task}}
+
+    Save the findings JSON to a file named "review.json" in the current directory without remapping fields.
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`

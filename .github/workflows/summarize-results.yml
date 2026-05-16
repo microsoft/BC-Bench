@@ -75,6 +75,14 @@ jobs:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
         run: |
+          if [ "${{ inputs.category }}" = "code-review" ]; then
+            EVALUATORS="precision_score,recall_score,f1_score,valid_review_output"
+          elif [ "${{ inputs.category }}" = "test-generation" ]; then
+            EVALUATORS="resolution_rate,build_rate,pre_patch_failed_rate,post_patch_passed_rate"
+          else
+            EVALUATORS="resolution_rate,build_rate"
+          fi
+
           # Get Azure DevOps access token from Azure CLI (uses the OIDC token from azure/login)
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
           echo "::add-mask::$ADO_TOKEN"
@@ -88,7 +96,7 @@ jobs:
           bceval metrics calculate \
             --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \
-            --evaluators "resolution_rate,build_rate${{ inputs.category == 'test-generation' && ',pre_patch_failed_rate,post_patch_passed_rate' || '' }}" \
+            --evaluators "${EVALUATORS}" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \

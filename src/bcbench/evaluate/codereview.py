@@ -23,8 +23,12 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     """
 
     def setup_workspace(self, entry: CodeReviewEntry, repo_path: Path) -> None:
+        """Setup workspace for code review.
+        
+        For code-review, we only clean/reset the repo. The patch is passed to
+        the agent for review but not applied to the working directory.
+        """
         setup_repo_prebuild(entry, repo_path)
-        apply_patch(repo_path, entry.patch, f"{entry.instance_id} code-review patch")
 
     def setup(self, context: EvaluationContext[CodeReviewEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
@@ -42,9 +46,18 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             logger.error(f"No review generated for {context.entry.instance_id}")
             raise RuntimeError(f"No review generated for {context.entry.instance_id}")
 
-        result = CodeReviewResult.create_success(context, output=output)
+        result = CodeReviewResult.create_success(
+            context,
+            output=output,
+            expected_comments=context.entry.expected_comments,
+            line_tolerance=context.entry.match_line_tolerance,
+        )
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
-        # TODO: Code Review team should implement the real evaluation logic and populate metrics in the result
+        logger.info(
+            f"Code review metrics: matched={result.matched_comment_count}, "
+            f"incorrect={result.incorrect_comment_count}, missed={result.missed_comment_count}, "
+            f"precision={result.precision:.3f}, recall={result.recall:.3f}, f1={result.f1:.3f}"
+        )
         for comment in result.generated_comments:
             logger.debug(f"  {comment}")
         self.save_result(context, result)

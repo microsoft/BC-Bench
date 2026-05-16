@@ -166,13 +166,75 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
 
 class CodeReviewResultSummary(EvaluationResultSummary):
-    """Summary for the code-review category (POC).
+    """Summary for the code-review category."""
 
-    TODO: Add scoring metrics (precision, recall, F1) once evaluation logic is implemented.
-    """
+    generated_comment_count: int = 0
+    expected_comment_count: int = 0
+    matched_comment_count: int = 0
+    incorrect_comment_count: int = 0
+    missed_comment_count: int = 0
+
+    precision: float = 0.0
+    recall: float = 0.0
+    f1: float = 0.0
+    severity_mae: float = 0.0
+    valid_review_output_rate: float = 0.0
 
     def display_summary(self) -> dict[str, int | float]:
-        return {"total": self.total}
+        return {
+            "generated_comment_count": self.generated_comment_count,
+            "expected_comment_count": self.expected_comment_count,
+            "matched_comment_count": self.matched_comment_count,
+            "incorrect_comment_count": self.incorrect_comment_count,
+            "missed_comment_count": self.missed_comment_count,
+            "precision": round(self.precision * 100, 1),
+            "recall": round(self.recall * 100, 1),
+            "f1": round(self.f1 * 100, 1),
+            "severity_mae": round(self.severity_mae, 3),
+            "valid_review_output_rate": round(self.valid_review_output_rate * 100, 1),
+        }
+
+    @classmethod
+    def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":
+        from bcbench.results.codereview import CodeReviewResult
+
+        summary = super().from_results(results, run_id)
+        assert isinstance(summary, CodeReviewResultSummary)
+
+        code_review_results = [r for r in results if isinstance(r, CodeReviewResult)]
+        total_results = len(code_review_results)
+
+        generated_total = sum(r.category_metrics.get("generated_comment_count", 0) for r in code_review_results)
+        expected_total = sum(r.category_metrics.get("expected_comment_count", 0) for r in code_review_results)
+        matched_total = sum(r.category_metrics.get("matched_comment_count", 0) for r in code_review_results)
+        incorrect_total = sum(r.category_metrics.get("incorrect_comment_count", 0) for r in code_review_results)
+        missed_total = sum(r.category_metrics.get("missed_comment_count", 0) for r in code_review_results)
+
+        precision = matched_total / generated_total if generated_total > 0 else 1.0
+        recall = matched_total / expected_total if expected_total > 0 else 1.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
+
+        weighted_mae_numerator = sum(r.severity_mae * r.matched_comment_count for r in code_review_results)
+        weighted_mae_denominator = sum(r.matched_comment_count for r in code_review_results)
+        severity_mae = weighted_mae_numerator / weighted_mae_denominator if weighted_mae_denominator > 0 else 0.0
+
+        valid_output_count = sum(1 for r in code_review_results if r.valid_review_output)
+        valid_output_rate = valid_output_count / total_results if total_results > 0 else 0.0
+
+        return summary.model_copy(
+            update={
+                "generated_comment_count": generated_total,
+                "expected_comment_count": expected_total,
+                "matched_comment_count": matched_total,
+                "incorrect_comment_count": incorrect_total,
+                "missed_comment_count": missed_total,
+                "precision": round(precision, 3),
+                "recall": round(recall, 3),
+                "f1": round(f1, 3),
+                "severity_mae": round(severity_mae, 3),
+                "valid_review_output_rate": round(valid_output_rate, 3),
+            }
+        )
 
 
 # ---------------------------------------------------------------------------

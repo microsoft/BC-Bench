@@ -102,7 +102,7 @@ class FilePatternConfig:
         return cls(
             trajectory_pattern=".traj.json",
             patch_pattern=".patch",
-            instance_pattern=r"^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+$",
+            instance_pattern=r"^(?:[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+-[0-9]+|[a-zA-Z0-9_-]+-[0-9]+)$",
             result_pattern=".jsonl",
             instruction_source_naming="AGENTS.md",
             instructions_dirname="instructions",

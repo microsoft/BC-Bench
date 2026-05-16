@@ -4,6 +4,7 @@ from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult
+from bcbench.results.summary import CodeReviewResultSummary
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
@@ -80,6 +81,111 @@ class TestCodeReviewResult:
         result = BaseEvaluationResult.from_json(payload)
         assert result.category == EvaluationCategory.CODE_REVIEW
         assert isinstance(result, CodeReviewResult)
+
+    def test_parses_skill_style_output_schema(self):
+        output = json.dumps(
+            {
+                "findings": [
+                    {
+                        "filePath": "src/app.al",
+                        "lineNumber": 12,
+                        "severity": "High",
+                        "issue": "Potential SQL injection risk",
+                        "recommendation": "Use parameterized queries",
+                        "suggestedCode": "DoSafeThing();",
+                    }
+                ]
+            }
+        )
+
+        result = create_codereview_result(output=output)
+
+        assert result.valid_review_output is True
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].file == "src/app.al"
+        assert result.generated_comments[0].line_start == 12
+        assert result.generated_comments[0].body == "Potential SQL injection risk"
+
+    def test_metrics_match_expected_comments_with_tolerance(self):
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),
+            ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity="high"),
+        ]
+        generated_output = json.dumps(
+            [
+                {
+                    "file": "src/app.al",
+                    "line_start": 12,
+                    "body": "Potential null reference",
+                    "severity": "warning",
+                },
+                {
+                    "file": "src/other.al",
+                    "line_start": 99,
+                    "body": "Unrelated finding",
+                    "severity": "low",
+                },
+            ]
+        )
+
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
+
+        assert result.matched_comment_count == 1
+        assert result.missed_comment_count == 1
+        assert result.incorrect_comment_count == 1
+        assert result.precision == 0.5
+        assert result.recall == 0.5
+        assert result.f1 == 0.5
+        assert result.severity_mae == 0.0
+
+    def test_severity_aliases_normalize_to_skill_levels(self):
+        result = create_codereview_result(
+            output=json.dumps(
+                [
+                    {"file": "src/app.al", "line_start": 1, "body": "a", "severity": "warning"},
+                    {"file": "src/app.al", "line_start": 2, "body": "b", "severity": "suggestion"},
+                    {"file": "src/app.al", "line_start": 3, "body": "c", "severity": "error"},
+                ]
+            )
+        )
+
+        severities = [comment.severity for comment in result.generated_comments]
+        assert severities == ["medium", "low", "high"]
+
+
+class TestCodeReviewSummary:
+    def test_summary_aggregates_precision_recall_and_f1(self):
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),
+            ReviewComment(file="src/app.al", line_start=30, body="Fix auth check", severity="high"),
+        ]
+
+        result_1 = create_codereview_result(
+            instance_id="a__1",
+            output=json.dumps(
+                [
+                    {"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"},
+                    {"file": "src/other.al", "line_start": 80, "body": "Issue B", "severity": "low"},
+                ]
+            ),
+            expected_comments=expected_comments,
+        )
+        result_2 = create_codereview_result(
+            instance_id="a__2",
+            output="[]",
+            expected_comments=expected_comments,
+        )
+
+        summary = CodeReviewResultSummary.from_results([result_1, result_2], run_id="run-1")
+
+        assert summary.generated_comment_count == 2
+        assert summary.expected_comment_count == 4
+        assert summary.matched_comment_count == 1
+        assert summary.incorrect_comment_count == 1
+        assert summary.missed_comment_count == 3
+        assert summary.precision == 0.5
+        assert summary.recall == 0.25
+        assert summary.f1 == 0.333
 
 
 class TestCodeReviewPipeline:

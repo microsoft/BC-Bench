@@ -188,8 +188,13 @@ def create_codereview_result(
     model: str = "gpt-4o",
     agent_name: str = "copilot-cli",
     output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
+    expected_comments: list[ReviewComment] | None = None,
+    line_tolerance: int = 5,
     metrics: AgentMetrics | None = None,
 ) -> CodeReviewResult:
+    if expected_comments is None:
+        expected_comments = []
+
     return CodeReviewResult(
         instance_id=instance_id,
         project=project,
@@ -197,6 +202,8 @@ def create_codereview_result(
         agent_name=agent_name,
         category=EvaluationCategory.CODE_REVIEW,
         output=output,
+        expected_comments=expected_comments,
+        line_tolerance=line_tolerance,
         metrics=metrics,
     )
 

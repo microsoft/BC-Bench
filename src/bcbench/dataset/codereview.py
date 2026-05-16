@@ -24,8 +24,8 @@ class ReviewComment(BaseModel):
 class CodeReviewEntry(BaseDatasetEntry):
     """Dataset entry for the code-review category."""
 
-    # TODO: Code Review team should review the schema and update as needed. This is just a starting point
     expected_comments: list[ReviewComment] = Field(default_factory=list)
+    match_line_tolerance: int = Field(default=5, ge=0)
 
     def get_task(self) -> str:
         return self.patch
