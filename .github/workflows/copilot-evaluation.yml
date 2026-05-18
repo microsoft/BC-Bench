@@ -135,6 +135,8 @@ jobs:
             throw "BCAL_PACKAGE_ID / BCAL_FEED_URL repo secrets are not configured."
           }
 
+          iex "& { $(irm https://aka.ms/install-artifacts-credprovider.ps1) }"
+
           $adoToken = az account get-access-token `
             --resource 499b84ac-1321-427f-aa17-267ca6975798 `
             --query accessToken -o tsv
