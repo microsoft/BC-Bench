@@ -1,6 +1,7 @@
 """bc-al agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -14,11 +15,9 @@ from bcbench.types import AgentMetrics, ExperimentConfiguration
 logger = get_logger(__name__)
 _config = get_config()
 
-_FRAMEWORK = "net10.0"
 _AUDIENCE = "both"
 _PAGE = "Customer Card"
-
-_init_env: dict[str, str] | None = None
+_BCAL_TOOL = "bcal"
 
 
 def _require_env(name: str) -> str:
@@ -28,77 +27,21 @@ def _require_env(name: str) -> str:
     return value
 
 
-def _get_bcal_repo() -> Path:
-    return Path(_require_env("BCAL_REPO_PATH"))
-
-
-def _get_bcal_project() -> Path:
-    return _get_bcal_repo() / "source" / "Prod" / "bcal" / "bcal.cli.csproj"
-
-
-def _get_init_env() -> dict[str, str]:
-    """Run init.ps1 in the BC-DeveloperExperience repo and capture the resulting environment."""
-    global _init_env  # noqa: PLW0603
-    if _init_env is not None:
-        return _init_env
-
-    bcal_repo = _get_bcal_repo()
-    init_script = bcal_repo / "init.ps1"
-    if not init_script.exists():
-        raise AgentError(f"init.ps1 not found at: {init_script}")
-
-    # Run init.ps1, then dump env vars in a delimited block to separate from init.ps1 output
-    marker = "___BCBENCH_ENV_START___"
-    ps_command = (
-        f"Set-Location '{bcal_repo}'; "
-        f". '.\\init.ps1' | Out-Null; "
-        f"Write-Output '{marker}'; "
-        f"Get-ChildItem Env: | ForEach-Object {{ \"$($_.Name)=$($_.Value)\" }}"
-    )
-
-    logger.info("Running init.ps1 to capture build environment...")
-    result = subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_command],
-        cwd=str(bcal_repo),
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-
-    if result.returncode != 0:
-        raise AgentError(f"init.ps1 failed (exit {result.returncode}): {result.stderr}")
-
-    # Extract env vars after the marker
-    stdout = result.stdout
-    if marker not in stdout:
-        raise AgentError(f"init.ps1 output did not contain expected marker. stdout: {stdout[:500]}")
-
-    env_block = stdout.split(marker, 1)[1].strip()
-    env = dict(os.environ)
-    for line in env_block.splitlines():
-        if "=" in line:
-            key, _, value = line.partition("=")
-            env[key] = value
-
-    _init_env = env
-    logger.info(f"Captured {len(env)} environment variables from init.ps1 (INETROOT={env.get('INETROOT', '<not set>')})")
-    return _init_env
+def _resolve_bcal_executable() -> str:
+    resolved = shutil.which(_BCAL_TOOL)
+    if not resolved:
+        raise AgentError(f"'{_BCAL_TOOL}' executable not found on PATH.")
+    return resolved
 
 
 def run_bcal_agent(
     entry: NL2ALEntry,
     output_dir: Path,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    bcal_repo = _get_bcal_repo()
-    bcal_project = _get_bcal_project()
     azure_endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
     azure_deployment = _require_env("AZURE_OPENAI_DEPLOYMENT")
+    bcal_executable = _resolve_bcal_executable()
 
-    if not bcal_project.exists():
-        raise AgentError(f"bcal CLI project not found at: {bcal_project}")
-
-    env = _get_init_env()
     logger.info(f"Running bcal CLI on: {entry.instance_id}")
 
     prompt = entry.nl_prompt
@@ -114,12 +57,7 @@ def run_bcal_agent(
     export_folder.mkdir(parents=True, exist_ok=True)
 
     cmd_args = [
-        "dotnet",
-        "run",
-        "--framework",
-        _FRAMEWORK,
-        "--project",
-        str(bcal_project),
+        bcal_executable,
         "--packagecachepath",
         str(package_cache_path),
         "--endpoint",
@@ -136,7 +74,7 @@ def run_bcal_agent(
         str(export_folder),
     ]
 
-    logger.info(f"Executing bcal CLI from: {bcal_repo}")
+    logger.info(f"Executing bcal CLI: {bcal_executable}")
     logger.info(f"Package cache path: {package_cache_path}")
     logger.info(f"Export folder: {export_folder}")
     logger.debug(f"Using prompt:\n{prompt}")
@@ -146,8 +84,6 @@ def run_bcal_agent(
         start = time.monotonic()
         subprocess.run(
             cmd_args,
-            cwd=str(bcal_repo),
-            env=env,
             timeout=_config.timeout.agent_execution,
             check=True,
         )

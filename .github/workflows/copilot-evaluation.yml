@@ -115,6 +115,45 @@ jobs:
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot@1.0.39
 
+      - name: Azure Login for bcal feed auth
+        if: ${{ inputs.category == 'nl2al' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Install bcal CLI
+        if: ${{ inputs.category == 'nl2al' }}
+        shell: pwsh
+        env:
+          BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
+          BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
+        run: |
+          if (-not $env:BCAL_PACKAGE_ID -or -not $env:BCAL_FEED_URL) {
+            throw "BCAL_PACKAGE_ID / BCAL_FEED_URL repo secrets are not configured."
+          }
+
+          $adoToken = az account get-access-token `
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 `
+            --query accessToken -o tsv
+          Write-Output "::add-mask::$adoToken"
+
+          $endpoints = @{
+            endpointCredentials = @(
+              @{
+                endpoint = $env:BCAL_FEED_URL
+                username = "anything"
+                password = $adoToken
+              }
+            )
+          } | ConvertTo-Json -Compress -Depth 5
+          $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
+
+          dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease `
+            --add-source $env:BCAL_FEED_URL
+          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
+
       - name: Download Application.app for NL2AL
         if: ${{ inputs.category == 'nl2al' }}
         shell: pwsh
@@ -122,12 +161,14 @@ jobs:
           .\scripts\Download-BCSymbols.ps1 -InstanceId "${{ matrix.entry }}"
 
       - name: Select PAT based on job index
+        if: ${{ inputs.category != 'nl2al' }}
         id: select-pat
         run: |
           $patIndex = ${{ strategy.job-index }} % 4
           echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+        if: ${{ inputs.category != 'nl2al' }}
         timeout-minutes: 120
         env:
           COPILOT_GITHUB_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' &&
@@ -143,6 +184,16 @@ jobs:
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             ${{ inputs.al-mcp && '--al-mcp' || '' }}
+
+      - name: Run bcal for entry ${{ matrix.entry }}
+        if: ${{ inputs.category == 'nl2al' }}
+        timeout-minutes: 120
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model }}
+        run: |
+          uv run bcbench evaluate bcal "${{ matrix.entry }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -161,7 +212,7 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: "GitHub Copilot CLI"
+      agent: ${{ inputs.category == 'nl2al' && 'bcal' || 'GitHub Copilot CLI' }}
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
     secrets: inherit
