@@ -1,4 +1,4 @@
-using module .\BCBenchUtils.psm1
+using module ..\..\scripts\BCBenchUtils.psm1
 
 <#
     .SYNOPSIS
@@ -43,7 +43,7 @@ using module .\BCBenchUtils.psm1
 
 param(
     [Parameter(Mandatory = $false)]
-    [string]$RunId,
+    [string[]]$RunId,
 
     [Parameter(Mandatory = $false)]
     [int]$Last = 1,
@@ -294,7 +294,8 @@ function Parse-EvaluationSummary {
 function Download-RunArtifacts {
     <#
     .SYNOPSIS
-    Downloads all artifacts for a run into a destination folder using gh run download.
+    Downloads all artifacts for a run into a destination folder.
+    Lists artifacts via the GitHub API (covers all run attempts) and downloads each individually.
     #>
     param(
         [string]$Repo,
@@ -304,9 +305,52 @@ function Download-RunArtifacts {
 
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 
-    $result = gh run download $RunId --repo $Repo --dir $Destination 2>&1
+    # List all artifacts for the run via API (covers all attempts).
+    # Use --jq to extract the artifacts array so --paginate merges pages correctly.
+    $artifactsJson = gh api "repos/$Repo/actions/runs/$RunId/artifacts" --paginate --jq '.artifacts[] | {name, expired}' 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to download artifacts for run $RunId`: $result"
+        Write-Log "  Could not list artifacts via API, falling back to gh run download" -Level Warning
+        $result = gh run download $RunId --repo $Repo --dir $Destination 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to download artifacts for run $RunId`: $result"
+        }
+        return
+    }
+
+    $artifacts = @($artifactsJson | ConvertFrom-Json)
+    if (-not $artifacts -or $artifacts.Count -eq 0) {
+        Write-Log "  No artifacts found for run $RunId" -Level Warning
+        return
+    }
+
+    $activeArtifacts = $artifacts | Where-Object { -not $_.expired }
+    $expiredCount = $artifacts.Count - $activeArtifacts.Count
+    Write-Log "  Found $($artifacts.Count) artifact(s) ($($activeArtifacts.Count) active, $expiredCount expired)" -Level Info
+
+    $downloaded = 0
+    $failed = 0
+    foreach ($artifact in $activeArtifacts) {
+        $name = $artifact.name
+        try {
+            $result = gh run download $RunId --repo $Repo --dir $Destination --name $name 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "    Failed to download artifact '$name': $result" -Level Warning
+                $failed++
+            }
+            else {
+                $downloaded++
+            }
+        }
+        catch {
+            Write-Log "    Error downloading artifact '$name': $_" -Level Warning
+            $failed++
+        }
+    }
+
+    Write-Log "  Downloaded $downloaded artifact(s), $failed failed" -Level $(if ($failed -gt 0) { "Warning" } else { "Info" })
+
+    if ($downloaded -eq 0 -and $activeArtifacts.Count -gt 0) {
+        throw "Failed to download any artifacts for run $RunId"
     }
 }
 
@@ -408,8 +452,11 @@ Write-Log "Fetching workflow runs from $Repository..." -Level Info
 try {
     if ($RunId) {
         # Fetch full run details so url/branch/createdAt are not null
-        $runDetails = Get-RunDetails -Repo $Repository -RunId $RunId
-        $runs = @($runDetails)
+        $runs = @()
+        foreach ($id in $RunId) {
+            $runDetails = Get-RunDetails -Repo $Repository -RunId $id
+            $runs += $runDetails
+        }
     }
     else {
         $runs = Get-WorkflowRuns -Repo $Repository -WorkflowFile $Workflow -Limit $Last -BranchFilter $Branch -StatusFilter $Status
@@ -418,6 +465,23 @@ try {
     if (-not $runs -or $runs.Count -eq 0) {
         Write-Log "No workflow runs found matching criteria" -Level Warning
         exit 0
+    }
+
+    # Auto-detect parent run IDs from branch names matching eval-run-copilot-{ID}
+    $existingIds = @($runs | ForEach-Object { $_.databaseId })
+    $parentIds = @($runs | ForEach-Object {
+            if ($_.headBranch -match '^eval-run-copilot-(\d+)$') { $Matches[1] }
+        } | Where-Object { $_ } | Select-Object -Unique | Where-Object { $_ -notin $existingIds })
+
+    foreach ($parentId in $parentIds) {
+        try {
+            $parentRun = Get-RunDetails -Repo $Repository -RunId $parentId
+            $runs += $parentRun
+            Write-Log "Auto-included parent run $parentId (from branch name)" -Level Info
+        }
+        catch {
+            Write-Log "Could not fetch parent run $parentId`: $_" -Level Warning
+        }
     }
 
     Write-Log "Found $($runs.Count) run(s) to process" -Level Success
