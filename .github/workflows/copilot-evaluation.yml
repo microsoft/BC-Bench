@@ -161,6 +161,7 @@ jobs:
         if: ${{ inputs.category == 'nl2al' }}
         shell: pwsh
         run: |
+          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           .\scripts\Download-BCSymbols.ps1 -InstanceId "${{ matrix.entry }}"
 
       - name: Select PAT based on job index
