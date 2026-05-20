@@ -1,5 +1,5 @@
-name: Setup BC Container
-description: Install BcContainerHelper and setup BC container with repository
+name: Setup BC Container and Repository
+description: Install BcContainerHelper and setup BC container along with repository
 
 inputs:
   instance-id:

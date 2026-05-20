@@ -81,10 +81,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup BC container
+      - name: Setup BC Container and Repository
         id: setup-env
         timeout-minutes: 40
-        uses: ./.github/actions/setup-bc-container
+        uses: ./.github/actions/setup-bc-container-repo
         with:
           instance-id: ${{ matrix.entry }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
