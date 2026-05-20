@@ -8780,6 +8780,56 @@
         "microsoftInternal__NAV-201169": false,
         "microsoft__BCApps-5633": true
       }
+    },
+    {
+      "total": 16,
+      "date": "2026-05-20",
+      "model": "claude-opus-4-7",
+      "agent_name": "Claude Code",
+      "category": "bug-fix",
+      "average_duration": 189.9,
+      "average_prompt_tokens": 1099529.9,
+      "average_completion_tokens": 10668.9,
+      "average_llm_duration": 174.9,
+      "average_tool_usage": {
+        "Agent": 0.19,
+        "Bash": 9.12,
+        "Glob": 0.81,
+        "Grep": 5.31,
+        "Read": 9.44,
+        "Edit": 1.75,
+        "ToolSearch": 0.19
+      },
+      "github_run_id": "26184534185",
+      "experiment": {
+        "mcp_servers": null,
+        "custom_instructions": true,
+        "skills_enabled": true,
+        "custom_agent": null
+      },
+      "benchmark_version": "0.5.3",
+      "resolved": 8,
+      "failed": 8,
+      "build": 16,
+      "percentage": 50.0,
+      "instance_results": {
+        "microsoftInternal__NAV-193853": true,
+        "microsoftInternal__NAV-191624": false,
+        "microsoftInternal__NAV-215645": false,
+        "microsoftInternal__NAV-217104": true,
+        "microsoftInternal__NAV-210528": true,
+        "microsoft__BCApps-4699": true,
+        "microsoftInternal__NAV-195193": false,
+        "microsoft__BCApps-4822": true,
+        "microsoftInternal__NAV-224668": true,
+        "microsoftInternal__NAV-211710": true,
+        "microsoft__BCApps-4766": false,
+        "microsoftInternal__NAV-193649": true,
+        "microsoftInternal__NAV-188438": false,
+        "microsoftInternal__NAV-220452": false,
+        "microsoftInternal__NAV-201169": false,
+        "microsoft__BCApps-5633": false
+      }
     }
   ],
   "aggregate": [
@@ -8983,12 +9033,12 @@
         "custom_agent": null
       },
       "total": 16,
-      "num_runs": 3,
+      "num_runs": 4,
       "average": 0.5,
-      "ci_low": 0.438,
-      "ci_high": 0.562,
+      "ci_low": 0.453,
+      "ci_high": 0.547,
       "pass_hat_5": null,
-      "average_duration": 201.3,
+      "average_duration": 198.5,
       "benchmark_version": "0.5.3"
     }
   ]
