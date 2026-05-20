@@ -55,14 +55,10 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    /review
+    @al-code-review
 
-    Review the current branch changes and save findings to a file named "review.json" in the repository root.
-
-    The file must contain valid JSON with a top-level object named findings.
-    Each finding must include: filePath, lineNumber, severity, issue, recommendation.
-    Allowed severity values are: critical, high, medium, low.
-
+    Review the current branch changes and return findings using the al-code-review skill schema.
+    Save the findings JSON to a file named review.json in the repository root.
     If there are no findings, write an empty findings list.
 
 # controls:
