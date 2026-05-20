@@ -14,6 +14,10 @@ inputs:
   github-token:
     description: GitHub token for accessing public repositories
     required: true
+  dataset-path:
+    description: Path to dataset JSONL used to resolve instance metadata
+    required: false
+    default: dataset/bcbench.jsonl
   skip-container:
     description: Skip BC container setup (only clone repository)
     required: false
@@ -66,5 +70,5 @@ runs:
         $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
         Write-Output "::add-mask::$env:ADO_TOKEN"
 
-        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }}
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -DatasetPath "${{ inputs.dataset-path }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }}
       shell: pwsh

@@ -3,8 +3,8 @@
 # Keeps each entry result in its own run folder to avoid overwriting previous results.
 #
 # Usage:
-#   pwsh scripts/run_all_codereview_evals.ps1
-#   pwsh scripts/run_all_codereview_evals.ps1 -RepoPath "C:\repos\evals\BCApps\"
+#   pwsh tools/code-review/run_all_evals.ps1
+#   pwsh tools/code-review/run_all_evals.ps1 -RepoPath "C:\repos\evals\BCApps\"
 
 param(
     [string]$Dataset = "dataset/codereview.jsonl",

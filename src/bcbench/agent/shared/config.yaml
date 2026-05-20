@@ -55,14 +55,7 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    @al-code-review
-
-    Review the following code patch and return findings using the output schema defined by the al-code-review skill.
-
-    Code Patch:
-    {{task}}
-
-    Save the findings JSON to a file named "review.json" in the current directory without remapping fields.
+    /review
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
@@ -73,14 +66,14 @@ prompt:
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentType.instruction_filename) during setup
 instructions:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
 skills:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`
