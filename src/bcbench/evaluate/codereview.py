@@ -3,7 +3,6 @@ import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
@@ -22,7 +21,7 @@ __all__ = ["CodeReviewPipeline"]
 
 def _normalize_diff_path(raw_path: str) -> str:
     normalized = raw_path.strip()
-    if normalized.startswith("a/") or normalized.startswith("b/"):
+    if normalized.startswith(("a/", "b/")):
         normalized = normalized[2:]
     return normalized.lstrip("/").replace("\\", "/")
 
@@ -75,14 +74,14 @@ def _materialize_files_from_patch(repo_path: Path, patch_content: str) -> list[P
             current_content.append(line[1:])
             continue
 
-        if line.startswith("-") or line.startswith("@@") or line.startswith("\\ No newline at end of file"):
+        if line.startswith(("-", "@@", "\\ No newline at end of file")):
             continue
 
     flush_current_file()
     return files_written
 
 
-def _is_valid_review_payload(payload: Any) -> bool:
+def _is_valid_review_payload(payload: object) -> bool:
     if isinstance(payload, dict):
         return isinstance(payload.get("findings"), list)
     return isinstance(payload, list)
