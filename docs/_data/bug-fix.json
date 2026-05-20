@@ -8830,6 +8830,57 @@
         "microsoftInternal__NAV-201169": false,
         "microsoft__BCApps-5633": false
       }
+    },
+    {
+      "total": 16,
+      "date": "2026-05-20",
+      "model": "claude-opus-4-7",
+      "agent_name": "Claude Code",
+      "category": "bug-fix",
+      "average_duration": 184.5,
+      "average_prompt_tokens": 988751.9,
+      "average_completion_tokens": 10254.1,
+      "average_llm_duration": 168.8,
+      "average_tool_usage": {
+        "Agent": 0.25,
+        "Glob": 0.44,
+        "Bash": 6.25,
+        "Grep": 5.5,
+        "Read": 9.75,
+        "TodoWrite": 0.56,
+        "Edit": 1.75,
+        "ToolSearch": 0.19
+      },
+      "github_run_id": "26186610799",
+      "experiment": {
+        "mcp_servers": null,
+        "custom_instructions": true,
+        "skills_enabled": true,
+        "custom_agent": null
+      },
+      "benchmark_version": "0.5.3",
+      "resolved": 9,
+      "failed": 7,
+      "build": 16,
+      "percentage": 56.2,
+      "instance_results": {
+        "microsoftInternal__NAV-193853": true,
+        "microsoftInternal__NAV-191624": false,
+        "microsoftInternal__NAV-215645": false,
+        "microsoftInternal__NAV-217104": true,
+        "microsoftInternal__NAV-210528": true,
+        "microsoft__BCApps-4699": true,
+        "microsoftInternal__NAV-195193": false,
+        "microsoft__BCApps-4822": true,
+        "microsoftInternal__NAV-224668": true,
+        "microsoftInternal__NAV-211710": true,
+        "microsoft__BCApps-4766": false,
+        "microsoftInternal__NAV-193649": true,
+        "microsoftInternal__NAV-188438": false,
+        "microsoftInternal__NAV-220452": true,
+        "microsoftInternal__NAV-201169": false,
+        "microsoft__BCApps-5633": false
+      }
     }
   ],
   "aggregate": [
@@ -9033,12 +9084,12 @@
         "custom_agent": null
       },
       "total": 16,
-      "num_runs": 4,
-      "average": 0.5,
-      "ci_low": 0.453,
-      "ci_high": 0.547,
-      "pass_hat_5": null,
-      "average_duration": 198.5,
+      "num_runs": 5,
+      "average": 0.512,
+      "ci_low": 0.463,
+      "ci_high": 0.55,
+      "pass_hat_5": 0.438,
+      "average_duration": 195.7,
       "benchmark_version": "0.5.3"
     }
   ]
