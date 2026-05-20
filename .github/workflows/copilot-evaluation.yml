@@ -41,6 +41,11 @@ on:
         required: false
         default: false
         type: boolean
+      skip-container-setup:
+        description: "Skip BC container setup (repository setup still runs)"
+        required: false
+        default: false
+        type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
         required: false
@@ -99,7 +104,7 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dataset-path: ${{ inputs.category == 'code-review' && 'dataset/codereview.jsonl' || 'dataset/bcbench.jsonl' }}
-          skip-container: ${{ inputs.category == 'code-review' }}
+          skip-container: ${{ inputs.category == 'code-review' || inputs.skip-container-setup }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
@@ -173,4 +178,4 @@ jobs:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "skip-container-setup": "${{ inputs.skip-container-setup }}"}
