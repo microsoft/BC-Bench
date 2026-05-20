@@ -1,4 +1,5 @@
 name: Dataset Validation and Verification
+description: Designed for bug-fix and test-generation dataset, verifies the flow of building and testing still works as expected, avoiding regressions caused by underlying infrastructure changes.
 permissions:
   contents: read
 
@@ -51,6 +52,7 @@ jobs:
         uses: ./.github/actions/setup-bc-container-repo
         with:
           instance-id: ${{ matrix.entry }}
+          category: "bug-fix"
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
