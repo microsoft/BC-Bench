@@ -57,6 +57,24 @@ prompt:
   code-review-template: |
     /review
 
+    Review the current branch changes and save findings to a file named "review.json" in the repository root.
+
+    Required output format for review.json:
+    {
+      "findings": [
+        {
+          "filePath": "path/to/file.al",
+          "lineNumber": 123,
+          "severity": "critical|high|medium|low",
+          "issue": "Short issue summary",
+          "recommendation": "Concrete fix recommendation"
+        }
+      ]
+    }
+
+    If there are no findings, save:
+    {"findings": []}
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

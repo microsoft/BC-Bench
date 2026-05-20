@@ -1,7 +1,9 @@
+import json
 import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
@@ -80,6 +82,66 @@ def _materialize_files_from_patch(repo_path: Path, patch_content: str) -> list[P
     return files_written
 
 
+def _is_valid_review_payload(payload: Any) -> bool:
+    if isinstance(payload, dict):
+        return isinstance(payload.get("findings"), list)
+    return isinstance(payload, list)
+
+
+def _extract_review_json_candidate(raw_text: str) -> str | None:
+    decoder = json.JSONDecoder()
+
+    for match in re.finditer(r"```json\s*([\s\S]*?)\s*```", raw_text, re.IGNORECASE):
+        candidate = match.group(1).strip()
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if _is_valid_review_payload(parsed):
+            return json.dumps(parsed, ensure_ascii=False)
+
+    for match in re.finditer(r"```\s*([\s\S]*?)\s*```", raw_text):
+        candidate = match.group(1).strip()
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if _is_valid_review_payload(parsed):
+            return json.dumps(parsed, ensure_ascii=False)
+
+    for idx, ch in enumerate(raw_text):
+        if ch not in "[{":
+            continue
+        try:
+            parsed, end_idx = decoder.raw_decode(raw_text[idx:])
+        except json.JSONDecodeError:
+            continue
+        if _is_valid_review_payload(parsed):
+            return raw_text[idx : idx + end_idx].strip()
+
+    return None
+
+
+def _recover_review_output_from_logs(result_dir: Path) -> str | None:
+    log_files = sorted(result_dir.glob("process-*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+    for log_file in log_files:
+        try:
+            content = log_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        candidate = _extract_review_json_candidate(content)
+        if candidate:
+            return candidate
+
+    return None
+
+
 class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     """Pipeline for code-review evaluation category.
 
@@ -120,8 +182,14 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         if review_output_file.exists():
             output = review_output_file.read_text(encoding="utf-8")
         else:
-            logger.error(f"No review generated for {context.entry.instance_id}")
-            raise RuntimeError(f"No review generated for {context.entry.instance_id}")
+            recovered_output = _recover_review_output_from_logs(context.result_dir)
+            if not recovered_output:
+                logger.error(f"No review generated for {context.entry.instance_id}")
+                raise RuntimeError(f"No review generated for {context.entry.instance_id}")
+
+            review_output_file.write_text(recovered_output, encoding="utf-8")
+            logger.warning(f"Recovered {REVIEW_OUTPUT_FILE} from Copilot logs for {context.entry.instance_id}")
+            output = recovered_output
 
         result = CodeReviewResult.create_success(
             context,
