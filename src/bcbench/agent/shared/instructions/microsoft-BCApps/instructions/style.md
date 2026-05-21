@@ -812,7 +812,7 @@ ERROR LABELS (CodeCop AA0216, AA0217, AA0231, AA0470):
 ALL error messages MUST use label variables with proper suffixes and include Comment parameter explaining ALL placeholders (%1, %2, etc.). However, be contextually aware:
 - Comment parameter is not required when placeholder meaning is obvious from the label text (e.g., 'Customer %1' clearly means Customer No.)
 - Do NOT use hardcoded text strings for messages
-- Do NOT use string concatenation in Error() - use labels directly with parameters  
+- Do NOT use string concatenation in Error() - use labels directly with parameters
 - Do NOT use StrSubstNo inside Error() - pass parameters directly to Error()
 - You can use Error with empty message like: `Error('')`
 
@@ -849,7 +849,7 @@ if ValidateCustomer(CustomerNo) then
     Error('');  // Let ValidateCustomer handle the message
 
 // Complex scenarios with clear comments
-ValidationErr: Label 'Field %1 in table %2 contains invalid value %3.', 
+ValidationErr: Label 'Field %1 in table %2 contains invalid value %3.',
                Comment = '%1 = Field Name, %2 = Table Caption, %3 = Field Value';
 Error(ValidationErr, FieldCaption("Status"), TableCaption(), "Status");
 ```
@@ -909,14 +909,14 @@ Acceptable obsolete patterns:
 [Obsolete('Use NewProcedure instead.', '18.0')]
 procedure OldProcedure()
 
-[Obsolete('Replaced by improved NewMethod in version 19.0', '19.0')]  
+[Obsolete('Replaced by improved NewMethod in version 19.0', '19.0')]
 procedure LegacyMethod()
 
 // Both preprocessor styles are valid:
 #if CLEAN28
     // New implementation
 #endif
-#if not CLEAN28  
+#if not CLEAN28
     // Legacy code
 #endif
 ```
@@ -943,7 +943,7 @@ page 50100 "Stockkeeping Units with Negative Inventory"
     SourceTable = "Stockkeeping Unit";
 }
 
-page 50101 "Items with Negative Inventory" 
+page 50101 "Items with Negative Inventory"
 {
     PageType = List;
     SourceTable = Item;  // Name matches source table

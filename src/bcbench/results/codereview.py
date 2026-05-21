@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any, Self
+from typing import Self
 
 from pydantic import Field
 
@@ -11,7 +11,7 @@ from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 
-__all__ = ["CodeReviewResult", "parse_review_output", "compute_comment_metrics"]
+__all__ = ["CodeReviewResult", "compute_comment_metrics", "parse_review_output"]
 
 
 SEVERITY_LEVELS: dict[str, int] = {
@@ -34,7 +34,7 @@ def _extract_json_candidate(raw_output: str) -> str:
     if not stripped:
         return ""
 
-    if stripped.startswith("[") or stripped.startswith("{"):
+    if stripped.startswith(("[", "{")):
         return stripped
 
     block_match = re.search(r"```json\s*([\s\S]*?)\s*```", raw_output, re.IGNORECASE)
@@ -59,17 +59,19 @@ def _normalize_severity(value: str) -> str:
     return SEVERITY_ALIASES.get(normalized, "medium")
 
 
-def _to_int(value: Any) -> int | None:
+def _to_int(value: object) -> int | None:
     if value is None:
         return None
+    if isinstance(value, bool):
+        return None
     try:
-        parsed = int(value)
+        parsed = int(str(value))
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
 
 
-def _normalize_comment(item: dict[str, Any]) -> ReviewComment | None:
+def _normalize_comment(item: dict[str, object]) -> ReviewComment | None:
     file_path = item.get("file") or item.get("filePath") or item.get("path")
     line_start = _to_int(item.get("line_start") or item.get("lineNumber") or item.get("line"))
     line_end = _to_int(item.get("line_end") or item.get("lineEnd") or item.get("endLine"))
@@ -109,7 +111,7 @@ def parse_review_output(raw_output: str) -> tuple[list[ReviewComment], bool]:
         logger.warning("Failed to parse review output as JSON")
         return [], False
 
-    raw_items: Any
+    raw_items: object
     if isinstance(raw, list):
         raw_items = raw
     elif isinstance(raw, dict) and isinstance(raw.get("findings"), list):

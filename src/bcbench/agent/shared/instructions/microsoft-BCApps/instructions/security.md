@@ -565,7 +565,7 @@ field(50102; "External Customer Ref"; Code[50])
 {
     TableRelation = Customer."External Reference";
     ValidateTableRelation = false;
-    
+
     trigger OnValidate()
     begin
         if "External Customer Ref" <> '' then
