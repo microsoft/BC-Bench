@@ -182,7 +182,7 @@ class EvaluationCategory(StrEnum):
         """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
-                return "resolution_rate"
+                return "ResolutionRate"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
