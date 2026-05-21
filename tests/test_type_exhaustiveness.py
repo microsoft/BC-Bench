@@ -39,8 +39,13 @@ def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with
         input_text = entry.get_task()
         expected_output = entry.get_expected_output()
         assert isinstance(input_text, str)
-        assert isinstance(expected_output, str)
-        assert len(expected_output) > 0
+        # ExpectedOutput is `str | Checklist`: string for execution-based categories,
+        # `{"assertions": [...]}` for lm_checklist-driven ones.
+        if isinstance(expected_output, dict):
+            assert "assertions" in expected_output
+        else:
+            assert isinstance(expected_output, str)
+            assert expected_output
 
 
 def test_all_categories_have_evaluators():

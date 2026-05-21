@@ -1,7 +1,7 @@
 import json
 from unittest.mock import PropertyMock, patch
 
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.types import AgentMetrics, EvaluationCategory
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
@@ -180,3 +180,33 @@ class TestWriteBcevalResults:
         assert data["metadata"]["prompt_tokens"] == 0
         assert data["metadata"]["completion_tokens"] == 1500
         assert data["metadata"]["latency"] == 100.0
+
+    def test_preserves_dict_expected_output_for_lm_checklist_style_categories(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
+        """A category whose `get_expected_output()` returns assertions (dict) must surface them as a JSON object in `expected`."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        checklist_payload = {
+            "assertions": [
+                {"text": "The output identifies the root cause.", "level": "critical"},
+                {"text": "The output mentions the affected codeunit.", "level": "expected"},
+            ]
+        }
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(BugFixEntry, "get_expected_output", lambda self: checklist_payload),
+        ):
+            write_bceval_results(
+                results=[sample_bugfix_result_with_metrics],
+                out_dir=output_dir,
+                run_id="test_run_checklist",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        with open(output_dir / "results.jsonl") as f:
+            data = json.loads(f.readline())
+
+        assert data["expected"] == checklist_payload
