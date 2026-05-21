@@ -152,6 +152,27 @@ class TestCodeReviewResult:
         severities = [comment.severity for comment in result.generated_comments]
         assert severities == ["medium", "low", "high"]
 
+    def test_display_row_includes_precision_recall_f1_and_severity_mae(self):
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),
+        ]
+        result = create_codereview_result(
+            output=json.dumps(
+                [
+                    {"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"},
+                    {"file": "src/other.al", "line_start": 80, "body": "Issue B", "severity": "low"},
+                ]
+            ),
+            expected_comments=expected_comments,
+        )
+
+        row = result.display_row
+        assert row["Comments"] == "2 (1/1 matched)"
+        assert row["Precision"] == "0.50"
+        assert row["Recall"] == "1.00"
+        assert row["F1"] == "0.67"
+        assert row["Severity MAE"] == "0.00"
+
 
 class TestCodeReviewSummary:
     def test_summary_aggregates_precision_recall_and_f1(self):
