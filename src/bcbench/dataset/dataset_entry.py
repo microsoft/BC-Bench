@@ -16,7 +16,7 @@ _config = get_config()
 __all__ = ["BaseDatasetEntry", "BugFixEntry", "ExpectedOutput", "TestEntry", "TestGenEntry"]
 
 
-type ChecklistLevel = Literal["critical", "expected", "aspirational"]
+ChecklistLevel = Literal["critical", "expected", "aspirational"]
 
 
 class ChecklistAssertion(TypedDict):
@@ -30,7 +30,7 @@ class Checklist(TypedDict):
 
 # Patch-style string for execution-based categories (bug-fix, test-generation),
 # or an lm_checklist payload for scorer-driven categories.
-type ExpectedOutput = str | Checklist
+ExpectedOutput = str | Checklist
 
 
 class TestEntry(BaseModel):
