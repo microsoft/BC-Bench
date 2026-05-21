@@ -180,6 +180,8 @@ class TestCodeReviewResult:
             "Generated": "2",
             "Matched": "1",
             "Expected": "2",
+            "Precision": "0.50",
+            "Recall": "0.50",
             "F1": "0.50",
         }
 

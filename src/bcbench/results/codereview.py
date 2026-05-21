@@ -298,5 +298,7 @@ class CodeReviewResult(BaseEvaluationResult):
             "Generated": str(len(self.generated_comments)),
             "Matched": str(self.matched_comment_count),
             "Expected": str(len(self.expected_comments)),
+            "Precision": f"{self.precision:.2f}",
+            "Recall": f"{self.recall:.2f}",
             "F1": f"{self.f1:.2f}",
         }

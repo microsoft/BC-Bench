@@ -46,7 +46,6 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     table.add_column("Custom Instructions", style="yellow")
     table.add_column("Skills", style="yellow")
     table.add_column("Custom Agent", style="yellow")
-    table.add_column("Error Message", style="dim")
 
     for result in results:
         has_error = result.error_message is not None or result.timeout
@@ -56,18 +55,10 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
         skills = "Yes" if result.experiment and result.experiment.skills_enabled else "No"
         custom_agent = result.experiment.custom_agent if result.experiment and result.experiment.custom_agent else "N/A"
         extra_values = list(result.display_row.values())
-        table.add_row(result.instance_id, result.project, status, *extra_values, mcp_servers, custom_instructions, skills, custom_agent, result.error_message or "")
+        table.add_row(result.instance_id, result.project, status, *extra_values, mcp_servers, custom_instructions, skills, custom_agent)
 
     console.print(table)
     console.print()
-
-
-def _get_short_error_message(error_message: str | None) -> str:
-    """Extract the first line of an error message for summary display."""
-    if not error_message:
-        return ""
-    first_line = error_message.split("\n")[0].rstrip(":")
-    return first_line.replace("|", "\\|")
 
 
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
@@ -114,22 +105,21 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     extra_separator = " | ".join("------" for _ in extra_columns)
 
     if extra_columns:
-        markdown_summary += f"| Instance ID | Project | Status | {extra_headers} | Error Message |\n"
-        markdown_summary += f"|-------------|---------|--------|{extra_separator}|---------------|\n"
+        markdown_summary += f"| Instance ID | Project | Status | {extra_headers} |\n"
+        markdown_summary += f"|-------------|---------|--------|{extra_separator}|\n"
     else:
-        markdown_summary += "| Instance ID | Project | Status | Error Message |\n"
-        markdown_summary += "|-------------|---------|--------|---------------|\n"
+        markdown_summary += "| Instance ID | Project | Status |\n"
+        markdown_summary += "|-------------|---------|--------|\n"
 
     for result in results:
         has_error = result.error_message is not None or result.timeout
         status_icon = ":x:" if has_error else ":white_check_mark:"
         status_text = f"{status_icon} {result.status_label}"
-        error_msg = _get_short_error_message(result.error_message)
         extra_values = " | ".join(result.display_row.values())
         if extra_columns:
-            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {extra_values} | {error_msg} |\n"
+            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {extra_values} |\n"
         else:
-            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {error_msg} |\n"
+            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} |\n"
 
     _write_github_step_summary(markdown_summary)
 
