@@ -29,7 +29,7 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 continue
 
             matched_entry = matching_entries[0]
-            input: str = matched_entry.get_task()
+            task_input: str = matched_entry.get_task()
             expected: ExpectedOutput = matched_entry.get_expected_output()
 
             metadata: dict[str, Any] = {
@@ -48,7 +48,7 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
 
             bceval_result = {
                 "id": result.instance_id,
-                "input": input,
+                "input": task_input,
                 "expected": expected,
                 "output": result.output,
                 "context": "",
