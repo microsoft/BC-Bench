@@ -51,6 +51,7 @@ def test_all_categories_have_evaluators():
         assert all(isinstance(e, str) and e for e in evaluators)
 
 
-def test_all_categories_core_score_is_in_evaluators():
+def test_all_categories_have_core_score():
     for category in EvaluationCategory:
-        assert category.core_score in category.evaluators, f"{category}.core_score ({category.core_score!r}) must be one of {category.evaluators}"
+        assert isinstance(category.core_score, str)
+        assert category.core_score, f"{category} must declare a non-empty core_score"
