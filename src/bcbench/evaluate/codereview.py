@@ -1,8 +1,10 @@
 from collections.abc import Callable
 from pathlib import Path
+import re
 
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.exceptions import PatchApplicationError
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import apply_patch, setup_repo_prebuild
 from bcbench.results.codereview import CodeReviewResult, compute_comment_metrics, parse_review_output
@@ -13,6 +15,50 @@ logger = get_logger(__name__)
 REVIEW_OUTPUT_FILE = "review.json"
 
 __all__ = ["CodeReviewPipeline"]
+
+
+def _looks_like_full_file_patch(patch: str) -> bool:
+    return "@@" not in patch and "\n--- " in f"\n{patch}" and "\n+++ " in f"\n{patch}"
+
+
+def _materialize_full_file_patch(repo_path: Path, patch: str) -> int:
+    file_count = 0
+    current_path: Path | None = None
+    current_content: list[str] = []
+
+    def flush_current() -> None:
+        nonlocal file_count, current_path, current_content
+        if current_path is None:
+            return
+        current_path.parent.mkdir(parents=True, exist_ok=True)
+        current_path.write_text("\n".join(current_content) + "\n", encoding="utf-8")
+        file_count += 1
+        current_path = None
+        current_content = []
+
+    for line in patch.splitlines():
+        if line.startswith("--- "):
+            flush_current()
+            continue
+
+        if line.startswith("+++ "):
+            relative_path = re.sub(r"^[ab]/", "", line[4:].strip())
+            current_path = repo_path / relative_path
+            current_content = []
+            continue
+
+        if current_path is None:
+            continue
+
+        if line.startswith("+"):
+            current_content.append(line[1:])
+            continue
+
+        if line.startswith("\\ No newline at end of file"):
+            continue
+
+    flush_current()
+    return file_count
 
 
 class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
@@ -26,7 +72,15 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         """Setup workspace for code review by applying the entry patch as local changes."""
         setup_repo_prebuild(entry, repo_path)
         if entry.patch.strip():
-            apply_patch(repo_path, entry.patch, f"{entry.instance_id} review patch")
+            try:
+                apply_patch(repo_path, entry.patch, f"{entry.instance_id} review patch")
+            except PatchApplicationError:
+                if not _looks_like_full_file_patch(entry.patch):
+                    raise
+                materialized = _materialize_full_file_patch(repo_path, entry.patch)
+                if materialized == 0:
+                    raise
+                logger.info(f"Materialized {materialized} file(s) from simplified review patch for {entry.instance_id}")
         else:
             logger.warning(f"Entry {entry.instance_id} has empty patch; review will run on clean workspace")
 
