@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from pathlib import Path
 import re
+import subprocess
 
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
@@ -21,10 +22,11 @@ def _looks_like_full_file_patch(patch: str) -> bool:
     return "@@" not in patch and "\n--- " in f"\n{patch}" and "\n+++ " in f"\n{patch}"
 
 
-def _materialize_full_file_patch(repo_path: Path, patch: str) -> int:
+def _materialize_full_file_patch(repo_path: Path, patch: str) -> list[str]:
     file_count = 0
     current_path: Path | None = None
     current_content: list[str] = []
+    materialized_paths: list[str] = []
 
     def flush_current() -> None:
         nonlocal file_count, current_path, current_content
@@ -32,6 +34,7 @@ def _materialize_full_file_patch(repo_path: Path, patch: str) -> int:
             return
         current_path.parent.mkdir(parents=True, exist_ok=True)
         current_path.write_text("\n".join(current_content) + "\n", encoding="utf-8")
+        materialized_paths.append(current_path.relative_to(repo_path).as_posix())
         file_count += 1
         current_path = None
         current_content = []
@@ -58,7 +61,7 @@ def _materialize_full_file_patch(repo_path: Path, patch: str) -> int:
             continue
 
     flush_current()
-    return file_count
+    return materialized_paths
 
 
 class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
@@ -77,10 +80,12 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             except PatchApplicationError:
                 if not _looks_like_full_file_patch(entry.patch):
                     raise
-                materialized = _materialize_full_file_patch(repo_path, entry.patch)
-                if materialized == 0:
+                materialized_paths = _materialize_full_file_patch(repo_path, entry.patch)
+                if not materialized_paths:
                     raise
-                logger.info(f"Materialized {materialized} file(s) from simplified review patch for {entry.instance_id}")
+                # Mark untracked files as intent-to-add so `git diff HEAD` includes them.
+                subprocess.run(["git", "add", "-N", "--", *materialized_paths], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+                logger.info(f"Materialized {len(materialized_paths)} file(s) from simplified review patch for {entry.instance_id}")
         else:
             logger.warning(f"Entry {entry.instance_id} has empty patch; review will run on clean workspace")
 

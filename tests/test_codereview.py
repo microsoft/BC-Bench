@@ -110,6 +110,25 @@ class TestCodeReviewResult:
         assert result.generated_comments[0].line_start == 12
         assert result.generated_comments[0].body == "Potential SQL injection risk"
 
+    def test_parses_single_finding_object_output(self):
+        output = json.dumps(
+            {
+                "filePath": "src/app.al",
+                "lineNumber": 42,
+                "severity": "Medium",
+                "issue": "Potential issue in single-object response",
+                "recommendation": "Fix it",
+                "suggestedCode": "",
+            }
+        )
+
+        result = create_codereview_result(output=output)
+
+        assert result.valid_review_output is True
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].file == "src/app.al"
+        assert result.generated_comments[0].line_start == 42
+
     def test_metrics_match_expected_comments_with_tolerance(self):
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),

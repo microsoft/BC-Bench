@@ -59,10 +59,13 @@ prompt:
 
     Review the current branch changes and save findings to a file named "review.json" in the repository root.
 
+    Review ONLY the current working-tree AL file changes for this evaluation entry.
+    Do NOT compare commits (for example, do NOT use HEAD~1..HEAD or origin/main comparisons).
+    Use working tree diff only (git diff HEAD), and focus on changed *.al files.
+
     The file must contain valid JSON with a top-level object named findings.
     Each finding must include: filePath, lineNumber, severity, issue, recommendation.
     Allowed severity values are: critical, high, medium, low.
-
     If there are no findings, write an empty findings list.
 
 # controls:
