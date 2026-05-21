@@ -116,6 +116,8 @@ def parse_review_output(raw_output: str) -> tuple[list[ReviewComment], bool]:
         raw_items = raw
     elif isinstance(raw, dict) and isinstance(raw.get("findings"), list):
         raw_items = raw["findings"]
+    elif isinstance(raw, dict) and any(key in raw for key in ("file", "filePath", "path")):
+        raw_items = [raw]
     else:
         logger.warning(f"Expected JSON array or object with findings[], got {type(raw).__name__}")
         return [], False

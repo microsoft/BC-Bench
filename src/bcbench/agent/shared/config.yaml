@@ -57,7 +57,10 @@ prompt:
   code-review-template: |
     @al-code-review
 
-    Review the current branch changes and return findings using the al-code-review skill schema.
+    Review ONLY the current working-tree AL file changes for this evaluation entry.
+    Do NOT compare commits (for example, do NOT use HEAD~1..HEAD or origin/main comparisons).
+    Use working tree diff only (git diff HEAD), and focus on changed *.al files.
+    Return findings using the al-code-review skill schema.
     Save the findings JSON to a file named review.json in the repository root.
     If there are no findings, write an empty findings list.
 
