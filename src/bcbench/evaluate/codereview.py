@@ -5,7 +5,7 @@ from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult
+from bcbench.results.codereview import CodeReviewResult, compute_comment_metrics, parse_review_output
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -24,7 +24,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
 
     def setup_workspace(self, entry: CodeReviewEntry, repo_path: Path) -> None:
         """Setup workspace for code review.
-        
+
         For code-review, we only clean/reset the repo. The patch is passed to
         the agent for review but not applied to the working directory.
         """
@@ -46,11 +46,27 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             logger.error(f"No review generated for {context.entry.instance_id}")
             raise RuntimeError(f"No review generated for {context.entry.instance_id}")
 
+        generated_comments, valid_review_output = parse_review_output(output)
+        computed_metrics = compute_comment_metrics(
+            context.entry.expected_comments,
+            generated_comments,
+            context.entry.match_line_tolerance,
+        )
+
         result = CodeReviewResult.create_success(
             context,
             output=output,
             expected_comments=context.entry.expected_comments,
             line_tolerance=context.entry.match_line_tolerance,
+            generated_comments=generated_comments,
+            valid_review_output=valid_review_output,
+            matched_comment_count=int(computed_metrics["matched_comment_count"]),
+            incorrect_comment_count=int(computed_metrics["incorrect_comment_count"]),
+            missed_comment_count=int(computed_metrics["missed_comment_count"]),
+            precision=float(computed_metrics["precision"]),
+            recall=float(computed_metrics["recall"]),
+            f1=float(computed_metrics["f1"]),
+            severity_mae=float(computed_metrics["severity_mae"]),
         )
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
         logger.info(
