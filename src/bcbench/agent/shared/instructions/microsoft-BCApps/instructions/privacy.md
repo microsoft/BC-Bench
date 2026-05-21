@@ -169,13 +169,13 @@ The only concerns are:
 
 Bad (email in telemetry):
 ```al
-Session.LogMessage('0001', StrSubstNo('Email sent to %1', NotificationEmail), 
+Session.LogMessage('0001', StrSubstNo('Email sent to %1', NotificationEmail),
     Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::All);
 ```
 
 Good (no PII in telemetry):
 ```al
-Session.LogMessage('0001', 'Email notification sent successfully', 
+Session.LogMessage('0001', 'Email notification sent successfully',
     Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::All);
 ```
 
@@ -213,27 +213,27 @@ Session.LogMessage('0000000', 'Customer record processed', Verbosity::Normal,
 
 Bad:
 ```al
-Session.LogMessage('0001', StrSubstNo('Error processing file %1', FileName), 
+Session.LogMessage('0001', StrSubstNo('Error processing file %1', FileName),
     Verbosity::Error, DataClassification::SystemMetadata, TelemetryScope::All);
     // Filename is Customer Data
 ```
 
 Good:
 ```al
-Session.LogMessage('0001', 'Error processing uploaded file', 
+Session.LogMessage('0001', 'Error processing uploaded file',
     Verbosity::Error, DataClassification::SystemMetadata, TelemetryScope::All);
 ```
 
 Bad:
 ```al
-Session.LogMessage('0002', StrSubstNo('Employee %1 updated record', EmployeeCode), 
+Session.LogMessage('0002', StrSubstNo('Employee %1 updated record', EmployeeCode),
     Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::All);
     // Employee codes can identify individuals
 ```
 
 Good:
 ```al
-Session.LogMessage('0002', 'Record updated by employee', 
+Session.LogMessage('0002', 'Record updated by employee',
     Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::All);
 ```
 

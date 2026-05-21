@@ -705,4 +705,3 @@ IMPORTANT RULES FOR `suggestedCode`:
 - If you cannot provide an exact code-level replacement, set `suggestedCode` to an empty string (`""`) and keep the finding.
 
 If no issues are found, output an empty array: []
- 
