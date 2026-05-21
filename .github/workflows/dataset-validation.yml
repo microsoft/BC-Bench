@@ -1,5 +1,7 @@
+# Designed for bug-fix and test-generation dataset, verifies the flow of building and
+# testing still works as expected, avoiding regressions caused by underlying
+# infrastructure changes.
 name: Dataset Validation and Verification
-description: Designed for bug-fix and test-generation dataset, verifies the flow of building and testing still works as expected, avoiding regressions caused by underlying infrastructure changes.
 permissions:
   contents: read
 
