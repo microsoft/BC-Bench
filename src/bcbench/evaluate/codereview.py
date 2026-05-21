@@ -4,7 +4,7 @@ from pathlib import Path
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.logger import get_logger, github_log_group
-from bcbench.operations import setup_repo_prebuild
+from bcbench.operations import apply_patch, setup_repo_prebuild
 from bcbench.results.codereview import CodeReviewResult, compute_comment_metrics, parse_review_output
 from bcbench.types import EvaluationContext
 
@@ -18,17 +18,17 @@ __all__ = ["CodeReviewPipeline"]
 class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     """Pipeline for code-review evaluation category.
 
-    Code review does not require a BC container — the agent reviews a patch
-    and produces review comments without building or running tests.
+    Code review does not require a BC container. We materialize the dataset patch
+    as local git changes so the agent can review the branch diff directly.
     """
 
     def setup_workspace(self, entry: CodeReviewEntry, repo_path: Path) -> None:
-        """Setup workspace for code review.
-
-        For code-review, we only clean/reset the repo. The patch is passed to
-        the agent for review but not applied to the working directory.
-        """
+        """Setup workspace for code review by applying the entry patch as local changes."""
         setup_repo_prebuild(entry, repo_path)
+        if entry.patch.strip():
+            apply_patch(repo_path, entry.patch, f"{entry.instance_id} review patch")
+        else:
+            logger.warning(f"Entry {entry.instance_id} has empty patch; review will run on clean workspace")
 
     def setup(self, context: EvaluationContext[CodeReviewEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)

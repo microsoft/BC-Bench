@@ -1,7 +1,10 @@
 import json
+from pathlib import Path
+from unittest.mock import patch
 
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment
+from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.summary import CodeReviewResultSummary
@@ -234,3 +237,16 @@ class TestCodeReviewPipeline:
         context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
         # Container is passed but pipeline doesn't use it — this is fine
         assert context.category == EvaluationCategory.CODE_REVIEW
+
+    def test_setup_workspace_applies_entry_patch(self, tmp_path):
+        entry = create_codereview_entry(patch="diff --git a/a.al b/a.al\n+new line\n")
+        pipeline = CodeReviewPipeline()
+
+        with (
+            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
+            patch("bcbench.evaluate.codereview.apply_patch") as mock_apply,
+        ):
+            pipeline.setup_workspace(entry, Path(tmp_path))
+
+        mock_setup.assert_called_once()
+        mock_apply.assert_called_once()
