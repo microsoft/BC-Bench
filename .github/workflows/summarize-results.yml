@@ -22,7 +22,7 @@ on:
         default: false
       category:
         description: "Evaluation category"
-        required: false
+        required: true
         type: string
 
 env:
