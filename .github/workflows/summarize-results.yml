@@ -74,7 +74,7 @@ jobs:
         id: bceval
         run: uv run bcbench category bceval-config --category "${{ inputs.category }}"
 
-      - name: Upload result with bceval to Braintrust
+      - name: Upload result using bceval
         env:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
@@ -85,7 +85,7 @@ jobs:
 
           uv tool install bc-eval[capi]==0.3.6 --python 3.12 --index "https://anything:${ADO_TOKEN}@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
-          # Upload summary to Braintrust using bc-eval
+          # Upload summary using bc-eval
           MODEL_TAG="${{ inputs.model }}"
           MODEL_TAG="${MODEL_TAG//./-}"
           bceval metrics calculate \
