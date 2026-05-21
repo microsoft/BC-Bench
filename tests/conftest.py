@@ -16,7 +16,7 @@ from bcbench.dataset import BaseDatasetEntry, BugFixEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.results.bugfix import BugFixResult
-from bcbench.results.codereview import CodeReviewResult
+from bcbench.results.codereview import CodeReviewResult, compute_comment_metrics, parse_review_output
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext
 
@@ -194,6 +194,8 @@ def create_codereview_result(
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
+    generated_comments, valid_review_output = parse_review_output(output)
+    computed_metrics = compute_comment_metrics(expected_comments, generated_comments, line_tolerance)
 
     return CodeReviewResult(
         instance_id=instance_id,
@@ -202,8 +204,17 @@ def create_codereview_result(
         agent_name=agent_name,
         category=EvaluationCategory.CODE_REVIEW,
         output=output,
+        generated_comments=generated_comments,
         expected_comments=expected_comments,
         line_tolerance=line_tolerance,
+        valid_review_output=valid_review_output,
+        matched_comment_count=int(computed_metrics["matched_comment_count"]),
+        incorrect_comment_count=int(computed_metrics["incorrect_comment_count"]),
+        missed_comment_count=int(computed_metrics["missed_comment_count"]),
+        precision=float(computed_metrics["precision"]),
+        recall=float(computed_metrics["recall"]),
+        f1=float(computed_metrics["f1"]),
+        severity_mae=float(computed_metrics["severity_mae"]),
         metrics=metrics,
     )
 

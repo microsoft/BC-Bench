@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.logger import get_logger
@@ -11,7 +11,7 @@ from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 
-__all__ = ["CodeReviewResult"]
+__all__ = ["CodeReviewResult", "parse_review_output", "compute_comment_metrics"]
 
 
 SEVERITY_LEVELS: dict[str, int] = {
@@ -95,7 +95,7 @@ def _normalize_comment(item: dict[str, Any]) -> ReviewComment | None:
         return None
 
 
-def _parse_review_output(raw_output: str) -> tuple[list[ReviewComment], bool]:
+def parse_review_output(raw_output: str) -> tuple[list[ReviewComment], bool]:
     if not raw_output.strip():
         return [], False
 
@@ -201,6 +201,32 @@ def _compute_severity_mae(
     return total_error / len(matched_pairs)
 
 
+def compute_comment_metrics(
+    expected_comments: list[ReviewComment],
+    generated_comments: list[ReviewComment],
+    line_tolerance: int,
+) -> dict[str, int | float]:
+    matches = _match_comments(expected_comments, generated_comments, line_tolerance)
+    matched_count = len(matches)
+    incorrect_count = max(0, len(generated_comments) - matched_count)
+    missed_count = max(0, len(expected_comments) - matched_count)
+
+    precision = matched_count / len(generated_comments) if generated_comments else 1.0
+    recall = matched_count / len(expected_comments) if expected_comments else 1.0
+    f1 = _compute_f1(precision, recall)
+    severity_mae = _compute_severity_mae(matches, expected_comments, generated_comments)
+
+    return {
+        "matched_comment_count": matched_count,
+        "incorrect_comment_count": incorrect_count,
+        "missed_comment_count": missed_count,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "severity_mae": severity_mae,
+    }
+
+
 class CodeReviewResult(BaseEvaluationResult):
     """Result for the code-review category."""
 
@@ -218,34 +244,6 @@ class CodeReviewResult(BaseEvaluationResult):
     f1: float = 1.0
     severity_mae: float = 0.0
 
-    @model_validator(mode="after")
-    def _parse_comments_from_output(self) -> Self:
-        if not self.generated_comments and self.output:
-            parsed_comments, valid_output = _parse_review_output(self.output)
-            object.__setattr__(self, "generated_comments", parsed_comments)
-            object.__setattr__(self, "valid_review_output", valid_output)
-        elif not self.output.strip():
-            object.__setattr__(self, "valid_review_output", False)
-
-        matches = _match_comments(self.expected_comments, self.generated_comments, self.line_tolerance)
-        matched_count = len(matches)
-        incorrect_count = max(0, len(self.generated_comments) - matched_count)
-        missed_count = max(0, len(self.expected_comments) - matched_count)
-
-        precision = matched_count / len(self.generated_comments) if self.generated_comments else 1.0
-        recall = matched_count / len(self.expected_comments) if self.expected_comments else 1.0
-        f1 = _compute_f1(precision, recall)
-        severity_mae = _compute_severity_mae(matches, self.expected_comments, self.generated_comments)
-
-        object.__setattr__(self, "matched_comment_count", matched_count)
-        object.__setattr__(self, "incorrect_comment_count", incorrect_count)
-        object.__setattr__(self, "missed_comment_count", missed_count)
-        object.__setattr__(self, "precision", precision)
-        object.__setattr__(self, "recall", recall)
-        object.__setattr__(self, "f1", f1)
-        object.__setattr__(self, "severity_mae", severity_mae)
-        return self
-
     @classmethod
     def create_success(
         cls,
@@ -253,12 +251,30 @@ class CodeReviewResult(BaseEvaluationResult):
         output: str,
         expected_comments: list[ReviewComment] | None = None,
         line_tolerance: int = 5,
+        generated_comments: list[ReviewComment] | None = None,
+        valid_review_output: bool = False,
+        matched_comment_count: int = 0,
+        incorrect_comment_count: int = 0,
+        missed_comment_count: int = 0,
+        precision: float = 1.0,
+        recall: float = 1.0,
+        f1: float = 1.0,
+        severity_mae: float = 0.0,
     ) -> Self:
         return cls(
             **cls._base_fields(context),
             output=output,
             expected_comments=expected_comments or [],
             line_tolerance=line_tolerance,
+            generated_comments=generated_comments or [],
+            valid_review_output=valid_review_output,
+            matched_comment_count=matched_comment_count,
+            incorrect_comment_count=incorrect_comment_count,
+            missed_comment_count=missed_comment_count,
+            precision=precision,
+            recall=recall,
+            f1=f1,
+            severity_mae=severity_mae,
         )
 
     @property
@@ -279,9 +295,8 @@ class CodeReviewResult(BaseEvaluationResult):
     @property
     def display_row(self) -> dict[str, str]:
         return {
-            "Comments": f"{len(self.generated_comments)} ({self.matched_comment_count}/{len(self.expected_comments)} matched)",
-            "Precision": f"{self.precision:.2f}",
-            "Recall": f"{self.recall:.2f}",
+            "Generated": str(len(self.generated_comments)),
+            "Matched": str(self.matched_comment_count),
+            "Expected": str(len(self.expected_comments)),
             "F1": f"{self.f1:.2f}",
-            "Severity MAE": f"{self.severity_mae:.2f}",
         }

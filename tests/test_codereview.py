@@ -152,26 +152,36 @@ class TestCodeReviewResult:
         severities = [comment.severity for comment in result.generated_comments]
         assert severities == ["medium", "low", "high"]
 
-    def test_display_row_includes_precision_recall_f1_and_severity_mae(self):
+    def test_display_row_splits_comment_counts(self):
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),
+            ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity="high"),
         ]
-        result = create_codereview_result(
-            output=json.dumps(
-                [
-                    {"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"},
-                    {"file": "src/other.al", "line_start": 80, "body": "Issue B", "severity": "low"},
-                ]
-            ),
-            expected_comments=expected_comments,
+        generated_output = json.dumps(
+            [
+                {
+                    "file": "src/app.al",
+                    "line_start": 12,
+                    "body": "Potential null reference",
+                    "severity": "warning",
+                },
+                {
+                    "file": "src/other.al",
+                    "line_start": 99,
+                    "body": "Unrelated finding",
+                    "severity": "low",
+                },
+            ]
         )
 
-        row = result.display_row
-        assert row["Comments"] == "2 (1/1 matched)"
-        assert row["Precision"] == "0.50"
-        assert row["Recall"] == "1.00"
-        assert row["F1"] == "0.67"
-        assert row["Severity MAE"] == "0.00"
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
+
+        assert result.display_row == {
+            "Generated": "2",
+            "Matched": "1",
+            "Expected": "2",
+            "F1": "0.50",
+        }
 
 
 class TestCodeReviewSummary:
