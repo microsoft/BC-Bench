@@ -1,0 +1,2162 @@
+{
+  "totalRows": 1931,
+  "rowsWithCalls": 1056,
+  "uniqueProcedures": 385,
+  "uniqueLibraries": 45,
+  "generatedAt": "2026-05-05T11:20:18.2655607+02:00",
+  "sourceFile": "C:\\Enlist\\navagent\\tools\\al-test-corpus\\out\\corpus-deduped.jsonl",
+  "byProcedure": [
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandDecInRange",
+      "calls": 157
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "AssertEmpty",
+      "calls": 122
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GenerateGUID",
+      "calls": 121
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "Enqueue",
+      "calls": 111
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "PostGeneralJnlLine",
+      "calls": 67
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "DequeueText",
+      "calls": 63
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "PostSalesDocument",
+      "calls": 56
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerNo",
+      "calls": 45
+    },
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandIntInRange",
+      "calls": 44
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesHeader",
+      "calls": 30
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGLAccountNo",
+      "calls": 27
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomer",
+      "calls": 27
+    },
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandInt",
+      "calls": 26
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateItemNo",
+      "calls": 25
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "PostPurchaseDocument",
+      "calls": 25
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesLine",
+      "calls": 25
+    },
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandDec",
+      "calls": 23
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "PostBankAccReconciliation",
+      "calls": 22
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateBankAccReconciliation",
+      "calls": 21
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GenerateRandomXMLText",
+      "calls": 21
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "Initialize",
+      "calls": 21
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreateVendor",
+      "calls": 20
+    },
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandDate",
+      "calls": 20
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GetNewRecNo",
+      "calls": 20
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGenJournalBatch",
+      "calls": 18
+    },
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandDateFromInRange",
+      "calls": 18
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "VerifyNodeValueByXPathWithIndex",
+      "calls": 18
+    },
+    {
+      "library": "LibraryPlanning",
+      "procedure": "CalcRegenPlanForPlanWksh",
+      "calls": 17
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGeneralJnlLine",
+      "calls": 16
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateItem",
+      "calls": 16
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchHeader",
+      "calls": 16
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesDocumentWithItem",
+      "calls": 16
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGenJournalTemplate",
+      "calls": 15
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateVATPostingSetupWithAccounts",
+      "calls": 15
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreateVendorNo",
+      "calls": 15
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "SetFileName",
+      "calls": 15
+    },
+    {
+      "library": "LibraryApplicationArea",
+      "procedure": "DisableApplicationAreaSetup",
+      "calls": 14
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateBankAccount",
+      "calls": 14
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "OpenExcelFile",
+      "calls": 14
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "VerifyNodeCountByXPath",
+      "calls": 14
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "PostItemJournalLine",
+      "calls": 13
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "FindColumnNoFromColumnCaption",
+      "calls": 13
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "GetFileName",
+      "calls": 13
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "VerifyCellValue",
+      "calls": 13
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockCustomerNo",
+      "calls": 13
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateCurrency",
+      "calls": 12
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGLAccount",
+      "calls": 12
+    },
+    {
+      "library": "LibraryMarketing",
+      "procedure": "CreatePersonContact",
+      "calls": 12
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseLine",
+      "calls": 12
+    },
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandDateFrom",
+      "calls": 12
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "Dequeue",
+      "calls": 12
+    },
+    {
+      "library": "LibraryApplicationArea",
+      "procedure": "EnableEssentialSetup",
+      "calls": 11
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateRoutingHeader",
+      "calls": 11
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateWorkCenter",
+      "calls": 11
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "AssertElementWithValueExists",
+      "calls": 11
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateBankAccReconciliationLn",
+      "calls": 10
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindCustomerLedgerEntry",
+      "calls": 10
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GenerateRandomNumericText",
+      "calls": 10
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDimensionValue",
+      "calls": 9
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateCountryRegion",
+      "calls": 9
+    },
+    {
+      "library": "LibraryJournals",
+      "procedure": "CreateGenJournalLine",
+      "calls": 9
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateRoutingLine",
+      "calls": 9
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseInvoice",
+      "calls": 9
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceHeader",
+      "calls": 9
+    },
+    {
+      "library": "LibraryTestInitialize",
+      "procedure": "OnTestInitialize",
+      "calls": 9
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "VerifyNodeValueByXPath",
+      "calls": 9
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDimension",
+      "calls": 8
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateShippingAgent",
+      "calls": 8
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "CreateJob",
+      "calls": 8
+    },
+    {
+      "library": "LibraryNotificationMgt",
+      "procedure": "RecallNotificationsForRecord",
+      "calls": 8
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "LoadDataSetFile",
+      "calls": 8
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesInvoice",
+      "calls": 8
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesInvoiceForCustomerNo",
+      "calls": 8
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "PostServiceOrder",
+      "calls": 8
+    },
+    {
+      "library": "LibrarySetupStorage",
+      "procedure": "Save",
+      "calls": 8
+    },
+    {
+      "library": "LibraryTestInitialize",
+      "procedure": "OnAfterTestSuiteInitialize",
+      "calls": 8
+    },
+    {
+      "library": "LibraryTestInitialize",
+      "procedure": "OnBeforeTestSuiteInitialize",
+      "calls": 8
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GenerateRandomCode",
+      "calls": 8
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "DequeueDate",
+      "calls": 8
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateExchangeRate",
+      "calls": 7
+    },
+    {
+      "library": "LibraryPermissionsVerify",
+      "procedure": "CheckReadAccessToRelatedTables",
+      "calls": 7
+    },
+    {
+      "library": "LibraryPermissionsVerify",
+      "procedure": "CreateRecWithRelatedFields",
+      "calls": 7
+    },
+    {
+      "library": "LibraryTextFileValidation",
+      "procedure": "FindLineWithValue",
+      "calls": 7
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockShipToAddressEAEU",
+      "calls": 7
+    },
+    {
+      "library": "LibraryBEHelper",
+      "procedure": "CreateDomesticCustomer",
+      "calls": 6
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "ApplyCustomerLedgerEntries",
+      "calls": 6
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateCurrencyWithRandomExchRates",
+      "calls": 6
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGenProdPostingGroup",
+      "calls": 6
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindVendorLedgerEntry",
+      "calls": 6
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetAddReportingCurrency",
+      "calls": 6
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetupReportSelection",
+      "calls": 6
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateItemWithVATProdPostingGroup",
+      "calls": 6
+    },
+    {
+      "library": "LibraryJournals",
+      "procedure": "CreateGenJournalLineWithBatch",
+      "calls": 6
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreateVendorWithVATBusPostingGroup",
+      "calls": 6
+    },
+    {
+      "library": "LibraryRUReports",
+      "procedure": "CreatePostCode",
+      "calls": 6
+    },
+    {
+      "library": "LibraryTextFileValidation",
+      "procedure": "CountNoOfLinesWithValue",
+      "calls": 6
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "DequeueBoolean",
+      "calls": 6
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "GetNodeInnerTextByXPathWithIndex",
+      "calls": 6
+    },
+    {
+      "library": "LibraryEmailFeature",
+      "procedure": "SetEmailFeatureEnabled",
+      "calls": 5
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGenBusPostingGroup",
+      "calls": 5
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGLAccountWithVATPostingSetup",
+      "calls": 5
+    },
+    {
+      "library": "LibraryFileMgtHandler",
+      "procedure": "GetServerTempFileName",
+      "calls": 5
+    },
+    {
+      "library": "LibraryFileMgtHandler",
+      "procedure": "GetTempBlob",
+      "calls": 5
+    },
+    {
+      "library": "LibraryFileMgtHandler",
+      "procedure": "SetBeforeDownloadFromStreamHandlerActivated",
+      "calls": 5
+    },
+    {
+      "library": "LibraryFileMgtHandler",
+      "procedure": "SetDownloadSubscriberActivated",
+      "calls": 5
+    },
+    {
+      "library": "LibraryFileMgtHandler",
+      "procedure": "SetSaveFileActivated",
+      "calls": 5
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "UpdateFASetupDefaultDeprBook",
+      "calls": 5
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "CreateJobTask",
+      "calls": 5
+    },
+    {
+      "library": "LibraryLowerPermissions",
+      "procedure": "SetInvoiceApp",
+      "calls": 5
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseCreditMemo",
+      "calls": 5
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseLineWithUnitCost",
+      "calls": 5
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerDocumentLayout",
+      "calls": 5
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerWithAddress",
+      "calls": 5
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerWithVATBusPostingGroup",
+      "calls": 5
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateShipToAddress",
+      "calls": 5
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "FindFirstSalesLine",
+      "calls": 5
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceContractHeader",
+      "calls": 5
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GenerateRandomAlphabeticText",
+      "calls": 5
+    },
+    {
+      "library": "LibraryWarehouse",
+      "procedure": "CreateLocation",
+      "calls": 5
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDefaultDimension",
+      "calls": 4
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDimensionValueWithCode",
+      "calls": 4
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDimSet",
+      "calls": 4
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGeneralJnlLineWithBalAcc",
+      "calls": 4
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGeneralPostingSetup",
+      "calls": 4
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateICGLAccount",
+      "calls": 4
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateRecurringBatchName",
+      "calls": 4
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "GetAmountRoundingPrecision",
+      "calls": 4
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateShippingAgentService",
+      "calls": 4
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "CreateJobPlanningLine",
+      "calls": 4
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "PlanningLineTypeContract",
+      "calls": 4
+    },
+    {
+      "library": "LibraryMarketing",
+      "procedure": "CreateContactWithCustomer",
+      "calls": 4
+    },
+    {
+      "library": "LibraryPermissionsVerify",
+      "procedure": "VerifyWritePermissionTrue",
+      "calls": 4
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "SetCheckTotalOnPurchaseDocument",
+      "calls": 4
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "GetFileName",
+      "calls": 4
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "RunReportAndLoad",
+      "calls": 4
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesCreditMemo",
+      "calls": 4
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesOrder",
+      "calls": 4
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceDocumentWithItemServiceLine",
+      "calls": 4
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceItem",
+      "calls": 4
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceLine",
+      "calls": 4
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "SetUpEmailAccount",
+      "calls": 4
+    },
+    {
+      "library": "LibraryApplicationArea",
+      "procedure": "EnableFoundationSetup",
+      "calls": 3
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "GetGlobalDimCodeValue",
+      "calls": 3
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateRecurringTemplateName",
+      "calls": 3
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateReminderTerms",
+      "calls": 3
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindRecurringTemplateName",
+      "calls": 3
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "GetGlobalDimensionCode",
+      "calls": 3
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SelectGenJnlBatch",
+      "calls": 3
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetAppliestoIdVendor",
+      "calls": 3
+    },
+    {
+      "library": "LibraryHumanResource",
+      "procedure": "CreateEmployee",
+      "calls": 3
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateItemNoWithVATProdPostingGroup",
+      "calls": 3
+    },
+    {
+      "library": "LibraryJournals",
+      "procedure": "CreateGenJournalBatch",
+      "calls": 3
+    },
+    {
+      "library": "LibraryLowerPermissions",
+      "procedure": "AddO365Setup",
+      "calls": 3
+    },
+    {
+      "library": "LibraryLowerPermissions",
+      "procedure": "SetSalesDocsPost",
+      "calls": 3
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateMachineCenter",
+      "calls": 3
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateProductionOrder",
+      "calls": 3
+    },
+    {
+      "library": "LibraryPlanning",
+      "procedure": "CreateRequisitionLine",
+      "calls": 3
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseInvoiceForVendorNo",
+      "calls": 3
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseOrder",
+      "calls": 3
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseReturnOrder",
+      "calls": 3
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "FindRowNoFromColumnNoAndValueInsideArea",
+      "calls": 3
+    },
+    {
+      "library": "LibraryRUReports",
+      "procedure": "CreateCustomer",
+      "calls": 3
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesLineWithUnitPrice",
+      "calls": 3
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "FindServiceInvoiceHeader",
+      "calls": 3
+    },
+    {
+      "library": "LibraryTextFileValidation",
+      "procedure": "ReadValue",
+      "calls": 3
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "CreateNoSeries",
+      "calls": 3
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "CreateNoSeriesLine",
+      "calls": 3
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GenerateRandomEmail",
+      "calls": 3
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GenerateRandomText",
+      "calls": 3
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockShipToAddress",
+      "calls": 3
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockShipToAddressNonEAEU",
+      "calls": 3
+    },
+    {
+      "library": "LibraryWarehouse",
+      "procedure": "CreateBin",
+      "calls": 3
+    },
+    {
+      "library": "LibraryApplicationArea",
+      "procedure": "EnablePremiumSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryCalcComplexity",
+      "procedure": "IsQuadratic",
+      "calls": 2
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDimWithDimValue",
+      "calls": 2
+    },
+    {
+      "library": "LibraryDocumentApprovals",
+      "procedure": "CreateMockupUserSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryDocumentApprovals",
+      "procedure": "CreateUser",
+      "calls": 2
+    },
+    {
+      "library": "LibraryDocumentApprovals",
+      "procedure": "GetApprovalEntries",
+      "calls": 2
+    },
+    {
+      "library": "LibraryDocumentApprovals",
+      "procedure": "SetSubstitute",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "ClearGenJournalLines",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGenJnlAllocation",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateGLAccountWithSalesSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateReasonCode",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateTaxAreaLine",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateTaxJurisdiction",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateVATBusinessPostingGroup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateVATPostingSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindGeneralPostingSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindGenJournalTemplate",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindVATPostingSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "MaxDate",
+      "calls": 2
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SelectGenJnlTemplate",
+      "calls": 2
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "CreateFADepreciationBook",
+      "calls": 2
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "CreateFAWithPostingGroup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "CreateFixedAsset",
+      "calls": 2
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "PostTransferHeader",
+      "calls": 2
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "GLAccountType",
+      "calls": 2
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "ResourceType",
+      "calls": 2
+    },
+    {
+      "library": "LibraryJobQueue",
+      "procedure": "GetCollectedJobQueueEntries",
+      "calls": 2
+    },
+    {
+      "library": "LibraryJobQueue",
+      "procedure": "SetDoNotHandleCodeunitJobQueueEnqueueEvent",
+      "calls": 2
+    },
+    {
+      "library": "LibraryLowerPermissions",
+      "procedure": "SetO365ServiceMgtRead",
+      "calls": 2
+    },
+    {
+      "library": "LibraryLowerPermissions",
+      "procedure": "SetPurchDocsPost",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CalculateWorkCenterCalendar",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateCapacityUnitOfMeasure",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateShopCalendarCode",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateShopCalendarWorkingDays",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateWorkCenterWithCalendar",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateWorkShiftCode",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "RefreshProdOrder",
+      "calls": 2
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "UpdateShopCalendarWorkingDaysCustomTime",
+      "calls": 2
+    },
+    {
+      "library": "LibraryNLLocalization",
+      "procedure": "CreateCBGStatement",
+      "calls": 2
+    },
+    {
+      "library": "LibraryPlanning",
+      "procedure": "CarryOutActionMsgPlanWksh",
+      "calls": 2
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseCreditMemoForVendorNo",
+      "calls": 2
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreateVendorDocumentLayout",
+      "calls": 2
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "FindFirstPurchLine",
+      "calls": 2
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "FindRowNoColumnNoByValueOnWorksheet",
+      "calls": 2
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "FormatDecimalValue",
+      "calls": 2
+    },
+    {
+      "library": "LibraryRUReports",
+      "procedure": "CreateVendor",
+      "calls": 2
+    },
+    {
+      "library": "LibraryRUReports",
+      "procedure": "GetCustomerFullAddress",
+      "calls": 2
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreatePaymentAndApplytoInvoice",
+      "calls": 2
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreatePrepaymentVATSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesCreditMemoForCustomerNo",
+      "calls": 2
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesperson",
+      "calls": 2
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceContractLine",
+      "calls": 2
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceDocumentForCustomerNo",
+      "calls": 2
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceItemLine",
+      "calls": 2
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "FindServiceCrMemoHeader",
+      "calls": 2
+    },
+    {
+      "library": "LibrarySetupStorage",
+      "procedure": "Restore",
+      "calls": 2
+    },
+    {
+      "library": "LibrarySplitVAT",
+      "procedure": "CreateServiceDoc",
+      "calls": 2
+    },
+    {
+      "library": "LibrarySplitVAT",
+      "procedure": "CreateServiceLine",
+      "calls": 2
+    },
+    {
+      "library": "LibraryTextFileValidation",
+      "procedure": "ReadLine",
+      "calls": 2
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "DequeueDecimal",
+      "calls": 2
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "DequeueInteger",
+      "calls": 2
+    },
+    {
+      "library": "LibraryWarehouse",
+      "procedure": "CreateLocationWithInventoryPostingSetup",
+      "calls": 2
+    },
+    {
+      "library": "LibraryXMLRead",
+      "procedure": "Initialize",
+      "calls": 2
+    },
+    {
+      "library": "LibraryXMLRead",
+      "procedure": "LocateNodeInSubtree",
+      "calls": 2
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "GetNodeByElementNameByIndex",
+      "calls": 2
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "GetNodeList",
+      "calls": 2
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "InitializeWithBlob",
+      "calls": 2
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "VerifyNodeCountWithValueByXPath",
+      "calls": 2
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "VerifyNodeValueFromParentNode",
+      "calls": 2
+    },
+    {
+      "library": "LibraryApplicationArea",
+      "procedure": "EnableSalesTaxSetup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryCalcComplexity",
+      "procedure": "IsLinear",
+      "calls": 1
+    },
+    {
+      "library": "LibraryCosting",
+      "procedure": "AdjustCostItemEntries",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateAndMapICDimFromDim",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateAndMapICDimValueFromDimValue",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDefaultDimensionCustomer",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDefaultDimensionGLAcc",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "CreateDefaultDimensionVendor",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "FindDimensionSetEntry",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "FindDimensionValue",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDimension",
+      "procedure": "ResetDefaultDimensions",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDocumentApprovals",
+      "procedure": "CreateNonWindowsUser",
+      "calls": 1
+    },
+    {
+      "library": "LibraryDocumentApprovals",
+      "procedure": "CreateUserSetup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "ApplyVendorLedgerEntries",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateAccountMappingGLAccount",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateBankAccountNo",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateBusinessUnit",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateCurrencyWithExchangeRate",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateDeferralTemplate",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateFinanceChargeMemoHeader",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateFinanceChargeMemoLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateFinanceChargeTerms",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateICPartner",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateLineDiscForCustomer",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateNoSeriesCode",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreatePostCode",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateReminderHeader",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateReminderLevel",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateReminderLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateReminderText",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateSourceCode",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateTaxArea",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateTaxDetail",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateTaxGroup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "CreateVATProductPostingGroup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "DisableMyNotifications",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindDirectPostingGLAccount",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindGenJnlTemplateAndBatch",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "FindGLAccount",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "GenerateVATRegistrationNo",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "GetCurrencyCode",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "GetShortcutDimensionCode",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "PostCustLedgerApplication",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "PostVendLedgerApplication",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "ReverseTransaction",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetAllowPostingFromTo",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetAppliestoIdCustomer",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetApplyCustomerEntry",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetApplyVendorEntry",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetMaxVATDifferenceAllowed",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "SetShortcutDimensionCode",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERM",
+      "procedure": "UnapplyVendorLedgerEntry",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERMCountryData",
+      "procedure": "CreateVATData",
+      "calls": 1
+    },
+    {
+      "library": "LibraryERMCountryData",
+      "procedure": "UpdatePurchasesPayablesSetup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryFileMgtHandler",
+      "procedure": "GetDownloadFromSreamToFileName",
+      "calls": 1
+    },
+    {
+      "library": "LibraryFiscalYear",
+      "procedure": "CreateClosedAccountingPeriods",
+      "calls": 1
+    },
+    {
+      "library": "LibraryFiscalYear",
+      "procedure": "GetFirstPostingDate",
+      "calls": 1
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "CreateDepreciationBook",
+      "calls": 1
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "CreateFAClass",
+      "calls": 1
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "CreateFAJournalSetup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "procedure": "CreateFASubclassDetailed",
+      "calls": 1
+    },
+    {
+      "library": "LibraryIncomingDocuments",
+      "procedure": "CreateNewIncomingDocument",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "ClearItemJournal",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateBaseCalendarChange",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateInventoryPostingGroup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateItemJournalLineInItemTemplate",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateItemWithPostingSetup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateItemWithUnitPriceAndUnitCost",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "CreateStockKeepingUnit",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "SelectItemJournalBatchName",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "SelectItemJournalTemplateName",
+      "calls": 1
+    },
+    {
+      "library": "LibraryInventory",
+      "procedure": "SetAverageCostSetup",
+      "calls": 1
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "CreateJobJournalBatch",
+      "calls": 1
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "CreateJobJournalTemplate",
+      "calls": 1
+    },
+    {
+      "library": "LibraryJob",
+      "procedure": "PostJobJournal",
+      "calls": 1
+    },
+    {
+      "library": "LibraryJournals",
+      "procedure": "CreateGenJournalLine2",
+      "calls": 1
+    },
+    {
+      "library": "LibraryLowerPermissions",
+      "procedure": "SetJournalsPost",
+      "calls": 1
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "ChangeStatusFirmPlanToReleased",
+      "calls": 1
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateOutputJournal",
+      "calls": 1
+    },
+    {
+      "library": "LibraryManufacturing",
+      "procedure": "CreateWorkCenterFullWorkingWeek",
+      "calls": 1
+    },
+    {
+      "library": "LibraryNLLocalization",
+      "procedure": "CreateCBGStatementLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryNotificationMgt",
+      "procedure": "DisableMyNotification",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPlanning",
+      "procedure": "RefreshPlanningLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPlanning",
+      "procedure": "SelectRequisitionWkshName",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreateFCYPurchaseDocumentWithItem",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreatePurchaseQuote",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "CreateVendorBankAccount",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "GetDropShipment",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "PostPurchasePrepaymentInvoice",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "SelectPmtJnlTemplate",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "SetAllowVATDifference",
+      "calls": 1
+    },
+    {
+      "library": "LibraryPurchase",
+      "procedure": "SetInvoiceRounding",
+      "calls": 1
+    },
+    {
+      "library": "LibraryRandom",
+      "procedure": "RandDecInDecimalRange",
+      "calls": 1
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "AssertElementWithValueNotExist",
+      "calls": 1
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "GetParametersFileName",
+      "calls": 1
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "RowCount",
+      "calls": 1
+    },
+    {
+      "library": "LibraryReportDataset",
+      "procedure": "SetRange",
+      "calls": 1
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "CheckIfValueExists",
+      "calls": 1
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "DeleteObjectOptions",
+      "calls": 1
+    },
+    {
+      "library": "LibraryReportValidation",
+      "procedure": "FindRowNoFromColumnNoAndValue",
+      "calls": 1
+    },
+    {
+      "library": "LibraryRUReports",
+      "procedure": "FormatAmountXML",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerPostingGroup",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerTemplate",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerTemplateWithBusPostingGroups",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateCustomerWithVATRegNo",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesPrice",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "CreateSalesQuoteForCustomerNo",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "PostSalesPrepaymentInvoice",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "ReleaseSalesDocument",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySales",
+      "procedure": "SetInvoiceRounding",
+      "calls": 1
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateBaseCalendar",
+      "calls": 1
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "CreateServiceContractTemplate",
+      "calls": 1
+    },
+    {
+      "library": "LibraryService",
+      "procedure": "SetupServiceMgtNoSeries",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySII",
+      "procedure": "FindCustLedgEntryForPostedServCrMemo",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySII",
+      "procedure": "FindCustLedgEntryForPostedServInvoice",
+      "calls": 1
+    },
+    {
+      "library": "LibrarySplitVAT",
+      "procedure": "FindServiceLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "procedure": "CreateCauseOfAbsence",
+      "calls": 1
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "procedure": "CreateTimeActivity",
+      "calls": 1
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "procedure": "CreateTimeSheet",
+      "calls": 1
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "procedure": "CreateTimeSheetDetail",
+      "calls": 1
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "procedure": "CreateTimeSheetLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "procedure": "RunSuggestJobJnlLinesReportForResourceInPeriod",
+      "calls": 1
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "procedure": "SubmitAndApproveTimeSheetLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GetFieldLength",
+      "calls": 1
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GetGlobalNoSeriesCode",
+      "calls": 1
+    },
+    {
+      "library": "LibraryUtility",
+      "procedure": "GetNewLineNo",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "procedure": "Clear",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockItemNo",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockLocation",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockSalesCrMemoHeader",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockSalesCrMemoLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockSalesHeader",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockSalesInvHeader",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockSalesInvLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryVATLedger",
+      "procedure": "MockSalesLine",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWarehouse",
+      "procedure": "CreateBinContent",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "CreateWorkflow",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "EnableWorkflow",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "InsertEntryPointEventStep",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "InsertEventStep",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "InsertResponseStep",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "SetNotifySenderInResponse",
+      "calls": 1
+    },
+    {
+      "library": "LibraryWorkflow",
+      "procedure": "UpdateWorkflowStepArgumentApproverLimitType",
+      "calls": 1
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "procedure": "VerifyNodeAbsence",
+      "calls": 1
+    }
+  ],
+  "byLibrary": [
+    {
+      "library": "LibraryERM",
+      "calls": 424,
+      "uniqueProcedures": 86
+    },
+    {
+      "library": "LibraryVariableStorage",
+      "calls": 327,
+      "uniqueProcedures": 9
+    },
+    {
+      "library": "LibraryRandom",
+      "calls": 301,
+      "uniqueProcedures": 8
+    },
+    {
+      "library": "LibrarySales",
+      "calls": 268,
+      "uniqueProcedures": 29
+    },
+    {
+      "library": "LibraryUtility",
+      "calls": 200,
+      "uniqueProcedures": 13
+    },
+    {
+      "library": "LibraryPurchase",
+      "calls": 140,
+      "uniqueProcedures": 24
+    },
+    {
+      "library": "LibraryInventory",
+      "calls": 87,
+      "uniqueProcedures": 18
+    },
+    {
+      "library": "LibraryXPathXMLReader",
+      "calls": 79,
+      "uniqueProcedures": 11
+    },
+    {
+      "library": "LibraryReportValidation",
+      "calls": 78,
+      "uniqueProcedures": 11
+    },
+    {
+      "library": "LibraryManufacturing",
+      "calls": 56,
+      "uniqueProcedures": 16
+    },
+    {
+      "library": "LibraryService",
+      "calls": 48,
+      "uniqueProcedures": 14
+    },
+    {
+      "library": "LibraryDimension",
+      "calls": 42,
+      "uniqueProcedures": 15
+    },
+    {
+      "library": "LibraryVATLedger",
+      "calls": 34,
+      "uniqueProcedures": 12
+    },
+    {
+      "library": "LibraryReportDataset",
+      "calls": 31,
+      "uniqueProcedures": 8
+    },
+    {
+      "library": "LibraryApplicationArea",
+      "calls": 31,
+      "uniqueProcedures": 5
+    },
+    {
+      "library": "LibraryJob",
+      "calls": 28,
+      "uniqueProcedures": 9
+    },
+    {
+      "library": "LibraryFileMgtHandler",
+      "calls": 26,
+      "uniqueProcedures": 6
+    },
+    {
+      "library": "LibraryTestInitialize",
+      "calls": 25,
+      "uniqueProcedures": 3
+    },
+    {
+      "library": "LibraryPlanning",
+      "calls": 24,
+      "uniqueProcedures": 5
+    },
+    {
+      "library": "LibraryJournals",
+      "calls": 19,
+      "uniqueProcedures": 4
+    },
+    {
+      "library": "LibraryPermissionsVerify",
+      "calls": 18,
+      "uniqueProcedures": 3
+    },
+    {
+      "library": "LibraryTextFileValidation",
+      "calls": 18,
+      "uniqueProcedures": 4
+    },
+    {
+      "library": "LibraryLowerPermissions",
+      "calls": 16,
+      "uniqueProcedures": 6
+    },
+    {
+      "library": "LibraryMarketing",
+      "calls": 16,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryFixedAsset",
+      "calls": 15,
+      "uniqueProcedures": 8
+    },
+    {
+      "library": "LibraryRUReports",
+      "calls": 14,
+      "uniqueProcedures": 5
+    },
+    {
+      "library": "LibraryWorkflow",
+      "calls": 11,
+      "uniqueProcedures": 8
+    },
+    {
+      "library": "LibraryWarehouse",
+      "calls": 11,
+      "uniqueProcedures": 4
+    },
+    {
+      "library": "LibraryDocumentApprovals",
+      "calls": 10,
+      "uniqueProcedures": 6
+    },
+    {
+      "library": "LibrarySetupStorage",
+      "calls": 10,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryNotificationMgt",
+      "calls": 9,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryTimeSheet",
+      "calls": 7,
+      "uniqueProcedures": 7
+    },
+    {
+      "library": "LibraryBEHelper",
+      "calls": 6,
+      "uniqueProcedures": 1
+    },
+    {
+      "library": "LibrarySplitVAT",
+      "calls": 5,
+      "uniqueProcedures": 3
+    },
+    {
+      "library": "LibraryEmailFeature",
+      "calls": 5,
+      "uniqueProcedures": 1
+    },
+    {
+      "library": "LibraryXMLRead",
+      "calls": 4,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryJobQueue",
+      "calls": 4,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryHumanResource",
+      "calls": 3,
+      "uniqueProcedures": 1
+    },
+    {
+      "library": "LibraryNLLocalization",
+      "calls": 3,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryCalcComplexity",
+      "calls": 3,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryFiscalYear",
+      "calls": 2,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryERMCountryData",
+      "calls": 2,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibrarySII",
+      "calls": 2,
+      "uniqueProcedures": 2
+    },
+    {
+      "library": "LibraryCosting",
+      "calls": 1,
+      "uniqueProcedures": 1
+    },
+    {
+      "library": "LibraryIncomingDocuments",
+      "calls": 1,
+      "uniqueProcedures": 1
+    }
+  ]
+}

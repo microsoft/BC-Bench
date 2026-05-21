@@ -70,7 +70,7 @@ instructions:
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
 skills:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`
