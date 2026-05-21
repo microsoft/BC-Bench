@@ -5,6 +5,7 @@ from unittest.mock import patch
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.evaluate.codereview import CodeReviewPipeline
+from bcbench.exceptions import PatchApplicationError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.summary import CodeReviewResultSummary
@@ -250,3 +251,23 @@ class TestCodeReviewPipeline:
 
         mock_setup.assert_called_once()
         mock_apply.assert_called_once()
+
+    def test_setup_workspace_materializes_simplified_patch_when_git_apply_fails(self, tmp_path):
+        entry = create_codereview_entry(
+            patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n"
+        )
+        pipeline = CodeReviewPipeline()
+
+        with (
+            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
+            patch(
+                "bcbench.evaluate.codereview.apply_patch",
+                side_effect=PatchApplicationError("test", 'error: No valid patches in input'),
+            ),
+        ):
+            pipeline.setup_workspace(entry, Path(tmp_path))
+
+        mock_setup.assert_called_once()
+        materialized_file = Path(tmp_path) / "src" / "NewObject.Codeunit.al"
+        assert materialized_file.exists()
+        assert "codeunit 50100 NewObject" in materialized_file.read_text(encoding="utf-8")
