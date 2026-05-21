@@ -100,8 +100,7 @@ jobs:
             --core-score "${{ steps.bceval.outputs.core_score }}" \
             --metric-definitions "${{ github.workspace }}/evaluator/metrics.py" \
             --metrics "bc_bench_metrics" \
-            --storage braintrust --storage kusto \
-            ${{ !inputs.mock && '--upload-results' || '' }}
+            --storage braintrust --storage kusto
 
       - name: Update leaderboard in a new branch
         if: ${{ !inputs.mock }}
