@@ -41,3 +41,16 @@ def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with
         assert isinstance(input_text, str)
         assert isinstance(expected_output, str)
         assert len(expected_output) > 0
+
+
+def test_all_categories_have_evaluators():
+    for category in EvaluationCategory:
+        evaluators = category.evaluators
+        assert isinstance(evaluators, list)
+        assert evaluators, f"{category} must declare at least one evaluator"
+        assert all(isinstance(e, str) and e for e in evaluators)
+
+
+def test_all_categories_core_score_is_in_evaluators():
+    for category in EvaluationCategory:
+        assert category.core_score in category.evaluators, f"{category}.core_score ({category.core_score!r}) must be one of {category.evaluators}"

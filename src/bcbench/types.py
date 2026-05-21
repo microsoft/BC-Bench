@@ -162,6 +162,30 @@ class EvaluationCategory(StrEnum):
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
+    @property
+    def evaluators(self) -> list[str]:
+        """
+        Names of bc-eval evaluators (from evaluator/scores.py) to run for this category.
+
+        Used for uploading evaluation results to long term storage.
+        """
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ["resolution_rate", "build_rate"]
+            case EvaluationCategory.TEST_GENERATION:
+                return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def core_score(self) -> str:
+        """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "resolution_rate"
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
 
 @dataclass(frozen=True)
 class ContainerConfig:
