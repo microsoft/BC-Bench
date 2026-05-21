@@ -4,13 +4,15 @@ This document assumes you are either using the upstream repo, or you have alread
 
 ## What is an Experiment?
 
-An experiment compares agent performance under different configurations against the same dataset. Typical examples:
+An experiment compares agent performance under different configurations against the **same dataset and the same category**. Typical examples:
 
 - Toggling custom instructions / skills / a custom agent
 - Adding an MCP server (e.g. the AL MCP) and measuring impact
 - Comparing models under the same setup
 
-The dataset, evaluation pipeline, and result format should stay constant. Only [`src/bcbench/agent/shared/config.yaml`](src/bcbench/agent/shared/config.yaml) (and the files it references) change between experiments.
+The dataset, category, evaluation pipeline, and result format stay constant. Only [`src/bcbench/agent/shared/config.yaml`](src/bcbench/agent/shared/config.yaml) (and the files it references) change between experiments.
+
+> If you want to evaluate a **different kind of output** (e.g. code review instead of bug fix), that's a new category, not an experiment — see [CATEGORIES.md](CATEGORIES.md).
 
 ## Configuring an Experiment
 
@@ -123,7 +125,7 @@ Each run uploads artifacts and updates a `leaderboard/<category>/<run_id>` branc
 
 - **Agent:**
 - **Model:**
-- **Category:**
+- **Category:** <!-- bug-fix | test-generation | ... -->
 
 ### Hypothesis / Expected Outcome
 

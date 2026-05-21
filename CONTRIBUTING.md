@@ -6,7 +6,12 @@ Thank you for your interest in BC-Bench.
 
 BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time.
 
-The instructions below are for teams that fork BC-Bench and replace the dataset with their own tasks.
+This document covers both audiences:
+
+- **Fork users** — read [Setup](#setup) and [After Forking](#after-forking).
+- **Maintainers** — skip the `gh repo fork` step in [Setup](#setup), ignore [After Forking](#after-forking).
+
+For related workflows see [EXPERIMENT.md](EXPERIMENT.md) (tweak agent setup) and [CATEGORIES.md](CATEGORIES.md) (add a new evaluation category).
 
 ## Repo Structure
 
@@ -62,11 +67,15 @@ uv run pre-commit run --all-files
 
 ## After Forking
 
+> Fork users only. Maintainers on `microsoft/BC-Bench` can skip this section.
+
 ### Dataset
 
 Replace the dataset tasks with your own, you can keep the ones from `BCApps` as the repository is public. The tasks follow `<organization>__<repo>-<PR#number>`, the `<organization>/<repo>` by default points to GitHub repositories. If your tasks come from Azure DevOps, update the ADO branch in `scripts/BCBenchUtils.psm1` (currently hardcoded to `microsoftinternal`).
 
 ### GitHub Actions
+
+The upstream workflows are wired for Microsoft's internal environment. To run them on your fork:
 
 - Replace self-hosted runner label `GitHub-BCBench` with the standard GitHub Action runners.
 - Remove or update GitHub environment `ado-read`, it is used to clone from Azure DevOps.
@@ -97,7 +106,9 @@ This ensures the leaderboard always compares apples-to-apples. When bumping vers
 3. Clear old results from `docs/_data/*.json` if needed
 4. Re-run evaluations with the new version
 
-## Frequently Used Operations
+## Maintainer Operations
+
+> Routine tasks for maintainers working on `microsoft/BC-Bench` directly. Fork users will rarely need these unless mirroring upstream changes.
 
 ### Bump Coding Agent/Tool versions
 
