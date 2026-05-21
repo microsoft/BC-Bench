@@ -280,5 +280,8 @@ class CodeReviewResult(BaseEvaluationResult):
     def display_row(self) -> dict[str, str]:
         return {
             "Comments": f"{len(self.generated_comments)} ({self.matched_comment_count}/{len(self.expected_comments)} matched)",
+            "Precision": f"{self.precision:.2f}",
+            "Recall": f"{self.recall:.2f}",
             "F1": f"{self.f1:.2f}",
+            "Severity MAE": f"{self.severity_mae:.2f}",
         }
