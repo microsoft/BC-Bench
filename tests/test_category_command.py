@@ -14,7 +14,7 @@ def test_bceval_config_prints_evaluators_and_core_score_to_stdout_when_no_github
 
     assert result.exit_code == 0
     assert "evaluators=resolution_rate,build_rate" in result.stdout
-    assert "core_score=resolution_rate" in result.stdout
+    assert "core_score=ResolutionRate" in result.stdout
 
 
 def test_bceval_config_appends_to_github_output_file_when_set(tmp_path, monkeypatch):
@@ -29,7 +29,7 @@ def test_bceval_config_appends_to_github_output_file_when_set(tmp_path, monkeypa
     contents = output_file.read_text(encoding="utf-8")
     assert "pre_existing=keep" in contents
     assert "evaluators=resolution_rate,build_rate,pre_patch_failed_rate,post_patch_passed_rate" in contents
-    assert "core_score=resolution_rate" in contents
+    assert "core_score=ResolutionRate" in contents
 
 
 def test_bceval_config_supports_every_category(monkeypatch):
