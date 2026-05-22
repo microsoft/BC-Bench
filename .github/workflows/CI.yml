@@ -37,11 +37,17 @@ jobs:
     outputs:
       category: ${{ steps.random.outputs.category }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
       - name: Select random category
         id: random
         shell: pwsh
         run: |
-          $categories = @("bug-fix", "test-generation")
+          $categories = (uv run bcbench category list) -split "`n" | Where-Object { $_ }
           $selected = $categories | Get-Random
           echo "category=$selected" >> $env:GITHUB_OUTPUT
 
