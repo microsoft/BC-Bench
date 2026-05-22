@@ -22,7 +22,7 @@ param(
     [string]$InstanceId,
 
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -DatasetName "nl2al.jsonl"),
+    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category "nl2al"),
 
     [Parameter(Mandatory = $false)]
     [string]$Country = "W1"
