@@ -138,9 +138,7 @@ jobs:
 
           iex "& { $(irm https://aka.ms/install-artifacts-credprovider.ps1) }"
 
-          $adoToken = az account get-access-token `
-            --resource 499b84ac-1321-427f-aa17-267ca6975798 `
-            --query accessToken -o tsv
+          $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
           $endpoints = @{
@@ -154,8 +152,7 @@ jobs:
           } | ConvertTo-Json -Compress -Depth 5
           $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
 
-          dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease `
-            --add-source $env:BCAL_FEED_URL
+          dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Download Application.app for NL2AL
@@ -197,8 +194,7 @@ jobs:
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model }}
         run: |
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6

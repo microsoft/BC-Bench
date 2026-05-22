@@ -70,3 +70,4 @@ runs:
         Write-Output "::add-mask::$env:ADO_TOKEN"
 
         .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }}
+      shell: pwsh
