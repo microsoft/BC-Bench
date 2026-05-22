@@ -1,3 +1,12 @@
+<#
+.SYNOPSIS
+    Verifies that the projects build and tests run successfully for "bug-fix" and "test-generation" dataset.
+.DESCRIPTION
+    This script is designed specifically for the "bug-fix" and "test-generation" dataset.
+
+    It verifies the flow of building and testing still works as expected, avoiding regressions caused by underlying infrastructure changes.
+#>
+
 using module .\DatasetEntry.psm1
 using module .\BCBenchUtils.psm1
 using module .\AppUtils.psm1
@@ -11,7 +20,7 @@ param(
     [string]$InstanceId,
 
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath),
+    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category "bug-fix"),
 
     [Parameter(Mandatory = $true)]
     [string]$RepoPath,
