@@ -17,7 +17,7 @@ from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -244,9 +244,13 @@ def create_nl2al_entry(
     patch: str = VALID_PATCH,
     nl_prompt: str = VALID_NL_PROMPT,
     created_at: str = VALID_CREATED_AT,
+    expected: list[ChecklistAssertion] | None = None,
 ) -> NL2ALEntry:
     if project_paths is None:
         project_paths = ["JobBudgetVsActualReport"]
+
+    if expected is None:
+        expected = [ChecklistAssertion(text="The output defines an AL report object.", level="critical")]
 
     return NL2ALEntry(
         instance_id=instance_id,
@@ -257,6 +261,7 @@ def create_nl2al_entry(
         patch=patch,
         nl_prompt=nl_prompt,
         created_at=created_at,
+        expected=expected,
     )
 
 

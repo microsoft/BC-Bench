@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
-from bcbench.types import ExpectedOutput
+from bcbench.types import Checklist, ChecklistAssertion, ExpectedOutput
 
 _config = get_config()
 
@@ -158,9 +158,10 @@ class NL2ALEntry(BaseDatasetEntry):
 
     base_commit: str | None = None
     nl_prompt: Annotated[str, Field(min_length=1)]
+    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
 
     def get_task(self) -> str:
         return self.nl_prompt
 
-    def get_expected_output(self) -> str:
-        return self.patch
+    def get_expected_output(self) -> Checklist:
+        return {"assertions": self.expected}
