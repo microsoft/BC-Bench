@@ -52,6 +52,7 @@ class BaseEvaluationResult(BaseModel):
 
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
+        output_dir.mkdir(parents=True, exist_ok=True)
         with open(output_file, "a", encoding="utf-8") as f:
             result_dict = self.model_dump(mode="json")
             # Per-instance JSONL result files are uploaded as workflow artifacts and are the only inputs required by the summarize-results workflow.

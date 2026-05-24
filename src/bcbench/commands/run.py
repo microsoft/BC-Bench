@@ -86,7 +86,7 @@ def run_claude(
 @run_app.command("bcal")
 def run_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    repo_path: RepoPath = _config.paths.evaluation_results_path,
 ) -> None:
     """
     Run bc-al dotnet tool on a single nl2al entry to generate AL code.
@@ -98,6 +98,6 @@ def run_bcal(
     """
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
-    category.pipeline.setup_workspace(entry, output_dir)
+    category.pipeline.setup_workspace(entry, repo_path)
 
-    run_bcal_agent(entry=entry, output_dir=output_dir)
+    run_bcal_agent(entry=entry, repo_path=repo_path)

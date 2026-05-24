@@ -36,7 +36,7 @@ def _resolve_bcal_executable() -> str:
 
 def run_bcal_agent(
     entry: NL2ALEntry,
-    output_dir: Path,
+    repo_path: Path,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     azure_endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
     azure_deployment = _require_env("AZURE_OPENAI_DEPLOYMENT")
@@ -48,30 +48,23 @@ def run_bcal_agent(
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
     project_name = entry.project_paths[0] if entry.project_paths else "App"
-    package_cache_path = output_dir / project_name / ".alpackages"
+    package_cache_path = repo_path / project_name / ".alpackages"
     if not package_cache_path.exists():
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 
     # Export folder for generated AL files
-    export_folder = output_dir / project_name / "src"
+    export_folder = repo_path / project_name / "src"
     export_folder.mkdir(parents=True, exist_ok=True)
 
     cmd_args = [
         bcal_executable,
-        "--packagecachepath",
-        str(package_cache_path),
-        "--endpoint",
-        azure_endpoint,
-        "--deployment",
-        azure_deployment,
-        "--audience",
-        _AUDIENCE,
-        "--page",
-        _PAGE,
-        "--prompt",
-        prompt,
-        "--exportfolder",
-        str(export_folder),
+        f"--packagecachepath={package_cache_path}",
+        f"--endpoint={azure_endpoint}",
+        f"--deployment={azure_deployment}",
+        f"--audience={_AUDIENCE}",
+        f"--page={_PAGE}",
+        f"--prompt={prompt}",
+        f"--exportfolder={export_folder}",
     ]
 
     logger.info(f"Executing bcal CLI: {bcal_executable}")

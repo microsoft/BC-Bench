@@ -149,8 +149,10 @@ def evaluate_claude_code(
 @evaluate_app.command("bcal")
 def evaluate_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
+    model: Annotated[str, typer.Option(help="Azure OpenAI model name")] = "gpt-5.2",
 ) -> None:
     """
     Evaluate bc-al dotnet tool on single nl2al dataset entry.
@@ -159,15 +161,16 @@ def evaluate_bcal(
     """
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with bc-al")
 
     context = EvaluationContext(
         entry=entry,
-        repo_path=output_dir,
-        result_dir=output_dir,
+        repo_path=repo_path,
+        result_dir=run_dir,
         container=None,
-        model="",
+        model=model,
         agent_name="bc-al",
         category=category,
     )
@@ -176,12 +179,12 @@ def evaluate_bcal(
         context,
         lambda ctx: run_bcal_agent(
             entry=cast(NL2ALEntry, ctx.entry),
-            output_dir=ctx.result_dir,
+            repo_path=ctx.repo_path,
         ),
     )
 
     logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {output_dir}")
+    logger.info(f"Results saved to: {run_dir}")
 
 
 @evaluate_app.command("mock", hidden=True)
