@@ -24,6 +24,11 @@ on:
         description: "Evaluation category"
         required: true
         type: string
+      skip-leaderboard:
+        description: "Whether to skip updating the leaderboard"
+        required: false
+        type: boolean
+        default: false
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
@@ -103,7 +108,7 @@ jobs:
             --use-capi ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
 
       - name: Update leaderboard in a new branch
-        if: ${{ !inputs.mock }}
+        if: ${{ !inputs.mock && !inputs.skip-leaderboard }}
         run: |
           git fetch origin main
 

@@ -128,4 +128,5 @@ jobs:
       agent: BCal
       mock: ${{ inputs.test-run }}
       category: nl2al
+      skip-leaderboard: true
     secrets: inherit
