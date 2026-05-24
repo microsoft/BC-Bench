@@ -100,7 +100,7 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           .\scripts\Download-BCSymbols.ps1 -InstanceId "${{ matrix.entry }}"
 
-      - name: Run bcal for entry ${{ matrix.entry }}
+      - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 15
         env:
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
@@ -125,7 +125,7 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: bcal
+      agent: BCal
       mock: ${{ inputs.test-run }}
       category: nl2al
     secrets: inherit
