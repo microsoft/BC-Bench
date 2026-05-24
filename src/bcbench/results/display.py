@@ -42,21 +42,13 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     for col_name in extra_columns:
         table.add_column(col_name, style="yellow")
 
-    table.add_column("MCP Servers", style="yellow")
-    table.add_column("Custom Instructions", style="yellow")
-    table.add_column("Skills", style="yellow")
-    table.add_column("Custom Agent", style="yellow")
     table.add_column("Error Message", style="dim")
 
     for result in results:
         has_error = result.error_message is not None or result.timeout
         status = f"[red]{result.status_label}[/red]" if has_error else f"[green]{result.status_label}[/green]"
-        mcp_servers = ", ".join(result.experiment.mcp_servers) if result.experiment and result.experiment.mcp_servers else "N/A"
-        custom_instructions = "Yes" if result.experiment and result.experiment.custom_instructions else "No"
-        skills = "Yes" if result.experiment and result.experiment.skills_enabled else "No"
-        custom_agent = result.experiment.custom_agent if result.experiment and result.experiment.custom_agent else "N/A"
         extra_values = list(result.display_row.values())
-        table.add_row(result.instance_id, result.project, status, *extra_values, mcp_servers, custom_instructions, skills, custom_agent, result.error_message or "")
+        table.add_row(result.instance_id, result.project, status, *extra_values, result.error_message or "")
 
     console.print(table)
     console.print()

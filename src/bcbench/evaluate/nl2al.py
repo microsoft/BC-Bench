@@ -8,7 +8,7 @@ from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.logger import get_logger, github_log_group
 from bcbench.operations import stage_and_get_diff
-from bcbench.results.nl2al import NL2ALResult
+from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -78,11 +78,9 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
 
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
         generated_patch = stage_and_get_diff(context.repo_path)
-        result: NL2ALResult | None = None
-
-        # TODO: LLM-as-judge evaluation against context.entry.get_expected_output()
-        # This step might just store the generated patch, the scoring logic might happen later in the workflow using LMchecklist (i.e. LLM-as-judge)
-        result = NL2ALResult.create_build_success(context, output=generated_patch)
-        logger.info(f"Result saved succeeded for {context.entry.instance_id}")
+        # NL2AL is judge-scored: persist the raw agent output now; `bcbench result summarize`
+        # ingests bceval's LMChecklist scores into the same per-instance file later.
+        result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
+        logger.info(f"Saved raw NL2AL result for {context.entry.instance_id} (scoring pending)")
 
         self.save_result(context, result)

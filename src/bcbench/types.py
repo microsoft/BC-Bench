@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,7 +15,35 @@ if TYPE_CHECKING:
     from bcbench.results.base import BaseEvaluationResult
     from bcbench.results.summary import EvaluationResultSummary
 
-__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = [
+    "AgentMetrics",
+    "AgentType",
+    "Checklist",
+    "ChecklistAssertion",
+    "ChecklistLevel",
+    "ContainerConfig",
+    "EvaluationCategory",
+    "EvaluationContext",
+    "ExpectedOutput",
+    "ExperimentConfiguration",
+]
+
+
+type ChecklistLevel = Literal["critical", "expected", "aspirational"]
+
+
+class ChecklistAssertion(TypedDict):
+    text: str
+    level: ChecklistLevel
+
+
+class Checklist(TypedDict):
+    assertions: list[ChecklistAssertion]
+
+
+# Patch-style string for execution-based categories (bug-fix, test-generation),
+# or an lm_checklist payload for scorer-driven categories.
+type ExpectedOutput = str | Checklist
 
 
 class AgentMetrics(BaseModel):
@@ -134,8 +162,8 @@ class EvaluationCategory(StrEnum):
 
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
+        from bcbench.results.base import JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
-        from bcbench.results.nl2al import NL2ALResult
         from bcbench.results.testgeneration import TestGenerationResult
 
         match self:
@@ -144,20 +172,22 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationResult
             case EvaluationCategory.NL2AL:
-                return NL2ALResult
+                return JudgeBasedEvaluationResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
+        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedEvaluationResultSummary
+            case EvaluationCategory.NL2AL:
+                return JudgeBasedEvaluationResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -188,7 +218,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.TEST_GENERATION:
                 return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
             case EvaluationCategory.NL2AL:
-                return ["build_rate"]
+                return ["lm_checklist"]
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -199,7 +229,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
             case EvaluationCategory.NL2AL:
-                return "BuildRate"
+                return "LMChecklist"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

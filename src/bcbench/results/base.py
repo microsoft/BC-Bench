@@ -116,3 +116,19 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     @property
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {"resolved": self.resolved, "build": self.build}
+
+
+class JudgeBasedEvaluationResult(BaseEvaluationResult):
+    """Result for categories scored by LLM-as-judge (e.g. nl2al via lm_checklist).
+
+    The local pipeline only persists the agent's raw output; actual scoring is performed downstream by bceval
+    and lives in the external scoring backend (e.g. Kusto) not in these local artifacts.
+    """
+
+    @classmethod
+    def create_raw(cls, context: "EvaluationContext", output: str) -> Self:
+        return cls(**cls._base_fields(context), output=output)
+
+    @classmethod
+    def create_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context), output=output, error_message=error_message)
