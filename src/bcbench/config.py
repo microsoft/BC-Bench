@@ -67,6 +67,7 @@ class TimeoutConfig:
     build_app: int
     test_execution: int
     agent_execution: int
+    bcal_execution: int
 
     @classmethod
     def default(cls) -> TimeoutConfig:
@@ -76,6 +77,7 @@ class TimeoutConfig:
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
+            bcal_execution=10 * 60,  # 10 minutes for bcal CLI execution
         )
 
 
