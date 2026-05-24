@@ -229,7 +229,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
             case EvaluationCategory.NL2AL:
-                return "LMChecklist"
+                return "test_passed"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
