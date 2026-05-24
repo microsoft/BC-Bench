@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import subprocess
@@ -17,45 +16,6 @@ logger = get_logger(__name__)
 __all__ = ["NL2ALPipeline"]
 
 _BCCONTAINERHELPER_CACHE = Path(r"C:\bcartifacts.cache")
-
-_APP_JSON_TEMPLATE = {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "name": "",
-    "publisher": "BCBench",
-    "version": "1.0.0.0",
-    "brief": "",
-    "description": "",
-    "privacyStatement": "",
-    "EULA": "",
-    "help": "",
-    "url": "",
-    "logo": "",
-    "dependencies": [],
-    "screenshots": [],
-    "platform": "",
-    "application": "",
-    "idRanges": [{"from": 80000, "to": 80099}],
-    "resourceExposurePolicy": {"allowDebugging": True, "allowDownloadingSource": True, "includeSourceInSymbolFile": True},
-    "runtime": "",
-    "target": "Cloud",
-}
-
-
-def _create_al_project_scaffold(project_dir: Path, entry: NL2ALEntry) -> None:
-    project_dir.mkdir(parents=True, exist_ok=True)
-    src_dir = project_dir / "src"
-    src_dir.mkdir(exist_ok=True)
-
-    app_json = _APP_JSON_TEMPLATE.copy()
-    app_name = entry.project_paths[0] if entry.project_paths else "NL2ALApp"
-    app_json["name"] = app_name
-    app_json["brief"] = f"Generated AL extension: {app_name}"
-    app_json["platform"] = f"{entry.environment_setup_version}.0.0"
-    app_json["application"] = f"{entry.environment_setup_version}.0.0"
-    app_json["runtime"] = f"{entry.environment_setup_version.split('.')[0]}.0"
-
-    app_json_path = project_dir / "app.json"
-    app_json_path.write_text(json.dumps(app_json, indent=2), encoding="utf-8")
 
 
 def _copy_symbol_apps(project_dir: Path, version: str) -> None:
@@ -106,7 +66,6 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         project_dir = repo_path / project_path
 
         _reset_repo_path(repo_path)
-        _create_al_project_scaffold(project_dir, entry)
         _copy_symbol_apps(project_dir, entry.environment_setup_version)
         _git_init_and_commit(repo_path)
 
