@@ -155,7 +155,7 @@ def evaluate_bcal(
     model: Annotated[str, typer.Option(help="Azure OpenAI model name")] = "gpt-5.2",
 ) -> None:
     """
-    Evaluate bc-al dotnet tool on single nl2al dataset entry.
+    Evaluate BCal dotnet tool on single nl2al dataset entry.
 
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
@@ -163,7 +163,7 @@ def evaluate_bcal(
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     run_dir = _prepare_run_dir(output_dir, run_id)
 
-    logger.info(f"Running evaluation on entry {entry_id} with bc-al")
+    logger.info(f"Running evaluation on entry {entry_id} with BCal")
 
     context = EvaluationContext(
         entry=entry,
@@ -171,7 +171,7 @@ def evaluate_bcal(
         result_dir=run_dir,
         container=None,
         model=model,
-        agent_name="bc-al",
+        agent_name="BCal",
         category=category,
     )
 

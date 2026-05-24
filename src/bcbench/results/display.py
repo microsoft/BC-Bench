@@ -12,6 +12,15 @@ logger = get_logger(__name__)
 console = Console()
 
 
+def _status_style(status_label: str) -> tuple[str, str]:
+    """Return (rich_color, github_emoji) for a status label."""
+    if status_label in ("Timeout", "Error", "Failed"):
+        return "red", ":x:"
+    if status_label == "Unscored":
+        return "yellow", ":grey_question:"
+    return "green", ":white_check_mark:"
+
+
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
     display_metrics: dict[str, int | float | bool] = summary.display_summary()
@@ -45,8 +54,8 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     table.add_column("Error Message", style="dim")
 
     for result in results:
-        has_error = result.error_message is not None or result.timeout
-        status = f"[red]{result.status_label}[/red]" if has_error else f"[green]{result.status_label}[/green]"
+        color, _ = _status_style(result.status_label)
+        status = f"[{color}]{result.status_label}[/{color}]"
         extra_values = list(result.display_row.values())
         table.add_row(result.instance_id, result.project, status, *extra_values, result.error_message or "")
 
@@ -81,24 +90,23 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             tool_lines = [f"  - `{tool}`: {count}" for tool, count in sorted_tools]
             tool_usage_section = "\n\n## Average Tool Usage\n" + "\n".join(tool_lines)
 
-    # Build category-specific summary lines
-    display_lines = "\n".join(f"- {key.replace('_', ' ').title()}: {value}" for key, value in display_metrics.items())
+    # Only render "## Result Summary" when the category has aggregates to show.
+    result_summary_section = ""
+    if display_metrics:
+        display_lines = "\n".join(f"- {key.replace('_', ' ').title()}: {value}" for key, value in display_metrics.items())
+        result_summary_section = f"\n## Result Summary\n{display_lines}\n"
 
-    markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
-- Category: `{results[0].category.value}`
-- MCP Servers used: {mcp_servers}
-- Custom Instructions: {custom_instructions}
-- Skills: {skills}
-- Custom Agent: {custom_agent}
-
-## Result Summary
-{display_lines}
-
-{tool_usage_section}
-
-## Detailed Results
-
-"""
+    markdown_summary = (
+        f"Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**\n"
+        f"- Category: `{results[0].category.value}`\n"
+        f"- MCP Servers used: {mcp_servers}\n"
+        f"- Custom Instructions: {custom_instructions}\n"
+        f"- Skills: {skills}\n"
+        f"- Custom Agent: {custom_agent}\n"
+        f"{result_summary_section}"
+        f"{tool_usage_section}\n\n"
+        f"## Detailed Results\n\n"
+    )
 
     # Dynamic columns from display_row()
     extra_columns = list(results[0].display_row.keys()) if results else []
@@ -113,8 +121,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
         markdown_summary += "|-------------|---------|--------|---------------|\n"
 
     for result in results:
-        has_error = result.error_message is not None or result.timeout
-        status_icon = ":x:" if has_error else ":white_check_mark:"
+        _, status_icon = _status_style(result.status_label)
         status_text = f"{status_icon} {result.status_label}"
         error_msg = _get_short_error_message(result.error_message)
         extra_values = " | ".join(result.display_row.values())

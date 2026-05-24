@@ -89,7 +89,7 @@ def run_bcal(
     repo_path: RepoPath = _config.paths.evaluation_results_path,
 ) -> None:
     """
-    Run bc-al dotnet tool on a single nl2al entry to generate AL code.
+    Run BCal dotnet tool on a single nl2al entry to generate AL code.
 
     For full evaluation, use 'bcbench evaluate bcal' instead.
 

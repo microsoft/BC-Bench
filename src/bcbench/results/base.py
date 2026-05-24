@@ -132,3 +132,11 @@ class JudgeBasedEvaluationResult(BaseEvaluationResult):
     @classmethod
     def create_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message)
+
+    @property
+    def status_label(self) -> str:
+        if self.timeout:
+            return "Timeout"
+        if self.error_message:
+            return "Error"
+        return "Unscored"

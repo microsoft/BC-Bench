@@ -1,4 +1,4 @@
-"""bc-al agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
+"""BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
 import os
 import shutil
