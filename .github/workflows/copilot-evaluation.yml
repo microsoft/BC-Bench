@@ -155,7 +155,7 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: GitHub Copilot CLI
+      agent: "GitHub Copilot CLI"
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
     secrets: inherit

@@ -99,7 +99,7 @@ def view_entry(
 
     console.print(Panel(info_table, title="[bold]Entry Information[/bold]", border_style="blue"))
 
-    console.print("\n[bold cyan]Problem Statement:[/bold cyan]")
+    console.print("\n[bold cyan]Problem Statement with Hints:[/bold cyan]")
     console.print(Panel(entry.get_task() or "[dim]Empty[/dim]", border_style="green"))
 
     if show_patch:
