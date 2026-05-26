@@ -119,7 +119,7 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
 
 
 class JudgeBasedEvaluationResult(BaseEvaluationResult):
-    """Result for categories scored by LLM-as-judge (e.g. nl2al via lm_checklist).
+    """Result for categories scored by LLM-as-judge (e.g. lm_checklist).
 
     The local pipeline only persists the agent's raw output; actual scoring is performed downstream by bceval
     and lives in the external scoring backend (e.g. Kusto) not in these local artifacts.

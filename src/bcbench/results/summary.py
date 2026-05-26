@@ -166,7 +166,7 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
 
 class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
-    """Summary for judge-scored categories (e.g. nl2al).
+    """Summary for judge-scored categories.
 
     Scoring is performed externally (bceval -> Braintrust/Kusto) and not reflected here;
     this summary only carries the agent-execution aggregates from the base class.
