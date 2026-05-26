@@ -165,6 +165,17 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
         )
 
 
+class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
+    """Summary for judge-scored categories.
+
+    Scoring is performed externally (bceval -> Braintrust/Kusto) and not reflected here;
+    this summary only carries the agent-execution aggregates from the base class.
+    """
+
+    def display_summary(self) -> dict[str, int | float]:
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # Leaderboard aggregation (execution-based categories only)
 # ---------------------------------------------------------------------------
