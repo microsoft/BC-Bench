@@ -29,6 +29,7 @@ CopilotModel = Annotated[
         "claude-haiku-4.5",
         "claude-opus-4.6",
         "claude-opus-4.7",
+        "gpt-5.5",
         "gpt-5.4",
         "gpt-5.3-codex",
         "gpt-5.2-codex",

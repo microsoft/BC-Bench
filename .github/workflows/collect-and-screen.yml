@@ -19,7 +19,7 @@ on:
       limit:
         description: "Maximum number of merged PRs to consider"
         required: false
-        default: "200"
+        default: "50"
         type: string
       base-branch:
         description: "Only consider PRs merged into this base branch"
@@ -61,7 +61,7 @@ jobs:
           .\scripts\Collect-And-Screen.ps1 `
             -Repo '${{ inputs.repo || 'microsoft/BCApps' }}' `
             -SinceDays ${{ inputs.since-days || '7' }} `
-            -Limit ${{ inputs.limit || '200' }} `
+            -Limit ${{ inputs.limit || '50' }} `
             -BaseBranch '${{ inputs.base-branch || 'main' }}' `
             -SummaryFile $env:GITHUB_STEP_SUMMARY
 

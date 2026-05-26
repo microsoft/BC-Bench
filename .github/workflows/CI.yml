@@ -26,8 +26,8 @@ jobs:
         with:
           all-extras: true
 
-      - name: Run Ruff
-        run: uv run ruff check --output-format=github .
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
 
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing
@@ -37,11 +37,17 @@ jobs:
     outputs:
       category: ${{ steps.random.outputs.category }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
       - name: Select random category
         id: random
         shell: pwsh
         run: |
-          $categories = @("bug-fix", "test-generation", "cf")
+          $categories = (uv run bcbench category list) -split "`n" | Where-Object { $_ }
           $selected = $categories | Get-Random
           echo "category=$selected" >> $env:GITHUB_OUTPUT
 

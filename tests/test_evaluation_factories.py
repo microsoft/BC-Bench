@@ -1,4 +1,5 @@
 from bcbench.results.bugfix import BugFixResult
+from bcbench.results.testgeneration import TestGenerationResult
 from tests.conftest import create_dataset_entry, create_evaluation_context
 
 
@@ -67,3 +68,21 @@ class TestEvaluationResultFactories:
         result = BugFixResult.create_build_failure(sample_evaluation_context, "test_patch", error_msg)
 
         assert result.error_message == error_msg
+
+    def test_test_generation_pre_patch_failure_sets_category_state(self, sample_evaluation_context):
+        result = TestGenerationResult.create_pre_patch_failure(sample_evaluation_context, "test_patch", "Passed pre-patch")
+
+        assert result.resolved is False
+        assert result.build is True
+        assert result.pre_patch_failed is False
+        assert result.post_patch_passed is False
+        assert result.error_message == "Passed pre-patch"
+
+    def test_test_generation_post_patch_failure_sets_category_state(self, sample_evaluation_context):
+        result = TestGenerationResult.create_post_patch_failure(sample_evaluation_context, "test_patch", "Failed post-patch")
+
+        assert result.resolved is False
+        assert result.build is True
+        assert result.pre_patch_failed is True
+        assert result.post_patch_passed is False
+        assert result.error_message == "Failed post-patch"

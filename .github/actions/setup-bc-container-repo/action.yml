@@ -1,9 +1,12 @@
-name: Setup BC Container
-description: Install BcContainerHelper and setup BC container with repository
+name: Setup BC Container and Repository
+description: Install BcContainerHelper and setup BC container along with repository
 
 inputs:
   instance-id:
     description: Instance ID for the dataset entry
+    required: true
+  category:
+    description: Category for the dataset entry
     required: true
   azure-client-id:
     description: Azure AD application client ID for OIDC authentication
@@ -66,5 +69,5 @@ runs:
         $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
         Write-Output "::add-mask::$env:ADO_TOKEN"
 
-        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }}
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }}
       shell: pwsh

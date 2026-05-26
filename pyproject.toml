@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bcbench"
-version = "0.5.2"
+version = "0.5.3"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -82,7 +82,6 @@ ignore = [
     "UP035",   # deprecated-import (typing.Dict, etc. still valid)
     "PTH123",  # Allow open() for now, Path.open() migration can be gradual
     "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible
-    "ANN401",  # Any in **kwargs: needed for kwarg forwarding through inheritance; revisit later
     "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message
     "TRY300",  # try-consider-else: stylistic; often hurts readability
     "TRY301",  # raise-within-try: suggested "abstract to inner function" refactor adds indirection

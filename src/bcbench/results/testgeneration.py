@@ -22,5 +22,33 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
         }
 
     @classmethod
+    def create_success(cls, context: "EvaluationContext", output: str) -> Self:
+        return cls(**cls._base_fields(context), output=output, resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
+
+    @classmethod
+    def create_pre_patch_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+        return cls(
+            **cls._base_fields(context),
+            output=output,
+            error_message=error_message,
+            resolved=False,
+            build=True,
+            pre_patch_failed=False,
+            post_patch_passed=False,
+        )
+
+    @classmethod
+    def create_post_patch_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+        return cls(
+            **cls._base_fields(context),
+            output=output,
+            error_message=error_message,
+            resolved=False,
+            build=True,
+            pre_patch_failed=True,
+            post_patch_passed=False,
+        )
+
+    @classmethod
     def create_no_tests_extracted(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
-        return cls._create_from_context(context, resolved=False, build=False, output=output, error_message=error_message)
+        return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)

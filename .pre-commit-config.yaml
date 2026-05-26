@@ -1,6 +1,3 @@
-ci:
-  skip: [ty]
-
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12
@@ -34,6 +31,6 @@ repos:
     hooks:
       - id: ty
         name: ty check
-        entry: uv run ty check . --ignore=unresolved-import --exclude "notebooks/**"
+        entry: uv run ty check . --ignore=unresolved-import --exclude "notebooks/"
         language: python
         pass_filenames: false
