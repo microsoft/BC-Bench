@@ -4,33 +4,17 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Literal, Self, TypedDict
+from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
+from bcbench.types import ExpectedOutput
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "ExpectedOutput", "TestEntry", "TestGenEntry"]
-
-
-type ChecklistLevel = Literal["critical", "expected", "aspirational"]
-
-
-class ChecklistAssertion(TypedDict):
-    text: str
-    level: ChecklistLevel
-
-
-class Checklist(TypedDict):
-    assertions: list[ChecklistAssertion]
-
-
-# Patch-style string for execution-based categories (bug-fix, test-generation),
-# or an lm_checklist payload for scorer-driven categories.
-type ExpectedOutput = str | Checklist
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):

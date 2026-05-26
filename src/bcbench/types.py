@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,7 +15,35 @@ if TYPE_CHECKING:
     from bcbench.results.base import BaseEvaluationResult
     from bcbench.results.summary import EvaluationResultSummary
 
-__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = [
+    "AgentMetrics",
+    "AgentType",
+    "Checklist",
+    "ChecklistAssertion",
+    "ChecklistLevel",
+    "ContainerConfig",
+    "EvaluationCategory",
+    "EvaluationContext",
+    "ExpectedOutput",
+    "ExperimentConfiguration",
+]
+
+
+type ChecklistLevel = Literal["critical", "expected", "aspirational"]
+
+
+class ChecklistAssertion(TypedDict):
+    text: str
+    level: ChecklistLevel
+
+
+class Checklist(TypedDict):
+    assertions: list[ChecklistAssertion]
+
+
+# Patch-style string for execution-based categories (bug-fix, test-generation),
+# or an lm_checklist payload for scorer-driven categories.
+type ExpectedOutput = str | Checklist
 
 
 class AgentMetrics(BaseModel):
