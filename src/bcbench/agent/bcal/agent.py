@@ -1,8 +1,10 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
 import os
+import shlex
 import shutil
 import subprocess
+import sys
 import time
 from enum import StrEnum
 from pathlib import Path
@@ -19,18 +21,7 @@ _config = get_config()
 _AUDIENCE = "both"
 _PAGE = "Customer Card"
 _BCAL_TOOL = "bcal"
-_REQUIRED_CAPI_ENV_VARS = (
-    "CAPI_ENDPOINT",
-    "CAPI_SCOPE",
-    "CAPI_ORG_GUID",
-    "CAPI_TENANT_ID",
-    "CAPI_USER_OBJECT_ID",
-)
-_CAPI_CERT_ENV_VARS = (
-    "CAPI_CLIENT_ID",
-    "CAPI_CERTIFICATE_KEY_VAULT_NAME",
-    "CAPI_CERTIFICATE_NAME",
-)
+_BC_EVAL_CAPI_BRIDGE_MODULE = "bcbench.agent.bcal.bc_eval_capi_bridge"
 
 
 class BcalAIProvider(StrEnum):
@@ -70,23 +61,23 @@ def _resolve_deployment(provider: BcalAIProvider) -> str:
     return _require_env("AZURE_OPENAI_DEPLOYMENT")
 
 
-def _validate_capi_environment() -> None:
-    for name in _REQUIRED_CAPI_ENV_VARS:
-        _require_env(name)
+def _default_bc_eval_capi_command() -> str:
+    command = [sys.executable, "-m", _BC_EVAL_CAPI_BRIDGE_MODULE]
+    if os.name == "nt":
+        return subprocess.list2cmdline(command)
+    return shlex.join(command)
 
-    configured_cert_vars = [name for name in _CAPI_CERT_ENV_VARS if os.environ.get(name)]
-    if configured_cert_vars and len(configured_cert_vars) != len(_CAPI_CERT_ENV_VARS):
-        required = ", ".join(_CAPI_CERT_ENV_VARS)
-        raise AgentError(f"CAPI cert auth requires all of {required} when any one is set.")
+def _resolve_capi_ai_command() -> str:
+    return os.environ.get("BCAL_AI_COMMAND") or _default_bc_eval_capi_command()
+    return os.environ.get("BCAL_AI_COMMAND") or _default_bc_eval_capi_command()
 
 
 def _build_provider_cli_args(provider: BcalAIProvider, deployment: str) -> list[str]:
     if provider is BcalAIProvider.CAPI:
-        _validate_capi_environment()
         return [
-            f"--endpoint={_require_env('CAPI_ENDPOINT')}",
             f"--deployment={deployment}",
-            "--ai-provider=capi",
+            "--ai-provider=external-command",
+            f"--ai-command={_resolve_capi_ai_command()}",
         ]
 
     endpoint = _require_env("AZURE_OPENAI_ENDPOINT")

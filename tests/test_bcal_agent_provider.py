@@ -16,6 +16,7 @@ from tests.conftest import create_nl2al_entry
 _RELEVANT_ENV_VARS = (
     "BCAL_AI_PROVIDER",
     "BCAL_AI_MODEL",
+    "BCAL_AI_COMMAND",
     "AZURE_OPENAI_ENDPOINT",
     "AZURE_OPENAI_DEPLOYMENT",
     "CAPI_ENDPOINT",
@@ -106,13 +107,9 @@ class TestRunBcalAgentCapi:
     def _capi_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("BCAL_AI_PROVIDER", "capi")
         monkeypatch.setenv("BCAL_AI_MODEL", "gpt-5")
-        monkeypatch.setenv("CAPI_ENDPOINT", "https://capi.example")
-        monkeypatch.setenv("CAPI_SCOPE", "api://capi/.default")
-        monkeypatch.setenv("CAPI_ORG_GUID", "org-guid-1")
-        monkeypatch.setenv("CAPI_TENANT_ID", "tenant-1")
-        monkeypatch.setenv("CAPI_USER_OBJECT_ID", "user-1")
+        monkeypatch.setenv("BCAL_AI_COMMAND", "python capi_bridge.py")
 
-    def test_forwards_provider_neutral_capi_args_to_bcal_cli(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_maps_capi_to_bcal_external_command_backend(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
         self._capi_env(monkeypatch)
         entry = create_nl2al_entry()
         captured: dict[str, list[str]] = {}
@@ -131,14 +128,15 @@ class TestRunBcalAgentCapi:
 
         assert metrics is not None
         args = captured["args"]
-        assert "--endpoint=https://capi.example" in args
         assert "--deployment=gpt-5" in args
-        assert "--ai-provider=capi" in args
+        assert "--ai-provider=external-command" in args
+        assert "--ai-command=python capi_bridge.py" in args
+        assert not any(a.startswith("--endpoint=") for a in args)
         assert not any(a.startswith("--capi-") for a in args)
 
-    def test_partner_source_stays_env_only(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
-        self._capi_env(monkeypatch)
-        monkeypatch.setenv("CAPI_PARTNER_SOURCE", "BC.NL2AL.Test")
+    def test_capi_uses_default_bridge_command_when_not_overridden(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("BCAL_AI_PROVIDER", "capi")
+        monkeypatch.setenv("BCAL_AI_MODEL", "gpt-5")
         entry = create_nl2al_entry()
         captured: dict[str, list[str]] = {}
 
@@ -154,91 +152,5 @@ class TestRunBcalAgentCapi:
         ):
             bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace)
 
-        assert not any(a.startswith("--capi-partner-source=") for a in captured["args"])
-
-    @pytest.mark.parametrize(
-        "missing",
-        ["CAPI_ENDPOINT", "CAPI_SCOPE", "CAPI_ORG_GUID", "CAPI_TENANT_ID", "CAPI_USER_OBJECT_ID"],
-    )
-    def test_missing_required_capi_var_raises(
-        self, workspace: Path, monkeypatch: pytest.MonkeyPatch, missing: str
-    ):
-        self._capi_env(monkeypatch)
-        monkeypatch.delenv(missing, raising=False)
-        entry = create_nl2al_entry()
-
-        with (
-            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
-            patch.object(subprocess, "run") as run_mock,
-            pytest.raises(AgentError) as exc,
-        ):
-            bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace)
-
-        assert missing in str(exc.value)
-        run_mock.assert_not_called()
-
-    def test_cert_env_accepted_when_all_three_set(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
-        self._capi_env(monkeypatch)
-        monkeypatch.setenv("CAPI_CLIENT_ID", "client-1")
-        monkeypatch.setenv("CAPI_CERTIFICATE_KEY_VAULT_NAME", "kv-1")
-        monkeypatch.setenv("CAPI_CERTIFICATE_NAME", "cert-1")
-        entry = create_nl2al_entry()
-        captured: dict[str, list[str]] = {}
-
-        def fake_run(args: list[str], **_: object) -> MagicMock:
-            captured["args"] = args
-            mock = MagicMock()
-            mock.returncode = 0
-            return mock
-
-        with (
-            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
-            patch.object(subprocess, "run", side_effect=fake_run),
-        ):
-            bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace)
-
-        args = captured["args"]
-        assert not any(a.startswith("--capi-") for a in args)
-
-    def test_cert_env_omitted_when_none_set(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
-        self._capi_env(monkeypatch)
-        entry = create_nl2al_entry()
-        captured: dict[str, list[str]] = {}
-
-        def fake_run(args: list[str], **_: object) -> MagicMock:
-            captured["args"] = args
-            mock = MagicMock()
-            mock.returncode = 0
-            return mock
-
-        with (
-            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
-            patch.object(subprocess, "run", side_effect=fake_run),
-        ):
-            bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace)
-
-        assert not any(a.startswith("--capi-") for a in captured["args"])
-
-    @pytest.mark.parametrize(
-        "missing",
-        ["CAPI_CLIENT_ID", "CAPI_CERTIFICATE_KEY_VAULT_NAME", "CAPI_CERTIFICATE_NAME"],
-    )
-    def test_partial_cert_config_raises(
-        self, workspace: Path, monkeypatch: pytest.MonkeyPatch, missing: str
-    ):
-        self._capi_env(monkeypatch)
-        monkeypatch.setenv("CAPI_CLIENT_ID", "client-1")
-        monkeypatch.setenv("CAPI_CERTIFICATE_KEY_VAULT_NAME", "kv-1")
-        monkeypatch.setenv("CAPI_CERTIFICATE_NAME", "cert-1")
-        monkeypatch.delenv(missing, raising=False)
-        entry = create_nl2al_entry()
-
-        with (
-            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
-            patch.object(subprocess, "run") as run_mock,
-            pytest.raises(AgentError) as exc,
-        ):
-            bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace)
-
-        assert "cert auth requires all" in str(exc.value)
-        run_mock.assert_not_called()
+        ai_command = next(a for a in captured["args"] if a.startswith("--ai-command="))
+        assert "bcbench.agent.bcal.bc_eval_capi_bridge" in ai_command

@@ -111,6 +111,17 @@ jobs:
           dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
+      - name: Install bc-eval CAPI bridge dependencies
+        if: ${{ inputs.ai-provider == 'capi' }}
+        shell: pwsh
+        run: |
+          $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          Write-Output "::add-mask::$adoToken"
+
+          uv python install 3.12
+          uv venv .bcal-capi-venv --python 3.12
+          uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.6" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+
       - name: Download BC Application symbols
         shell: pwsh
         run: |
@@ -133,7 +144,12 @@ jobs:
           CAPI_CLIENT_ID: ${{ vars.CAPI_CLIENT_ID }}
           CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ vars.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
           CAPI_CERTIFICATE_NAME: ${{ vars.CAPI_CERTIFICATE_NAME }}
+        shell: pwsh
         run: |
+          if ("${{ inputs.ai-provider }}" -eq "capi") {
+            $env:BCAL_AI_COMMAND = "`"$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe`" `"$env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py`""
+          }
+
           uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
