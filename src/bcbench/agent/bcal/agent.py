@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import time
+from enum import StrEnum
 from pathlib import Path
 
 from bcbench.config import get_config
@@ -18,11 +19,28 @@ _config = get_config()
 _AUDIENCE = "both"
 _PAGE = "Customer Card"
 _BCAL_TOOL = "bcal"
+_REQUIRED_CAPI_ENV_VARS = (
+    "CAPI_ENDPOINT",
+    "CAPI_SCOPE",
+    "CAPI_ORG_GUID",
+    "CAPI_TENANT_ID",
+    "CAPI_USER_OBJECT_ID",
+)
+_CAPI_CERT_ENV_VARS = (
+    "CAPI_CLIENT_ID",
+    "CAPI_CERTIFICATE_KEY_VAULT_NAME",
+    "CAPI_CERTIFICATE_NAME",
+)
+
+
+class BcalAIProvider(StrEnum):
+    AZURE_OPENAI = "azure-openai"
+    CAPI = "capi"
 
 
 def _require_env(name: str) -> str:
     value = os.environ.get(name)
-    if not value:
+    if not value or not value.strip():
         raise AgentError(f"Environment variable {name} is required but not set. Add it to your .env file.")
     return value
 
@@ -34,15 +52,60 @@ def _resolve_bcal_executable() -> str:
     return resolved
 
 
+def _resolve_provider() -> BcalAIProvider:
+    raw = os.environ.get("BCAL_AI_PROVIDER", BcalAIProvider.AZURE_OPENAI.value)
+    try:
+        return BcalAIProvider(raw)
+    except ValueError as exc:
+        valid = ", ".join(p.value for p in BcalAIProvider)
+        raise AgentError(f"Unknown BCAL_AI_PROVIDER='{raw}'. Expected one of: {valid}.") from exc
+
+
+def _resolve_deployment(provider: BcalAIProvider) -> str:
+    if provider is BcalAIProvider.CAPI:
+        model = os.environ.get("BCAL_AI_MODEL") or os.environ.get("AZURE_OPENAI_DEPLOYMENT")
+        if not model:
+            raise AgentError("BCAL_AI_MODEL or AZURE_OPENAI_DEPLOYMENT must be set when BCAL_AI_PROVIDER=capi.")
+        return model
+    return _require_env("AZURE_OPENAI_DEPLOYMENT")
+
+
+def _validate_capi_environment() -> None:
+    for name in _REQUIRED_CAPI_ENV_VARS:
+        _require_env(name)
+
+    configured_cert_vars = [name for name in _CAPI_CERT_ENV_VARS if os.environ.get(name)]
+    if configured_cert_vars and len(configured_cert_vars) != len(_CAPI_CERT_ENV_VARS):
+        required = ", ".join(_CAPI_CERT_ENV_VARS)
+        raise AgentError(f"CAPI cert auth requires all of {required} when any one is set.")
+
+
+def _build_provider_cli_args(provider: BcalAIProvider, deployment: str) -> list[str]:
+    if provider is BcalAIProvider.CAPI:
+        _validate_capi_environment()
+        return [
+            f"--endpoint={_require_env('CAPI_ENDPOINT')}",
+            f"--deployment={deployment}",
+            "--ai-provider=capi",
+        ]
+
+    endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
+    return [
+        f"--endpoint={endpoint}",
+        f"--deployment={deployment}",
+    ]
+
+
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    azure_endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
-    azure_deployment = _require_env("AZURE_OPENAI_DEPLOYMENT")
     bcal_executable = _resolve_bcal_executable()
+    provider = _resolve_provider()
+    deployment = _resolve_deployment(provider)
+    provider_args = _build_provider_cli_args(provider, deployment)
 
-    logger.info(f"Running bcal CLI on: {entry.instance_id}")
+    logger.info(f"Running bcal CLI on: {entry.instance_id} (provider={provider.value}, deployment={deployment})")
 
     prompt = entry.nl_prompt
 
@@ -59,8 +122,7 @@ def run_bcal_agent(
     cmd_args = [
         bcal_executable,
         f"--packagecachepath={package_cache_path}",
-        f"--endpoint={azure_endpoint}",
-        f"--deployment={azure_deployment}",
+        *provider_args,
         f"--audience={_AUDIENCE}",
         f"--page={_PAGE}",
         f"--prompt={prompt}",
