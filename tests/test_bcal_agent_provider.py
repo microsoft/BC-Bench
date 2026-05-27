@@ -1,4 +1,4 @@
-"""Tests for the bcal agent's provider branch (azure-openai vs capi)."""
+"""Tests for the bcal agent's LLM backend branch."""
 
 from __future__ import annotations
 
@@ -9,25 +9,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bcbench.agent.bcal import agent as bcal_agent
-from bcbench.agent.bcal.agent import BcalAIProvider
+from bcbench.agent.bcal.agent import BcalLlmBackend
 from bcbench.exceptions import AgentError
 from tests.conftest import create_nl2al_entry
 
 _RELEVANT_ENV_VARS = (
-    "BCAL_AI_PROVIDER",
-    "BCAL_AI_MODEL",
-    "BCAL_AI_COMMAND",
+    "BCAL_LLM_BACKEND",
+    "BCAL_LLM_MODEL",
+    "BCAL_LLM_COMMAND",
     "AZURE_OPENAI_ENDPOINT",
     "AZURE_OPENAI_DEPLOYMENT",
-    "CAPI_ENDPOINT",
-    "CAPI_SCOPE",
-    "CAPI_ORG_GUID",
-    "CAPI_TENANT_ID",
-    "CAPI_USER_OBJECT_ID",
-    "CAPI_PARTNER_SOURCE",
-    "CAPI_CLIENT_ID",
-    "CAPI_CERTIFICATE_KEY_VAULT_NAME",
-    "CAPI_CERTIFICATE_NAME",
 )
 
 
@@ -44,37 +35,22 @@ def workspace(tmp_path: Path) -> Path:
     return tmp_path
 
 
-class TestResolveProvider:
+class TestResolveLlmBackend:
     def test_default_is_azure_openai(self):
-        assert bcal_agent._resolve_provider() is BcalAIProvider.AZURE_OPENAI
+        assert bcal_agent._resolve_llm_backend() is BcalLlmBackend.AZURE_OPENAI
 
     def test_explicit_azure_openai(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("BCAL_AI_PROVIDER", "azure-openai")
-        assert bcal_agent._resolve_provider() is BcalAIProvider.AZURE_OPENAI
+        monkeypatch.setenv("BCAL_LLM_BACKEND", "azure-openai")
+        assert bcal_agent._resolve_llm_backend() is BcalLlmBackend.AZURE_OPENAI
 
-    def test_capi(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("BCAL_AI_PROVIDER", "capi")
-        assert bcal_agent._resolve_provider() is BcalAIProvider.CAPI
+    def test_external_command(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("BCAL_LLM_BACKEND", "external-command")
+        assert bcal_agent._resolve_llm_backend() is BcalLlmBackend.EXTERNAL_COMMAND
 
     def test_unknown_raises(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("BCAL_AI_PROVIDER", "openai")
+        monkeypatch.setenv("BCAL_LLM_BACKEND", "openai")
         with pytest.raises(AgentError):
-            bcal_agent._resolve_provider()
-
-
-class TestResolveDeployment:
-    def test_azure_openai_requires_aoai_deployment(self):
-        with pytest.raises(AgentError):
-            bcal_agent._resolve_deployment(BcalAIProvider.AZURE_OPENAI)
-
-    def test_capi_prefers_bcal_ai_model(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("BCAL_AI_MODEL", "gpt-5")
-        monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.2")
-        assert bcal_agent._resolve_deployment(BcalAIProvider.CAPI) == "gpt-5"
-
-    def test_capi_falls_back_to_aoai_deployment(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.2")
-        assert bcal_agent._resolve_deployment(BcalAIProvider.CAPI) == "gpt-5.2"
+            bcal_agent._resolve_llm_backend()
 
 
 class TestRunBcalAgentAzureOpenAI:
@@ -100,17 +76,17 @@ class TestRunBcalAgentAzureOpenAI:
         assert metrics is not None
         assert "--endpoint=https://aoai.example/" in captured["args"]
         assert "--deployment=gpt-5.2" in captured["args"]
-        assert not any(a.startswith("--ai-provider=") for a in captured["args"])
+        assert not any(a.startswith("--llm-backend=") for a in captured["args"])
 
 
-class TestRunBcalAgentCapi:
-    def _capi_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("BCAL_AI_PROVIDER", "capi")
-        monkeypatch.setenv("BCAL_AI_MODEL", "gpt-5")
-        monkeypatch.setenv("BCAL_AI_COMMAND", "python capi_bridge.py")
+class TestRunBcalAgentExternalCommand:
+    def _external_command_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("BCAL_LLM_BACKEND", "external-command")
+        monkeypatch.setenv("BCAL_LLM_MODEL", "gpt-5")
+        monkeypatch.setenv("BCAL_LLM_COMMAND", "python bridge.py")
 
-    def test_maps_capi_to_bcal_external_command_backend(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
-        self._capi_env(monkeypatch)
+    def test_passes_external_command_backend_to_bcal(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
+        self._external_command_env(monkeypatch)
         entry = create_nl2al_entry()
         captured: dict[str, list[str]] = {}
 
@@ -129,14 +105,24 @@ class TestRunBcalAgentCapi:
         assert metrics is not None
         args = captured["args"]
         assert "--deployment=gpt-5" in args
-        assert "--ai-provider=external-command" in args
-        assert "--ai-command=python capi_bridge.py" in args
+        assert "--llm-backend=external-command" in args
+        assert "--llm-command=python bridge.py" in args
         assert not any(a.startswith("--endpoint=") for a in args)
         assert not any(a.startswith("--capi-") for a in args)
 
-    def test_capi_uses_default_bridge_command_when_not_overridden(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("BCAL_AI_PROVIDER", "capi")
-        monkeypatch.setenv("BCAL_AI_MODEL", "gpt-5")
+    def test_external_command_requires_command(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("BCAL_LLM_BACKEND", "external-command")
+        entry = create_nl2al_entry()
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            pytest.raises(AgentError),
+        ):
+            bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace)
+
+    def test_external_command_model_is_optional(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("BCAL_LLM_BACKEND", "external-command")
+        monkeypatch.setenv("BCAL_LLM_COMMAND", "python bridge.py")
         entry = create_nl2al_entry()
         captured: dict[str, list[str]] = {}
 
@@ -152,5 +138,6 @@ class TestRunBcalAgentCapi:
         ):
             bcal_agent.run_bcal_agent(entry=entry, repo_path=workspace)
 
-        ai_command = next(a for a in captured["args"] if a.startswith("--ai-command="))
-        assert "bcbench.agent.bcal.bc_eval_capi_bridge" in ai_command
+        assert "--llm-backend=external-command" in captured["args"]
+        assert "--llm-command=python bridge.py" in captured["args"]
+        assert not any(a.startswith("--deployment=") for a in captured["args"])

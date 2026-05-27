@@ -1,10 +1,8 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
 import os
-import shlex
 import shutil
 import subprocess
-import sys
 import time
 from enum import StrEnum
 from pathlib import Path
@@ -21,12 +19,11 @@ _config = get_config()
 _AUDIENCE = "both"
 _PAGE = "Customer Card"
 _BCAL_TOOL = "bcal"
-_BC_EVAL_CAPI_BRIDGE_MODULE = "bcbench.agent.bcal.bc_eval_capi_bridge"
 
 
-class BcalAIProvider(StrEnum):
+class BcalLlmBackend(StrEnum):
     AZURE_OPENAI = "azure-openai"
-    CAPI = "capi"
+    EXTERNAL_COMMAND = "external-command"
 
 
 def _require_env(name: str) -> str:
@@ -43,44 +40,28 @@ def _resolve_bcal_executable() -> str:
     return resolved
 
 
-def _resolve_provider() -> BcalAIProvider:
-    raw = os.environ.get("BCAL_AI_PROVIDER", BcalAIProvider.AZURE_OPENAI.value)
+def _resolve_llm_backend() -> BcalLlmBackend:
+    raw = os.environ.get("BCAL_LLM_BACKEND", BcalLlmBackend.AZURE_OPENAI.value)
     try:
-        return BcalAIProvider(raw)
+        return BcalLlmBackend(raw)
     except ValueError as exc:
-        valid = ", ".join(p.value for p in BcalAIProvider)
-        raise AgentError(f"Unknown BCAL_AI_PROVIDER='{raw}'. Expected one of: {valid}.") from exc
+        valid = ", ".join(p.value for p in BcalLlmBackend)
+        raise AgentError(f"Unknown BCAL_LLM_BACKEND='{raw}'. Expected one of: {valid}.") from exc
 
 
-def _resolve_deployment(provider: BcalAIProvider) -> str:
-    if provider is BcalAIProvider.CAPI:
-        model = os.environ.get("BCAL_AI_MODEL") or os.environ.get("AZURE_OPENAI_DEPLOYMENT")
-        if not model:
-            raise AgentError("BCAL_AI_MODEL or AZURE_OPENAI_DEPLOYMENT must be set when BCAL_AI_PROVIDER=capi.")
-        return model
-    return _require_env("AZURE_OPENAI_DEPLOYMENT")
-
-
-def _default_bc_eval_capi_command() -> str:
-    command = [sys.executable, "-m", _BC_EVAL_CAPI_BRIDGE_MODULE]
-    if os.name == "nt":
-        return subprocess.list2cmdline(command)
-    return shlex.join(command)
-
-def _resolve_capi_ai_command() -> str:
-    return os.environ.get("BCAL_AI_COMMAND") or _default_bc_eval_capi_command()
-    return os.environ.get("BCAL_AI_COMMAND") or _default_bc_eval_capi_command()
-
-
-def _build_provider_cli_args(provider: BcalAIProvider, deployment: str) -> list[str]:
-    if provider is BcalAIProvider.CAPI:
-        return [
-            f"--deployment={deployment}",
-            "--ai-provider=external-command",
-            f"--ai-command={_resolve_capi_ai_command()}",
+def _build_backend_cli_args(backend: BcalLlmBackend) -> list[str]:
+    if backend is BcalLlmBackend.EXTERNAL_COMMAND:
+        command = _require_env("BCAL_LLM_COMMAND")
+        args = [
+            "--llm-backend=external-command",
+            f"--llm-command={command}",
         ]
+        if model := os.environ.get("BCAL_LLM_MODEL"):
+            args.append(f"--deployment={model}")
+        return args
 
     endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
+    deployment = _require_env("AZURE_OPENAI_DEPLOYMENT")
     return [
         f"--endpoint={endpoint}",
         f"--deployment={deployment}",
@@ -92,11 +73,10 @@ def run_bcal_agent(
     repo_path: Path,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     bcal_executable = _resolve_bcal_executable()
-    provider = _resolve_provider()
-    deployment = _resolve_deployment(provider)
-    provider_args = _build_provider_cli_args(provider, deployment)
+    backend = _resolve_llm_backend()
+    backend_args = _build_backend_cli_args(backend)
 
-    logger.info(f"Running bcal CLI on: {entry.instance_id} (provider={provider.value}, deployment={deployment})")
+    logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend.value})")
 
     prompt = entry.nl_prompt
 
@@ -113,7 +93,7 @@ def run_bcal_agent(
     cmd_args = [
         bcal_executable,
         f"--packagecachepath={package_cache_path}",
-        *provider_args,
+        *backend_args,
         f"--audience={_AUDIENCE}",
         f"--page={_PAGE}",
         f"--prompt={prompt}",

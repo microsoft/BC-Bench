@@ -13,23 +13,19 @@ on:
         type: choice
         options:
           - "gpt-5.2"
-      ai-provider:
-        description: "LLM backend for bcal: azure-openai (default) or capi (CopilotService)"
+      llm-backend:
+        description: "LLM backend for bcal. In this workflow, external-command uses the bc-eval CAPI bridge."
         required: false
         default: "azure-openai"
         type: choice
         options:
           - "azure-openai"
-          - "capi"
-      capi-model:
-        description: "CAPI model alias to use when ai-provider=capi"
+          - "external-command"
+      external-model:
+        description: "Model alias passed to the external-command bridge when llm-backend=external-command"
         required: false
         default: "gpt-5"
-        type: choice
-        options:
-          - "gpt-5"
-          - "gpt-5-mini"
-          - "gpt-41-mini"
+        type: string
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -112,7 +108,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install bc-eval CAPI bridge dependencies
-        if: ${{ inputs.ai-provider == 'capi' }}
+        if: ${{ inputs.llm-backend == 'external-command' }}
         shell: pwsh
         run: |
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
@@ -131,8 +127,8 @@ jobs:
       - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 15
         env:
-          BCAL_AI_PROVIDER: ${{ inputs.ai-provider }}
-          BCAL_AI_MODEL: ${{ inputs.ai-provider == 'capi' && inputs.capi-model || inputs.model }}
+          BCAL_LLM_BACKEND: ${{ inputs.llm-backend }}
+          BCAL_LLM_MODEL: ${{ inputs.llm-backend == 'external-command' && inputs.external-model || inputs.model }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model }}
           CAPI_ENDPOINT: ${{ vars.CAPI_ENDPOINT }}
@@ -146,8 +142,8 @@ jobs:
           CAPI_CERTIFICATE_NAME: ${{ vars.CAPI_CERTIFICATE_NAME }}
         shell: pwsh
         run: |
-          if ("${{ inputs.ai-provider }}" -eq "capi") {
-            $env:BCAL_AI_COMMAND = "`"$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe`" `"$env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py`""
+          if ("${{ inputs.llm-backend }}" -eq "external-command") {
+            $env:BCAL_LLM_COMMAND = "`"$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe`" `"$env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py`""
           }
 
           uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
@@ -168,8 +164,8 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ inputs.ai-provider == 'capi' && inputs.capi-model || inputs.model }}
-      agent: ${{ inputs.ai-provider == 'capi' && 'BCal-capi' || 'BCal' }}
+      model: ${{ inputs.llm-backend == 'external-command' && inputs.external-model || inputs.model }}
+      agent: ${{ inputs.llm-backend == 'external-command' && 'BCal-external-command' || 'BCal' }}
       mock: ${{ inputs.test-run }}
       category: nl2al
       skip-leaderboard: true
