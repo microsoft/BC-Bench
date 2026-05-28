@@ -143,7 +143,7 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend }}" -eq "external-command") {
-            $env:BCAL_LLM_COMMAND = "`"$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe`" `"$env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py`""
+            $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
           }
 
           uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
