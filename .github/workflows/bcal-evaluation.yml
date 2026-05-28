@@ -124,6 +124,14 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           .\scripts\Download-BCSymbols.ps1 -InstanceId "${{ matrix.entry }}"
 
+      - name: Refresh Azure Login (OIDC) for CAPI Key Vault
+        if: ${{ inputs.llm-backend == 'external-command' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
       - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 15
         env:
@@ -143,6 +151,11 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend }}" -eq "external-command") {
+            $keyVaultToken = az account get-access-token --resource https://vault.azure.net --query accessToken -o tsv
+            if (-not $keyVaultToken) {
+              throw "Failed to acquire a Key Vault token for the CAPI bridge."
+            }
+            Write-Output "::add-mask::$keyVaultToken"
             $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
           }
 
