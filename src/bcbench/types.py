@@ -26,6 +26,7 @@ __all__ = [
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
+    "FailureLayer",
 ]
 
 
@@ -206,29 +207,13 @@ class EvaluationCategory(StrEnum):
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
-    @property
-    def evaluators(self) -> list[str]:
-        """
-        Names of bc-eval evaluators (from evaluator/scores.py) to run for this category.
 
-        Used for uploading evaluation results to long term storage.
-        """
-        match self:
-            case EvaluationCategory.BUG_FIX:
-                return ["resolution_rate", "build_rate"]
-            case EvaluationCategory.TEST_GENERATION:
-                return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
-
-        raise ValueError(f"Unknown evaluation category: {self}")
-
-    @property
-    def core_score(self) -> str:
-        """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
-        match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
-                return "ResolutionRate"
-
-        raise ValueError(f"Unknown evaluation category: {self}")
+class FailureLayer(StrEnum):
+    L1_SYNTAX = "L1-syntax-representation"
+    L2_EXECUTION = "L2-execution-validation"
+    L3_EVENT = "L3-event-driven-paradigm"
+    L4_WORKFLOW = "L4-workflow-business-logic"
+    L5_TOOLCHAIN = "L5-toolchain-ecosystem"
 
 
 @dataclass(frozen=True)

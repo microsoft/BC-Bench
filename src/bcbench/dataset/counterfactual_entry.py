@@ -49,7 +49,7 @@ class CounterfactualEntry(_BugFixTestGenBase):
         return self.patch
 
     @classmethod
-    def load(cls, dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[Self]:
+    def load(cls, dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[Self]:  # ty: ignore[invalid-method-override]
         from bcbench.dataset.dataset_entry import BugFixEntry
 
         base_dataset_path = _config.paths.dataset_dir / "bcbench.jsonl"

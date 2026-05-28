@@ -8,12 +8,12 @@ skeleton — they are NOT independent IID samples.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from bcbench.types import FailureLayer
 
 
-class FamilyType(str, Enum):
+class FamilyType(StrEnum):
     STABLE_CORRECT = "stable-correct"
     FRAGILE = "fragile"
     UNSOLVED = "unsolved"
