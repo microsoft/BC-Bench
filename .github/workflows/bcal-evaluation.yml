@@ -131,15 +131,15 @@ jobs:
           BCAL_LLM_MODEL: ${{ inputs.llm-backend == 'external-command' && inputs.external-model || inputs.model }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model }}
-          CAPI_ENDPOINT: ${{ vars.CAPI_ENDPOINT }}
-          CAPI_SCOPE: ${{ vars.CAPI_SCOPE }}
-          CAPI_ORG_GUID: ${{ vars.CAPI_ORG_GUID }}
-          CAPI_TENANT_ID: ${{ vars.CAPI_TENANT_ID }}
-          CAPI_USER_OBJECT_ID: ${{ vars.CAPI_USER_OBJECT_ID }}
-          CAPI_PARTNER_SOURCE: ${{ vars.CAPI_PARTNER_SOURCE }}
-          CAPI_CLIENT_ID: ${{ vars.CAPI_CLIENT_ID }}
-          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ vars.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
-          CAPI_CERTIFICATE_NAME: ${{ vars.CAPI_CERTIFICATE_NAME }}
+          CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
+          CAPI_SCOPE: ${{ secrets.CAPI_SCOPE }}
+          CAPI_ORG_GUID: ${{ secrets.CAPI_ORG_GUID }}
+          CAPI_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
+          CAPI_USER_OBJECT_ID: ${{ secrets.CAPI_USER_OBJECT_ID }}
+          CAPI_PARTNER_SOURCE: ${{ secrets.CAPI_PARTNER_SOURCE }}
+          CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend }}" -eq "external-command") {
