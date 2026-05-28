@@ -14,7 +14,8 @@ from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 
-_AL_LSP_RELATIVE_PATH = Path(".github") / "lsp.json"
+_COPILOT_LSP_RELATIVE_PATH = Path(".github") / "lsp.json"
+_CLAUDE_PLUGIN_RELATIVE_PATH = Path(".claude") / "plugins" / "al-lsp"
 
 
 def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory, container_name: str) -> tuple[list[str], list[str]]:
@@ -48,13 +49,21 @@ def _build_lsp_args(project_paths: list[str], package_cache_paths: list[str], as
     return args
 
 
-def build_lsp_config(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, al_lsp: bool, container_name: str = "") -> bool:
-    """Write Copilot's project-level LSP config to <repo_path>/.github/lsp.json.
+def _prepare_lsp(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, container_name: str) -> list[str]:
+    """Common preparation shared by both agent variants: set runtime, resolve symbols, build args."""
+    project_paths = [str(repo_path / p) for p in entry.project_paths]
+    set_runtime_version(project_paths)
+    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container_name)
+    return _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
 
-    When ``al_lsp=False``, removes any stale config left over from a previous run and returns False.
-    When True, writes the `lspServers.altool` entry pointing at `altool launchlspserver` and returns True.
+
+def build_copilot_lsp_config(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, al_lsp: bool, container_name: str = "") -> bool:
+    """Write Copilot CLI's project-level LSP config to <repo_path>/.github/lsp.json.
+
+    Copilot CLI auto-discovers ``.github/lsp.json`` on session start — no CLI flag needed.
+    Removes any stale config when ``al_lsp=False`` so toggling the flag off actually disables the server.
     """
-    lsp_config_path = repo_path / _AL_LSP_RELATIVE_PATH
+    lsp_config_path = repo_path / _COPILOT_LSP_RELATIVE_PATH
 
     if not al_lsp:
         if lsp_config_path.is_file():
@@ -62,16 +71,7 @@ def build_lsp_config(entry: BaseDatasetEntry, category: EvaluationCategory, repo
             logger.info(f"Removed stale LSP config: {lsp_config_path}")
         return False
 
-    project_paths = [str(repo_path / p) for p in entry.project_paths]
-    set_runtime_version(project_paths)
-
-    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container_name)
-
-    args = _build_lsp_args(
-        project_paths=project_paths,
-        package_cache_paths=package_cache_paths,
-        assembly_probing_paths=assembly_probing_paths,
-    )
+    args = _prepare_lsp(entry, category, repo_path, container_name)
 
     # Copilot CLI resolves `command` via PATH (absolute paths are silently rejected with
     # "Server <name> is configured but not available"). `al` is the published altool
@@ -89,7 +89,60 @@ def build_lsp_config(entry: BaseDatasetEntry, category: EvaluationCategory, repo
     lsp_config_path.parent.mkdir(parents=True, exist_ok=True)
     lsp_config_path.write_text(json.dumps(lsp_config, indent=2), encoding="utf-8")
 
-    logger.info(f"Wrote AL LSP config: {lsp_config_path}")
+    logger.info(f"Wrote Copilot LSP config: {lsp_config_path}")
     logger.debug(f"LSP configuration: {json.dumps(lsp_config, indent=2)}")
 
     return True
+
+
+def build_claude_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, al_lsp: bool, container_name: str = "") -> Path | None:
+    """Build a per-task Claude Code plugin folder containing the AL LSP server.
+
+    Claude Code surfaces LSP servers through its plugin system. ``claude --plugin-dir <path>``
+    loads a plugin for a single session with no marketplace registration, no
+    ``ENABLE_LSP_TOOL`` global state, and no cross-run plugin leakage — the same
+    per-task isolation the Copilot side gets from ``.github/lsp.json``.
+
+    Layout written under ``<repo>/.claude/plugins/al-lsp/``:
+        .claude-plugin/plugin.json   — minimal manifest (only ``name`` is required)
+        .lsp.json                    — LSP server config in Claude's schema
+
+    Returns the plugin folder path so the caller can pass it as ``--plugin-dir``,
+    or None when disabled.
+    """
+    plugin_dir = repo_path / _CLAUDE_PLUGIN_RELATIVE_PATH
+
+    if not al_lsp:
+        if plugin_dir.exists():
+            for p in sorted(plugin_dir.rglob("*"), reverse=True):
+                p.rmdir() if p.is_dir() else p.unlink()
+            plugin_dir.rmdir()
+            logger.info(f"Removed stale Claude LSP plugin: {plugin_dir}")
+        return None
+
+    args = _prepare_lsp(entry, category, repo_path, container_name)
+
+    # Minimal plugin manifest. Name is the only required field; we don't ship skills/agents/hooks.
+    plugin_manifest = {
+        "name": "al-lsp",
+        "version": "1.0.0",
+        "description": "AL Language Server for Business Central agentic development",
+    }
+    # Claude's LSP schema differs from Copilot's: no `lspServers` wrapper, and uses
+    # `extensionToLanguage` instead of `fileExtensions`.
+    lsp_config = {
+        "altool": {
+            "command": "al",
+            "args": args,
+            "extensionToLanguage": {".al": "al"},
+        }
+    }
+
+    (plugin_dir / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+    (plugin_dir / ".claude-plugin" / "plugin.json").write_text(json.dumps(plugin_manifest, indent=2), encoding="utf-8")
+    (plugin_dir / ".lsp.json").write_text(json.dumps(lsp_config, indent=2), encoding="utf-8")
+
+    logger.info(f"Wrote Claude LSP plugin: {plugin_dir}")
+    logger.debug(f"LSP configuration: {json.dumps(lsp_config, indent=2)}")
+
+    return plugin_dir

@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.claude.metrics import parse_metrics
-from bcbench.agent.shared import build_mcp_config, build_prompt, parse_tool_usage_from_hooks
+from bcbench.agent.shared import build_claude_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -19,7 +19,14 @@ _config = get_config()
 
 
 def run_claude_code(
-    entry: BaseDatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False, container_name: str = "bcbench"
+    entry: BaseDatasetEntry,
+    model: str,
+    category: EvaluationCategory,
+    repo_path: Path,
+    output_dir: Path,
+    al_mcp: bool = False,
+    al_lsp: bool = False,
+    container_name: str = "bcbench",
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
 
@@ -33,12 +40,14 @@ def run_claude_code(
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
+    lsp_plugin_dir: Path | None = build_claude_lsp_plugin(entry, category, repo_path, al_lsp=al_lsp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
+        al_lsp_enabled=lsp_plugin_dir is not None,
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
@@ -65,6 +74,8 @@ def run_claude_code(
         ]
         if mcp_config_json:
             cmd_args.append(f"--mcp-config={mcp_config_json}")
+        if lsp_plugin_dir is not None:
+            cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
         cmd_args.extend(
