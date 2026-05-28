@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.agent.shared.mcp import _build_assembly_probing_paths, _set_runtime_version, build_mcp_config
+from bcbench.agent.shared.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
+from bcbench.agent.shared.altool_paths import set_runtime_version as _set_runtime_version
+from bcbench.agent.shared.mcp import build_mcp_config
 from tests.conftest import create_dataset_entry
 
 
