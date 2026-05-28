@@ -72,7 +72,7 @@ jobs:
       category: ${{ inputs.category }}
 
   evaluate-with-copilot-cli:
-    runs-on: [GitHub-BCBench]
+    runs-on: [ GitHub-BCBench ]
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}

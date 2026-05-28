@@ -1,5 +1,3 @@
-import json
-import shutil
 from pathlib import Path
 
 from bcbench.agent.shared.altool_paths import (
@@ -8,6 +6,7 @@ from bcbench.agent.shared.altool_paths import (
     resolve_artifact_lsp_paths,
     set_runtime_version,
 )
+from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
@@ -15,12 +14,8 @@ from bcbench.types import AgentType, EvaluationCategory
 
 logger = get_logger(__name__)
 
-# Per-task plugin folder location. Both Copilot CLI and Claude Code accept
-# `--plugin-dir <path>` for ad-hoc plugin loading and both look for the
-# manifest under `.claude-plugin/plugin.json`, so a single neutral path works
-# for either agent. Lives under `.bcbench/` so it's visibly BC-Bench-owned
-# and won't collide with either agent's auto-discovery paths.
-_AL_LSP_PLUGIN_RELATIVE_PATH = Path(".bcbench") / "al-lsp-plugin"
+_AL_LSP_PLUGIN_FOLDER = "al-lsp-plugin"
+_AL_LSP_MANIFEST = {"name": "al-lsp"}
 
 
 def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory, container_name: str) -> tuple[list[str], list[str]]:
@@ -57,8 +52,7 @@ def _build_lsp_args(project_paths: list[str], package_cache_paths: list[str], as
 def _lsp_config_for(agent_type: AgentType, args: list[str]) -> dict:
     """Build the agent-specific `.lsp.json` content.
 
-    Both agents launch the same `al launchlspserver` process — only the surrounding
-    LSP-routing schema differs:
+    Both agents launch the same `al launchlspserver` process — only the surrounding LSP-routing schema differs:
 
     - Copilot CLI expects `{ "lspServers": { name: { ..., "fileExtensions": {".ext": "lang"} } } }`
     - Claude Code expects `{ name: { ..., "extensionToLanguage": {".ext": "lang"} } }` (no wrapper, different extension key)
@@ -76,46 +70,23 @@ def _lsp_config_for(agent_type: AgentType, args: list[str]) -> dict:
 
 
 def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, agent_type: AgentType, al_lsp: bool, container_name: str = "") -> Path | None:
-    """Build a per-task plugin folder containing the AL LSP server, return its path or None.
+    """Build a per-task AL-LSP plugin folder, return its path or None.
 
-    Both Copilot CLI and Claude Code load this via ``--plugin-dir <path>`` for a single session
-    — no marketplace registration, no global state, no cross-run plugin leakage. The plugin
-    folder layout is identical between agents; only the LSP-routing schema in ``.lsp.json``
-    differs (see :func:`_lsp_config_for`).
-
-    Layout written under ``<repo>/.bcbench/al-lsp-plugin/``::
-
-        .claude-plugin/plugin.json   — minimal manifest (only ``name`` is required;
-                                       both CLIs check this path)
-        .lsp.json                    — LSP server config in the agent's schema
-
-    Returns the plugin folder path (to be passed as ``--plugin-dir``), or None when disabled.
+    Loaded by both Copilot CLI and Claude Code via ``--plugin-dir <path>`` for a single
+    session — no marketplace registration, no global state, no cross-run plugin leakage.
+    Folder layout is identical between agents; only the LSP-routing schema in
+    ``.lsp.json`` differs (see :func:`_lsp_config_for`).
     """
-    plugin_dir = repo_path / _AL_LSP_PLUGIN_RELATIVE_PATH
-
     if not al_lsp:
-        if plugin_dir.exists():
-            shutil.rmtree(plugin_dir)
-            logger.info(f"Removed stale AL LSP plugin: {plugin_dir}")
+        remove_agent_plugin(repo_path, _AL_LSP_PLUGIN_FOLDER)
         return None
 
     project_paths = [str(repo_path / p) for p in entry.project_paths]
     set_runtime_version(project_paths)
     package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container_name)
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
-
-    plugin_manifest = {
-        "name": "al-lsp",
-        "version": "1.0.0",
-        "description": "AL Language Server for Business Central agentic development",
-    }
     lsp_config = _lsp_config_for(agent_type, args)
 
-    (plugin_dir / ".claude-plugin").mkdir(parents=True, exist_ok=True)
-    (plugin_dir / ".claude-plugin" / "plugin.json").write_text(json.dumps(plugin_manifest, indent=2), encoding="utf-8")
-    (plugin_dir / ".lsp.json").write_text(json.dumps(lsp_config, indent=2), encoding="utf-8")
-
-    logger.info(f"Wrote AL LSP plugin for {agent_type.value}: {plugin_dir}")
-    logger.debug(f"LSP configuration: {json.dumps(lsp_config, indent=2)}")
-
+    plugin_dir = write_agent_plugin(repo_path, _AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
+    logger.debug(f"AL LSP configuration for {agent_type.value}: {lsp_config}")
     return plugin_dir
