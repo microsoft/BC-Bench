@@ -36,7 +36,7 @@ def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory,
         return package_cache_paths, assembly_probing_paths
 
     raise AgentError(
-        f"No AL symbols found for BC v{entry.environment_setup_version}. Run `./scripts/Download-BCSymbols.ps1 -Category {category} -InstanceId {entry.instance_id}` (no container required) and retry."
+        f"No AL symbols found for BC v{entry.environment_setup_version}. Run `./scripts/Download-BCSymbols.ps1 -Category {category.value} -InstanceId {entry.instance_id}` (no container required) and retry."
     )
 
 
