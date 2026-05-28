@@ -11,13 +11,13 @@ using module .\BCBenchUtils.psm1
 .PARAMETER InstanceId
     The dataset instance_id to resolve the BC version for.
 .PARAMETER Category
-    The dataset category (e.g. nl2al) to resolve the dataset path for (if DatasetPath not explicitly provided).
+    The dataset category (`bug-fix` or `test-generation`) to resolve the dataset path for (if DatasetPath is not explicitly provided).
 .PARAMETER DatasetPath
-    Path to the dataset (.jsonl). Defaults to dataset/nl2al.jsonl in the repo.
+    Path to the dataset (.jsonl). Defaults to the category-specific dataset path in the repo, for example dataset/bug-fix.jsonl or dataset/test-generation.jsonl.
 .PARAMETER Country
     BC artifact country (default: w1).
 .EXAMPLE
-    .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId nl2al__job-budget-report-1
+    .\scripts\Download-BCSymbols.ps1 -Category bug-fix -InstanceId bug-fix__job-budget-report-1
 #>
 param(
     [Parameter(Mandatory = $true)]
