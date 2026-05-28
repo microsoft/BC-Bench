@@ -33,6 +33,11 @@ on:
         required: false
         default: false
         type: boolean
+      al-lsp:
+        description: "Enable AL LSP server"
+        required: false
+        default: false
+        type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
         required: false
@@ -100,9 +105,9 @@ jobs:
           node-version: 24
 
       - name: Install AL Tool
-        if: ${{ inputs.al-mcp }}
+        if: ${{ inputs.al-mcp || inputs.al-lsp }}
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.33.55542
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.36.64936-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
@@ -120,7 +125,8 @@ jobs:
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            ${{ inputs.al-mcp && '--al-mcp' || '' }}
+            ${{ inputs.al-mcp && '--al-mcp' || '' }} `
+            ${{ inputs.al-lsp && '--al-lsp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -155,4 +161,4 @@ jobs:
       workflow-file: claude-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}"}
