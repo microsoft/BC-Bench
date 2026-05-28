@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import cast
+from typing import BinaryIO, cast
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -26,12 +26,16 @@ def _to_jsonable(value: object) -> dict[str, object]:
     raise TypeError(f"Unsupported response type from bc_eval CAPI bridge: {type(value)!r}")
 
 
-def main() -> int:
-    request_raw = json.load(sys.stdin)
+def _load_request(input_stream: BinaryIO) -> dict[str, object]:
+    request_raw = json.loads(input_stream.read().decode("utf-8-sig"))
     if not isinstance(request_raw, dict):
         raise TypeError("External AI request must be a JSON object.")
 
-    request = cast(dict[str, object], request_raw)
+    return cast(dict[str, object], request_raw)
+
+
+def main() -> int:
+    request = _load_request(sys.stdin.buffer)
     model = request.get("model")
     messages = request.get("messages")
     if not isinstance(model, str):
