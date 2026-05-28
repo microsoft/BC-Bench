@@ -78,7 +78,7 @@ skills:
 #    - Claude: copies to repo/.claude/agents/
 # 2. whether to pass --agent=<agent-name> to copilot or claude
 agents:
-  enabled: false
+  enabled: true
   name: ALTest
 
 mcp:
