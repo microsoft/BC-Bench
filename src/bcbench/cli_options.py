@@ -17,9 +17,9 @@ RunId = Annotated[str, typer.Option(envvar="GITHUB_RUN_ID", help="Unique identif
 
 ContainerName = Annotated[str, typer.Option(envvar="BC_CONTAINER_NAME", help="BC container name")]
 
-ContainerUsername = Annotated[str, typer.Option(envvar="BC_CONTAINER_USERNAME", help="Username for BC container")]
+ContainerUsername = Annotated[str, typer.Option(envvar="BC_SERVER_USERNAME", help="Username for BC container")]
 
-ContainerPassword = Annotated[str, typer.Option(envvar="BC_CONTAINER_PASSWORD", help="Password for BC container")]
+ContainerPassword = Annotated[str, typer.Option(envvar="BC_SERVER_PASSWORD", help="Password for BC container")]
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
 
