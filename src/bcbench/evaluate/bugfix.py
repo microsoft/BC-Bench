@@ -4,7 +4,8 @@ from pathlib import Path
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, TestExecutionError
-from bcbench.logger import get_logger, github_log_group
+from bcbench.github_actions import github_log_group
+from bcbench.logger import get_logger
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,
