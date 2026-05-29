@@ -12,8 +12,6 @@ prompt:
 
     Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
 
-    CRITICAL: Use al mcp to pulish the fixed app after applying the fix.
-
     Important constraints:
     - Do NOT modify any testing logic or test files
     - Focus solely on fixing the reported issue
