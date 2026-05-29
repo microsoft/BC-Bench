@@ -53,3 +53,18 @@ def test_list_prints_every_category_one_per_line():
     assert result.exit_code == 0
     lines = [line for line in result.stdout.splitlines() if line]
     assert lines == [c.value for c in EvaluationCategory]
+
+
+def test_runtime_config_supports_every_category(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    for category in EvaluationCategory:
+        output_file = tmp_path / f"gh_output_{category.value}"
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+
+        result = runner.invoke(app, ["category", "runtime-config", "--category", category.value])
+        assert result.exit_code == 0, f"{category}: {result.stdout}"
+
+        contents = output_file.read_text(encoding="utf-8")
+        assert f"runner={category.runner}" in contents
+        assert f"requires-container={str(category.requires_container).lower()}" in contents
