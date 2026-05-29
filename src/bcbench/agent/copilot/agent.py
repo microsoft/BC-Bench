@@ -49,7 +49,9 @@ def run_copilot_agent(
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
+    # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
+    # which re-parses arguments and corrupts prompts containing double quotes (e.g. JSON examples).
+    copilot_cmd = shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
