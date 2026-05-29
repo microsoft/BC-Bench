@@ -252,6 +252,8 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.CODE_REVIEW:
                 return "ubuntu-latest"
 
+        raise ValueError(f"Unknown evaluation category: {self}")
+
 
 @dataclass(frozen=True)
 class ContainerConfig:
