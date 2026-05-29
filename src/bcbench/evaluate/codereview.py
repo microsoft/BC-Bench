@@ -6,7 +6,8 @@ from pathlib import Path
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import PatchApplicationError
-from bcbench.logger import get_logger, github_log_group
+from bcbench.github_actions import github_log_group
+from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, setup_repo_prebuild
 from bcbench.results.codereview import CodeReviewResult, compute_comment_metrics, parse_review_output
 from bcbench.types import EvaluationContext
