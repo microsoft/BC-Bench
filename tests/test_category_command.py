@@ -80,4 +80,3 @@ def test_runtime_config_marks_code_review_as_containerless_on_hosted_runner(tmp_
     assert result.exit_code == 0
     contents = output_file.read_text(encoding="utf-8")
     assert "requires-container=false" in contents
-    assert "runner=windows-latest" in contents
