@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,7 +15,35 @@ if TYPE_CHECKING:
     from bcbench.results.base import BaseEvaluationResult
     from bcbench.results.summary import EvaluationResultSummary
 
-__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = [
+    "AgentMetrics",
+    "AgentType",
+    "Checklist",
+    "ChecklistAssertion",
+    "ChecklistLevel",
+    "ContainerConfig",
+    "EvaluationCategory",
+    "EvaluationContext",
+    "ExpectedOutput",
+    "ExperimentConfiguration",
+]
+
+
+type ChecklistLevel = Literal["critical", "expected", "aspirational"]
+
+
+class ChecklistAssertion(TypedDict):
+    text: str
+    level: ChecklistLevel
+
+
+class Checklist(TypedDict):
+    assertions: list[ChecklistAssertion]
+
+
+# Patch-style string for execution-based categories (bug-fix, test-generation),
+# or an lm_checklist payload for scorer-driven categories.
+type ExpectedOutput = str | Checklist
 
 
 class AgentMetrics(BaseModel):
@@ -170,6 +198,34 @@ class EvaluationCategory(StrEnum):
                 return TestGenerationPipeline()
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewPipeline()
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def evaluators(self) -> list[str]:
+        """
+        Names of bc-eval evaluators (from evaluator/scores.py) to run for this category.
+
+        Used for uploading evaluation results to long term storage.
+        """
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ["resolution_rate", "build_rate"]
+            case EvaluationCategory.TEST_GENERATION:
+                return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
+            case EvaluationCategory.CODE_REVIEW:
+                return ["precision", "recall", "f1", "valid_review_output"]
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def core_score(self) -> str:
+        """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "ResolutionRate"
+            case EvaluationCategory.CODE_REVIEW:
+                return "F1Score"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
