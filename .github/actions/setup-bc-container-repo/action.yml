@@ -17,10 +17,6 @@ inputs:
   github-token:
     description: GitHub token for accessing public repositories
     required: true
-  dataset-path:
-    description: Path to the dataset file
-    required: false
-    default: "dataset/bcbench.jsonl"
   skip-container:
     description: Skip BC container setup (only clone repository)
     required: false

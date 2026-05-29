@@ -1,7 +1,7 @@
-from collections.abc import Callable
-from pathlib import Path
 import re
 import subprocess
+from collections.abc import Callable
+from pathlib import Path
 
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.evaluate.base import EvaluationPipeline

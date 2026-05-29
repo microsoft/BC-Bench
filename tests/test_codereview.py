@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -272,16 +273,15 @@ class TestCodeReviewPipeline:
         mock_apply.assert_called_once()
 
     def test_setup_workspace_materializes_simplified_patch_when_git_apply_fails(self, tmp_path):
-        entry = create_codereview_entry(
-            patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n"
-        )
+        entry = create_codereview_entry(patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n")
         pipeline = CodeReviewPipeline()
+        subprocess.run(["git", "init"], cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
         with (
             patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
             patch(
                 "bcbench.evaluate.codereview.apply_patch",
-                side_effect=PatchApplicationError("test", 'error: No valid patches in input'),
+                side_effect=PatchApplicationError("test", "error: No valid patches in input"),
             ),
         ):
             pipeline.setup_workspace(entry, Path(tmp_path))
