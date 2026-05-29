@@ -6,7 +6,6 @@ from unittest.mock import patch
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.exceptions import PatchApplicationError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.summary import CodeReviewResultSummary
@@ -272,21 +271,41 @@ class TestCodeReviewPipeline:
         mock_setup.assert_called_once()
         mock_apply.assert_called_once()
 
-    def test_setup_workspace_materializes_simplified_patch_when_git_apply_fails(self, tmp_path):
-        entry = create_codereview_entry(patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n")
+    def test_setup_workspace_marks_new_files_as_intent_to_add(self, tmp_path):
+        entry = create_codereview_entry(
+            patch=(
+                "diff --git a/src/NewObject.Codeunit.al b/src/NewObject.Codeunit.al\n"
+                "new file mode 100644\n"
+                "--- /dev/null\n"
+                "+++ b/src/NewObject.Codeunit.al\n"
+                "@@ -0,0 +1,3 @@\n"
+                "+codeunit 50100 NewObject\n"
+                "+{\n"
+                "+}\n"
+            )
+        )
         pipeline = CodeReviewPipeline()
         subprocess.run(["git", "init"], cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init"],
+            cwd=tmp_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
 
-        with (
-            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
-            patch(
-                "bcbench.evaluate.codereview.apply_patch",
-                side_effect=PatchApplicationError("test", "error: No valid patches in input"),
-            ),
-        ):
+        with patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup:
             pipeline.setup_workspace(entry, Path(tmp_path))
 
         mock_setup.assert_called_once()
-        materialized_file = Path(tmp_path) / "src" / "NewObject.Codeunit.al"
-        assert materialized_file.exists()
-        assert "codeunit 50100 NewObject" in materialized_file.read_text(encoding="utf-8")
+        new_file = Path(tmp_path) / "src" / "NewObject.Codeunit.al"
+        assert new_file.exists()
+        assert "codeunit 50100 NewObject" in new_file.read_text(encoding="utf-8")
+        diff = subprocess.run(
+            ["git", "diff", "HEAD"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert "src/NewObject.Codeunit.al" in diff
