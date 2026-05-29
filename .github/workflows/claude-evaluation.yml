@@ -14,6 +14,7 @@ on:
         options:
           - "claude-sonnet-4-6"
           - "claude-opus-4-7"
+          - "claude-opus-4-8"
           - "claude-haiku-4-5"
       category:
         description: "Evaluation category to run"

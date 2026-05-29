@@ -29,6 +29,7 @@ CopilotModel = Annotated[
         "claude-haiku-4.5",
         "claude-opus-4.6",
         "claude-opus-4.7",
+        "claude-opus-4.8",
         "gpt-5.5",
         "gpt-5.4",
         "gpt-5.3-codex",
@@ -43,6 +44,7 @@ ClaudeCodeModel = Annotated[
     Literal[
         "claude-sonnet-4-6",
         "claude-opus-4-7",
+        "claude-opus-4-8",
         "claude-haiku-4-5",
     ],
     typer.Option(help="Claude Code model to use"),
