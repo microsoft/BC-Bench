@@ -214,7 +214,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.TEST_GENERATION:
                 return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
             case EvaluationCategory.CODE_REVIEW:
-                return ["precision", "recall", "f1", "valid_review_output"]
+                return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
