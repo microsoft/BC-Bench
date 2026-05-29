@@ -229,6 +229,29 @@ class EvaluationCategory(StrEnum):
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
+    @property
+    def requires_container(self) -> bool:
+        """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return True
+            case EvaluationCategory.CODE_REVIEW:
+                return False
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def runner(self) -> str:
+        """GitHub Actions runner label for evaluating this category.
+
+        Only categories that require building BaseApp needs self-hosted runners.
+        """
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "GitHub-BCBench"
+            case EvaluationCategory.CODE_REVIEW:
+                return "ubuntu-latest"
+
 
 @dataclass(frozen=True)
 class ContainerConfig:

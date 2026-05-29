@@ -63,6 +63,14 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     console.print()
 
 
+def _get_short_error_message(error_message: str | None) -> str:
+    """Extract the first line of an error message for summary display."""
+    if not error_message:
+        return ""
+    first_line = error_message.split("\n")[0].rstrip(":")
+    return first_line.replace("|", "\\|")
+
+
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
     display_metrics: dict[str, int | float | bool] = summary.display_summary()
@@ -106,20 +114,21 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     extra_separator = " | ".join("------" for _ in extra_columns)
 
     if extra_columns:
-        markdown_summary += f"| Instance ID | Project | Status | {extra_headers} |\n"
-        markdown_summary += f"|-------------|---------|--------|{extra_separator}|\n"
+        markdown_summary += f"| Instance ID | Project | Status | {extra_headers} | Error Message |\n"
+        markdown_summary += f"|-------------|---------|--------|{extra_separator}|---------------|\n"
     else:
-        markdown_summary += "| Instance ID | Project | Status |\n"
-        markdown_summary += "|-------------|---------|--------|\n"
+        markdown_summary += "| Instance ID | Project | Status | Error Message |\n"
+        markdown_summary += "|-------------|---------|--------|---------------|\n"
 
     for result in results:
         _, status_icon = _status_style(result.status_label)
         status_text = f"{status_icon} {result.status_label}"
+        error_msg = _get_short_error_message(result.error_message)
         extra_values = " | ".join(result.display_row.values())
         if extra_columns:
-            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {extra_values} |\n"
+            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {extra_values} | {error_msg} |\n"
         else:
-            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} |\n"
+            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {error_msg} |\n"
 
     _write_github_step_summary(markdown_summary)
 

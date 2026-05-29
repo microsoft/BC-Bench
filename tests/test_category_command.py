@@ -49,3 +49,25 @@ def test_list_prints_every_category_one_per_line():
     assert result.exit_code == 0
     lines = [line for line in result.stdout.splitlines() if line]
     assert lines == [c.value for c in EvaluationCategory]
+
+
+def test_runtime_config_supports_every_category(monkeypatch):
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    for category in EvaluationCategory:
+        result = runner.invoke(app, ["category", "runtime-config", "--category", category.value])
+        assert result.exit_code == 0, f"{category}: {result.stdout}"
+        assert f"runner={category.runner}" in result.stdout
+        assert f"requires-container={str(category.requires_container).lower()}" in result.stdout
+
+
+def test_runtime_config_marks_code_review_as_containerless_on_hosted_runner(monkeypatch):
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    result = runner.invoke(app, ["category", "runtime-config", "--category", "code-review"])
+
+    assert result.exit_code == 0
+    assert "requires-container=false" in result.stdout
+    assert "runner=windows-latest" in result.stdout
