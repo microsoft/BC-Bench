@@ -4674,12 +4674,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 168.98,
+      "benchmark_version": "0.1.0",
       "average": 0.455,
       "ci_low": 0.434,
       "ci_high": 0.489,
-      "pass_hat_5": 0.208,
-      "average_duration": 169.0,
-      "benchmark_version": "0.1.0"
+      "pass_hat_5": 0.208
     },
     {
       "model": "gpt-5-3-codex",
@@ -4688,12 +4688,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 154.74,
+      "benchmark_version": "0.2.2",
       "average": 0.453,
       "ci_low": 0.426,
       "ci_high": 0.481,
-      "pass_hat_5": 0.208,
-      "average_duration": 154.7,
-      "benchmark_version": "0.2.2"
+      "pass_hat_5": 0.208
     },
     {
       "model": "gpt-5-2-codex",
@@ -4702,12 +4702,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 290.82,
+      "benchmark_version": "0.2.2",
       "average": 0.44,
       "ci_low": 0.408,
       "ci_high": 0.485,
-      "pass_hat_5": 0.168,
-      "average_duration": 290.8,
-      "benchmark_version": "0.2.2"
+      "pass_hat_5": 0.168
     },
     {
       "model": "claude-opus-4-7",
@@ -4716,12 +4716,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 214.01999999999998,
+      "benchmark_version": "0.5.1",
       "average": 0.543,
       "ci_low": 0.517,
       "ci_high": 0.568,
-      "pass_hat_5": 0.218,
-      "average_duration": 214.0,
-      "benchmark_version": "0.5.1"
+      "pass_hat_5": 0.218
     },
     {
       "model": "gpt-5-4",
@@ -4730,12 +4730,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 300.88,
+      "benchmark_version": "0.5.2",
       "average": 0.406,
       "ci_low": 0.384,
       "ci_high": 0.448,
-      "pass_hat_5": 0.109,
-      "average_duration": 300.9,
-      "benchmark_version": "0.5.2"
+      "pass_hat_5": 0.109
     },
     {
       "model": "claude-opus-4-6",
@@ -4749,12 +4749,12 @@
       },
       "total": 101,
       "num_runs": 5,
+      "average_duration": 373.38,
+      "benchmark_version": "0.5.1",
       "average": 0.624,
       "ci_low": 0.612,
       "ci_high": 0.636,
-      "pass_hat_5": 0.396,
-      "average_duration": 373.4,
-      "benchmark_version": "0.5.1"
+      "pass_hat_5": 0.396
     },
     {
       "model": "claude-opus-4-6",
@@ -4763,12 +4763,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 230.54000000000002,
+      "benchmark_version": "0.5.3",
       "average": 0.517,
       "ci_low": 0.475,
       "ci_high": 0.588,
-      "pass_hat_5": 0.228,
-      "average_duration": 230.5,
-      "benchmark_version": "0.5.3"
+      "pass_hat_5": 0.228
     }
   ]
 }

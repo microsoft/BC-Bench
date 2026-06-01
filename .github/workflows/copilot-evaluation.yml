@@ -109,6 +109,7 @@ jobs:
 
       - name: Install AL Tool
         if: ${{ inputs.al-mcp }}
+        shell: pwsh
         run: |
           dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.36.64936-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
@@ -118,6 +119,7 @@ jobs:
 
       - name: Select PAT based on job index
         id: select-pat
+        shell: pwsh
         run: |
           $patIndex = ${{ strategy.job-index }} % 4
           echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
