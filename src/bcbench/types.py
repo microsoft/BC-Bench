@@ -190,6 +190,8 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedLeaderboardAggregate
 
+        raise ValueError(f"Unknown evaluation category: {self}")
+
     @property
     def pipeline(self) -> EvaluationPipeline:
         from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
