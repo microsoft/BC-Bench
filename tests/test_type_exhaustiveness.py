@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry
-from bcbench.dataset.codereview import ReviewComment
+from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentType, EvaluationCategory
 
 
@@ -44,7 +44,7 @@ def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with
                 created_at=sample_dataset_entry_with_problem_statement.created_at,
                 environment_setup_version=sample_dataset_entry_with_problem_statement.environment_setup_version,
                 patch=sample_dataset_entry_with_problem_statement.patch,
-                expected_comments=[ReviewComment(file="test.al", line_start=1, body="Test comment")],
+                expected_comments=[ReviewComment(file="test.al", line_start=1, body="Test comment", severity=Severity.MEDIUM)],
             )
         else:
             # Reconstruct entry as the category-specific type so get_expected_output() works

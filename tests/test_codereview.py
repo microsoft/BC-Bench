@@ -3,14 +3,38 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from bcbench.dataset import CodeReviewEntry
-from bcbench.dataset.codereview import ReviewComment
+from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.summary import CodeReviewResultSummary
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
+
+
+class TestSeverity:
+    def test_canonical_values_parse_directly(self):
+        assert Severity.from_input("Critical") is Severity.CRITICAL
+        assert Severity.from_input(" high ") is Severity.HIGH
+
+    def test_aliases_map_to_canonical_severities(self):
+        assert Severity.from_input("error") is Severity.HIGH
+        assert Severity.from_input("warning") is Severity.MEDIUM
+        assert Severity.from_input("suggestion") is Severity.LOW
+        assert Severity.from_input("info") is Severity.LOW
+
+    def test_unknown_severity_defaults_to_medium(self):
+        assert Severity.from_input("bogus") is Severity.MEDIUM
+
+    def test_levels_are_strictly_ordered(self):
+        assert Severity.CRITICAL.level > Severity.HIGH.level > Severity.MEDIUM.level > Severity.LOW.level
+
+    def test_review_comment_normalizes_severity_on_construction(self):
+        comment = ReviewComment.model_validate({"file": "src/app.al", "line_start": 1, "body": "x", "severity": "warning"})
+        assert comment.severity is Severity.MEDIUM
 
 
 class TestCodeReviewEntry:
@@ -20,13 +44,13 @@ class TestCodeReviewEntry:
 
     def test_get_expected_output_formats_comments(self):
         comments = [
-            ReviewComment(file="src/app.al", line_start=10, body="Fix this", severity="warning"),
-            ReviewComment(file="src/app.al", line_start=20, body="Consider that", severity="suggestion"),
+            ReviewComment(file="src/app.al", line_start=10, body="Fix this", severity=Severity.MEDIUM),
+            ReviewComment(file="src/app.al", line_start=20, body="Consider that", severity=Severity.LOW),
         ]
         entry = create_codereview_entry(expected_comments=comments)
         output = entry.get_expected_output()
-        assert "[warning] src/app.al:10: Fix this" in output
-        assert "[suggestion] src/app.al:20: Consider that" in output
+        assert "[medium] src/app.al:10: Fix this" in output
+        assert "[low] src/app.al:20: Consider that" in output
 
     def test_entry_does_not_require_test_fields(self):
         entry = create_codereview_entry()
@@ -58,7 +82,7 @@ class TestCodeReviewResult:
     def test_round_trip_serialization(self, tmp_path):
         output = json.dumps([{"file": "test.al", "line_start": 5, "body": "Good catch"}])
         original = create_codereview_result(
-            instance_id="codereview-round-trip",
+            instance_id="test__rt-1",
             output=output,
         )
 
@@ -131,8 +155,8 @@ class TestCodeReviewResult:
 
     def test_metrics_match_expected_comments_with_tolerance(self):
         expected_comments = [
-            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),
-            ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity="high"),
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+            ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity=Severity.HIGH),
         ]
         generated_output = json.dumps(
             [
@@ -177,8 +201,8 @@ class TestCodeReviewResult:
 
     def test_display_row_splits_comment_counts(self):
         expected_comments = [
-            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),
-            ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity="high"),
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+            ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity=Severity.HIGH),
         ]
         generated_output = json.dumps(
             [
@@ -212,12 +236,12 @@ class TestCodeReviewResult:
 class TestCodeReviewSummary:
     def test_summary_aggregates_precision_recall_and_f1(self):
         expected_comments = [
-            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity="warning"),
-            ReviewComment(file="src/app.al", line_start=30, body="Fix auth check", severity="high"),
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+            ReviewComment(file="src/app.al", line_start=30, body="Fix auth check", severity=Severity.HIGH),
         ]
 
         result_1 = create_codereview_result(
-            instance_id="a__1",
+            instance_id="test__a-1",
             output=json.dumps(
                 [
                     {"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"},
@@ -227,7 +251,7 @@ class TestCodeReviewSummary:
             expected_comments=expected_comments,
         )
         result_2 = create_codereview_result(
-            instance_id="a__2",
+            instance_id="test__a-2",
             output="[]",
             expected_comments=expected_comments,
         )
@@ -309,3 +333,11 @@ class TestCodeReviewPipeline:
             check=True,
         ).stdout
         assert "src/NewObject.Codeunit.al" in diff
+
+    def test_evaluate_raises_when_no_review_generated(self, tmp_path):
+        entry = create_codereview_entry()
+        context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+        pipeline = CodeReviewPipeline()
+
+        with pytest.raises(RuntimeError, match="No review generated"):
+            pipeline.evaluate(context)

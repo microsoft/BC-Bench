@@ -1,8 +1,44 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
+
+
+class Severity(StrEnum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+    @property
+    def level(self) -> int:
+        return _SEVERITY_LEVELS[self]
+
+    @classmethod
+    def from_input(cls, value: str) -> Severity:
+        normalized = value.strip().lower()
+        try:
+            return cls(normalized)
+        except ValueError:
+            return _SEVERITY_ALIASES.get(normalized, cls.MEDIUM)
+
+
+_SEVERITY_LEVELS: dict[Severity, int] = {
+    Severity.CRITICAL: 4,
+    Severity.HIGH: 3,
+    Severity.MEDIUM: 2,
+    Severity.LOW: 1,
+}
+
+_SEVERITY_ALIASES: dict[str, Severity] = {
+    "error": Severity.HIGH,
+    "warning": Severity.MEDIUM,
+    "suggestion": Severity.LOW,
+    "info": Severity.LOW,
+}
 
 
 class ReviewComment(BaseModel):
@@ -12,7 +48,14 @@ class ReviewComment(BaseModel):
     line_start: int
     line_end: int | None = None
     body: str
-    severity: str = "suggestion"
+    severity: Severity
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _coerce_severity(cls, value: object) -> Severity:
+        if isinstance(value, Severity):
+            return value
+        return Severity.from_input(str(value))
 
     def __str__(self) -> str:
         loc = f"{self.file}:{self.line_start}"
