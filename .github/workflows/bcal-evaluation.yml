@@ -61,7 +61,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 16
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -133,7 +133,7 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Run BCal for entry ${{ matrix.entry }}
-        timeout-minutes: 15
+        timeout-minutes: 30
         env:
           BCAL_LLM_BACKEND: ${{ inputs.llm-backend }}
           BCAL_LLM_MODEL: ${{ inputs.llm-backend == 'external-command' && inputs.external-model || inputs.model }}
