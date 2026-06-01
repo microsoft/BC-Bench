@@ -35,7 +35,6 @@ CopilotModel = Annotated[
         "gpt-5.3-codex",
         "gpt-5.2-codex",
         "gpt-5.2",
-        "gpt-4.1",
     ],
     typer.Option(help="Copilot model to use"),
 ]
