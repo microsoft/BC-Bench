@@ -155,19 +155,23 @@ class CodeReviewResult(BaseEvaluationResult):
 
 
 class CodeReviewResultSummary(EvaluationResultSummary):
-    """Summary for the code-review category."""
+    """
+    Summary for the code-review category.
 
-    generated_comment_count: int = 0
-    expected_comment_count: int = 0
-    matched_comment_count: int = 0
-    incorrect_comment_count: int = 0
-    missed_comment_count: int = 0
+    Precision, recall, and F1 are calculated by aggregating matched/expected/generated comment counts across all results.
+    """
 
-    precision: float = 0.0
-    recall: float = 0.0
-    f1: float = 0.0
+    generated_comment_count: int = Field(default=0, ge=0)
+    expected_comment_count: int = Field(default=0, ge=0)
+    matched_comment_count: int = Field(default=0, ge=0)
+    incorrect_comment_count: int = Field(default=0, ge=0)
+    missed_comment_count: int = Field(default=0, ge=0)
+
+    precision: float = Field(default=0.0, ge=0.0, le=1.0)
+    recall: float = Field(default=0.0, ge=0.0, le=1.0)
+    f1: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
-    valid_review_output_rate: float = 0.0
+    valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
     def display_summary(self) -> dict[str, int | float]:
         return {
@@ -190,25 +194,24 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         summary = super().from_results(results, run_id)
         assert isinstance(summary, CodeReviewResultSummary)
 
-        code_review_results = [r for r in results if isinstance(r, CodeReviewResult)]
-        total_results = len(code_review_results)
+        code_review_results: list[CodeReviewResult] = [r for r in results if isinstance(r, CodeReviewResult)]
+        total_results: int = len(code_review_results)
 
-        generated_total = sum(r.category_metrics.get("generated_comment_count", 0) for r in code_review_results)
-        expected_total = sum(r.category_metrics.get("expected_comment_count", 0) for r in code_review_results)
-        matched_total = sum(r.category_metrics.get("matched_comment_count", 0) for r in code_review_results)
-        incorrect_total = sum(r.category_metrics.get("incorrect_comment_count", 0) for r in code_review_results)
-        missed_total = sum(r.category_metrics.get("missed_comment_count", 0) for r in code_review_results)
+        generated_total: int = sum(len(r.generated_comments) for r in code_review_results)
+        expected_total: int = sum(len(r.expected_comments) for r in code_review_results)
+        matched_total: int = sum(r.matched_comment_count for r in code_review_results)
+        incorrect_total: int = sum(r.incorrect_comment_count for r in code_review_results)
+        missed_total: int = sum(r.missed_comment_count for r in code_review_results)
 
-        precision = matched_total / generated_total if generated_total > 0 else 1.0
-        recall = matched_total / expected_total if expected_total > 0 else 1.0
-        f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
+        precision, recall = precision_recall(matched_total, generated_total, expected_total)
+        f1: float = f1_score(precision, recall)
 
-        weighted_mae_numerator = sum(r.severity_mae * r.matched_comment_count for r in code_review_results)
-        weighted_mae_denominator = sum(r.matched_comment_count for r in code_review_results)
-        severity_mae = weighted_mae_numerator / weighted_mae_denominator if weighted_mae_denominator > 0 else 0.0
+        weighted_mae_numerator: float = sum(r.severity_mae * r.matched_comment_count for r in code_review_results)
+        weighted_mae_denominator: int = sum(r.matched_comment_count for r in code_review_results)
+        severity_mae: float = weighted_mae_numerator / weighted_mae_denominator if weighted_mae_denominator > 0 else 0.0
 
-        valid_output_count = sum(1 for r in code_review_results if r.valid_review_output)
-        valid_output_rate = valid_output_count / total_results if total_results > 0 else 0.0
+        valid_output_count: int = sum(1 for r in code_review_results if r.valid_review_output)
+        valid_output_rate: float = valid_output_count / total_results
 
         return summary.model_copy(
             update={
