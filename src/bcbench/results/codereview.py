@@ -190,8 +190,6 @@ class CodeReviewResultSummary(EvaluationResultSummary):
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":
-        from bcbench.results.codereview import CodeReviewResult
-
         summary = super().from_results(results, run_id)
         assert isinstance(summary, CodeReviewResultSummary)
 
