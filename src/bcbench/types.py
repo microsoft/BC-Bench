@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict
 
+from bcbench.results.leaderboard import LeaderboardAggregate
+
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
@@ -177,6 +179,17 @@ class EvaluationCategory(StrEnum):
                 return ExecutionBasedEvaluationResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def aggregate_class(self) -> type[LeaderboardAggregate]:
+        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedLeaderboardAggregate
 
     @property
     def pipeline(self) -> EvaluationPipeline:
