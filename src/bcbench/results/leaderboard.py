@@ -117,9 +117,9 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
 class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
     """Aggregate for the code-review category: mean F1 across runs."""
 
-    f1: float
-    precision: float
-    recall: float
+    f1: float = 0.0
+    precision: float = 0.0
+    recall: float = 0.0
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":

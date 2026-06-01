@@ -124,6 +124,7 @@ class CodeReviewResult(BaseEvaluationResult):
             **cls._base_fields(context),
             output=output,
             expected_comments=expected_comments,
+            line_tolerance=0,
             valid_review_output=False,
         )
 

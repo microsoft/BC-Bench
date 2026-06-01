@@ -103,6 +103,7 @@ class TestCodeReviewResult:
             "agent_name": "copilot-cli",
             "category": "code-review",
             "output": "",
+            "line_tolerance": 5,
         }
 
         result = BaseEvaluationResult.from_json(payload)
@@ -309,7 +310,7 @@ class TestCodeReviewLeaderboardAggregate:
         data = leaderboard.to_dict()
 
         assert "pass_hat_5" not in data["aggregate"][0]
-        assert data["aggregate"][0]["average"] == run.f1
+        assert data["aggregate"][0]["f1"] == run.f1
 
     def test_round_trip_preserves_codereview_subclasses(self):
         from bcbench.results.codereview import CodeReviewResultSummary as CRSummary
