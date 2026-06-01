@@ -267,6 +267,69 @@ class TestCodeReviewSummary:
         assert summary.f1 == 0.333
 
 
+class TestCodeReviewLeaderboardAggregate:
+    def _make_summary(self, expected_comments, output: str, run_id: str) -> CodeReviewResultSummary:
+        result = create_codereview_result(
+            instance_id="test__a-1",
+            output=output,
+            expected_comments=expected_comments,
+        )
+        return CodeReviewResultSummary.from_results([result], run_id=run_id)
+
+    def test_aggregate_uses_f1_as_average_and_has_no_pass_hat_5(self):
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, LeaderboardAggregate
+
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        output = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
+
+        run = self._make_summary(expected_comments, output, run_id="run-1")
+
+        agg = LeaderboardAggregate.from_runs([run])
+
+        assert isinstance(agg, CodeReviewLeaderboardAggregate)
+        assert agg.category == EvaluationCategory.CODE_REVIEW
+        assert agg.num_runs == 1
+        assert agg.f1 == run.f1
+        assert not hasattr(agg, "pass_hat_5")
+
+    def test_aggregate_serialization_excludes_pass_hat_5(self):
+        from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
+
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        output = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
+
+        run = self._make_summary(expected_comments, output, run_id="run-1")
+        agg = LeaderboardAggregate.from_runs([run])
+
+        leaderboard = Leaderboard(runs=[run], aggregate=[agg])
+        data = leaderboard.to_dict()
+
+        assert "pass_hat_5" not in data["aggregate"][0]
+        assert data["aggregate"][0]["average"] == run.f1
+
+    def test_round_trip_preserves_codereview_subclasses(self):
+        from bcbench.results.codereview import CodeReviewResultSummary as CRSummary
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, Leaderboard, LeaderboardAggregate
+
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        output = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
+
+        run = self._make_summary(expected_comments, output, run_id="run-1")
+        agg = LeaderboardAggregate.from_runs([run])
+        leaderboard = Leaderboard(runs=[run], aggregate=[agg])
+
+        restored = Leaderboard.model_validate(leaderboard.to_dict())
+
+        assert isinstance(restored.runs[0], CRSummary)
+        assert isinstance(restored.aggregate[0], CodeReviewLeaderboardAggregate)
+
+
 class TestCodeReviewPipeline:
     def test_pipeline_instantiates(self):
         pipeline = EvaluationCategory.CODE_REVIEW.pipeline

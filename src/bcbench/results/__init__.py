@@ -2,22 +2,28 @@ from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvalu
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.results.codereview import CodeReviewResultSummary
 from bcbench.results.display import create_console_summary, create_github_job_summary
+from bcbench.results.leaderboard import (
+    CodeReviewLeaderboardAggregate,
+    ExecutionBasedLeaderboardAggregate,
+    Leaderboard,
+    LeaderboardAggregate,
+)
 from bcbench.results.metrics import bootstrap_ci, pass_at_k, pass_hat_k
 from bcbench.results.summary import (
     BaseEvaluationResult,
     EvaluationResultSummary,
     ExecutionBasedEvaluationResultSummary,
     JudgeBasedEvaluationResultSummary,
-    Leaderboard,
-    LeaderboardAggregate,
 )
 
 __all__ = [
     "BaseEvaluationResult",
+    "CodeReviewLeaderboardAggregate",
     "CodeReviewResultSummary",
     "EvaluationResultSummary",
     "ExecutionBasedEvaluationResult",
     "ExecutionBasedEvaluationResultSummary",
+    "ExecutionBasedLeaderboardAggregate",
     "JudgeBasedEvaluationResult",
     "JudgeBasedEvaluationResultSummary",
     "Leaderboard",

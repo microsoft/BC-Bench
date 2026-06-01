@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
+    from bcbench.results.leaderboard import LeaderboardAggregate
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
@@ -185,6 +186,21 @@ class EvaluationCategory(StrEnum):
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewResultSummary
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def aggregate_class(self) -> type[LeaderboardAggregate]:
+        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.CODE_REVIEW:
+                return CodeReviewLeaderboardAggregate
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
