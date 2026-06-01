@@ -9296,12 +9296,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 204.6,
+      "benchmark_version": "0.1.0",
       "average": 0.574,
       "ci_low": 0.549,
       "ci_high": 0.592,
-      "pass_hat_5": 0.317,
-      "average_duration": 204.6,
-      "benchmark_version": "0.1.0"
+      "pass_hat_5": 0.317
     },
     {
       "model": "claude-opus-4-5",
@@ -9310,12 +9310,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 171.95999999999998,
+      "benchmark_version": "0.2.0",
       "average": 0.598,
       "ci_low": 0.582,
       "ci_high": 0.612,
-      "pass_hat_5": 0.386,
-      "average_duration": 172.0,
-      "benchmark_version": "0.2.0"
+      "pass_hat_5": 0.386
     },
     {
       "model": "gpt-5-3-codex",
@@ -9324,12 +9324,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 106.64000000000001,
+      "benchmark_version": "0.2.1",
       "average": 0.558,
       "ci_low": 0.541,
       "ci_high": 0.568,
-      "pass_hat_5": 0.376,
-      "average_duration": 106.6,
-      "benchmark_version": "0.2.1"
+      "pass_hat_5": 0.376
     },
     {
       "model": "gpt-5-2-codex",
@@ -9338,12 +9338,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 195.46,
+      "benchmark_version": "0.2.2",
       "average": 0.608,
       "ci_low": 0.592,
       "ci_high": 0.62,
-      "pass_hat_5": 0.495,
-      "average_duration": 195.5,
-      "benchmark_version": "0.2.2"
+      "pass_hat_5": 0.495
     },
     {
       "model": "gpt-5-1-codex-max",
@@ -9352,12 +9352,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 229.24,
+      "benchmark_version": "0.2.2",
       "average": 0.537,
       "ci_low": 0.517,
       "ci_high": 0.568,
-      "pass_hat_5": 0.366,
-      "average_duration": 229.2,
-      "benchmark_version": "0.2.2"
+      "pass_hat_5": 0.366
     },
     {
       "model": "claude-opus-4-5",
@@ -9366,12 +9366,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 164.7,
+      "benchmark_version": "0.1.0",
       "average": 0.584,
       "ci_low": 0.566,
       "ci_high": 0.602,
-      "pass_hat_5": 0.386,
-      "average_duration": 164.7,
-      "benchmark_version": "0.1.0"
+      "pass_hat_5": 0.386
     },
     {
       "model": "gpt-4-1",
@@ -9380,12 +9380,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 255.78000000000003,
+      "benchmark_version": "0.2.2",
       "average": 0.166,
       "ci_low": 0.156,
       "ci_high": 0.172,
-      "pass_hat_5": 0.05,
-      "average_duration": 255.8,
-      "benchmark_version": "0.2.2"
+      "pass_hat_5": 0.05
     },
     {
       "model": "gpt-5-4",
@@ -9394,12 +9394,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 314.26000000000005,
+      "benchmark_version": "0.3.1",
       "average": 0.584,
       "ci_low": 0.558,
       "ci_high": 0.608,
-      "pass_hat_5": 0.376,
-      "average_duration": 314.3,
-      "benchmark_version": "0.3.1"
+      "pass_hat_5": 0.376
     },
     {
       "model": "claude-sonnet-4-6",
@@ -9408,12 +9408,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 510.46000000000004,
+      "benchmark_version": "0.4.0",
       "average": 0.673,
       "ci_low": 0.661,
       "ci_high": 0.685,
-      "pass_hat_5": 0.485,
-      "average_duration": 510.5,
-      "benchmark_version": "0.4.0"
+      "pass_hat_5": 0.485
     },
     {
       "model": "claude-opus-4-6",
@@ -9429,12 +9429,12 @@
       },
       "total": 101,
       "num_runs": 5,
+      "average_duration": 570.7,
+      "benchmark_version": "0.5.0",
       "average": 0.713,
       "ci_low": 0.701,
       "ci_high": 0.741,
-      "pass_hat_5": 0.545,
-      "average_duration": 570.7,
-      "benchmark_version": "0.5.0"
+      "pass_hat_5": 0.545
     },
     {
       "model": "claude-opus-4-6",
@@ -9443,12 +9443,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 219.06,
+      "benchmark_version": "0.5.0",
       "average": 0.657,
       "ci_low": 0.644,
       "ci_high": 0.671,
-      "pass_hat_5": 0.455,
-      "average_duration": 219.1,
-      "benchmark_version": "0.5.0"
+      "pass_hat_5": 0.455
     },
     {
       "model": "claude-opus-4-6",
@@ -9457,12 +9457,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 477.9,
+      "benchmark_version": "0.5.0",
       "average": 0.669,
       "ci_low": 0.646,
       "ci_high": 0.697,
-      "pass_hat_5": 0.455,
-      "average_duration": 477.9,
-      "benchmark_version": "0.5.0"
+      "pass_hat_5": 0.455
     },
     {
       "model": "claude-opus-4-7",
@@ -9471,12 +9471,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 245.18,
+      "benchmark_version": "0.5.1",
       "average": 0.659,
       "ci_low": 0.644,
       "ci_high": 0.675,
-      "pass_hat_5": 0.505,
-      "average_duration": 245.2,
-      "benchmark_version": "0.5.1"
+      "pass_hat_5": 0.505
     },
     {
       "model": "claude-opus-4-7",
@@ -9485,12 +9485,12 @@
       "experiment": null,
       "total": 101,
       "num_runs": 5,
+      "average_duration": 493.18,
+      "benchmark_version": "0.5.3",
       "average": 0.679,
       "ci_low": 0.655,
       "ci_high": 0.699,
-      "pass_hat_5": 0.545,
-      "average_duration": 493.2,
-      "benchmark_version": "0.5.3"
+      "pass_hat_5": 0.545
     }
   ]
 }
