@@ -2,15 +2,13 @@ from typing import Self
 
 from pydantic import Field
 
-from bcbench.dataset.codereview import ReviewComment
+from bcbench.dataset import ReviewComment
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.metrics import f1_score, precision_recall
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
-
-__all__ = ["CodeReviewResult"]
 
 
 def _normalize_path(path: str) -> str:
