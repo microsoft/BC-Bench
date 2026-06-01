@@ -175,7 +175,8 @@ class EvaluationCategory(StrEnum):
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.summary import CodeReviewResultSummary, ExecutionBasedEvaluationResultSummary
+        from bcbench.results.codereview import CodeReviewResultSummary
+        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 
         match self:
             case EvaluationCategory.BUG_FIX:

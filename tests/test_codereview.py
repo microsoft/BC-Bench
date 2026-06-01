@@ -9,8 +9,7 @@ from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.codereview import CodeReviewResult
-from bcbench.results.summary import CodeReviewResultSummary
+from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
