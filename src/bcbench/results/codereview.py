@@ -71,16 +71,16 @@ class CodeReviewResult(BaseEvaluationResult):
 
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
-    line_tolerance: int = 5
+    line_tolerance: int = Field(ge=0)
 
     valid_review_output: bool = False
-    matched_comment_count: int = 0
-    missed_comment_count: int = 0
-    incorrect_comment_count: int = 0
+    matched_comment_count: int = Field(default=0, ge=0)
+    missed_comment_count: int = Field(default=0, ge=0)
+    incorrect_comment_count: int = Field(default=0, ge=0)
 
-    precision: float = 0.0
-    recall: float = 0.0
-    f1: float = 0.0
+    precision: float = Field(default=0.0, ge=0.0, le=1.0)
+    recall: float = Field(default=0.0, ge=0.0, le=1.0)
+    f1: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
 
     @classmethod
@@ -125,10 +125,6 @@ class CodeReviewResult(BaseEvaluationResult):
             output=output,
             expected_comments=expected_comments,
             valid_review_output=False,
-            missed_comment_count=len(expected_comments),
-            precision=0.0,
-            recall=0.0,
-            f1=0.0,
         )
 
     @property
