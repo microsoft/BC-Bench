@@ -149,7 +149,7 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
         return None
     version_root = version_roots[-1]  # newest revision
 
-    # Country-specific app symbols (e.g. W1 BaseApp), then platform symbols (System app etc.)
+    # Country-specific app symbols (e.g. w1 BaseApp), then platform symbols (System app etc.)
     package_cache_paths = [str(p) for p in (version_root / country / "Extensions", version_root / "platform" / "Applications") if p.is_dir()]
     if not package_cache_paths:
         return None

@@ -30,7 +30,7 @@ param(
     [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category),
 
     [Parameter(Mandatory = $false)]
-    [string]$Country = "W1"
+    [string]$Country = "w1"
 )
 
 $ErrorActionPreference = 'Stop'

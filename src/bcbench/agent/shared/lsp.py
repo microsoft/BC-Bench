@@ -18,7 +18,7 @@ _AL_LSP_PLUGIN_FOLDER = "al-lsp-plugin"
 _AL_LSP_MANIFEST = {"name": "al-lsp"}
 
 
-def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory, container_name: str) -> tuple[list[str], list[str]]:
+def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory, container_name: str, country: str = "w1") -> tuple[list[str], list[str]]:
     """Resolve (package_cache_paths, assembly_probing_paths) for the LSP server.
 
     Prefers the container's compiler folder when available — its single flat layout is the exact same arg shape AL-MCP uses.
@@ -30,7 +30,7 @@ def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory,
             logger.info(f"Using container compiler-folder symbols: {symbols_folder}")
             return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder)
 
-    artifact_paths = resolve_artifact_lsp_paths(entry.environment_setup_version)
+    artifact_paths = resolve_artifact_lsp_paths(entry.environment_setup_version, country)
     if artifact_paths is not None:
         package_cache_paths, assembly_probing_paths = artifact_paths
         logger.info(f"Using BC artifact cache symbols for v{entry.environment_setup_version}: {package_cache_paths}")
