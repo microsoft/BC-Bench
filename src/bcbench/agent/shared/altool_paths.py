@@ -49,6 +49,20 @@ def _detect_dotnet_runtime_version() -> Version | None:
     return max(versions) if versions else None
 
 
+def _dotnet_runtime_probing_paths() -> list[str]:
+    """Probing paths for the latest compatible system .NET runtime (empty if none found)."""
+    dotnet_version = _detect_dotnet_runtime_version()
+    if not dotnet_version:
+        logger.warning("No compatible .NET runtime found. DotNet interop types may not resolve.")
+        return []
+
+    logger.info(f"Using system .NET runtime {dotnet_version} for assembly probing")
+    return [
+        str(_DOTNET_SHARED / "Microsoft.NETCore.App" / str(dotnet_version)),
+        str(_DOTNET_SHARED / "Microsoft.AspNetCore.App" / str(dotnet_version)),
+    ]
+
+
 def build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
     """Build list of assembly probing paths for the AL compiler.
 
@@ -72,13 +86,7 @@ def build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
     if shared_folder.is_dir():
         paths.append(str(shared_folder))
     else:
-        dotnet_version = _detect_dotnet_runtime_version()
-        if dotnet_version:
-            paths.append(str(_DOTNET_SHARED / "Microsoft.NETCore.App" / str(dotnet_version)))
-            paths.append(str(_DOTNET_SHARED / "Microsoft.AspNetCore.App" / str(dotnet_version)))
-            logger.info(f"Using system .NET runtime {dotnet_version} for assembly probing")
-        else:
-            logger.warning("No compatible .NET runtime found. DotNet interop types may not resolve.")
+        paths.extend(_dotnet_runtime_probing_paths())
 
     # dlls\ after dotnet — recursively covers Service, OpenXML, Mock Assemblies, etc.
     if dlls_path.is_dir():
@@ -159,11 +167,7 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     platform_dir = version_root / "platform"
     assembly_probing_paths = [str(platform_dir)] if platform_dir.is_dir() else []
 
-    # System .NET runtime — same fallback as the container-derived path so DotNet
-    # interop types resolve even without BC-shipped reference assemblies.
-    dotnet_version = _detect_dotnet_runtime_version()
-    if dotnet_version:
-        assembly_probing_paths.append(str(_DOTNET_SHARED / "Microsoft.NETCore.App" / str(dotnet_version)))
-        assembly_probing_paths.append(str(_DOTNET_SHARED / "Microsoft.AspNetCore.App" / str(dotnet_version)))
+    # System .NET runtime — same fallback as the container-derived path so DotNet interop types resolve even without BC-shipped reference assemblies.
+    assembly_probing_paths.extend(_dotnet_runtime_probing_paths())
 
     return package_cache_paths, assembly_probing_paths
