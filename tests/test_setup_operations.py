@@ -8,7 +8,7 @@ class TestSetRuntimeVersion:
         app_json = {"platform": "25.0.0.0", "version": "25.0.0.0"}
         (tmp_path / "app.json").write_text(json.dumps(app_json))
 
-        set_runtime_version([str(tmp_path)])
+        set_runtime_version(tmp_path, [str(tmp_path)])
 
         result = json.loads((tmp_path / "app.json").read_text())
         assert result["runtime"] == "14.0"
@@ -17,7 +17,7 @@ class TestSetRuntimeVersion:
         app_json = {"platform": "25.0.0.0", "runtime": "12.0"}
         (tmp_path / "app.json").write_text(json.dumps(app_json))
 
-        set_runtime_version([str(tmp_path)])
+        set_runtime_version(tmp_path, [str(tmp_path)])
 
         result = json.loads((tmp_path / "app.json").read_text())
         assert result["runtime"] == "12.0"
@@ -26,10 +26,10 @@ class TestSetRuntimeVersion:
         app_json = {"platform": "27.0.0.0"}
         (tmp_path / "app.json").write_text(json.dumps(app_json))
 
-        set_runtime_version([str(tmp_path)])
+        set_runtime_version(tmp_path, [str(tmp_path)])
 
         result = json.loads((tmp_path / "app.json").read_text())
         assert result["runtime"] == "16.0"
 
     def test_skips_missing_app_json(self, tmp_path):
-        set_runtime_version([str(tmp_path)])  # should not raise
+        set_runtime_version(tmp_path, [str(tmp_path)])  # should not raise

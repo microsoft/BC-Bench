@@ -36,7 +36,7 @@ def setup_repo_prebuild(entry: BaseDatasetEntry, repo_path: Path) -> None:
     checkout_commit(repo_path, entry.base_commit)
 
 
-def set_runtime_version(project_paths: list[str]) -> None:
+def set_runtime_version(repo_path: Path, project_paths: list[str]) -> None:
     """Set the AL runtime version in each project's app.json based on platform version.
 
     The AL compiler (altool) defaults to the latest runtime, enabling newer validation rules that reject older code.
@@ -45,7 +45,7 @@ def set_runtime_version(project_paths: list[str]) -> None:
     Can be skippped when altool is not used.
     """
     for project_path in project_paths:
-        app_json_path = Path(project_path) / "app.json"
+        app_json_path = repo_path / project_path / "app.json"
         if not app_json_path.is_file():
             continue
 
