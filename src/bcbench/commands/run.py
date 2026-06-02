@@ -52,7 +52,7 @@ def run_copilot(
         output_dir=output_dir,
         al_mcp=al_mcp if container_name else False,
         al_lsp=al_lsp,
-        container_name=container_name or "",
+        container_name=container_name,
     )
 
 
@@ -86,5 +86,5 @@ def run_claude(
         output_dir=output_dir,
         al_mcp=al_mcp if container_name else False,
         al_lsp=al_lsp,
-        container_name=container_name or "",
+        container_name=container_name,
     )
