@@ -109,7 +109,7 @@ jobs:
         if: ${{ inputs.al-mcp || inputs.al-lsp }}
         shell: pwsh
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.36.64936-beta
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
