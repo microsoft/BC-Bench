@@ -32,7 +32,7 @@ def write_agent_plugin(repo_path: Path, folder: str, manifest: dict, files: dict
     (plugin_dir / ".claude-plugin").mkdir(parents=True, exist_ok=True)
     (plugin_dir / ".claude-plugin" / "plugin.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     for rel_path, content in files.items():
-        target = plugin_dir / rel_path
+        target: Path = plugin_dir / rel_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(content, indent=2), encoding="utf-8")
 
