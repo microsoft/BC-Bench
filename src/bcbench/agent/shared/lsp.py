@@ -4,7 +4,6 @@ from bcbench.agent.shared.altool_paths import (
     build_assembly_probing_paths,
     compiler_symbol_folder_for_container,
     resolve_artifact_lsp_paths,
-    set_runtime_version,
 )
 from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
@@ -84,7 +83,6 @@ def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, r
         return None
 
     project_paths = [str(repo_path / p) for p in entry.project_paths]
-    set_runtime_version(project_paths)
     package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container_name)
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(agent_type, args)

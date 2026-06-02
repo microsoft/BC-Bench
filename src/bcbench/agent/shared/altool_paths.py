@@ -1,10 +1,8 @@
 """Shared altool helpers used by both AL-MCP and AL-LSP integrations.
 
-Both `altool launchmcpserver` and `altool launchlspserver` need the same
-package-cache layout, assembly probing paths, and runtime-version handling.
+Both `altool launchmcpserver` and `altool launchlspserver` need the same package-cache layout and assembly probing paths.
 """
 
-import json
 from pathlib import Path
 
 from packaging.version import Version
@@ -17,11 +15,6 @@ logger = get_logger(__name__)
 # See: navcontainerhelper/InitializeModule.ps1 line 62
 _EXCLUDED_DOTNET_MAJORS = {9, 10}
 _DOTNET_SHARED = Path(r"C:\Program Files\dotnet\shared")
-
-# Offset from BC platform major version to AL runtime version.
-# E.g. platform 25.0 (BC 2024w2) → runtime 14.0, platform 27.0 → runtime 16.0
-# See: BC-DeveloperExperience RuntimeVersion.cs
-_PLATFORM_TO_RUNTIME_OFFSET = 11
 
 # Default location of BCContainerHelper-downloaded artifacts (symbols, reference assemblies, etc.)
 _BCARTIFACTS_CACHE = Path(r"C:\bcartifacts.cache")
@@ -93,43 +86,6 @@ def build_assembly_probing_paths(compiler_folder: Path) -> list[str]:
         paths.append(str(dlls_path))
 
     return paths
-
-
-def set_runtime_version(project_paths: list[str]) -> None:
-    """Set the AL runtime version in each project's app.json based on platform version.
-
-    The AL compiler (altool 17.0+) defaults to the latest runtime when "runtime"
-    is not set in app.json, enabling newer validation rules that reject older code.
-    Setting the runtime to match the platform version makes the compiler behave
-    like the version that originally compiled the code.
-    """
-    for project_path in project_paths:
-        app_json_path = Path(project_path) / "app.json"
-        if not app_json_path.is_file():
-            continue
-
-        try:
-            app_json = json.loads(app_json_path.read_text(encoding="utf-8-sig"))
-        except (json.JSONDecodeError, OSError):
-            continue
-
-        if app_json.get("runtime"):
-            continue
-
-        platform = app_json.get("platform", "")
-        try:
-            platform_major = int(platform.split(".")[0])
-        except (ValueError, IndexError):
-            continue
-
-        runtime_major = platform_major - _PLATFORM_TO_RUNTIME_OFFSET
-        if runtime_major < 1:
-            continue
-
-        runtime = f"{runtime_major}.0"
-        app_json["runtime"] = runtime
-        app_json_path.write_text(json.dumps(app_json, indent=2, ensure_ascii=False), encoding="utf-8")
-        logger.info(f"Set runtime={runtime} in {app_json_path} (platform {platform})")
 
 
 def compiler_symbol_folder_for_container(container_name: str) -> tuple[Path, Path]:

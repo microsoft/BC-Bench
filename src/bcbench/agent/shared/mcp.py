@@ -6,7 +6,7 @@ from typing import Any
 
 from jinja2 import Template
 
-from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, compiler_symbol_folder_for_container, set_runtime_version
+from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, compiler_symbol_folder_for_container
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
@@ -63,8 +63,6 @@ def build_mcp_config(config: dict[str, Any], entry: BaseDatasetEntry, repo_path:
         # Insert project paths right after "launchmcpserver" (positional args must precede options)
         insert_idx: int = al_server["args"].index("launchmcpserver") + 1
         al_server["args"][insert_idx:insert_idx] = project_paths
-
-        set_runtime_version(project_paths)
 
         # Each path must be a separate arg (System.CommandLine expects space-separated values)
         assembly_probing_paths = build_assembly_probing_paths(compiler_folder)

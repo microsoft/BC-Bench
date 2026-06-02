@@ -21,6 +21,7 @@ from bcbench.operations import (
     stage_and_get_diff,
 )
 from bcbench.operations.bc_operations import run_test_suite
+from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
 
@@ -62,6 +63,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
     def setup_workspace(self, entry: TestGenEntry, repo_path: Path) -> None:
         setup_repo_prebuild(entry, repo_path)
         self._apply_input_postbuild(entry, repo_path)
+        set_runtime_version(entry.project_paths)
 
     def setup(self, context: EvaluationContext[TestGenEntry]) -> None:
         setup_repo_prebuild(context.entry, context.repo_path)
@@ -74,6 +76,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         )
 
         self._apply_input_postbuild(context.entry, context.repo_path)
+        set_runtime_version(context.entry.project_paths)
 
     def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
