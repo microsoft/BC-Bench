@@ -8,7 +8,8 @@ from bcbench.config import get_config
 from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
-from bcbench.logger import get_logger, github_log_group
+from bcbench.github_actions import github_log_group
+from bcbench.logger import get_logger
 from bcbench.operations import (
     apply_patch,
     build_and_publish_projects,

@@ -13,7 +13,7 @@ on:
         type: choice
         options:
           - "claude-sonnet-4-6"
-          - "claude-opus-4-7"
+          - "claude-opus-4-8"
           - "claude-haiku-4-5"
       category:
         description: "Evaluation category to run"
@@ -60,7 +60,7 @@ jobs:
       category: ${{ inputs.category }}
 
   evaluate-with-claude-code:
-    runs-on: [ GitHub-BCBench ]
+    runs-on: ${{ needs.get-entries.outputs.runner }}
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
@@ -91,6 +91,7 @@ jobs:
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
@@ -102,14 +103,15 @@ jobs:
       - name: Install AL Tool
         if: ${{ inputs.al-mcp }}
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.33.55542
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.36.64936-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.116
+        run: npm install -g @anthropic-ai/claude-code@2.1.160
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
+        shell: pwsh
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
+    from bcbench.results.leaderboard import LeaderboardAggregate
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
@@ -179,6 +180,19 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
+    def aggregate_class(self) -> type[LeaderboardAggregate]:
+        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedLeaderboardAggregate
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
     def pipeline(self) -> EvaluationPipeline:
         from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
 
@@ -211,6 +225,27 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def requires_container(self) -> bool:
+        """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return True
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def runner(self) -> str:
+        """GitHub Actions runner label for evaluating this category.
+
+        Only categories that require building BaseApp needs self-hosted runners.
+        """
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "GitHub-BCBench"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -134,11 +135,15 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
             args: list[str] = server["args"]
             rendered_args = [Template(arg).render(**template_context) for arg in args]
             command: str = shutil.which(server["command"]) or server["command"]
-            return server_name, {
+            entry: dict[str, Any] = {
                 "type": server_type,
                 "command": command,
                 "args": rendered_args,
             }
+            env: dict[str, str] = server.get("env", {})
+            if env:
+                entry["env"] = env
+            return server_name, entry
         case _:
             logger.error(f"Unsupported MCP server type: {server_type}, {server}")
             raise AgentError(f"Unsupported MCP server type: {server_type}")
@@ -173,6 +178,12 @@ def build_mcp_config(config: dict[str, Any], entry: BaseDatasetEntry, repo_path:
         if assembly_probing_paths:
             al_server["args"].extend(["--assemblyprobingpaths", *assembly_probing_paths])
             logger.info(f"Assembly probing paths: {assembly_probing_paths}")
+
+        # forward BC_SERVER_* environment variables explicitly
+        forwarded = {k: os.environ[k] for k in ("BC_SERVER_URL", "BC_SERVER_INSTANCE", "BC_SERVER_USERNAME", "BC_SERVER_PASSWORD") if os.environ.get(k)}
+        if forwarded:
+            al_server["env"] = forwarded
+            logger.info(f"Forwarding env vars to altool MCP: {list(forwarded.keys())}")
 
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
