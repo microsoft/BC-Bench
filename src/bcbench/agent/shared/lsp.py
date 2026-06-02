@@ -67,6 +67,8 @@ def _lsp_config_for(agent_type: AgentType, args: list[str]) -> dict:
             return {"lspServers": {"altool": {**server, "fileExtensions": {".al": "al"}}}}
         case AgentType.CLAUDE:
             return {"altool": {**server, "extensionToLanguage": {".al": "al"}}}
+        case _:
+            raise AgentError(f"Unsupported agent type for AL LSP config: {agent_type}")
 
 
 def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, agent_type: AgentType, al_lsp: bool, container_name: str = "") -> Path | None:
