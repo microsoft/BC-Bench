@@ -76,6 +76,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     display_metrics: dict[str, int | float | bool] = summary.display_summary()
 
     mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
+    al_lsp_enabled = "Yes" if results[0].experiment and results[0].experiment.al_lsp_enabled else "No"
     custom_instructions = "Yes" if results[0].experiment and results[0].experiment.custom_instructions else "No"
     skills = "Yes" if results[0].experiment and results[0].experiment.skills_enabled else "No"
     custom_agent = results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else "N/A"
@@ -100,6 +101,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
         f"Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**\n"
         f"- Category: `{results[0].category.value}`\n"
         f"- MCP Servers used: {mcp_servers}\n"
+        f"- AL LSP: {al_lsp_enabled}\n"
         f"- Custom Instructions: {custom_instructions}\n"
         f"- Skills: {skills}\n"
         f"- Custom Agent: {custom_agent}\n"
