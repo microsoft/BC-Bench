@@ -15,7 +15,7 @@ def _plugin_dir_for(repo_path: Path, folder: str) -> Path:
     return repo_path / _PLUGIN_ROOT / folder
 
 
-def write_agent_plugin(repo_path: Path, folder: str, manifest: dict, files: dict[str, dict]) -> Path:
+def write_agent_plugin(repo_path: Path, folder: str, manifest: dict[str, object], files: dict[str, object]) -> Path:
     """Write a plugin folder and return its path.
 
     Args:
