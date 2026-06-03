@@ -81,6 +81,9 @@ class ExperimentConfiguration(BaseModel):
     # MCP server names used in experiment (if any)
     mcp_servers: list[str] | None = None
 
+    # Whether the AL LSP server was enabled for this experiment
+    al_lsp_enabled: bool = False
+
     # Custom instructions enabled in experiment
     custom_instructions: bool = False
 
@@ -96,7 +99,7 @@ class ExperimentConfiguration(BaseModel):
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
+        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
 
 
 class AgentType(StrEnum):

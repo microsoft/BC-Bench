@@ -30,6 +30,7 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 
 ### Readable code over documentation or comments
 Function names should be self-explanatory. Do NOT add docstrings to functions unless absolutely necessary.
+When a docstring is necessary, keep it short and use Google style. Include only useful sections such as `Args:` and `Returns:`; skip details that are obvious from names and type hints.
 
 Bad:
 ```python
