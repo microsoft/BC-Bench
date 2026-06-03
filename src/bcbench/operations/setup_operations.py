@@ -42,7 +42,7 @@ def set_runtime_version(repo_path: Path, project_paths: list[str]) -> None:
     The AL compiler (altool) defaults to the latest runtime, enabling newer validation rules that reject older code.
     Setting the runtime to match the platform version makes the compiler behave like the version that originally compiled the code.
 
-    Can be skippped when altool is not used.
+    Can be skipped when altool is not used.
     """
     for project_path in project_paths:
         app_json_path = repo_path / project_path / "app.json"
