@@ -8,7 +8,7 @@ class TestSetRuntimeVersion:
         app_json = {"platform": "25.0.0.0", "version": "25.0.0.0"}
         (tmp_path / "app.json").write_text(json.dumps(app_json))
 
-        set_runtime_version(tmp_path, [str(tmp_path)])
+        set_runtime_version(tmp_path, ["."])
 
         result = json.loads((tmp_path / "app.json").read_text())
         assert result["runtime"] == "14.0"
