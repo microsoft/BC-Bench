@@ -1,5 +1,6 @@
 import json
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
 from bcbench.logger import get_logger
@@ -15,7 +16,7 @@ def _plugin_dir_for(repo_path: Path, folder: str) -> Path:
     return repo_path / _PLUGIN_ROOT / folder
 
 
-def write_agent_plugin(repo_path: Path, folder: str, manifest: dict[str, object], files: dict[str, object]) -> Path:
+def write_agent_plugin(repo_path: Path, folder: str, manifest: Mapping[str, object], files: Mapping[str, object]) -> Path:
     """Write a plugin folder and return its path.
 
     Args:
