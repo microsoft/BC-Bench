@@ -9,7 +9,7 @@ from bcbench.operations.git_operations import checkout_commit, clean_repo
 
 logger = get_logger(__name__)
 
-__all__ = ["setup_repo_prebuild"]
+__all__ = ["setup_repo_prebuild", "set_runtime_version"]
 
 # Offset from BC platform major version to AL runtime version.
 # E.g. platform 25.0 (BC 2024w2) → runtime 14.0, platform 27.0 → runtime 16.0
