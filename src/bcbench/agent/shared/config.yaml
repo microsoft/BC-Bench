@@ -15,9 +15,7 @@ prompt:
     Important constraints:
     - Do NOT modify any testing logic or test files
     - Focus solely on fixing the reported issue
-    {% if al_mcp %}
-    - Do NOT try to run tests
-    {% else %}
+    {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
     - Do NOT commit any changes to the repository
@@ -42,9 +40,7 @@ prompt:
     Important constraints:
     - Do NOT modify any production code or existing tests
     - Focus solely on generating tests {% if is_gold_patch %}that verify the fix works correctly{% else %}for the reported issue{% endif %}
-    {% if al_mcp %}
-    - Do NOT try to run tests
-    {% else %}
+    {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
     - Do NOT commit any changes to the repository
@@ -55,13 +51,17 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    @al-code-review
+    /review
+
+    Review the current branch changes and save findings to a file named "review.json" in the repository root.
 
     Review ONLY the current working-tree AL file changes for this evaluation entry.
     Do NOT compare commits (for example, do NOT use HEAD~1..HEAD or origin/main comparisons).
     Use working tree diff only (git diff HEAD), and focus on changed *.al files.
-    Return findings using the al-code-review skill schema.
-    Save the findings JSON to a file named review.json in the repository root.
+
+    The file must contain valid JSON with a top-level object named findings.
+    Each finding must include: filePath, lineNumber, severity, issue, recommendation.
+    Allowed severity values are: critical, high, medium, low.
     If there are no findings, write an empty findings list.
 
 # controls:
@@ -73,14 +73,14 @@ prompt:
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentType.instruction_filename) during setup
 instructions:
-  enabled: true
+  enabled: false
 
 # controls:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
 skills:
-  enabled: true
+  enabled: false
 
 # controls:
 # 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`

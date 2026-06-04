@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
+from bcbench.types import ExpectedOutput
 
 _config = get_config()
 
@@ -89,7 +90,7 @@ class BaseDatasetEntry(BaseModel):
         pass
 
     @abstractmethod
-    def get_expected_output(self) -> str:
+    def get_expected_output(self) -> ExpectedOutput:
         pass
 
     def extract_project_name(self) -> str:

@@ -9,7 +9,7 @@ from typing import Any
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory
+from bcbench.types import EvaluationCategory, ExpectedOutput
 
 logger = get_logger(__name__)
 
@@ -29,7 +29,8 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
                 continue
 
             matched_entry = matching_entries[0]
-            input, expected = matched_entry.get_task(), matched_entry.get_expected_output()
+            task_input: str = matched_entry.get_task()
+            expected: ExpectedOutput = matched_entry.get_expected_output()
 
             metadata: dict[str, Any] = {
                 "model": result.model,
@@ -47,7 +48,7 @@ def write_bceval_results(results: list[BaseEvaluationResult], out_dir: Path, run
 
             bceval_result = {
                 "id": result.instance_id,
-                "input": input,
+                "input": task_input,
                 "expected": expected,
                 "output": result.output,
                 "context": "",

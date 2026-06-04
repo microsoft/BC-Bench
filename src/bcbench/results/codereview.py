@@ -1,138 +1,20 @@
-import json
-import re
+from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field
 
-from bcbench.dataset.codereview import ReviewComment
+from bcbench.dataset import ReviewComment
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.metrics import f1_score, precision_recall
+from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 
-__all__ = ["CodeReviewResult", "compute_comment_metrics", "parse_review_output"]
-
-
-SEVERITY_LEVELS: dict[str, int] = {
-    "critical": 4,
-    "high": 3,
-    "medium": 2,
-    "low": 1,
-}
-
-SEVERITY_ALIASES: dict[str, str] = {
-    "error": "high",
-    "warning": "medium",
-    "suggestion": "low",
-    "info": "low",
-}
-
-
-def _extract_json_candidate(raw_output: str) -> str:
-    stripped = raw_output.strip()
-    if not stripped:
-        return ""
-
-    if stripped.startswith(("[", "{")):
-        return stripped
-
-    block_match = re.search(r"```json\s*([\s\S]*?)\s*```", raw_output, re.IGNORECASE)
-    if block_match:
-        return block_match.group(1).strip()
-
-    generic_block_match = re.search(r"```\s*([\s\S]*?)\s*```", raw_output)
-    if generic_block_match:
-        return generic_block_match.group(1).strip()
-
-    return stripped
-
 
 def _normalize_path(path: str) -> str:
     return path.replace("\\", "/").lstrip("./").lstrip("/")
-
-
-def _normalize_severity(value: str) -> str:
-    normalized = value.strip().lower()
-    if normalized in SEVERITY_LEVELS:
-        return normalized
-    return SEVERITY_ALIASES.get(normalized, "medium")
-
-
-def _to_int(value: object) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return None
-    try:
-        parsed = int(str(value))
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed > 0 else None
-
-
-def _normalize_comment(item: dict[str, object]) -> ReviewComment | None:
-    file_path = item.get("file") or item.get("filePath") or item.get("path")
-    line_start = _to_int(item.get("line_start") or item.get("lineNumber") or item.get("line"))
-    line_end = _to_int(item.get("line_end") or item.get("lineEnd") or item.get("endLine"))
-    body = item.get("body") or item.get("issue") or item.get("comment")
-    severity = _normalize_severity(str(item.get("severity", "medium")))
-
-    if not isinstance(file_path, str) or not file_path.strip():
-        return None
-    if line_start is None:
-        return None
-    if not isinstance(body, str) or not body.strip():
-        return None
-
-    try:
-        return ReviewComment(
-            file=file_path.strip(),
-            line_start=line_start,
-            line_end=line_end,
-            body=body.strip(),
-            severity=severity,
-        )
-    except Exception:
-        return None
-
-
-def parse_review_output(raw_output: str) -> tuple[list[ReviewComment], bool]:
-    if not raw_output.strip():
-        return [], False
-
-    candidate = _extract_json_candidate(raw_output)
-    if not candidate:
-        return [], False
-
-    try:
-        raw = json.loads(candidate)
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse review output as JSON")
-        return [], False
-
-    raw_items: object
-    if isinstance(raw, list):
-        raw_items = raw
-    elif isinstance(raw, dict) and isinstance(raw.get("findings"), list):
-        raw_items = raw["findings"]
-    elif isinstance(raw, dict) and any(key in raw for key in ("file", "filePath", "path")):
-        raw_items = [raw]
-    else:
-        logger.warning(f"Expected JSON array or object with findings[], got {type(raw).__name__}")
-        return [], False
-
-    comments: list[ReviewComment] = []
-    for item in raw_items:
-        if not isinstance(item, dict):
-            continue
-        normalized = _normalize_comment(item)
-        if normalized is not None:
-            comments.append(normalized)
-        else:
-            logger.debug(f"Skipping malformed comment: {item}")
-
-    return comments, True
 
 
 def _line_distance(line: int, start: int, end: int | None) -> int:
@@ -144,91 +26,44 @@ def _line_distance(line: int, start: int, end: int | None) -> int:
     return line - effective_end
 
 
-def _severity_level(value: str) -> int:
-    return SEVERITY_LEVELS[_normalize_severity(value)]
-
-
 def _match_comments(
     expected_comments: list[ReviewComment],
     generated_comments: list[ReviewComment],
     line_tolerance: int,
-) -> list[tuple[int, int]]:
-    matched: list[tuple[int, int]] = []
+) -> list[tuple[ReviewComment, ReviewComment]]:
+    """Greedily pair each expected comment with the nearest unused generated comment in the same file."""
+    matched: list[tuple[ReviewComment, ReviewComment]] = []
     used_generated: set[int] = set()
 
-    for expected_index, expected in enumerate(expected_comments):
+    for expected in expected_comments:
         expected_file = _normalize_path(expected.file)
-        best_generated_index: int | None = None
+        best_index: int | None = None
         best_distance: int | None = None
 
-        for generated_index, generated in enumerate(generated_comments):
-            if generated_index in used_generated:
-                continue
-            if _normalize_path(generated.file) != expected_file:
+        for index, generated in enumerate(generated_comments):
+            if index in used_generated or _normalize_path(generated.file) != expected_file:
                 continue
 
-            distance = _line_distance(generated.line_start, expected.line_start, expected.line_end)
+            distance: int = _line_distance(generated.line_start, expected.line_start, expected.line_end)
             if distance > line_tolerance:
                 continue
 
             if best_distance is None or distance < best_distance:
                 best_distance = distance
-                best_generated_index = generated_index
+                best_index = index
 
-        if best_generated_index is not None:
-            used_generated.add(best_generated_index)
-            matched.append((expected_index, best_generated_index))
+        if best_index is not None:
+            used_generated.add(best_index)
+            matched.append((expected, generated_comments[best_index]))
 
     return matched
 
 
-def _compute_f1(precision: float, recall: float) -> float:
-    if precision + recall == 0:
-        return 0.0
-    return 2 * precision * recall / (precision + recall)
-
-
-def _compute_severity_mae(
-    matched_pairs: list[tuple[int, int]],
-    expected_comments: list[ReviewComment],
-    generated_comments: list[ReviewComment],
-) -> float:
+def _severity_mae(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
     if not matched_pairs:
         return 0.0
-
-    total_error = 0.0
-    for expected_index, generated_index in matched_pairs:
-        expected_level = _severity_level(expected_comments[expected_index].severity)
-        generated_level = _severity_level(generated_comments[generated_index].severity)
-        total_error += abs(expected_level - generated_level)
-
+    total_error: int = sum(abs(expected.severity.level - generated.severity.level) for expected, generated in matched_pairs)
     return total_error / len(matched_pairs)
-
-
-def compute_comment_metrics(
-    expected_comments: list[ReviewComment],
-    generated_comments: list[ReviewComment],
-    line_tolerance: int,
-) -> dict[str, int | float]:
-    matches = _match_comments(expected_comments, generated_comments, line_tolerance)
-    matched_count = len(matches)
-    incorrect_count = max(0, len(generated_comments) - matched_count)
-    missed_count = max(0, len(expected_comments) - matched_count)
-
-    precision = matched_count / len(generated_comments) if generated_comments else 1.0
-    recall = matched_count / len(expected_comments) if expected_comments else 1.0
-    f1 = _compute_f1(precision, recall)
-    severity_mae = _compute_severity_mae(matches, expected_comments, generated_comments)
-
-    return {
-        "matched_comment_count": matched_count,
-        "incorrect_comment_count": incorrect_count,
-        "missed_comment_count": missed_count,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "severity_mae": severity_mae,
-    }
 
 
 class CodeReviewResult(BaseEvaluationResult):
@@ -236,49 +71,61 @@ class CodeReviewResult(BaseEvaluationResult):
 
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
-    line_tolerance: int = 5
-
+    line_tolerance: int = Field(ge=0)
     valid_review_output: bool = False
-    matched_comment_count: int = 0
-    missed_comment_count: int = 0
-    incorrect_comment_count: int = 0
 
-    precision: float = 1.0
-    recall: float = 1.0
-    f1: float = 1.0
+    matched_comment_count: int = Field(default=0, ge=0)
+    missed_comment_count: int = Field(default=0, ge=0)
+    incorrect_comment_count: int = Field(default=0, ge=0)
+
+    precision: float = Field(default=0.0, ge=0.0, le=1.0)
+    recall: float = Field(default=0.0, ge=0.0, le=1.0)
+    f1: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
 
     @classmethod
-    def create_success(
+    def create(
         cls,
         context: "EvaluationContext",
         output: str,
-        expected_comments: list[ReviewComment] | None = None,
-        line_tolerance: int = 5,
-        generated_comments: list[ReviewComment] | None = None,
-        valid_review_output: bool = False,
-        matched_comment_count: int = 0,
-        incorrect_comment_count: int = 0,
-        missed_comment_count: int = 0,
-        precision: float = 1.0,
-        recall: float = 1.0,
-        f1: float = 1.0,
-        severity_mae: float = 0.0,
+        expected_comments: list[ReviewComment],
+        generated_comments: list[ReviewComment],
+        line_tolerance: int,
     ) -> Self:
+        matches = _match_comments(expected_comments, generated_comments, line_tolerance)
+        matched_count = len(matches)
+        precision, recall = precision_recall(matched_count, len(generated_comments), len(expected_comments))
+
         return cls(
             **cls._base_fields(context),
             output=output,
-            expected_comments=expected_comments or [],
+            expected_comments=expected_comments,
+            generated_comments=generated_comments,
             line_tolerance=line_tolerance,
-            generated_comments=generated_comments or [],
-            valid_review_output=valid_review_output,
-            matched_comment_count=matched_comment_count,
-            incorrect_comment_count=incorrect_comment_count,
-            missed_comment_count=missed_comment_count,
+            valid_review_output=True,
+            matched_comment_count=matched_count,
+            incorrect_comment_count=max(0, len(generated_comments) - matched_count),
+            missed_comment_count=max(0, len(expected_comments) - matched_count),
             precision=precision,
             recall=recall,
-            f1=f1,
-            severity_mae=severity_mae,
+            f1=f1_score(precision, recall),
+            severity_mae=_severity_mae(matches),
+        )
+
+    @classmethod
+    def create_invalid(
+        cls,
+        context: "EvaluationContext",
+        output: str,
+        expected_comments: list[ReviewComment],
+    ) -> Self:
+        """Result for output that could not be parsed into a review — scored zero."""
+        return cls(
+            **cls._base_fields(context),
+            output=output,
+            expected_comments=expected_comments,
+            line_tolerance=0,
+            valid_review_output=False,
         )
 
     @property
@@ -306,3 +153,76 @@ class CodeReviewResult(BaseEvaluationResult):
             "Recall": f"{self.recall:.2f}",
             "F1": f"{self.f1:.2f}",
         }
+
+
+class CodeReviewResultSummary(EvaluationResultSummary):
+    """
+    Summary for the code-review category.
+
+    Precision, recall, and F1 are calculated by aggregating matched/expected/generated comment counts across all results.
+    """
+
+    generated_comment_count: int = Field(default=0, ge=0)
+    expected_comment_count: int = Field(default=0, ge=0)
+    matched_comment_count: int = Field(default=0, ge=0)
+    incorrect_comment_count: int = Field(default=0, ge=0)
+    missed_comment_count: int = Field(default=0, ge=0)
+
+    precision: float = Field(default=0.0, ge=0.0, le=1.0)
+    recall: float = Field(default=0.0, ge=0.0, le=1.0)
+    f1: float = Field(default=0.0, ge=0.0, le=1.0)
+    severity_mae: float = 0.0
+    valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    def display_summary(self) -> dict[str, int | float]:
+        return {
+            "generated_comment_count": self.generated_comment_count,
+            "expected_comment_count": self.expected_comment_count,
+            "matched_comment_count": self.matched_comment_count,
+            "incorrect_comment_count": self.incorrect_comment_count,
+            "missed_comment_count": self.missed_comment_count,
+            "precision": round(self.precision * 100, 1),
+            "recall": round(self.recall * 100, 1),
+            "f1": round(self.f1 * 100, 1),
+            "severity_mae": round(self.severity_mae, 3),
+            "valid_review_output_rate": round(self.valid_review_output_rate * 100, 1),
+        }
+
+    @classmethod
+    def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":
+        summary = super().from_results(results, run_id)
+        assert isinstance(summary, CodeReviewResultSummary)
+
+        code_review_results: list[CodeReviewResult] = [r for r in results if isinstance(r, CodeReviewResult)]
+        total_results: int = len(code_review_results)
+
+        generated_total: int = sum(len(r.generated_comments) for r in code_review_results)
+        expected_total: int = sum(len(r.expected_comments) for r in code_review_results)
+        matched_total: int = sum(r.matched_comment_count for r in code_review_results)
+        incorrect_total: int = sum(r.incorrect_comment_count for r in code_review_results)
+        missed_total: int = sum(r.missed_comment_count for r in code_review_results)
+
+        precision, recall = precision_recall(matched_total, generated_total, expected_total)
+        f1: float = f1_score(precision, recall)
+
+        weighted_mae_numerator: float = sum(r.severity_mae * r.matched_comment_count for r in code_review_results)
+        weighted_mae_denominator: int = sum(r.matched_comment_count for r in code_review_results)
+        severity_mae: float = weighted_mae_numerator / weighted_mae_denominator if weighted_mae_denominator > 0 else 0.0
+
+        valid_output_count: int = sum(1 for r in code_review_results if r.valid_review_output)
+        valid_output_rate: float = valid_output_count / total_results
+
+        return summary.model_copy(
+            update={
+                "generated_comment_count": generated_total,
+                "expected_comment_count": expected_total,
+                "matched_comment_count": matched_total,
+                "incorrect_comment_count": incorrect_total,
+                "missed_comment_count": missed_total,
+                "precision": round(precision, 3),
+                "recall": round(recall, 3),
+                "f1": round(f1, 3),
+                "severity_mae": round(severity_mae, 3),
+                "valid_review_output_rate": round(valid_output_rate, 3),
+            }
+        )

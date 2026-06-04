@@ -12,6 +12,14 @@ logger = get_logger(__name__)
 console = Console()
 
 
+def _status_style(status_label: str) -> tuple[str, str]:
+    if status_label in ("Timeout", "Error", "Failed"):
+        return "red", ":x:"
+    if status_label == "Unscored":
+        return "yellow", ":grey_question:"
+    return "green", ":white_check_mark:"
+
+
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
     display_metrics: dict[str, int | float | bool] = summary.display_summary()
@@ -48,8 +56,8 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     table.add_column("Custom Agent", style="yellow")
 
     for result in results:
-        has_error = result.error_message is not None or result.timeout
-        status = f"[red]{result.status_label}[/red]" if has_error else f"[green]{result.status_label}[/green]"
+        color, _ = _status_style(result.status_label)
+        status = f"[{color}]{result.status_label}[/{color}]"
         mcp_servers = ", ".join(result.experiment.mcp_servers) if result.experiment and result.experiment.mcp_servers else "N/A"
         custom_instructions = "Yes" if result.experiment and result.experiment.custom_instructions else "No"
         skills = "Yes" if result.experiment and result.experiment.skills_enabled else "No"
@@ -66,6 +74,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     display_metrics: dict[str, int | float | bool] = summary.display_summary()
 
     mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
+    al_lsp_enabled = "Yes" if results[0].experiment and results[0].experiment.al_lsp_enabled else "No"
     custom_instructions = "Yes" if results[0].experiment and results[0].experiment.custom_instructions else "No"
     skills = "Yes" if results[0].experiment and results[0].experiment.skills_enabled else "No"
     custom_agent = results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else "N/A"
@@ -86,6 +95,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
 - Category: `{results[0].category.value}`
 - MCP Servers used: {mcp_servers}
+- AL LSP: {al_lsp_enabled}
 - Custom Instructions: {custom_instructions}
 - Skills: {skills}
 - Custom Agent: {custom_agent}
@@ -112,8 +122,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
         markdown_summary += "|-------------|---------|--------|\n"
 
     for result in results:
-        has_error = result.error_message is not None or result.timeout
-        status_icon = ":x:" if has_error else ":white_check_mark:"
+        _, status_icon = _status_style(result.status_label)
         status_text = f"{status_icon} {result.status_label}"
         extra_values = " | ".join(result.display_row.values())
         if extra_columns:

@@ -6,10 +6,9 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.cli_options import EvaluationCategoryOption
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.exceptions import ConfigurationError
+from bcbench.github_actions import write_step_outputs
 from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
@@ -60,7 +59,7 @@ def list_entries(
         print(f"  - {entry_id}")
 
     if github_output:
-        _write_github_output(github_output, json.dumps(entry_ids))
+        write_step_outputs({github_output: json.dumps(entry_ids)})
 
 
 @dataset_app.command("view")
@@ -167,12 +166,3 @@ def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
             instance_ids.append(entry_data["instance_id"])
 
     return instance_ids
-
-
-def _write_github_output(key: str, value: str) -> None:
-    """Write a value to GitHub Actions output."""
-    config = get_config()
-    if not config.env.github_output:
-        raise ConfigurationError("GITHUB_OUTPUT environment variable not set. This feature is only available when running in GitHub Actions.")
-    with open(config.env.github_output, "a", encoding="utf-8") as f:
-        f.write(f"{key}={value}\n")

@@ -52,6 +52,7 @@ class BaseEvaluationResult(BaseModel):
 
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
+        output_dir.mkdir(parents=True, exist_ok=True)
         with open(output_file, "a", encoding="utf-8") as f:
             result_dict = self.model_dump(mode="json")
             # Per-instance JSONL result files are uploaded as workflow artifacts and are the only inputs required by the summarize-results workflow.
@@ -115,3 +116,27 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     @property
     def category_metrics(self) -> dict[str, int | float | bool]:
         return {"resolved": self.resolved, "build": self.build}
+
+
+class JudgeBasedEvaluationResult(BaseEvaluationResult):
+    """Result for categories scored by LLM-as-judge (e.g. lm_checklist).
+
+    The local pipeline only persists the agent's raw output; actual scoring is performed downstream by bceval
+    and lives in the external scoring backend (e.g. Kusto) not in these local artifacts.
+    """
+
+    @classmethod
+    def create_raw(cls, context: "EvaluationContext", output: str) -> Self:
+        return cls(**cls._base_fields(context), output=output)
+
+    @classmethod
+    def create_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+        return cls(**cls._base_fields(context), output=output, error_message=error_message)
+
+    @property
+    def status_label(self) -> str:
+        if self.timeout:
+            return "Timeout"
+        if self.error_message:
+            return "Error"
+        return "Unscored"

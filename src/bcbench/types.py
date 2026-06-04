@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -13,9 +13,38 @@ if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
+    from bcbench.results.leaderboard import LeaderboardAggregate
     from bcbench.results.summary import EvaluationResultSummary
 
-__all__ = ["AgentMetrics", "AgentType", "ContainerConfig", "EvaluationCategory", "EvaluationContext", "ExperimentConfiguration"]
+__all__ = [
+    "AgentMetrics",
+    "AgentType",
+    "Checklist",
+    "ChecklistAssertion",
+    "ChecklistLevel",
+    "ContainerConfig",
+    "EvaluationCategory",
+    "EvaluationContext",
+    "ExpectedOutput",
+    "ExperimentConfiguration",
+]
+
+
+type ChecklistLevel = Literal["critical", "expected", "aspirational"]
+
+
+class ChecklistAssertion(TypedDict):
+    text: str
+    level: ChecklistLevel
+
+
+class Checklist(TypedDict):
+    assertions: list[ChecklistAssertion]
+
+
+# Patch-style string for execution-based categories (bug-fix, test-generation),
+# or an lm_checklist payload for scorer-driven categories.
+type ExpectedOutput = str | Checklist
 
 
 class AgentMetrics(BaseModel):
@@ -52,6 +81,9 @@ class ExperimentConfiguration(BaseModel):
     # MCP server names used in experiment (if any)
     mcp_servers: list[str] | None = None
 
+    # Whether the AL LSP server was enabled for this experiment
+    al_lsp_enabled: bool = False
+
     # Custom instructions enabled in experiment
     custom_instructions: bool = False
 
@@ -67,7 +99,7 @@ class ExperimentConfiguration(BaseModel):
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
+        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
 
 
 class AgentType(StrEnum):
@@ -147,7 +179,8 @@ class EvaluationCategory(StrEnum):
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.summary import CodeReviewResultSummary, ExecutionBasedEvaluationResultSummary
+        from bcbench.results.codereview import CodeReviewResultSummary
+        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -156,6 +189,21 @@ class EvaluationCategory(StrEnum):
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewResultSummary
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def aggregate_class(self) -> type[LeaderboardAggregate]:
+        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.CODE_REVIEW:
+                return CodeReviewLeaderboardAggregate
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -170,6 +218,59 @@ class EvaluationCategory(StrEnum):
                 return TestGenerationPipeline()
             case EvaluationCategory.CODE_REVIEW:
                 return CodeReviewPipeline()
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def evaluators(self) -> list[str]:
+        """
+        Names of bc-eval evaluators (from evaluator/scores.py) to run for this category.
+
+        Used for uploading evaluation results to long term storage.
+        """
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ["resolution_rate", "build_rate"]
+            case EvaluationCategory.TEST_GENERATION:
+                return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
+            case EvaluationCategory.CODE_REVIEW:
+                return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def core_score(self) -> str:
+        """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "ResolutionRate"
+            case EvaluationCategory.CODE_REVIEW:
+                return "F1Score"
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def requires_container(self) -> bool:
+        """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return True
+            case EvaluationCategory.CODE_REVIEW:
+                return False
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def runner(self) -> str:
+        """GitHub Actions runner label for evaluating this category.
+
+        Only categories that require building BaseApp needs self-hosted runners.
+        """
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "GitHub-BCBench"
+            case EvaluationCategory.CODE_REVIEW:
+                return "ubuntu-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

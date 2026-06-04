@@ -1,14 +1,16 @@
-from collections.abc import Callable
-from pathlib import Path
 import re
 import subprocess
+from collections.abc import Callable
+from pathlib import Path
 
-from bcbench.dataset.codereview import CodeReviewEntry
+from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.exceptions import PatchApplicationError
-from bcbench.logger import get_logger, github_log_group
+from bcbench.github_actions import github_log_group
+from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult, compute_comment_metrics, parse_review_output
+from bcbench.results.codereview import CodeReviewResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -64,6 +66,10 @@ def _materialize_full_file_patch(repo_path: Path, patch: str) -> list[str]:
     return materialized_paths
 
 
+def _patched_paths(patch: str) -> list[str]:
+    return [line[6:].strip() for line in patch.splitlines() if line.startswith("+++ b/")]
+
+
 class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     """Pipeline for code-review evaluation category.
 
@@ -86,6 +92,15 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 # Mark untracked files as intent-to-add so `git diff HEAD` includes them.
                 subprocess.run(["git", "add", "-N", "--", *materialized_paths], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
                 logger.info(f"Materialized {len(materialized_paths)} file(s) from simplified review patch for {entry.instance_id}")
+
+            if paths := _patched_paths(entry.patch):
+                subprocess.run(
+                    ["git", "add", "-N", "--", *paths],
+                    cwd=repo_path,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    check=True,
+                )
         else:
             logger.warning(f"Entry {entry.instance_id} has empty patch; review will run on clean workspace")
 
@@ -99,34 +114,24 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     def evaluate(self, context: EvaluationContext[CodeReviewEntry]) -> None:
         review_output_file: Path = context.repo_path / REVIEW_OUTPUT_FILE
 
-        if review_output_file.exists():
-            output = review_output_file.read_text(encoding="utf-8")
-        else:
+        if not review_output_file.exists():
             logger.error(f"No review generated for {context.entry.instance_id}")
             raise RuntimeError(f"No review generated for {context.entry.instance_id}")
+        output: str = review_output_file.read_text(encoding="utf-8")
 
-        generated_comments, valid_review_output = parse_review_output(output)
-        computed_metrics = compute_comment_metrics(
-            context.entry.expected_comments,
-            generated_comments,
-            context.entry.match_line_tolerance,
-        )
+        generated_comments: list[ReviewComment] | None = parse_review_output(output)
 
-        result = CodeReviewResult.create_success(
-            context,
-            output=output,
-            expected_comments=context.entry.expected_comments,
-            line_tolerance=context.entry.match_line_tolerance,
-            generated_comments=generated_comments,
-            valid_review_output=valid_review_output,
-            matched_comment_count=int(computed_metrics["matched_comment_count"]),
-            incorrect_comment_count=int(computed_metrics["incorrect_comment_count"]),
-            missed_comment_count=int(computed_metrics["missed_comment_count"]),
-            precision=float(computed_metrics["precision"]),
-            recall=float(computed_metrics["recall"]),
-            f1=float(computed_metrics["f1"]),
-            severity_mae=float(computed_metrics["severity_mae"]),
-        )
+        if generated_comments is None:
+            logger.warning(f"Invalid review output for {context.entry.instance_id}")
+            result = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
+        else:
+            result = CodeReviewResult.create(
+                context,
+                output=output,
+                expected_comments=context.entry.expected_comments,
+                generated_comments=generated_comments,
+                line_tolerance=context.entry.match_line_tolerance,
+            )
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
         logger.info(
             f"Code review metrics: matched={result.matched_comment_count}, "

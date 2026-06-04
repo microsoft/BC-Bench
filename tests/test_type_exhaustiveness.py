@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry
-from bcbench.dataset.codereview import ReviewComment
+from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentType, EvaluationCategory
 
 
@@ -32,6 +32,14 @@ def test_all_categories_have_entry_classes():
         assert entry_cls is not None
 
 
+def test_all_categories_have_aggregate_classes():
+    from bcbench.results.leaderboard import LeaderboardAggregate
+
+    for category in EvaluationCategory:
+        aggregate_cls = category.aggregate_class
+        assert issubclass(aggregate_cls, LeaderboardAggregate)
+
+
 def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry):
     for category in EvaluationCategory:
         entry_cls = category.entry_class
@@ -44,7 +52,7 @@ def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with
                 created_at=sample_dataset_entry_with_problem_statement.created_at,
                 environment_setup_version=sample_dataset_entry_with_problem_statement.environment_setup_version,
                 patch=sample_dataset_entry_with_problem_statement.patch,
-                expected_comments=[ReviewComment(file="test.al", line_start=1, body="Test comment")],
+                expected_comments=[ReviewComment(file="test.al", line_start=1, body="Test comment", severity=Severity.MEDIUM)],
             )
         else:
             # Reconstruct entry as the category-specific type so get_expected_output() works
@@ -52,5 +60,24 @@ def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with
         input_text = entry.get_task()
         expected_output = entry.get_expected_output()
         assert isinstance(input_text, str)
-        assert isinstance(expected_output, str)
-        assert len(expected_output) > 0
+        # ExpectedOutput is `str | Checklist`: string for execution-based categories,
+        # `{"assertions": [...]}` for lm_checklist-driven ones.
+        if isinstance(expected_output, dict):
+            assert "assertions" in expected_output
+        else:
+            assert isinstance(expected_output, str)
+            assert expected_output
+
+
+def test_all_categories_have_evaluators():
+    for category in EvaluationCategory:
+        evaluators = category.evaluators
+        assert isinstance(evaluators, list)
+        assert evaluators, f"{category} must declare at least one evaluator"
+        assert all(isinstance(e, str) and e for e in evaluators)
+
+
+def test_all_categories_have_core_score():
+    for category in EvaluationCategory:
+        assert isinstance(category.core_score, str)
+        assert category.core_score, f"{category} must declare a non-empty core_score"

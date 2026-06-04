@@ -1,3 +1,10 @@
+<#
+.SYNOPSIS
+    Sets up the BC container and clones the repository based on the provided dataset entry.
+.DESCRIPTION
+    This script is designed for categories that require a BC container environment or repository setup, should be skipped if not needed.
+#>
+
 using module .\DatasetEntry.psm1
 using module .\BCBenchUtils.psm1
 using module .\BCContainerManagement.psm1
@@ -9,8 +16,11 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$InstanceId,
 
+    [Parameter(Mandatory = $true)]
+    [string]$Category,
+
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath),
+    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category),
 
     [Parameter(Mandatory = $false)]
     [string]$Country = "w1",
@@ -19,7 +29,7 @@ param(
     [string]$ContainerName = $env:BC_CONTAINER_NAME ?? "bcbench",
 
     [Parameter(Mandatory = $false)]
-    [string]$Username = $env:BC_CONTAINER_USERNAME ?? "admin",
+    [string]$Username = $env:BC_SERVER_USERNAME ?? "admin",
 
     [Parameter(Mandatory = $false)]
     [SecureString]$Password,

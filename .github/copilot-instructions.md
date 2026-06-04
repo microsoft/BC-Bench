@@ -5,7 +5,7 @@ This is a benchmark for evaluating coding agents on real-world Business Central 
 - **Dataset**: Benchmark entries following SWE-Bench schema with BC-specific adjustments
 - **Python Package** (`src/bcbench/`): CLI tools, agent implementations, and validation utilities
 - **PowerShell Scripts** (`scripts/`): Environment setup and dataset verification using AL-GO/BCContainerHelper
-- **Tools** (`tools/`): Standalone scripts for downloading and analyzing GitHub Actions artifacts
+- **Tools** (`tools/`): Ad-hoc scripts for GitHub Artifacts download, etc
 - **Agent Evaluations**: Focuses on GitHub Copilot CLI and Claude Code
 - **Experiments**: MCP Servers, custom instructions, custom agents, skills, etc. and their performance on the benchmark
 - **Notebooks** (`notebooks/`): Analysis and visualization of benchmark results
@@ -30,6 +30,7 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 
 ### Readable code over documentation or comments
 Function names should be self-explanatory. Do NOT add docstrings to functions unless absolutely necessary.
+When a docstring is necessary, keep it short and use Google style. Include only useful sections such as `Args:` and `Returns:`; skip details that are obvious from names and type hints.
 
 Bad:
 ```python

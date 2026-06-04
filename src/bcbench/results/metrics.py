@@ -27,6 +27,23 @@ def bootstrap_ci(values: list[float] | np.ndarray, n_bootstrap: int = 10000, ci_
     }
 
 
+def precision_recall(matched_count: int, generated_count: int, expected_count: int) -> tuple[float, float]:
+    """Precision and recall for a set-matching task.
+
+    An empty generated or expected set yields perfect precision or recall respectively,
+    so a model that correctly produces no output is not penalized.
+    """
+    precision = matched_count / generated_count if generated_count else 1.0
+    recall = matched_count / expected_count if expected_count else 1.0
+    return precision, recall
+
+
+def f1_score(precision: float, recall: float) -> float:
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
 def pass_hat_k(num_trials: int, success_count: int, k: int) -> float:
     """Measures the probability that all k trials succeed
 

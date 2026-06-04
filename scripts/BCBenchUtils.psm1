@@ -15,13 +15,13 @@
 .PARAMETER Password
     Optional SecureString password parameter
 .PARAMETER EnvironmentVariableName
-    Name of environment variable containing password (default: BC_CONTAINER_PASSWORD)
+    Name of environment variable containing password (default: BC_SERVER_PASSWORD)
 .OUTPUTS
     PSCredential object
 .EXAMPLE
     $cred = Get-BCCredential -Username "admin" -Password $securePassword
 .EXAMPLE
-    $cred = Get-BCCredential -Username "admin" # Uses BC_CONTAINER_PASSWORD env var
+    $cred = Get-BCCredential -Username "admin" # Uses BC_SERVER_PASSWORD env var
 #>
 function Get-BCCredential {
     [CmdletBinding()]
@@ -34,7 +34,7 @@ function Get-BCCredential {
         [SecureString]$Password,
 
         [Parameter(Mandatory = $false)]
-        [string]$EnvironmentVariableName = "BC_CONTAINER_PASSWORD"
+        [string]$EnvironmentVariableName = "BC_SERVER_PASSWORD"
     )
 
     # Get environment password
@@ -474,13 +474,31 @@ function Get-RepoCloneInfo {
     }
 }
 
+<#
+.SYNOPSIS
+    Gets the default dataset path for a given category
+.DESCRIPTION
+    Get the dataset path based on the provided category, must be maintained when adding new categories.
+.PARAMETER Category
+    The category for which to get the dataset path
+.OUTPUTS
+    String representing the dataset path
+#>
 function Get-BCBenchDatasetPath {
     [CmdletBinding()]
     [OutputType([string])]
     param(
-        [Parameter(Mandatory = $false)]
-        [string]$DatasetName = "bcbench.jsonl"
+        [Parameter(Mandatory = $true)]
+        # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
+        [ValidateSet("bug-fix", "test-generation", "code-review")]
+        [string] $Category
     )
+
+    switch ($Category) {
+        "bug-fix" { $DatasetName = "bcbench.jsonl" }
+        "test-generation" { $DatasetName = "bcbench.jsonl" }
+        "code-review" { $DatasetName = "codereview.jsonl" }
+    }
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent
     return Join-Path $projectRoot "dataset" $DatasetName

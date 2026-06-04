@@ -8,15 +8,17 @@ meeting all Pydantic validation requirements.
 import json
 from collections.abc import Generator
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
 
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, TestEntry
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
+from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
-from bcbench.results.codereview import CodeReviewResult, compute_comment_metrics, parse_review_output
+from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext
 
@@ -74,21 +76,20 @@ def create_dataset_entry(
     )
 
 
-def create_evaluation_context(
+def create_evaluation_context[EntryT: BaseDatasetEntry](
     tmp_path: Path,
-    entry: BaseDatasetEntry | None = None,
+    entry: EntryT | None = None,
     agent_name: str = "test-agent",
     model: str = "test-model",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
     password: str = "test-password",
     username: str = "test-user",
-) -> EvaluationContext[BaseDatasetEntry]:
-    if entry is None:
-        entry = create_dataset_entry()
+) -> EvaluationContext[EntryT]:
+    resolved_entry = entry if entry is not None else cast(EntryT, create_dataset_entry())
 
-    return EvaluationContext[BaseDatasetEntry](
-        entry=entry,
+    return EvaluationContext[EntryT](
+        entry=resolved_entry,
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
         container=ContainerConfig(name=container_name, username=username, password=password),
@@ -166,8 +167,8 @@ def create_codereview_entry(
         project_paths = VALID_PROJECT_PATHS.copy()
     if expected_comments is None:
         expected_comments = [
-            ReviewComment(file="src/app.al", line_start=10, body="Fix this", severity="warning"),
-            ReviewComment(file="src/app.al", line_start=20, body="Consider that", severity="suggestion"),
+            ReviewComment(file="src/app.al", line_start=10, body="Fix this", severity=Severity.MEDIUM),
+            ReviewComment(file="src/app.al", line_start=20, body="Consider that", severity=Severity.LOW),
         ]
 
     return CodeReviewEntry(
@@ -184,7 +185,6 @@ def create_codereview_entry(
 
 def create_codereview_result(
     instance_id: str = VALID_INSTANCE_ID,
-    project: str = "Shopify",
     model: str = "gpt-4o",
     agent_name: str = "copilot-cli",
     output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
@@ -194,28 +194,27 @@ def create_codereview_result(
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
-    generated_comments, valid_review_output = parse_review_output(output)
-    computed_metrics = compute_comment_metrics(expected_comments, generated_comments, line_tolerance)
-
-    return CodeReviewResult(
-        instance_id=instance_id,
-        project=project,
-        model=model,
+    entry = create_codereview_entry(instance_id=instance_id, expected_comments=expected_comments)
+    context = EvaluationContext[CodeReviewEntry](
+        entry=entry,
+        repo_path=Path(),
+        result_dir=Path(),
+        container=ContainerConfig(name="t", username="t", password="t"),
         agent_name=agent_name,
+        model=model,
         category=EvaluationCategory.CODE_REVIEW,
+    )
+    context.metrics = metrics
+
+    generated_comments = parse_review_output(output)
+    if generated_comments is None:
+        return CodeReviewResult.create_invalid(context, output, expected_comments)
+    return CodeReviewResult.create(
+        context,
         output=output,
-        generated_comments=generated_comments,
         expected_comments=expected_comments,
+        generated_comments=generated_comments,
         line_tolerance=line_tolerance,
-        valid_review_output=valid_review_output,
-        matched_comment_count=int(computed_metrics["matched_comment_count"]),
-        incorrect_comment_count=int(computed_metrics["incorrect_comment_count"]),
-        missed_comment_count=int(computed_metrics["missed_comment_count"]),
-        precision=float(computed_metrics["precision"]),
-        recall=float(computed_metrics["recall"]),
-        f1=float(computed_metrics["f1"]),
-        severity_mae=float(computed_metrics["severity_mae"]),
-        metrics=metrics,
     )
 
 

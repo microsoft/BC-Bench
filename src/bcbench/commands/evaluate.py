@@ -22,8 +22,8 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult
-from bcbench.types import AgentMetrics, ContainerConfig, EvaluationContext, ExperimentConfiguration
+from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult
+from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -51,6 +51,7 @@ def evaluate_copilot(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
+    al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -84,6 +85,7 @@ def evaluate_copilot(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp if ctx.container else False,
+            al_lsp=al_lsp,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
@@ -104,6 +106,7 @@ def evaluate_claude_code(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_code_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
+    al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
 ) -> None:
     """
     Evaluate Claude Code on single dataset entry.
@@ -137,6 +140,7 @@ def evaluate_claude_code(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp if ctx.container else False,
+            al_lsp=al_lsp,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
@@ -222,8 +226,15 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
-        # Randomly choose success or build failure
-        scenario = random.choice(["success", "build-fail"])
+        match context.category:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                scenarios = ["success", "build-fail"]
+            case EvaluationCategory.CODE_REVIEW:
+                scenarios = ["invalid", "valid"]
+            case _:
+                raise ValueError(f"Unsupported category for mock evaluation: {context.category}")
+
+        scenario = random.choice(scenarios)
         logger.info(f"Mock pipeline: Selected scenario: {scenario}")
 
         result: BaseEvaluationResult
@@ -232,6 +243,10 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
             case "build-fail":
                 result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+            case "invalid":
+                result = CodeReviewResult.create_invalid(context, output="MOCK_REVIEW_OUTPUT", expected_comments=[])
+            case "valid":
+                result = CodeReviewResult.create(context, "MOCK_INVALID_REVIEW_OUTPUT", [], [], 0)
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

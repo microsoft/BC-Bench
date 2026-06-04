@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -60,8 +59,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     def display_summary(self) -> dict[str, int | float]:
         """Return category-specific metrics for console/GitHub summary display.
 
-        Subclasses must override. Keys become display labels (underscores replaced
-        with spaces and title-cased). Values are shown as-is.
+        Subclasses must override. Keys become display labels (underscores replaced with spaces and title-cased). Values are shown as-is.
         """
 
     @classmethod
@@ -75,11 +73,11 @@ class EvaluationResultSummary(BaseModel, ABC):
             summary_cls = results[0].category.summary_class
             return summary_cls.from_results(results, run_id)
 
-        durations = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
-        prompt_tokens = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
-        completion_tokens = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
-        llm_durations = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
-        tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
+        durations: list[float] = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
+        prompt_tokens: list[int] = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
+        completion_tokens: list[int] = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
+        llm_durations: list[float] = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
+        tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
 
         first_result = results[0]
         experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
@@ -119,6 +117,13 @@ class EvaluationResultSummary(BaseModel, ABC):
             f.write(json.dumps(self.to_dict(), indent=4))
 
         logger.info(f"Saved evaluation summary to {output_file}")
+
+    def combination_key(self) -> tuple[str, str, str | None, str]:
+        """Key for identifying runs of the same agent+model+experiment+benchmark_version combination."""
+        experiment_key: str | None = None
+        if self.experiment and not self.experiment.is_empty():
+            experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
+        return (self.agent_name, self.model, experiment_key, self.benchmark_version)
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
@@ -165,196 +170,20 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
         )
 
 
-class CodeReviewResultSummary(EvaluationResultSummary):
-    """Summary for the code-review category."""
+class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
+    """Summary for judge-scored categories.
 
-    generated_comment_count: int = 0
-    expected_comment_count: int = 0
-    matched_comment_count: int = 0
-    incorrect_comment_count: int = 0
-    missed_comment_count: int = 0
-
-    precision: float = 0.0
-    recall: float = 0.0
-    f1: float = 0.0
-    severity_mae: float = 0.0
-    valid_review_output_rate: float = 0.0
-
-    def display_summary(self) -> dict[str, int | float]:
-        return {
-            "generated_comment_count": self.generated_comment_count,
-            "expected_comment_count": self.expected_comment_count,
-            "matched_comment_count": self.matched_comment_count,
-            "incorrect_comment_count": self.incorrect_comment_count,
-            "missed_comment_count": self.missed_comment_count,
-            "precision": round(self.precision * 100, 1),
-            "recall": round(self.recall * 100, 1),
-            "f1": round(self.f1 * 100, 1),
-            "severity_mae": round(self.severity_mae, 3),
-            "valid_review_output_rate": round(self.valid_review_output_rate * 100, 1),
-        }
-
-    @classmethod
-    def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":
-        from bcbench.results.codereview import CodeReviewResult
-
-        summary = super().from_results(results, run_id)
-        assert isinstance(summary, CodeReviewResultSummary)
-
-        code_review_results = [r for r in results if isinstance(r, CodeReviewResult)]
-        total_results = len(code_review_results)
-
-        generated_total = sum(r.category_metrics.get("generated_comment_count", 0) for r in code_review_results)
-        expected_total = sum(r.category_metrics.get("expected_comment_count", 0) for r in code_review_results)
-        matched_total = sum(r.category_metrics.get("matched_comment_count", 0) for r in code_review_results)
-        incorrect_total = sum(r.category_metrics.get("incorrect_comment_count", 0) for r in code_review_results)
-        missed_total = sum(r.category_metrics.get("missed_comment_count", 0) for r in code_review_results)
-
-        precision = matched_total / generated_total if generated_total > 0 else 1.0
-        recall = matched_total / expected_total if expected_total > 0 else 1.0
-        f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
-
-        weighted_mae_numerator = sum(r.severity_mae * r.matched_comment_count for r in code_review_results)
-        weighted_mae_denominator = sum(r.matched_comment_count for r in code_review_results)
-        severity_mae = weighted_mae_numerator / weighted_mae_denominator if weighted_mae_denominator > 0 else 0.0
-
-        valid_output_count = sum(1 for r in code_review_results if r.valid_review_output)
-        valid_output_rate = valid_output_count / total_results if total_results > 0 else 0.0
-
-        return summary.model_copy(
-            update={
-                "generated_comment_count": generated_total,
-                "expected_comment_count": expected_total,
-                "matched_comment_count": matched_total,
-                "incorrect_comment_count": incorrect_total,
-                "missed_comment_count": missed_total,
-                "precision": round(precision, 3),
-                "recall": round(recall, 3),
-                "f1": round(f1, 3),
-                "severity_mae": round(severity_mae, 3),
-                "valid_review_output_rate": round(valid_output_rate, 3),
-            }
-        )
-
-
-# ---------------------------------------------------------------------------
-# Leaderboard aggregation (execution-based categories only)
-# ---------------------------------------------------------------------------
-
-
-class LeaderboardAggregate(BaseModel):
-    """Aggregate metrics across multiple runs. Execution-based categories only for now."""
-
-    model: str
-    agent_name: str
-    category: EvaluationCategory
-    experiment: ExperimentConfiguration | None = None
-
-    total: int
-    num_runs: int
-
-    average: float | None = None
-    ci_low: float | None = None
-    ci_high: float | None = None
-    pass_hat_5: float | None = None
-
-    average_duration: float | None = None
-
-    benchmark_version: str
-
-    @classmethod
-    def from_runs(cls, runs: Sequence[ExecutionBasedEvaluationResultSummary]) -> "LeaderboardAggregate":
-        if not runs:
-            raise ValueError("Cannot create aggregate from empty runs list")
-
-        first_run = runs[0]
-        total = first_run.total
-        num_runs = len(runs)
-        benchmark_version = first_run.benchmark_version
-
-        unique_totals = {r.total for r in runs}
-        if len(unique_totals) > 1:
-            logger.warning(f"Aggregating runs with different instance counts for '{first_run.agent_name}' + '{first_run.model}': {sorted(unique_totals)}. pass^k metrics may be misleading.")
-
-        # Average duration across runs
-        durations = [r.average_duration for r in runs if r.average_duration]
-        average_duration = sum(durations) / len(durations) if durations else None
-
-        # Collect per-instance results across runs for pass^5
-        instance_resolved: dict[str, list[bool]] = {}
-        for run in runs:
-            for instance_id, outcome in run.instance_results.items():
-                if instance_id not in instance_resolved:
-                    instance_resolved[instance_id] = []
-                instance_resolved[instance_id].append(bool(outcome))
-
-        # Per-run scores for average and CI
-        per_run_rates = [run.resolved / run.total for run in runs if run.total > 0]
-        avg = round(sum(per_run_rates) / len(per_run_rates), 3) if per_run_rates else None
-        ci_result = bootstrap_ci(per_run_rates)
-        ci_low = round(ci_result["ci_low"], 3) if ci_result["ci_low"] is not None else None
-        ci_high = round(ci_result["ci_high"], 3) if ci_result["ci_high"] is not None else None
-
-        pass_hat_5_val = _calculate_pass_hat_k(instance_resolved, 5, num_runs) if num_runs >= 5 else None
-
-        return cls(
-            model=first_run.model,
-            agent_name=first_run.agent_name,
-            category=first_run.category,
-            experiment=first_run.experiment,
-            total=total,
-            num_runs=num_runs,
-            average=avg,
-            ci_low=ci_low,
-            ci_high=ci_high,
-            pass_hat_5=pass_hat_5_val,
-            average_duration=round(average_duration, 1) if average_duration else None,
-            benchmark_version=benchmark_version,
-        )
-
-
-class Leaderboard(BaseModel):
-    """Leaderboard for execution-based categories only.
-
-    Non-execution-based categories (e.g. code-review) will need a different
-    leaderboard model once they are introduced.
+    Scoring is performed externally (bceval -> Braintrust/Kusto) and not reflected here;
+    this summary only carries the agent-execution aggregates from the base class.
     """
 
-    runs: list[ExecutionBasedEvaluationResultSummary]
-    aggregate: list[LeaderboardAggregate]
-
-    @classmethod
-    def load(cls, path: Path) -> "Leaderboard":
-        if not path.exists():
-            return cls(runs=[], aggregate=[])
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-            if not data or not isinstance(data, dict):
-                return cls(runs=[], aggregate=[])
-            return cls.model_validate(data)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "runs": [r.to_dict() for r in self.runs],
-            "aggregate": [a.model_dump(mode="json") for a in self.aggregate],
-        }
+    def display_summary(self) -> dict[str, int | float]:
+        return {}
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int, num_trials: int) -> float:
-    if num_trials < k:
-        return 0.0
-
-    total_pass_hat_k: float = 0.0
-    for results in instance_resolved.values():
-        success_count = sum(results[:num_trials])
-        total_pass_hat_k += pass_hat_k(num_trials, success_count, k)
-
-    return round(total_pass_hat_k / len(instance_resolved), 3)
 
 
 def calculate_average_tool_usage(tool_usages: list[dict[str, int]]) -> dict[str, float]:
