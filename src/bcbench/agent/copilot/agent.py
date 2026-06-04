@@ -8,7 +8,13 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks
+from bcbench.agent.shared import (
+    build_al_lsp_plugin,
+    build_mcp_config,
+    build_prompt,
+    parse_skill_read_diagnostics_from_hooks,
+    parse_tool_usage_from_hooks,
+)
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -108,8 +114,17 @@ def run_copilot_agent(
         metrics = parse_metrics(stderr_lines, session_log_path=session_log_path)
 
         tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
+        skill_read_diagnostics: dict[str, bool] | None = None
+        if skills_enabled:
+            skill_read_diagnostics = parse_skill_read_diagnostics_from_hooks(tool_log_path, repo_path, AgentType.COPILOT)
+
+        if metrics and (tool_usage or skill_read_diagnostics):
+            metrics = metrics.model_copy(
+                update={
+                    "tool_usage": tool_usage,
+                    "skill_read_diagnostics": skill_read_diagnostics,
+                }
+            )
 
         return metrics, config
     except subprocess.TimeoutExpired:
