@@ -1,7 +1,11 @@
 import json
 from pathlib import Path
 
-from bcbench.agent.shared.hooks_parser import parse_skill_read_diagnostics_from_hooks, parse_tool_usage_from_hooks
+from bcbench.agent.shared.hooks_parser import (
+    parse_skill_read_diagnostics_from_hooks,
+    parse_skill_read_diagnostics_from_session_log,
+    parse_tool_usage_from_hooks,
+)
 from bcbench.types import AgentType
 
 
@@ -115,6 +119,38 @@ class TestParseSkillReadDiagnosticsFromHooks:
 
         assert result is not None
         assert result["skill_file_read"] is True
+
+
+class TestParseSkillReadDiagnosticsFromSessionLog:
+    def test_returns_none_for_missing_file(self, tmp_path: Path):
+        result = parse_skill_read_diagnostics_from_session_log(tmp_path / "missing.log", tmp_path / "repo", AgentType.COPILOT)
+
+        assert result is None
+
+    def test_detects_skill_and_domain_instruction_reads(self, tmp_path: Path):
+        repo_path = tmp_path / "repo"
+        log_file = tmp_path / "process.log"
+
+        log_file.write_text(
+            "\n".join(
+                [
+                    f"2026-01-01T00:00:00.000Z [DEBUG] view: {repo_path}\\.github\\skills\\al-code-review\\SKILL.md",
+                    f"2026-01-01T00:00:01.000Z [DEBUG] view: {repo_path}\\.github\\instructions\\security.md",
+                    f"2026-01-01T00:00:02.000Z [DEBUG] view: {repo_path}\\.github\\instructions\\style.md",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = parse_skill_read_diagnostics_from_session_log(log_file, repo_path, AgentType.COPILOT)
+
+        assert result is not None
+        assert result["skill_file_read"] is True
+        assert result["instruction_security_read"] is True
+        assert result["instruction_style_read"] is True
+        assert result["instruction_performance_read"] is False
+        assert result["any_domain_instruction_read"] is True
+        assert result["all_domain_instructions_read"] is False
         assert result["instruction_security_read"] is True
         assert result["any_domain_instruction_read"] is True
         assert result["all_domain_instructions_read"] is False

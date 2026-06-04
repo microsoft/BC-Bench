@@ -1,5 +1,6 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import json
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from bcbench.agent.shared import (
     build_mcp_config,
     build_prompt,
     parse_skill_read_diagnostics_from_hooks,
+    parse_skill_read_diagnostics_from_session_log,
     parse_tool_usage_from_hooks,
 )
 from bcbench.config import get_config
@@ -94,17 +96,21 @@ def run_copilot_agent(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
+            stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.agent_execution,
             check=True,
         )
+
+        stdout = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+        stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+        cli_output_log = output_dir / f"{entry.instance_id}.copilot-cli.log"
 
         if result.stderr:
             sys.stdout.buffer.write(result.stderr)
             sys.stdout.buffer.flush()
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
-        stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
         stderr_lines = stderr.splitlines()
 
         # Find the most recent session log for turn count parsing
@@ -115,8 +121,31 @@ def run_copilot_agent(
 
         tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
         skill_read_diagnostics: dict[str, bool] | None = None
+        skill_read_diagnostics_source = "none"
         if skills_enabled:
             skill_read_diagnostics = parse_skill_read_diagnostics_from_hooks(tool_log_path, repo_path, AgentType.COPILOT)
+            if skill_read_diagnostics is not None:
+                skill_read_diagnostics_source = "hooks"
+            if skill_read_diagnostics is None and session_log_path is not None:
+                skill_read_diagnostics = parse_skill_read_diagnostics_from_session_log(
+                    session_log_path, repo_path, AgentType.COPILOT
+                )
+                if skill_read_diagnostics is not None:
+                    skill_read_diagnostics_source = "session_log"
+            if skill_read_diagnostics is None:
+                logger.warning("skills_enabled=true but no skill read diagnostics were captured")
+
+        diagnostics_payload = {
+            "skills_enabled": skills_enabled,
+            "skill_read_diagnostics_source": skill_read_diagnostics_source,
+            "skill_read_diagnostics": skill_read_diagnostics,
+            "tool_usage": tool_usage,
+        }
+        cli_output_log.write_text(
+            f"[stdout]\n{stdout}\n\n[stderr]\n{stderr}\n\n[diagnostics]\n{json.dumps(diagnostics_payload, indent=2)}\n",
+            encoding="utf-8",
+        )
+        logger.info(f"Saved Copilot CLI output + diagnostics to: {cli_output_log}")
 
         if metrics and (tool_usage or skill_read_diagnostics):
             metrics = metrics.model_copy(

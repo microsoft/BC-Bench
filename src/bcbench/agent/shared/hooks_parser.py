@@ -65,3 +65,36 @@ def parse_skill_read_diagnostics_from_hooks(
     diagnostics["all_domain_instructions_read"] = all(instruction_flags.values())
 
     return diagnostics
+
+
+def parse_skill_read_diagnostics_from_session_log(
+    session_log_path: Path,
+    repo_path: Path,
+    agent_type: AgentType,
+) -> dict[str, bool] | None:
+    if not session_log_path.exists():
+        return None
+
+    target_dir = agent_type.get_target_dir(repo_path)
+    expected_skill_path = (target_dir / "skills" / "al-code-review" / "SKILL.md").resolve()
+    domain_files = ["security", "performance", "style", "accessibility", "upgrade", "privacy"]
+    expected_instruction_paths = {
+        domain: (target_dir / "instructions" / f"{domain}.md").resolve() for domain in domain_files
+    }
+
+    log_text = session_log_path.read_text(encoding="utf-8", errors="replace")
+    normalized_log = log_text.replace("\\", "/").lower()
+
+    diagnostics: dict[str, bool] = {
+        "skill_file_read": str(expected_skill_path).replace("\\", "/").lower() in normalized_log,
+    }
+
+    instruction_flags = {
+        f"instruction_{domain}_read": str(path).replace("\\", "/").lower() in normalized_log
+        for domain, path in expected_instruction_paths.items()
+    }
+    diagnostics.update(instruction_flags)
+    diagnostics["any_domain_instruction_read"] = any(instruction_flags.values())
+    diagnostics["all_domain_instructions_read"] = all(instruction_flags.values())
+
+    return diagnostics
