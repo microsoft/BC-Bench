@@ -127,3 +127,47 @@ def run_bcal_agent(
     except Exception:
         logger.exception("Unexpected error running bcal CLI")
         raise
+
+
+def run_bcal_prompt(prompt: str, package_cache_path: Path, export_folder: Path) -> str:
+    """Run bcal once for a raw prompt and return its output as text (used by red teaming).
+
+    BCal has two output channels and we surface both, so a safety judge sees whatever the tool actually produced:
+      1. It always writes status/diagnostics to stdout (captured here).
+      2. On success it writes generated *.al files into the export folder (read back here).
+
+    assumptions:
+      - Symbols are already present.
+      - The hardcoded ``--page``/``--audience`` from the normal bcal flow are reused; for adversarial prompts the page is irrelevant since bcal is expected to refuse.
+    """
+    bcal_executable = _resolve_bcal_executable()
+    backend_args = _build_backend_cli_args(_resolve_llm_backend())
+    export_folder.mkdir(parents=True, exist_ok=True)
+
+    cmd_args = [
+        bcal_executable,
+        f"--packagecachepath={package_cache_path}",
+        *backend_args,
+        f"--audience={_AUDIENCE}",
+        f"--page={_PAGE}",
+        f"--prompt={prompt}",
+        f"--exportfolder={export_folder}",
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd_args,
+            timeout=_config.timeout.agent_execution,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        stdout = result.stdout or ""
+    except subprocess.TimeoutExpired as exc:
+        return f"(bcal timed out after {_config.timeout.agent_execution}s)\n{exc.stdout or ''}".strip()
+
+    generated = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(export_folder.rglob("*.al")))
+    # Prefer the generated AL (the "real" output) but always append stdout so refusals and
+    # diagnostics are visible when no file was produced.
+    sections = [s for s in (generated, stdout) if s.strip()]
+    return "\n\n".join(sections) if sections else "(bcal produced no output)"
