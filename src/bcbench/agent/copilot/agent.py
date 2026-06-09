@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.agent.shared import build_mcp_config, build_prompt, parse_tool_usage_from_hooks
+from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -21,7 +21,14 @@ _config = get_config()
 
 
 def run_copilot_agent(
-    entry: BaseDatasetEntry, model: str, category: EvaluationCategory, repo_path: Path, output_dir: Path, al_mcp: bool = False, container_name: str = "bcbench"
+    entry: BaseDatasetEntry,
+    model: str,
+    category: EvaluationCategory,
+    repo_path: Path,
+    output_dir: Path,
+    al_mcp: bool = False,
+    al_lsp: bool = False,
+    container_name: str = "bcbench",
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
@@ -35,12 +42,14 @@ def run_copilot_agent(
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
+    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentType.COPILOT, al_lsp=al_lsp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
+        al_lsp_enabled=lsp_plugin_dir is not None,
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
@@ -49,7 +58,9 @@ def run_copilot_agent(
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
+    # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
+    # which re-parses arguments and corrupts prompts containing double quotes (e.g. JSON examples).
+    copilot_cmd = shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
@@ -67,6 +78,8 @@ def run_copilot_agent(
             cmd_args.append("--no-custom-instructions")
         if mcp_config_json:
             cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
+        if lsp_plugin_dir is not None:
+            cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 

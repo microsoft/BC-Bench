@@ -3,29 +3,34 @@ using module .\BCBenchUtils.psm1
 
 <#
 .SYNOPSIS
-    Downloads the BC artifact for an NL2AL dataset entry into the BCContainerHelper cache.
+    Downloads the BC artifact for a dataset entry into the BCContainerHelper cache.
 .DESCRIPTION
-    Looks up the BC version for the given InstanceId in the NL2AL dataset and downloads the matching BC artifact via BcContainerHelper.
+    Looks up the BC version for the given InstanceId in the dataset and downloads the matching BC artifact via BcContainerHelper.
     The artifact (including all *.app symbol packages) lands in BCContainerHelper's default cache (using default path: C:\bcartifacts.cache),
-    where the NL2AL pipeline copies them at evaluation time.
+    where the pipeline copies them at evaluation time.
 .PARAMETER InstanceId
-    The NL2AL dataset instance_id to resolve the BC version for.
+    The dataset instance_id to resolve the BC version for.
+.PARAMETER Category
+    The dataset category (`bug-fix` or `test-generation`) to resolve the dataset path for (if DatasetPath is not explicitly provided).
 .PARAMETER DatasetPath
-    Path to the NL2AL dataset (.jsonl). Defaults to dataset/nl2al.jsonl in the repo.
+    Path to the dataset (.jsonl). Defaults to the category-specific dataset path in the repo, for example dataset/bug-fix.jsonl or dataset/test-generation.jsonl.
 .PARAMETER Country
     BC artifact country (default: w1).
 .EXAMPLE
-    .\scripts\Download-BCSymbols.ps1 -InstanceId nl2al__job-budget-report-1
+    .\scripts\Download-BCSymbols.ps1 -Category bug-fix -InstanceId bug-fix__job-budget-report-1
 #>
 param(
     [Parameter(Mandatory = $true)]
     [string]$InstanceId,
 
-    [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category "nl2al"),
+    [Parameter(Mandatory = $true)]
+    [string]$Category,
 
     [Parameter(Mandatory = $false)]
-    [string]$Country = "W1"
+    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category),
+
+    [Parameter(Mandatory = $false)]
+    [string]$Country = "w1"
 )
 
 $ErrorActionPreference = 'Stop'
