@@ -122,7 +122,7 @@ jobs:
         shell: pwsh
         run: |
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-          .\scripts\Download-BCSymbols.ps1 -InstanceId "${{ matrix.entry }}"
+          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
       - name: Refresh Azure Login (OIDC) for CAPI Key Vault
         if: ${{ inputs.llm-backend == 'external-command' }}
