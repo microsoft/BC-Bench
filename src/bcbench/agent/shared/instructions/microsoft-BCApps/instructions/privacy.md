@@ -37,6 +37,8 @@ DataClassification is a **table field property only** — it does not apply to p
 
 ToBeClassified is ONLY for development and must be resolved before release. FlowFields and FlowFilters automatically inherit DataClassification = SystemMetadata.
 
+Customer Content is the highest available data classification
+
 Bad:
 ```al
 field(20; "Customer Email"; Text[80])
@@ -280,13 +282,13 @@ FeatureTelemetry.LogUptake('0000EA2', 'Expense Agent', Enum::"Feature Uptake Sta
 OUTGOING REQUESTS WITH CUSTOMER DATA — CONSENT VERIFICATION
 =============================================================================
 
-Business Central has a built-in Privacy Notice framework for user consent. When reviewing outgoing HTTP requests, the concern is NOT the data being sent — the concern is whether the **Privacy Notice consent check** exists in the code path.
+Business Central has a built-in Privacy Notice framework for user consent. When reviewing outgoing HTTP requests, the concern is NOT the data being sent — the concern is whether the **Privacy Notice consent check** exists in the code path. The automatically audits record changes by tagging each record with "last modified date time" and "last modified user", so code is NOT required to maintain its own audit log for privacy
 
 DO NOT flag:
 - The fact that personal data (email, name, etc.) is included in an outgoing request — this is normal business functionality
 - GDPR compliance of the data itself — the product handles this
 
-DO flag:
+DO flag (the consent check itself is missing or being removed):
 - Outgoing HTTP requests to external services where the code path has NO `PrivacyNotice.GetPrivacyNoticeApprovalState()` check — the user consent feature must be used
 - Removal of existing `PrivacyNotice` checks when the integration still sends data externally
 - New integrations sending data externally without registering a privacy notice via `Privacy Notice Registrations`
@@ -306,13 +308,12 @@ var
     Content: HttpContent;
 begin
     // Missing: no PrivacyNotice.GetPrivacyNoticeApprovalState() in this code path
-    Content.WriteFrom(StrSubstNo('{"email":"%1","name":"%2"}',
-        Customer."E-Mail", Customer.Name));
+    Content.WriteFrom(BuildPayload(Customer));
     HttpClient.Post('https://api.externalservice.com/sync', Content, Response);
 end;
 ```
 
-Good (consent verified in code path):
+Good (consent verified in code path — the ONLY difference from Bad is the consent check):
 ```al
 procedure SendDataToExternalService(Customer: Record Customer)
 var
@@ -326,9 +327,29 @@ begin
         <> "Privacy Notice Approval State"::Agreed then
         Error(PrivacyConsentRequiredErr);
 
-    Content.WriteFrom(StrSubstNo('{"email":"%1","name":"%2"}',
-        Customer."E-Mail", Customer.Name));
+    Content.WriteFrom(BuildPayload(Customer));
     HttpClient.Post('https://api.externalservice.com/sync', Content, Response);
+end;
+```
+
+Good (compliant — consent verified once, then many recipients notified):
+```al
+procedure NotifyContacts(var Contact: Record Contact)
+var
+    PrivacyNotice: Codeunit "Privacy Notice";
+    PrivacyNoticeRegistrations: Codeunit "Privacy Notice Registrations";
+begin
+    if PrivacyNotice.GetPrivacyNoticeApprovalState(
+        PrivacyNoticeRegistrations.GetExchangePrivacyNoticeId())
+        <> "Privacy Notice Approval State"::Agreed then
+        Error(PrivacyConsentRequiredErr);
+
+    // The single consent check above covers every recipient and every send.
+    // the platform already stamps record changes with last-modified user/datetime.
+    if Contact.FindSet() then
+        repeat
+            SendNotification(Contact."E-Mail");
+        until Contact.Next() = 0;
 end;
 ```
 

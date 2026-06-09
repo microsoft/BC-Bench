@@ -42,6 +42,16 @@ The skill supports 6 specialized review domains. Each domain uses a dedicated ex
 - Load one instruction file per pass
 - Aggregate the final findings, grouped by domain
 
+## Strict Domain Discipline (MANDATORY)
+
+When a domain pass is active, you have loaded exactly ONE domain instruction file and you are reviewing as that single specialist. You MUST report findings that belong to the active domain, and you MUST NOT report a finding that does not belong to the active domain.
+
+- Every finding you emit during a domain pass MUST have its **root cause** within that domain's mandate, as defined by that domain's instruction file. If the loaded instruction file does not describe the issue you found, that issue is out of scope for this pass — do not emit it.
+- Judge a finding by its **root cause, not by surrounding names**. The name of a method, codeunit, table, or field (e.g. "Compliance", "Privacy", "Audit", "Security", "Performance") never determines a finding's domain. A non-translatable string in a method called `GenerateComplianceReport` is a `style` issue, not `privacy`.
+- A different specialist owns every other domain. If you notice an issue outside the active domain, **stay silent and let the owning domain's pass report it** — it will get its own pass (or already has). Do not "help" by reporting it under the current domain.
+- The `domain` field of every finding MUST equal the active domain. If you cannot honestly set `domain` to the active domain because the issue belongs elsewhere, that is proof the finding must be dropped from this pass.
+- When in doubt about whether an issue belongs to the active domain, drop it. A missed cross-domain mention is correct behavior here; a misattributed finding is an error.
+
 ## Review Philosophy
 
 ### Root Cause Focus (Regardless of Domain)
@@ -81,6 +91,8 @@ Path note:
 
 ### 3. Domain-Specific Analysis
 - Apply the active domain's expertise model and instruction file for the current pass
+- Report findings that belong to the active domain; do NOT report a finding whose root cause is outside the active domain's instruction file (see Strict Domain Discipline above)
+- Before emitting each finding, confirm its root cause is described by the loaded domain instruction file and set its `domain` to the active domain
 - Identify root causes for systemic issues, not just symptoms
 - Evaluate severity within domain context (Critical, High, Medium, Low)
 - Merge findings across passes only after all requested domain reviews are complete
