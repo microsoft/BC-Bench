@@ -6,7 +6,8 @@ from pathlib import Path
 
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.logger import get_logger, github_log_group
+from bcbench.github_actions import github_log_group
+from bcbench.logger import get_logger
 from bcbench.operations import stage_and_get_diff
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext

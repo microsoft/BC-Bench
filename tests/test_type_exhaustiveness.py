@@ -31,6 +31,14 @@ def test_all_categories_have_entry_classes():
         assert entry_cls is not None
 
 
+def test_all_categories_have_aggregate_classes():
+    from bcbench.results.leaderboard import LeaderboardAggregate
+
+    for category in EvaluationCategory:
+        aggregate_cls = category.aggregate_class
+        assert issubclass(aggregate_cls, LeaderboardAggregate)
+
+
 def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry):
     for category in EvaluationCategory:
         entry_cls = category.entry_class
