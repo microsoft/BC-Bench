@@ -110,7 +110,8 @@ def stage_and_get_diff(repo_path: Path) -> str:
 
     # Stage all changes, so new files can be captured in the diff
     # only focus on *.al files for now
-    subprocess.run(["git", "add", "*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    # check=False because when the agent produces zero *.al files git returns 128 ("pathspec did not match"); the empty-diff path below handles it.
+    subprocess.run(["git", "add", "*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
 
     # Get diff of staged changes against HEAD
     result = subprocess.run(
