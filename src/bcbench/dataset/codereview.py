@@ -47,6 +47,7 @@ class ReviewComment(BaseModel):
     file: str
     line_start: int
     line_end: int | None = None
+    domain: str | None = None
     body: str
     severity: Severity
 
@@ -67,6 +68,7 @@ class ReviewComment(BaseModel):
 class CodeReviewEntry(BaseDatasetEntry):
     """Dataset entry for the code-review category."""
 
+    domain: str | None = None
     expected_comments: list[ReviewComment] = Field(default_factory=list)
     match_line_tolerance: int = Field(default=5, ge=0)
 

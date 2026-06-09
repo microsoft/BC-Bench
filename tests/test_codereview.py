@@ -225,6 +225,7 @@ class TestCodeReviewResult:
         result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
 
         assert result.display_row == {
+            "Domain": "unknown",
             "Generated": "2",
             "Matched": "1",
             "Expected": "2",
@@ -232,6 +233,45 @@ class TestCodeReviewResult:
             "Recall": "0.50",
             "F1": "0.50",
         }
+
+    def test_result_uses_explicit_domain_from_entry(self):
+        result = create_codereview_result(output="[]", expected_comments=[], domain="performance")
+
+        assert result.domain == "performance"
+
+    def test_result_falls_back_to_metadata_area_domain(self):
+        result = create_codereview_result(output="not-json", expected_comments=[], metadata_area="security")
+
+        assert result.domain == "security"
+
+    def test_result_stamps_domain_on_generated_comments(self):
+        result = create_codereview_result(
+            output='[{"file": "src/app.al", "line_start": 5, "body": "Issue", "severity": "medium"}]',
+            expected_comments=[],
+            domain="performance",
+        )
+
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].domain == "performance"
+
+    def test_result_drops_generated_comments_with_mismatched_domain(self):
+        result = create_codereview_result(
+            output='[{"file": "src/app.al", "line_start": 5, "domain": "security", "body": "Issue", "severity": "medium"}]',
+            expected_comments=[],
+            domain="performance",
+        )
+
+        assert result.generated_comments == []
+
+    def test_result_preserves_explicit_generated_comment_domain_when_matching(self):
+        result = create_codereview_result(
+            output='[{"file": "src/app.al", "line_start": 5, "domain": "performance", "body": "Issue", "severity": "medium"}]',
+            expected_comments=[],
+            domain="performance",
+        )
+
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].domain == "performance"
 
 
 class TestCodeReviewSummary:

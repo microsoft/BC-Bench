@@ -13,6 +13,27 @@ from bcbench.types import EvaluationContext
 logger = get_logger(__name__)
 
 
+def _resolve_domain(context: "EvaluationContext") -> str:
+    entry = context.entry
+    domain = getattr(entry, "domain", None) or entry.metadata.area
+    return domain if isinstance(domain, str) and domain else "unknown"
+
+
+def _with_comment_domains(generated_comments: list[ReviewComment], domain: str) -> list[ReviewComment]:
+    domain_scoped: list[ReviewComment] = []
+    dropped_count = 0
+    for comment in generated_comments:
+        if comment.domain and comment.domain != domain:
+            dropped_count += 1
+            continue
+        domain_scoped.append(comment if comment.domain else comment.model_copy(update={"domain": domain}))
+
+    if dropped_count > 0:
+        logger.warning("Dropped %d generated comments with mismatched domain", dropped_count)
+
+    return domain_scoped
+
+
 def _normalize_path(path: str) -> str:
     return path.replace("\\", "/").lstrip("./").lstrip("/")
 
@@ -69,6 +90,7 @@ def _severity_mae(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> f
 class CodeReviewResult(BaseEvaluationResult):
     """Result for the code-review category."""
 
+    domain: str = "unknown"
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
     line_tolerance: int = Field(ge=0)
@@ -92,12 +114,15 @@ class CodeReviewResult(BaseEvaluationResult):
         generated_comments: list[ReviewComment],
         line_tolerance: int,
     ) -> Self:
+        domain = _resolve_domain(context)
+        generated_comments = _with_comment_domains(generated_comments, domain)
         matches = _match_comments(expected_comments, generated_comments, line_tolerance)
         matched_count = len(matches)
         precision, recall = precision_recall(matched_count, len(generated_comments), len(expected_comments))
 
         return cls(
             **cls._base_fields(context),
+            domain=domain,
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
@@ -122,6 +147,7 @@ class CodeReviewResult(BaseEvaluationResult):
         """Result for output that could not be parsed into a review — scored zero."""
         return cls(
             **cls._base_fields(context),
+            domain=_resolve_domain(context),
             output=output,
             expected_comments=expected_comments,
             line_tolerance=0,
@@ -146,6 +172,7 @@ class CodeReviewResult(BaseEvaluationResult):
     @property
     def display_row(self) -> dict[str, str]:
         return {
+            "Domain": self.domain,
             "Generated": str(len(self.generated_comments)),
             "Matched": str(self.matched_comment_count),
             "Expected": str(len(self.expected_comments)),
