@@ -8,7 +8,6 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.types import EvaluationCategory
 
 _config = get_config()
-_REVIEW_DOMAINS = {"security", "performance", "style", "accessibility", "upgrade", "privacy"}
 
 
 def _transform_image_paths(content: str) -> str:
@@ -26,10 +25,6 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
     is_problem_statement: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("problem-statement", "both")
 
     task = _transform_image_paths(entry.get_task())
-    review_domain_raw = getattr(entry, "domain", None)
-    review_domain = review_domain_raw.strip().lower() if isinstance(review_domain_raw, str) else None
-    if review_domain not in _REVIEW_DOMAINS:
-        review_domain = None
 
     template = Template(template_str)
     return template.render(
@@ -40,5 +35,4 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
         is_gold_patch=is_gold_patch,  # only relevant for test-generation
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
         al_mcp=al_mcp,  # whether AL MCP server is enabled
-        review_domain=review_domain,  # only relevant for code-review
     )

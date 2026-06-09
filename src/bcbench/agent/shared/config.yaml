@@ -51,11 +51,7 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    {% if review_domain %}
-    /al-code-review {{review_domain}}
-    {% else %}
     /al-code-review
-    {% endif %}
 
     Save findings to a file named "review.json" in the repository root.
     The file must contain valid JSON with a top-level object named findings.
