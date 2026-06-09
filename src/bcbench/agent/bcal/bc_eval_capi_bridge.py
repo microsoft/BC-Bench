@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from typing import BinaryIO, cast
+
+_TRANSIENT_RETRY_ATTEMPTS = 3
+_TRANSIENT_RETRY_BACKOFF_SEC = 2.0
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -34,6 +38,23 @@ def _load_request(input_stream: BinaryIO) -> dict[str, object]:
     return cast(dict[str, object], request_raw)
 
 
+def _create_with_retry(client: object, kwargs: dict[str, object]) -> object:
+    # Retry transient CAPI failures (e.g. upstream OpenAI returns 5xx wrapped as DependencyFailure / server_error).
+    from azure.core.exceptions import HttpResponseError
+
+    last_exc: HttpResponseError | None = None
+    for attempt in range(_TRANSIENT_RETRY_ATTEMPTS):
+        try:
+            return client.chat.completions.create(**kwargs)  # type: ignore[attr-defined]
+        except HttpResponseError as exc:
+            last_exc = exc
+            if attempt == _TRANSIENT_RETRY_ATTEMPTS - 1:
+                raise
+            time.sleep(_TRANSIENT_RETRY_BACKOFF_SEC * (2**attempt))
+    assert last_exc is not None
+    raise last_exc
+
+
 def main() -> int:
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
@@ -58,7 +79,7 @@ def main() -> int:
     if request.get("tools"):
         kwargs["tools"] = request["tools"]
 
-    response = client.chat.completions.create(**kwargs)
+    response = _create_with_retry(client, kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
     return 0
 
