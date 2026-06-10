@@ -46,11 +46,17 @@ jobs:
       test-run: ${{ inputs.test-run }}
       category: nl2al
 
-  evaluate-with-bcal:
+  # A.3: hoist common setup. bcal CLI, the CAPI venv, BcContainerHelper, and
+  # the NuGet credprovider are installed once here and republished as an
+  # artifact. The matrix job downloads + restores instead of reinstalling
+  # 16-32x in parallel. Saves ~3 CPU-h per attempt.
+  #
+  # Per-job by design (NOT hoisted): OIDC tokens for Key Vault (per-job
+  # lifetime), bcartifacts download (per-entry, see A.2), and the BCal run
+  # itself.
+  prepare-workspace:
     runs-on: windows-latest
     needs: get-entries
-    outputs:
-      results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
@@ -58,12 +64,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    name: ${{ matrix.entry }}
-    strategy:
-      fail-fast: false
-      max-parallel: 16
-      matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -71,14 +71,14 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
-      - name: Azure Login (OIDC) for bcal feed and symbols
+      - name: Azure Login (OIDC) for ADO feed
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      - name: Install bcal CLI from internal feed
+      - name: Install credprovider + bcal CLI to portable folder
         shell: pwsh
         env:
           BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
@@ -121,10 +121,17 @@ jobs:
           } | ConvertTo-Json -Compress -Depth 5
           $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
 
-          dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
-          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
+          New-Item -ItemType Directory -Force -Path workspace-out\bcal-tools | Out-Null
+          dotnet tool install --tool-path workspace-out\bcal-tools $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
 
-      - name: Install bc-eval CAPI bridge dependencies
+          # Stage the credprovider plugin so the matrix job has it locally
+          # if a future step ever needs to hit the ADO feed again.
+          $credPath = "$env:USERPROFILE\.nuget\plugins"
+          if (Test-Path $credPath) {
+            Copy-Item -Path $credPath -Destination workspace-out\nuget-plugins -Recurse -Force
+          }
+
+      - name: Build bc-eval CAPI bridge venv
         if: ${{ inputs.llm-backend == 'external-command' }}
         shell: pwsh
         run: |
@@ -132,16 +139,91 @@ jobs:
           Write-Output "::add-mask::$adoToken"
 
           uv python install 3.12
-          uv venv .bcal-capi-venv --python 3.12
-          uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.6" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          uv venv workspace-out\bcal-capi-venv --python 3.12
+          uv pip install --python workspace-out\bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.6" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+
+      - name: Save BcContainerHelper module to portable folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path workspace-out\ps-modules | Out-Null
+          Save-Module -Name BcContainerHelper -Path workspace-out\ps-modules -AllowPrerelease -Force
+
+      - name: Upload prepared workspace
+        uses: actions/upload-artifact@v6
+        with:
+          name: prepared-workspace-${{ github.run_id }}
+          path: workspace-out/
+          retention-days: 1
+          include-hidden-files: true
+
+  evaluate-with-bcal:
+    runs-on: windows-latest
+    needs: [get-entries, prepare-workspace]
+    outputs:
+      results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
+    if: needs.get-entries.outputs.entries != '[]'
+    environment:
+      name: ado-read
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
+    name: ${{ matrix.entry }}
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Download prepared workspace
+        uses: actions/download-artifact@v6
+        with:
+          name: prepared-workspace-${{ github.run_id }}
+          path: workspace-in
+
+      - name: Restore prepared workspace
+        shell: pwsh
+        run: |
+          # bcal CLI: copy the portable --tool-path output into PATH.
+          $dotnetTools = "$HOME\.dotnet\tools"
+          New-Item -ItemType Directory -Force -Path $dotnetTools | Out-Null
+          Copy-Item -Path workspace-in\bcal-tools\* -Destination $dotnetTools -Recurse -Force
+          echo $dotnetTools >> $env:GITHUB_PATH
+
+          # CAPI venv (only present when llm-backend = external-command).
+          # Run BCal step references $env:GITHUB_WORKSPACE\.bcal-capi-venv.
+          # uv venvs are relocatable as long as the base Python at the path
+          # in pyvenv.cfg also exists; we run `uv python install 3.12` here
+          # to make sure it does, then move the venv into place.
+          if (Test-Path workspace-in\bcal-capi-venv) {
+            uv python install 3.12
+            Move-Item -Path workspace-in\bcal-capi-venv -Destination .bcal-capi-venv -Force
+          }
+
+          # BcContainerHelper module: expose it on PSModulePath for the
+          # symbol-download step (no more Install-Module).
+          "PSModulePath=$pwd\workspace-in\ps-modules;$env:PSModulePath" >> $env:GITHUB_ENV
+
+          # Credprovider plugin: drop into ~/.nuget/plugins in case some
+          # downstream step ever needs to hit the ADO feed again.
+          if (Test-Path workspace-in\nuget-plugins) {
+            $credDest = "$env:USERPROFILE\.nuget\plugins"
+            New-Item -ItemType Directory -Force -Path $credDest | Out-Null
+            Copy-Item -Path workspace-in\nuget-plugins\* -Destination $credDest -Recurse -Force
+          }
 
       - name: Download BC Application symbols
         shell: pwsh
         run: |
-          Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
-      - name: Refresh Azure Login (OIDC) for CAPI Key Vault
+      - name: Azure Login (OIDC) for CAPI Key Vault
         if: ${{ inputs.llm-backend == 'external-command' }}
         uses: azure/login@v3
         with:
