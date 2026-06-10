@@ -14,6 +14,7 @@ on:
         options:
           - "claude-sonnet-4-6"
           - "claude-opus-4-8"
+          - "claude-fable-5"
           - "claude-haiku-4-5"
       category:
         description: "Evaluation category to run"
@@ -113,7 +114,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.160
+        run: npm install -g @anthropic-ai/claude-code@2.1.170
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
