@@ -8,14 +8,11 @@ false positives where two comments happen to be near each other but address diff
 import json
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
-from bcbench.logger import get_logger
 
-logger = get_logger(__name__)
 _config = get_config()
 
 JUDGE_RESULT_FILE = "judge_results.json"
@@ -51,17 +48,14 @@ def _build_judge_prompt(pairs: list[tuple[ReviewComment, ReviewComment]], result
 
 def _parse_judge_results(result_path: Path, num_pairs: int) -> list[bool]:
     if not result_path.exists():
-        logger.warning("Judge result file not found — treating all pairs as matched")
         return [True] * num_pairs
 
     try:
         raw = json.loads(result_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        logger.warning("Failed to parse judge results — treating all pairs as matched")
         return [True] * num_pairs
 
     if not isinstance(raw, list):
-        logger.warning(f"Judge results is not a list (got {type(raw).__name__}) — treating all as matched")
         return [True] * num_pairs
 
     results_by_pair: dict[int, bool] = {}
@@ -96,13 +90,10 @@ def judge_comment_matches(
 
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
-        logger.warning("Copilot CLI not found — skipping semantic judge, keeping all structural matches")
         return matched_pairs
 
     result_path = work_dir / JUDGE_RESULT_FILE
     prompt = _build_judge_prompt(matched_pairs, JUDGE_RESULT_FILE)
-
-    logger.info(f"Running semantic judge on {len(matched_pairs)} matched pair(s)")
 
     try:
         subprocess.run(
@@ -120,17 +111,8 @@ def judge_comment_matches(
             timeout=_config.timeout.agent_execution,
             check=True,
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as e:
-        logger.warning(f"Semantic judge failed ({type(e).__name__}) — keeping all structural matches")
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError):
         return matched_pairs
 
     verdicts = _parse_judge_results(result_path, len(matched_pairs))
-    filtered = [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
-
-    rejected_count = len(matched_pairs) - len(filtered)
-    if rejected_count > 0:
-        logger.info(f"Semantic judge rejected {rejected_count}/{len(matched_pairs)} structural match(es)")
-    else:
-        logger.info("Semantic judge confirmed all structural matches")
-
-    return filtered
+    return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
