@@ -148,6 +148,46 @@ jobs:
           New-Item -ItemType Directory -Force -Path workspace-out\ps-modules | Out-Null
           Save-Module -Name BcContainerHelper -Path workspace-out\ps-modules -AllowPrerelease -Force
 
+      # A.2: cache the BC sandbox artifact between runs. All matrix jobs land
+      # on the same BC version(s); pre-downloading once and caching the
+      # ~3 GB payload turns the per-entry symbol-download step into a no-op
+      # (just a copy from the local cache).
+      - name: Compute bcartifacts cache key
+        id: bccache
+        shell: pwsh
+        run: |
+          $versions = uv run python -c "import json; print(','.join(sorted({json.loads(l)['environment_setup_version'] for l in open('dataset/nl2al.jsonl', encoding='utf-8') if l.strip()})))"
+          $bytes = [Text.Encoding]::UTF8.GetBytes("$versions|w1|v1")
+          $stream = [System.IO.MemoryStream]::new($bytes)
+          $hash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash.Substring(0, 16)
+          "key=bcartifacts-windows-$hash" >> $env:GITHUB_OUTPUT
+          "versions=$versions" >> $env:GITHUB_OUTPUT
+          Write-Host "BC versions: $versions"
+          Write-Host "Cache key:   bcartifacts-windows-$hash"
+
+      - name: Cache BC sandbox artifacts
+        uses: actions/cache@v4
+        with:
+          path: C:\bcartifacts.cache
+          key: ${{ steps.bccache.outputs.key }}
+          restore-keys: |
+            bcartifacts-windows-
+
+      - name: Pre-download BC sandbox artifacts
+        shell: pwsh
+        env:
+          BCARTIFACTS_VERSIONS: ${{ steps.bccache.outputs.versions }}
+        run: |
+          $env:PSModulePath = "$pwd\workspace-out\ps-modules;$env:PSModulePath"
+          Import-Module BcContainerHelper -Force -DisableNameChecking
+          foreach ($v in ($env:BCARTIFACTS_VERSIONS -split ',')) {
+            if (-not $v) { continue }
+            $url = Get-BCArtifactUrl -version $v -country w1 -select 'Latest'
+            if (-not $url) { throw "No BC artifact URL resolved for version $v" }
+            Write-Host "Pre-downloading $url"
+            Download-Artifacts -artifactUrl $url -includePlatform | Out-Null
+          }
+
       - name: Upload prepared workspace
         uses: actions/upload-artifact@v6
         with:
@@ -217,6 +257,26 @@ jobs:
             New-Item -ItemType Directory -Force -Path $credDest | Out-Null
             Copy-Item -Path workspace-in\nuget-plugins\* -Destination $credDest -Recurse -Force
           }
+
+      # A.2: restore bcartifacts cache that prepare-workspace populated.
+      # Same cache key recipe; Download-BCSymbols.ps1 then short-circuits.
+      - name: Compute bcartifacts cache key
+        id: bccache
+        shell: pwsh
+        run: |
+          $versions = uv run python -c "import json; print(','.join(sorted({json.loads(l)['environment_setup_version'] for l in open('dataset/nl2al.jsonl', encoding='utf-8') if l.strip()})))"
+          $bytes = [Text.Encoding]::UTF8.GetBytes("$versions|w1|v1")
+          $stream = [System.IO.MemoryStream]::new($bytes)
+          $hash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash.Substring(0, 16)
+          "key=bcartifacts-windows-$hash" >> $env:GITHUB_OUTPUT
+
+      - name: Restore bcartifacts cache
+        uses: actions/cache/restore@v4
+        with:
+          path: C:\bcartifacts.cache
+          key: ${{ steps.bccache.outputs.key }}
+          restore-keys: |
+            bcartifacts-windows-
 
       - name: Download BC Application symbols
         shell: pwsh
