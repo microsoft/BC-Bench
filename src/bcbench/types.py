@@ -68,10 +68,6 @@ class AgentMetrics(BaseModel):
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
 
-    # Diagnostics from hook logs that indicate whether the code-review skill and
-    # its domain instruction files were read during execution.
-    skill_read_diagnostics: dict[str, bool] | None = None
-
 
 class ExperimentConfiguration(BaseModel):
     """Configuration for agent experiment execution.
