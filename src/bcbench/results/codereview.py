@@ -5,7 +5,7 @@ from pydantic import Field
 
 from bcbench.dataset import ReviewComment
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.metrics import f1_score, precision_recall
+from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
 from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import EvaluationContext
 
@@ -90,6 +90,8 @@ class CodeReviewResult(BaseEvaluationResult):
     precision: float = Field(default=0.0, ge=0.0, le=1.0)
     recall: float = Field(default=0.0, ge=0.0, le=1.0)
     f1: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
 
     @classmethod
@@ -121,6 +123,8 @@ class CodeReviewResult(BaseEvaluationResult):
             precision=precision,
             recall=recall,
             f1=f1_score(precision, recall),
+            f_beta_05=f_beta_score(precision, recall, beta=0.5),
+            f_beta_2=f_beta_score(precision, recall, beta=2.0),
             severity_mae=_severity_mae(matches),
         )
 
@@ -152,6 +156,8 @@ class CodeReviewResult(BaseEvaluationResult):
             "precision": round(self.precision, 3),
             "recall": round(self.recall, 3),
             "f1": round(self.f1, 3),
+            "f_beta_05": round(self.f_beta_05, 3),
+            "f_beta_2": round(self.f_beta_2, 3),
             "severity_mae": round(self.severity_mae, 3),
             "valid_review_output": self.valid_review_output,
         }
@@ -173,7 +179,8 @@ class CodeReviewResultSummary(EvaluationResultSummary):
     """
     Summary for the code-review category.
 
-    Precision, recall, and F1 are calculated by aggregating matched/expected/generated comment counts across all results.
+    Micro metrics aggregate matched/expected/generated comment counts across all results (volume-weighted).
+    Macro metrics average per-task scores (each task weighted equally).
     """
 
     generated_comment_count: int = Field(default=0, ge=0)
@@ -185,6 +192,15 @@ class CodeReviewResultSummary(EvaluationResultSummary):
     precision: float = Field(default=0.0, ge=0.0, le=1.0)
     recall: float = Field(default=0.0, ge=0.0, le=1.0)
     f1: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    macro_precision: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_recall: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_f1: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
+
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
@@ -195,9 +211,16 @@ class CodeReviewResultSummary(EvaluationResultSummary):
             "matched_comment_count": self.matched_comment_count,
             "incorrect_comment_count": self.incorrect_comment_count,
             "missed_comment_count": self.missed_comment_count,
-            "precision": round(self.precision * 100, 1),
-            "recall": round(self.recall * 100, 1),
-            "f1": round(self.f1 * 100, 1),
+            "micro_precision": round(self.precision * 100, 1),
+            "micro_recall": round(self.recall * 100, 1),
+            "micro_f1": round(self.f1 * 100, 1),
+            "micro_f_beta_05": round(self.f_beta_05 * 100, 1),
+            "micro_f_beta_2": round(self.f_beta_2 * 100, 1),
+            "macro_precision": round(self.macro_precision * 100, 1),
+            "macro_recall": round(self.macro_recall * 100, 1),
+            "macro_f1": round(self.macro_f1 * 100, 1),
+            "macro_f_beta_05": round(self.macro_f_beta_05 * 100, 1),
+            "macro_f_beta_2": round(self.macro_f_beta_2 * 100, 1),
             "severity_mae": round(self.severity_mae, 3),
             "valid_review_output_rate": round(self.valid_review_output_rate * 100, 1),
         }
@@ -218,6 +241,14 @@ class CodeReviewResultSummary(EvaluationResultSummary):
 
         precision, recall = precision_recall(matched_total, generated_total, expected_total)
         f1: float = f1_score(precision, recall)
+        f_beta_05: float = f_beta_score(precision, recall, beta=0.5)
+        f_beta_2: float = f_beta_score(precision, recall, beta=2.0)
+
+        macro_precision: float = sum(r.precision for r in code_review_results) / total_results
+        macro_recall: float = sum(r.recall for r in code_review_results) / total_results
+        macro_f1: float = sum(r.f1 for r in code_review_results) / total_results
+        macro_f_beta_05: float = sum(r.f_beta_05 for r in code_review_results) / total_results
+        macro_f_beta_2: float = sum(r.f_beta_2 for r in code_review_results) / total_results
 
         weighted_mae_numerator: float = sum(r.severity_mae * r.matched_comment_count for r in code_review_results)
         weighted_mae_denominator: int = sum(r.matched_comment_count for r in code_review_results)
@@ -236,6 +267,13 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                 "precision": round(precision, 3),
                 "recall": round(recall, 3),
                 "f1": round(f1, 3),
+                "f_beta_05": round(f_beta_05, 3),
+                "f_beta_2": round(f_beta_2, 3),
+                "macro_precision": round(macro_precision, 3),
+                "macro_recall": round(macro_recall, 3),
+                "macro_f1": round(macro_f1, 3),
+                "macro_f_beta_05": round(macro_f_beta_05, 3),
+                "macro_f_beta_2": round(macro_f_beta_2, 3),
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
             }

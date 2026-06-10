@@ -118,8 +118,16 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
     """Aggregate for the code-review category: mean F1 across runs."""
 
     f1: float = 0.0
+    f_beta_05: float = 0.0
+    f_beta_2: float = 0.0
     precision: float = 0.0
     recall: float = 0.0
+
+    macro_f1: float = 0.0
+    macro_f_beta_05: float = 0.0
+    macro_f_beta_2: float = 0.0
+    macro_precision: float = 0.0
+    macro_recall: float = 0.0
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
@@ -128,15 +136,21 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
         base = super().from_runs(runs)
         assert isinstance(base, CodeReviewLeaderboardAggregate)
 
-        per_run_f1: list[float] = [run.f1 for run in runs if isinstance(run, CodeReviewResultSummary)]
-        per_run_precision: list[float] = [run.precision for run in runs if isinstance(run, CodeReviewResultSummary)]
-        per_run_recall: list[float] = [run.recall for run in runs if isinstance(run, CodeReviewResultSummary)]
+        cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
+        n = len(cr_runs)
 
         return base.model_copy(
             update={
-                "f1": sum(per_run_f1) / len(per_run_f1),
-                "precision": sum(per_run_precision) / len(per_run_precision),
-                "recall": sum(per_run_recall) / len(per_run_recall),
+                "f1": sum(r.f1 for r in cr_runs) / n,
+                "f_beta_05": sum(r.f_beta_05 for r in cr_runs) / n,
+                "f_beta_2": sum(r.f_beta_2 for r in cr_runs) / n,
+                "precision": sum(r.precision for r in cr_runs) / n,
+                "recall": sum(r.recall for r in cr_runs) / n,
+                "macro_f1": sum(r.macro_f1 for r in cr_runs) / n,
+                "macro_f_beta_05": sum(r.macro_f_beta_05 for r in cr_runs) / n,
+                "macro_f_beta_2": sum(r.macro_f_beta_2 for r in cr_runs) / n,
+                "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
+                "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
             }
         )
 
