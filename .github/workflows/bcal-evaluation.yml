@@ -88,7 +88,24 @@ jobs:
             throw "BCAL_PACKAGE_ID / BCAL_FEED_URL secrets are not configured."
           }
 
-          iex "& { $(irm https://aka.ms/install-artifacts-credprovider.ps1) }"
+          # The credprovider installer calls the GitHub release API, which
+          # intermittently returns 403 (rate-limited) on cold runs. Retry up
+          # to 3 times with exponential backoff (1s, 4s, 16s).
+          $maxAttempts = 3
+          $delay = 1
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+              iex "& { $(irm https://aka.ms/install-artifacts-credprovider.ps1) }"
+              break
+            } catch {
+              if ($attempt -eq $maxAttempts) {
+                throw "credprovider install failed after $maxAttempts attempts: $($_.Exception.Message)"
+              }
+              Write-Warning "credprovider install attempt $attempt failed: $($_.Exception.Message). Retrying in ${delay}s..."
+              Start-Sleep -Seconds $delay
+              $delay = $delay * 4
+            }
+          }
 
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
