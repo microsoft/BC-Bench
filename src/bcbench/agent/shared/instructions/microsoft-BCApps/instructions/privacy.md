@@ -37,7 +37,7 @@ DataClassification is a **table field property only** — it does not apply to p
 
 ToBeClassified is ONLY for development and must be resolved before release. FlowFields and FlowFilters automatically inherit DataClassification = SystemMetadata.
 
-Customer Content is the highest available data classification
+Fields that are classified as "Customer Content" should not be flagged as this is the highest classification in BC.
 
 Bad:
 ```al
@@ -200,6 +200,8 @@ TELEMETRY AND LOGGING
 
 ALL telemetry MUST specify DataClassification parameter. Session.LogMessage with non-personal data (counts, error codes, enum values, Code[20] identifiers) is acceptable. Flag telemetry containing customer's data including email addresses, names, phone numbers, address details, employee codes/IDs in dimensions, attachment filenames, user-provided content that may contain PII, or Record content dumps.
 
+The telemetry EVENT ID / TAG (the first argument to Session.LogMessage / FeatureTelemetry, e.g. '0000ABC', '0000BA2') is a system-assigned identifier and is out of scope for ANY feedback. Do NOT flag the event tag's naming, uniqueness, placeholder style, value, or whether it collides with another tag convention. Only the message text, custom dimensions, and DataClassification carry privacy risk.
+
 Bad:
 ```al
 Session.LogMessage('0000000', StrSubstNo('Processed %1', Customer.Name), Verbosity::Normal,
@@ -284,9 +286,12 @@ OUTGOING REQUESTS WITH CUSTOMER DATA — CONSENT VERIFICATION
 
 Business Central has a built-in Privacy Notice framework for user consent. When reviewing outgoing HTTP requests, the concern is NOT the data being sent — the concern is whether the **Privacy Notice consent check** exists in the code path. The automatically audits record changes by tagging each record with "last modified date time" and "last modified user", so code is NOT required to maintain its own audit log for privacy
 
+Sending record/field data in an outgoing request is the integration working as designed — it is expected and acceptable. An integration that performs the feature the user invoked (address/postal-code lookup, address validation, geocoding, exchange-rate fetch, tax/VAT validation, shipping quotes) is allowed to send the fields it needs to do that job. The privacy question is ONLY whether consent gating exists for the integration; it is never that the data itself is being sent.
+
 DO NOT flag:
-- The fact that personal data (email, name, etc.) is included in an outgoing request — this is normal business functionality
+- The fact that personal data (email, name, postal code, city, address, etc.) is included in an outgoing request — sending fields to the service is the integration working as designed
 - GDPR compliance of the data itself — the product handles this
+- Missing "data-classification annotation" or "audit logging" on the outbound payload — the payload is not telemetry, DataClassification is a table-field property, and the platform already audits record changes via last-modified user/datetime
 
 DO flag (the consent check itself is missing or being removed):
 - Outgoing HTTP requests to external services where the code path has NO `PrivacyNotice.GetPrivacyNoticeApprovalState()` check — the user consent feature must be used
@@ -365,6 +370,24 @@ begin
         PrivacyNoticeRegistrations.GetExchangePrivacyNoticeId())
         <> "Privacy Notice Approval State"::Agreed then
         ShowPrivacyConsentStep();
+end;
+```
+
+Acceptable — functional lookup integration (DO NOT flag for privacy):
+```al
+// Postal-code / address lookup. Sending Postal Code + City to the lookup
+// service IS the feature; this is the integration working as designed.
+// There is NO privacy finding here — do not require a consent gate, a
+// data-classification annotation on the payload, or an outbound audit log.
+procedure LookupAddress(PostalCode: Text; City: Text): Text
+var
+    HttpClient: HttpClient;
+    HttpResponse: HttpResponseMessage;
+    ResponseText: Text;
+begin
+    if HttpClient.Get(StrSubstNo('https://postal-api.service.com/lookup?postal=%1&city=%2', PostalCode, City), HttpResponse) then
+        HttpResponse.Content.ReadAs(ResponseText);
+    exit(ResponseText);
 end;
 ```
 

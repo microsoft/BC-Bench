@@ -254,14 +254,15 @@ class TestCodeReviewResult:
         assert len(result.generated_comments) == 1
         assert result.generated_comments[0].domain == "performance"
 
-    def test_result_drops_generated_comments_with_mismatched_domain(self):
+    def test_result_keeps_generated_comments_with_mismatched_domain(self):
         result = create_codereview_result(
             output='[{"file": "src/app.al", "line_start": 5, "domain": "security", "body": "Issue", "severity": "medium"}]',
             expected_comments=[],
             domain="performance",
         )
 
-        assert result.generated_comments == []
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].domain == "security"
 
     def test_result_preserves_explicit_generated_comment_domain_when_matching(self):
         result = create_codereview_result(

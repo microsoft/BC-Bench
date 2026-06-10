@@ -4,13 +4,10 @@ from typing import Self
 from pydantic import Field
 
 from bcbench.dataset import ReviewComment
-from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.metrics import f1_score, precision_recall
 from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import EvaluationContext
-
-logger = get_logger(__name__)
 
 
 def _resolve_domain(context: "EvaluationContext") -> str:
@@ -20,18 +17,8 @@ def _resolve_domain(context: "EvaluationContext") -> str:
 
 
 def _with_comment_domains(generated_comments: list[ReviewComment], domain: str) -> list[ReviewComment]:
-    domain_scoped: list[ReviewComment] = []
-    dropped_count = 0
-    for comment in generated_comments:
-        if comment.domain and comment.domain != domain:
-            dropped_count += 1
-            continue
-        domain_scoped.append(comment if comment.domain else comment.model_copy(update={"domain": domain}))
-
-    if dropped_count > 0:
-        logger.warning("Dropped %d generated comments with mismatched domain", dropped_count)
-
-    return domain_scoped
+    """Stamp the entry domain onto comments that have no explicit domain. All comments are kept."""
+    return [comment if comment.domain else comment.model_copy(update={"domain": domain}) for comment in generated_comments]
 
 
 def _normalize_path(path: str) -> str:
