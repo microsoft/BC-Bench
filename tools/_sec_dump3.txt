@@ -1,0 +1,352 @@
+
+################################################################################
+# synthetic__security-013 domain=security exp=5 ood=5
+# EXPECTED:
+#   src/ExpenseAgentConsumption.Table.al:5 [security/medium] InherentEntitlements = RIX and InherentPermissions = RIX grant overly broad inherent permi
+#   src/ExpenseAgentConsumption.Table.al:52 [security/medium] Public procedure LogConsumption accepts arbitrary UserSecurityId parameter, enabling consu
+#   src/ExpenseAgentConsumption.Table.al:62 [security/medium] Public procedure LogFailedOperation accepts arbitrary UserSecurityId, allowing false error
+#   src/ExpenseMgmtEdit.PermissionSet.al:38 [security/medium] IMD permissions on Expense Report Rule Violation table allow users to delete policy violat
+#   src/AgentAdmin.PermissionSet.al:8 [security/medium] RIMD permissions on Agent Creation Control table allow deletion of creation control record
+# OOD:
+#   style/medium ExpenseAgentConsumption.Table.al:47 | LogConsumption declares parameters TokenCount and ProcessingTimeMs but never persists them ù th
+#   style/medium ExpenseAgentConsumption.Table.al:16 | The parameter name UserSecurityId on LogConsumption/LogFailedOperation shadows the built-in sys
+#   privacy/medium ExpenseAgentConsumption.Table.al:1 | "Expense Agent Consumption" stores per-user telemetry (EndUserPseudonymousIdentifiers plus Cust
+#   privacy/medium ExpenseAgentConsumption.Table.al:31 | "Error Message" is classified as CustomerContent but is populated from arbitrary runtime error 
+#   performance/low ExpenseAgentConsumption.Table.al:39 | The table only defines the primary key on "Entry No.". Consumption telemetry is almost always q
+# PATCH:
+diff --git a/src/AgentAdmin.PermissionSet.al b/src/AgentAdmin.PermissionSet.al
+new file mode 100644
+--- /dev/null
++++ b/src/AgentAdmin.PermissionSet.al
+@@ -0,0 +1,12 @@
++permissionset 50700 "Agent Admin"
++{
++    Assignable = true;
++    Caption = 'Agent Administration';
++
++    Permissions =
++        tabledata "Agent Setup" = RIMD,
++        tabledata "Agent Creation Control" = RIMD,
++        tabledata "Agent User Assignment" = RIMD,
++        codeunit "Agent Management" = X,
++        page "Agent Setup Card" = X;
++}
+diff --git a/src/ExpenseAgentConsumption.Table.al b/src/ExpenseAgentConsumption.Table.al
+new file mode 100644
+--- /dev/null
++++ b/src/ExpenseAgentConsumption.Table.al
+@@ -0,0 +1,68 @@
++table 50600 "Expense Agent Consumption"
++{
++    Caption = 'Expense Agent Consumption';
++    DataClassification = CustomerContent;
++    InherentEntitlements = RIX;
++    InherentPermissions = RIX;
++
++    fields
++    {
++        field(1; "Entry No."; Integer)
++        {
++            Caption = 'Entry No.';
++            DataClassification = SystemMetadata;
++            AutoIncrement = true;
++        }
++        field(20; "User Security ID"; Guid)
++        {
++            Caption = 'User Security ID';
++            DataClassification = EndUserPseudonymousIdentifiers;
++            TableRelation = User."User Security ID";
++        }
++        field(30; "Agent Operation"; Enum "Agent Operation Type")
++        {
++            Caption = 'Agent Operation';
++            DataClassification = CustomerContent;
++        }
++        field(90; "Response Status"; Enum "Agent Response Status")
++        {
++            Caption = 'Response Status';
++            DataClassification = CustomerContent;
++        }
++        field(100; "Error Message"; Text[250])
++        {
++            Caption = 'Error Message';
++            DataClassification = CustomerContent;
++        }
++    }
++
++    keys
++    {
++        key(PK; "Entry No.")
++        {
++            Clustered = true;
++        }
++    }
++
++    procedure LogConsumption(UserSecurityId: Guid; Operation: Enum "Agent Operation Type"; TokenCount: Integer; ProcessingTimeMs: Integer)
++    var
++        NewEntry: Record "Expense Agent Consumption";
++    begin
++        NewEntry.Init();
++        NewEntry."User Security ID" := UserSecurityId;
++        NewEntry."Agent Operation" := Operation;
++        NewEntry.Insert();
++    end;
++
++    procedure LogFailedOperation(UserSecurityId: Guid; Operation: Enum "Agent Operation Type"; ErrorText: Text[250])
++    var
++        NewEntry: Record "Expense Agent Consumption";
++    begin
++        NewEntry.Init();
++        NewEntry."User Security ID" := UserSecurityId;
++        NewEntry."Agent Operation" := Operation;
++        NewEntry."Response Status" := NewEntry."Response Status"::Error;
++        NewEntry."Error Message" := ErrorText;
++        NewEntry.Insert();
++    end;
++}
+diff --git a/src/ExpenseMgmtEdit.PermissionSet.al b/src/ExpenseMgmtEdit.PermissionSet.al
+new file mode 100644
+--- /dev/null
++++ b/src/ExpenseMgmtEdit.PermissionSet.al
+@@ -0,0 +1,41 @@
++permissionset 50800 "ExpenseMgmt Edit"
++{
++    Assignable = true;
++    Caption = 'Expense Management Edit';
++
++    Permissions =
++        tabledata "Expense Setup" = RIM,
++        tabledata "Expense User" = RIMD,
++        tabledata "Expense Category" = RIMD,
++        tabledata "Expense Approval Setup" = RIM,
++        tabledata "Expense Report Header" = RIMD,
++        tabledata "Expense Report Line" = RIMD,
++        tabledata "Expense Report Attachment" = RIMD,
++        tabledata "Expense Report Comment" = RIMD,
++        tabledata "Expense Advance" = RIMD,
++        tabledata "Expense Advance Line" = RIMD,
++        tabledata "Expense Mileage" = RIMD,
++        tabledata "Expense Receipt" = RIMD,
++        tabledata "Expense Policy" = RIM,
++        tabledata "Expense Policy Line" = RIM,
++        tabledata "Expense Workflow" = RIM,
++        tabledata "Expense Approval Entry" = RIM,
++        tabledata "Expense Report History" = R,
++        tabledata "Expense Reimbursement" = RIMD,
++        tabledata "Expense Analytics" = R,
++        tabledata "Expense Budget" = RIMD,
++        tabledata "Expense Budget Line" = RIMD,
++        tabledata "Expense Dimension" = RIMD,
++        tabledata "Expense Tax Setup" = RIM,
++        tabledata "Expense Currency Exchange" = RIM,
++        tabledata "Expense Posting Group" = RIM,
++        tabledata "Expense Journal Template" = RIM,
++        tabledata "Expense Journal Batch" = RIMD,
++        tabledata "Expense Journal Line" = RIMD,
++        tabledata "Expense Ledger Entry" = R,
++        tabledata "Expense Register" = R,
++        tabledata "Expense Report Rule" = RIM,
++        tabledata "Expense Report Rule Violation" = IMD,
++        codeunit "Expense Management" = X,
++        page "Expense Report" = X;
++}
+
+
+################################################################################
+# synthetic__security-014 domain=security exp=1 ood=1
+# EXPECTED:
+#   src/SecureOperationHelper.Codeunit.al:7 [security/high] Public procedure uses RecordRef.Open with caller-provided table number ù any extension can
+# OOD:
+#   style/medium SecureOperationHelper.Codeunit.al:1 | The codeunit and procedure names ('Secure Operation Helper', 'ArchiveRecord') are misleading: t
+# PATCH:
+diff --git a/src/SecureOperationHelper.Codeunit.al b/src/SecureOperationHelper.Codeunit.al
+new file mode 100644
+--- /dev/null
++++ b/src/SecureOperationHelper.Codeunit.al
+@@ -0,0 +1,12 @@
++codeunit 50105 "Secure Operation Helper"
++{
++    procedure ArchiveRecord(TableNo: Integer)
++    var
++        RecRef: RecordRef;
++    begin
++        RecRef.Open(TableNo);
++        RecRef.DeleteAll();
++        RecRef.Close();
++    end;
++}
++
+
+
+################################################################################
+# synthetic__security-015 domain=security exp=3 ood=5
+# EXPECTED:
+#   src/ExternalIntegrationMgt.Codeunit.al:22 [security/high] URL from table field used in HttpClient.Post without validation ù SSRF risk ù Validate URL
+#   src/ExternalIntegrationMgt.Codeunit.al:33 [security/high] URL from setup table used in HttpClient.Get without host validation ù SSRF risk ù Validate
+#   src/ExternalIntegrationMgt.Codeunit.al:49 [security/high] URL from table field used in HttpClient.Post without validation ù SSRF risk ù Validate URL
+# OOD:
+#   performance/high ExternalIntegrationMgt.Codeunit.al:18 | External HTTP call (HttpClient.Post) is executed inside a FindSet/repeat loop over the Item tab
+#   privacy/high ExternalIntegrationMgt.Codeunit.al:50 | SendOrderToFulfillment transmits customer-identifying information (Sell-to Customer No.) and a 
+#   performance/medium ExternalIntegrationMgt.Codeunit.al:12 | The Item record is opened with FindSet without SetLoadFields, so every column of the Item table
+#   style/medium ExternalIntegrationMgt.Codeunit.al:30 | The Error message 'Failed to connect to exchange rate service' is a hard-coded English literal.
+#   style/low ExternalIntegrationMgt.Codeunit.al:67 | ProcessExchangeRateResponse accepts a ResponseText parameter but its body is empty (only a comm
+# PATCH:
+diff --git a/src/ExternalIntegrationMgt.Codeunit.al b/src/ExternalIntegrationMgt.Codeunit.al
+new file mode 100644
+--- /dev/null
++++ b/src/ExternalIntegrationMgt.Codeunit.al
+@@ -0,0 +1,69 @@
++codeunit 50200 "External Integration Mgt."
++{
++    Access = Public;
++
++    procedure SyncInventoryWithPartner(PartnerSetup: Record "Partner Integration Setup")
++    var
++        HttpClient: HttpClient;
++        Content: HttpContent;
++        Response: HttpResponseMessage;
++        Item: Record Item;
++        JsonPayload: JsonObject;
++        PayloadText: Text;
++    begin
++        Item.SetRange("Item Category Code", PartnerSetup."Category Filter");
++        if Item.FindSet() then
++            repeat
++                JsonPayload.Add('itemNo', Item."No.");
++                JsonPayload.Add('description', Item.Description);
++                JsonPayload.Add('unitPrice', Item."Unit Price");
++                JsonPayload.WriteTo(PayloadText);
++                Content.WriteFrom(PayloadText);
++                HttpClient.Post(PartnerSetup."Sync Endpoint URL", Content, Response);
++                Clear(JsonPayload);
++            until Item.Next() = 0;
++    end;
++
++    procedure FetchExchangeRates(Setup: Record "Currency Exchange Setup")
++    var
++        HttpClient: HttpClient;
++        Response: HttpResponseMessage;
++        ResponseText: Text;
++    begin
++        if not HttpClient.Get(Setup."Exchange Rate API URL", Response) then
++            Error('Failed to connect to exchange rate service');
++
++        Response.Content.ReadAs(ResponseText);
++        ProcessExchangeRateResponse(ResponseText);
++    end;
++
++    procedure SendOrderToFulfillment(SalesHeader: Record "Sales Header"; FulfillmentSetup: Record "Fulfillment Setup")
++    var
++        HttpClient: HttpClient;
++        Content: HttpContent;
++        Response: HttpResponseMessage;
++        OrderJson: Text;
++    begin
++        OrderJson := BuildOrderJson(SalesHeader);
++        Content.WriteFrom(OrderJson);
++        HttpClient.Post(FulfillmentSetup."Fulfillment API URL", Content, Response);
++    end;
++
++    local procedure BuildOrderJson(SalesHeader: Record "Sales Header"): Text
++    var
++        JsonObj: JsonObject;
++        OutputText: Text;
++    begin
++        JsonObj.Add('orderNo', SalesHeader."No.");
++        JsonObj.Add('customerNo', SalesHeader."Sell-to Customer No.");
++        JsonObj.Add('amount', SalesHeader.Amount);
++        JsonObj.WriteTo(OutputText);
++        exit(OutputText);
++    end;
++
++    local procedure ProcessExchangeRateResponse(ResponseText: Text)
++    begin
++        // Process exchange rate data
++    end;
++}
++
+
+
+################################################################################
+# synthetic__security-016 domain=security exp=2 ood=5
+# EXPECTED:
+#   src/EANotifDispatcher.Codeunit.al:34 [security/medium] EmployeeName embedded in HTML without encoding - XSS vulnerability ù See agent comment for
+#   src/EANotifDispatcher.Codeunit.al:38 [security/medium] ExpenseReportHeader.Description embedded in HTML without encoding - XSS vulnerability ù Se
+# OOD:
+#   style/medium EANotifDispatcher.Codeunit.al:22 | Error message uses an inline string literal instead of a Label variable, so it is not localizab
+#   style/medium EANotifDispatcher.Codeunit.al:25 | Error message is a hardcoded string literal rather than a Label, breaking localizability and th
+#   style/medium EANotifDispatcher.Codeunit.al:29 | Subject line is built from a hardcoded English string literal in StrSubstNo instead of a Label,
+#   style/medium EANotifDispatcher.Codeunit.al:62 | Hardcoded English error literal instead of a Label variable.
+#   style/low EANotifDispatcher.Codeunit.al:31 | Source comment documents a known XSS/HTML-injection vulnerability but the code still ships it; 
+# PATCH:
+diff --git a/src/EANotifDispatcher.Codeunit.al b/src/EANotifDispatcher.Codeunit.al
+new file mode 100644
+--- /dev/null
++++ b/src/EANotifDispatcher.Codeunit.al
+@@ -0,0 +1,65 @@
++codeunit 50900 "EA Notif Dispatcher"
++{
++    TableNo = "Expense Notification";
++
++    var
++        NoEmailConfigErr: Label 'No email configuration found for expense notifications.';
++
++    trigger OnRun()
++    begin
++        SendExpenseReportNotification(Rec."Expense Report No.", Rec."Employee Email");
++    end;
++
++    procedure SendExpenseReportNotification(ExpenseReportNo: Code[20]; EmployeeEmail: Text)
++    var
++        ExpenseReportHeader: Record "Expense Report Header";
++        Recipients: List of [Text];
++        Subject: Text;
++        HtmlBody: Text;
++        EmployeeName: Text;
++    begin
++        if not ExpenseReportHeader.Get(ExpenseReportNo) then
++            Error('Expense report %1 not found.', ExpenseReportNo);
++
++        if EmployeeEmail = '' then
++            Error('No email recipient for expense report %1.', ExpenseReportNo);
++
++        Recipients.Add(EmployeeEmail);
++        EmployeeName := ExpenseReportHeader."Employee Name";
++        Subject := StrSubstNo('Expense Report %1 Status Update', ExpenseReportNo);
++
++        // User-supplied EmployeeName and Description concatenated into HTML without encoding - XSS vulnerability
++        HtmlBody := '<html><body>';
++        HtmlBody += '<h2>Expense Report Update</h2>';
++        HtmlBody += '<p>Dear ' + EmployeeName + ',</p>';
++        HtmlBody += '<p>Your expense report has been updated:</p>';
++        HtmlBody += '<table border="1">';
++        HtmlBody += '<tr><th>Report No.</th><td>' + ExpenseReportNo + '</td></tr>';
++        HtmlBody += '<tr><th>Description</th><td>' + ExpenseReportHeader.Description + '</td></tr>';
++        HtmlBody += '<tr><th>Status</th><td>' + Format(ExpenseReportHeader.Status) + '</td></tr>';
++        HtmlBody += '</table>';
++        HtmlBody += '<p>Thank you,<br/>Expense Management System</p>';
++        HtmlBody += '</body></html>';
++
++        SendEmailNotification(Recipients, Subject, HtmlBody);
++    end;
++
++    local procedure SendEmailNotification(Recipients: List of [Text]; Subject: Text; HtmlMessage: Text)
++    var
++        EmailAccount: Record "Email Account";
++        Email: Codeunit Email;
++        EmailMessage: Codeunit "Email Message";
++        SendResult: Boolean;
++    begin
++        EmailAccount.SetRange("Default Account", true);
++        if not EmailAccount.FindFirst() then
++            Error(NoEmailConfigErr);
++
++        EmailMessage.Create(Recipients, Subject, HtmlMessage, true);
++        SendResult := Email.Send(EmailMessage);
++
++        if not SendResult then
++            Error('Failed to send expense notification email.');
++    end;
++}
++
+
