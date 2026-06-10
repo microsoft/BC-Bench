@@ -5,7 +5,7 @@ from pathlib import Path
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.evaluate.comment_judge import judge_comment_matches
+from bcbench.evaluate.codereview_judge import judge_comment_matches
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.exceptions import PatchApplicationError
 from bcbench.github_actions import github_log_group

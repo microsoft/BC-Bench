@@ -106,8 +106,7 @@ def judge_comment_matches(
                 f"--prompt={prompt.replace(chr(10), ' ')}",
             ],
             cwd=str(work_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=_config.timeout.agent_execution,
             check=True,
         )
