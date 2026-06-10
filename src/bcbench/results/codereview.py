@@ -34,7 +34,7 @@ def _line_distance(line: int, start: int, end: int | None) -> int:
     return line - effective_end
 
 
-def _match_comments(
+def match_comments(
     expected_comments: list[ReviewComment],
     generated_comments: list[ReviewComment],
     line_tolerance: int,
@@ -102,11 +102,13 @@ class CodeReviewResult(BaseEvaluationResult):
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
         line_tolerance: int,
+        matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
     ) -> Self:
         domain = _resolve_domain(context)
         generated_comments = _with_comment_domains(generated_comments, domain)
-        matches = _match_comments(expected_comments, generated_comments, line_tolerance)
-        matched_count = len(matches)
+        if matched_pairs is None:
+            matched_pairs = match_comments(expected_comments, generated_comments, line_tolerance)
+        matched_count = len(matched_pairs)
         precision, recall = precision_recall(matched_count, len(generated_comments), len(expected_comments))
 
         return cls(
@@ -125,7 +127,7 @@ class CodeReviewResult(BaseEvaluationResult):
             f1=f1_score(precision, recall),
             f_beta_05=f_beta_score(precision, recall, beta=0.5),
             f_beta_2=f_beta_score(precision, recall, beta=2.0),
-            severity_mae=_severity_mae(matches),
+            severity_mae=_severity_mae(matched_pairs),
         )
 
     @classmethod

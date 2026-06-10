@@ -5,12 +5,13 @@ from pathlib import Path
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.comment_judge import judge_comment_matches
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.exceptions import PatchApplicationError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult
+from bcbench.results.codereview import CodeReviewResult, match_comments
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -125,12 +126,23 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             logger.warning(f"Invalid review output for {context.entry.instance_id}")
             result = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
         else:
+            structural_matches = match_comments(
+                context.entry.expected_comments,
+                generated_comments,
+                context.entry.match_line_tolerance,
+            )
+            validated_matches = judge_comment_matches(
+                structural_matches,
+                model=context.model,
+                work_dir=context.repo_path,
+            )
             result = CodeReviewResult.create(
                 context,
                 output=output,
                 expected_comments=context.entry.expected_comments,
                 generated_comments=generated_comments,
                 line_tolerance=context.entry.match_line_tolerance,
+                matched_pairs=validated_matches,
             )
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
         logger.info(
