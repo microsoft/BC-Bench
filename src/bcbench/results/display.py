@@ -53,7 +53,7 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     table.add_column("Skills", style="yellow")
     table.add_column("Custom Agent", style="yellow")
 
-    for result in results:
+    for result in sorted(results, key=lambda r: r.sort_key):
         color, _ = _status_style(result.status_label)
         status = f"[{color}]{result.status_label}[/{color}]"
         mcp_servers = ", ".join(result.experiment.mcp_servers) if result.experiment and result.experiment.mcp_servers else "N/A"
@@ -116,7 +116,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
         markdown_summary += "| Instance ID | Project | Status |\n"
         markdown_summary += "|-------------|---------|--------|\n"
 
-    for result in results:
+    for result in sorted(results, key=lambda r: r.sort_key):
         _, status_icon = _status_style(result.status_label)
         status_text = f"{status_icon} {result.status_label}"
         extra_values = " | ".join(result.display_row.values())

@@ -274,6 +274,27 @@ class TestCodeReviewResult:
         assert len(result.generated_comments) == 1
         assert result.generated_comments[0].domain == "performance"
 
+    def test_sort_key_groups_by_domain_then_natural_instance_id(self):
+        unsorted_results = [
+            create_codereview_result(instance_id="repo__feature-a-10", domain="performance"),
+            create_codereview_result(instance_id="repo__feature-a-2", domain="performance"),
+            create_codereview_result(instance_id="repo__feature-a-1", domain="performance"),
+            create_codereview_result(instance_id="repo__feature-b-11", domain="upgrade"),
+            create_codereview_result(instance_id="repo__feature-b-3", domain="upgrade"),
+            create_codereview_result(instance_id="repo__feature-c-2", domain="upgrade"),
+        ]
+
+        ordered_ids = [r.instance_id for r in sorted(unsorted_results, key=lambda r: r.sort_key)]
+
+        assert ordered_ids == [
+            "repo__feature-a-1",
+            "repo__feature-a-2",
+            "repo__feature-a-10",
+            "repo__feature-b-3",
+            "repo__feature-b-11",
+            "repo__feature-c-2",
+        ]
+
 
 class TestCodeReviewSummary:
     def test_summary_aggregates_precision_recall_and_f1(self):

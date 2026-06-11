@@ -136,6 +136,32 @@ class TestDisplayRow:
         assert row["Post-Patch Passed"] == "No"
 
 
+class TestSortKey:
+    def test_bugfix_sort_key_is_natural_instance_id(self):
+        unsorted = [
+            create_bugfix_result(instance_id="repo__feature-10"),
+            create_bugfix_result(instance_id="repo__feature-2"),
+            create_bugfix_result(instance_id="repo__feature-1"),
+        ]
+        ordered_ids = [r.instance_id for r in sorted(unsorted, key=lambda r: r.sort_key)]
+        assert ordered_ids == ["repo__feature-1", "repo__feature-2", "repo__feature-10"]
+
+    def test_zero_padded_ids_sort_correctly(self):
+        unsorted = [
+            create_bugfix_result(instance_id="repo__feature-011"),
+            create_bugfix_result(instance_id="repo__feature-002"),
+            create_bugfix_result(instance_id="repo__feature-010"),
+            create_bugfix_result(instance_id="repo__feature-001"),
+        ]
+        ordered_ids = [r.instance_id for r in sorted(unsorted, key=lambda r: r.sort_key)]
+        assert ordered_ids == [
+            "repo__feature-001",
+            "repo__feature-002",
+            "repo__feature-010",
+            "repo__feature-011",
+        ]
+
+
 # ---------------------------------------------------------------------------
 # from_json dispatch
 # ---------------------------------------------------------------------------
