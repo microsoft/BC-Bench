@@ -110,7 +110,7 @@ def run_bcal_agent(
         start = time.monotonic()
         subprocess.run(
             cmd_args,
-            timeout=_config.timeout.agent_execution,
+            timeout=_config.timeout.bcal_execution,
             check=True,
         )
         execution_time = time.monotonic() - start
@@ -118,8 +118,8 @@ def run_bcal_agent(
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
         return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
     except subprocess.TimeoutExpired:
-        logger.exception(f"bcal CLI timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+        logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
+        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
         raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"bcal CLI execution failed: {e.stderr}")
@@ -157,14 +157,14 @@ def run_bcal_prompt(prompt: str, package_cache_path: Path, export_folder: Path) 
     try:
         result = subprocess.run(
             cmd_args,
-            timeout=_config.timeout.agent_execution,
+            timeout=_config.timeout.bcal_execution,
             capture_output=True,
             text=True,
             check=True,
         )
         stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
-        return f"(bcal timed out after {_config.timeout.agent_execution}s)\n{exc.stdout or ''}".strip()
+        return f"(bcal timed out after {_config.timeout.bcal_execution}s)\n{exc.stdout or ''}".strip()
 
     generated = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(export_folder.rglob("*.al")))
     # Prefer the generated AL (the "real" output) but always append stdout so refusals and

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.exceptions import AgentTimeoutError
+from bcbench.exceptions import AgentTimeoutError, EmptyDiffError
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
@@ -100,7 +100,13 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
             logger.info(f"Agent metrics: {context.metrics}")
             logger.info(f"Experiment configuration: {context.experiment}")
 
-        self.evaluate(context)
+        try:
+            self.evaluate(context)
+        except EmptyDiffError:
+            # Treat "agent made no changes" (truly empty edit, or asked a clarifying question instead of editing) as a graded failure, not an infra error: persist a zero-score result so the GH Actions step exits 0 and the per-instance jsonl is still uploaded.
+            result = context.category.result_class.create_empty_diff_failure(context)
+            self.save_result(context, result)
+            logger.warning(f"Agent produced no changes for {context.entry.instance_id}; recorded as failure with zero score.")
 
     def save_result(self, context: EvaluationContext[E], result: BaseEvaluationResult) -> None:
         """Save result directly using result object.

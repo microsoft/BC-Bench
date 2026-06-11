@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
+from pathlib import Path
 from typing import BinaryIO, cast
 
 _TRANSIENT_RETRY_ATTEMPTS = 3
 _TRANSIENT_RETRY_BACKOFF_SEC = 2.0
+
+_CERT_FILE_ENV = "CAPI_CERT_FILE"
+_CERT_TENANT_ENV = "CAPI_TENANT_ID"
+_CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
@@ -55,6 +61,46 @@ def _create_with_retry(client: object, kwargs: dict[str, object]) -> object:
     raise last_exc
 
 
+def _patch_credential_from_local_file(cert_file: Path) -> None:
+    """Avoid one Key Vault round-trip per LLM call by loading the CAPI client cert from disk.
+
+    The bridge is spawned once per agent turn; the stock `CapiModel()` constructor calls
+    `bc_eval.capi.capi_auth.get_certificate_credential()`, which hits Key Vault and AAD
+    every time. With N parallel jobs * M turns this both rate-limits Key Vault and races
+    on the local Azure CLI token cache (see analysis: `nl2al__trial-balance-diff-codeunit-1`
+    in run 73481163213). When the prepare-workspace job has staged the PFX locally we
+    monkey-patch the credential factory to read the same cert from disk.
+    """
+    tenant_id = os.environ.get(_CERT_TENANT_ENV)
+    client_id = os.environ.get(_CERT_CLIENT_ENV)
+    if not tenant_id or not client_id:
+        raise RuntimeError(f"{_CERT_FILE_ENV}={cert_file} requires {_CERT_TENANT_ENV} and {_CERT_CLIENT_ENV} to also be set.")
+
+    import bc_eval.capi.capi_auth as capi_auth
+    from azure.identity import CertificateCredential
+
+    def _credential_from_file() -> CertificateCredential:
+        return CertificateCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            certificate_path=str(cert_file),
+        )
+
+    capi_auth.get_certificate_credential = _credential_from_file
+
+
+def _maybe_install_local_cert_credential() -> None:
+    cert_path = os.environ.get(_CERT_FILE_ENV)
+    if not cert_path:
+        return
+
+    cert_file = Path(cert_path)
+    if not cert_file.is_file():
+        raise RuntimeError(f"{_CERT_FILE_ENV}={cert_path} is set but the file does not exist.")
+
+    _patch_credential_from_local_file(cert_file)
+
+
 def main() -> int:
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
@@ -69,6 +115,8 @@ def main() -> int:
         from bc_eval.capi.capi_model import CapiModel
     except ImportError as exc:
         raise RuntimeError("bc-eval[capi] is required for the bcal CAPI bridge.") from exc
+
+    _maybe_install_local_cert_credential()
 
     client = CapiModel()
     kwargs: dict[str, object] = {

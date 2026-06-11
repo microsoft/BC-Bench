@@ -187,6 +187,44 @@ class TestCreateAgentTimeout:
 
 
 # ---------------------------------------------------------------------------
+# create_empty_diff_failure
+# ---------------------------------------------------------------------------
+
+
+class TestCreateEmptyDiffFailure:
+    def test_execution_based_sets_resolved_and_build_false(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        result = BugFixResult.create_empty_diff_failure(ctx)
+        assert result.resolved is False
+        assert result.build is False
+        assert result.error_message == "Agent made no changes"
+        assert result.timeout is False
+        assert result.status_label == "Failed"
+
+    def test_testgen_inherits_execution_based_defaults(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path, category=EvaluationCategory.TEST_GENERATION)
+        result = TestGenerationResult.create_empty_diff_failure(ctx)
+        assert result.resolved is False
+        assert result.build is False
+        assert result.pre_patch_failed is False
+        assert result.post_patch_passed is False
+        assert result.error_message == "Agent made no changes"
+
+    def test_judge_based_records_error_only(self, tmp_path):
+        from bcbench.dataset import NL2ALEntry
+        from bcbench.results.base import JudgeBasedEvaluationResult
+        from tests.conftest import create_nl2al_entry
+
+        entry: NL2ALEntry = create_nl2al_entry()
+        ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)  # type: ignore[arg-type]
+        result = JudgeBasedEvaluationResult.create_empty_diff_failure(ctx)
+        assert result.error_message == "Agent made no changes"
+        assert result.output == ""
+        assert result.timeout is False
+        assert result.status_label == "Error"
+
+
+# ---------------------------------------------------------------------------
 # EvaluationResultSummary.from_results — dispatch + super() chain
 # ---------------------------------------------------------------------------
 

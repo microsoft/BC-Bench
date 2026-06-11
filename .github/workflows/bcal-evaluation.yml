@@ -38,6 +38,9 @@ concurrency:
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
+  # Stable absolute path so the .venv baked in prepare-workspace resolves
+  # its Python interpreter the same way in the matrix job.
+  UV_PYTHON_INSTALL_DIR: C:\bcbench-uv-python
 
 jobs:
   get-entries:
@@ -64,6 +67,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      bccache-key: ${{ steps.bccache.outputs.key }}
+      bccache-versions: ${{ steps.bccache.outputs.versions }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -142,6 +148,27 @@ jobs:
           uv venv workspace-out\bcal-capi-venv --python 3.12
           uv pip install --python workspace-out\bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.6" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
+      # Fetch the CAPI client certificate once here so the matrix job can skip
+      # azure/login + per-call Key Vault round-trips. Key Vault stores the
+      # PKCS#12 (.pfx) as a base64-encoded secret. The matrix job picks this
+      # up via $env:CAPI_CERT_FILE and the bc_eval_capi_bridge.py patcher.
+      - name: Stage CAPI client certificate from Key Vault
+        if: ${{ inputs.llm-backend == 'external-command' }}
+        shell: pwsh
+        env:
+          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+        run: |
+          if (-not $env:CAPI_CERTIFICATE_KEY_VAULT_NAME -or -not $env:CAPI_CERTIFICATE_NAME) {
+            throw "CAPI_CERTIFICATE_KEY_VAULT_NAME / CAPI_CERTIFICATE_NAME secrets must be set when llm-backend = external-command."
+          }
+          $b64 = az keyvault secret show --vault-name $env:CAPI_CERTIFICATE_KEY_VAULT_NAME --name $env:CAPI_CERTIFICATE_NAME --query value -o tsv
+          if (-not $b64) {
+            throw "Failed to fetch CAPI cert from Key Vault."
+          }
+          New-Item -ItemType Directory -Force -Path workspace-out | Out-Null
+          [IO.File]::WriteAllBytes("$pwd\workspace-out\capi-cert.pfx", [Convert]::FromBase64String($b64))
+
       - name: Save BcContainerHelper module to portable folder
         shell: pwsh
         run: |
@@ -188,13 +215,31 @@ jobs:
             Download-Artifacts -artifactUrl $url -includePlatform | Out-Null
           }
 
-      - name: Upload prepared workspace
-        uses: actions/upload-artifact@v6
+      # Bake the bcbench .venv + UV-managed Python interpreter into the cache
+      # so the matrix job can skip setup-python-uv entirely (-22 s * 125 jobs).
+      # UV_PYTHON_INSTALL_DIR is fixed at workflow-env scope so the venv's
+      # pyvenv.cfg references a path that also exists in the matrix job.
+      - name: Bake Python + bcbench venv
+        shell: pwsh
+        run: |
+          if (-not (Test-Path .venv)) {
+            throw ".venv missing after setup-python-uv; bake step cannot proceed."
+          }
+          if (-not (Test-Path $env:UV_PYTHON_INSTALL_DIR)) {
+            throw "$env:UV_PYTHON_INSTALL_DIR missing after uv python install; bake step cannot proceed."
+          }
+          Copy-Item -Path .venv -Destination workspace-out\bcbench-venv -Recurse -Force
+          Copy-Item -Path $env:UV_PYTHON_INSTALL_DIR -Destination workspace-out\uv-python -Recurse -Force
+
+      # Cache instead of upload-artifact: faster restore in matrix (~14 s -> a
+      # few s for cache hit) AND avoids the 54 s artifact upload here. Keyed
+      # by github.run_id so each workflow run gets its own slot and we never
+      # collide with concurrent runs.
+      - name: Save prepared workspace to cache
+        uses: actions/cache/save@v4
         with:
-          name: prepared-workspace-${{ github.run_id }}
-          path: workspace-out/
-          retention-days: 1
-          include-hidden-files: true
+          path: workspace-out
+          key: prepared-workspace-${{ github.run_id }}
 
   evaluate-with-bcal:
     runs-on: windows-latest
@@ -218,14 +263,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
-
-      - name: Download prepared workspace
-        uses: actions/download-artifact@v6
+      # Restore the prepared workspace (bcal CLI, bcbench .venv, UV-managed
+      # Python, BcContainerHelper, optional CAPI venv + client cert) from the
+      # cache populated by prepare-workspace. Cache restore is ~3-5x faster
+      # than the previous download-artifact step AND skips that job's upload.
+      - name: Restore prepared workspace from cache
+        id: restore-workspace
+        uses: actions/cache/restore@v4
         with:
-          name: prepared-workspace-${{ github.run_id }}
-          path: workspace-in
+          path: workspace-out
+          key: prepared-workspace-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Restore prepared workspace
         shell: pwsh
@@ -233,48 +281,53 @@ jobs:
           # bcal CLI: copy the portable --tool-path output into PATH.
           $dotnetTools = "$HOME\.dotnet\tools"
           New-Item -ItemType Directory -Force -Path $dotnetTools | Out-Null
-          Copy-Item -Path workspace-in\bcal-tools\* -Destination $dotnetTools -Recurse -Force
+          Copy-Item -Path workspace-out\bcal-tools\* -Destination $dotnetTools -Recurse -Force
           echo $dotnetTools >> $env:GITHUB_PATH
+
+          # bcbench venv + UV-managed Python: restore to absolute paths that
+          # match where prepare-workspace built them. The .venv pyvenv.cfg
+          # references $env:UV_PYTHON_INSTALL_DIR\cpython-... which we set at
+          # the workflow env level so it's identical in both jobs.
+          if (Test-Path workspace-out\bcbench-venv) {
+            if (Test-Path .venv) { Remove-Item -Recurse -Force .venv }
+            Move-Item -Path workspace-out\bcbench-venv -Destination .venv -Force
+            "$env:GITHUB_WORKSPACE\.venv\Scripts" >> $env:GITHUB_PATH
+          }
+          if (Test-Path workspace-out\uv-python) {
+            $parent = Split-Path -Parent $env:UV_PYTHON_INSTALL_DIR
+            New-Item -ItemType Directory -Force -Path $parent | Out-Null
+            if (Test-Path $env:UV_PYTHON_INSTALL_DIR) {
+              Remove-Item -Recurse -Force $env:UV_PYTHON_INSTALL_DIR
+            }
+            Move-Item -Path workspace-out\uv-python -Destination $env:UV_PYTHON_INSTALL_DIR -Force
+          }
 
           # CAPI venv (only present when llm-backend = external-command).
           # Run BCal step references $env:GITHUB_WORKSPACE\.bcal-capi-venv.
-          # uv venvs are relocatable as long as the base Python at the path
-          # in pyvenv.cfg also exists; we run `uv python install 3.12` here
-          # to make sure it does, then move the venv into place.
-          if (Test-Path workspace-in\bcal-capi-venv) {
-            uv python install 3.12
-            Move-Item -Path workspace-in\bcal-capi-venv -Destination .bcal-capi-venv -Force
+          if (Test-Path workspace-out\bcal-capi-venv) {
+            Move-Item -Path workspace-out\bcal-capi-venv -Destination .bcal-capi-venv -Force
           }
 
           # BcContainerHelper module: expose it on PSModulePath for the
           # symbol-download step (no more Install-Module).
-          "PSModulePath=$pwd\workspace-in\ps-modules;$env:PSModulePath" >> $env:GITHUB_ENV
+          "PSModulePath=$pwd\workspace-out\ps-modules;$env:PSModulePath" >> $env:GITHUB_ENV
 
           # Credprovider plugin: drop into ~/.nuget/plugins in case some
           # downstream step ever needs to hit the ADO feed again.
-          if (Test-Path workspace-in\nuget-plugins) {
+          if (Test-Path workspace-out\nuget-plugins) {
             $credDest = "$env:USERPROFILE\.nuget\plugins"
             New-Item -ItemType Directory -Force -Path $credDest | Out-Null
-            Copy-Item -Path workspace-in\nuget-plugins\* -Destination $credDest -Recurse -Force
+            Copy-Item -Path workspace-out\nuget-plugins\* -Destination $credDest -Recurse -Force
           }
 
       # A.2: restore bcartifacts cache that prepare-workspace populated.
-      # Same cache key recipe; Download-BCSymbols.ps1 then short-circuits.
-      - name: Compute bcartifacts cache key
-        id: bccache
-        shell: pwsh
-        run: |
-          $versions = uv run python -c "import json; print(','.join(sorted({json.loads(l)['environment_setup_version'] for l in open('dataset/nl2al.jsonl', encoding='utf-8') if l.strip()})))"
-          $bytes = [Text.Encoding]::UTF8.GetBytes("$versions|w1|v1")
-          $stream = [System.IO.MemoryStream]::new($bytes)
-          $hash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash.Substring(0, 16)
-          "key=bcartifacts-windows-$hash" >> $env:GITHUB_OUTPUT
-
+      # Cache key is reused via job output to avoid a redundant `uv run python`
+      # invocation here (we no longer have uv available in the matrix job).
       - name: Restore bcartifacts cache
         uses: actions/cache/restore@v4
         with:
           path: C:\bcartifacts.cache
-          key: ${{ steps.bccache.outputs.key }}
+          key: ${{ needs.prepare-workspace.outputs.bccache-key }}
           restore-keys: |
             bcartifacts-windows-
 
@@ -283,16 +336,8 @@ jobs:
         run: |
           .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
-      - name: Azure Login (OIDC) for CAPI Key Vault
-        if: ${{ inputs.llm-backend == 'external-command' }}
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
       - name: Run BCal for entry ${{ matrix.entry }}
-        timeout-minutes: 30
+        timeout-minutes: 18
         env:
           BCAL_LLM_BACKEND: ${{ inputs.llm-backend }}
           BCAL_LLM_MODEL: ${{ inputs.llm-backend == 'external-command' && inputs.external-model || inputs.model }}
@@ -305,20 +350,17 @@ jobs:
           CAPI_USER_OBJECT_ID: ${{ secrets.CAPI_USER_OBJECT_ID }}
           CAPI_PARTNER_SOURCE: ${{ secrets.CAPI_PARTNER_SOURCE }}
           CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
-          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
-          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend }}" -eq "external-command") {
-            $keyVaultToken = az account get-access-token --resource https://vault.azure.net --query accessToken -o tsv
-            if (-not $keyVaultToken) {
-              throw "Failed to acquire a Key Vault token for the CAPI bridge."
+            $env:CAPI_CERT_FILE = "$env:GITHUB_WORKSPACE\workspace-out\capi-cert.pfx"
+            if (-not (Test-Path $env:CAPI_CERT_FILE)) {
+              throw "Expected CAPI client cert at $env:CAPI_CERT_FILE but it was not restored from the cache."
             }
-            Write-Output "::add-mask::$keyVaultToken"
             $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
           }
 
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
