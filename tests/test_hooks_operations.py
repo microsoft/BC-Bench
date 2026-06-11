@@ -25,6 +25,8 @@ class TestSetupHooks:
         hook = hooks_config["hooks"]["preToolUse"][0]
         assert hook["type"] == "command"
         assert "powershell" in hook
+        assert "bash" in hook
+        assert "pwsh" in hook["bash"]
         assert "BCBENCH_TOOL_LOG" in hook["env"]
         assert hook["timeoutSec"] == 5
 

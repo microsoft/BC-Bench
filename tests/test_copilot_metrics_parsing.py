@@ -239,6 +239,47 @@ def test_parse_metrics_new_format_tokens_with_m():
     assert result.completion_tokens == 11600
 
 
+def test_parse_metrics_v1_0_61_format_full():
+    output_lines = [
+        "Changes    +23 -0\n",
+        "AI Credits 58.4 (1m 14s)\n",
+        "Tokens     ↑ 413.9k (368.1k cached) • ↓ 4.5k (500 reasoning)\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.execution_time == 74.0
+    assert result.prompt_tokens == 413900
+    assert result.completion_tokens == 4500
+
+
+def test_parse_metrics_v1_0_61_ai_credits_seconds_only():
+    output_lines = [
+        "AI Credits 12.3 (45s)\n",
+        "Tokens     ↑ 125.5k (10k cached) • ↓ 3.6k\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.execution_time == 45.0
+    assert result.prompt_tokens == 125500
+    assert result.completion_tokens == 3600
+
+
+def test_parse_metrics_v1_0_61_tokens_with_only_cached_annotation():
+    output_lines = [
+        "Tokens     ↑ 200k (180k cached) • ↓ 5k\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.prompt_tokens == 200000
+    assert result.completion_tokens == 5000
+
+
 def test_parse_turn_count_from_log():
     log_content = """
 2026-01-20T08:55:10.767Z [INFO] --- Start of group: Sending request to the AI model ---

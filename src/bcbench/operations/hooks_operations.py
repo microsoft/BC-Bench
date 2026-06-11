@@ -31,12 +31,18 @@ def _setup_copilot_hooks(repo_path: Path, script_path: str, tool_log_path: Path)
     hooks_dir = repo_path / ".github" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
+    # Per https://docs.github.com/en/copilot/reference/hooks-reference, only the field matching
+    # the runner OS is honored: `bash` on Linux/macOS and `powershell` on Windows. Provide both
+    # so the hook fires regardless of where the agent runs (Linux runners on GH Actions vs.
+    # local Windows dev). pwsh (PowerShell Core) is preinstalled on GitHub-hosted Linux runners
+    # and is what the .ps1 script needs.
     hooks_config = {
         "version": 1,
         "hooks": {
             "preToolUse": [
                 {
                     "type": "command",
+                    "bash": f'pwsh -NoProfile -ExecutionPolicy Bypass -File "{script_path}"',
                     "powershell": f'powershell -ExecutionPolicy Bypass -File "{script_path}"',
                     "env": {"BCBENCH_TOOL_LOG": str(tool_log_path.resolve())},
                     "timeoutSec": 5,
