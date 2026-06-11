@@ -71,15 +71,25 @@ def test_create_with_retry_gives_up_after_max_attempts(monkeypatch, http_respons
 @pytest.fixture
 def fake_capi_auth(monkeypatch):
     """Provide stubs for bc_eval.capi.capi_auth and azure.identity used by the cert patcher."""
+
+    def _original_get_certificate_credential():
+        return "kv-credential"
+
     bc_eval_pkg = types.ModuleType("bc_eval")
     bc_eval_pkg.__path__ = []
     capi_pkg = types.ModuleType("bc_eval.capi")
     capi_pkg.__path__ = []
     capi_auth_mod = types.ModuleType("bc_eval.capi.capi_auth")
-    capi_auth_mod.get_certificate_credential = lambda: "kv-credential"
+    capi_auth_mod.get_certificate_credential = _original_get_certificate_credential
+    # Simulate `from .capi_auth import get_certificate_credential` performed at
+    # import time by capi_model — this is the binding that previously stayed
+    # un-patched and caused the production failure.
+    capi_model_mod = types.ModuleType("bc_eval.capi.capi_model")
+    capi_model_mod.get_certificate_credential = _original_get_certificate_credential
     monkeypatch.setitem(sys.modules, "bc_eval", bc_eval_pkg)
     monkeypatch.setitem(sys.modules, "bc_eval.capi", capi_pkg)
     monkeypatch.setitem(sys.modules, "bc_eval.capi.capi_auth", capi_auth_mod)
+    monkeypatch.setitem(sys.modules, "bc_eval.capi.capi_model", capi_model_mod)
 
     class _StubCertCredential:
         def __init__(self, tenant_id, client_id, certificate_path):
@@ -94,11 +104,11 @@ def fake_capi_auth(monkeypatch):
     monkeypatch.setitem(sys.modules, "azure", azure_pkg)
     monkeypatch.setitem(sys.modules, "azure.identity", identity_mod)
 
-    return capi_auth_mod, _StubCertCredential
+    return capi_auth_mod, capi_model_mod, _StubCertCredential
 
 
 def test_maybe_install_local_cert_credential_noop_when_env_unset(monkeypatch, fake_capi_auth):
-    capi_auth_mod, _ = fake_capi_auth
+    capi_auth_mod, _, _ = fake_capi_auth
     monkeypatch.delenv(bc_eval_capi_bridge._CERT_FILE_ENV, raising=False)
     original = capi_auth_mod.get_certificate_credential
 
@@ -126,7 +136,7 @@ def test_maybe_install_local_cert_credential_requires_tenant_and_client_ids(monk
 
 
 def test_maybe_install_local_cert_credential_patches_factory(monkeypatch, fake_capi_auth, tmp_path):
-    capi_auth_mod, stub_cred = fake_capi_auth
+    capi_auth_mod, capi_model_mod, stub_cred = fake_capi_auth
     cert = tmp_path / "cert.pfx"
     cert.write_bytes(b"fake-pfx")
     monkeypatch.setenv(bc_eval_capi_bridge._CERT_FILE_ENV, str(cert))
@@ -135,9 +145,13 @@ def test_maybe_install_local_cert_credential_patches_factory(monkeypatch, fake_c
 
     bc_eval_capi_bridge._maybe_install_local_cert_credential()
 
-    cred = capi_auth_mod.get_certificate_credential()
-    assert isinstance(cred, stub_cred)
-    assert cred.tenant_id == "tenant-x"
-    assert cred.client_id == "client-y"
-    assert cred.certificate_path == str(cert)
+    # Patch must reach both the definition module AND every module that did
+    # `from .capi_auth import get_certificate_credential` at import time -
+    # capi_model is the one that bit us in production.
+    for mod in (capi_auth_mod, capi_model_mod):
+        cred = mod.get_certificate_credential()
+        assert isinstance(cred, stub_cred), f"{mod.__name__} still holds the original credential factory"
+        assert cred.tenant_id == "tenant-x"
+        assert cred.client_id == "client-y"
+        assert cred.certificate_path == str(cert)
 

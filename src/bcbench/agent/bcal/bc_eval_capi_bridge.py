@@ -71,6 +71,8 @@ def _patch_credential_from_local_file(cert_file: Path) -> None:
     in run 73481163213). When the prepare-workspace job has staged the PFX locally we
     monkey-patch the credential factory to read the same cert from disk.
     """
+    import sys
+
     tenant_id = os.environ.get(_CERT_TENANT_ENV)
     client_id = os.environ.get(_CERT_CLIENT_ENV)
     if not tenant_id or not client_id:
@@ -86,7 +88,19 @@ def _patch_credential_from_local_file(cert_file: Path) -> None:
             certificate_path=str(cert_file),
         )
 
+    # `bc_eval.capi.capi_model` (and possibly other modules) do
+    # `from .capi_auth import get_certificate_credential` at import time, which
+    # binds an independent reference in their own namespace. Patching only
+    # `capi_auth.get_certificate_credential` doesn't update those bindings, so
+    # the original Key-Vault-hitting function still runs from CapiModel.__init__.
+    # Walk sys.modules and rebind every reference that points at the original.
+    original = capi_auth.get_certificate_credential
     capi_auth.get_certificate_credential = _credential_from_file
+    for mod_name, mod in list(sys.modules.items()):
+        if mod is None or not mod_name.startswith("bc_eval"):
+            continue
+        if getattr(mod, "get_certificate_credential", None) is original:
+            mod.get_certificate_credential = _credential_from_file
 
 
 def _maybe_install_local_cert_credential() -> None:

@@ -350,6 +350,8 @@ jobs:
           CAPI_USER_OBJECT_ID: ${{ secrets.CAPI_USER_OBJECT_ID }}
           CAPI_PARTNER_SOURCE: ${{ secrets.CAPI_PARTNER_SOURCE }}
           CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend }}" -eq "external-command") {
