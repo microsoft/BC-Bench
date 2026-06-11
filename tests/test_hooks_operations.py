@@ -26,7 +26,8 @@ class TestSetupHooks:
         assert hook["type"] == "command"
         assert "powershell" in hook
         assert "bash" in hook
-        assert "pwsh" in hook["bash"]
+        assert "python3" in hook["bash"]
+        assert "log_tool_usage.py" in hook["bash"]
         assert "BCBENCH_TOOL_LOG" in hook["env"]
         assert hook["timeoutSec"] == 5
 

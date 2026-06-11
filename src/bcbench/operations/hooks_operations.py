@@ -13,13 +13,14 @@ _config = get_config()
 def setup_hooks(repo_path: Path, agent_type: AgentType, output_dir: Path) -> Path:
     tool_log_path = output_dir / _config.file_patterns.tool_usage_log
     tool_log_path.unlink(missing_ok=True)
-    script_path = str(_config.paths.hook_script_path.resolve())
+    ps_script = str(_config.paths.hook_script_path.resolve())
+    py_script = str(_config.paths.hook_script_path_py.resolve())
 
     match agent_type:
         case AgentType.COPILOT:
-            _setup_copilot_hooks(repo_path, script_path, tool_log_path)
+            _setup_copilot_hooks(repo_path, ps_script, py_script, tool_log_path)
         case AgentType.CLAUDE:
-            _setup_claude_hooks(repo_path, script_path, tool_log_path)
+            _setup_claude_hooks(repo_path, ps_script, tool_log_path)
         case _:
             raise ValueError(f"Unknown AgentType: {agent_type}")
 
@@ -27,23 +28,22 @@ def setup_hooks(repo_path: Path, agent_type: AgentType, output_dir: Path) -> Pat
     return tool_log_path
 
 
-def _setup_copilot_hooks(repo_path: Path, script_path: str, tool_log_path: Path) -> None:
+def _setup_copilot_hooks(repo_path: Path, ps_script: str, py_script: str, tool_log_path: Path) -> None:
     hooks_dir = repo_path / ".github" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
     # Per https://docs.github.com/en/copilot/reference/hooks-reference, only the field matching
-    # the runner OS is honored: `bash` on Linux/macOS and `powershell` on Windows. Provide both
-    # so the hook fires regardless of where the agent runs (Linux runners on GH Actions vs.
-    # local Windows dev). pwsh (PowerShell Core) is preinstalled on GitHub-hosted Linux runners
-    # and is what the .ps1 script needs.
+    # the runner OS is honored: `bash` on Linux/macOS and `powershell` on Windows. We use Python
+    # on Linux (preinstalled, no pwsh/stdin quirks) and keep the .ps1 path on Windows where it
+    # already works for bug-fix/test-gen runs on self-hosted runners.
     hooks_config = {
         "version": 1,
         "hooks": {
             "preToolUse": [
                 {
                     "type": "command",
-                    "bash": f'pwsh -NoProfile -ExecutionPolicy Bypass -File "{script_path}"',
-                    "powershell": f'powershell -ExecutionPolicy Bypass -File "{script_path}"',
+                    "bash": f'python3 "{py_script}"',
+                    "powershell": f'powershell -ExecutionPolicy Bypass -File "{ps_script}"',
                     "env": {"BCBENCH_TOOL_LOG": str(tool_log_path.resolve())},
                     "timeoutSec": 5,
                 }
