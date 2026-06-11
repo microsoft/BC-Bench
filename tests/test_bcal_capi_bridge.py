@@ -92,10 +92,11 @@ def fake_capi_auth(monkeypatch):
     monkeypatch.setitem(sys.modules, "bc_eval.capi.capi_model", capi_model_mod)
 
     class _StubCertCredential:
-        def __init__(self, tenant_id, client_id, certificate_path):
+        def __init__(self, tenant_id, client_id, certificate_path, send_certificate_chain=False):
             self.tenant_id = tenant_id
             self.client_id = client_id
             self.certificate_path = certificate_path
+            self.send_certificate_chain = send_certificate_chain
 
     azure_pkg = types.ModuleType("azure")
     azure_pkg.__path__ = []
@@ -154,4 +155,7 @@ def test_maybe_install_local_cert_credential_patches_factory(monkeypatch, fake_c
         assert cred.tenant_id == "tenant-x"
         assert cred.client_id == "client-y"
         assert cred.certificate_path == str(cert)
+        # SNI (x5c) auth is required by the CAPI app registration; without it
+        # AAD rejects the client assertion with AADSTS700027.
+        assert cred.send_certificate_chain is True
 

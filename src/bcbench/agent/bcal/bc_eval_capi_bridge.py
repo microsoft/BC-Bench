@@ -82,10 +82,17 @@ def _patch_credential_from_local_file(cert_file: Path) -> None:
     from azure.identity import CertificateCredential
 
     def _credential_from_file() -> CertificateCredential:
+        # send_certificate_chain=True switches azure-identity from thumbprint-based
+        # client auth to SNI (Subject Name + Issuer), i.e. it includes the x5c
+        # claim in the JWT header. This matches what bc_eval's stock
+        # make_client_assertion_factory does and is what the CAPI app registration
+        # validates against. Without it, AAD returns AADSTS700027 ("certificate
+        # ... is not registered on application").
         return CertificateCredential(
             tenant_id=tenant_id,
             client_id=client_id,
             certificate_path=str(cert_file),
+            send_certificate_chain=True,
         )
 
     # `bc_eval.capi.capi_model` (and possibly other modules) do
