@@ -2,6 +2,9 @@ from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from bcbench.dataset import ReviewComment
 from bcbench.results.base import BaseEvaluationResult
@@ -14,6 +17,51 @@ def _resolve_domain(context: "EvaluationContext") -> str:
     entry = context.entry
     domain = getattr(entry, "domain", None) or entry.metadata.area
     return domain if isinstance(domain, str) and domain else "unknown"
+
+
+_METRIC_EXPLANATIONS = """\
+<details>
+<summary>📖 How to read these metrics</summary>
+
+- **Micro** — sums matched/generated/expected across all tasks and computes one score; tasks with many comments dominate.
+- **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume.
+- **Matched comment** — a generated comment paired with an expected one by file and line proximity (within the configured tolerance), then confirmed by an LLM judge to describe the same underlying issue.
+- **F1** — harmonic mean of precision and recall; balances both equally. (Special case of Fβ at β=1.)
+- **Fβ** — generalized F-score with a tunable precision/recall trade-off:
+
+  ```
+  F_β = (1 + β²) · (P · R) / (β² · P + R)
+  ```
+
+  where *P* = precision, *R* = recall. β < 1 favors precision; β > 1 favors recall.
+- **Fβ (β=0.5)** — precision-leaning; use when false positives are costly (noisy reviews waste reviewer time).
+- **Fβ (β=2)** — recall-leaning; use when missing issues is costly.
+- **Severity MAE** — mean absolute error between generated and expected severity levels (matched comments only). Lower is better; `0` = exact match.
+- **Valid review output rate** — fraction of runs whose output parsed into a structured review. Failures score 0 on every other metric.
+
+</details>
+"""
+
+
+_CONSOLE_METRIC_EXPLANATIONS = (
+    "[bold]Micro[/bold] — volume-weighted across all comments; tasks with many comments dominate.\n"
+    "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same.\n"
+    "[bold]Matched comment[/bold] — paired by file + line proximity, then confirmed by an LLM judge to describe the same underlying issue.\n"
+    "[bold]F1[/bold] — harmonic mean of precision and recall (special case of Fβ at β=1).\n"
+    "[bold]Fβ[/bold] — F_β = (1 + β²) · (P · R) / (β² · P + R); β<1 favors precision, β>1 favors recall.\n"
+    "[bold]Fβ (β=0.5)[/bold] — precision-leaning; use when false positives are costly.\n"
+    "[bold]Fβ (β=2)[/bold] — recall-leaning; use when missing issues is costly.\n"
+    "[bold]Severity MAE[/bold] — mean absolute error of severity levels for matched comments; lower is better, 0 = exact match.\n"
+    "[bold]Valid review output rate[/bold] — fraction of runs whose output parsed into a structured review."
+)
+
+
+def _build_console_table(title: str, columns: list[str], row: list[str]) -> Table:
+    table = Table(title=title, title_justify="left", title_style="bold cyan", show_header=True, header_style="bold")
+    for column in columns:
+        table.add_column(column, justify="right")
+    table.add_row(*row)
+    return table
 
 
 def _with_comment_domains(generated_comments: list[ReviewComment], domain: str) -> list[ReviewComment]:
@@ -226,6 +274,105 @@ class CodeReviewResultSummary(EvaluationResultSummary):
             "severity_mae": round(self.severity_mae, 3),
             "valid_review_output_rate": round(self.valid_review_output_rate * 100, 1),
         }
+
+    def render_github_metrics_markdown(self) -> str:
+        micro_p = self.precision * 100
+        micro_r = self.recall * 100
+        micro_f1 = self.f1 * 100
+        micro_f05 = self.f_beta_05 * 100
+        micro_f2 = self.f_beta_2 * 100
+        macro_p = self.macro_precision * 100
+        macro_r = self.macro_recall * 100
+        macro_f1 = self.macro_f1 * 100
+        macro_f05 = self.macro_f_beta_05 * 100
+        macro_f2 = self.macro_f_beta_2 * 100
+        valid_rate = self.valid_review_output_rate * 100
+        return (
+            "## Comment counts\n"
+            "\n"
+            "| Generated | Expected | Matched | Incorrect | Missed |\n"
+            "|----------:|---------:|--------:|----------:|-------:|\n"
+            f"| {self.generated_comment_count} | {self.expected_comment_count} | {self.matched_comment_count} | {self.incorrect_comment_count} | {self.missed_comment_count} |\n"
+            "\n"
+            "## Micro metrics (volume-weighted across all comments)\n"
+            "\n"
+            "| Precision | Recall | F1 | Fβ (β=0.5) | Fβ (β=2) |\n"
+            "|----------:|-------:|---:|-----------:|---------:|\n"
+            f"| {micro_p:.1f}% | {micro_r:.1f}% | {micro_f1:.1f}% | {micro_f05:.1f}% | {micro_f2:.1f}% |\n"
+            "\n"
+            "## Macro metrics (averaged per task)\n"
+            "\n"
+            "| Precision | Recall | F1 | Fβ (β=0.5) | Fβ (β=2) |\n"
+            "|----------:|-------:|---:|-----------:|---------:|\n"
+            f"| {macro_p:.1f}% | {macro_r:.1f}% | {macro_f1:.1f}% | {macro_f05:.1f}% | {macro_f2:.1f}% |\n"
+            "\n"
+            "## Quality\n"
+            "\n"
+            "| Severity MAE | Valid review output rate |\n"
+            "|-------------:|-------------------------:|\n"
+            f"| {self.severity_mae:.3f} | {valid_rate:.1f}% |\n"
+            "\n"
+            f"{_METRIC_EXPLANATIONS}"
+        )
+
+    def render_console_metrics(self, console: Console) -> None:
+        metric_columns = ["Precision", "Recall", "F1", "Fβ (β=0.5)", "Fβ (β=2)"]
+
+        console.print(
+            _build_console_table(
+                "Comment counts",
+                ["Generated", "Expected", "Matched", "Incorrect", "Missed"],
+                [
+                    str(self.generated_comment_count),
+                    str(self.expected_comment_count),
+                    str(self.matched_comment_count),
+                    str(self.incorrect_comment_count),
+                    str(self.missed_comment_count),
+                ],
+            )
+        )
+        console.print(
+            _build_console_table(
+                "Micro metrics (volume-weighted across all comments)",
+                metric_columns,
+                [
+                    f"{self.precision * 100:.1f}%",
+                    f"{self.recall * 100:.1f}%",
+                    f"{self.f1 * 100:.1f}%",
+                    f"{self.f_beta_05 * 100:.1f}%",
+                    f"{self.f_beta_2 * 100:.1f}%",
+                ],
+            )
+        )
+        console.print(
+            _build_console_table(
+                "Macro metrics (averaged per task)",
+                metric_columns,
+                [
+                    f"{self.macro_precision * 100:.1f}%",
+                    f"{self.macro_recall * 100:.1f}%",
+                    f"{self.macro_f1 * 100:.1f}%",
+                    f"{self.macro_f_beta_05 * 100:.1f}%",
+                    f"{self.macro_f_beta_2 * 100:.1f}%",
+                ],
+            )
+        )
+        console.print(
+            _build_console_table(
+                "Quality",
+                ["Severity MAE", "Valid review output rate"],
+                [f"{self.severity_mae:.3f}", f"{self.valid_review_output_rate * 100:.1f}%"],
+            )
+        )
+        console.print(
+            Panel(
+                _CONSOLE_METRIC_EXPLANATIONS,
+                title="📖 How to read these metrics",
+                title_align="left",
+                border_style="dim",
+                padding=(1, 2),
+            )
+        )
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":

@@ -22,13 +22,11 @@ def _status_style(status_label: str) -> tuple[str, str]:
 
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
-    display_metrics: dict[str, int | float | bool] = summary.display_summary()
 
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
     console.print(f"Total Processed: [bold]{total}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
-    for key, value in display_metrics.items():
-        console.print(f"{key.replace('_', ' ').title()}: [bold]{value}[/bold]")
+    summary.render_console_metrics(console)
 
     # Display average tool usage if available
     tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
@@ -71,7 +69,6 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
 
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
-    display_metrics: dict[str, int | float | bool] = summary.display_summary()
 
     mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
     al_lsp_enabled = "Yes" if results[0].experiment and results[0].experiment.al_lsp_enabled else "No"
@@ -89,8 +86,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             tool_lines = [f"  - `{tool}`: {count}" for tool, count in sorted_tools]
             tool_usage_section = "\n\n## Average Tool Usage\n" + "\n".join(tool_lines)
 
-    # Build category-specific summary lines
-    display_lines = "\n".join(f"- {key.replace('_', ' ').title()}: {value}" for key, value in display_metrics.items())
+    metrics_section = summary.render_github_metrics_markdown()
 
     markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
 - Category: `{results[0].category.value}`
@@ -100,8 +96,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
 - Skills: {skills}
 - Custom Agent: {custom_agent}
 
-## Result Summary
-{display_lines}
+{metrics_section}
 
 {tool_usage_section}
 

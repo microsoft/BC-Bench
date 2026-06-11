@@ -309,6 +309,75 @@ class TestCodeReviewSummary:
         assert summary.recall == 0.25
         assert summary.f1 == 0.333
 
+    def test_render_github_metrics_markdown_has_grouped_sections(self):
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        result = create_codereview_result(
+            instance_id="test__render-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
+            expected_comments=expected_comments,
+        )
+
+        summary = CodeReviewResultSummary.from_results([result], run_id="run-1")
+        markdown = summary.render_github_metrics_markdown()
+
+        # Section headers replace the old flat bullet list.
+        assert "## Comment counts" in markdown
+        assert "## Micro metrics (volume-weighted across all comments)" in markdown
+        assert "## Macro metrics (averaged per task)" in markdown
+        assert "## Quality" in markdown
+        assert "## Result Summary" not in markdown
+
+        # Percent units applied to rate-style metrics.
+        assert "100.0%" in markdown
+
+        # Beta renders as the Greek symbol, not the LaTeX escape sequence.
+        assert "β" in markdown
+        assert "\\beta" not in markdown
+
+        # Collapsible explanations are present.
+        assert "<details>" in markdown
+        assert "How to read these metrics" in markdown
+        assert "LLM judge" in markdown
+        assert "F_β = (1 + β²)" in markdown
+
+    def test_render_console_metrics_uses_grouped_rich_tables(self):
+        from io import StringIO
+
+        from rich.console import Console
+
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        result = create_codereview_result(
+            instance_id="test__render-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
+            expected_comments=expected_comments,
+        )
+
+        summary = CodeReviewResultSummary.from_results([result], run_id="run-1")
+        buffer = StringIO()
+        # Force a wide terminal so Rich does not truncate column headers in the captured output.
+        console = Console(file=buffer, force_terminal=False, width=200)
+        summary.render_console_metrics(console)
+        output = buffer.getvalue()
+
+        # Grouped section titles appear instead of the old flat key/value bullets.
+        assert "Comment counts" in output
+        assert "Micro metrics" in output
+        assert "Macro metrics" in output
+        assert "Quality" in output
+
+        # Percent units on rate-style metrics; Greek beta, not LaTeX.
+        assert "100.0%" in output
+        assert "β" in output
+        assert "\\beta" not in output
+
+        # Explanations panel rendered.
+        assert "How to read these metrics" in output
+        assert "LLM judge" in output
+
 
 class TestCodeReviewLeaderboardAggregate:
     def _make_summary(self, expected_comments, output: str, run_id: str) -> CodeReviewResultSummary:
