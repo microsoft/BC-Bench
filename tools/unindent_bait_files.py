@@ -48,7 +48,7 @@ def unindent_plus_line(line: str) -> str:
     if len(indent) % 4 != 0:
         return line  # not pure 4-space; leave alone
     new_indent = " " * (len(indent) // 2)
-    return "+" + new_indent + payload[len(indent):]
+    return "+" + new_indent + payload[len(indent) :]
 
 
 def reindent_file_block(patch: str, file_path: str) -> tuple[str, int]:

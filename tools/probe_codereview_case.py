@@ -13,20 +13,23 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
-import os
 import shutil
 import stat
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
-def _force_remove(func, path, exc):
-    os.chmod(path, stat.S_IWRITE)
+def _force_remove(func: Callable[[str], Any], path: str, exc: BaseException) -> None:
+    Path(path).chmod(stat.S_IWRITE)
     func(path)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASET = REPO_ROOT / "dataset" / "codereview.jsonl"
@@ -61,8 +64,8 @@ class Entry:
 def load_entries(only: list[str] | None = None, zero_only: bool = False, domain: str | None = None) -> list[Entry]:
     out: list[Entry] = []
     with DATASET.open(encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
+        for raw_line in fh:
+            line = raw_line.strip()
             if not line:
                 continue
             raw = json.loads(line)
@@ -74,13 +77,15 @@ def load_entries(only: list[str] | None = None, zero_only: bool = False, domain:
                 continue
             if zero_only and raw["expected_comments"]:
                 continue
-            out.append(Entry(
-                instance_id=iid,
-                domain=ed,
-                patch=raw["patch"],
-                expected_comments=raw["expected_comments"],
-                match_line_tolerance=raw.get("match_line_tolerance", 2),
-            ))
+            out.append(
+                Entry(
+                    instance_id=iid,
+                    domain=ed,
+                    patch=raw["patch"],
+                    expected_comments=raw["expected_comments"],
+                    match_line_tolerance=raw.get("match_line_tolerance", 2),
+                )
+            )
     return out
 
 
@@ -104,7 +109,7 @@ def materialize_patch(repo_path: Path, patch: str) -> list[str]:
         if line.startswith("diff --git "):
             flush()
             continue
-        if line.startswith("--- ") or line.startswith("new file mode") or line.startswith("index "):
+        if line.startswith(("--- ", "new file mode", "index ")):
             continue
         if line.startswith("+++ "):
             rel = re.sub(r"^[ab]/", "", line[4:].strip())
@@ -115,9 +120,7 @@ def materialize_patch(repo_path: Path, patch: str) -> list[str]:
             continue
         if current_path is None:
             continue
-        if line.startswith("+"):
-            current_content.append(line[1:])
-        elif line.startswith(" "):
+        if line.startswith(("+", " ")):
             current_content.append(line[1:])
     flush()
     return materialized
@@ -209,7 +212,10 @@ def evaluate(entry: Entry, findings: list[dict]) -> dict:
         "matched": len(matched),
         "missed": [{"file": m["file"], "line": m["line_start"], "issue": (m.get("body") or m.get("issue") or "")[:80]} for m in missed],
         "ood": [{"file": f.get("filePath"), "line": f.get("lineNumber"), "domain": f.get("domain"), "severity": f.get("severity"), "issue": (f.get("issue") or "")[:160]} for f in ood],
-        "in_domain_findings": [{"file": f.get("filePath"), "line": f.get("lineNumber"), "severity": f.get("severity"), "issue": (f.get("issue") or "")[:200], "recommendation": (f.get("recommendation") or "")[:160]} for f in in_domain],
+        "in_domain_findings": [
+            {"file": f.get("filePath"), "line": f.get("lineNumber"), "severity": f.get("severity"), "issue": (f.get("issue") or "")[:200], "recommendation": (f.get("recommendation") or "")[:160]}
+            for f in in_domain
+        ],
         "total_findings": len(findings),
     }
 
@@ -233,10 +239,8 @@ def probe_one(entry: Entry, model: str, keep: bool = False) -> dict:
     if not keep:
         # leave repo for inspection if errors, else trim heavy logs
         for p in log_dir.glob("*.log"):
-            try:
+            with contextlib.suppress(OSError):
                 p.unlink()
-            except OSError:
-                pass
     return report
 
 

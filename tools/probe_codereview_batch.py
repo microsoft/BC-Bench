@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -27,8 +26,8 @@ PROBE = REPO_ROOT / "tools" / "probe_codereview_case.py"
 def select_ids(only: list[str] | None, zero_only: bool, domain: str | None) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     with DATASET.open(encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
+        for raw_line in fh:
+            line = raw_line.strip()
             if not line:
                 continue
             raw = json.loads(line)
@@ -94,7 +93,7 @@ def main() -> None:
             if rc != 0:
                 failed.append(iid)
     total = time.time() - t_start
-    print(f"\nBatch done in {total/60:.1f} min. {len(failed)} failures.", flush=True)
+    print(f"\nBatch done in {total / 60:.1f} min. {len(failed)} failures.", flush=True)
     if failed:
         for iid in failed:
             print(f"  FAIL {iid}  see tmp/cr-probe-reports/{iid}.stdout.log", flush=True)

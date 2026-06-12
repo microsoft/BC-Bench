@@ -11,6 +11,7 @@ Fixes:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -85,7 +86,7 @@ PRIVACY_008_CONTENT = """codeunit 50327 "Customer Sync Dispatcher"
 """
 
 
-FIXES: dict[str, callable] = {}
+FIXES: dict[str, Callable[[dict], None]] = {}
 
 
 def fix_security_002(entry: dict) -> None:
@@ -131,10 +132,7 @@ def fix_style_002(entry: dict) -> None:
             "line_end": 33,
             "severity": "low",
             "domain": "style",
-            "body": (
-                "The codeunit body uses 4-space indentation for nested AL blocks. "
-                "Project style requires 2-space indentation consistently throughout."
-            ),
+            "body": ("The codeunit body uses 4-space indentation for nested AL blocks. Project style requires 2-space indentation consistently throughout."),
         }
     ]
 

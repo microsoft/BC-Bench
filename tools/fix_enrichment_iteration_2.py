@@ -95,10 +95,7 @@ def fix_style_002(entry: dict) -> None:
             "line_end": 33,
             "severity": "low",
             "domain": "style",
-            "body": (
-                "The codeunit body uses 4-space indentation for nested AL blocks. "
-                "Project style requires 2-space indentation consistently throughout."
-            ),
+            "body": ("The codeunit body uses 4-space indentation for nested AL blocks. Project style requires 2-space indentation consistently throughout."),
         },
         {
             "file": "src/SelfReferenceStyle.Codeunit.al",
@@ -106,10 +103,7 @@ def fix_style_002(entry: dict) -> None:
             "line_end": 5,
             "severity": "low",
             "domain": "style",
-            "body": (
-                "Self-references inside codeunits should be qualified with this. "
-                "Use this.IsCustomerNoFilled(CustomerNo) for clarity."
-            ),
+            "body": ("Self-references inside codeunits should be qualified with this. Use this.IsCustomerNoFilled(CustomerNo) for clarity."),
         },
     ]
 
