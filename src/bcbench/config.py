@@ -41,6 +41,7 @@ class PathConfig:
     leaderboard_dir: Path
     agent_share_dir: Path
     hook_script_path: Path
+    hook_script_path_py: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -56,6 +57,7 @@ class PathConfig:
             leaderboard_dir=root / "docs" / "_data",
             agent_share_dir=agent_share_dir,
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
+            hook_script_path_py=agent_share_dir / "hooks" / "log_tool_usage.py",
         )
 
 

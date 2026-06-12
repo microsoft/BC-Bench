@@ -1,6 +1,7 @@
 """Base evaluation result class with shared metrics across all evaluation categories."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Self
 
@@ -10,6 +11,15 @@ from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
+
+
+def natural_sort_key(value: str) -> tuple[object, ...]:
+    """Split a string into a tuple suitable for human-friendly sorting.
+
+    "test__name-2" sorts before "test__name-10" because numeric runs are compared as integers.
+    Non-numeric segments are lowercased for case-insensitive ordering.
+    """
+    return tuple(int(segment) if segment.isdigit() else segment.lower() for segment in re.split(r"(\d+)", value))
 
 
 class BaseEvaluationResult(BaseModel):
@@ -86,6 +96,15 @@ class BaseEvaluationResult(BaseModel):
         Subclasses override to surface category-specific per-instance info.
         """
         return {}
+
+    @property
+    def sort_key(self) -> tuple[object, ...]:
+        """Sort key for the detailed results table.
+
+        Default orders by natural-sorted instance_id (so ``-002`` precedes ``-010``).
+        Subclasses can prepend category-specific keys (e.g. domain for code-review).
+        """
+        return (natural_sort_key(self.instance_id),)
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "BaseEvaluationResult":

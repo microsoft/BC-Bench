@@ -38,10 +38,15 @@ def precision_recall(matched_count: int, generated_count: int, expected_count: i
     return precision, recall
 
 
-def f1_score(precision: float, recall: float) -> float:
+def f_beta_score(precision: float, recall: float, beta: float = 1.0) -> float:
     if precision + recall == 0:
         return 0.0
-    return 2 * precision * recall / (precision + recall)
+    beta_sq = beta**2
+    return (1 + beta_sq) * precision * recall / (beta_sq * precision + recall)
+
+
+def f1_score(precision: float, recall: float) -> float:
+    return f_beta_score(precision, recall, beta=1.0)
 
 
 def pass_hat_k(num_trials: int, success_count: int, k: int) -> float:

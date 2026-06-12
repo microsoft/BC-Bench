@@ -115,11 +115,23 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
 
 
 class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
-    """Aggregate for the code-review category: mean F1 across runs."""
+    """Aggregate for the code-review category: mean F1 across runs with bootstrap CI."""
 
     f1: float = 0.0
+    f1_ci_low: float | None = None
+    f1_ci_high: float | None = None
+    f_beta_05: float = 0.0
+    f_beta_2: float = 0.0
     precision: float = 0.0
     recall: float = 0.0
+
+    macro_f1: float = 0.0
+    macro_f1_ci_low: float | None = None
+    macro_f1_ci_high: float | None = None
+    macro_f_beta_05: float = 0.0
+    macro_f_beta_2: float = 0.0
+    macro_precision: float = 0.0
+    macro_recall: float = 0.0
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
@@ -128,15 +140,28 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
         base = super().from_runs(runs)
         assert isinstance(base, CodeReviewLeaderboardAggregate)
 
-        per_run_f1: list[float] = [run.f1 for run in runs if isinstance(run, CodeReviewResultSummary)]
-        per_run_precision: list[float] = [run.precision for run in runs if isinstance(run, CodeReviewResultSummary)]
-        per_run_recall: list[float] = [run.recall for run in runs if isinstance(run, CodeReviewResultSummary)]
+        cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
+        n = len(cr_runs)
+
+        f1_ci = bootstrap_ci([r.f1 for r in cr_runs])
+        macro_f1_ci = bootstrap_ci([r.macro_f1 for r in cr_runs])
 
         return base.model_copy(
             update={
-                "f1": sum(per_run_f1) / len(per_run_f1),
-                "precision": sum(per_run_precision) / len(per_run_precision),
-                "recall": sum(per_run_recall) / len(per_run_recall),
+                "f1": round(f1_ci["mean"], 3) if f1_ci["mean"] is not None else 0.0,
+                "f1_ci_low": round(f1_ci["ci_low"], 3) if f1_ci["ci_low"] is not None else None,
+                "f1_ci_high": round(f1_ci["ci_high"], 3) if f1_ci["ci_high"] is not None else None,
+                "f_beta_05": sum(r.f_beta_05 for r in cr_runs) / n,
+                "f_beta_2": sum(r.f_beta_2 for r in cr_runs) / n,
+                "precision": sum(r.precision for r in cr_runs) / n,
+                "recall": sum(r.recall for r in cr_runs) / n,
+                "macro_f1": round(macro_f1_ci["mean"], 3) if macro_f1_ci["mean"] is not None else 0.0,
+                "macro_f1_ci_low": round(macro_f1_ci["ci_low"], 3) if macro_f1_ci["ci_low"] is not None else None,
+                "macro_f1_ci_high": round(macro_f1_ci["ci_high"], 3) if macro_f1_ci["ci_high"] is not None else None,
+                "macro_f_beta_05": sum(r.macro_f_beta_05 for r in cr_runs) / n,
+                "macro_f_beta_2": sum(r.macro_f_beta_2 for r in cr_runs) / n,
+                "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
+                "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
             }
         )
 

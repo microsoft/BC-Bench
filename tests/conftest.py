@@ -161,6 +161,7 @@ def create_codereview_entry(
     project_paths: list[str] | None = None,
     patch: str = VALID_PATCH,
     created_at: str = VALID_CREATED_AT,
+    domain: str | None = None,
     expected_comments: list[ReviewComment] | None = None,
 ) -> CodeReviewEntry:
     if project_paths is None:
@@ -179,6 +180,7 @@ def create_codereview_entry(
         project_paths=project_paths,
         patch=patch,
         created_at=created_at,
+        domain=domain,
         expected_comments=expected_comments,
     )
 
@@ -191,10 +193,14 @@ def create_codereview_result(
     expected_comments: list[ReviewComment] | None = None,
     line_tolerance: int = 5,
     metrics: AgentMetrics | None = None,
+    domain: str | None = None,
+    metadata_area: str | None = None,
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
-    entry = create_codereview_entry(instance_id=instance_id, expected_comments=expected_comments)
+    entry = create_codereview_entry(instance_id=instance_id, expected_comments=expected_comments, domain=domain)
+    if metadata_area:
+        entry = entry.model_copy(update={"metadata": entry.metadata.model_copy(update={"area": metadata_area})})
     context = EvaluationContext[CodeReviewEntry](
         entry=entry,
         repo_path=Path(),

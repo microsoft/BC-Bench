@@ -5,13 +5,16 @@ from collections import Counter
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 logger = get_logger(__name__)
 
@@ -61,6 +64,24 @@ class EvaluationResultSummary(BaseModel, ABC):
 
         Subclasses must override. Keys become display labels (underscores replaced with spaces and title-cased). Values are shown as-is.
         """
+
+    def render_github_metrics_markdown(self) -> str:
+        """Markdown for the metrics block between the run header and the Detailed Results table.
+
+        Default renders ``display_summary()`` as a bullet list under "## Result Summary".
+        Subclasses can override for richer layouts (tables, grouped sections, explanations).
+        """
+        display_metrics = self.display_summary()
+        lines = "\n".join(f"- {key.replace('_', ' ').title()}: {value}" for key, value in display_metrics.items())
+        return f"## Result Summary\n{lines}"
+
+    def render_console_metrics(self, console: "Console") -> None:
+        """Print the metrics block to a Rich console between the run header and the Detailed Results table.
+
+        Default renders ``display_summary()`` as a bullet list. Subclasses can override for grouped tables and explanations.
+        """
+        for key, value in self.display_summary().items():
+            console.print(f"{key.replace('_', ' ').title()}: [bold]{value}[/bold]")
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":

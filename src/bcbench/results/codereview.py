@@ -2,15 +2,71 @@ from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from bcbench.dataset import ReviewComment
-from bcbench.logger import get_logger
-from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.metrics import f1_score, precision_recall
+from bcbench.results.base import BaseEvaluationResult, natural_sort_key
+from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
 from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import EvaluationContext
 
-logger = get_logger(__name__)
+
+def _resolve_domain(context: "EvaluationContext") -> str:
+    entry = context.entry
+    domain = getattr(entry, "domain", None) or entry.metadata.area
+    return domain if isinstance(domain, str) and domain else "unknown"
+
+
+_METRIC_EXPLANATIONS = """\
+<details>
+<summary>📖 How to read these metrics</summary>
+
+- **Micro** — sums matched/generated/expected across all tasks and computes one score; tasks with many comments dominate.
+- **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume.
+- **Matched comment** — a generated comment paired with an expected one by file and line proximity (within the configured tolerance), then confirmed by an LLM judge to describe the same underlying issue.
+- **F1** — harmonic mean of precision and recall; balances both equally. (Special case of Fβ at β=1.)
+- **Fβ** — generalized F-score with a tunable precision/recall trade-off:
+
+  ```
+  F_β = (1 + β²) · (P · R) / (β² · P + R)
+  ```
+
+  where *P* = precision, *R* = recall. β < 1 favors precision; β > 1 favors recall.
+- **Fβ (β=0.5)** — precision-leaning; use when false positives are costly (noisy reviews waste reviewer time).
+- **Fβ (β=2)** — recall-leaning; use when missing issues is costly.
+- **Severity MAE** — mean absolute error between generated and expected severity levels (matched comments only). Lower is better; `0` = exact match.
+- **Valid review output rate** — fraction of runs whose output parsed into a structured review. Failures score 0 on every other metric.
+
+</details>
+"""
+
+
+_CONSOLE_METRIC_EXPLANATIONS = (
+    "[bold]Micro[/bold] — volume-weighted across all comments; tasks with many comments dominate.\n"
+    "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same.\n"
+    "[bold]Matched comment[/bold] — paired by file + line proximity, then confirmed by an LLM judge to describe the same underlying issue.\n"
+    "[bold]F1[/bold] — harmonic mean of precision and recall (special case of Fβ at β=1).\n"
+    "[bold]Fβ[/bold] — F_β = (1 + β²) · (P · R) / (β² · P + R); β<1 favors precision, β>1 favors recall.\n"
+    "[bold]Fβ (β=0.5)[/bold] — precision-leaning; use when false positives are costly.\n"
+    "[bold]Fβ (β=2)[/bold] — recall-leaning; use when missing issues is costly.\n"
+    "[bold]Severity MAE[/bold] — mean absolute error of severity levels for matched comments; lower is better, 0 = exact match.\n"
+    "[bold]Valid review output rate[/bold] — fraction of runs whose output parsed into a structured review."
+)
+
+
+def _build_console_table(title: str, columns: list[str], row: list[str]) -> Table:
+    table = Table(title=title, title_justify="left", title_style="bold cyan", show_header=True, header_style="bold")
+    for column in columns:
+        table.add_column(column, justify="right")
+    table.add_row(*row)
+    return table
+
+
+def _with_comment_domains(generated_comments: list[ReviewComment], domain: str) -> list[ReviewComment]:
+    """Stamp the entry domain onto comments that have no explicit domain. All comments are kept."""
+    return [comment if comment.domain else comment.model_copy(update={"domain": domain}) for comment in generated_comments]
 
 
 def _normalize_path(path: str) -> str:
@@ -26,7 +82,7 @@ def _line_distance(line: int, start: int, end: int | None) -> int:
     return line - effective_end
 
 
-def _match_comments(
+def match_comments(
     expected_comments: list[ReviewComment],
     generated_comments: list[ReviewComment],
     line_tolerance: int,
@@ -69,6 +125,7 @@ def _severity_mae(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> f
 class CodeReviewResult(BaseEvaluationResult):
     """Result for the code-review category."""
 
+    domain: str = "unknown"
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
     line_tolerance: int = Field(ge=0)
@@ -81,6 +138,8 @@ class CodeReviewResult(BaseEvaluationResult):
     precision: float = Field(default=0.0, ge=0.0, le=1.0)
     recall: float = Field(default=0.0, ge=0.0, le=1.0)
     f1: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
     severity_mae: float = 0.0
 
     @classmethod
@@ -91,13 +150,18 @@ class CodeReviewResult(BaseEvaluationResult):
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
         line_tolerance: int,
+        matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
     ) -> Self:
-        matches = _match_comments(expected_comments, generated_comments, line_tolerance)
-        matched_count = len(matches)
+        domain = _resolve_domain(context)
+        generated_comments = _with_comment_domains(generated_comments, domain)
+        if matched_pairs is None:
+            matched_pairs = match_comments(expected_comments, generated_comments, line_tolerance)
+        matched_count = len(matched_pairs)
         precision, recall = precision_recall(matched_count, len(generated_comments), len(expected_comments))
 
         return cls(
             **cls._base_fields(context),
+            domain=domain,
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
@@ -109,7 +173,9 @@ class CodeReviewResult(BaseEvaluationResult):
             precision=precision,
             recall=recall,
             f1=f1_score(precision, recall),
-            severity_mae=_severity_mae(matches),
+            f_beta_05=f_beta_score(precision, recall, beta=0.5),
+            f_beta_2=f_beta_score(precision, recall, beta=2.0),
+            severity_mae=_severity_mae(matched_pairs),
         )
 
     @classmethod
@@ -122,6 +188,7 @@ class CodeReviewResult(BaseEvaluationResult):
         """Result for output that could not be parsed into a review — scored zero."""
         return cls(
             **cls._base_fields(context),
+            domain=_resolve_domain(context),
             output=output,
             expected_comments=expected_comments,
             line_tolerance=0,
@@ -139,6 +206,8 @@ class CodeReviewResult(BaseEvaluationResult):
             "precision": round(self.precision, 3),
             "recall": round(self.recall, 3),
             "f1": round(self.f1, 3),
+            "f_beta_05": round(self.f_beta_05, 3),
+            "f_beta_2": round(self.f_beta_2, 3),
             "severity_mae": round(self.severity_mae, 3),
             "valid_review_output": self.valid_review_output,
         }
@@ -146,6 +215,7 @@ class CodeReviewResult(BaseEvaluationResult):
     @property
     def display_row(self) -> dict[str, str]:
         return {
+            "Domain": self.domain,
             "Generated": str(len(self.generated_comments)),
             "Matched": str(self.matched_comment_count),
             "Expected": str(len(self.expected_comments)),
@@ -154,12 +224,17 @@ class CodeReviewResult(BaseEvaluationResult):
             "F1": f"{self.f1:.2f}",
         }
 
+    @property
+    def sort_key(self) -> tuple[object, ...]:
+        return (self.domain.lower(), natural_sort_key(self.instance_id))
+
 
 class CodeReviewResultSummary(EvaluationResultSummary):
     """
     Summary for the code-review category.
 
-    Precision, recall, and F1 are calculated by aggregating matched/expected/generated comment counts across all results.
+    Micro metrics aggregate matched/expected/generated comment counts across all results (volume-weighted).
+    Macro metrics average per-task scores (each task weighted equally).
     """
 
     generated_comment_count: int = Field(default=0, ge=0)
@@ -171,6 +246,15 @@ class CodeReviewResultSummary(EvaluationResultSummary):
     precision: float = Field(default=0.0, ge=0.0, le=1.0)
     recall: float = Field(default=0.0, ge=0.0, le=1.0)
     f1: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
+    f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    macro_precision: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_recall: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_f1: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_f_beta_05: float = Field(default=0.0, ge=0.0, le=1.0)
+    macro_f_beta_2: float = Field(default=0.0, ge=0.0, le=1.0)
+
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
@@ -181,12 +265,118 @@ class CodeReviewResultSummary(EvaluationResultSummary):
             "matched_comment_count": self.matched_comment_count,
             "incorrect_comment_count": self.incorrect_comment_count,
             "missed_comment_count": self.missed_comment_count,
-            "precision": round(self.precision * 100, 1),
-            "recall": round(self.recall * 100, 1),
-            "f1": round(self.f1 * 100, 1),
+            "micro_precision": round(self.precision * 100, 1),
+            "micro_recall": round(self.recall * 100, 1),
+            "micro_f1": round(self.f1 * 100, 1),
+            "micro_f_beta_05": round(self.f_beta_05 * 100, 1),
+            "micro_f_beta_2": round(self.f_beta_2 * 100, 1),
+            "macro_precision": round(self.macro_precision * 100, 1),
+            "macro_recall": round(self.macro_recall * 100, 1),
+            "macro_f1": round(self.macro_f1 * 100, 1),
+            "macro_f_beta_05": round(self.macro_f_beta_05 * 100, 1),
+            "macro_f_beta_2": round(self.macro_f_beta_2 * 100, 1),
             "severity_mae": round(self.severity_mae, 3),
             "valid_review_output_rate": round(self.valid_review_output_rate * 100, 1),
         }
+
+    def render_github_metrics_markdown(self) -> str:
+        micro_p = self.precision * 100
+        micro_r = self.recall * 100
+        micro_f1 = self.f1 * 100
+        micro_f05 = self.f_beta_05 * 100
+        micro_f2 = self.f_beta_2 * 100
+        macro_p = self.macro_precision * 100
+        macro_r = self.macro_recall * 100
+        macro_f1 = self.macro_f1 * 100
+        macro_f05 = self.macro_f_beta_05 * 100
+        macro_f2 = self.macro_f_beta_2 * 100
+        valid_rate = self.valid_review_output_rate * 100
+        return (
+            "## Comment counts\n"
+            "\n"
+            "| Generated | Expected | Matched | Incorrect | Missed |\n"
+            "|----------:|---------:|--------:|----------:|-------:|\n"
+            f"| {self.generated_comment_count} | {self.expected_comment_count} | {self.matched_comment_count} | {self.incorrect_comment_count} | {self.missed_comment_count} |\n"
+            "\n"
+            "## Micro metrics (volume-weighted across all comments)\n"
+            "\n"
+            "| Precision | Recall | F1 | Fβ (β=0.5) | Fβ (β=2) |\n"
+            "|----------:|-------:|---:|-----------:|---------:|\n"
+            f"| {micro_p:.1f}% | {micro_r:.1f}% | {micro_f1:.1f}% | {micro_f05:.1f}% | {micro_f2:.1f}% |\n"
+            "\n"
+            "## Macro metrics (averaged per task)\n"
+            "\n"
+            "| Precision | Recall | F1 | Fβ (β=0.5) | Fβ (β=2) |\n"
+            "|----------:|-------:|---:|-----------:|---------:|\n"
+            f"| {macro_p:.1f}% | {macro_r:.1f}% | {macro_f1:.1f}% | {macro_f05:.1f}% | {macro_f2:.1f}% |\n"
+            "\n"
+            "## Quality\n"
+            "\n"
+            "| Severity MAE | Valid review output rate |\n"
+            "|-------------:|-------------------------:|\n"
+            f"| {self.severity_mae:.3f} | {valid_rate:.1f}% |\n"
+            "\n"
+            f"{_METRIC_EXPLANATIONS}"
+        )
+
+    def render_console_metrics(self, console: Console) -> None:
+        metric_columns = ["Precision", "Recall", "F1", "Fβ (β=0.5)", "Fβ (β=2)"]
+
+        console.print(
+            _build_console_table(
+                "Comment counts",
+                ["Generated", "Expected", "Matched", "Incorrect", "Missed"],
+                [
+                    str(self.generated_comment_count),
+                    str(self.expected_comment_count),
+                    str(self.matched_comment_count),
+                    str(self.incorrect_comment_count),
+                    str(self.missed_comment_count),
+                ],
+            )
+        )
+        console.print(
+            _build_console_table(
+                "Micro metrics (volume-weighted across all comments)",
+                metric_columns,
+                [
+                    f"{self.precision * 100:.1f}%",
+                    f"{self.recall * 100:.1f}%",
+                    f"{self.f1 * 100:.1f}%",
+                    f"{self.f_beta_05 * 100:.1f}%",
+                    f"{self.f_beta_2 * 100:.1f}%",
+                ],
+            )
+        )
+        console.print(
+            _build_console_table(
+                "Macro metrics (averaged per task)",
+                metric_columns,
+                [
+                    f"{self.macro_precision * 100:.1f}%",
+                    f"{self.macro_recall * 100:.1f}%",
+                    f"{self.macro_f1 * 100:.1f}%",
+                    f"{self.macro_f_beta_05 * 100:.1f}%",
+                    f"{self.macro_f_beta_2 * 100:.1f}%",
+                ],
+            )
+        )
+        console.print(
+            _build_console_table(
+                "Quality",
+                ["Severity MAE", "Valid review output rate"],
+                [f"{self.severity_mae:.3f}", f"{self.valid_review_output_rate * 100:.1f}%"],
+            )
+        )
+        console.print(
+            Panel(
+                _CONSOLE_METRIC_EXPLANATIONS,
+                title="📖 How to read these metrics",
+                title_align="left",
+                border_style="dim",
+                padding=(1, 2),
+            )
+        )
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "CodeReviewResultSummary":
@@ -204,6 +394,14 @@ class CodeReviewResultSummary(EvaluationResultSummary):
 
         precision, recall = precision_recall(matched_total, generated_total, expected_total)
         f1: float = f1_score(precision, recall)
+        f_beta_05: float = f_beta_score(precision, recall, beta=0.5)
+        f_beta_2: float = f_beta_score(precision, recall, beta=2.0)
+
+        macro_precision: float = sum(r.precision for r in code_review_results) / total_results
+        macro_recall: float = sum(r.recall for r in code_review_results) / total_results
+        macro_f1: float = sum(r.f1 for r in code_review_results) / total_results
+        macro_f_beta_05: float = sum(r.f_beta_05 for r in code_review_results) / total_results
+        macro_f_beta_2: float = sum(r.f_beta_2 for r in code_review_results) / total_results
 
         weighted_mae_numerator: float = sum(r.severity_mae * r.matched_comment_count for r in code_review_results)
         weighted_mae_denominator: int = sum(r.matched_comment_count for r in code_review_results)
@@ -222,6 +420,13 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                 "precision": round(precision, 3),
                 "recall": round(recall, 3),
                 "f1": round(f1, 3),
+                "f_beta_05": round(f_beta_05, 3),
+                "f_beta_2": round(f_beta_2, 3),
+                "macro_precision": round(macro_precision, 3),
+                "macro_recall": round(macro_recall, 3),
+                "macro_f1": round(macro_f1, 3),
+                "macro_f_beta_05": round(macro_f_beta_05, 3),
+                "macro_f_beta_2": round(macro_f_beta_2, 3),
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
             }

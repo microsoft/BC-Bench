@@ -13,7 +13,6 @@ console = Console()
 
 
 def _status_style(status_label: str) -> tuple[str, str]:
-    """Return (rich_color, github_emoji) for a status label."""
     if status_label in ("Timeout", "Error", "Failed"):
         return "red", ":x:"
     if status_label == "Unscored":
@@ -23,13 +22,11 @@ def _status_style(status_label: str) -> tuple[str, str]:
 
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
-    display_metrics: dict[str, int | float | bool] = summary.display_summary()
 
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
     console.print(f"Total Processed: [bold]{total}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
-    for key, value in display_metrics.items():
-        console.print(f"{key.replace('_', ' ').title()}: [bold]{value}[/bold]")
+    summary.render_console_metrics(console)
 
     # Display average tool usage if available
     tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
@@ -51,29 +48,27 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     for col_name in extra_columns:
         table.add_column(col_name, style="yellow")
 
-    table.add_column("Error Message", style="dim")
+    table.add_column("MCP Servers", style="yellow")
+    table.add_column("Custom Instructions", style="yellow")
+    table.add_column("Skills", style="yellow")
+    table.add_column("Custom Agent", style="yellow")
 
-    for result in results:
+    for result in sorted(results, key=lambda r: r.sort_key):
         color, _ = _status_style(result.status_label)
         status = f"[{color}]{result.status_label}[/{color}]"
+        mcp_servers = ", ".join(result.experiment.mcp_servers) if result.experiment and result.experiment.mcp_servers else "N/A"
+        custom_instructions = "Yes" if result.experiment and result.experiment.custom_instructions else "No"
+        skills = "Yes" if result.experiment and result.experiment.skills_enabled else "No"
+        custom_agent = result.experiment.custom_agent if result.experiment and result.experiment.custom_agent else "N/A"
         extra_values = list(result.display_row.values())
-        table.add_row(result.instance_id, result.project, status, *extra_values, result.error_message or "")
+        table.add_row(result.instance_id, result.project, status, *extra_values, mcp_servers, custom_instructions, skills, custom_agent)
 
     console.print(table)
     console.print()
 
 
-def _get_short_error_message(error_message: str | None) -> str:
-    """Extract the first line of an error message for summary display."""
-    if not error_message:
-        return ""
-    first_line = error_message.split("\n")[0].rstrip(":")
-    return first_line.replace("|", "\\|")
-
-
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     total = len(results)
-    display_metrics: dict[str, int | float | bool] = summary.display_summary()
 
     mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
     al_lsp_enabled = "Yes" if results[0].experiment and results[0].experiment.al_lsp_enabled else "No"
@@ -91,24 +86,23 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             tool_lines = [f"  - `{tool}`: {count}" for tool, count in sorted_tools]
             tool_usage_section = "\n\n## Average Tool Usage\n" + "\n".join(tool_lines)
 
-    # Only render "## Result Summary" when the category has aggregates to show.
-    result_summary_section = ""
-    if display_metrics:
-        display_lines = "\n".join(f"- {key.replace('_', ' ').title()}: {value}" for key, value in display_metrics.items())
-        result_summary_section = f"\n## Result Summary\n{display_lines}\n"
+    metrics_section = summary.render_github_metrics_markdown()
 
-    markdown_summary = (
-        f"Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**\n"
-        f"- Category: `{results[0].category.value}`\n"
-        f"- MCP Servers used: {mcp_servers}\n"
-        f"- AL LSP: {al_lsp_enabled}\n"
-        f"- Custom Instructions: {custom_instructions}\n"
-        f"- Skills: {skills}\n"
-        f"- Custom Agent: {custom_agent}\n"
-        f"{result_summary_section}"
-        f"{tool_usage_section}\n\n"
-        f"## Detailed Results\n\n"
-    )
+    markdown_summary = f"""Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**
+- Category: `{results[0].category.value}`
+- MCP Servers used: {mcp_servers}
+- AL LSP: {al_lsp_enabled}
+- Custom Instructions: {custom_instructions}
+- Skills: {skills}
+- Custom Agent: {custom_agent}
+
+{metrics_section}
+
+{tool_usage_section}
+
+## Detailed Results
+
+"""
 
     # Dynamic columns from display_row()
     extra_columns = list(results[0].display_row.keys()) if results else []
@@ -116,21 +110,20 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     extra_separator = " | ".join("------" for _ in extra_columns)
 
     if extra_columns:
-        markdown_summary += f"| Instance ID | Project | Status | {extra_headers} | Error Message |\n"
-        markdown_summary += f"|-------------|---------|--------|{extra_separator}|---------------|\n"
+        markdown_summary += f"| Instance ID | Project | Status | {extra_headers} |\n"
+        markdown_summary += f"|-------------|---------|--------|{extra_separator}|\n"
     else:
-        markdown_summary += "| Instance ID | Project | Status | Error Message |\n"
-        markdown_summary += "|-------------|---------|--------|---------------|\n"
+        markdown_summary += "| Instance ID | Project | Status |\n"
+        markdown_summary += "|-------------|---------|--------|\n"
 
-    for result in results:
+    for result in sorted(results, key=lambda r: r.sort_key):
         _, status_icon = _status_style(result.status_label)
         status_text = f"{status_icon} {result.status_label}"
-        error_msg = _get_short_error_message(result.error_message)
         extra_values = " | ".join(result.display_row.values())
         if extra_columns:
-            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {extra_values} | {error_msg} |\n"
+            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {extra_values} |\n"
         else:
-            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} | {error_msg} |\n"
+            markdown_summary += f"| `{result.instance_id}` | `{result.project}` | {status_text} |\n"
 
     _write_github_step_summary(markdown_summary)
 

@@ -8,6 +8,7 @@ import pytest
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
+from bcbench.exceptions import PatchApplicationError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
 from bcbench.types import EvaluationCategory
@@ -224,6 +225,7 @@ class TestCodeReviewResult:
         result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
 
         assert result.display_row == {
+            "Domain": "unknown",
             "Generated": "2",
             "Matched": "1",
             "Expected": "2",
@@ -231,6 +233,67 @@ class TestCodeReviewResult:
             "Recall": "0.50",
             "F1": "0.50",
         }
+
+    def test_result_uses_explicit_domain_from_entry(self):
+        result = create_codereview_result(output="[]", expected_comments=[], domain="performance")
+
+        assert result.domain == "performance"
+
+    def test_result_falls_back_to_metadata_area_domain(self):
+        result = create_codereview_result(output="not-json", expected_comments=[], metadata_area="security")
+
+        assert result.domain == "security"
+
+    def test_result_stamps_domain_on_generated_comments(self):
+        result = create_codereview_result(
+            output='[{"file": "src/app.al", "line_start": 5, "body": "Issue", "severity": "medium"}]',
+            expected_comments=[],
+            domain="performance",
+        )
+
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].domain == "performance"
+
+    def test_result_keeps_generated_comments_with_mismatched_domain(self):
+        result = create_codereview_result(
+            output='[{"file": "src/app.al", "line_start": 5, "domain": "security", "body": "Issue", "severity": "medium"}]',
+            expected_comments=[],
+            domain="performance",
+        )
+
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].domain == "security"
+
+    def test_result_preserves_explicit_generated_comment_domain_when_matching(self):
+        result = create_codereview_result(
+            output='[{"file": "src/app.al", "line_start": 5, "domain": "performance", "body": "Issue", "severity": "medium"}]',
+            expected_comments=[],
+            domain="performance",
+        )
+
+        assert len(result.generated_comments) == 1
+        assert result.generated_comments[0].domain == "performance"
+
+    def test_sort_key_groups_by_domain_then_natural_instance_id(self):
+        unsorted_results = [
+            create_codereview_result(instance_id="repo__feature-a-10", domain="performance"),
+            create_codereview_result(instance_id="repo__feature-a-2", domain="performance"),
+            create_codereview_result(instance_id="repo__feature-a-1", domain="performance"),
+            create_codereview_result(instance_id="repo__feature-b-11", domain="upgrade"),
+            create_codereview_result(instance_id="repo__feature-b-3", domain="upgrade"),
+            create_codereview_result(instance_id="repo__feature-c-2", domain="upgrade"),
+        ]
+
+        ordered_ids = [r.instance_id for r in sorted(unsorted_results, key=lambda r: r.sort_key)]
+
+        assert ordered_ids == [
+            "repo__feature-a-1",
+            "repo__feature-a-2",
+            "repo__feature-a-10",
+            "repo__feature-b-3",
+            "repo__feature-b-11",
+            "repo__feature-c-2",
+        ]
 
 
 class TestCodeReviewSummary:
@@ -266,6 +329,75 @@ class TestCodeReviewSummary:
         assert summary.precision == 0.5
         assert summary.recall == 0.25
         assert summary.f1 == 0.333
+
+    def test_render_github_metrics_markdown_has_grouped_sections(self):
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        result = create_codereview_result(
+            instance_id="test__render-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
+            expected_comments=expected_comments,
+        )
+
+        summary = CodeReviewResultSummary.from_results([result], run_id="run-1")
+        markdown = summary.render_github_metrics_markdown()
+
+        # Section headers replace the old flat bullet list.
+        assert "## Comment counts" in markdown
+        assert "## Micro metrics (volume-weighted across all comments)" in markdown
+        assert "## Macro metrics (averaged per task)" in markdown
+        assert "## Quality" in markdown
+        assert "## Result Summary" not in markdown
+
+        # Percent units applied to rate-style metrics.
+        assert "100.0%" in markdown
+
+        # Beta renders as the Greek symbol, not the LaTeX escape sequence.
+        assert "β" in markdown
+        assert "\\beta" not in markdown
+
+        # Collapsible explanations are present.
+        assert "<details>" in markdown
+        assert "How to read these metrics" in markdown
+        assert "LLM judge" in markdown
+        assert "F_β = (1 + β²)" in markdown
+
+    def test_render_console_metrics_uses_grouped_rich_tables(self):
+        from io import StringIO
+
+        from rich.console import Console
+
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        result = create_codereview_result(
+            instance_id="test__render-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
+            expected_comments=expected_comments,
+        )
+
+        summary = CodeReviewResultSummary.from_results([result], run_id="run-1")
+        buffer = StringIO()
+        # Force a wide terminal so Rich does not truncate column headers in the captured output.
+        console = Console(file=buffer, force_terminal=False, width=200)
+        summary.render_console_metrics(console)
+        output = buffer.getvalue()
+
+        # Grouped section titles appear instead of the old flat key/value bullets.
+        assert "Comment counts" in output
+        assert "Micro metrics" in output
+        assert "Macro metrics" in output
+        assert "Quality" in output
+
+        # Percent units on rate-style metrics; Greek beta, not LaTeX.
+        assert "100.0%" in output
+        assert "β" in output
+        assert "\\beta" not in output
+
+        # Explanations panel rendered.
+        assert "How to read these metrics" in output
+        assert "LLM judge" in output
 
 
 class TestCodeReviewLeaderboardAggregate:
@@ -388,6 +520,41 @@ class TestCodeReviewPipeline:
         new_file = Path(tmp_path) / "src" / "NewObject.Codeunit.al"
         assert new_file.exists()
         assert "codeunit 50100 NewObject" in new_file.read_text(encoding="utf-8")
+        diff = subprocess.run(
+            ["git", "diff", "HEAD"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert "src/NewObject.Codeunit.al" in diff
+
+    def test_setup_workspace_materializes_simplified_patch_when_git_apply_fails(self, tmp_path):
+        entry = create_codereview_entry(patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n")
+        pipeline = CodeReviewPipeline()
+
+        subprocess.run(["git", "init"], cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init"],
+            cwd=tmp_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+
+        with (
+            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
+            patch(
+                "bcbench.evaluate.codereview.apply_patch",
+                side_effect=PatchApplicationError("test", "error: No valid patches in input"),
+            ),
+        ):
+            pipeline.setup_workspace(entry, Path(tmp_path))
+
+        mock_setup.assert_called_once()
+        materialized_file = Path(tmp_path) / "src" / "NewObject.Codeunit.al"
+        assert materialized_file.exists()
+        assert "codeunit 50100 NewObject" in materialized_file.read_text(encoding="utf-8")
         diff = subprocess.run(
             ["git", "diff", "HEAD"],
             cwd=tmp_path,
