@@ -63,8 +63,6 @@ def reindent_file_block(patch: str, file_path: str) -> tuple[str, int]:
         block = patch[start:]
         tail = ""
     else:
-        block = patch[start : end + 1]  # include leading \n of separator? no, end+1 is \n itself - take up to end+1
-        # actually safer:
         block = patch[start:end] + "\n"  # ensure block ends with newline
         tail = patch[end + 1 :]  # skip the leading '\n' we put on block
     if end == -1:
