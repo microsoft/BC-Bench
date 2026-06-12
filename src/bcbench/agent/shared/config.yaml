@@ -60,7 +60,7 @@ prompt:
     Use working tree diff only (git diff HEAD), and focus on changed *.al files.
 
     The file must contain valid JSON with a top-level object named findings.
-    Each finding must include: filePath, lineNumber, severity, issue, recommendation.
+    Each finding must include: filePath, lineNumber, severity, issue, recommendation, domain, suggestedCode.
     Allowed severity values are: critical, high, medium, low.
     If there are no findings, write an empty findings list.
 
