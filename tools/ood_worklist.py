@@ -1,19 +1,19 @@
 """Generate out-of-domain (OOD) worklist for a domain from the latest gh run artifacts."""
 
-import glob
+import contextlib
 import json
-import os
 import sys
+from pathlib import Path
 
-BASE = "evaluation_results/gh_run_27240290541"
+BASE = Path("evaluation_results/gh_run_27240290541")
 VALID = {"security", "performance", "style", "accessibility", "upgrade", "privacy"}
 
 
 def load_entry(iid: str) -> dict:
-    hits = glob.glob(os.path.join(BASE, "**", f"{iid}.jsonl"), recursive=True)
+    hits = list(BASE.rglob(f"{iid}.jsonl"))
     if not hits:
         return {}
-    text = open(hits[0], encoding="utf-8").read().strip()
+    text = hits[0].read_text(encoding="utf-8").strip()
     if not text:
         return {}
     return json.loads(text.splitlines()[0])
@@ -21,12 +21,7 @@ def load_entry(iid: str) -> dict:
 
 def main() -> None:
     domain = sys.argv[1]
-    ids = sorted(
-        {
-            os.path.basename(p).replace(".jsonl", "")
-            for p in glob.glob(os.path.join(BASE, "**", f"synthetic__{domain}-*.jsonl"), recursive=True)
-        }
-    )
+    ids = sorted({p.stem for p in BASE.rglob(f"synthetic__{domain}-*.jsonl")})
     print(f"{domain} entries: {len(ids)}")
     for iid in ids:
         r = load_entry(iid)
@@ -34,10 +29,9 @@ def main() -> None:
             print(iid, "NO_DATA")
             continue
         edom = (r.get("domain") or "").lower()
-        try:
+        findings: list = []
+        with contextlib.suppress(Exception):
             findings = json.loads(r.get("output", "")).get("findings", [])
-        except Exception:
-            findings = []
         ood = [f for f in findings if isinstance(f, dict) and (f.get("domain") or "").lower() not in ("", edom)]
         doms = sorted({(f.get("domain") or "").lower() for f in ood})
         exp = len(r.get("expected_comments", []))

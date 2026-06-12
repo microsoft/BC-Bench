@@ -530,9 +530,7 @@ class TestCodeReviewPipeline:
         assert "src/NewObject.Codeunit.al" in diff
 
     def test_setup_workspace_materializes_simplified_patch_when_git_apply_fails(self, tmp_path):
-        entry = create_codereview_entry(
-            patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n"
-        )
+        entry = create_codereview_entry(patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n")
         pipeline = CodeReviewPipeline()
 
         subprocess.run(["git", "init"], cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)

@@ -6,6 +6,7 @@ hooks via the `bash` field of the hook command spec; the legacy .ps1 in this
 directory mirrors the same behavior for the Windows `powershell` field.
 """
 
+import contextlib
 import json
 import os
 import sys
@@ -44,9 +45,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception:
+    with contextlib.suppress(Exception):
         # Never block tool execution — silently fail.
-        pass
+        main()
     sys.exit(0)

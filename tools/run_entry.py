@@ -5,11 +5,11 @@ Prints: metrics line + each generated finding's domain/severity/file:line + shor
 Designed for the iterate-until-clean workflow.
 """
 
+import datetime
 import json
 import pathlib
 import subprocess
 import sys
-import datetime
 
 REPO = r"C:\repos\evals\BCApps"
 
@@ -21,10 +21,24 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        "uv", "run", "bcbench", "-v", "evaluate", "copilot", iid,
-        "--category", "code-review", "--model", "claude-opus-4.7",
-        "--repo-path", REPO, "--output-dir", str(out_dir),
-        "--run-id", f"run_{stamp}", "--al-mcp",
+        "uv",
+        "run",
+        "bcbench",
+        "-v",
+        "evaluate",
+        "copilot",
+        iid,
+        "--category",
+        "code-review",
+        "--model",
+        "claude-opus-4.7",
+        "--repo-path",
+        REPO,
+        "--output-dir",
+        str(out_dir),
+        "--run-id",
+        f"run_{stamp}",
+        "--al-mcp",
     ]
     subprocess.run(cmd, check=False)
 
@@ -42,9 +56,11 @@ def main() -> None:
 
     print("=" * 70)
     print(f"ENTRY {iid}  domain={edom}")
-    print(f"METRICS matched={r.get('matched_comment_count')} missed={r.get('missed_comment_count')} "
-          f"incorrect={r.get('incorrect_comment_count')} precision={r.get('precision'):.3f} "
-          f"recall={r.get('recall'):.3f} f1={r.get('f1'):.3f}")
+    print(
+        f"METRICS matched={r.get('matched_comment_count')} missed={r.get('missed_comment_count')} "
+        f"incorrect={r.get('incorrect_comment_count')} precision={r.get('precision'):.3f} "
+        f"recall={r.get('recall'):.3f} f1={r.get('f1'):.3f}"
+    )
     ood = []
     for f in findings:
         if not isinstance(f, dict):
