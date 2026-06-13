@@ -51,9 +51,15 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    /review
+    Use the "al-code-review" skill to review the current branch changes, then save the findings
+    to a file named "review.json" in the repository root.
 
-    Review the current branch changes and save findings to a file named "review.json" in the repository root.
+    The al-code-review skill is a composed super-skill: it invokes five domain leaf sub-skills
+    (performance, security, privacy, upgrade, style) one at a time, each backed by curated
+    BCQuality knowledge files, then performs a cross-cutting self-review pass. Follow the skill's
+    execution discipline exactly: run each leaf as its own pass, do NOT collapse them into one
+    shared scan, and only emit findings that survive each leaf's knowledge-backed checks or the
+    skill's agent-finding precision bar.
 
     Review ONLY the current working-tree AL file changes for this evaluation entry.
     Do NOT compare commits (for example, do NOT use HEAD~1..HEAD or origin/main comparisons).
@@ -61,6 +67,8 @@ prompt:
 
     The file must contain valid JSON with a top-level object named findings.
     Each finding must include: filePath, lineNumber, severity, issue, recommendation, domain, suggestedCode.
+    Map the skill's findings into this schema as described in the skill's output-mapping section
+    (blocker->critical, major->high, minor->medium, info->low; from-sub-skill->domain).
     Allowed severity values are: critical, high, medium, low.
     If there are no findings, write an empty findings list.
 
@@ -80,7 +88,7 @@ instructions:
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
 skills:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`
