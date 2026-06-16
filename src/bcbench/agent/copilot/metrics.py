@@ -34,10 +34,10 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
         output_lines: Lines from Copilot CLI stderr output
         session_log_path: Optional path to session log file for tool usage parsing
 
-    Expected output format (new, v1.0.2+):
-        Changes   +17 -0
-        Requests  0.33 Premium (1m 45s)
-        Tokens    ↑ 317.5k • ↓ 4.3k • 255.0k (cached)
+    Expected output format (v1.0.57):
+        Changes    +67 -0
+        Requests   15 Premium (6m 47s)
+        Tokens     ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)
 
     Legacy output format:
         Total usage est:        0.33 Premium requests
@@ -97,9 +97,10 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
             prompt_tokens = _parse_token_count(usage_match.group(1))
             completion_tokens = _parse_token_count(usage_match.group(2))
 
-        # New format: "Tokens    ↑ 317.5k • ↓ 4.3k • 255.0k (cached)"
+        # New format: "Tokens    ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)"
+        # Anchor on the ↑/↓ arrows so parenthesized annotations between the numbers don't break parsing.
         if prompt_tokens is None:
-            tokens_match = re.search(r"Tokens\s+[^\d]*(\d+(?:\.\d+)?[km]?)\s*[•·]\s*[^\d]*(\d+(?:\.\d+)?[km]?)", output_text)
+            tokens_match = re.search(r"Tokens\s+.*?↑\s*(\d+(?:\.\d+)?[km]?).*?↓\s*(\d+(?:\.\d+)?[km]?)", output_text)
             if tokens_match:
                 prompt_tokens = _parse_token_count(tokens_match.group(1))
                 completion_tokens = _parse_token_count(tokens_match.group(2))
