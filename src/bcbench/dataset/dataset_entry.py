@@ -29,6 +29,7 @@ class EntryMetadata(BaseModel):
 
     area: str | None = None
     image_count: int | None = None
+    persona: str | None = None
 
 
 class BaseDatasetEntry(BaseModel):
