@@ -1,5 +1,6 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -88,6 +89,7 @@ def run_copilot_agent(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
+            env={**os.environ, "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true"},
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.agent_execution,
             check=True,
