@@ -112,17 +112,12 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
 
         # New format (v1.0.2+): "Tokens    ↑ 317.5k • ↓ 4.3k • 255.0k (cached)"
         # Newest format (v1.0.61+): "Tokens     ↑ 413.9k (368.1k cached) • ↓ 4.5k (500 reasoning)"
-        # Use separate ↑ / ↓ lookups to tolerate inline "(N cached)" / "(N reasoning)" annotations
-        # between the two values.
+        # Anchor on the ↑/↓ arrows so parenthesized annotations between the numbers don't break parsing.
         if prompt_tokens is None:
-            tokens_line_match = re.search(r"Tokens\s+([^\n]+)", output_text)
-            if tokens_line_match:
-                tokens_line = tokens_line_match.group(1)
-                up_match = re.search(r"\u2191\s*(\d+(?:\.\d+)?[km]?)", tokens_line)
-                down_match = re.search(r"\u2193\s*(\d+(?:\.\d+)?[km]?)", tokens_line)
-                if up_match and down_match:
-                    prompt_tokens = _parse_token_count(up_match.group(1))
-                    completion_tokens = _parse_token_count(down_match.group(1))
+            tokens_match = re.search(r"Tokens\s+.*?↑\s*(\d+(?:\.\d+)?[km]?).*?↓\s*(\d+(?:\.\d+)?[km]?)", output_text)
+            if tokens_match:
+                prompt_tokens = _parse_token_count(tokens_match.group(1))
+                completion_tokens = _parse_token_count(tokens_match.group(2))
 
         if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None or turn_count is not None:
             return AgentMetrics(

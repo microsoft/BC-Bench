@@ -200,23 +200,23 @@ def test_parse_metrics_minimal_real_output():
 
 def test_parse_metrics_new_format_full():
     output_lines = [
-        "Changes   +17 -0\n",
-        "Requests  0.33 Premium (1m 45s)\n",
-        "Tokens    ↑ 317.5k • ↓ 4.3k • 255.0k (cached)\n",
+        "Changes    +67 -0\n",
+        "Requests   15 Premium (6m 47s)\n",
+        "Tokens     ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)\n",
     ]
 
     result = parse_metrics(output_lines)
 
     assert result is not None
-    assert result.execution_time == 105.0
-    assert result.prompt_tokens == 317500
-    assert result.completion_tokens == 4300
+    assert result.execution_time == 407.0
+    assert result.prompt_tokens == 1600000
+    assert result.completion_tokens == 20700
 
 
 def test_parse_metrics_new_format_seconds_only():
     output_lines = [
         "Requests  1 Premium (45s)\n",
-        "Tokens    ↑ 125.5k • ↓ 3.6k • 0 (cached)\n",
+        "Tokens    ↑ 125.5k (0 cached) • ↓ 3.6k (0 reasoning)\n",
     ]
 
     result = parse_metrics(output_lines)
@@ -229,7 +229,7 @@ def test_parse_metrics_new_format_seconds_only():
 
 def test_parse_metrics_new_format_tokens_with_m():
     output_lines = [
-        "Tokens    ↑ 1.3m • ↓ 11.6k • 1.2m (cached)\n",
+        "Tokens    ↑ 1.3m (1.2m cached) • ↓ 11.6k (500 reasoning)\n",
     ]
 
     result = parse_metrics(output_lines)
