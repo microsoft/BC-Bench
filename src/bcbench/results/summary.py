@@ -14,7 +14,7 @@ from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 if TYPE_CHECKING:
-    from rich.console import Console
+    from rich.console import RenderableType
 
 logger = get_logger(__name__)
 
@@ -59,29 +59,18 @@ class EvaluationResultSummary(BaseModel, ABC):
     benchmark_version: str
 
     @abstractmethod
-    def display_summary(self) -> dict[str, int | float]:
-        """Return category-specific metrics for console/GitHub summary display.
-
-        Subclasses must override. Keys become display labels (underscores replaced with spaces and title-cased). Values are shown as-is.
-        """
-
     def render_github_metrics_markdown(self) -> str:
-        """Markdown for the metrics block between the run header and the Detailed Results table.
+        """Markdown metrics block between the run header and the Detailed Results table (GitHub Actions summary).
 
-        Default renders ``display_summary()`` as a bullet list under "## Result Summary".
-        Subclasses can override for richer layouts (tables, grouped sections, explanations).
+        Shown after every CI run, so each category must explicitly decide what to surface (return "" for none).
         """
-        display_metrics = self.display_summary()
-        lines = "\n".join(f"- {key.replace('_', ' ').title()}: {value}" for key, value in display_metrics.items())
-        return f"## Result Summary\n{lines}"
 
-    def render_console_metrics(self, console: "Console") -> None:
-        """Print the metrics block to a Rich console between the run header and the Detailed Results table.
+    def render_console_metrics(self) -> "RenderableType | None":
+        """Rich renderable for the metrics block printed by display.py after each run (console).
 
-        Default renders ``display_summary()`` as a bullet list. Subclasses can override for grouped tables and explanations.
+        Defaults to no metrics block. Subclasses override to add category-specific metrics.
         """
-        for key, value in self.display_summary().items():
-            console.print(f"{key.replace('_', ' ').title()}: [bold]{value}[/bold]")
+        return None
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
@@ -161,12 +150,8 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
 
-    def display_summary(self) -> dict[str, int | float]:
-        return {
-            "resolved": self.resolved,
-            "failed": self.failed,
-            "build": self.build,
-        }
+    def render_github_metrics_markdown(self) -> str:
+        return f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "ExecutionBasedEvaluationResultSummary":
@@ -198,8 +183,9 @@ class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
     this summary only carries the agent-execution aggregates from the base class.
     """
 
-    def display_summary(self) -> dict[str, int | float]:
-        return {}
+    def render_github_metrics_markdown(self) -> str:
+        """Judge scoring happens externally, so there are no in-run metrics to surface."""
+        return ""
 
 
 # ---------------------------------------------------------------------------

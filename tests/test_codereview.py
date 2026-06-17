@@ -381,7 +381,7 @@ class TestCodeReviewSummary:
         buffer = StringIO()
         # Force a wide terminal so Rich does not truncate column headers in the captured output.
         console = Console(file=buffer, force_terminal=False, width=200)
-        summary.render_console_metrics(console)
+        console.print(summary.render_console_metrics())
         output = buffer.getvalue()
 
         # Grouped section titles appear instead of the old flat key/value bullets.

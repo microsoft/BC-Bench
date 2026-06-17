@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field
-from rich.console import Console
+from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 
@@ -258,27 +258,6 @@ class CodeReviewResultSummary(EvaluationResultSummary):
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
-    def display_summary(self) -> dict[str, int | float]:
-        return {
-            "generated_comment_count": self.generated_comment_count,
-            "expected_comment_count": self.expected_comment_count,
-            "matched_comment_count": self.matched_comment_count,
-            "incorrect_comment_count": self.incorrect_comment_count,
-            "missed_comment_count": self.missed_comment_count,
-            "micro_precision": round(self.precision * 100, 1),
-            "micro_recall": round(self.recall * 100, 1),
-            "micro_f1": round(self.f1 * 100, 1),
-            "micro_f_beta_05": round(self.f_beta_05 * 100, 1),
-            "micro_f_beta_2": round(self.f_beta_2 * 100, 1),
-            "macro_precision": round(self.macro_precision * 100, 1),
-            "macro_recall": round(self.macro_recall * 100, 1),
-            "macro_f1": round(self.macro_f1 * 100, 1),
-            "macro_f_beta_05": round(self.macro_f_beta_05 * 100, 1),
-            "macro_f_beta_2": round(self.macro_f_beta_2 * 100, 1),
-            "severity_mae": round(self.severity_mae, 3),
-            "valid_review_output_rate": round(self.valid_review_output_rate * 100, 1),
-        }
-
     def render_github_metrics_markdown(self) -> str:
         micro_p = self.precision * 100
         micro_r = self.recall * 100
@@ -319,10 +298,10 @@ class CodeReviewResultSummary(EvaluationResultSummary):
             f"{_METRIC_EXPLANATIONS}"
         )
 
-    def render_console_metrics(self, console: Console) -> None:
+    def render_console_metrics(self) -> RenderableType:
         metric_columns = ["Precision", "Recall", "F1", "Fβ (β=0.5)", "Fβ (β=2)"]
 
-        console.print(
+        return Group(
             _build_console_table(
                 "Comment counts",
                 ["Generated", "Expected", "Matched", "Incorrect", "Missed"],
@@ -333,9 +312,7 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                     str(self.incorrect_comment_count),
                     str(self.missed_comment_count),
                 ],
-            )
-        )
-        console.print(
+            ),
             _build_console_table(
                 "Micro metrics (volume-weighted across all comments)",
                 metric_columns,
@@ -346,9 +323,7 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                     f"{self.f_beta_05 * 100:.1f}%",
                     f"{self.f_beta_2 * 100:.1f}%",
                 ],
-            )
-        )
-        console.print(
+            ),
             _build_console_table(
                 "Macro metrics (averaged per task)",
                 metric_columns,
@@ -359,23 +334,19 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                     f"{self.macro_f_beta_05 * 100:.1f}%",
                     f"{self.macro_f_beta_2 * 100:.1f}%",
                 ],
-            )
-        )
-        console.print(
+            ),
             _build_console_table(
                 "Quality",
                 ["Severity MAE", "Valid review output rate"],
                 [f"{self.severity_mae:.3f}", f"{self.valid_review_output_rate * 100:.1f}%"],
-            )
-        )
-        console.print(
+            ),
             Panel(
                 _CONSOLE_METRIC_EXPLANATIONS,
                 title="📖 How to read these metrics",
                 title_align="left",
                 border_style="dim",
                 padding=(1, 2),
-            )
+            ),
         )
 
     @classmethod

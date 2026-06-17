@@ -24,10 +24,7 @@ class TestSetupHooks:
 
         hook = hooks_config["hooks"]["preToolUse"][0]
         assert hook["type"] == "command"
-        assert "powershell" in hook
-        assert "bash" in hook
-        assert "python3" in hook["bash"]
-        assert "log_tool_usage.py" in hook["bash"]
+        assert "command" in hook
         assert "BCBENCH_TOOL_LOG" in hook["env"]
         assert hook["timeoutSec"] == 5
 
@@ -86,7 +83,7 @@ class TestSetupHooks:
 
         hooks_file = repo_path / ".github" / "hooks" / "bcbench-hooks.json"
         hooks_config = json.loads(hooks_file.read_text(encoding="utf-8"))
-        powershell_cmd = hooks_config["hooks"]["preToolUse"][0]["powershell"]
+        powershell_cmd = hooks_config["hooks"]["preToolUse"][0]["command"]
 
         # The command should contain an absolute path to the script
         assert "log-tool-usage.ps1" in powershell_cmd
