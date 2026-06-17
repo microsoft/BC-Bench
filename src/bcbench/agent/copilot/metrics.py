@@ -34,15 +34,10 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
         output_lines: Lines from Copilot CLI stderr output
         session_log_path: Optional path to session log file for tool usage parsing
 
-    Expected output format (newest, v1.0.61+):
-        Changes    +23 -0
-        AI Credits 58.4 (1m 14s)
-        Tokens     ↑ 413.9k (368.1k cached) • ↓ 4.5k (500 reasoning)
-
-    Previous output format (v1.0.2..v1.0.60):
-        Changes   +17 -0
-        Requests  0.33 Premium (1m 45s)
-        Tokens    ↑ 317.5k • ↓ 4.3k • 255.0k (cached)
+    Expected output format (v1.0.57):
+        Changes    +67 -0
+        Requests   15 Premium (6m 47s)
+        Tokens     ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)
 
     Legacy output format:
         Total usage est:        0.33 Premium requests
@@ -88,20 +83,12 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
             seconds = float(duration_match.group(2))
             execution_time = minutes * 60 + seconds
 
-        # New format (v1.0.2+): "Requests  0.33 Premium (1m 45s)" — extract session time from parenthesized duration
+        # New format: "Requests  0.33 Premium (1m 45s)" — extract session time from parenthesized duration
         if execution_time is None:
             requests_match = re.search(r"Requests\s+[\d.]+\s+Premium\s+\((?:(\d+)m\s*)?(\d+(?:\.\d+)?)s\)", output_text)
             if requests_match:
                 minutes = int(requests_match.group(1)) if requests_match.group(1) else 0
                 seconds = float(requests_match.group(2))
-                execution_time = minutes * 60 + seconds
-
-        # Newest format (v1.0.61+): "AI Credits 58.4 (1m 14s)" — "Requests N Premium" was renamed to "AI Credits N"
-        if execution_time is None:
-            credits_match = re.search(r"AI Credits\s+[\d.]+\s+\((?:(\d+)m\s*)?(\d+(?:\.\d+)?)s\)", output_text)
-            if credits_match:
-                minutes = int(credits_match.group(1)) if credits_match.group(1) else 0
-                seconds = float(credits_match.group(2))
                 execution_time = minutes * 60 + seconds
 
         # Token usage — legacy format: "1.3m in, 11.6k out"
@@ -110,8 +97,7 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
             prompt_tokens = _parse_token_count(usage_match.group(1))
             completion_tokens = _parse_token_count(usage_match.group(2))
 
-        # New format (v1.0.2+): "Tokens    ↑ 317.5k • ↓ 4.3k • 255.0k (cached)"
-        # Newest format (v1.0.61+): "Tokens     ↑ 413.9k (368.1k cached) • ↓ 4.5k (500 reasoning)"
+        # New format: "Tokens    ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)"
         # Anchor on the ↑/↓ arrows so parenthesized annotations between the numbers don't break parsing.
         if prompt_tokens is None:
             tokens_match = re.search(r"Tokens\s+.*?↑\s*(\d+(?:\.\d+)?[km]?).*?↓\s*(\d+(?:\.\d+)?[km]?)", output_text)
