@@ -25,7 +25,9 @@ on:
         description: "Model alias passed to the external-command bridge when llm-backend=external-command"
         required: false
         default: "gpt-5"
-        type: string
+        type: choice
+        options:
+          - "gpt-5"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
