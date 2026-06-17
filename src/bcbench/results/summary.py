@@ -5,13 +5,16 @@ from collections import Counter
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
+
+if TYPE_CHECKING:
+    from rich.console import RenderableType
 
 logger = get_logger(__name__)
 
@@ -56,11 +59,18 @@ class EvaluationResultSummary(BaseModel, ABC):
     benchmark_version: str
 
     @abstractmethod
-    def display_summary(self) -> dict[str, int | float]:
-        """Return category-specific metrics for console/GitHub summary display.
+    def render_github_metrics_markdown(self) -> str:
+        """Markdown metrics block between the run header and the Detailed Results table (GitHub Actions summary).
 
-        Subclasses must override. Keys become display labels (underscores replaced with spaces and title-cased). Values are shown as-is.
+        Shown after every CI run, so each category must explicitly decide what to surface (return "" for none).
         """
+
+    def render_console_metrics(self) -> "RenderableType | None":
+        """Rich renderable for the metrics block printed by display.py after each run (console).
+
+        Defaults to no metrics block. Subclasses override to add category-specific metrics.
+        """
+        return None
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
@@ -140,12 +150,8 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
 
-    def display_summary(self) -> dict[str, int | float]:
-        return {
-            "resolved": self.resolved,
-            "failed": self.failed,
-            "build": self.build,
-        }
+    def render_github_metrics_markdown(self) -> str:
+        return f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "ExecutionBasedEvaluationResultSummary":
@@ -177,8 +183,9 @@ class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
     this summary only carries the agent-execution aggregates from the base class.
     """
 
-    def display_summary(self) -> dict[str, int | float]:
-        return {}
+    def render_github_metrics_markdown(self) -> str:
+        """Judge scoring happens externally, so there are no in-run metrics to surface."""
+        return ""
 
 
 # ---------------------------------------------------------------------------
