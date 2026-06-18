@@ -48,14 +48,13 @@ jobs:
       test-run: ${{ inputs.test-run }}
       category: nl2al
 
-  # A.3: hoist common setup. bcal CLI, the CAPI venv, BcContainerHelper, and
-  # the NuGet credprovider are installed once here and republished as an
-  # artifact. The matrix job downloads + restores instead of reinstalling
-  # 16-32x in parallel. Saves ~3 CPU-h per attempt.
+  # Install the rate-limited, install-once tooling a single time (credprovider
+  # + bcal CLI, the optional CAPI bridge venv, and BcContainerHelper) and share
+  # it with the matrix via a run-scoped cache, instead of reinstalling it 16x
+  # in parallel.
   #
-  # Per-job by design (NOT hoisted): OIDC tokens for Key Vault (per-job
-  # lifetime), bcartifacts download (per-entry, see A.2), and the BCal run
-  # itself.
+  # NOT here: the CAPI client cert (fetched per-job from Key Vault, never
+  # cached) and the bcartifacts download (cached directly by the matrix job).
   prepare-workspace:
     runs-on: windows-latest
     needs: get-entries
@@ -66,9 +65,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    outputs:
-      bccache-key: ${{ steps.bccache.outputs.key }}
-      bccache-versions: ${{ steps.bccache.outputs.versions }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -119,74 +115,15 @@ jobs:
           uv venv workspace-out\bcal-capi-venv --python 3.12
           uv pip install --python workspace-out\bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.6" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
-      # Fetch the CAPI client certificate once here so the matrix job can skip azure/login + per-call Key Vault round-trips.
-      - name: Stage CAPI client certificate from Key Vault
-        if: ${{ inputs.llm-backend == 'external-command' }}
-        shell: pwsh
-        env:
-          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
-          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
-        run: |
-          if (-not $env:CAPI_CERTIFICATE_KEY_VAULT_NAME -or -not $env:CAPI_CERTIFICATE_NAME) {
-            throw "CAPI_CERTIFICATE_KEY_VAULT_NAME / CAPI_CERTIFICATE_NAME secrets must be set when llm-backend = external-command."
-          }
-          $b64 = az keyvault secret show --vault-name $env:CAPI_CERTIFICATE_KEY_VAULT_NAME --name $env:CAPI_CERTIFICATE_NAME --query value -o tsv
-          if (-not $b64) {
-            throw "Failed to fetch CAPI cert from Key Vault."
-          }
-          New-Item -ItemType Directory -Force -Path workspace-out | Out-Null
-          [IO.File]::WriteAllBytes("$pwd\workspace-out\capi-cert.pfx", [Convert]::FromBase64String($b64))
-
       - name: Save BcContainerHelper module to portable folder
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path workspace-out\ps-modules | Out-Null
           Save-Module -Name BcContainerHelper -Path workspace-out\ps-modules -AllowPrerelease -Force
 
-      # A.2: cache the BC sandbox artifact between runs. All matrix jobs land
-      # on the same BC version(s); pre-downloading once and caching the
-      # ~3 GB payload turns the per-entry symbol-download step into a no-op
-      # (just a copy from the local cache).
-      - name: Compute bcartifacts cache key
-        id: bccache
-        shell: pwsh
-        run: |
-          $versions = uv run python -c "import json; print(','.join(sorted({json.loads(l)['environment_setup_version'] for l in open('dataset/nl2al.jsonl', encoding='utf-8') if l.strip()})))"
-          $bytes = [Text.Encoding]::UTF8.GetBytes("$versions|w1|v1")
-          $stream = [System.IO.MemoryStream]::new($bytes)
-          $hash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash.Substring(0, 16)
-          "key=bcartifacts-windows-$hash" >> $env:GITHUB_OUTPUT
-          "versions=$versions" >> $env:GITHUB_OUTPUT
-          Write-Host "BC versions: $versions"
-          Write-Host "Cache key:   bcartifacts-windows-$hash"
-
-      - name: Cache BC sandbox artifacts
-        uses: actions/cache@v5
-        with:
-          path: C:\bcartifacts.cache
-          key: ${{ steps.bccache.outputs.key }}
-          restore-keys: |
-            bcartifacts-windows-
-
-      - name: Pre-download BC sandbox artifacts
-        shell: pwsh
-        env:
-          BCARTIFACTS_VERSIONS: ${{ steps.bccache.outputs.versions }}
-        run: |
-          $env:PSModulePath = "$pwd\workspace-out\ps-modules;$env:PSModulePath"
-          Import-Module BcContainerHelper -Force -DisableNameChecking
-          foreach ($v in ($env:BCARTIFACTS_VERSIONS -split ',')) {
-            if (-not $v) { continue }
-            $url = Get-BCArtifactUrl -version $v -country w1 -select 'Latest'
-            if (-not $url) { throw "No BC artifact URL resolved for version $v" }
-            Write-Host "Pre-downloading $url"
-            Download-Artifacts -artifactUrl $url -includePlatform | Out-Null
-          }
-
-      # Cache instead of upload-artifact: faster restore in matrix (~14 s -> a
-      # few s for cache hit) AND avoids the 54 s artifact upload here. Keyed
-      # by github.run_id so each workflow run gets its own slot and we never
-      # collide with concurrent runs.
+      # Share the install-once tooling (bcal CLI, BcContainerHelper, optional
+      # CAPI bridge venv) with the matrix via a run-scoped cache. Keyed by
+      # github.run_id so it's pure transport and never collides across runs.
       - name: Save prepared workspace to cache
         uses: actions/cache/save@v5
         with:
@@ -219,8 +156,7 @@ jobs:
         uses: ./.github/actions/setup-python-uv
 
       # Restore the prepared workspace (bcal CLI, BcContainerHelper, optional
-      # CAPI venv + client cert) from the cache populated by prepare-workspace.
-      # Cache restore is ~3-5x faster than a download-artifact step.
+      # CAPI bridge venv) from the cache populated by prepare-workspace.
       - name: Restore prepared workspace from cache
         id: restore-workspace
         uses: actions/cache/restore@v5
@@ -248,20 +184,60 @@ jobs:
           # symbol-download step (no more Install-Module).
           "PSModulePath=$pwd\workspace-out\ps-modules;$env:PSModulePath" >> $env:GITHUB_ENV
 
-      # A.2: restore bcartifacts cache that prepare-workspace populated.
-      # Cache key is reused via job output to avoid recomputing it here.
-      - name: Restore bcartifacts cache
-        uses: actions/cache/restore@v5
+      # Resolve this entry's BC version (a per-task property) for the cache key.
+      - name: Resolve BC version for cache key
+        id: bcversion
+        shell: pwsh
+        env:
+          ENTRY: ${{ matrix.entry }}
+        run: |
+          $version = uv run python -c "import json, os; entries = [json.loads(l) for l in open('dataset/nl2al.jsonl', encoding='utf-8') if l.strip()]; print(next(e['environment_setup_version'] for e in entries if e['instance_id'] == os.environ['ENTRY']))"
+          if (-not $version) { throw "Could not resolve BC version for $env:ENTRY" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      # Cache BcContainerHelper's artifact folder (its hardcoded default path),
+      # keyed by this entry's BC version so a bump (e.g. 28.0 -> 29.0) is a
+      # clean miss. No restore-keys: we must never restore a different
+      # version's artifacts. On a hit the symbol download is skipped entirely.
+      - name: Cache BC sandbox artifacts
+        id: bccache
+        uses: actions/cache@v5
         with:
           path: C:\bcartifacts.cache
-          key: ${{ needs.prepare-workspace.outputs.bccache-key }}
-          restore-keys: |
-            bcartifacts-windows-
+          key: bcartifacts-${{ steps.bcversion.outputs.version }}
 
       - name: Download BC Application symbols
+        if: steps.bccache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
+
+      # The CAPI client cert is fetched per-job from Key Vault and lives only on
+      # this runner (RUNNER_TEMP) -- it is never written to the workspace or a
+      # cache/artifact.
+      - name: Azure Login (OIDC) for CAPI Key Vault
+        if: ${{ inputs.llm-backend == 'external-command' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Fetch CAPI client certificate from Key Vault
+        if: ${{ inputs.llm-backend == 'external-command' }}
+        shell: pwsh
+        env:
+          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+        run: |
+          if (-not $env:CAPI_CERTIFICATE_KEY_VAULT_NAME -or -not $env:CAPI_CERTIFICATE_NAME) {
+            throw "CAPI_CERTIFICATE_KEY_VAULT_NAME / CAPI_CERTIFICATE_NAME secrets must be set when llm-backend = external-command."
+          }
+          $b64 = az keyvault secret show --vault-name $env:CAPI_CERTIFICATE_KEY_VAULT_NAME --name $env:CAPI_CERTIFICATE_NAME --query value -o tsv
+          if (-not $b64) {
+            throw "Failed to fetch CAPI cert from Key Vault."
+          }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\capi-cert.pfx", [Convert]::FromBase64String($b64))
 
       - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 18
@@ -282,9 +258,9 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend }}" -eq "external-command") {
-            $env:CAPI_CERT_FILE = "$env:GITHUB_WORKSPACE\workspace-out\capi-cert.pfx"
+            $env:CAPI_CERT_FILE = "$env:RUNNER_TEMP\capi-cert.pfx"
             if (-not (Test-Path $env:CAPI_CERT_FILE)) {
-              throw "Expected CAPI client cert at $env:CAPI_CERT_FILE but it was not restored from the cache."
+              throw "Expected CAPI client cert at $env:CAPI_CERT_FILE but it was not fetched from Key Vault."
             }
             $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
           }
