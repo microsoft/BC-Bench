@@ -101,6 +101,12 @@ class TestStageAndGetDiff:
         with pytest.raises(EmptyDiffError):
             stage_and_get_diff(tmp_path)
 
+    def test_stage_and_get_diff_other_git_failure_propagates(self, tmp_path):
+        # A git failure that is NOT "pathspec did not match" (here: not a git repo at all)
+        # must surface as a real error, not be masked as an empty diff.
+        with pytest.raises(subprocess.CalledProcessError):
+            stage_and_get_diff(tmp_path)
+
 
 class TestCleanProjectPaths:
     @pytest.fixture

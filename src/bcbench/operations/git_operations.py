@@ -108,10 +108,16 @@ def stage_and_get_diff(repo_path: Path) -> str:
     """
     logger.info("Staging *.al file changes and getting git diff")
 
-    # Stage all changes, so new files can be captured in the diff
-    # only focus on *.al files for now
-    # check=False because when the agent produces zero *.al files git returns 128 ("pathspec did not match"); the empty-diff path below handles it.
-    subprocess.run(["git", "add", "*.al"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+    # Stage all changes, so new files can be captured in the diff (only *.al files for now).
+    # A missing-pathspec error (exit 128) means the agent produced no *.al files at all -> empty diff.
+    # Any other failure is a real git error and propagates to fail the job.
+    try:
+        subprocess.run(["git", "add", "*.al"], cwd=repo_path, capture_output=True, encoding="utf-8", text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        if e.stderr and "did not match" in e.stderr:
+            logger.warning("No *.al files produced by agent - treating as empty diff")
+            raise EmptyDiffError() from e
+        raise
 
     # Get diff of staged changes against HEAD
     result = subprocess.run(

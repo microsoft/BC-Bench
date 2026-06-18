@@ -4,7 +4,6 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import EmptyDiffError
@@ -15,7 +14,6 @@ from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
-_config = get_config()
 
 __all__ = ["NL2ALPipeline"]
 
