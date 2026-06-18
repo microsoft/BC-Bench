@@ -16,7 +16,7 @@ on:
       llm-backend:
         description: "LLM backend for bcal. In this workflow, external-command uses the bc-eval CAPI bridge."
         required: false
-        default: "azure-openai"
+        default: "external-command"
         type: choice
         options:
           - "azure-openai"
@@ -120,15 +120,11 @@ jobs:
           uv venv .bcal-capi-venv --python 3.12
           uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.6" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
-      # Resolve this entry's BC version (a per-task property) for the cache key.
       - name: Resolve BC version for cache key
         id: bcversion
         run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
 
-      # Cache BcContainerHelper's artifact folder (its hardcoded default path),
-      # keyed by this entry's BC version so a bump (e.g. 28.0 -> 29.0) is a
-      # clean miss. No restore-keys: we must never restore a different
-      # version's artifacts. On a hit the symbol download is skipped entirely.
+      # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
         id: bccache
         uses: actions/cache@v5
@@ -143,9 +139,6 @@ jobs:
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
           .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
-      # The CAPI client cert is fetched per-job from Key Vault and lives only on
-      # this runner (RUNNER_TEMP) -- it is never written to the workspace or a
-      # cache/artifact.
       - name: Azure Login (OIDC) for CAPI Key Vault
         if: ${{ inputs.llm-backend == 'external-command' }}
         uses: azure/login@v3
