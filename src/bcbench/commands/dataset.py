@@ -7,7 +7,7 @@ from typing_extensions import Annotated
 
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
@@ -90,6 +90,10 @@ def view_entry(
         "\n".join(entry.project_paths) if entry.project_paths else "N/A",
     )
 
+    if isinstance(entry, NL2ALEntry):
+        info_table.add_row("Page", entry.page if entry.page else "[dim](empty)[/dim]")
+        info_table.add_row("Audience", entry.audience)
+
     metadata_dict = entry.metadata.model_dump()
     for field_name, field_value in metadata_dict.items():
         if field_value is not None:
@@ -133,6 +137,18 @@ def view_entry(
             console.print(test_table)
         else:
             console.print("[dim]No PASS_TO_PASS tests[/dim]")
+
+    elif isinstance(entry, NL2ALEntry):
+        console.print("\n[bold cyan]Expected Checklist:[/bold cyan]")
+        if entry.expected:
+            checklist_table = Table()
+            checklist_table.add_column("Level", style="magenta")
+            checklist_table.add_column("Assertion", style="yellow")
+            for assertion in entry.expected:
+                checklist_table.add_row(assertion["level"], assertion["text"])
+            console.print(checklist_table)
+        else:
+            console.print("[dim]No expected assertions[/dim]")
 
 
 @dataset_app.command("version")
