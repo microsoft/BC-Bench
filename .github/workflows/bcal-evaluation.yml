@@ -33,6 +33,9 @@ on:
         required: false
         default: true
         type: boolean
+  schedule:
+    - cron: "0 3 * * 0"
+
 
 concurrency:
   group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
@@ -45,7 +48,7 @@ jobs:
   get-entries:
     uses: ./.github/workflows/get-entries.yml
     with:
-      test-run: ${{ inputs.test-run }}
+      test-run: ${{ inputs.test-run || false }}
       category: nl2al
 
   evaluate-with-bcal:
@@ -110,7 +113,7 @@ jobs:
           dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
 
       - name: Build bc-eval CAPI bridge venv
-        if: ${{ inputs.llm-backend == 'external-command' }}
+        if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
         shell: pwsh
         run: |
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
@@ -140,7 +143,7 @@ jobs:
           .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
       - name: Azure Login (OIDC) for CAPI Key Vault
-        if: ${{ inputs.llm-backend == 'external-command' }}
+        if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -148,7 +151,7 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Fetch CAPI client certificate from Key Vault
-        if: ${{ inputs.llm-backend == 'external-command' }}
+        if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
         shell: pwsh
         env:
           CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
@@ -166,10 +169,10 @@ jobs:
       - name: Run BCal for entry ${{ matrix.entry }}
         timeout-minutes: 18
         env:
-          BCAL_LLM_BACKEND: ${{ inputs.llm-backend }}
-          BCAL_LLM_MODEL: ${{ inputs.llm-backend == 'external-command' && inputs.external-model || inputs.model }}
+          BCAL_LLM_BACKEND: ${{ inputs.llm-backend || 'external-command' }}
+          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-          AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model || 'gpt-5.2' }}
           CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
           CAPI_SCOPE: ${{ secrets.CAPI_SCOPE }}
           CAPI_ORG_GUID: ${{ secrets.CAPI_ORG_GUID }}
@@ -181,7 +184,7 @@ jobs:
           CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
         shell: pwsh
         run: |
-          if ("${{ inputs.llm-backend }}" -eq "external-command") {
+          if ("${{ inputs.llm-backend || 'external-command' }}" -eq "external-command") {
             $env:CAPI_CERT_FILE = "$env:RUNNER_TEMP\capi-cert.pfx"
             if (-not (Test-Path $env:CAPI_CERT_FILE)) {
               throw "Expected CAPI client cert at $env:CAPI_CERT_FILE but it was not fetched from Key Vault."
@@ -207,9 +210,9 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ inputs.llm-backend == 'external-command' && inputs.external-model || inputs.model }}
-      agent: ${{ inputs.llm-backend == 'external-command' && 'BCal-external-command' || 'BCal' }}
-      mock: ${{ inputs.test-run }}
+      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
+      agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
+      mock: ${{ inputs.test-run || false }}
       category: nl2al
       skip-leaderboard: true
     secrets: inherit
