@@ -135,6 +135,19 @@ def view_entry(
             console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
 
+@dataset_app.command("version")
+def version(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to resolve the BC version for")],
+    category: EvaluationCategoryOption,
+    github_output: Annotated[str | None, typer.Option(help="Write the version to GITHUB_OUTPUT with this key name")] = None,
+) -> None:
+    """Print an entry's environment_setup_version (the BC sandbox version)."""
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    print(entry.environment_setup_version)
+    if github_output:
+        write_step_outputs({github_output: entry.environment_setup_version})
+
+
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
     instance_ids = []
 

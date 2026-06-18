@@ -123,13 +123,7 @@ jobs:
       # Resolve this entry's BC version (a per-task property) for the cache key.
       - name: Resolve BC version for cache key
         id: bcversion
-        shell: pwsh
-        env:
-          ENTRY: ${{ matrix.entry }}
-        run: |
-          $version = uv run python -c "import json, os; entries = [json.loads(l) for l in open('dataset/nl2al.jsonl', encoding='utf-8') if l.strip()]; print(next(e['environment_setup_version'] for e in entries if e['instance_id'] == os.environ['ENTRY']))"
-          if (-not $version) { throw "Could not resolve BC version for $env:ENTRY" }
-          "version=$version" >> $env:GITHUB_OUTPUT
+        run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
 
       # Cache BcContainerHelper's artifact folder (its hardcoded default path),
       # keyed by this entry's BC version so a bump (e.g. 28.0 -> 29.0) is a

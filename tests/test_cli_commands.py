@@ -253,6 +253,25 @@ def test_dataset_list_displays_all_entries(sample_dataset_file_for_cli):
 
 
 @pytest.mark.integration
+def test_dataset_bc_version_returns_entry_version(sample_dataset_file_for_cli):
+    with patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file_for_cli):
+        result = runner.invoke(
+            app,
+            [
+                "dataset",
+                "version",
+                "microsoftInternal__NAV-2",
+                "--category",
+                "bug-fix",
+            ],
+        )
+
+    assert result.exit_code == 0, f"Command failed: {result.stdout}\n{result.exception}"
+    assert "27.0" in result.stdout
+    assert "26.5" not in result.stdout
+
+
+@pytest.mark.integration
 def test_dataset_list_missing_file_fails_gracefully(tmp_path):
     nonexistent_path = tmp_path / "nonexistent.jsonl"
 
