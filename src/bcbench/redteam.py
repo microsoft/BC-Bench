@@ -4,9 +4,10 @@ import asyncio
 import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from bcbench.agent.bcal import run_bcal_prompt
+from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
+from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -14,43 +15,45 @@ logger = get_logger(__name__)
 __all__ = ["build_bcal_target", "run_scan"]
 
 
-def _ensure_package_cache(package_cache_path: Path) -> None:
+def _ensure_package_cache(package_cache_path: Path, version: str) -> None:
     """Guarantee bcal has BC symbols on disk before scanning, mirroring the working `run bcal`.
 
     Every bcal call really shells out and reads *.app symbol files from disk, so the cache
-    must physically exist. The nl2al pipeline builds it via setup_workspace -> _copy_symbol_apps
+    must physically exist. The nl2al pipeline builds it via setup_workspace -> copy_symbol_apps
     (copying from the BCContainerHelper artifacts cache that scripts/Download-BCSymbols.ps1
     populates). Red teaming has no nl2al entry, so we build the same .alpackages once here,
-    deriving the BC version from the nl2al dataset. A pre-populated cache is reused as-is.
+    using the BC version from the nl2al dataset. A pre-populated cache is reused as-is.
 
-    Assumption: package_cache_path is named '.alpackages' (so _copy_symbol_apps, which always
+    Assumption: package_cache_path is named '.alpackages' (so copy_symbol_apps, which always
     writes into '<dir>/.alpackages', lands exactly here).
     """
     if package_cache_path.exists() and any(package_cache_path.glob("*.app")):
         return
 
     # Local import: reuse the proven nl2al setup and avoid importing azure-free code at module load.
-    from bcbench.evaluate.nl2al import _copy_symbol_apps
-    from bcbench.types import EvaluationCategory
+    from bcbench.operations import copy_symbol_apps
 
-    category = EvaluationCategory.NL2AL
-    version = category.entry_class.load(category.dataset_path)[0].environment_setup_version
     logger.info(f"Populating bcal package cache at {package_cache_path} (BC {version})")
-    _copy_symbol_apps(package_cache_path.parent, version)
+    copy_symbol_apps(package_cache_path.parent, version)
 
 
-def build_bcal_target(package_cache_path: Path, export_base: Path) -> Callable[[str], str]:
+def build_bcal_target(package_cache_path: Path, export_base: Path, backend_config: BCalBackendConfig) -> Callable[[str], str]:
     """Wrap the nl2al agent (BCal) as a red-team target callback.
 
     The symbol cache is set up once up front (fail fast before the scan spins up); each
     adversarial query then gets its own export subfolder so concurrent bcal calls — which all
-    need real disk access — never collide on generated files.
+    need real disk access — never collide on generated files. A representative nl2al entry
+    supplies the bcal ``--page``/``--audience`` inputs (the adversarial query replaces its prompt).
     """
-    _ensure_package_cache(package_cache_path)
+    from bcbench.types import EvaluationCategory
+
+    category = EvaluationCategory.NL2AL
+    entry = category.entry_class.load(category.dataset_path)[0]
+    _ensure_package_cache(package_cache_path, entry.environment_setup_version)
 
     def bcal_target(query: str) -> str:
         export_folder = export_base / f"query-{uuid.uuid4().hex[:8]}"
-        return run_bcal_prompt(query, package_cache_path, export_folder)
+        return run_bcal_prompt(cast(NL2ALEntry, entry), package_cache_path, export_folder, backend_config)
 
     return bcal_target
 

@@ -4,7 +4,7 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -160,6 +160,8 @@ class NL2ALEntry(BaseDatasetEntry):
     base_commit: str | None = None
     nl_prompt: Annotated[str, Field(min_length=1)]
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
+    page: str
+    audience: Literal["Business", "Technical", "Both"]
 
     def get_task(self) -> str:
         return self.nl_prompt

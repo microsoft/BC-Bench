@@ -41,6 +41,7 @@ class PathConfig:
     leaderboard_dir: Path
     agent_share_dir: Path
     hook_script_path: Path
+    bc_artifacts_cache: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -56,6 +57,7 @@ class PathConfig:
             leaderboard_dir=root / "docs" / "_data",
             agent_share_dir=agent_share_dir,
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
+            bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
         )
 
 
@@ -97,6 +99,8 @@ class FilePatternConfig:
     tool_usage_log: str
     copilot_hooks_config: str
     claude_settings_local: str
+    alpackages_dirname: str
+    nl2al_export_subdir: str
 
     @classmethod
     def default(cls) -> FilePatternConfig:
@@ -114,6 +118,8 @@ class FilePatternConfig:
             tool_usage_log="tool_usage.jsonl",
             copilot_hooks_config="bcbench-hooks.json",
             claude_settings_local="settings.local.json",
+            alpackages_dirname=".alpackages",
+            nl2al_export_subdir="src",
         )
 
 

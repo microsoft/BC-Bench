@@ -51,7 +51,7 @@ def _create_with_retry(client: object, kwargs: dict[str, object]) -> object:
     last_exc: HttpResponseError | None = None
     for attempt in range(_TRANSIENT_RETRY_ATTEMPTS):
         try:
-            return client.chat.completions.create(**kwargs)  # type: ignore[attr-defined]
+            return client.chat.completions.create(**kwargs)  # ty: ignore[unresolved-attribute]
         except HttpResponseError as exc:
             last_exc = exc
             if attempt == _TRANSIENT_RETRY_ATTEMPTS - 1:
@@ -107,7 +107,7 @@ def _patch_credential_from_local_file(cert_file: Path) -> None:
         if mod is None or not mod_name.startswith("bc_eval"):
             continue
         if getattr(mod, "get_certificate_credential", None) is original:
-            mod.get_certificate_credential = _credential_from_file
+            mod.get_certificate_credential = _credential_from_file  # ty: ignore[unresolved-attribute]
 
 
 def _maybe_install_local_cert_credential() -> None:

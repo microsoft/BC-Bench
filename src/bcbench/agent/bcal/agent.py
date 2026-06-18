@@ -1,36 +1,73 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
-import os
 import shutil
 import subprocess
 import time
-from enum import StrEnum
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics, ExperimentConfiguration
+from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
 
-_AUDIENCE = "both"
-_PAGE = "Customer Card"
 _BCAL_TOOL = "bcal"
 
 
-class BcalLlmBackend(StrEnum):
-    AZURE_OPENAI = "azure-openai"
-    EXTERNAL_COMMAND = "external-command"
+class BCalBackendConfig(BaseModel):
+    """A resolved bcal backend plus the inputs it needs to run.
 
+    Bundles the backend selector with its (command-entry supplied) values so call sites pass a
+    single object, and the conditional "which inputs are required" rules stay in one place.
+    """
 
-def _require_env(name: str) -> str:
-    value = os.environ.get(name)
-    if not value or not value.strip():
-        raise AgentError(f"Environment variable {name} is required but not set. Add it to your .env file.")
-    return value
+    model_config = ConfigDict(frozen=True)
+
+    backend: BCalLLMBackend
+    endpoint: str | None = None
+    deployment: str | None = None
+    command: str | None = None
+    model: str | None = None
+
+    @field_validator("endpoint", "deployment", "command", "model", mode="before")
+    @classmethod
+    def _strip_optional_string(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    def cli_args(self) -> list[str]:
+        match self.backend:
+            case BCalLLMBackend.EXTERNAL_COMMAND:
+                if not self.command:
+                    raise AgentError("BCAL_LLM_COMMAND is required for the external-command backend.")
+                args = ["--llm-backend=external-command", f"--llm-command={self.command}"]
+                if self.model:
+                    args.append(f"--deployment={self.model}")
+                return args
+            case BCalLLMBackend.AZURE_OPENAI:
+                if not self.endpoint:
+                    raise AgentError("AZURE_OPENAI_ENDPOINT is required for the azure-openai backend.")
+                if not self.deployment:
+                    raise AgentError("AZURE_OPENAI_DEPLOYMENT is required for the azure-openai backend.")
+                return [f"--endpoint={self.endpoint}", f"--deployment={self.deployment}"]
+
+        raise ValueError(f"Unknown BCalLLMBackend: {self.backend}")
+
+    def model_label(self) -> str:
+        match self.backend:
+            case BCalLLMBackend.EXTERNAL_COMMAND:
+                return self.model or self.backend.value
+            case BCalLLMBackend.AZURE_OPENAI:
+                return self.deployment or self.backend.value
+
+        raise ValueError(f"Unknown BCalLLMBackend: {self.backend}")
 
 
 def _resolve_bcal_executable() -> str:
@@ -40,70 +77,38 @@ def _resolve_bcal_executable() -> str:
     return resolved
 
 
-def _resolve_llm_backend() -> BcalLlmBackend:
-    raw = os.environ.get("BCAL_LLM_BACKEND", BcalLlmBackend.AZURE_OPENAI.value)
-    try:
-        return BcalLlmBackend(raw)
-    except ValueError as exc:
-        valid = ", ".join(p.value for p in BcalLlmBackend)
-        raise AgentError(f"Unknown BCAL_LLM_BACKEND='{raw}'. Expected one of: {valid}.") from exc
-
-
-def _build_backend_cli_args(backend: BcalLlmBackend) -> list[str]:
-    if backend is BcalLlmBackend.EXTERNAL_COMMAND:
-        command = _require_env("BCAL_LLM_COMMAND")
-        args = [
-            "--llm-backend=external-command",
-            f"--llm-command={command}",
-        ]
-        if model := os.environ.get("BCAL_LLM_MODEL"):
-            args.append(f"--deployment={model}")
-        return args
-
-    endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
-    deployment = _require_env("AZURE_OPENAI_DEPLOYMENT")
-    return [
-        f"--endpoint={endpoint}",
-        f"--deployment={deployment}",
-    ]
-
-
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
+    backend_config: BCalBackendConfig,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     bcal_executable = _resolve_bcal_executable()
-    backend = _resolve_llm_backend()
-    backend_args = _build_backend_cli_args(backend)
+    backend_args = backend_config.cli_args()
 
-    logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend.value})")
-
-    prompt = entry.nl_prompt
+    logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend_config.backend.value})")
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
-    project_name = entry.project_paths[0] if entry.project_paths else "App"
-    package_cache_path = repo_path / project_name / ".alpackages"
+    project_name: str = entry.project_paths[0]
+    package_cache_path = repo_path / project_name / _config.file_patterns.alpackages_dirname
     if not package_cache_path.exists():
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 
-    # Export folder for generated AL files
-    export_folder = repo_path / project_name / "src"
-    export_folder.mkdir(parents=True, exist_ok=True)
+    export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
 
     cmd_args = [
         bcal_executable,
         f"--packagecachepath={package_cache_path}",
         *backend_args,
-        f"--audience={_AUDIENCE}",
-        f"--page={_PAGE}",
-        f"--prompt={prompt}",
+        f"--audience={entry.audience}",
+        f"--page={entry.page}",
+        f"--prompt={entry.get_task()}",
         f"--exportfolder={export_folder}",
     ]
 
     logger.info(f"Executing bcal CLI: {bcal_executable}")
-    logger.info(f"Package cache path: {package_cache_path}")
     logger.info(f"Export folder: {export_folder}")
-    logger.debug(f"Using prompt:\n{prompt}")
+    logger.debug(f"Package cache path: {package_cache_path}")
+    logger.debug(f"Using prompt:\n{entry.get_task()}")
     logger.debug(f"bcal CLI command: {cmd_args}")
 
     try:
@@ -129,7 +134,12 @@ def run_bcal_agent(
         raise
 
 
-def run_bcal_prompt(prompt: str, package_cache_path: Path, export_folder: Path) -> str:
+def run_bcal_prompt(
+    entry: NL2ALEntry,
+    package_cache_path: Path,
+    export_folder: Path,
+    backend_config: BCalBackendConfig,
+) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
     BCal has two output channels and we surface both, so a safety judge sees whatever the tool actually produced:
@@ -138,19 +148,19 @@ def run_bcal_prompt(prompt: str, package_cache_path: Path, export_folder: Path) 
 
     assumptions:
       - Symbols are already present.
-      - The hardcoded ``--page``/``--audience`` from the normal bcal flow are reused; for adversarial prompts the page is irrelevant since bcal is expected to refuse.
+      - ``--page``/``--audience`` come from the dataset entry; for adversarial prompts the page is irrelevant since bcal is expected to refuse.
     """
     bcal_executable = _resolve_bcal_executable()
-    backend_args = _build_backend_cli_args(_resolve_llm_backend())
+    backend_args = backend_config.cli_args()
     export_folder.mkdir(parents=True, exist_ok=True)
 
     cmd_args = [
         bcal_executable,
         f"--packagecachepath={package_cache_path}",
         *backend_args,
-        f"--audience={_AUDIENCE}",
-        f"--page={_PAGE}",
-        f"--prompt={prompt}",
+        f"--audience={entry.audience}",
+        f"--page={entry.page}",
+        f"--prompt={entry.get_task()}",
         f"--exportfolder={export_folder}",
     ]
 

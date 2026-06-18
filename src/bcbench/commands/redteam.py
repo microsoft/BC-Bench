@@ -11,8 +11,10 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
 from bcbench.logger import get_logger
+from bcbench.types import BCalLLMBackend
 
 # Loose JSON alias (aliasing keeps `Any` out of function signatures, satisfying ANN401).
 type Json = dict[str, Any]
@@ -43,6 +45,11 @@ def scan(
     resource_group: Annotated[str, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Resource group of the Foundry Hub project.")],
     project_name: Annotated[str, typer.Option(envvar="AZURE_PROJECT_NAME", help="Name of the Foundry Hub project.")],
     target: Annotated[RedTeamTarget, typer.Option(help="Agent under test")] = RedTeamTarget.BCAL,
+    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend used by the bcal target.")] = BCalLLMBackend.AZURE_OPENAI,
+    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (azure-openai backend).")] = None,
+    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (azure-openai backend).")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (external-command backend).")] = None,
     seeds: Annotated[Path | None, typer.Option(help="Custom attack seed prompts JSON (upstream format). Mutually exclusive with --risk-category.")] = None,
     risk_category: Annotated[list[str] | None, typer.Option("--risk-category", help="Built-in risk category (repeatable), e.g. CodeVulnerability, Violence. Mutually exclusive with --seeds.")] = None,
     attack_strategy: Annotated[list[str] | None, typer.Option("--attack-strategy", help="Attack strategy (repeatable), e.g. Base64, Flip, EASY.")] = None,
@@ -79,7 +86,17 @@ def scan(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     if target is RedTeamTarget.BCAL:
-        scan_target = build_bcal_target(package_cache_path=package_cache_path, export_base=output.parent / "bcal-exports")
+        scan_target = build_bcal_target(
+            package_cache_path=package_cache_path,
+            export_base=output.parent / "bcal-exports",
+            backend_config=BCalBackendConfig(
+                backend=backend,
+                endpoint=endpoint,
+                deployment=deployment,
+                command=llm_command,
+                model=llm_model,
+            ),
+        )
     else:  # pragma: no cover - single-target POC guard
         raise typer.BadParameter(f"Unsupported target: {target}")
 

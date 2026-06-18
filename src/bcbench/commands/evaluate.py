@@ -7,7 +7,7 @@ from typing import cast
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -24,7 +24,7 @@ from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult
-from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -156,7 +156,11 @@ def evaluate_bcal(
     repo_path: RepoPath = _config.paths.evaluation_results_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
-    model: Annotated[str, typer.Option(help="Azure OpenAI model name")] = "gpt-5.2",
+    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.EXTERNAL_COMMAND,
+    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
+    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -166,6 +170,13 @@ def evaluate_bcal(
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     run_dir = _prepare_run_dir(output_dir, run_id)
+    backend_config = BCalBackendConfig(
+        backend=backend,
+        endpoint=endpoint,
+        deployment=deployment,
+        command=llm_command,
+        model=llm_model,
+    )
 
     logger.info(f"Running evaluation on entry {entry_id} with BCal")
 
@@ -174,7 +185,7 @@ def evaluate_bcal(
         repo_path=repo_path,
         result_dir=run_dir,
         container=None,
-        model=model,
+        model=backend_config.model_label(),
         agent_name="BCal",
         category=category,
     )
@@ -184,6 +195,7 @@ def evaluate_bcal(
         lambda ctx: run_bcal_agent(
             entry=cast(NL2ALEntry, ctx.entry),
             repo_path=ctx.repo_path,
+            backend_config=backend_config,
         ),
     )
 
