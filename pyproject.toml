@@ -107,7 +107,3 @@ dev = [
     "pre-commit>=4.3.0",
     "ty>=0.0.33",
 ]
-redteam = [
-    "azure-ai-evaluation[redteam]>=1.13.0",
-    "azure-identity>=1.19.0",
-]

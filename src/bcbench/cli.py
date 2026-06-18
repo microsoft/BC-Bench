@@ -6,7 +6,7 @@ import sys
 import typer
 from typing_extensions import Annotated
 
-from bcbench.commands import dataset_app, evaluate_app, redteam_app, run_app
+from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.category import category_app
 from bcbench.commands.collect import collect_app
 from bcbench.commands.result import result_app
@@ -35,7 +35,6 @@ app.add_typer(dataset_app, name="dataset")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(result_app, name="result")
 app.add_typer(category_app, name="category")
-app.add_typer(redteam_app, name="redteam")
 
 
 @app.callback()
