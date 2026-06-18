@@ -90,14 +90,12 @@ def run_bcal_agent(
     logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend_config.backend.value})")
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
-    project_name = entry.project_paths[0] if entry.project_paths else "App"
-    package_cache_path = repo_path / project_name / ".alpackages"
+    project_name: str = entry.project_paths[0]
+    package_cache_path = repo_path / project_name / _config.file_patterns.alpackages_dirname
     if not package_cache_path.exists():
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 
-    # Export folder for generated AL files
-    export_folder = repo_path / project_name / "src"
-    export_folder.mkdir(parents=True, exist_ok=True)
+    export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
 
     cmd_args = [
         bcal_executable,
@@ -110,8 +108,8 @@ def run_bcal_agent(
     ]
 
     logger.info(f"Executing bcal CLI: {bcal_executable}")
-    logger.info(f"Package cache path: {package_cache_path}")
     logger.info(f"Export folder: {export_folder}")
+    logger.debug(f"Package cache path: {package_cache_path}")
     logger.debug(f"Using prompt:\n{entry.get_task()}")
     logger.debug(f"bcal CLI command: {cmd_args}")
 

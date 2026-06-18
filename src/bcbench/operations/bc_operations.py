@@ -1,5 +1,6 @@
 """Business Central specific operations for building, publishing, and testing."""
 
+import shutil
 import subprocess
 from pathlib import Path
 from string import Template
@@ -16,6 +17,37 @@ from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def resolve_artifact_version_root(version: str) -> Path | None:
+    """Return the newest BCContainerHelper artifact folder matching a major.minor version.
+
+    The dataset's ``environment_setup_version`` is major.minor (e.g. "27.2"); BCContainerHelper
+    expands that to a full ``<major>.<minor>.<build>.<revision>`` folder under
+    ``<bc_artifacts_cache>/sandbox/``. We glob, lexically sort, and pick the newest -- BC's
+    full-version fields are constant-width in practice, so a lexical sort matches a numeric one.
+
+    Returns None when no matching artifact has been downloaded yet.
+    """
+    version_roots = sorted((_config.paths.bc_artifacts_cache / "sandbox").glob(f"{version}.*"))
+    return version_roots[-1] if version_roots else None
+
+
+def copy_symbol_apps(project_dir: Path, version: str) -> None:
+    """Copy all *.app symbol files from the BC artifact cache into the project's .alpackages."""
+    version_root = resolve_artifact_version_root(version)
+    if version_root is None:
+        raise FileNotFoundError(f"No BC artifact for version {version} under {_config.paths.bc_artifacts_cache / 'sandbox'}. Run scripts/Download-BCSymbols.ps1 to populate the cache.")
+
+    app_files = list(version_root.rglob("*.app"))
+    if not app_files:
+        raise FileNotFoundError(f"No *.app files found under {version_root}.")
+
+    alpackages_dir = project_dir / _config.file_patterns.alpackages_dirname
+    alpackages_dir.mkdir(parents=True, exist_ok=True)
+    for app_file in app_files:
+        shutil.copy2(app_file, alpackages_dir / app_file.name)
+    logger.info(f"Copied {len(app_files)} *.app files from {version_root} to {alpackages_dir}")
 
 
 def _escape_ps_string(value: str) -> str:
