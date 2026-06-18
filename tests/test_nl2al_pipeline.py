@@ -19,7 +19,7 @@ def _read_only_result(ctx) -> JudgeBasedEvaluationResult:
 
 def _nl2al_context(tmp_path):
     entry = create_nl2al_entry()
-    return create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)  # type: ignore[arg-type]
+    return create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)  # ty: ignore[invalid-argument-type]
 
 
 class TestNL2ALEvaluateEmptyDiff:

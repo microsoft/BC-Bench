@@ -91,7 +91,7 @@ def view_entry(
     )
 
     if isinstance(entry, NL2ALEntry):
-        info_table.add_row("Page", entry.page if entry.page else "[dim](empty)[/dim]")
+        info_table.add_row("Page", entry.page)
         info_table.add_row("Audience", entry.audience)
 
     metadata_dict = entry.metadata.model_dump()

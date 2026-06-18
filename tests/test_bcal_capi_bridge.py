@@ -36,7 +36,7 @@ def http_response_error(monkeypatch):
     core_pkg = types.ModuleType("azure.core")
     core_pkg.__path__ = []
     exceptions_mod = types.ModuleType("azure.core.exceptions")
-    exceptions_mod.HttpResponseError = _StubHttpResponseError
+    exceptions_mod.HttpResponseError = _StubHttpResponseError  # ty: ignore[unresolved-attribute]
 
     monkeypatch.setitem(sys.modules, "azure", azure_pkg)
     monkeypatch.setitem(sys.modules, "azure.core", core_pkg)
@@ -80,12 +80,12 @@ def fake_capi_auth(monkeypatch):
     capi_pkg = types.ModuleType("bc_eval.capi")
     capi_pkg.__path__ = []
     capi_auth_mod = types.ModuleType("bc_eval.capi.capi_auth")
-    capi_auth_mod.get_certificate_credential = _original_get_certificate_credential
+    capi_auth_mod.get_certificate_credential = _original_get_certificate_credential  # ty: ignore[unresolved-attribute]
     # Simulate `from .capi_auth import get_certificate_credential` performed at
     # import time by capi_model — this is the binding that previously stayed
     # un-patched and caused the production failure.
     capi_model_mod = types.ModuleType("bc_eval.capi.capi_model")
-    capi_model_mod.get_certificate_credential = _original_get_certificate_credential
+    capi_model_mod.get_certificate_credential = _original_get_certificate_credential  # ty: ignore[unresolved-attribute]
     monkeypatch.setitem(sys.modules, "bc_eval", bc_eval_pkg)
     monkeypatch.setitem(sys.modules, "bc_eval.capi", capi_pkg)
     monkeypatch.setitem(sys.modules, "bc_eval.capi.capi_auth", capi_auth_mod)
@@ -101,7 +101,7 @@ def fake_capi_auth(monkeypatch):
     azure_pkg = types.ModuleType("azure")
     azure_pkg.__path__ = []
     identity_mod = types.ModuleType("azure.identity")
-    identity_mod.CertificateCredential = _StubCertCredential
+    identity_mod.CertificateCredential = _StubCertCredential  # ty: ignore[unresolved-attribute]
     monkeypatch.setitem(sys.modules, "azure", azure_pkg)
     monkeypatch.setitem(sys.modules, "azure.identity", identity_mod)
 
@@ -158,4 +158,3 @@ def test_maybe_install_local_cert_credential_patches_factory(monkeypatch, fake_c
         # SNI (x5c) auth is required by the CAPI app registration; without it
         # AAD rejects the client assertion with AADSTS700027.
         assert cred.send_certificate_chain is True
-
