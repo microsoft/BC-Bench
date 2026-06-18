@@ -7,12 +7,14 @@ import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
+from bcbench.commands import evaluate as evaluate_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import AgentMetrics, BCalLLMBackend, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
     create_dataset_file,
+    create_nl2al_entry,
     create_test_entry,
 )
 
@@ -88,6 +90,38 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
     result3.save(results_dir, f"{result3.instance_id}.jsonl")
 
     return tmp_path, run_id, sample_dataset_file_for_cli
+
+
+def test_evaluate_bcal_records_backend_model_label(tmp_path):
+    entry = create_nl2al_entry()
+    captured = {}
+
+    class EntryClass:
+        @staticmethod
+        def load(_dataset_path, entry_id: str):
+            assert entry_id == entry.instance_id
+            return [entry]
+
+    class Pipeline:
+        def execute(self, context, _agent_runner):
+            captured["context"] = context
+
+    with (
+        patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=tmp_path / "nl2al.jsonl"),
+        patch.object(EvaluationCategory, "entry_class", new_callable=PropertyMock, return_value=EntryClass),
+        patch.object(EvaluationCategory, "pipeline", new_callable=PropertyMock, return_value=Pipeline()),
+    ):
+        evaluate_commands.evaluate_bcal(
+            entry_id=entry.instance_id,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            run_id="bcal-run",
+            backend=BCalLLMBackend.AZURE_OPENAI,
+            endpoint=" https://aoai.example/ ",
+            deployment=" gpt-5.2-prod ",
+        )
+
+    assert captured["context"].model == "gpt-5.2-prod"
 
 
 @pytest.mark.integration

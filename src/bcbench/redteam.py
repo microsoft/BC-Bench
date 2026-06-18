@@ -6,9 +6,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bcbench.agent.bcal import run_bcal_prompt
+from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
 from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend
 
 logger = get_logger(__name__)
 
@@ -40,7 +39,7 @@ def _ensure_package_cache(package_cache_path: Path) -> None:
     _copy_symbol_apps(package_cache_path.parent, version)
 
 
-def build_bcal_target(package_cache_path: Path, export_base: Path) -> Callable[[str], str]:
+def build_bcal_target(package_cache_path: Path, export_base: Path, backend_config: BCalBackendConfig) -> Callable[[str], str]:
     """Wrap the nl2al agent (BCal) as a red-team target callback.
 
     The symbol cache is set up once up front (fail fast before the scan spins up); each
@@ -51,7 +50,7 @@ def build_bcal_target(package_cache_path: Path, export_base: Path) -> Callable[[
 
     def bcal_target(query: str) -> str:
         export_folder = export_base / f"query-{uuid.uuid4().hex[:8]}"
-        return run_bcal_prompt(query, package_cache_path, export_folder, BCalLLMBackend.AZURE_OPENAI)
+        return run_bcal_prompt(query, package_cache_path, export_folder, backend_config)
 
     return bcal_target
 
