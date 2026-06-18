@@ -16,7 +16,6 @@ from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
 logger = get_logger(__name__)
 _config = get_config()
 
-_AUDIENCE = "both"
 _BCAL_TOOL = "bcal"
 
 
@@ -100,7 +99,7 @@ def run_bcal_agent(
         bcal_executable,
         f"--packagecachepath={package_cache_path}",
         *backend_args,
-        f"--audience={_AUDIENCE}",
+        f"--audience={entry.audience}",
         f"--page={entry.page}",
         f"--prompt={entry.get_task()}",
         f"--exportfolder={export_folder}",
@@ -136,7 +135,7 @@ def run_bcal_agent(
 
 
 def run_bcal_prompt(
-    prompt: str,
+    entry: NL2ALEntry,
     package_cache_path: Path,
     export_folder: Path,
     backend_config: BCalBackendConfig,
@@ -149,7 +148,7 @@ def run_bcal_prompt(
 
     assumptions:
       - Symbols are already present.
-      - The hardcoded ``--page``/``--audience`` from the normal bcal flow are reused; for adversarial prompts the page is irrelevant since bcal is expected to refuse.
+      - ``--page``/``--audience`` come from the dataset entry; for adversarial prompts the page is irrelevant since bcal is expected to refuse.
     """
     bcal_executable = _resolve_bcal_executable()
     backend_args = backend_config.cli_args()
@@ -159,9 +158,9 @@ def run_bcal_prompt(
         bcal_executable,
         f"--packagecachepath={package_cache_path}",
         *backend_args,
-        f"--audience={_AUDIENCE}",
-        f"--page={_PAGE}",
-        f"--prompt={prompt}",
+        f"--audience={entry.audience}",
+        f"--page={entry.page}",
+        f"--prompt={entry.get_task()}",
         f"--exportfolder={export_folder}",
     ]
 
