@@ -1,8 +1,12 @@
 """Tests for EvaluationPipeline.execute() template-method orchestration."""
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
+from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
@@ -42,12 +46,9 @@ def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> tuple[AgentMetrics | N
 
 
 def _read_only_result(ctx: EvaluationContext[BugFixEntry]) -> BaseEvaluationResult:
-    from bcbench.config import get_config
-
     result_file = ctx.result_dir / f"{ctx.entry.instance_id}{get_config().file_patterns.result_pattern}"
     payload = result_file.read_text(encoding="utf-8").strip().splitlines()
     assert len(payload) == 1, f"Expected one persisted result, got {len(payload)}: {payload}"
-    import json
 
     return BaseEvaluationResult.from_json(json.loads(payload[0]))
 
@@ -85,8 +86,6 @@ class TestExecuteEvaluateError:
     def test_unexpected_exceptions_still_propagate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
         pipeline = _StubPipeline(raise_in_evaluate=RuntimeError("infra blew up"))
-
-        import pytest
 
         with pytest.raises(RuntimeError, match="infra blew up"):
             pipeline.execute(ctx, _noop_runner)

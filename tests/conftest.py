@@ -15,7 +15,6 @@ import pytest
 
 from bcbench.dataset import BugFixEntry, NL2ALEntry, TestEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext
@@ -270,32 +269,6 @@ def create_nl2al_entry(
     )
 
 
-def create_nl2al_result(
-    instance_id: str = "nl2al__job-budget-report-1",
-    project: str = "JobBudgetVsActualReport",
-    model: str = "gpt-4o",
-    agent_name: str = "copilot-cli",
-    output: str = "diff --git a/test.al b/test.al\n+report code",
-    error_message: str | None = None,
-    metrics: AgentMetrics | None = None,
-) -> JudgeBasedEvaluationResult:
-    return JudgeBasedEvaluationResult(
-        instance_id=instance_id,
-        project=project,
-        model=model,
-        agent_name=agent_name,
-        category=EvaluationCategory.NL2AL,
-        output=output,
-        error_message=error_message,
-        metrics=metrics,
-    )
-
-
 @pytest.fixture
 def sample_nl2al_entry() -> NL2ALEntry:
     return create_nl2al_entry()
-
-
-@pytest.fixture
-def sample_nl2al_result() -> JudgeBasedEvaluationResult:
-    return create_nl2al_result()
