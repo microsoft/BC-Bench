@@ -58,7 +58,7 @@ on:
           - "5"
 
 concurrency:
-  group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.category }}
   cancel-in-progress: false
 
 env:
