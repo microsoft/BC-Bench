@@ -106,7 +106,6 @@ class ExperimentConfiguration(BaseModel):
 class AgentType(StrEnum):
     COPILOT = "copilot"
     CLAUDE = "claude"
-    BCAL = "bcal"
 
     @property
     def instruction_filename(self) -> str:
@@ -115,8 +114,6 @@ class AgentType(StrEnum):
                 return "copilot-instructions.md"
             case AgentType.CLAUDE:
                 return "CLAUDE.md"
-            case AgentType.BCAL:
-                return "BCAL.md"
             case _:
                 raise ValueError(f"Unknown AgentType: {self}")
 
@@ -126,8 +123,6 @@ class AgentType(StrEnum):
                 return repo_path / ".github"
             case AgentType.CLAUDE:
                 return repo_path / ".claude"
-            case AgentType.BCAL:
-                return repo_path / ".bcal"
             case _:
                 raise ValueError(f"Unknown AgentType: {self}")
 
