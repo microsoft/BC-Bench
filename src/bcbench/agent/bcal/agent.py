@@ -89,8 +89,6 @@ def run_bcal_agent(
 
     logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend_config.backend.value})")
 
-    prompt = entry.nl_prompt
-
     # The .alpackages dir is created by the NL2AL pipeline setup step
     project_name = entry.project_paths[0] if entry.project_paths else "App"
     package_cache_path = repo_path / project_name / ".alpackages"
@@ -107,14 +105,14 @@ def run_bcal_agent(
         *backend_args,
         f"--audience={_AUDIENCE}",
         f"--page={_PAGE}",
-        f"--prompt={prompt}",
+        f"--prompt={entry.get_task()}",
         f"--exportfolder={export_folder}",
     ]
 
     logger.info(f"Executing bcal CLI: {bcal_executable}")
     logger.info(f"Package cache path: {package_cache_path}")
     logger.info(f"Export folder: {export_folder}")
-    logger.debug(f"Using prompt:\n{prompt}")
+    logger.debug(f"Using prompt:\n{entry.get_task()}")
     logger.debug(f"bcal CLI command: {cmd_args}")
 
     try:
