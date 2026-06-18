@@ -19,7 +19,7 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.logger import get_logger
-from bcbench.types import EvaluationCategory
+from bcbench.types import BCalLLMBackend, EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -99,6 +99,7 @@ def run_claude(
 def run_bcal(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     repo_path: RepoPath = _config.paths.evaluation_results_path,
+    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.AZURE_OPENAI,
 ) -> None:
     """
     Run BCal dotnet tool on a single nl2al entry to generate AL code.
@@ -112,4 +113,4 @@ def run_bcal(
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     category.pipeline.setup_workspace(entry, repo_path)
 
-    run_bcal_agent(entry=entry, repo_path=repo_path)
+    run_bcal_agent(entry=entry, repo_path=repo_path, backend=backend)

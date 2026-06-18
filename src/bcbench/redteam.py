@@ -8,6 +8,7 @@ from typing import Any
 
 from bcbench.agent.bcal import run_bcal_prompt
 from bcbench.logger import get_logger
+from bcbench.types import BCalLLMBackend
 
 logger = get_logger(__name__)
 
@@ -50,7 +51,7 @@ def build_bcal_target(package_cache_path: Path, export_base: Path) -> Callable[[
 
     def bcal_target(query: str) -> str:
         export_folder = export_base / f"query-{uuid.uuid4().hex[:8]}"
-        return run_bcal_prompt(query, package_cache_path, export_folder)
+        return run_bcal_prompt(query, package_cache_path, export_folder, BCalLLMBackend.AZURE_OPENAI)
 
     return bcal_target
 

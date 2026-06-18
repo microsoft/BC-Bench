@@ -4,14 +4,13 @@ import os
 import shutil
 import subprocess
 import time
-from enum import StrEnum
 from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics, ExperimentConfiguration
+from bcbench.types import AgentMetrics, BCalLLMBackend, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -19,11 +18,6 @@ _config = get_config()
 _AUDIENCE = "both"
 _PAGE = "Customer Card"
 _BCAL_TOOL = "bcal"
-
-
-class BcalLlmBackend(StrEnum):
-    AZURE_OPENAI = "azure-openai"
-    EXTERNAL_COMMAND = "external-command"
 
 
 def _require_env(name: str) -> str:
@@ -40,17 +34,8 @@ def _resolve_bcal_executable() -> str:
     return resolved
 
 
-def _resolve_llm_backend() -> BcalLlmBackend:
-    raw = os.environ.get("BCAL_LLM_BACKEND", BcalLlmBackend.AZURE_OPENAI.value)
-    try:
-        return BcalLlmBackend(raw)
-    except ValueError as exc:
-        valid = ", ".join(p.value for p in BcalLlmBackend)
-        raise AgentError(f"Unknown BCAL_LLM_BACKEND='{raw}'. Expected one of: {valid}.") from exc
-
-
-def _build_backend_cli_args(backend: BcalLlmBackend) -> list[str]:
-    if backend is BcalLlmBackend.EXTERNAL_COMMAND:
+def _build_backend_cli_args(backend: BCalLLMBackend) -> list[str]:
+    if backend is BCalLLMBackend.EXTERNAL_COMMAND:
         command = _require_env("BCAL_LLM_COMMAND")
         args = [
             "--llm-backend=external-command",
@@ -71,9 +56,9 @@ def _build_backend_cli_args(backend: BcalLlmBackend) -> list[str]:
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
+    backend: BCalLLMBackend,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     bcal_executable = _resolve_bcal_executable()
-    backend = _resolve_llm_backend()
     backend_args = _build_backend_cli_args(backend)
 
     logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend.value})")
@@ -129,7 +114,7 @@ def run_bcal_agent(
         raise
 
 
-def run_bcal_prompt(prompt: str, package_cache_path: Path, export_folder: Path) -> str:
+def run_bcal_prompt(prompt: str, package_cache_path: Path, export_folder: Path, backend: BCalLLMBackend) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
     BCal has two output channels and we surface both, so a safety judge sees whatever the tool actually produced:
@@ -141,7 +126,7 @@ def run_bcal_prompt(prompt: str, package_cache_path: Path, export_folder: Path) 
       - The hardcoded ``--page``/``--audience`` from the normal bcal flow are reused; for adversarial prompts the page is irrelevant since bcal is expected to refuse.
     """
     bcal_executable = _resolve_bcal_executable()
-    backend_args = _build_backend_cli_args(_resolve_llm_backend())
+    backend_args = _build_backend_cli_args(backend)
     export_folder.mkdir(parents=True, exist_ok=True)
 
     cmd_args = [

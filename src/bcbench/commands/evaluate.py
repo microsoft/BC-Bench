@@ -24,7 +24,7 @@ from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult
-from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -157,6 +157,7 @@ def evaluate_bcal(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "bcal_test_run",
     model: Annotated[str, typer.Option(help="Azure OpenAI model name")] = "gpt-5.2",
+    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.EXTERNAL_COMMAND,
 ) -> None:
     """
     Evaluate BCal dotnet tool on single nl2al dataset entry.
@@ -184,6 +185,7 @@ def evaluate_bcal(
         lambda ctx: run_bcal_agent(
             entry=cast(NL2ALEntry, ctx.entry),
             repo_path=ctx.repo_path,
+            backend=backend,
         ),
     )
 
