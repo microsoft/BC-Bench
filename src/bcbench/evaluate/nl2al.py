@@ -7,6 +7,7 @@ from pathlib import Path
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.exceptions import EmptyDiffError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import copy_symbol_apps, stage_and_get_diff
@@ -58,10 +59,13 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
-        generated_patch = stage_and_get_diff(context.repo_path)
-        # NL2AL is judge-scored: persist the raw agent output now; `bcbench result summarize`
-        # ingests bceval's LMChecklist scores into the same per-instance file later.
-        result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
-        logger.info(f"Saved raw NL2AL result for {context.entry.instance_id} (scoring pending)")
+        try:
+            generated_patch = stage_and_get_diff(context.repo_path)
+        except EmptyDiffError:
+            result = JudgeBasedEvaluationResult.create_empty_output(context)
+            logger.warning(f"Agent produced no changes for {context.entry.instance_id}")
+        else:
+            result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
+            logger.info(f"Saved raw NL2AL result for {context.entry.instance_id} (scoring pending)")
 
         self.save_result(context, result)

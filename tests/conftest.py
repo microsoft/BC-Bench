@@ -245,6 +245,8 @@ def create_nl2al_entry(
     nl_prompt: str = VALID_NL_PROMPT,
     created_at: str = VALID_CREATED_AT,
     expected: list[ChecklistAssertion] | None = None,
+    page: str = "Customer Card",
+    audience: str = "Both",
 ) -> NL2ALEntry:
     if project_paths is None:
         project_paths = ["JobBudgetVsActualReport"]
@@ -262,6 +264,8 @@ def create_nl2al_entry(
         nl_prompt=nl_prompt,
         created_at=created_at,
         expected=expected,
+        page=page,
+        audience=audience,
     )
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import AgentTimeoutError, EmptyDiffError
+from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_evaluation_context
@@ -81,21 +81,7 @@ class TestExecuteAgentTimeout:
         assert result.experiment == timeout_config
 
 
-class TestExecuteEmptyDiff:
-    def test_persists_empty_diff_failure_and_does_not_raise(self, tmp_path):
-        # Empty-diff (no edits, or agent asked a clarifying question instead of editing) must not bubble out as an unhandled exception - the GH Actions step would exit 1 and skip the upload-artifact step.
-        ctx = create_evaluation_context(tmp_path)
-        pipeline = _StubPipeline(raise_in_evaluate=EmptyDiffError())
-
-        pipeline.execute(ctx, _noop_runner)
-
-        assert pipeline.evaluate_called is True
-        result = _read_only_result(ctx)
-        assert result.error_message == "Agent made no changes"
-        assert result.timeout is False
-        # ExecutionBasedEvaluationResult: empty diff should score zero across all execution-based metrics.
-        assert result.category_metrics == {"resolved": False, "build": False}
-
+class TestExecuteEvaluateError:
     def test_unexpected_exceptions_still_propagate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
         pipeline = _StubPipeline(raise_in_evaluate=RuntimeError("infra blew up"))

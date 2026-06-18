@@ -50,11 +50,6 @@ class BaseEvaluationResult(BaseModel):
     def create_agent_timeout_failure(cls, context: "EvaluationContext") -> Self:
         return cls(**cls._base_fields(context), timeout=True, error_message="Agent timed out")
 
-    @classmethod
-    def create_empty_diff_failure(cls, context: "EvaluationContext") -> Self:
-        # Empty-diff covers two real failure modes (clarifying question, agent concluded "no change needed"); both score as failure with no patch.
-        return cls(**cls._base_fields(context), error_message="Agent made no changes")
-
     def save(self, output_dir: Path, result_file: str) -> None:
         output_file = output_dir / result_file
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -112,11 +107,6 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     def create_build_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
 
-    @classmethod
-    def create_empty_diff_failure(cls, context: "EvaluationContext") -> Self:
-        # Execution-based pipelines never reach build/test phases without a patch, so we record both as failed.
-        return cls(**cls._base_fields(context), error_message="Agent made no changes", resolved=False, build=False)
-
     @property
     def status_label(self) -> str:
         if self.timeout:
@@ -142,6 +132,10 @@ class JudgeBasedEvaluationResult(BaseEvaluationResult):
     @classmethod
     def create_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message)
+
+    @classmethod
+    def create_empty_output(cls, context: "EvaluationContext") -> Self:
+        return cls(**cls._base_fields(context), output="")
 
     @property
     def status_label(self) -> str:
