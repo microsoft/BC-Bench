@@ -160,6 +160,7 @@ class NL2ALEntry(BaseDatasetEntry):
     base_commit: str | None = None
     nl_prompt: Annotated[str, Field(min_length=1)]
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
+    page: str
 
     def get_task(self) -> str:
         return self.nl_prompt

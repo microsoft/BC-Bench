@@ -17,7 +17,6 @@ logger = get_logger(__name__)
 _config = get_config()
 
 _AUDIENCE = "both"
-_PAGE = "Customer Card"
 _BCAL_TOOL = "bcal"
 
 
@@ -102,7 +101,7 @@ def run_bcal_agent(
         f"--packagecachepath={package_cache_path}",
         *backend_args,
         f"--audience={_AUDIENCE}",
-        f"--page={_PAGE}",
+        f"--page={entry.page}",
         f"--prompt={entry.get_task()}",
         f"--exportfolder={export_folder}",
     ]
