@@ -1,10 +1,12 @@
 from collections.abc import Sequence
 from typing import Self
 
+import numpy as np
 from pydantic import Field
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
+from scipy.optimize import linear_sum_assignment
 
 from bcbench.dataset import ReviewComment
 from bcbench.results.base import BaseEvaluationResult, natural_sort_key
@@ -87,32 +89,36 @@ def match_comments(
     generated_comments: list[ReviewComment],
     line_tolerance: int,
 ) -> list[tuple[ReviewComment, ReviewComment]]:
-    """Greedily pair each expected comment with the nearest unused generated comment in the same file."""
-    matched: list[tuple[ReviewComment, ReviewComment]] = []
-    used_generated: set[int] = set()
+    """Pair expected and generated comments by globally optimal (file, line-proximity) assignment.
 
-    for expected in expected_comments:
+    Uses minimum-cost bipartite matching so each finding lands on its closest eligible expected
+    comment, maximizing the number of matches first and minimizing total line distance second.
+    A simple order-based greedy can let an earlier-listed expected comment steal a finding that is
+    a closer (often exact-line) match for a later expected comment, understating recall.
+    """
+    if not expected_comments or not generated_comments:
+        return []
+
+    num_expected = len(expected_comments)
+    num_generated = len(generated_comments)
+    impossible = float(line_tolerance * min(num_expected, num_generated) + 1)
+    cost = np.full((num_expected, num_generated), impossible, dtype=float)
+
+    for expected_index, expected in enumerate(expected_comments):
         expected_file = _normalize_path(expected.file)
-        best_index: int | None = None
-        best_distance: int | None = None
-
-        for index, generated in enumerate(generated_comments):
-            if index in used_generated or _normalize_path(generated.file) != expected_file:
+        for generated_index, generated in enumerate(generated_comments):
+            if _normalize_path(generated.file) != expected_file:
                 continue
+            distance = _line_distance(generated.line_start, expected.line_start, expected.line_end)
+            if distance <= line_tolerance:
+                cost[expected_index, generated_index] = distance
 
-            distance: int = _line_distance(generated.line_start, expected.line_start, expected.line_end)
-            if distance > line_tolerance:
-                continue
-
-            if best_distance is None or distance < best_distance:
-                best_distance = distance
-                best_index = index
-
-        if best_index is not None:
-            used_generated.add(best_index)
-            matched.append((expected, generated_comments[best_index]))
-
-    return matched
+    row_indices, column_indices = linear_sum_assignment(cost)
+    return [
+        (expected_comments[expected_index], generated_comments[generated_index])
+        for expected_index, generated_index in zip(row_indices, column_indices, strict=False)
+        if cost[expected_index, generated_index] <= line_tolerance
+    ]
 
 
 def _severity_mae(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:

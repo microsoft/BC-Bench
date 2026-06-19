@@ -10,7 +10,7 @@ from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.exceptions import PatchApplicationError
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
+from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
@@ -35,6 +35,54 @@ class TestSeverity:
     def test_review_comment_normalizes_severity_on_construction(self):
         comment = ReviewComment.model_validate({"file": "src/app.al", "line_start": 1, "body": "x", "severity": "warning"})
         assert comment.severity is Severity.MEDIUM
+
+
+class TestMatchComments:
+    def test_finding_matches_nearest_expected_not_first_listed(self):
+        expected = [
+            ReviewComment(file="a.al", line_start=14, body="RecordRef in loop", severity=Severity.HIGH),
+            ReviewComment(file="a.al", line_start=16, body="Commit in loop", severity=Severity.HIGH),
+        ]
+        generated = [ReviewComment(file="a.al", line_start=16, body="Commit() inside repeat", severity=Severity.HIGH)]
+
+        pairs = match_comments(expected, generated, line_tolerance=2)
+
+        assert len(pairs) == 1
+        matched_expected, matched_generated = pairs[0]
+        assert matched_expected.line_start == 16
+        assert matched_generated.line_start == 16
+
+    def test_maximizes_number_of_matches_within_tolerance(self):
+        expected = [
+            ReviewComment(file="a.al", line_start=10, body="issue A", severity=Severity.HIGH),
+            ReviewComment(file="a.al", line_start=11, body="issue B", severity=Severity.HIGH),
+        ]
+        generated = [
+            ReviewComment(file="a.al", line_start=10, body="near both", severity=Severity.HIGH),
+            ReviewComment(file="a.al", line_start=12, body="near A only", severity=Severity.HIGH),
+        ]
+
+        pairs = match_comments(expected, generated, line_tolerance=2)
+
+        assert len(pairs) == 2
+        assert {matched_expected.line_start for matched_expected, _ in pairs} == {10, 11}
+
+    def test_no_match_across_files(self):
+        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
+        generated = [ReviewComment(file="b.al", line_start=10, body="x", severity=Severity.HIGH)]
+
+        assert match_comments(expected, generated, line_tolerance=5) == []
+
+    def test_no_match_beyond_tolerance(self):
+        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
+        generated = [ReviewComment(file="a.al", line_start=20, body="x", severity=Severity.HIGH)]
+
+        assert match_comments(expected, generated, line_tolerance=5) == []
+
+    def test_empty_inputs_return_no_pairs(self):
+        comment = ReviewComment(file="a.al", line_start=1, body="x", severity=Severity.HIGH)
+        assert match_comments([], [comment], line_tolerance=5) == []
+        assert match_comments([comment], [], line_tolerance=5) == []
 
 
 class TestCodeReviewEntry:
