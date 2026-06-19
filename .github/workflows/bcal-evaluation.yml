@@ -28,6 +28,7 @@ on:
         type: choice
         options:
           - "gpt-5"
+          - "gpt-4o"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
