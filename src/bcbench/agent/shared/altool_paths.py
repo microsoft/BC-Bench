@@ -8,6 +8,7 @@ from pathlib import Path
 from packaging.version import Version
 
 from bcbench.logger import get_logger
+from bcbench.operations import resolve_artifact_version_root
 
 logger = get_logger(__name__)
 
@@ -15,9 +16,6 @@ logger = get_logger(__name__)
 # See: navcontainerhelper/InitializeModule.ps1 line 62
 _EXCLUDED_DOTNET_MAJORS = {9, 10}
 _DOTNET_SHARED = Path(r"C:\Program Files\dotnet\shared")
-
-# Default location of BCContainerHelper-downloaded artifacts (symbols, reference assemblies, etc.)
-_BCARTIFACTS_CACHE = Path(r"C:\bcartifacts.cache")
 
 
 def _detect_dotnet_runtime_version() -> Version | None:
@@ -108,10 +106,9 @@ def resolve_artifact_lsp_paths(environment_setup_version: str, country: str = "w
     Returns None when the artifact has not been downloaded yet — caller should fall
     back or surface an actionable error.
     """
-    version_roots = sorted((_BCARTIFACTS_CACHE / "sandbox").glob(f"{environment_setup_version}.*"))
-    if not version_roots:
+    version_root = resolve_artifact_version_root(environment_setup_version)
+    if version_root is None:
         return None
-    version_root = version_roots[-1]  # newest revision
 
     # Country-specific app symbols (e.g. w1 BaseApp), then platform symbols (System app etc.)
     package_cache_paths = [str(p) for p in (version_root / country / "Extensions", version_root / "platform" / "Applications") if p.is_dir()]

@@ -79,6 +79,8 @@ class TestEvaluationResultSummary:
 
         for category in EvaluationCategory:
             leaderboard_path = _config.paths.leaderboard_dir / f"{category.value}.json"
+            if not leaderboard_path.exists():
+                continue
 
             with open(leaderboard_path, encoding="utf-8") as f:
                 data = json.load(f)

@@ -114,6 +114,14 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
         )
 
 
+class JudgeBasedLeaderboardAggregate(LeaderboardAggregate):
+    """Aggregate for judge-scored categories.
+
+    Headline scoring is performed externally (bceval -> Braintrust/Kusto), so only the
+    identity and run-shape fields from the base class are aggregated here.
+    """
+
+
 class Leaderboard(BaseModel):
     """Leaderboard holding per-run summaries and their multi-run aggregates for a category.
 

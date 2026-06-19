@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bcbench.dataset import BugFixEntry
+from bcbench.dataset import BugFixEntry, NL2ALEntry
 from bcbench.types import AgentType, EvaluationCategory
 
 
@@ -39,14 +39,15 @@ def test_all_categories_have_aggregate_classes():
         assert issubclass(aggregate_cls, LeaderboardAggregate)
 
 
-def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry):
+def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry):
     for category in EvaluationCategory:
         entry_cls = category.entry_class
-        # Reconstruct entry as the category-specific type so get_expected_output() works
-        entry = entry_cls.model_validate(sample_dataset_entry_with_problem_statement.model_dump(by_alias=True))
+        entry = sample_nl2al_entry if entry_cls is NL2ALEntry else entry_cls.model_validate(sample_dataset_entry_with_problem_statement.model_dump(by_alias=True))
+
         input_text = entry.get_task()
         expected_output = entry.get_expected_output()
         assert isinstance(input_text, str)
+        assert len(input_text) > 0
         # ExpectedOutput is `str | Checklist`: string for execution-based categories,
         # `{"assertions": [...]}` for lm_checklist-driven ones.
         if isinstance(expected_output, dict):
