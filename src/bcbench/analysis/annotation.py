@@ -1,8 +1,14 @@
-"""Sample failed instances for manual failure-layer annotation."""
+"""Sample failed instances for manual failure-layer annotation.
+
+Also provides inter-annotator agreement (IAA) helpers for the double-annotated
+subset required by the annotation protocol: a raw agreement rate and Cohen's
+kappa over two annotators' primary-failure-layer labels.
+"""
 
 from __future__ import annotations
 
 import csv
+from dataclasses import dataclass
 from pathlib import Path
 
 from bcbench.analysis.family import FamilyOutcome, FamilyType, InstanceResult
@@ -72,3 +78,72 @@ def write_annotation_csv(rows: list[dict[str, str]], output_path: Path) -> None:
         writer.writeheader()
         writer.writerows(rows)
     logger.info(f"Wrote {len(rows)} annotation rows to {output_path}")
+
+
+@dataclass(frozen=True)
+class AgreementResult:
+    """Inter-annotator agreement over a double-annotated subset."""
+
+    n: int
+    agreement_rate: float
+    cohen_kappa: float | None
+
+
+def agreement_rate(labels_a: list[str], labels_b: list[str]) -> float:
+    """Raw proportion of items on which the two annotators chose the same label."""
+    if len(labels_a) != len(labels_b):
+        raise ValueError("Label lists must have equal length")
+    if not labels_a:
+        return 0.0
+    matches = sum(1 for a, b in zip(labels_a, labels_b, strict=True) if a == b)
+    return matches / len(labels_a)
+
+
+def cohen_kappa(labels_a: list[str], labels_b: list[str]) -> float | None:
+    """Cohen's kappa for two annotators over the same items.
+
+    Returns None when kappa is undefined (no items, or perfect-chance-agreement
+    where the expected agreement is 1.0, e.g. both annotators used a single label).
+    """
+    if len(labels_a) != len(labels_b):
+        raise ValueError("Label lists must have equal length")
+    n = len(labels_a)
+    if n == 0:
+        return None
+
+    observed = agreement_rate(labels_a, labels_b)
+
+    categories = set(labels_a) | set(labels_b)
+    expected = 0.0
+    for cat in categories:
+        p_a = sum(1 for x in labels_a if x == cat) / n
+        p_b = sum(1 for x in labels_b if x == cat) / n
+        expected += p_a * p_b
+
+    if expected >= 1.0:
+        return None
+    return (observed - expected) / (1.0 - expected)
+
+
+def inter_annotator_agreement(annotations_a: dict[str, str], annotations_b: dict[str, str]) -> AgreementResult:
+    """Compute IAA over instances annotated by both annotators.
+
+    Args:
+        annotations_a: instance_id -> primary failure layer (annotator A).
+        annotations_b: instance_id -> primary failure layer (annotator B).
+
+    Only instances present in both maps (and with non-empty labels in both) are
+    used; the order is fixed by sorted instance_id for determinism.
+    """
+    shared = sorted(
+        iid
+        for iid in set(annotations_a) & set(annotations_b)
+        if annotations_a[iid] and annotations_b[iid]
+    )
+    labels_a = [annotations_a[iid] for iid in shared]
+    labels_b = [annotations_b[iid] for iid in shared]
+    return AgreementResult(
+        n=len(shared),
+        agreement_rate=agreement_rate(labels_a, labels_b),
+        cohen_kappa=cohen_kappa(labels_a, labels_b),
+    )

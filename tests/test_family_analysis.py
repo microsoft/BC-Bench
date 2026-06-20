@@ -179,3 +179,63 @@ class TestAnnotation:
         rows = sample_failures([_family("F1", True, [False], FailureLayer.L2_EXECUTION)])
         write_annotation_csv(rows, tmp_path / "annotations.csv")
         assert (tmp_path / "annotations.csv").exists()
+
+
+class TestInterAnnotatorAgreement:
+    def test_agreement_rate_perfect(self):
+        from bcbench.analysis.annotation import agreement_rate
+
+        assert agreement_rate(["a", "b", "c"], ["a", "b", "c"]) == 1.0
+
+    def test_agreement_rate_partial(self):
+        from bcbench.analysis.annotation import agreement_rate
+
+        assert agreement_rate(["a", "b", "c", "d"], ["a", "b", "x", "y"]) == pytest.approx(0.5)
+
+    def test_agreement_rate_empty(self):
+        from bcbench.analysis.annotation import agreement_rate
+
+        assert agreement_rate([], []) == 0.0
+
+    def test_agreement_rate_length_mismatch_raises(self):
+        from bcbench.analysis.annotation import agreement_rate
+
+        with pytest.raises(ValueError, match="equal length"):
+            agreement_rate(["a"], ["a", "b"])
+
+    def test_cohen_kappa_perfect_is_one(self):
+        from bcbench.analysis.annotation import cohen_kappa
+
+        kappa = cohen_kappa(["a", "b", "a", "b"], ["a", "b", "a", "b"])
+        assert kappa == pytest.approx(1.0)
+
+    def test_cohen_kappa_chance_is_zero(self):
+        from bcbench.analysis.annotation import cohen_kappa
+
+        # Observed agreement equals expected -> kappa 0.
+        a = ["a", "a", "b", "b"]
+        b = ["a", "b", "a", "b"]
+        kappa = cohen_kappa(a, b)
+        assert kappa == pytest.approx(0.0, abs=1e-9)
+
+    def test_cohen_kappa_single_label_undefined(self):
+        from bcbench.analysis.annotation import cohen_kappa
+
+        # Both annotators always pick the same single label -> expected agreement 1.0.
+        assert cohen_kappa(["a", "a"], ["a", "a"]) is None
+
+    def test_cohen_kappa_empty_is_none(self):
+        from bcbench.analysis.annotation import cohen_kappa
+
+        assert cohen_kappa([], []) is None
+
+    def test_inter_annotator_agreement_uses_shared_instances(self):
+        from bcbench.analysis.annotation import inter_annotator_agreement
+
+        a = {"i1": "L1", "i2": "L2", "i3": "L3", "i4": ""}
+        b = {"i1": "L1", "i2": "L3", "i3": "L3", "i5": "L1"}
+        result = inter_annotator_agreement(a, b)
+        # Shared with non-empty labels: i1, i2, i3 (i4 empty, i5 not in a)
+        assert result.n == 3
+        assert result.agreement_rate == pytest.approx(2 / 3)
+        assert result.cohen_kappa is not None
