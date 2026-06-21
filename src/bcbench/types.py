@@ -13,11 +13,13 @@ if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
+    from bcbench.results.leaderboard import LeaderboardAggregate
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
     "AgentMetrics",
     "AgentType",
+    "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -81,6 +83,9 @@ class ExperimentConfiguration(BaseModel):
     # MCP server names used in experiment (if any)
     mcp_servers: list[str] | None = None
 
+    # Whether the AL LSP server was enabled for this experiment
+    al_lsp_enabled: bool = False
+
     # Custom instructions enabled in experiment
     custom_instructions: bool = False
 
@@ -96,7 +101,7 @@ class ExperimentConfiguration(BaseModel):
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
+        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
 
 
 class AgentType(StrEnum):
@@ -126,6 +131,7 @@ class AgentType(StrEnum):
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
+    NL2AL = "nl2al"
     CF = "cf"
 
     @property
@@ -150,12 +156,14 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
+            case EvaluationCategory.NL2AL:
+                return get_config().paths.dataset_dir / "nl2al.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, NL2ALEntry, TestGenEntry
         from bcbench.dataset.counterfactual_entry import CounterfactualEntry
 
         if self.is_counterfactual:
@@ -166,11 +174,14 @@ class EvaluationCategory(StrEnum):
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
+            case EvaluationCategory.NL2AL:
+                return NL2ALEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
+        from bcbench.results.base import JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.testgeneration import TestGenerationResult
 
@@ -182,19 +193,50 @@ class EvaluationCategory(StrEnum):
                 return BugFixResult
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationResult
+            case EvaluationCategory.NL2AL:
+                return JudgeBasedEvaluationResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
+        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
 
-        return ExecutionBasedEvaluationResultSummary
+        if self.is_counterfactual:
+            return ExecutionBasedEvaluationResultSummary
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedEvaluationResultSummary
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedEvaluationResultSummary
+            case EvaluationCategory.NL2AL:
+                return JudgeBasedEvaluationResultSummary
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def aggregate_class(self) -> type[LeaderboardAggregate]:
+        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
+
+        if self.is_counterfactual:
+            return ExecutionBasedLeaderboardAggregate
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.NL2AL:
+                return JudgeBasedLeaderboardAggregate
+
+        raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
+        from bcbench.evaluate import BugFixPipeline, NL2ALPipeline, TestGenerationPipeline
 
         if self.is_counterfactual:
             return BugFixPipeline()
@@ -204,6 +246,73 @@ class EvaluationCategory(StrEnum):
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
+            case EvaluationCategory.NL2AL:
+                return NL2ALPipeline()
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def evaluators(self) -> list[str]:
+        """
+        Names of bc-eval evaluators (from evaluator/scores.py) to run for this category.
+
+        Used for uploading evaluation results to long term storage.
+        """
+        if self.is_counterfactual:
+            return ["resolution_rate", "build_rate"]
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ["resolution_rate", "build_rate"]
+            case EvaluationCategory.TEST_GENERATION:
+                return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
+            case EvaluationCategory.NL2AL:
+                return ["lm_checklist"]
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def core_score(self) -> str:
+        """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
+        if self.is_counterfactual:
+            return "ResolutionRate"
+
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "ResolutionRate"
+            case EvaluationCategory.NL2AL:
+                return "test_passed"
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def requires_container(self) -> bool:
+        """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
+        if self.is_counterfactual:
+            return True
+
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return True
+            case EvaluationCategory.NL2AL:
+                return False
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def runner(self) -> str:
+        """GitHub Actions runner label for evaluating this category.
+
+        Only categories that require building BaseApp needs self-hosted runners.
+        """
+        if self.is_counterfactual:
+            return "GitHub-BCBench"
+
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return "GitHub-BCBench"
+            case EvaluationCategory.NL2AL:
+                return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -256,3 +365,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
+
+
+class BCalLLMBackend(StrEnum):
+    AZURE_OPENAI = "azure-openai"
+    EXTERNAL_COMMAND = "external-command"

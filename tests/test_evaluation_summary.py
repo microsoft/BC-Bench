@@ -75,10 +75,12 @@ class TestEvaluationResultSummary:
         assert output_file.exists()
 
     def test_loading_existing_results(self):
-        from bcbench.results.summary import Leaderboard
+        from bcbench.results.leaderboard import Leaderboard
 
         for category in EvaluationCategory:
             leaderboard_path = _config.paths.leaderboard_dir / f"{category.value}.json"
+            if not leaderboard_path.exists():
+                continue
 
             with open(leaderboard_path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -475,7 +477,7 @@ class TestInstanceResults:
 
 class TestLeaderboardAggregate:
     def test_from_single_run_calculates_average(self):
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 
         summary = ExecutionBasedEvaluationResultSummary.from_results(
             [
@@ -486,7 +488,7 @@ class TestLeaderboardAggregate:
             run_id="run_1",
         )
 
-        agg = LeaderboardAggregate.from_runs([summary])
+        agg = ExecutionBasedLeaderboardAggregate.from_runs([summary])
 
         assert agg.num_runs == 1
         assert agg.total == 3
@@ -497,7 +499,7 @@ class TestLeaderboardAggregate:
         assert agg.pass_hat_5 is None  # Not enough runs
 
     def test_from_multiple_runs_calculates_average_and_ci_bounds(self):
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [
@@ -524,7 +526,7 @@ class TestLeaderboardAggregate:
             run_id="run_3",
         )
 
-        agg = LeaderboardAggregate.from_runs([run1, run2, run3])
+        agg = ExecutionBasedLeaderboardAggregate.from_runs([run1, run2, run3])
 
         assert agg.num_runs == 3
         assert agg.total == 3
@@ -536,7 +538,7 @@ class TestLeaderboardAggregate:
         assert agg.pass_hat_5 is None  # Not enough runs
 
     def test_average_and_ci_bounds_with_varying_results(self):
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 
         # Create 3 runs where:
         # - run1: 3/3 resolved (100%)
@@ -567,7 +569,7 @@ class TestLeaderboardAggregate:
             run_id="run_3",
         )
 
-        agg = LeaderboardAggregate.from_runs([run1, run2, run3])
+        agg = ExecutionBasedLeaderboardAggregate.from_runs([run1, run2, run3])
 
         # Average: (1.0 + 2/3 + 1/3) / 3 = 2/3 = 0.667
         assert agg.average == 0.667
@@ -580,7 +582,7 @@ class TestLeaderboardAggregate:
         assert agg.pass_hat_5 is None  # Not enough runs
 
     def test_consistent_results_have_zero_ci(self):
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 
         # All instances pass all runs
         run1 = ExecutionBasedEvaluationResultSummary.from_results(
@@ -605,7 +607,7 @@ class TestLeaderboardAggregate:
             run_id="run_3",
         )
 
-        agg = LeaderboardAggregate.from_runs([run1, run2, run3])
+        agg = ExecutionBasedLeaderboardAggregate.from_runs([run1, run2, run3])
 
         # All runs have 100% pass rate
         assert agg.average == 1.0
@@ -616,7 +618,7 @@ class TestLeaderboardAggregate:
 
 class TestLeaderboard:
     def test_aggregate_from_runs(self):
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [
@@ -626,14 +628,14 @@ class TestLeaderboard:
             run_id="run_1",
         )
 
-        agg = LeaderboardAggregate.from_runs([run1])
+        agg = ExecutionBasedLeaderboardAggregate.from_runs([run1])
 
         assert agg.num_runs == 1
         # With 1 run: average = resolved/total = 1/2 = 0.5
         assert agg.average == 0.5
 
     def test_leaderboard_to_dict(self):
-        from bcbench.results.summary import Leaderboard, LeaderboardAggregate
+        from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [create_bugfix_result(instance_id="test__1", resolved=True)],
@@ -651,7 +653,7 @@ class TestLeaderboard:
 
     def test_aggregate_from_legacy_runs_without_instance_results(self):
         """Test that a single run without instance_results uses pass rate from percentage."""
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 
         legacy_run = ExecutionBasedEvaluationResultSummary(
             total=10,
@@ -669,7 +671,7 @@ class TestLeaderboard:
             benchmark_version="0.1.0",
         )
 
-        agg = LeaderboardAggregate.from_runs([legacy_run])
+        agg = ExecutionBasedLeaderboardAggregate.from_runs([legacy_run])
 
         assert agg.num_runs == 1
         assert agg.total == 10
@@ -680,7 +682,7 @@ class TestLeaderboard:
         assert agg.pass_hat_5 is None
 
     def test_aggregate_includes_benchmark_version_from_runs(self):
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import LeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary.from_results(
             [create_bugfix_result(instance_id="test__1", resolved=True)],
@@ -694,7 +696,7 @@ class TestLeaderboard:
         assert agg.benchmark_version is not None
 
     def test_aggregate_allows_same_benchmark_versions(self):
-        from bcbench.results.summary import LeaderboardAggregate
+        from bcbench.results.leaderboard import LeaderboardAggregate
 
         run1 = ExecutionBasedEvaluationResultSummary(
             total=3,
@@ -734,7 +736,7 @@ class TestLeaderboard:
         assert agg.benchmark_version == "0.1.0"
 
     def test_load_empty_leaderboard_file(self, tmp_path):
-        from bcbench.results.summary import Leaderboard
+        from bcbench.results.leaderboard import Leaderboard
 
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("[]")
@@ -745,7 +747,7 @@ class TestLeaderboard:
         assert leaderboard.aggregate == []
 
     def test_load_empty_object_leaderboard_file(self, tmp_path):
-        from bcbench.results.summary import Leaderboard
+        from bcbench.results.leaderboard import Leaderboard
 
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("{}")

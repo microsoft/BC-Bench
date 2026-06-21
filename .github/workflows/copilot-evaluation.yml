@@ -16,12 +16,12 @@ on:
           - "claude-haiku-4.5"
           - "claude-opus-4.6"
           - "claude-opus-4.7"
+          - "claude-opus-4.8"
           - "gpt-5.5"
           - "gpt-5.4"
           - "gpt-5.3-codex"
           - "gpt-5.2-codex"
           - "gpt-5.2"
-          - "gpt-4.1"
       category:
         description: "Evaluation category to run"
         required: false
@@ -41,11 +41,11 @@ on:
         required: false
         default: false
         type: boolean
-      entries-override:
-        description: "Optional JSON array of entry IDs to run (overrides get-entries). Example: [\"microsoftInternal__NAV-213524__cf-4\"]"
+      al-lsp:
+        description: "Enable AL LSP server"
         required: false
-        default: ""
-        type: string
+        default: false
+        type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
         required: false
@@ -59,7 +59,7 @@ on:
           - "5"
 
 concurrency:
-  group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.category }}
   cancel-in-progress: false
 
 env:
@@ -90,7 +90,7 @@ jobs:
 
   evaluate-with-copilot-cli:
     runs-on: [ GitHub-BCBench ]
-    needs: resolve-entries
+    needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.resolve-entries.outputs.entries != '[]' && needs.resolve-entries.outputs.entries != ''
@@ -100,6 +100,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      copilot-requests: write
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
@@ -120,6 +121,7 @@ jobs:
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
@@ -129,27 +131,20 @@ jobs:
           node-version: 24
 
       - name: Install AL Tool
-        if: ${{ inputs.al-mcp }}
+        if: ${{ inputs.al-mcp || inputs.al-lsp }}
+        shell: pwsh
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.33.55542
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@1.0.39
-
-      - name: Select PAT based on job index
-        id: select-pat
-        run: |
-          $patIndex = ${{ strategy.job-index }} % 4
-          echo "pat_index=$patIndex" >> $env:GITHUB_OUTPUT
+        run: npm install -g @github/copilot@1.0.57
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
+        shell: pwsh
         env:
-          COPILOT_GITHUB_TOKEN: ${{ steps.select-pat.outputs.pat_index == '0' &&
-            secrets.COPILOT_PAT || (steps.select-pat.outputs.pat_index == '1' &&
-            secrets.COPILOT_PAT2 || (steps.select-pat.outputs.pat_index == '2'&&
-            secrets.COPILOT_PAT3 || secrets.COPILOT_PAT4)) }}
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -158,7 +153,8 @@ jobs:
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            ${{ inputs.al-mcp && '--al-mcp' || '' }}
+            ${{ inputs.al-mcp && '--al-mcp' || '' }} `
+            ${{ inputs.al-lsp && '--al-lsp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -193,4 +189,4 @@ jobs:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}"}

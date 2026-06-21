@@ -40,9 +40,14 @@ runs:
         # Mask the password in GitHub Actions logs
         Write-Output "::add-mask::$password"
 
-        "BC_CONTAINER_NAME=bcbench-$("${{ inputs.instance-id }}".Split('-')[1].Split('_')[0])" | Out-File -FilePath $env:GITHUB_ENV -Append
-        "BC_CONTAINER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
-        "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
+        $containerName = "bcbench-$("${{ inputs.instance-id }}".Split('-')[1])"
+        "BC_CONTAINER_NAME=$containerName" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+        # Connection target + credentials consumed by altool
+        "BC_SERVER_URL=http://$containerName" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_SERVER_INSTANCE=BC" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_SERVER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_SERVER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
       shell: pwsh
 
     - name: Install BcContainerHelper module

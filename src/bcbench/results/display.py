@@ -22,14 +22,18 @@ def _status_style(status_label: str) -> tuple[str, str]:
 
 
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
-    total = len(results)
-    display_metrics: dict[str, int | float | bool] = summary.display_summary()
-
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
-    console.print(f"Total Processed: [bold]{total}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
+    console.print(f"Total Processed: [bold]{len(results)}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
-    for key, value in display_metrics.items():
-        console.print(f"{key.replace('_', ' ').title()}: [bold]{value}[/bold]")
+    console.print(f"MCP Servers: [bold]{', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}[/bold]")
+    console.print(f"AL LSP: [bold]{'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}[/bold]")
+    console.print(f"Custom Instructions: [bold]{'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}[/bold]")
+    console.print(f"Skills: [bold]{'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}[/bold]")
+    console.print(f"Custom Agent: [bold]{results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}[/bold]")
+
+    metrics = summary.render_console_metrics()
+    if metrics is not None:
+        console.print(metrics)
 
     # Display average tool usage if available
     tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
@@ -72,41 +76,31 @@ def _get_short_error_message(error_message: str | None) -> str:
 
 
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
-    total = len(results)
-    display_metrics: dict[str, int | float | bool] = summary.display_summary()
-
-    mcp_servers = ", ".join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else "None"
-    custom_instructions = "Yes" if results[0].experiment and results[0].experiment.custom_instructions else "No"
-    skills = "Yes" if results[0].experiment and results[0].experiment.skills_enabled else "No"
-    custom_agent = results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else "N/A"
+    metrics_section: str = summary.render_github_metrics_markdown().strip()
 
     # Calculate average tool usage
-    tool_usage_section = ""
+    tool_usage_section: str = ""
     tool_usages = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
     if tool_usages:
         avg_usage = calculate_average_tool_usage(tool_usages)
         if avg_usage:
             sorted_tools = sorted(avg_usage.items(), key=lambda x: x[1], reverse=True)
             tool_lines = [f"  - `{tool}`: {count}" for tool, count in sorted_tools]
-            tool_usage_section = "\n\n## Average Tool Usage\n" + "\n".join(tool_lines)
+            tool_usage_section = "## Average Tool Usage\n" + "\n".join(tool_lines)
 
-    # Only render "## Result Summary" when the category has aggregates to show.
-    result_summary_section = ""
-    if display_metrics:
-        display_lines = "\n".join(f"- {key.replace('_', ' ').title()}: {value}" for key, value in display_metrics.items())
-        result_summary_section = f"\n## Result Summary\n{display_lines}\n"
-
-    markdown_summary = (
-        f"Total entries processed: {total}, using **{results[0].agent_name} ({results[0].model})**\n"
-        f"- Category: `{results[0].category.value}`\n"
-        f"- MCP Servers used: {mcp_servers}\n"
-        f"- Custom Instructions: {custom_instructions}\n"
-        f"- Skills: {skills}\n"
-        f"- Custom Agent: {custom_agent}\n"
-        f"{result_summary_section}"
-        f"{tool_usage_section}\n\n"
-        f"## Detailed Results\n\n"
+    header_section: str = "\n".join(
+        [
+            f"Total entries processed: {len(results)}, using **{results[0].agent_name} ({results[0].model})**",
+            f"- Category: `{results[0].category.value}`",
+            f"- MCP Servers used: {', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}",
+            f"- AL LSP: {'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}",
+            f"- Custom Instructions: {'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}",
+            f"- Skills: {'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}",
+            f"- Custom Agent: {results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}",
+        ]
     )
+    sections: list[str] = [header_section, *(section for section in [metrics_section, tool_usage_section] if section), "## Detailed Results\n\n"]
+    markdown_summary: str = "\n\n".join(sections)
 
     # Dynamic columns from display_row()
     extra_columns = list(results[0].display_row.keys()) if results else []

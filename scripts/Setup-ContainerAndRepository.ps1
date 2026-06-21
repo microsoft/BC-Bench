@@ -29,7 +29,7 @@ param(
     [string]$ContainerName = $env:BC_CONTAINER_NAME ?? "bcbench",
 
     [Parameter(Mandatory = $false)]
-    [string]$Username = $env:BC_CONTAINER_USERNAME ?? "admin",
+    [string]$Username = $env:BC_SERVER_USERNAME ?? "admin",
 
     [Parameter(Mandatory = $false)]
     [SecureString]$Password,

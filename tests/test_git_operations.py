@@ -87,6 +87,26 @@ class TestStageAndGetDiff:
         with pytest.raises(EmptyDiffError):
             stage_and_get_diff(temp_git_repo)
 
+    def test_stage_and_get_diff_no_al_files_raises_empty_diff(self, tmp_path):
+        # Repro for CI failure: agent didn't write any *.al files. `git add '*.al'`
+        # would otherwise fail with exit 128 ("pathspec did not match"); we expect
+        # the empty-diff path to kick in instead.
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / "README.md").write_text("seed")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "seed"], cwd=tmp_path, check=True, capture_output=True)
+
+        with pytest.raises(EmptyDiffError):
+            stage_and_get_diff(tmp_path)
+
+    def test_stage_and_get_diff_other_git_failure_propagates(self, tmp_path):
+        # A git failure that is NOT "pathspec did not match" (here: not a git repo at all)
+        # must surface as a real error, not be masked as an empty diff.
+        with pytest.raises(subprocess.CalledProcessError):
+            stage_and_get_diff(tmp_path)
+
 
 class TestCleanProjectPaths:
     @pytest.fixture

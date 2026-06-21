@@ -15,13 +15,13 @@
 .PARAMETER Password
     Optional SecureString password parameter
 .PARAMETER EnvironmentVariableName
-    Name of environment variable containing password (default: BC_CONTAINER_PASSWORD)
+    Name of environment variable containing password (default: BC_SERVER_PASSWORD)
 .OUTPUTS
     PSCredential object
 .EXAMPLE
     $cred = Get-BCCredential -Username "admin" -Password $securePassword
 .EXAMPLE
-    $cred = Get-BCCredential -Username "admin" # Uses BC_CONTAINER_PASSWORD env var
+    $cred = Get-BCCredential -Username "admin" # Uses BC_SERVER_PASSWORD env var
 #>
 function Get-BCCredential {
     [CmdletBinding()]
@@ -34,7 +34,7 @@ function Get-BCCredential {
         [SecureString]$Password,
 
         [Parameter(Mandatory = $false)]
-        [string]$EnvironmentVariableName = "BC_CONTAINER_PASSWORD"
+        [string]$EnvironmentVariableName = "BC_SERVER_PASSWORD"
     )
 
     # Get environment password
@@ -493,13 +493,14 @@ function Get-BCBenchDatasetPath {
     param(
         [Parameter(Mandatory = $true)]
         # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
-        [ValidateSet("bug-fix", "test-generation")]
+        [ValidateSet("bug-fix", "test-generation", "nl2al")]
         [string] $Category
     )
 
     switch ($Category) {
         "bug-fix" { $DatasetName = "bcbench.jsonl" }
         "test-generation" { $DatasetName = "bcbench.jsonl" }
+        "nl2al" { $DatasetName = "nl2al.jsonl" }
     }
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent
