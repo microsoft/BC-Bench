@@ -20,7 +20,7 @@ param(
     [string]$Category,
 
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category $Category),
+    [string]$DatasetPath,
 
     [Parameter(Mandatory = $false)]
     [string]$Country = "w1",

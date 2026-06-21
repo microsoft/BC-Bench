@@ -20,7 +20,7 @@ param(
     [string]$InstanceId,
 
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category "bug-fix"),
+    [string]$DatasetPath,
 
     [Parameter(Mandatory = $true)]
     [string]$RepoPath,
