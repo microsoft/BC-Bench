@@ -67,7 +67,6 @@ env:
 
 jobs:
   get-entries:
-    if: ${{ inputs.entries-override == '' }}
     uses: ./.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run }}
@@ -90,7 +89,7 @@ jobs:
 
   evaluate-with-copilot-cli:
     runs-on: [ GitHub-BCBench ]
-    needs: get-entries
+    needs: [get-entries, resolve-entries]
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
     if: needs.resolve-entries.outputs.entries != '[]' && needs.resolve-entries.outputs.entries != ''
