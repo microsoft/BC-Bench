@@ -78,9 +78,11 @@ jobs:
 
       - name: Resolve bceval evaluator config for category
         id: bceval
+        if: ${{ inputs.category != 'cf' }}
         run: uv run bcbench category bceval-config --category "${{ inputs.category }}"
 
       - name: Upload result using bceval
+        if: ${{ inputs.category != 'cf' }}
         env:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
@@ -109,7 +111,7 @@ jobs:
             --use-capi ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
 
       - name: Update leaderboard in a new branch
-        if: ${{ !inputs.mock && !inputs.skip-leaderboard }}
+        if: ${{ !inputs.mock && !inputs.skip-leaderboard && inputs.category != 'cf' }}
         run: |
           git fetch origin main
 
