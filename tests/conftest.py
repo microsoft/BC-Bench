@@ -15,7 +15,7 @@ import pytest
 
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
@@ -180,7 +180,7 @@ def create_codereview_entry(
         project_paths=project_paths,
         patch=patch,
         created_at=created_at,
-        domain=domain,
+        metadata=EntryMetadata(area=domain),
         expected_comments=expected_comments,
     )
 

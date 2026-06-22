@@ -97,15 +97,6 @@ class BaseEvaluationResult(BaseModel):
         """
         return {}
 
-    @property
-    def sort_key(self) -> tuple[object, ...]:
-        """Sort key for the detailed results table.
-
-        Default orders by natural-sorted instance_id (so ``-002`` precedes ``-010``).
-        Subclasses can prepend category-specific keys (e.g. domain for code-review).
-        """
-        return (natural_sort_key(self.instance_id),)
-
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "BaseEvaluationResult":
         category = EvaluationCategory(payload["category"])

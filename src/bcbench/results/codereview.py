@@ -16,8 +16,7 @@ from bcbench.types import EvaluationContext
 
 
 def _resolve_domain(context: "EvaluationContext") -> str:
-    entry = context.entry
-    domain = getattr(entry, "domain", None) or entry.metadata.area
+    domain = context.entry.metadata.area
     return domain if isinstance(domain, str) and domain else "unknown"
 
 

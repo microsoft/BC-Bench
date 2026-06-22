@@ -1,7 +1,8 @@
 """Local probe for a single code-review dataset entry.
 
 Materializes the entry's patch into a throwaway folder, runs `copilot` with the
-al-code-review skill, parses review.json, and validates OOD discipline +
+`/review` prompt (matching the evaluation pipeline's code-review-template), parses
+review.json, and validates OOD discipline +
 expected-comment recall.
 
 Usage:
@@ -38,7 +39,7 @@ PROBE_ROOT = REPO_ROOT / "tmp" / "cr-probe"
 REPORT_ROOT = REPO_ROOT / "tmp" / "cr-probe-reports"
 DEFAULT_MODEL = "claude-opus-4.8"
 
-PROMPT_TEMPLATE = """/al-code-review
+PROMPT_TEMPLATE = """/review
 
 Review ONLY the current working-tree AL file changes for this evaluation entry.
 Use the working tree diff only (git diff HEAD), and focus on changed *.al files.

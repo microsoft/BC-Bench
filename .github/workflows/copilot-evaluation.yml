@@ -145,9 +145,7 @@ jobs:
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: |
-            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
-            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.log
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:

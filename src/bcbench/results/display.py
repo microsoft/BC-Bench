@@ -5,11 +5,17 @@ from rich.table import Table
 
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.base import BaseEvaluationResult, natural_sort_key
 from bcbench.results.summary import EvaluationResultSummary, calculate_average_tool_usage
 
 logger = get_logger(__name__)
 console = Console()
+
+
+def _detail_sort_key(result: BaseEvaluationResult) -> tuple[object, ...]:
+    """Ordering for detail tables: natural-sorted instance_id, unless a result subclass defines its own key."""
+    custom = getattr(result, "sort_key", None)
+    return custom if custom is not None else (natural_sort_key(result.instance_id),)
 
 
 def _status_style(status_label: str) -> tuple[str, str]:
@@ -59,7 +65,7 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     table.add_column("Skills", style="yellow")
     table.add_column("Custom Agent", style="yellow")
 
-    for result in sorted(results, key=lambda r: r.sort_key):
+    for result in sorted(results, key=_detail_sort_key):
         color, _ = _status_style(result.status_label)
         status = f"[{color}]{result.status_label}[/{color}]"
         mcp_servers = ", ".join(result.experiment.mcp_servers) if result.experiment and result.experiment.mcp_servers else "N/A"
@@ -112,7 +118,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
         markdown_summary += "| Instance ID | Project | Status |\n"
         markdown_summary += "|-------------|---------|--------|\n"
 
-    for result in sorted(results, key=lambda r: r.sort_key):
+    for result in sorted(results, key=_detail_sort_key):
         _, status_icon = _status_style(result.status_label)
         status_text = f"{status_icon} {result.status_label}"
         extra_values = " | ".join(result.display_row.values())

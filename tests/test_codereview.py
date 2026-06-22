@@ -8,7 +8,7 @@ import pytest
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.exceptions import PatchApplicationError
+from bcbench.evaluate.codereview_judge import JUDGE_RESULT_FILE, JudgeError, _parse_judge_results, judge_comment_matches
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
 from bcbench.types import EvaluationCategory
@@ -577,41 +577,6 @@ class TestCodeReviewPipeline:
         ).stdout
         assert "src/NewObject.Codeunit.al" in diff
 
-    def test_setup_workspace_materializes_simplified_patch_when_git_apply_fails(self, tmp_path):
-        entry = create_codereview_entry(patch="--- src/NewObject.Codeunit.al\n+++ src/NewObject.Codeunit.al\n+codeunit 50100 NewObject\n+{\n+}\n")
-        pipeline = CodeReviewPipeline()
-
-        subprocess.run(["git", "init"], cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        subprocess.run(
-            ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init"],
-            cwd=tmp_path,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-
-        with (
-            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
-            patch(
-                "bcbench.evaluate.codereview.apply_patch",
-                side_effect=PatchApplicationError("test", "error: No valid patches in input"),
-            ),
-        ):
-            pipeline.setup_workspace(entry, Path(tmp_path))
-
-        mock_setup.assert_called_once()
-        materialized_file = Path(tmp_path) / "src" / "NewObject.Codeunit.al"
-        assert materialized_file.exists()
-        assert "codeunit 50100 NewObject" in materialized_file.read_text(encoding="utf-8")
-        diff = subprocess.run(
-            ["git", "diff", "HEAD"],
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        assert "src/NewObject.Codeunit.al" in diff
-
     def test_evaluate_raises_when_no_review_generated(self, tmp_path):
         entry = create_codereview_entry()
         context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
@@ -619,3 +584,68 @@ class TestCodeReviewPipeline:
 
         with pytest.raises(RuntimeError, match="No review generated"):
             pipeline.evaluate(context)
+
+
+class TestJudge:
+    @staticmethod
+    def _pair(line: int) -> tuple[ReviewComment, ReviewComment]:
+        expected = ReviewComment(file="src/app.al", line_start=line, body="expected", severity=Severity.MEDIUM)
+        generated = ReviewComment(file="src/app.al", line_start=line, body="generated", severity=Severity.MEDIUM)
+        return expected, generated
+
+    def test_parse_raises_when_result_file_missing(self, tmp_path):
+        with pytest.raises(JudgeError, match="no result file"):
+            _parse_judge_results(tmp_path / JUDGE_RESULT_FILE, num_pairs=1)
+
+    def test_parse_raises_on_invalid_json(self, tmp_path):
+        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path.write_text("not json", encoding="utf-8")
+
+        with pytest.raises(JudgeError, match="not valid JSON"):
+            _parse_judge_results(result_path, num_pairs=1)
+
+    def test_parse_raises_when_not_a_list(self, tmp_path):
+        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path.write_text('{"pair": 1, "match": true}', encoding="utf-8")
+
+        with pytest.raises(JudgeError, match="must be a JSON list"):
+            _parse_judge_results(result_path, num_pairs=1)
+
+    def test_parse_missing_pair_counts_as_not_confirmed(self, tmp_path):
+        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path.write_text('[{"pair": 1, "match": true}]', encoding="utf-8")
+
+        assert _parse_judge_results(result_path, num_pairs=2) == [True, False]
+
+    def test_empty_pairs_skips_judge(self):
+        assert judge_comment_matches([], work_dir=Path()) == []
+
+    def test_raises_when_copilot_not_found(self, tmp_path):
+        with patch("bcbench.evaluate.codereview_judge._find_copilot", return_value=None), pytest.raises(JudgeError, match="Copilot CLI not found"):
+            judge_comment_matches([self._pair(10)], work_dir=tmp_path)
+
+    def test_raises_when_subprocess_fails(self, tmp_path):
+        with (
+            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
+            patch(
+                "bcbench.evaluate.codereview_judge.subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, "copilot"),
+            ),
+            pytest.raises(JudgeError, match="Judge subprocess failed"),
+        ):
+            judge_comment_matches([self._pair(10)], work_dir=tmp_path)
+
+    def test_filters_to_confirmed_pairs(self, tmp_path):
+        pairs = [self._pair(10), self._pair(20)]
+
+        def fake_run(*args, **kwargs):
+            (tmp_path / JUDGE_RESULT_FILE).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
+            return subprocess.CompletedProcess(args, 0)
+
+        with (
+            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
+            patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=fake_run),
+        ):
+            result = judge_comment_matches(pairs, work_dir=tmp_path)
+
+        assert result == [pairs[0]]

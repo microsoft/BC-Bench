@@ -16,7 +16,7 @@ import pytest
 
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
-from bcbench.results.display import create_console_summary, create_github_job_summary
+from bcbench.results.display import _detail_sort_key, create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
     EvaluationResultSummary,
     ExecutionBasedEvaluationResultSummary,
@@ -144,7 +144,7 @@ class TestSortKey:
             create_bugfix_result(instance_id="repo__feature-2"),
             create_bugfix_result(instance_id="repo__feature-1"),
         ]
-        ordered_ids = [r.instance_id for r in sorted(unsorted, key=lambda r: r.sort_key)]
+        ordered_ids = [r.instance_id for r in sorted(unsorted, key=_detail_sort_key)]
         assert ordered_ids == ["repo__feature-1", "repo__feature-2", "repo__feature-10"]
 
     def test_zero_padded_ids_sort_correctly(self):
@@ -154,7 +154,7 @@ class TestSortKey:
             create_bugfix_result(instance_id="repo__feature-010"),
             create_bugfix_result(instance_id="repo__feature-001"),
         ]
-        ordered_ids = [r.instance_id for r in sorted(unsorted, key=lambda r: r.sort_key)]
+        ordered_ids = [r.instance_id for r in sorted(unsorted, key=_detail_sort_key)]
         assert ordered_ids == [
             "repo__feature-001",
             "repo__feature-002",

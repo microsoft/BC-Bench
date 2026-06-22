@@ -15,6 +15,10 @@ REPO = r"C:\repos\evals\BCApps"
 
 
 def main() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: uv run python tools/run_entry.py <instance_id>")
+        raise SystemExit(2)
+
     iid = sys.argv[1]
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = pathlib.Path(f"evaluation_results/iter/{iid}_{stamp}")
@@ -56,10 +60,13 @@ def main() -> None:
 
     print("=" * 70)
     print(f"ENTRY {iid}  domain={edom}")
+    precision = float(r.get("precision") or 0.0)
+    recall = float(r.get("recall") or 0.0)
+    f1 = float(r.get("f1") or 0.0)
     print(
         f"METRICS matched={r.get('matched_comment_count')} missed={r.get('missed_comment_count')} "
-        f"incorrect={r.get('incorrect_comment_count')} precision={r.get('precision'):.3f} "
-        f"recall={r.get('recall'):.3f} f1={r.get('f1'):.3f}"
+        f"incorrect={r.get('incorrect_comment_count')} precision={precision:.3f} "
+        f"recall={recall:.3f} f1={f1:.3f}"
     )
     ood = []
     for f in findings:

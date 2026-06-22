@@ -12,24 +12,29 @@ from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
+from bcbench.exceptions import BCBenchError
 
 _config = get_config()
 
+
+class JudgeError(BCBenchError):
+    """The semantic judge could not produce a usable verdict."""
+
 JUDGE_RESULT_FILE = "judge_results.json"
 
-_JUDGE_PROMPT_TEMPLATE = """\
-You are a code review evaluation judge. Your task is to determine whether pairs of code review \
-comments identify the SAME underlying issue.
+JUDGE_MODEL = "gpt-5.3-codex"
 
-For each pair below, decide if the "Expected" and "Candidate" comments point to the same bug, \
-concern, or code issue. Accept semantic matches — different wording is fine if it's the same problem.
+_JUDGE_PROMPT_TEMPLATE = """
+You are a code review evaluation judge. Your task is to determine whether pairs of code review comments identify the SAME underlying issue.
+
+For each pair below, decide if the "Expected" and "Candidate" comments point to the same bug, concern, or code issue. Accept semantic matches — different wording is fine if it's the same problem.
 
 {pairs_text}
 
 Write your response as a JSON file at {result_path} with the following format:
 [{{"pair": 1, "match": true, "reasoning": "brief explanation"}}, ...]
 
-You MUST include a result for every pair. Respond with ONLY the JSON file — no other output or tools.\
+You MUST include a result for every pair. Respond with ONLY the JSON file — no other output or tools.
 """
 
 
@@ -48,22 +53,23 @@ def _build_judge_prompt(pairs: list[tuple[ReviewComment, ReviewComment]], result
 
 def _parse_judge_results(result_path: Path, num_pairs: int) -> list[bool]:
     if not result_path.exists():
-        return [True] * num_pairs
+        raise JudgeError(f"Judge produced no result file at {result_path}")
 
     try:
         raw = json.loads(result_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return [True] * num_pairs
+    except (json.JSONDecodeError, OSError) as exc:
+        raise JudgeError(f"Judge result file is unreadable or not valid JSON: {result_path}") from exc
 
     if not isinstance(raw, list):
-        return [True] * num_pairs
+        raise JudgeError(f"Judge result must be a JSON list, got {type(raw).__name__}")
 
     results_by_pair: dict[int, bool] = {}
     for item in raw:
         if isinstance(item, dict) and "pair" in item and "match" in item:
             results_by_pair[item["pair"]] = bool(item["match"])
 
-    return [results_by_pair.get(i + 1, True) for i in range(num_pairs)]
+    # A pair the judge never returned a verdict for counts as not confirmed.
+    return [results_by_pair.get(i + 1, False) for i in range(num_pairs)]
 
 
 def _find_copilot() -> str | None:
@@ -72,28 +78,35 @@ def _find_copilot() -> str | None:
 
 def judge_comment_matches(
     matched_pairs: list[tuple[ReviewComment, ReviewComment]],
-    model: str,
     work_dir: Path,
+    model: str = JUDGE_MODEL,
 ) -> list[tuple[ReviewComment, ReviewComment]]:
     """Validate structurally matched comment pairs using an LLM semantic judge.
 
+    Defaults to a fixed judge model (``JUDGE_MODEL``) independent of the experiment
+    model, so scores reflect AL review quality rather than a model judging itself.
+
     Args:
         matched_pairs: Pairs from structural matching (expected, generated).
-        model: Model name to use for the judge.
         work_dir: Directory to write judge results to.
+        model: Judge model to use; defaults to the fixed LTS model.
 
     Returns:
         Filtered list of pairs where the judge confirmed a semantic match.
+
+    Raises:
+        JudgeError: If the judge cannot run or produce a usable verdict. Failing
+            loudly avoids silently inflating scores when the judge is broken.
     """
     if not matched_pairs:
         return []
 
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
-        return matched_pairs
+        raise JudgeError("Copilot CLI not found; cannot run the semantic judge")
 
     result_path = work_dir / JUDGE_RESULT_FILE
-    prompt = _build_judge_prompt(matched_pairs, JUDGE_RESULT_FILE)
+    prompt = " ".join(_build_judge_prompt(matched_pairs, JUDGE_RESULT_FILE).split())
 
     try:
         subprocess.run(
@@ -103,15 +116,15 @@ def judge_comment_matches(
                 "--disable-builtin-mcps",
                 "--no-custom-instructions",
                 f"--model={model}",
-                f"--prompt={prompt.replace(chr(10), ' ')}",
+                f"--prompt={prompt}",
             ],
             cwd=str(work_dir),
             capture_output=True,
             timeout=_config.timeout.agent_execution,
             check=True,
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError):
-        return matched_pairs
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
+        raise JudgeError(f"Judge subprocess failed: {exc}") from exc
 
     verdicts = _parse_judge_results(result_path, len(matched_pairs))
     return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
