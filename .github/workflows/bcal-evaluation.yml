@@ -10,12 +10,34 @@ on:
         description: "Azure OpenAI deployment name to use for bcal"
         required: false
         default: "gpt-5.2"
-        type: string
+        type: choice
+        options:
+          - "gpt-5.2"
+      llm-backend:
+        description: "LLM backend for bcal. In this workflow, external-command uses the bc-eval CAPI bridge."
+        required: false
+        default: "external-command"
+        type: choice
+        options:
+          - "azure-openai"
+          - "external-command"
+      external-model:
+        description: "Model alias passed to the external-command bridge when llm-backend=external-command"
+        required: false
+        default: "gpt-5"
+        type: choice
+        options:
+          - "gpt-5"
+          - "gpt-4o"
+          - "gpt-53-chat-2026-03-03"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
         default: true
         type: boolean
+  schedule:
+    - cron: "0 3 * * 0"
+
 
 concurrency:
   group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
@@ -28,7 +50,7 @@ jobs:
   get-entries:
     uses: ./.github/workflows/get-entries.yml
     with:
-      test-run: ${{ inputs.test-run }}
+      test-run: ${{ inputs.test-run || false }}
       category: nl2al
 
   evaluate-with-bcal:
@@ -46,7 +68,7 @@ jobs:
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 32
       matrix:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
@@ -56,12 +78,19 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
-      - name: Azure Login (OIDC) for bcal feed and symbols
+      - name: Azure Login (OIDC) for ADO feed
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
+
+      - name: Install Azure Artifacts credential provider
+        shell: pwsh
+        run: |
+          dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool
+
+          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install bcal CLI from internal feed
         shell: pwsh
@@ -69,12 +98,6 @@ jobs:
           BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
           BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
         run: |
-          if (-not $env:BCAL_PACKAGE_ID -or -not $env:BCAL_FEED_URL) {
-            throw "BCAL_PACKAGE_ID / BCAL_FEED_URL secrets are not configured."
-          }
-
-          iex "& { $(irm https://aka.ms/install-artifacts-credprovider.ps1) }"
-
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
@@ -90,20 +113,87 @@ jobs:
           $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
 
           dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
-          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
+
+      - name: Build bc-eval CAPI bridge venv
+        if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
+        shell: pwsh
+        run: |
+          $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          Write-Output "::add-mask::$adoToken"
+
+          uv python install 3.12
+          uv venv .bcal-capi-venv --python 3.12
+          uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.7" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+
+      - name: Resolve BC version for cache key
+        id: bcversion
+        run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
+
+      # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
+      - name: Cache BC sandbox artifacts
+        id: bccache
+        uses: actions/cache@v5
+        with:
+          path: C:\bcartifacts.cache
+          key: bcartifacts-${{ steps.bcversion.outputs.version }}
 
       - name: Download BC Application symbols
+        if: steps.bccache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-          .\scripts\Download-BCSymbols.ps1 -InstanceId "${{ matrix.entry }}"
+          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
-      - name: Run bcal for entry ${{ matrix.entry }}
-        timeout-minutes: 120
+      - name: Azure Login (OIDC) for CAPI Key Vault
+        if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Fetch CAPI client certificate from Key Vault
+        if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
+        shell: pwsh
         env:
-          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-          AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model }}
+          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
         run: |
+          if (-not $env:CAPI_CERTIFICATE_KEY_VAULT_NAME -or -not $env:CAPI_CERTIFICATE_NAME) {
+            throw "CAPI_CERTIFICATE_KEY_VAULT_NAME / CAPI_CERTIFICATE_NAME secrets must be set when llm-backend = external-command."
+          }
+          $b64 = az keyvault secret show --vault-name $env:CAPI_CERTIFICATE_KEY_VAULT_NAME --name $env:CAPI_CERTIFICATE_NAME --query value -o tsv
+          if (-not $b64) {
+            throw "Failed to fetch CAPI cert from Key Vault."
+          }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\capi-cert.pfx", [Convert]::FromBase64String($b64))
+
+      - name: Run BCal for entry ${{ matrix.entry }}
+        timeout-minutes: 18
+        env:
+          BCAL_LLM_BACKEND: ${{ inputs.llm-backend || 'external-command' }}
+          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model || 'gpt-5.2' }}
+          CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
+          CAPI_SCOPE: ${{ secrets.CAPI_SCOPE }}
+          CAPI_ORG_GUID: ${{ secrets.CAPI_ORG_GUID }}
+          CAPI_TENANT_ID: ${{ secrets.CAPI_TENANT_ID }}
+          CAPI_USER_OBJECT_ID: ${{ secrets.CAPI_USER_OBJECT_ID }}
+          CAPI_PARTNER_SOURCE: ${{ secrets.CAPI_PARTNER_SOURCE }}
+          CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
+          CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
+          CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+        shell: pwsh
+        run: |
+          if ("${{ inputs.llm-backend || 'external-command' }}" -eq "external-command") {
+            $env:CAPI_CERT_FILE = "$env:RUNNER_TEMP\capi-cert.pfx"
+            if (-not (Test-Path $env:CAPI_CERT_FILE)) {
+              throw "Expected CAPI client cert at $env:CAPI_CERT_FILE but it was not fetched from Key Vault."
+            }
+            $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
+          }
+
           uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
@@ -122,8 +212,9 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ inputs.model }}
-      agent: bcal
-      mock: ${{ inputs.test-run }}
+      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
+      agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
+      mock: ${{ inputs.test-run || false }}
       category: nl2al
+      skip-leaderboard: true
     secrets: inherit

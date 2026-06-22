@@ -4,17 +4,17 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
-from bcbench.types import ExpectedOutput
+from bcbench.types import Checklist, ChecklistAssertion, ExpectedOutput
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -29,6 +29,7 @@ class EntryMetadata(BaseModel):
 
     area: str | None = None
     image_count: int | None = None
+    persona: str | None = None
 
 
 class BaseDatasetEntry(BaseModel):
@@ -151,3 +152,19 @@ class TestGenEntry(_BugFixTestGenBase):
 
     def get_expected_output(self) -> str:
         return self.test_patch
+
+
+class NL2ALEntry(BaseDatasetEntry):
+    """Dataset entry for NL2AL category — generate AL code from natural language."""
+
+    base_commit: str | None = None
+    nl_prompt: Annotated[str, Field(min_length=1)]
+    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
+    page: str
+    audience: Literal["Business", "Technical", "Both"]
+
+    def get_task(self) -> str:
+        return self.nl_prompt
+
+    def get_expected_output(self) -> Checklist:
+        return {"assertions": self.expected}

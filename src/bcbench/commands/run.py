@@ -1,8 +1,11 @@
 """CLI commands for running agents."""
 
+from typing import cast
+
 import typer
 from typing_extensions import Annotated
 
+from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
 from bcbench.cli_options import (
@@ -14,7 +17,9 @@ from bcbench.cli_options import (
     RepoPath,
 )
 from bcbench.config import get_config
+from bcbench.dataset import NL2ALEntry
 from bcbench.logger import get_logger
+from bcbench.types import BCalLLMBackend, EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -87,4 +92,39 @@ def run_claude(
         al_mcp=al_mcp if container_name else False,
         al_lsp=al_lsp,
         container_name=container_name,
+    )
+
+
+@run_app.command("bcal")
+def run_bcal(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    repo_path: RepoPath = _config.paths.evaluation_results_path,
+    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.AZURE_OPENAI,
+    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
+    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
+) -> None:
+    """
+    Run BCal dotnet tool on a single nl2al entry to generate AL code.
+
+    For full evaluation, use 'bcbench evaluate bcal' instead.
+
+    Example:
+        uv run bcbench run bcal nl2al__job-budget-report-1
+    """
+    category = EvaluationCategory.NL2AL
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    category.pipeline.setup_workspace(entry, repo_path)
+
+    run_bcal_agent(
+        entry=entry,
+        repo_path=repo_path,
+        backend_config=BCalBackendConfig(
+            backend=backend,
+            endpoint=endpoint,
+            deployment=deployment,
+            command=llm_command,
+            model=llm_model,
+        ),
     )

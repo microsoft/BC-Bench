@@ -5,6 +5,8 @@ from bcbench.operations.bc_operations import (
     build_ps_app_build_and_publish,
     build_ps_dataset_tests_script,
     build_ps_test_script,
+    copy_symbol_apps,
+    resolve_artifact_version_root,
     run_tests,
 )
 from bcbench.operations.git_operations import (
@@ -34,7 +36,9 @@ __all__ = [
     "clean_repo",
     "commit_changes",
     "copy_problem_statement_folder",
+    "copy_symbol_apps",
     "extract_tests_from_patch",
+    "resolve_artifact_version_root",
     "run_tests",
     "set_runtime_version",
     "setup_agent_skills",

@@ -8,19 +8,19 @@ meeting all Pydantic validation requirements.
 import json
 from collections.abc import Generator
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, ContainerConfig, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -304,3 +304,44 @@ def sample_dataset_entry_with_problem_statement(tmp_path: Path) -> Generator[Bug
 
     with patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_dir)):
         yield entry
+
+
+VALID_NL_PROMPT = "Create a report showing budgeted cost vs actual cost broken down by job task."
+
+
+def create_nl2al_entry(
+    instance_id: str = "nl2al__job-budget-report-1",
+    repo: str = "nl2al/template",
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    patch: str = VALID_PATCH,
+    nl_prompt: str = VALID_NL_PROMPT,
+    created_at: str = VALID_CREATED_AT,
+    expected: list[ChecklistAssertion] | None = None,
+    page: str = "Customer Card",
+    audience: Literal["Business", "Technical", "Both"] = "Both",
+) -> NL2ALEntry:
+    if project_paths is None:
+        project_paths = ["JobBudgetVsActualReport"]
+
+    if expected is None:
+        expected = [ChecklistAssertion(text="The output defines an AL report object.", level="critical")]
+
+    return NL2ALEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=None,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths,
+        patch=patch,
+        nl_prompt=nl_prompt,
+        created_at=created_at,
+        expected=expected,
+        page=page,
+        audience=audience,
+    )
+
+
+@pytest.fixture
+def sample_nl2al_entry() -> NL2ALEntry:
+    return create_nl2al_entry()

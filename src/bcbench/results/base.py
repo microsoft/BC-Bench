@@ -143,6 +143,10 @@ class JudgeBasedEvaluationResult(BaseEvaluationResult):
     def create_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message)
 
+    @classmethod
+    def create_empty_output(cls, context: "EvaluationContext") -> Self:
+        return cls(**cls._base_fields(context), output="")
+
     @property
     def status_label(self) -> str:
         if self.timeout:
