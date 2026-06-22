@@ -292,7 +292,7 @@ class TestCodeReviewResult:
 
         assert result.domain == "security"
 
-    def test_result_stamps_domain_on_generated_comments(self):
+    def test_result_leaves_generated_comment_domain_unset_when_absent(self):
         result = create_codereview_result(
             output='[{"file": "src/app.al", "line_start": 5, "body": "Issue", "severity": "medium"}]',
             expected_comments=[],
@@ -300,7 +300,7 @@ class TestCodeReviewResult:
         )
 
         assert len(result.generated_comments) == 1
-        assert result.generated_comments[0].domain == "performance"
+        assert result.generated_comments[0].domain is None
 
     def test_result_keeps_generated_comments_with_mismatched_domain(self):
         result = create_codereview_result(

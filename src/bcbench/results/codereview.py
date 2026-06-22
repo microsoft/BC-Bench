@@ -65,11 +65,6 @@ def _build_console_table(title: str, columns: list[str], row: list[str]) -> Tabl
     return table
 
 
-def _with_comment_domains(generated_comments: list[ReviewComment], domain: str) -> list[ReviewComment]:
-    """Stamp the entry domain onto comments that have no explicit domain. All comments are kept."""
-    return [comment if comment.domain else comment.model_copy(update={"domain": domain}) for comment in generated_comments]
-
-
 def _normalize_path(path: str) -> str:
     return path.replace("\\", "/").lstrip("./").lstrip("/")
 
@@ -120,7 +115,11 @@ def match_comments(
     ]
 
 
-def _severity_mae(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
+def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
+    """Mean absolute difference between expected and generated severity levels over matched pairs.
+
+    Returns 0.0 when there are no matched pairs.
+    """
     if not matched_pairs:
         return 0.0
     total_error: int = sum(abs(expected.severity.level - generated.severity.level) for expected, generated in matched_pairs)
@@ -158,7 +157,6 @@ class CodeReviewResult(BaseEvaluationResult):
         matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
     ) -> Self:
         domain = _resolve_domain(context)
-        generated_comments = _with_comment_domains(generated_comments, domain)
         if matched_pairs is None:
             matched_pairs = match_comments(expected_comments, generated_comments, line_tolerance)
         matched_count = len(matched_pairs)
@@ -173,14 +171,14 @@ class CodeReviewResult(BaseEvaluationResult):
             line_tolerance=line_tolerance,
             valid_review_output=True,
             matched_comment_count=matched_count,
-            incorrect_comment_count=max(0, len(generated_comments) - matched_count),
-            missed_comment_count=max(0, len(expected_comments) - matched_count),
+            incorrect_comment_count=len(generated_comments) - matched_count,
+            missed_comment_count=len(expected_comments) - matched_count,
             precision=precision,
             recall=recall,
             f1=f1_score(precision, recall),
             f_beta_05=f_beta_score(precision, recall, beta=0.5),
             f_beta_2=f_beta_score(precision, recall, beta=2.0),
-            severity_mae=_severity_mae(matched_pairs),
+            severity_mae=_severity_mean_absolute_error(matched_pairs),
         )
 
     @classmethod
