@@ -29,6 +29,7 @@ on:
         options:
           - "gpt-5"
           - "gpt-4o"
+          - "gpt-53-chat-2026-03-03"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -122,7 +123,7 @@ jobs:
 
           uv python install 3.12
           uv venv .bcal-capi-venv --python 3.12
-          uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.6" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+          uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.7" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
 
       - name: Resolve BC version for cache key
         id: bcversion
