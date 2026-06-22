@@ -89,7 +89,11 @@ def run_copilot_agent(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            env={**os.environ, "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true"},
+            env={
+                **os.environ,
+                "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
+                "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
+            },
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.agent_execution,
             check=True,
