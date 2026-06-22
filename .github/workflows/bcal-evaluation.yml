@@ -27,6 +27,9 @@ on:
         default: "gpt-5"
         type: choice
         options:
+          - "claude-opus-4-8"
+          - "gpt-55-2026-04-24"
+          - "gpt-5-codex-2025-09-15"
           - "gpt-5"
           - "gpt-4o"
           - "gpt-53-chat-2026-03-03"
