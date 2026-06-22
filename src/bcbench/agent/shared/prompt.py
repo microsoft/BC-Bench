@@ -17,7 +17,7 @@ def _transform_image_paths(content: str) -> str:
 
 def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
     prompt_config = config.get("prompt", {})
-    template_str = prompt_config.get(f"{category.value}-template")
+    template_str = prompt_config.get(f"{category.prompt_template_key}-template")
     include_project_paths = prompt_config.get("include_project_paths")
 
     test_gen_input: str = prompt_config.get("test-generation-input", "problem-statement")

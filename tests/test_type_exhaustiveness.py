@@ -41,6 +41,8 @@ def test_all_categories_have_aggregate_classes():
 
 def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry):
     for category in EvaluationCategory:
+        if category.is_counterfactual:
+            continue  # CF entries are loaded via resolution from base; tested separately in test_counterfactual.py
         entry_cls = category.entry_class
         entry = sample_nl2al_entry if entry_cls is NL2ALEntry else entry_cls.model_validate(sample_dataset_entry_with_problem_statement.model_dump(by_alias=True))
 

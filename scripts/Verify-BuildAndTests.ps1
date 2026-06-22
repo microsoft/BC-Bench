@@ -20,7 +20,7 @@ param(
     [string]$InstanceId,
 
     [Parameter(Mandatory = $false)]
-    [string]$DatasetPath = (Get-BCBenchDatasetPath -Category "bug-fix"),
+    [string]$DatasetPath,
 
     [Parameter(Mandatory = $true)]
     [string]$RepoPath,
@@ -34,6 +34,11 @@ param(
     [Parameter(Mandatory = $false)]
     [SecureString]$Password
 )
+
+if (-not $DatasetPath) {
+    $datasetName = if ($InstanceId -match '__cf-\d+$') { "counterfactual.jsonl" } else { "bcbench.jsonl" }
+    $DatasetPath = Get-BCBenchDatasetPath -DatasetName $datasetName
+}
 
 [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -Version $Version -InstanceId $InstanceId
 if ($InstanceId) {

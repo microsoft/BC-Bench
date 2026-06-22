@@ -28,6 +28,7 @@ __all__ = [
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
+    "FailureLayer",
 ]
 
 
@@ -131,10 +132,24 @@ class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
     NL2AL = "nl2al"
+    CF = "cf"
+
+    @property
+    def is_counterfactual(self) -> bool:
+        return self == EvaluationCategory.CF
+
+    @property
+    def prompt_template_key(self) -> str:
+        if self.is_counterfactual:
+            return "counterfactual"
+        return self.value
 
     @property
     def dataset_path(self) -> Path:
         from bcbench.config import get_config
+
+        if self.is_counterfactual:
+            return get_config().paths.dataset_dir / "counterfactual.jsonl"
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -149,6 +164,10 @@ class EvaluationCategory(StrEnum):
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
         from bcbench.dataset import BugFixEntry, NL2ALEntry, TestGenEntry
+        from bcbench.dataset.counterfactual_entry import CounterfactualEntry
+
+        if self.is_counterfactual:
+            return CounterfactualEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -166,6 +185,9 @@ class EvaluationCategory(StrEnum):
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.testgeneration import TestGenerationResult
 
+        if self.is_counterfactual:
+            return BugFixResult
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixResult
@@ -180,6 +202,9 @@ class EvaluationCategory(StrEnum):
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
         from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
+
+        if self.is_counterfactual:
+            return ExecutionBasedEvaluationResultSummary
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -196,6 +221,9 @@ class EvaluationCategory(StrEnum):
         """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
         from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
 
+        if self.is_counterfactual:
+            return ExecutionBasedLeaderboardAggregate
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedLeaderboardAggregate
@@ -209,6 +237,9 @@ class EvaluationCategory(StrEnum):
     @property
     def pipeline(self) -> EvaluationPipeline:
         from bcbench.evaluate import BugFixPipeline, NL2ALPipeline, TestGenerationPipeline
+
+        if self.is_counterfactual:
+            return BugFixPipeline()
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -227,6 +258,9 @@ class EvaluationCategory(StrEnum):
 
         Used for uploading evaluation results to long term storage.
         """
+        if self.is_counterfactual:
+            return ["resolution_rate", "build_rate"]
+
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ["resolution_rate", "build_rate"]
@@ -240,6 +274,9 @@ class EvaluationCategory(StrEnum):
     @property
     def core_score(self) -> str:
         """Name of the evaluator whose value is considered as CoreScore, required by bc-eval."""
+        if self.is_counterfactual:
+            return "ResolutionRate"
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
@@ -251,6 +288,9 @@ class EvaluationCategory(StrEnum):
     @property
     def requires_container(self) -> bool:
         """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
+        if self.is_counterfactual:
+            return True
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return True
@@ -265,6 +305,9 @@ class EvaluationCategory(StrEnum):
 
         Only categories that require building BaseApp needs self-hosted runners.
         """
+        if self.is_counterfactual:
+            return "GitHub-BCBench"
+
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "GitHub-BCBench"
@@ -272,6 +315,14 @@ class EvaluationCategory(StrEnum):
                 return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
+
+
+class FailureLayer(StrEnum):
+    L1_SYNTAX = "L1-syntax-representation"
+    L2_EXECUTION = "L2-execution-validation"
+    L3_EVENT = "L3-event-driven-paradigm"
+    L4_WORKFLOW = "L4-workflow-business-logic"
+    L5_TOOLCHAIN = "L5-toolchain-ecosystem"
 
 
 @dataclass(frozen=True)

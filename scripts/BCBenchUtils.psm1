@@ -342,13 +342,16 @@ function Invoke-GitApplyPatch {
         # Create temporary patch file
         [string]$patchPath = Join-Path -Path $env:TEMP -ChildPath "patch_$PatchId.diff"
         Write-Log "Saving patch to temporary file: $patchPath" -Level Debug
-        $PatchContent | Out-File -FilePath $patchPath -Encoding utf8 -Force
+        # Write raw bytes preserving LF line endings — git apply context matching is sensitive
+        # to BOM and CRLF, both of which Out-File -Encoding utf8 introduces on Windows.
+        [string]$normalizedContent = $PatchContent -replace "`r`n", "`n"
+        [System.IO.File]::WriteAllBytes($patchPath, [System.Text.UTF8Encoding]::new($false).GetBytes($normalizedContent))
 
         if ($RepositoryPath) {
-            $applyResult = git -C $RepositoryPath apply --whitespace=nowarn $patchPath 2>&1
+            $applyResult = git -C $RepositoryPath apply --whitespace=nowarn --ignore-whitespace $patchPath 2>&1
         }
         else {
-            $applyResult = git apply --whitespace=nowarn $patchPath 2>&1
+            $applyResult = git apply --whitespace=nowarn --ignore-whitespace $patchPath 2>&1
         }
 
         if ($LASTEXITCODE -ne 0) {
@@ -485,19 +488,26 @@ function Get-RepoCloneInfo {
     String representing the dataset path
 #>
 function Get-BCBenchDatasetPath {
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = "Category")]
     [OutputType([string])]
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = "Category")]
         # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
         [ValidateSet("bug-fix", "test-generation", "nl2al")]
-        [string] $Category
+        [string] $Category,
+
+        # Instance-aware callers (e.g. counterfactual runs whose matrix mixes base and CF instances) resolve the dataset file directly.
+        [Parameter(Mandatory = $true, ParameterSetName = "DatasetName")]
+        [ValidateSet("bcbench.jsonl", "counterfactual.jsonl", "nl2al.jsonl")]
+        [string] $DatasetName
     )
 
-    switch ($Category) {
-        "bug-fix" { $DatasetName = "bcbench.jsonl" }
-        "test-generation" { $DatasetName = "bcbench.jsonl" }
-        "nl2al" { $DatasetName = "nl2al.jsonl" }
+    if ($PSCmdlet.ParameterSetName -eq "Category") {
+        switch ($Category) {
+            "bug-fix" { $DatasetName = "bcbench.jsonl" }
+            "test-generation" { $DatasetName = "bcbench.jsonl" }
+            "nl2al" { $DatasetName = "nl2al.jsonl" }
+        }
     }
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent
