@@ -172,7 +172,7 @@ jobs:
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\capi-cert.pfx", [Convert]::FromBase64String($b64))
 
       - name: Run BCal for entry ${{ matrix.entry }}
-        timeout-minutes: 18
+        timeout-minutes: 28
         env:
           BCAL_LLM_BACKEND: ${{ inputs.llm-backend || 'external-command' }}
           BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}

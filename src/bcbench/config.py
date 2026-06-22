@@ -79,7 +79,7 @@ class TimeoutConfig:
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
-            bcal_execution=15 * 60,  # 15 minutes for bcal CLI; matches the GH Actions step `timeout-minutes` cap.
+            bcal_execution=25 * 60,  # 25 minutes for bcal CLI; kept below the GH Actions step `timeout-minutes` (28) so the agent times out gracefully and still uploads results.
         )
 
 
