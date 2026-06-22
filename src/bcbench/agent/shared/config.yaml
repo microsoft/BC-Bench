@@ -51,16 +51,15 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    /review
-
-    Review the current branch changes and save findings to a file named "review.json" in the repository root.
+    /al-code-review
 
     Review ONLY the current working-tree AL file changes for this evaluation entry.
-    Do NOT compare commits (for example, do NOT use HEAD~1..HEAD or origin/main comparisons).
-    Use working tree diff only (git diff HEAD), and focus on changed *.al files.
+    Use the working tree diff only (git diff HEAD), and focus on changed *.al files.
+    Do NOT review committed history or the HEAD commit, and do NOT compare commits (for example, do NOT use HEAD~1..HEAD or origin/main comparisons).
 
+    Save findings to a file named "review.json" in the repository root.
     The file must contain valid JSON with a top-level object named findings.
-    Each finding must include: filePath, lineNumber, severity, issue, recommendation, domain, suggestedCode.
+    Each finding must include: filePath, lineNumber, severity, issue, recommendation, domain, suggestedCode
     Allowed severity values are: critical, high, medium, low.
     If there are no findings, write an empty findings list.
 
@@ -73,14 +72,14 @@ prompt:
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentType.instruction_filename) during setup
 instructions:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
 skills:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`
