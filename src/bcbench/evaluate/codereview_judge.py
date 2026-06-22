@@ -6,6 +6,7 @@ false positives where two comments happen to be near each other but address diff
 """
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -31,10 +32,10 @@ For each pair below, decide if the "Expected" and "Candidate" comments point to 
 
 {pairs_text}
 
-Write your response as a JSON file at {result_path} with the following format:
+Save your verdict to a JSON file at {result_path} using your file-writing tool. The file must contain ONLY a JSON array in this format:
 [{{"pair": 1, "match": true, "reasoning": "brief explanation"}}, ...]
 
-You MUST include a result for every pair. Respond with ONLY the JSON file — no other output or tools.
+Include exactly one entry for every pair. Do not write any other files or prose.
 """
 
 
@@ -51,14 +52,29 @@ def _build_judge_prompt(pairs: list[tuple[ReviewComment, ReviewComment]], result
     return _JUDGE_PROMPT_TEMPLATE.format(pairs_text=pairs_text, result_path=result_path)
 
 
-def _parse_judge_results(result_path: Path, num_pairs: int) -> list[bool]:
-    if not result_path.exists():
-        raise JudgeError(f"Judge produced no result file at {result_path}")
+def _extract_json_array(text: str) -> str:
+    stripped = text.strip()
+    if not stripped:
+        return ""
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", stripped, re.IGNORECASE)
+    if fence:
+        stripped = fence.group(1).strip()
+    start = stripped.find("[")
+    end = stripped.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return stripped[start : end + 1]
+    return stripped
+
+
+def _parse_judge_results(result_path: Path, num_pairs: int, stdout: str = "") -> list[bool]:
+    raw_text = result_path.read_text(encoding="utf-8") if result_path.exists() else stdout
+    if not raw_text.strip():
+        raise JudgeError(f"Judge produced no result file at {result_path} and no parseable output")
 
     try:
-        raw = json.loads(result_path.read_text(encoding="utf-8"))
+        raw = json.loads(_extract_json_array(raw_text))
     except (json.JSONDecodeError, OSError) as exc:
-        raise JudgeError(f"Judge result file is unreadable or not valid JSON: {result_path}") from exc
+        raise JudgeError(f"Judge result is unreadable or not valid JSON: {result_path}") from exc
 
     if not isinstance(raw, list):
         raise JudgeError(f"Judge result must be a JSON list, got {type(raw).__name__}")
@@ -109,7 +125,7 @@ def judge_comment_matches(
     prompt = " ".join(_build_judge_prompt(matched_pairs, JUDGE_RESULT_FILE).split())
 
     try:
-        subprocess.run(
+        completed = subprocess.run(
             [
                 copilot_cmd,
                 "--allow-all-tools",
@@ -120,11 +136,12 @@ def judge_comment_matches(
             ],
             cwd=str(work_dir),
             capture_output=True,
+            text=True,
             timeout=_config.timeout.agent_execution,
             check=True,
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
         raise JudgeError(f"Judge subprocess failed: {exc}") from exc
 
-    verdicts = _parse_judge_results(result_path, len(matched_pairs))
+    verdicts = _parse_judge_results(result_path, len(matched_pairs), stdout=completed.stdout or "")
     return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]

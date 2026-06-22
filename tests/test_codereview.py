@@ -617,6 +617,11 @@ class TestJudge:
 
         assert _parse_judge_results(result_path, num_pairs=2) == [True, False]
 
+    def test_parse_falls_back_to_stdout_when_file_missing(self, tmp_path):
+        result_path = tmp_path / JUDGE_RESULT_FILE
+
+        assert _parse_judge_results(result_path, num_pairs=1, stdout='```json\n[{"pair": 1, "match": true}]\n```') == [True]
+
     def test_empty_pairs_skips_judge(self):
         assert judge_comment_matches([], work_dir=Path()) == []
 
@@ -649,3 +654,17 @@ class TestJudge:
             result = judge_comment_matches(pairs, work_dir=tmp_path)
 
         assert result == [pairs[0]]
+
+    def test_filters_using_stdout_when_file_not_written(self, tmp_path):
+        pairs = [self._pair(10), self._pair(20)]
+
+        def fake_run(*args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, stdout='[{"pair": 1, "match": false}, {"pair": 2, "match": true}]')
+
+        with (
+            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
+            patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=fake_run),
+        ):
+            result = judge_comment_matches(pairs, work_dir=tmp_path)
+
+        assert result == [pairs[1]]
