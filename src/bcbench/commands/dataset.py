@@ -6,7 +6,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.cli_options import EvaluationCategoryOption
-from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.logger import get_logger
@@ -138,6 +138,22 @@ def view_entry(
         else:
             console.print("[dim]No PASS_TO_PASS tests[/dim]")
 
+    elif isinstance(entry, CodeReviewEntry):
+        console.print("\n[bold cyan]Expected Review Comments:[/bold cyan]")
+        if entry.expected_comments:
+            comment_table = Table()
+            comment_table.add_column("File", style="magenta")
+            comment_table.add_column("Lines", style="yellow")
+            comment_table.add_column("Severity", style="red")
+            comment_table.add_column("Comment", style="white")
+            for comment in entry.expected_comments:
+                lines = str(comment.line_start)
+                if comment.line_end and comment.line_end != comment.line_start:
+                    lines += f"-{comment.line_end}"
+                comment_table.add_row(comment.file, lines, comment.severity, comment.body)
+            console.print(comment_table)
+        else:
+            console.print("[dim]No expected comments[/dim]")
     elif isinstance(entry, NL2ALEntry):
         console.print("\n[bold cyan]Expected Checklist:[/bold cyan]")
         if entry.expected:

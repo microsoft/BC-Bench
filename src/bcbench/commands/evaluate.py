@@ -23,7 +23,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult
+from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult
 from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -280,8 +280,15 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
-        # Randomly choose success or build failure
-        scenario = random.choice(["success", "build-fail"])
+        match context.category:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                scenarios = ["success", "build-fail"]
+            case EvaluationCategory.CODE_REVIEW:
+                scenarios = ["invalid", "valid"]
+            case _:
+                raise ValueError(f"Unsupported category for mock evaluation: {context.category}")
+
+        scenario = random.choice(scenarios)
         logger.info(f"Mock pipeline: Selected scenario: {scenario}")
 
         result: BaseEvaluationResult
@@ -290,6 +297,10 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
             case "build-fail":
                 result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+            case "invalid":
+                result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
+            case "valid":
+                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[], line_tolerance=0)
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

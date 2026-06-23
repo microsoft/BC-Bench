@@ -50,6 +50,12 @@ prompt:
     {{task}}
     {% endif %}
 
+  code-review-template: |
+    /review
+
+    Review only the uncommitted working-tree changes (git diff HEAD); do not compare commits such as HEAD~1..HEAD or origin/main.
+    Save the review findings to a file named "review.json" in the repository root (write an empty array if there are no findings).
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

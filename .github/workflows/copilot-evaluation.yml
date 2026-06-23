@@ -30,6 +30,7 @@ on:
         options:
           - "bug-fix"
           - "test-generation"
+          - "code-review"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false

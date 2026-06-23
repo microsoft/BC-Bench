@@ -8,14 +8,17 @@ meeting all Pydantic validation requirements.
 import json
 from collections.abc import Generator
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BugFixEntry, NL2ALEntry, TestEntry
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry, TestEntry
+from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
+from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
+from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
+from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext
 
@@ -73,21 +76,20 @@ def create_dataset_entry(
     )
 
 
-def create_evaluation_context(
+def create_evaluation_context[EntryT: BaseDatasetEntry](
     tmp_path: Path,
-    entry: BugFixEntry | None = None,
+    entry: EntryT | None = None,
     agent_name: str = "test-agent",
     model: str = "test-model",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
     password: str = "test-password",
     username: str = "test-user",
-) -> EvaluationContext[BugFixEntry]:
-    if entry is None:
-        entry = create_dataset_entry()
+) -> EvaluationContext[EntryT]:
+    resolved_entry = entry if entry is not None else cast(EntryT, create_dataset_entry())
 
-    return EvaluationContext[BugFixEntry](
-        entry=entry,
+    return EvaluationContext[EntryT](
+        entry=resolved_entry,
         repo_path=tmp_path / "repo",
         result_dir=tmp_path / "results",
         container=ContainerConfig(name=container_name, username=username, password=password),
@@ -151,6 +153,74 @@ def create_testgen_result(
     )
 
 
+def create_codereview_entry(
+    instance_id: str = VALID_INSTANCE_ID,
+    repo: str = VALID_REPO,
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    patch: str = VALID_PATCH,
+    created_at: str = VALID_CREATED_AT,
+    domain: str | None = None,
+    expected_comments: list[ReviewComment] | None = None,
+) -> CodeReviewEntry:
+    if project_paths is None:
+        project_paths = VALID_PROJECT_PATHS.copy()
+    if expected_comments is None:
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix this", severity=Severity.MEDIUM),
+            ReviewComment(file="src/app.al", line_start=20, body="Consider that", severity=Severity.LOW),
+        ]
+
+    return CodeReviewEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths,
+        patch=patch,
+        created_at=created_at,
+        metadata=EntryMetadata(area=domain),
+        expected_comments=expected_comments,
+    )
+
+
+def create_codereview_result(
+    instance_id: str = VALID_INSTANCE_ID,
+    model: str = "gpt-4o",
+    agent_name: str = "copilot-cli",
+    output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
+    expected_comments: list[ReviewComment] | None = None,
+    line_tolerance: int = 5,
+    metrics: AgentMetrics | None = None,
+    domain: str | None = None,
+) -> CodeReviewResult:
+    if expected_comments is None:
+        expected_comments = []
+    entry = create_codereview_entry(instance_id=instance_id, expected_comments=expected_comments, domain=domain)
+    context = EvaluationContext[CodeReviewEntry](
+        entry=entry,
+        repo_path=Path(),
+        result_dir=Path(),
+        container=ContainerConfig(name="t", username="t", password="t"),
+        agent_name=agent_name,
+        model=model,
+        category=EvaluationCategory.CODE_REVIEW,
+    )
+    context.metrics = metrics
+
+    generated_comments = parse_review_output(output)
+    if generated_comments is None:
+        return CodeReviewResult.create_invalid(context, output, expected_comments)
+    return CodeReviewResult.create(
+        context,
+        output=output,
+        expected_comments=expected_comments,
+        generated_comments=generated_comments,
+        line_tolerance=line_tolerance,
+    )
+
+
 def create_dataset_file(tmp_path: Path, entries: list[BugFixEntry] | None = None) -> Path:
     if entries is None:
         entries = [create_dataset_entry()]
@@ -193,7 +263,7 @@ def sample_dataset_entry() -> BugFixEntry:
 
 
 @pytest.fixture
-def sample_evaluation_context(tmp_path: Path) -> EvaluationContext[BugFixEntry]:
+def sample_evaluation_context(tmp_path: Path) -> EvaluationContext[BaseDatasetEntry]:
     return create_evaluation_context(tmp_path)
 
 

@@ -735,6 +735,84 @@ class TestLeaderboard:
 
         assert agg.benchmark_version == "0.1.0"
 
+    def test_aggregate_rejects_runs_from_different_combinations(self):
+        from bcbench.results.leaderboard import LeaderboardAggregate
+
+        run1 = ExecutionBasedEvaluationResultSummary(
+            total=3,
+            resolved=2,
+            failed=1,
+            build=3,
+            percentage=66.7,
+            instance_results={"test__1": True, "test__2": True, "test__3": False},
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            benchmark_version="0.1.0",
+        )
+        run2 = ExecutionBasedEvaluationResultSummary(
+            total=3,
+            resolved=1,
+            failed=2,
+            build=3,
+            percentage=33.3,
+            instance_results={"test__1": False, "test__2": True, "test__3": False},
+            date=date.today(),
+            model="claude-3",  # Different model
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            benchmark_version="0.1.0",
+        )
+
+        with pytest.raises(ValueError, match="different combinations"):
+            LeaderboardAggregate.from_runs([run1, run2])
+
+    def test_aggregate_rejects_runs_with_different_totals(self):
+        from bcbench.results.leaderboard import LeaderboardAggregate
+
+        run1 = ExecutionBasedEvaluationResultSummary(
+            total=3,
+            resolved=2,
+            failed=1,
+            build=3,
+            percentage=66.7,
+            instance_results={"test__1": True, "test__2": True, "test__3": False},
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            benchmark_version="0.1.0",
+        )
+        run2 = ExecutionBasedEvaluationResultSummary(
+            total=2,  # Different total
+            resolved=1,
+            failed=1,
+            build=2,
+            percentage=50.0,
+            instance_results={"test__1": False, "test__2": True},
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=100.0,
+            average_prompt_tokens=1000.0,
+            average_completion_tokens=500.0,
+            benchmark_version="0.1.0",
+        )
+
+        with pytest.raises(ValueError, match="different totals"):
+            LeaderboardAggregate.from_runs([run1, run2])
+
     def test_load_empty_leaderboard_file(self, tmp_path):
         from bcbench.results.leaderboard import Leaderboard
 

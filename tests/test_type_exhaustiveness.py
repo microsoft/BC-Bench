@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from bcbench.dataset import BugFixEntry, NL2ALEntry
+from bcbench.dataset import BugFixEntry, CodeReviewEntry, NL2ALEntry
+from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentType, EvaluationCategory
 
 
@@ -42,7 +43,22 @@ def test_all_categories_have_aggregate_classes():
 def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry):
     for category in EvaluationCategory:
         entry_cls = category.entry_class
-        entry = sample_nl2al_entry if entry_cls is NL2ALEntry else entry_cls.model_validate(sample_dataset_entry_with_problem_statement.model_dump(by_alias=True))
+        if entry_cls == CodeReviewEntry:
+            # CodeReviewEntry has a different schema — test separately
+            entry = CodeReviewEntry(
+                instance_id=sample_dataset_entry_with_problem_statement.instance_id,
+                repo=sample_dataset_entry_with_problem_statement.repo,
+                base_commit=sample_dataset_entry_with_problem_statement.base_commit,
+                created_at=sample_dataset_entry_with_problem_statement.created_at,
+                environment_setup_version=sample_dataset_entry_with_problem_statement.environment_setup_version,
+                patch=sample_dataset_entry_with_problem_statement.patch,
+                expected_comments=[ReviewComment(file="test.al", line_start=1, body="Test comment", severity=Severity.MEDIUM)],
+            )
+        elif entry_cls is NL2ALEntry:
+            entry = sample_nl2al_entry
+        else:
+            # Reconstruct entry as the category-specific type so get_expected_output() works
+            entry = entry_cls.model_validate(sample_dataset_entry_with_problem_statement.model_dump(by_alias=True))
 
         input_text = entry.get_task()
         expected_output = entry.get_expected_output()
