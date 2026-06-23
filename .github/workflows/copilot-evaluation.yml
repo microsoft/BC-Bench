@@ -121,7 +121,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@1.0.63
+        run: npm install -g @github/copilot@1.0.39
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
