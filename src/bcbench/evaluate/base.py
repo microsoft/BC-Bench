@@ -71,6 +71,23 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         """
         raise NotImplementedError()
 
+    def max_agent_attempts(self) -> int:
+        """Total number of agent attempts (including the first).
+
+        Defaults to 1 (no retry). Pipelines whose agents suffer from transient failures (e.g. a hard
+        wall-clock timeout) can override this to retry. Kept as a method so subclasses can source the
+        value from configuration.
+        """
+        return 1
+
+    def agent_produced_output(self, context: EvaluationContext[E]) -> bool:
+        """Return whether the agent produced any usable output on the last attempt.
+
+        Used by ``execute()`` to decide whether an empty (no-change) run is worth retrying. Defaults
+        to ``True`` so pipelines that do not distinguish empty output are never retried on this basis.
+        """
+        return True
+
     def execute(
         self,
         context: EvaluationContext[E],
@@ -81,24 +98,43 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         Executes setup, runs agent, evaluates results, and saves outcomes.
         Result creation and error handling is now done explicitly within evaluate().
 
+        The agent step is retried up to ``max_agent_attempts()`` times, but only on transient
+        outcomes — an agent timeout or empty output. Each retry re-runs ``setup()`` for a clean
+        workspace. The final attempt's outcome is the one that is evaluated/persisted.
+
         Args:
             context: Evaluation context with configuration
             agent_runner: Function that runs the specific agent and returns (AgentMetrics, ExperimentConfiguration)
         """
-        self.setup(context)
+        max_attempts = self.max_agent_attempts()
 
-        try:
-            self.run_agent(context, agent_runner)
-        except AgentTimeoutError as e:
-            context.metrics = e.metrics
-            context.experiment = e.config
-            result = BaseEvaluationResult.create_agent_timeout_failure(context)
-            self.save_result(context, result)
-            logger.info("Agent timed out during execution, counting as failure.")
-            return
-        finally:
+        for attempt in range(1, max_attempts + 1):
+            is_last_attempt = attempt == max_attempts
+            self.setup(context)
+
+            try:
+                self.run_agent(context, agent_runner)
+            except AgentTimeoutError as e:
+                if not is_last_attempt:
+                    logger.warning(f"Agent timed out for {context.entry.instance_id} (attempt {attempt}/{max_attempts}); retrying.")
+                    continue
+                context.metrics = e.metrics
+                context.experiment = e.config
+                logger.info(f"Agent metrics: {context.metrics}")
+                logger.info(f"Experiment configuration: {context.experiment}")
+                result = BaseEvaluationResult.create_agent_timeout_failure(context)
+                self.save_result(context, result)
+                logger.info("Agent timed out during execution, counting as failure.")
+                return
+
             logger.info(f"Agent metrics: {context.metrics}")
             logger.info(f"Experiment configuration: {context.experiment}")
+
+            if not is_last_attempt and not self.agent_produced_output(context):
+                logger.warning(f"Agent produced no output for {context.entry.instance_id} (attempt {attempt}/{max_attempts}); retrying.")
+                continue
+
+            break
 
         self.evaluate(context)
 

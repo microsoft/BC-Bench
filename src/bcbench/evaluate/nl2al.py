@@ -4,6 +4,7 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import EmptyDiffError
@@ -14,6 +15,7 @@ from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
+_config = get_config()
 
 __all__ = ["NL2ALPipeline"]
 
@@ -51,6 +53,21 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
 
     def setup(self, context: EvaluationContext[NL2ALEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
+
+    def max_agent_attempts(self) -> int:
+        return _config.retry.nl2al_agent_attempts
+
+    def agent_produced_output(self, context: EvaluationContext[NL2ALEntry]) -> bool:
+        """An nl2al attempt produced output only if the agent generated a non-empty *.al diff.
+
+        A timed-out or no-op bcal run leaves the scaffold unchanged; treating that as "no output"
+        lets ``execute()`` retry it instead of scoring an empty submission against every assertion.
+        """
+        try:
+            stage_and_get_diff(context.repo_path)
+        except EmptyDiffError:
+            return False
+        return True
 
     def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: Callable) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):

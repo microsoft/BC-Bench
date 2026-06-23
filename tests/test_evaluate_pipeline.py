@@ -53,6 +53,89 @@ def _read_only_result(ctx: EvaluationContext[BugFixEntry]) -> BaseEvaluationResu
     return BaseEvaluationResult.from_json(json.loads(payload[0]))
 
 
+class _RetryStubPipeline(EvaluationPipeline[BugFixEntry]):
+    """Stub that drives the retry loop with per-attempt outcomes.
+
+    ``run_agent_outcomes[i]`` is raised on attempt i when it is an Exception, otherwise the agent
+    "succeeds". ``produced_output[i]`` is the value returned by ``agent_produced_output`` after a
+    successful attempt i (defaults to True when not supplied).
+    """
+
+    def __init__(self, *, attempts: int, run_agent_outcomes: list[Exception | None] | None = None, produced_output: list[bool] | None = None) -> None:
+        self._attempts = attempts
+        self._run_agent_outcomes = list(run_agent_outcomes or [])
+        self._produced_output = list(produced_output or [])
+        self.setup_count = 0
+        self.run_agent_count = 0
+        self.evaluate_count = 0
+
+    def max_agent_attempts(self) -> int:
+        return self._attempts
+
+    def setup_workspace(self, entry: BugFixEntry, repo_path: Path) -> None:
+        pass
+
+    def setup(self, context: EvaluationContext[BugFixEntry]) -> None:
+        self.setup_count += 1
+
+    def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: Callable) -> None:
+        idx = self.run_agent_count
+        self.run_agent_count += 1
+        outcome = self._run_agent_outcomes[idx] if idx < len(self._run_agent_outcomes) else None
+        if isinstance(outcome, Exception):
+            raise outcome
+        context.metrics, context.experiment = agent_runner(context)
+
+    def agent_produced_output(self, context: EvaluationContext[BugFixEntry]) -> bool:
+        idx = self.run_agent_count - 1
+        return self._produced_output[idx] if idx < len(self._produced_output) else True
+
+    def evaluate(self, context: EvaluationContext[BugFixEntry]) -> None:
+        self.evaluate_count += 1
+
+
+class TestExecuteRetry:
+    def test_retries_on_timeout_then_succeeds(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        timeout = AgentTimeoutError("transient timeout", metrics=AgentMetrics(execution_time=900.0), config=ExperimentConfiguration())
+        pipeline = _RetryStubPipeline(attempts=2, run_agent_outcomes=[timeout, None])
+
+        pipeline.execute(ctx, _noop_runner)
+
+        assert pipeline.run_agent_count == 2
+        assert pipeline.setup_count == 2  # workspace is reset before the retry
+        assert pipeline.evaluate_count == 1
+
+    def test_persists_timeout_after_exhausting_retries(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        timeout = AgentTimeoutError("persistent timeout", metrics=AgentMetrics(execution_time=900.0), config=ExperimentConfiguration())
+        pipeline = _RetryStubPipeline(attempts=2, run_agent_outcomes=[timeout, timeout])
+
+        pipeline.execute(ctx, _noop_runner)
+
+        assert pipeline.run_agent_count == 2
+        assert pipeline.evaluate_count == 0
+        assert _read_only_result(ctx).timeout is True
+
+    def test_retries_on_empty_output_then_succeeds(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        pipeline = _RetryStubPipeline(attempts=2, produced_output=[False])
+
+        pipeline.execute(ctx, _noop_runner)
+
+        assert pipeline.run_agent_count == 2
+        assert pipeline.evaluate_count == 1
+
+    def test_no_retry_when_first_attempt_produces_output(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path)
+        pipeline = _RetryStubPipeline(attempts=2, produced_output=[True])
+
+        pipeline.execute(ctx, _noop_runner)
+
+        assert pipeline.run_agent_count == 1
+        assert pipeline.evaluate_count == 1
+
+
 class TestExecuteHappyPath:
     def test_runs_setup_then_agent_then_evaluate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
