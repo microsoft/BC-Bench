@@ -15,6 +15,3 @@ Added \ProdOFactboxMgmtShowsDataAfterProdOrderFinished\ in codeunit 139989 — v
 Fixes [AB#634953](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/634953)
 
 :robot: Generated with GitHub Copilot
-
-
-

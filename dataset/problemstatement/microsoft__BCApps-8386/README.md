@@ -32,8 +32,3 @@ Main only — rare upgrade-window race condition with a self-service mitigation 
 
 #### Work Item(s)
 Fixes [AB#637250](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_workitems/edit/637250)
-
-
-
-
-
