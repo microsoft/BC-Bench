@@ -13,7 +13,7 @@ on:
         type: choice
         options:
           - "claude-sonnet-4-6"
-          - "claude-opus-4-7"
+          - "claude-opus-4-8"
           - "claude-haiku-4-5"
       category:
         description: "Evaluation category to run"
@@ -30,6 +30,11 @@ on:
         type: boolean
       al-mcp:
         description: "Enable AL MCP server"
+        required: false
+        default: false
+        type: boolean
+      al-lsp:
+        description: "Enable AL LSP server"
         required: false
         default: false
         type: boolean
@@ -101,13 +106,14 @@ jobs:
           node-version: 24
 
       - name: Install AL Tool
-        if: ${{ inputs.al-mcp }}
+        if: ${{ inputs.al-mcp || inputs.al-lsp }}
+        shell: pwsh
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.36.64936-beta
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.116
+        run: npm install -g @anthropic-ai/claude-code@2.1.160
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
@@ -122,7 +128,8 @@ jobs:
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            ${{ inputs.al-mcp && '--al-mcp' || '' }}
+            ${{ inputs.al-mcp && '--al-mcp' || '' }} `
+            ${{ inputs.al-lsp && '--al-lsp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -157,4 +164,4 @@ jobs:
       workflow-file: claude-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}"}

@@ -41,6 +41,7 @@ class PathConfig:
     leaderboard_dir: Path
     agent_share_dir: Path
     hook_script_path: Path
+    bc_artifacts_cache: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -56,6 +57,7 @@ class PathConfig:
             leaderboard_dir=root / "docs" / "_data",
             agent_share_dir=agent_share_dir,
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
+            bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
         )
 
 
@@ -67,6 +69,7 @@ class TimeoutConfig:
     build_app: int
     test_execution: int
     agent_execution: int
+    bcal_execution: int
 
     @classmethod
     def default(cls) -> TimeoutConfig:
@@ -76,6 +79,7 @@ class TimeoutConfig:
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
+            bcal_execution=15 * 60,  # 15 minutes for bcal CLI; matches the GH Actions step `timeout-minutes` cap.
         )
 
 
@@ -95,6 +99,8 @@ class FilePatternConfig:
     tool_usage_log: str
     copilot_hooks_config: str
     claude_settings_local: str
+    alpackages_dirname: str
+    nl2al_export_subdir: str
 
     @classmethod
     def default(cls) -> FilePatternConfig:
@@ -112,6 +118,8 @@ class FilePatternConfig:
             tool_usage_log="tool_usage.jsonl",
             copilot_hooks_config="bcbench-hooks.json",
             claude_settings_local="settings.local.json",
+            alpackages_dirname=".alpackages",
+            nl2al_export_subdir="src",
         )
 
 

@@ -77,7 +77,7 @@ Trigger the evaluation workflow from the **Actions** tab:
 
 - **Workflow:** `Evaluation with GitHub Copilot` or `Evaluation with Claude Code`
 - **`test-run`:** `true` (default — runs 4 entries, ~10 min)
-- **`model`**, **`category`**, **`al-mcp`**: as needed
+- **`model`**, **`category`**, **`al-mcp`**, **`al-lsp`**: as needed
 
 This catches configuration mistakes cheaply. Do not skip it.
 

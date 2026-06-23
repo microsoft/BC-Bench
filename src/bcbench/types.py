@@ -13,11 +13,13 @@ if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
     from bcbench.evaluate.base import EvaluationPipeline
     from bcbench.results.base import BaseEvaluationResult
+    from bcbench.results.leaderboard import LeaderboardAggregate
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
     "AgentMetrics",
     "AgentType",
+    "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
@@ -80,6 +82,9 @@ class ExperimentConfiguration(BaseModel):
     # MCP server names used in experiment (if any)
     mcp_servers: list[str] | None = None
 
+    # Whether the AL LSP server was enabled for this experiment
+    al_lsp_enabled: bool = False
+
     # Custom instructions enabled in experiment
     custom_instructions: bool = False
 
@@ -95,7 +100,7 @@ class ExperimentConfiguration(BaseModel):
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
+        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None
 
 
 class AgentType(StrEnum):
@@ -125,8 +130,7 @@ class AgentType(StrEnum):
 class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
-    # CODE_REVIEW = "code-review"
-    # EVENT_REQUEST = "event-request"
+    NL2AL = "nl2al"
 
     @property
     def dataset_path(self) -> Path:
@@ -137,23 +141,28 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.TEST_GENERATION:
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
+            case EvaluationCategory.NL2AL:
+                return get_config().paths.dataset_dir / "nl2al.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, NL2ALEntry, TestGenEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
+            case EvaluationCategory.NL2AL:
+                return NL2ALEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
+        from bcbench.results.base import JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.testgeneration import TestGenerationResult
 
@@ -162,31 +171,52 @@ class EvaluationCategory(StrEnum):
                 return BugFixResult
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationResult
+            case EvaluationCategory.NL2AL:
+                return JudgeBasedEvaluationResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
-        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
+        from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedEvaluationResultSummary
+            case EvaluationCategory.NL2AL:
+                return JudgeBasedEvaluationResultSummary
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def aggregate_class(self) -> type[LeaderboardAggregate]:
+        """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
+
+        match self:
+            case EvaluationCategory.BUG_FIX:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.TEST_GENERATION:
+                return ExecutionBasedLeaderboardAggregate
+            case EvaluationCategory.NL2AL:
+                return JudgeBasedLeaderboardAggregate
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, TestGenerationPipeline
+        from bcbench.evaluate import BugFixPipeline, NL2ALPipeline, TestGenerationPipeline
 
         match self:
             case EvaluationCategory.BUG_FIX:
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
+            case EvaluationCategory.NL2AL:
+                return NL2ALPipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -202,6 +232,8 @@ class EvaluationCategory(StrEnum):
                 return ["resolution_rate", "build_rate"]
             case EvaluationCategory.TEST_GENERATION:
                 return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
+            case EvaluationCategory.NL2AL:
+                return ["lm_checklist"]
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -211,6 +243,8 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
+            case EvaluationCategory.NL2AL:
+                return "test_passed"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -220,6 +254,8 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return True
+            case EvaluationCategory.NL2AL:
+                return False
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -232,6 +268,8 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "GitHub-BCBench"
+            case EvaluationCategory.NL2AL:
+                return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -276,3 +314,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
         if self.container is None:
             raise ValueError(f"Container configuration is required for {self.category.value} evaluation")
         return self.container
+
+
+class BCalLLMBackend(StrEnum):
+    AZURE_OPENAI = "azure-openai"
+    EXTERNAL_COMMAND = "external-command"

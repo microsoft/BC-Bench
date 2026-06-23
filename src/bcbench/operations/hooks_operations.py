@@ -37,7 +37,7 @@ def _setup_copilot_hooks(repo_path: Path, script_path: str, tool_log_path: Path)
             "preToolUse": [
                 {
                     "type": "command",
-                    "powershell": f'powershell -ExecutionPolicy Bypass -File "{script_path}"',
+                    "command": f'pwsh -ExecutionPolicy Bypass -File "{script_path}"',
                     "env": {"BCBENCH_TOOL_LOG": str(tool_log_path.resolve())},
                     "timeoutSec": 5,
                 }
@@ -68,7 +68,7 @@ def _setup_claude_hooks(repo_path: Path, script_path: str, tool_log_path: Path) 
                 "hooks": [
                     {
                         "type": "command",
-                        "command": f'BCBENCH_TOOL_LOG="{tool_log_resolved}" powershell -ExecutionPolicy Bypass -File "{script_path}"',
+                        "command": f'BCBENCH_TOOL_LOG="{tool_log_resolved}" pwsh -ExecutionPolicy Bypass -File "{script_path}"',
                     }
                 ],
             }
