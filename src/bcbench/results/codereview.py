@@ -14,12 +14,6 @@ from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
 from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import EvaluationContext
 
-
-def _resolve_domain(context: "EvaluationContext") -> str:
-    domain = context.entry.metadata.area
-    return domain if isinstance(domain, str) and domain else "unknown"
-
-
 _METRIC_EXPLANATIONS = """\
 <details>
 <summary>📖 How to read these metrics</summary>
@@ -129,7 +123,6 @@ def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, Revie
 class CodeReviewResult(BaseEvaluationResult):
     """Result for the code-review category."""
 
-    domain: str = "unknown"
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
     line_tolerance: int = Field(ge=0)
@@ -156,7 +149,6 @@ class CodeReviewResult(BaseEvaluationResult):
         line_tolerance: int,
         matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
     ) -> Self:
-        domain = _resolve_domain(context)
         if matched_pairs is None:
             matched_pairs = match_comments(expected_comments, generated_comments, line_tolerance)
         matched_count = len(matched_pairs)
@@ -164,7 +156,6 @@ class CodeReviewResult(BaseEvaluationResult):
 
         return cls(
             **cls._base_fields(context),
-            domain=domain,
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
@@ -191,7 +182,6 @@ class CodeReviewResult(BaseEvaluationResult):
         """Result for output that could not be parsed into a review — scored zero."""
         return cls(
             **cls._base_fields(context),
-            domain=_resolve_domain(context),
             output=output,
             expected_comments=expected_comments,
             line_tolerance=0,
@@ -217,8 +207,9 @@ class CodeReviewResult(BaseEvaluationResult):
 
     @property
     def display_row(self) -> dict[str, str]:
+        domains = sorted({comment.domain for comment in self.expected_comments if comment.domain})
         return {
-            "Domain": self.domain,
+            "Domain": ", ".join(domains) if domains else "unknown",
             "Generated": str(len(self.generated_comments)),
             "Matched": str(self.matched_comment_count),
             "Expected": str(len(self.expected_comments)),

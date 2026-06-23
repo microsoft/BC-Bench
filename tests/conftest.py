@@ -194,13 +194,10 @@ def create_codereview_result(
     line_tolerance: int = 5,
     metrics: AgentMetrics | None = None,
     domain: str | None = None,
-    metadata_area: str | None = None,
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
     entry = create_codereview_entry(instance_id=instance_id, expected_comments=expected_comments, domain=domain)
-    if metadata_area:
-        entry = entry.model_copy(update={"metadata": entry.metadata.model_copy(update={"area": metadata_area})})
     context = EvaluationContext[CodeReviewEntry](
         entry=entry,
         repo_path=Path(),

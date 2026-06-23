@@ -282,16 +282,6 @@ class TestCodeReviewResult:
             "F1": "0.50",
         }
 
-    def test_result_uses_explicit_domain_from_entry(self):
-        result = create_codereview_result(output="[]", expected_comments=[], domain="performance")
-
-        assert result.domain == "performance"
-
-    def test_result_falls_back_to_metadata_area_domain(self):
-        result = create_codereview_result(output="not-json", expected_comments=[], metadata_area="security")
-
-        assert result.domain == "security"
-
     def test_result_leaves_generated_comment_domain_unset_when_absent(self):
         result = create_codereview_result(
             output='[{"file": "src/app.al", "line_start": 5, "body": "Issue", "severity": "medium"}]',
