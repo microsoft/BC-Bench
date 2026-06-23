@@ -41,15 +41,8 @@ DEFAULT_MODEL = "claude-opus-4.8"
 
 PROMPT_TEMPLATE = """/review
 
-Review ONLY the current working-tree AL file changes for this evaluation entry.
-Use the working tree diff only (git diff HEAD), and focus on changed *.al files.
-Do NOT review committed history or the HEAD commit, and do NOT compare commits (for example, do NOT use HEAD~1..HEAD or origin/main comparisons).
-
-Save findings to a file named "review.json" in the repository root.
-The file must contain valid JSON with a top-level object named findings.
-Each finding must include: filePath, lineNumber, severity, issue, recommendation, domain, suggestedCode
-Allowed severity values are: critical, high, medium, low.
-If there are no findings, write an empty findings list.
+Review only the uncommitted working-tree changes (git diff HEAD); do not compare commits such as HEAD~1..HEAD or origin/main.
+Save the review findings to a file named "review.json" in the repository root (write an empty array if there are no findings).
 """
 
 

@@ -9,7 +9,7 @@ from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
 from bcbench.dataset import ReviewComment
-from bcbench.results.base import BaseEvaluationResult, natural_sort_key
+from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
 from bcbench.results.summary import EvaluationResultSummary
 from bcbench.types import EvaluationContext
@@ -226,10 +226,6 @@ class CodeReviewResult(BaseEvaluationResult):
             "Recall": f"{self.recall:.2f}",
             "F1": f"{self.f1:.2f}",
         }
-
-    @property
-    def sort_key(self) -> tuple[object, ...]:
-        return (self.domain.lower(), natural_sort_key(self.instance_id))
 
 
 class CodeReviewResultSummary(EvaluationResultSummary):

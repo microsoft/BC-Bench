@@ -33,11 +33,9 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
     def setup_workspace(self, entry: CodeReviewEntry, repo_path: Path) -> None:
         """Setup workspace for code review by applying the entry patch as local changes."""
         setup_repo_prebuild(entry, repo_path)
-        if not entry.patch.strip():
-            logger.warning(f"Entry {entry.instance_id} has empty patch; review will run on clean workspace")
-            return
-
         apply_patch(repo_path, entry.patch, f"{entry.instance_id} review patch")
+        # Mark newly added files as intent-to-add so they appear in `git diff HEAD`;
+        # all dataset patches are new-file diffs, which are otherwise untracked and invisible to the agent.
         if paths := _patched_paths(entry.patch):
             subprocess.run(
                 ["git", "add", "-N", "--", *paths],

@@ -1,7 +1,6 @@
 """Base evaluation result class with shared metrics across all evaluation categories."""
 
 import json
-import re
 from pathlib import Path
 from typing import Any, Self
 
@@ -11,15 +10,6 @@ from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
-
-
-def natural_sort_key(value: str) -> tuple[object, ...]:
-    """Split a string into a tuple suitable for human-friendly sorting.
-
-    "test__name-2" sorts before "test__name-10" because numeric runs are compared as integers.
-    Non-numeric segments are lowercased for case-insensitive ordering.
-    """
-    return tuple(int(segment) if segment.isdigit() else segment.lower() for segment in re.split(r"(\d+)", value))
 
 
 class BaseEvaluationResult(BaseModel):
