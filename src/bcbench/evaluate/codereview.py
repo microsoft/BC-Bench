@@ -91,6 +91,5 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             f"incorrect={result.incorrect_comment_count}, missed={result.missed_comment_count}, "
             f"precision={result.precision:.3f}, recall={result.recall:.3f}, f1={result.f1:.3f}"
         )
-        for comment in result.generated_comments:
-            logger.debug(f"  {comment}")
+
         self.save_result(context, result)
