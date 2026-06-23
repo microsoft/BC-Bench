@@ -108,8 +108,7 @@ jobs:
             --use-capi ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
 
       - name: Update leaderboard in a new branch
-        # WIP for code-review category
-        if: ${{ !inputs.mock && !inputs.skip-leaderboard && inputs.category != 'code-review' }}
+        if: ${{ !inputs.mock && !inputs.skip-leaderboard }}
         run: |
           git fetch origin main
 
