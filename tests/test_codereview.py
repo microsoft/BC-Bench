@@ -273,7 +273,6 @@ class TestCodeReviewResult:
         result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
 
         assert result.display_row == {
-            "Domain": "unknown",
             "Generated": "2",
             "Matched": "1",
             "Expected": "2",

@@ -207,9 +207,7 @@ class CodeReviewResult(BaseEvaluationResult):
 
     @property
     def display_row(self) -> dict[str, str]:
-        domains = sorted({comment.domain for comment in self.expected_comments if comment.domain})
         return {
-            "Domain": ", ".join(domains) if domains else "unknown",
             "Generated": str(len(self.generated_comments)),
             "Matched": str(self.matched_comment_count),
             "Expected": str(len(self.expected_comments)),
