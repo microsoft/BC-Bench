@@ -1,0 +1,3308 @@
+{
+  "articles": [
+    {
+      "path": "microsoft/knowledge/performance/addloadfields-in-report-onpredataitem.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "report",
+        "addloadfields",
+        "onpredataitem",
+        "dataitem",
+        "partial-record",
+        "layout"
+      ],
+      "title": "In reports, declare the fields the layout needs with AddLoadFields",
+      "description": "Reports iterate dataitems on potentially large source tables and pipe rows into a layout."
+    },
+    {
+      "path": "microsoft/knowledge/performance/admin-and-migration-pages-tolerate-lower-perf.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "admin-page",
+        "migration",
+        "wizard",
+        "hybrid",
+        "permissions",
+        "lower-severity"
+      ],
+      "title": "Admin and migration pages tolerate lower performance discipline",
+      "description": "Some pages run rarely and against small datasets, and the upstream guidance explicitly calls for treating them as lower severity."
+    },
+    {
+      "path": "microsoft/knowledge/performance/apply-filters-before-iterating.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "setrange",
+        "setfilter",
+        "filter",
+        "loop",
+        "early",
+        "dataset"
+      ],
+      "title": "Apply SetRange/SetFilter before iterating, not as an if-test inside the loop",
+      "description": "A `SetRange` or `SetFilter` placed before `FindSet` narrows the result set at the database."
+    },
+    {
+      "path": "microsoft/knowledge/performance/apply-guards-before-get.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "get",
+        "guard",
+        "early-exit",
+        "conditional",
+        "lookup",
+        "wasted-query"
+      ],
+      "title": "Apply early-exit guards before calling Get",
+      "description": "A `Get` (or any other database call) executed before a guard that may exit the procedure does a round-trip the procedure never uses."
+    },
+    {
+      "path": "microsoft/knowledge/performance/avoid-commit-inside-loops.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "commit",
+        "loop",
+        "transaction",
+        "lock",
+        "checkpoint",
+        "codeunit-run"
+      ],
+      "title": "Do not Commit inside loops",
+      "description": "Commit ends the current write transaction."
+    },
+    {
+      "path": "microsoft/knowledge/performance/avoid-get-inside-loop-on-large-table.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "n-plus-one",
+        "get",
+        "findfirst",
+        "loop",
+        "inner-lookup",
+        "large-table"
+      ],
+      "title": "Avoid Get / FindFirst inside a loop on a large inner table",
+      "description": "A `Get` or `FindFirst` against a different record inside a loop body produces one database round-trip per iteration \u2014 the classic N+1 pattern."
+    },
+    {
+      "path": "microsoft/knowledge/performance/avoid-recordref-in-hot-loop.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "recordref",
+        "fieldref",
+        "hot-loop",
+        "typed-record",
+        "metadata"
+      ],
+      "title": "Avoid RecordRef / FieldRef in hot loops when a typed record fits",
+      "description": "`RecordRef` and `FieldRef` are slower than direct typed record access \u2014 the platform resolves the table and field at runtime instead of at compile time."
+    },
+    {
+      "path": "microsoft/knowledge/performance/avoid-redundant-get-when-record-already-loaded.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "get",
+        "onaftergetrecord",
+        "redundant",
+        "page-trigger",
+        "rec",
+        "already-loaded"
+      ],
+      "title": "Do not Get the record the page already loaded",
+      "description": "A list or card page's `OnAfterGetRecord` trigger fires *because* the platform has already fetched a row into `Rec`."
+    },
+    {
+      "path": "microsoft/knowledge/performance/avoid-user-prompts-inside-transactions.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "confirm",
+        "strmenu",
+        "dialog",
+        "transaction",
+        "lock",
+        "user-interaction"
+      ],
+      "title": "Do not hold locks while waiting for the user",
+      "description": "A `Confirm`, `StrMenu`, modal page, or other user prompt issued from inside a write transaction stalls the transaction \u2014 and therefore every lock it holds \u2014 until the user responds."
+    },
+    {
+      "path": "microsoft/knowledge/performance/calcsums-instead-of-calcfields-in-loop.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "calcfields",
+        "calcsums",
+        "loop",
+        "flowfield",
+        "n-plus-one",
+        "aggregation"
+      ],
+      "title": "Use CalcSums to aggregate, not CalcFields inside a loop",
+      "description": "`CalcFields` materializes FlowField values for one record."
+    },
+    {
+      "path": "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "codeunit-run",
+        "atomic",
+        "rollback",
+        "transaction",
+        "sub-transaction",
+        "try-pattern",
+        "implicit-commit"
+      ],
+      "title": "Use Codeunit.Run to bound an atomic sub-operation",
+      "description": "`Codeunit.Run(ID)` is the AL-idiomatic way to run a unit of work as an atomic sub-operation with its own transactional boundary."
+    },
+    {
+      "path": "microsoft/knowledge/performance/codeunit-run-requires-prior-commit-inside-transaction.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "codeunit-run",
+        "commit",
+        "write-transaction",
+        "nesting",
+        "loop",
+        "runtime-error"
+      ],
+      "title": "Commit before Codeunit.Run when the caller already holds a write transaction",
+      "description": "`Codeunit.Run` cannot nest inside an open write transaction."
+    },
+    {
+      "path": "microsoft/knowledge/performance/do-not-locktable-in-read-only-procedure.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "locktable",
+        "read-only",
+        "helper",
+        "contention",
+        "transaction"
+      ],
+      "title": "Do not LockTable in a read-only procedure",
+      "description": "`LockTable` is a transaction-wide signal: from the call onward, every read against that table in the same transaction acquires `UPDLOCK`."
+    },
+    {
+      "path": "microsoft/knowledge/performance/do-not-modify-in-onaftergetrecord.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "page-trigger",
+        "onaftergetrecord",
+        "modify",
+        "display",
+        "scroll",
+        "db-write"
+      ],
+      "title": "Do not Modify inside OnAfterGetRecord",
+      "description": "A list page's `OnAfterGetRecord` fires once per visible row, every time the user scrolls, sorts, or refreshes."
+    },
+    {
+      "path": "microsoft/knowledge/performance/do-not-remove-sourcetabletemporary-from-api-page.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "sourcetabletemporary",
+        "api-page",
+        "temporary",
+        "persistent",
+        "in-memory"
+      ],
+      "title": "Removing SourceTableTemporary on an API page switches it from in-memory to persistent",
+      "description": "`SourceTableTemporary = true` on a page makes the page's record buffer in-memory only \u2014 reads and writes do not touch SQL."
+    },
+    {
+      "path": "microsoft/knowledge/performance/findset-true-applies-updlock-on-read.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "findset",
+        "updlock",
+        "readisolation",
+        "locking",
+        "modify",
+        "obsolete-syntax"
+      ],
+      "title": "FindSet(true) applies UpdLock on the read; the two-parameter form is obsolete",
+      "description": "`FindSet()` and `FindSet(false)` are read-only \u2014 no locking."
+    },
+    {
+      "path": "microsoft/knowledge/performance/flowfield-source-key-needs-sumindexfields.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "flowfield",
+        "sumindexfields",
+        "sift",
+        "key",
+        "calcformula",
+        "aa0232"
+      ],
+      "title": "A FlowField needs a source-table key that covers its CalcFormula",
+      "description": "A FlowField is computed by SQL on demand."
+    },
+    {
+      "path": "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "event-subscriber",
+        "guard",
+        "db-call",
+        "frequently-fired",
+        "validate"
+      ],
+      "title": "Guard event subscribers with cheap checks before any database call",
+      "description": "Event subscribers fire on every event matching their signature \u2014 for `OnAfterValidateEvent` on a hot field like `Sales Line.Quantity`, that is every quantity edit by every user."
+    },
+    {
+      "path": "microsoft/knowledge/performance/maintainsqlindex-false-breaks-flowfield-sift.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "maintainsqlindex",
+        "key",
+        "sift",
+        "flowfield",
+        "sum",
+        "count",
+        "table-scan"
+      ],
+      "title": "MaintainSQLIndex = false on a key disables SIFT for FlowFields that depend on it",
+      "description": "`MaintainSQLIndex = false` on a key tells the platform not to materialize that key as a SQL index."
+    },
+    {
+      "path": "microsoft/knowledge/performance/pair-findset-with-next-loop.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "findset",
+        "findfirst",
+        "findlast",
+        "get",
+        "next",
+        "repeat-until",
+        "aa0181",
+        "aa0233"
+      ],
+      "title": "Use FindSet with repeat..Next; do not pair FindFirst/FindLast/Get with Next",
+      "description": "Two CodeCop rules carve out the loop pattern."
+    },
+    {
+      "path": "microsoft/knowledge/performance/pass-false-to-insert-when-trigger-not-needed.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "insert",
+        "modify",
+        "delete",
+        "trigger",
+        "run-trigger",
+        "write-parameters"
+      ],
+      "title": "Pass false to Insert/Modify/Delete when the table triggers do not need to fire",
+      "description": "`Insert(true)`, `Modify(true)`, and `Delete(true)` run the table's `OnInsert`/`OnModify`/`OnDelete` trigger; the `(false)` form skips it."
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-dictionary-over-temporary-table-for-lookups.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "dictionary",
+        "temporary-table",
+        "lookup",
+        "o-of-1",
+        "key-lookup"
+      ],
+      "title": "Prefer a Dictionary over a temporary table for pure lookups",
+      "description": "A temporary table supports a full record API \u2014 filters, iteration, multi-field keys \u2014 but a pure key\u2192value lookup pays for plumbing it does not use."
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-modifyall-over-per-row-modify.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "modifyall",
+        "deleteall",
+        "bulk",
+        "loop",
+        "modify",
+        "set-based"
+      ],
+      "title": "Use ModifyAll / DeleteAll instead of per-row Modify / Delete in a loop",
+      "description": "`ModifyAll` and `DeleteAll` are the bulk APIs."
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-readisolation-over-locktable-for-reads.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "readisolation",
+        "locktable",
+        "updlock",
+        "read-only",
+        "transaction-scope",
+        "isolation-level"
+      ],
+      "title": "Prefer ReadIsolation over LockTable for read-only scenarios",
+      "description": "`LockTable` and `ReadIsolation` solve different problems with different blast radii."
+    },
+    {
+      "path": "microsoft/knowledge/performance/production-scale-tables-warrant-extra-analysis.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "table-size",
+        "hot-table",
+        "ledger-entry",
+        "item",
+        "customer",
+        "sales-line",
+        "scale"
+      ],
+      "title": "Production-scale tables warrant concrete performance analysis",
+      "description": "Some Business Central tables routinely reach sizes where access patterns matter much more than they do on a generic table."
+    },
+    {
+      "path": "microsoft/knowledge/performance/setcurrentkey-aligns-key-with-filters.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "setcurrentkey",
+        "key",
+        "index",
+        "filter",
+        "sort"
+      ],
+      "title": "Pick a key whose fields cover the filter and sort with SetCurrentKey",
+      "description": "The platform chooses a key for each record access."
+    },
+    {
+      "path": "microsoft/knowledge/performance/singleton-setup-tables-need-no-access-optimization.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "singleton",
+        "setup-table",
+        "sales-receivables-setup",
+        "general-ledger-setup",
+        "setloadfields",
+        "bounded"
+      ],
+      "title": "Singleton setup tables hold one row; access-pattern optimization is wasted",
+      "description": "Business Central setup tables \u2014 `Sales & Receivables Setup`, `General Ledger Setup`, `FA Setup`, `Purchases & Payables Setup`, and the broader pattern of any `*Setup` table \u2014 hold at most one record per company."
+    },
+    {
+      "path": "microsoft/knowledge/performance/temporary-tables-have-no-database-cost.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "temporary-table",
+        "in-memory",
+        "findset",
+        "findfirst",
+        "get",
+        "no-db-cost"
+      ],
+      "title": "Temporary tables are in-memory; access-pattern rules do not apply",
+      "description": "A record declared `Temporary` (or a page with `SourceTableTemporary = true`) lives entirely in memory; reads and writes never reach SQL."
+    },
+    {
+      "path": "microsoft/knowledge/performance/triggers-and-media-field-regress-modifyall.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "modifyall",
+        "deleteall",
+        "regression",
+        "triggers",
+        "media",
+        "getglobaltabletriggermask",
+        "subscriber"
+      ],
+      "title": "Triggers, subscribers, and media fields can silently regress ModifyAll / DeleteAll",
+      "description": "`ModifyAll` and `DeleteAll` usually execute as single SQL statements, but the platform falls back to a fetch-then-row-by-row loop under specific conditions."
+    },
+    {
+      "path": "microsoft/knowledge/performance/understand-implicit-transaction-boundary.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "commit",
+        "transaction",
+        "implicit-commit",
+        "write-transaction",
+        "runtime",
+        "boundary"
+      ],
+      "title": "AL auto-commits when code execution completes",
+      "description": "In AL, write transactions are managed by the runtime, not by the developer."
+    },
+    {
+      "path": "microsoft/knowledge/performance/use-get-instead-of-findfirst-on-full-primary-key.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "get",
+        "findfirst",
+        "primary-key",
+        "setrange",
+        "lookup"
+      ],
+      "title": "Use Get when the full primary key is known; FindFirst is the wrong tool",
+      "description": "`Get(...)` is the direct primary-key lookup."
+    },
+    {
+      "path": "microsoft/knowledge/performance/use-isempty-for-existence-check.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "isempty",
+        "count",
+        "findfirst",
+        "existence-check",
+        "exists"
+      ],
+      "title": "Use IsEmpty for existence checks, not Count() or FindFirst()",
+      "description": "When the caller only needs to know whether any row matches a filter, `IsEmpty()` is the API designed for the question."
+    },
+    {
+      "path": "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "setloadfields",
+        "partial-record",
+        "normal-field",
+        "flowfield",
+        "get",
+        "findset"
+      ],
+      "title": "Use SetLoadFields to load only the fields the code reads",
+      "description": "`SetLoadFields(...)` declares the subset of normal fields the next read should materialize, \"reducing data read and transfer thereby improving performance significantly.\" Per the upstream guidance, \"the gains scale with the amount of rows read, so for loops that read many rows `SetLoadFields` is even more important.\" Primary-key fields, `SystemId`, and system audit fields are loaded automatically, \"and fields that are filtered on are also automatically included\" \u2014 those do not need to appear in the list."
+    },
+    {
+      "path": "microsoft/knowledge/performance/use-textbuilder-for-string-concatenation-in-loops.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "textbuilder",
+        "string-concatenation",
+        "loop",
+        "append",
+        "immutable-text"
+      ],
+      "title": "Use TextBuilder for many string concatenations, especially inside loops",
+      "description": "AL `Text` is immutable: each `Result += Piece;` allocates a new buffer and copies the previous content into it."
+    },
+    {
+      "path": "microsoft/knowledge/performance/use-tryfunction-for-error-catching-not-rollback.md",
+      "layer": "microsoft",
+      "domain": "performance",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "try-function",
+        "try-method",
+        "error-handling",
+        "rollback",
+        "atomic",
+        "exception",
+        "get-last-error",
+        "session-buffer"
+      ],
+      "title": "Use [TryFunction] for error catching, Codeunit.Run for atomic rollback",
+      "description": "`[TryFunction]` annotates a method so that errors raised inside it can be caught by the caller instead of propagating."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/avoid-strsubstno-prebuild-before-error.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "strsubstno",
+        "error",
+        "telemetry",
+        "pii",
+        "prebuild",
+        "text-variable"
+      ],
+      "title": "Do not pre-build an error string with `StrSubstNo` before calling `Error()`",
+      "description": "`StrSubstNo` returns a plain `Text` value with the substitutions already performed."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-is-table-field-property.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "data-classification",
+        "page-field",
+        "table-field",
+        "api-page",
+        "card-page",
+        "list-page"
+      ],
+      "title": "DataClassification is a table-field property, not a page-field property",
+      "description": "`DataClassification` is defined on table fields."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "data-classification",
+        "pii",
+        "gdpr",
+        "customer-content",
+        "table-field",
+        "under-classified"
+      ],
+      "title": "DataClassification is required on table fields containing sensitive data",
+      "description": "`DataClassification` is the AL property that tells the platform what kind of data a table field stores so that telemetry, GDPR data-subject requests, and the platform's audit surfaces can treat it correctly."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/error-direct-substitution-safe-for-telemetry.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "error",
+        "strsubstno",
+        "direct-substitution",
+        "telemetry",
+        "classification",
+        "label"
+      ],
+      "title": "`Error()` with direct substitution parameters is always safe for telemetry",
+      "description": "When `Error()` is called with a format string and direct substitution parameters (`%1`, `%2`, \u2026), the BC platform intercepts the call, inspects each parameter individually, and applies the `DataClassification` of the source field \u2014 stripping or masking sensitive data before writing the message to telemetry."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/error-vs-message-telemetry-logging.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "error",
+        "message",
+        "confirm",
+        "notification",
+        "telemetry",
+        "logging",
+        "ui-dialog"
+      ],
+      "title": "Only `Error()` is logged to telemetry \u2014 `Message`, `Confirm`, `Notification` are not",
+      "description": "The privacy concern with dialog APIs is not what the signed-in user sees on the screen \u2014 it is what the platform writes to telemetry."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/featuretelemetry-customdimensions-no-pii.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "feature-telemetry",
+        "customdimensions",
+        "logusage",
+        "loguptake",
+        "logerror",
+        "pii",
+        "euii",
+        "eupi"
+      ],
+      "title": "`FeatureTelemetry` `CustomDimensions` follow the same privacy rules as `Session.LogMessage`",
+      "description": "`Codeunit \"Feature Telemetry\"` is the second telemetry surface in AL."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/flowfield-flowfilter-classification-systemmetadata.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "flowfield",
+        "flowfilter",
+        "data-classification",
+        "systemmetadata",
+        "calculated"
+      ],
+      "title": "FlowFields and FlowFilters are classified `SystemMetadata` automatically",
+      "description": "`FlowField` and `FlowFilter` are not stored fields \u2014 a FlowField is computed from a CalcFormula at read time and a FlowFilter is a transient filter scoped to the record variable."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/getlasterrortext-customer-content-in-errors.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "getlasterrortext",
+        "error",
+        "strsubstno",
+        "telemetry",
+        "customer-data",
+        "attachment"
+      ],
+      "title": "Treat `GetLastErrorText()` as potential customer content",
+      "description": "`GetLastErrorText()` returns the text of the last error that occurred in the context where it is called."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/in-memory-data-not-a-privacy-concern.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "in-memory",
+        "dictionary",
+        "list",
+        "temporary-table",
+        "variable",
+        "memory-dump"
+      ],
+      "title": "In-memory variables, dictionaries, lists and temporary tables are not a privacy concern",
+      "description": "AL runs in a managed server environment."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/migration-destination-classification.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "data-migration",
+        "hybridsl",
+        "hybridgp",
+        "hybridbc",
+        "destination-classification",
+        "ssn",
+        "tin"
+      ],
+      "title": "In data migration code, classify the destination \u2014 not the migration itself",
+      "description": "Migration codeunits such as `HybridSL`, `HybridGP`, and `HybridBC` exist to copy sensitive data \u2014 TINs, Federal IDs, social security numbers, financial records \u2014 from a source system into Business Central."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/no-pii-in-telemetry-message-string.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "telemetry",
+        "session-logmessage",
+        "strsubstno",
+        "pii",
+        "customer-data",
+        "employee-code",
+        "filename"
+      ],
+      "title": "Do not embed customer data in the telemetry message text",
+      "description": "`Session.LogMessage`'s message argument is a plain `Text`."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/page-display-is-not-a-privacy-concern.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "page",
+        "card",
+        "list",
+        "api",
+        "listpart",
+        "permission-system",
+        "display",
+        "ui-dialog"
+      ],
+      "title": "Displaying fields on a page (or in a UI dialog) is not a privacy concern",
+      "description": "Every page in Business Central \u2014 `Card`, `List`, `API`, `ListPart`, request pages \u2014 renders data to an authenticated user who has been granted permission to see it."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "privacy-notice",
+        "consent",
+        "http-client",
+        "outgoing-request",
+        "external-service",
+        "getprivacynoticeapprovalstate"
+      ],
+      "title": "Outgoing requests to external services require a Privacy Notice consent check",
+      "description": "Business Central ships a built-in Privacy Notice framework that the admin uses to grant or withhold per-integration consent for sending data to external services."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "privacy-notice-registrations",
+        "integration",
+        "register",
+        "exchange",
+        "onedrive",
+        "teams",
+        "notice-id"
+      ],
+      "title": "Register every new external integration with `Privacy Notice Registrations`",
+      "description": "`Codeunit \"Privacy Notice Registrations\"` is the registry of integrations whose consent state the platform tracks."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "tobeclassified",
+        "data-classification",
+        "release",
+        "appsource",
+        "development"
+      ],
+      "title": "Resolve every `ToBeClassified` before release",
+      "description": "`DataClassification = ToBeClassified` is the sentinel value the AL compiler accepts while a developer has not yet decided what a new field actually stores."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/session-logmessage-requires-dataclassification.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "session-logmessage",
+        "telemetry",
+        "data-classification",
+        "verbosity",
+        "telemetry-scope"
+      ],
+      "title": "Every `Session.LogMessage` call must specify `DataClassification`",
+      "description": "`Session.LogMessage` writes a record to the telemetry pipeline."
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "layer": "microsoft",
+      "domain": "privacy",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "data-classification",
+        "table-level",
+        "inheritance",
+        "override",
+        "cascading"
+      ],
+      "title": "Table-level DataClassification cascades to every field unless overridden",
+      "description": "`DataClassification` may be set at the table level."
+    },
+    {
+      "path": "microsoft/knowledge/security/al-has-no-built-in-htmlencode.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "html",
+        "xss",
+        "encoding",
+        "htmlencode",
+        "injection",
+        "email"
+      ],
+      "title": "AL has no built-in HtmlEncode \u2014 encode HTML output by hand or avoid it",
+      "description": "AL does not ship a built-in `HtmlEncode` (or equivalent) function."
+    },
+    {
+      "path": "microsoft/knowledge/security/commitbehavior-attribute-scopes-explicit-commits.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "commit-behavior",
+        "attribute",
+        "integration-event",
+        "subscriber",
+        "commit",
+        "atomic"
+      ],
+      "title": "Use [CommitBehavior] to protect an atomic operation from third-party commits",
+      "description": "`[CommitBehavior(CommitBehavior::Ignore)]` and `[CommitBehavior(CommitBehavior::Error)]` are method-level attributes that restrict what an explicit `Commit()` does inside the annotated method's scope: `Ignore` silently discards the call; `Error` raises a runtime error."
+    },
+    {
+      "path": "microsoft/knowledge/security/getlasterrortext-storage-is-privacy-not-security.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "getlasterrortext",
+        "error-text",
+        "classification",
+        "privacy",
+        "review-scope"
+      ],
+      "title": "Storing GetLastErrorText() in table fields is a privacy finding, not a security finding",
+      "description": "It is tempting to flag any code that calls `GetLastErrorText()` and writes the result into a table field (or displays it to end users) as a security issue, on the assumption that the error text might leak credentials or system internals."
+    },
+    {
+      "path": "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "permissionset",
+        "indirect-permissions",
+        "ri",
+        "ii",
+        "mi",
+        "di",
+        "code-mediated"
+      ],
+      "title": "Use indirect permissions when access must be code-mediated",
+      "description": "In a `permissionset`, uppercase letters (`R`, `I`, `M`, `D`) grant **direct** permissions: the assignee can read, insert, modify, or delete the table data through any UI or API surface."
+    },
+    {
+      "path": "microsoft/knowledge/security/inherent-permissions-minimal-grant.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "inherentpermissions",
+        "inherententitlements",
+        "attribute",
+        "least-privilege",
+        "procedure"
+      ],
+      "title": "Grant the minimum InherentPermissions a procedure needs",
+      "description": "`[InherentPermissions(PermissionObjectType::..., ...)]` and `[InherentEntitlements(Entitlement::...)]` are method-level attributes that let a procedure perform an operation on the listed object even when the caller's permission set does not allow it."
+    },
+    {
+      "path": "microsoft/knowledge/security/integrationevent-must-not-expose-secrets.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "integrationevent",
+        "eventsubscriber",
+        "secrets",
+        "credentials",
+        "publisher"
+      ],
+      "title": "Do not pass credentials or secrets through IntegrationEvent parameters",
+      "description": "`[IntegrationEvent]` publishes a hook that any extension can subscribe to."
+    },
+    {
+      "path": "microsoft/knowledge/security/integrationevent-var-parameter-bypasses-security-guards.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "integrationevent",
+        "var",
+        "guard",
+        "ishandled",
+        "bypass",
+        "security-check"
+      ],
+      "title": "Do not expose security guards as `var` parameters on IntegrationEvent",
+      "description": "A `var` parameter on an `[IntegrationEvent]` is a mutable hook: any subscriber can overwrite the value and the publisher will see the new value when control returns."
+    },
+    {
+      "path": "microsoft/knowledge/security/isolatedstorage-access-must-be-local-or-internal.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "isolatedstorage",
+        "local",
+        "internal",
+        "public",
+        "getter",
+        "setter",
+        "encapsulation"
+      ],
+      "title": "Procedures that read or write IsolatedStorage must not be public",
+      "description": "`IsolatedStorage` partitions its data by extension: values written by one extension are unreadable to another."
+    },
+    {
+      "path": "microsoft/knowledge/security/isolatedstorage-datascope-module-vs-company.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "isolatedstorage",
+        "datascope",
+        "module",
+        "company",
+        "user",
+        "scope"
+      ],
+      "title": "Pick the right IsolatedStorage DataScope for the secret's lifetime",
+      "description": "`IsolatedStorage` read and write methods take a `DataScope` parameter that decides which slice of storage the value belongs to."
+    },
+    {
+      "path": "microsoft/knowledge/security/isolatedstorage-setencrypted-for-sensitive-values.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "isolatedstorage",
+        "setencrypted",
+        "encryption",
+        "secret",
+        "storage"
+      ],
+      "title": "Prefer IsolatedStorage.SetEncrypted over Set for sensitive values",
+      "description": "`IsolatedStorage` exposes two write entry points: `Set` stores the value as-is, and `SetEncrypted` stores it encrypted at rest."
+    },
+    {
+      "path": "microsoft/knowledge/security/nondebuggable-required-when-unwrapping-secrettext.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "nondebuggable",
+        "attribute",
+        "secrettext",
+        "unwrap",
+        "debugger"
+      ],
+      "title": "Mark procedures that call SecretText.Unwrap() as [NonDebuggable]",
+      "description": "`SecretText` transit \u2014 assignment, parameter passing, and return values \u2014 is auto-protected: the debugger sees a redacted placeholder, not the value."
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "permissionset",
+        "wildcard",
+        "rimd",
+        "tabledata",
+        "least-privilege"
+      ],
+      "title": "Avoid wildcard grants in permission sets",
+      "description": "A `permissionset` object can grant access object-by-object or with the `*` wildcard."
+    },
+    {
+      "path": "microsoft/knowledge/security/recordref-open-with-caller-table-must-not-be-public.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "recordref",
+        "open",
+        "public",
+        "system-table",
+        "scope-onprem",
+        "confused-deputy",
+        "saas"
+      ],
+      "title": "Procedures that RecordRef.Open a caller-provided table must not be public",
+      "description": "When a codeunit holds permission to system tables \u2014 directly, via a permission set granted at install, or via `[InherentPermissions]` \u2014 and exposes a public procedure that accepts a table number (or a `RecordId`, from which the table number is derived) and calls `RecordRef.Open` on it, the procedure becomes a confused deputy."
+    },
+    {
+      "path": "microsoft/knowledge/security/secretstrsubstno-for-composing-secrets.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "secretstrsubstno",
+        "secrettext",
+        "strsubstno",
+        "format",
+        "compose"
+      ],
+      "title": "Use SecretStrSubstNo to compose strings that contain secrets",
+      "description": "`SecretStrSubstNo` is the secret-preserving counterpart of `StrSubstNo`."
+    },
+    {
+      "path": "microsoft/knowledge/security/secrettext-for-credentials.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "secrettext",
+        "credentials",
+        "api-key",
+        "token",
+        "debugger",
+        "unwrap"
+      ],
+      "title": "Use SecretText for credentials, API keys, and tokens",
+      "description": "`SecretText` is the AL data type for values that should never appear in a debugger session, in a log, or in a variable watch."
+    },
+    {
+      "path": "microsoft/knowledge/security/secrettext-with-httpclient.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "secrettext",
+        "httpclient",
+        "setsecretrequesturi",
+        "containssecret",
+        "headers",
+        "http"
+      ],
+      "title": "Use the SecretText-aware HttpClient surface for secrets in requests",
+      "description": "`HttpClient` and its companion types expose a parallel surface that accepts `SecretText` instead of `Text`, so that secret URIs, secret headers, and secret request bodies never round-trip through plain text."
+    },
+    {
+      "path": "microsoft/knowledge/security/validate-user-configurable-urls.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "ssrf",
+        "uri",
+        "url-validation",
+        "areurishavesamehost",
+        "isvaliduripattern",
+        "httpclient"
+      ],
+      "title": "Validate URLs that come from table fields before calling them",
+      "description": "A URL stored in a table field is user-configurable: anyone with write access to the row can change it."
+    },
+    {
+      "path": "microsoft/knowledge/security/validatetablerelation-false-on-user-input.md",
+      "layer": "microsoft",
+      "domain": "security",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "validatetablerelation",
+        "tablerelation",
+        "field",
+        "validation",
+        "input"
+      ],
+      "title": "Do not set ValidateTableRelation = false on user-editable fields",
+      "description": "`TableRelation` on a field declares that the field's value must exist in another table; the platform validates the value on entry and on `Validate`."
+    },
+    {
+      "path": "microsoft/knowledge/style/abouttitle-abouttext-teaching-tips.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "abouttitle",
+        "abouttext",
+        "teaching-tip",
+        "onboarding",
+        "page"
+      ],
+      "title": "Use `AboutTitle` and `AboutText` to surface teaching tips on top-level pages",
+      "description": "The `AboutTitle` and `AboutText` properties on a page render a teaching tip \u2014 an onboarding callout that appears the first time a user opens the page."
+    },
+    {
+      "path": "microsoft/knowledge/style/api-page-camelcase-properties.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "api-page",
+        "camelcase",
+        "apipublisher",
+        "apigroup",
+        "entityname",
+        "entitysetname"
+      ],
+      "title": "API pages use camelCase, alphanumeric-only values for API properties",
+      "description": "API pages \u2014 pages declared with `PageType = API` \u2014 surface as OData/JSON endpoints."
+    },
+    {
+      "path": "microsoft/knowledge/style/api-page-delayedinsert-true.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "api-page",
+        "delayedinsert",
+        "insert-trigger",
+        "validation"
+      ],
+      "title": "Set `DelayedInsert = true` on API pages",
+      "description": "On a normal page, `DelayedInsert = false` is the default: the record is inserted into the table as soon as the user enters the first field, and subsequent fields are written via `Modify` triggers."
+    },
+    {
+      "path": "microsoft/knowledge/style/api-page-entity-naming-singular-plural.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "api-page",
+        "entityname",
+        "entitysetname",
+        "singular",
+        "plural"
+      ],
+      "title": "`EntityName` is singular; `EntitySetName` is plural",
+      "description": "`EntityName` and `EntitySetName` on an API page are the two halves of the OData naming contract."
+    },
+    {
+      "path": "microsoft/knowledge/style/api-page-version-format.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "api-page",
+        "apiversion",
+        "version",
+        "format",
+        "beta"
+      ],
+      "title": "`APIVersion` must follow the pattern `vX.Y` (or `beta`)",
+      "description": "The `APIVersion` property on an API page is part of the public URL path: `/api/<publisher>/<group>/<version>/<entitySetName>`."
+    },
+    {
+      "path": "microsoft/knowledge/style/begin-on-same-line-as-then-else-do.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "begin",
+        "end",
+        "compound-statement",
+        "aa0005",
+        "codecop",
+        "formatting"
+      ],
+      "title": "`begin` goes on the same line as `then`, `else`, or `do` (CodeCop AA0005)",
+      "description": "When a compound block follows `then`, `else`, or `do`, the `begin` keyword must sit on the same line as the preceding keyword, separated by exactly one space."
+    },
+    {
+      "path": "microsoft/knowledge/style/block-keywords-start-new-line.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "block-keyword",
+        "end",
+        "if",
+        "repeat",
+        "until",
+        "for",
+        "while",
+        "case",
+        "aa0018"
+      ],
+      "title": "Block keywords (`end`, `if`, `repeat`, `until`, `for`, `while`, `case`) start a new line (CodeCop AA0018)",
+      "description": "CodeCop AA0018 requires that the block-introducing keywords `if`, `repeat`, `until`, `for`, `while`, `case`, and the block-terminating keyword `end` always start a new line."
+    },
+    {
+      "path": "microsoft/knowledge/style/caption-required-on-page-fields.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "caption",
+        "page-field",
+        "aa0225",
+        "aa0226",
+        "codecop",
+        "captionclass"
+      ],
+      "title": "Every page field needs a `Caption` (CodeCop AA0225/AA0226)",
+      "description": "CodeCop AA0225 and AA0226 require every field control to expose a `Caption` property, separately from the field's source name."
+    },
+    {
+      "path": "microsoft/knowledge/style/case-action-on-line-after-possibility.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "case",
+        "statement",
+        "formatting",
+        "possibility",
+        "action",
+        "line-break"
+      ],
+      "title": "`case` action goes on the line after the possibility",
+      "description": "In an AL `case` statement, the action for each label is written on the line that follows the label, not on the same line."
+    },
+    {
+      "path": "microsoft/knowledge/style/error-passes-parameters-directly-not-strsubstno.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "error",
+        "strsubstno",
+        "label",
+        "parameters",
+        "concatenation",
+        "aa0231"
+      ],
+      "title": "Pass parameters directly to `Error()`, do not wrap with `StrSubstNo`",
+      "description": "`Error()` accepts a format string and a variable number of arguments \u2014 `Error(SomeLabelErr, Arg1, Arg2)`."
+    },
+    {
+      "path": "microsoft/knowledge/style/event-subscriber-param-names-match-publisher.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "event-subscriber",
+        "parameter-name",
+        "publisher",
+        "signature",
+        "eventsubscriber"
+      ],
+      "title": "Event subscriber parameter names must match the publisher signature",
+      "description": "In AL, an `[EventSubscriber]` procedure is bound to its publisher by event name and parameter list."
+    },
+    {
+      "path": "microsoft/knowledge/style/fieldcaption-not-fieldname-in-user-messages.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "fieldcaption",
+        "fieldname",
+        "tablecaption",
+        "tablename",
+        "translation",
+        "message",
+        "error"
+      ],
+      "title": "Use FieldCaption/TableCaption (not FieldName/TableName) in user-facing text",
+      "description": "`FieldName` and `TableName` return the developer-facing identifier of a field or table \u2014 a fixed English string used in metadata and in code."
+    },
+    {
+      "path": "microsoft/knowledge/style/file-name-object-type-pattern.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "file-name",
+        "object-type",
+        "suffix",
+        "naming-convention"
+      ],
+      "title": "Name AL source files `<ObjectName>.<ObjectType>.al`",
+      "description": "Each AL source file holds a single object, and the file name is expected to be of the form `<ObjectName>.<ObjectType>.al` \u2014 `CustomerCard.Page.al`, `PostSalesInvoice.Codeunit.al`, `NoSeriesTests.Codeunit.al`, `SalesHeader.TableExt.al`."
+    },
+    {
+      "path": "microsoft/knowledge/style/function-call-parentheses-required.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "parentheses",
+        "function-call",
+        "method-call",
+        "aa0008",
+        "codecop"
+      ],
+      "title": "Always write parentheses on procedure calls (CodeCop AA0008)",
+      "description": "AL allows a parameterless procedure to be called without parentheses \u2014 `Customer.Init` instead of `Customer.Init()` \u2014 and the result is syntactically identical at runtime."
+    },
+    {
+      "path": "microsoft/knowledge/style/label-comment-explains-placeholders.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "label",
+        "comment",
+        "placeholder",
+        "strsubstno",
+        "translation",
+        "aa0470"
+      ],
+      "title": "Document each Label placeholder with the Comment parameter",
+      "description": "`Label` and `TextConst` strings that contain placeholders (`%1`, `%2`, \u2026) need a `Comment` parameter that names what each placeholder is."
+    },
+    {
+      "path": "microsoft/knowledge/style/label-locked-for-non-translatable.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "label",
+        "locked",
+        "translation",
+        "token",
+        "url",
+        "json",
+        "xml"
+      ],
+      "title": "Set `Locked = true` on Labels that must not be translated",
+      "description": "A `Label` is by default surfaced to translators and rewritten per locale."
+    },
+    {
+      "path": "microsoft/knowledge/style/label-suffix-approved-list.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "label",
+        "textconst",
+        "suffix",
+        "aa0074",
+        "codecop",
+        "msg",
+        "err",
+        "qst",
+        "lbl",
+        "tok"
+      ],
+      "title": "Use approved suffixes on Label and TextConst names (CodeCop AA0074)",
+      "description": "CodeCop AA0074 flags `Label` and `TextConst` identifiers that do not end with an approved usage suffix."
+    },
+    {
+      "path": "microsoft/knowledge/style/labels-declared-at-object-scope.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "label",
+        "scope",
+        "procedure",
+        "translation",
+        "localization",
+        "xliff"
+      ],
+      "title": "Declare Labels at object scope, not inside procedure `var` blocks",
+      "description": "`Label` is the AL declaration that participates in the translation pipeline: the build extracts every Label declared in an object into the `.xlf` file shipped to translators, and the runtime substitutes the localized value when the object is loaded."
+    },
+    {
+      "path": "microsoft/knowledge/style/lowercase-reserved-keywords.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "reserved-keyword",
+        "lowercase",
+        "aa0241",
+        "codecop",
+        "if",
+        "then",
+        "begin"
+      ],
+      "title": "Reserved keywords are written in lowercase (CodeCop AA0241)",
+      "description": "CodeCop AA0241 requires reserved AL keywords \u2014 `if`, `then`, `else`, `begin`, `end`, `var`, `procedure`, `local`, `internal`, `for`, `while`, `repeat`, `until`, `case`, `of`, `do`, `not`, `and`, `or`, `exit`, `break`, `skip`, `quit`, and the rest \u2014 to be lowercase."
+    },
+    {
+      "path": "microsoft/knowledge/style/named-invocations-not-object-ids.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "page",
+        "report",
+        "codeunit",
+        "runmodal",
+        "run",
+        "object-id",
+        "named-invocation"
+      ],
+      "title": "Call objects by name, not by numeric ID",
+      "description": "`Page.RunModal`, `Report.Run`, `Codeunit.Run`, and the `Page::`, `Report::`, `Codeunit::`, `Table::`, `XmlPort::` selectors accept either a numeric ID or a named alias."
+    },
+    {
+      "path": "microsoft/knowledge/style/no-begin-end-around-single-statement.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "begin",
+        "end",
+        "single-statement",
+        "aa0013",
+        "codecop",
+        "compound"
+      ],
+      "title": "Do not wrap a single statement in `begin \u2026 end` (CodeCop AA0013)",
+      "description": "CodeCop AA0013 flags `begin \u2026 end` blocks that contain exactly one statement."
+    },
+    {
+      "path": "microsoft/knowledge/style/no-else-after-terminating-statement.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "else",
+        "exit",
+        "break",
+        "skip",
+        "quit",
+        "error",
+        "terminating",
+        "control-flow"
+      ],
+      "title": "Omit `else` when the `then` branch ends with `exit`, `break`, `skip`, `quit`, or `error`",
+      "description": "When the `then` branch of an `if` ends in a terminating statement \u2014 `exit`, `break`, `skip`, `quit`, or `error` \u2014 the `else` branch becomes the natural fall-through."
+    },
+    {
+      "path": "microsoft/knowledge/style/no-space-before-method-parenthesis.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "spacing",
+        "parenthesis",
+        "method-call",
+        "aa0002",
+        "codecop"
+      ],
+      "title": "No space between a method name and its opening parenthesis (CodeCop AA0002)",
+      "description": "CodeCop AA0002 forbids whitespace between a procedure/method name and its `(`."
+    },
+    {
+      "path": "microsoft/knowledge/style/object-name-30-char-limit.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "object-name",
+        "length",
+        "prefix",
+        "affix",
+        "30-characters",
+        "appsource"
+      ],
+      "title": "Keep object names within the 30-character platform limit",
+      "description": "Business Central object names \u2014 for tables, pages, codeunits, reports, queries, XML ports, enums, and permission sets \u2014 are limited to 30 characters in total."
+    },
+    {
+      "path": "microsoft/knowledge/style/optioncaption-required-and-matches-membercount.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "optioncaption",
+        "option",
+        "member-count",
+        "aa0221",
+        "aa0223",
+        "aa0224"
+      ],
+      "title": "Option fields need `OptionCaption`, and its element count must match `OptionMembers` (CodeCop AA0221/AA0223/AA0224)",
+      "description": "CodeCop AA0221 requires an `OptionCaption` on every option-type field that is not sourced from a table column (table-sourced option fields inherit the captions of the underlying field)."
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "page-name",
+        "source-table",
+        "misleading",
+        "naming"
+      ],
+      "title": "A page or view name must describe the table it shows",
+      "description": "A page (or filtered page View) whose name references one entity but whose `SourceTable` is a different entity misleads every consumer of the object's metadata."
+    },
+    {
+      "path": "microsoft/knowledge/style/single-space-after-not-operator.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "spacing",
+        "not",
+        "operator",
+        "aa0003",
+        "codecop"
+      ],
+      "title": "Exactly one space between `not` and its argument (CodeCop AA0003)",
+      "description": "CodeCop AA0003 requires exactly one space between the `not` operator and the expression it negates."
+    },
+    {
+      "path": "microsoft/knowledge/style/single-space-around-binary-operators.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "spacing",
+        "binary-operator",
+        "aa0001",
+        "codecop",
+        "formatting"
+      ],
+      "title": "One space on each side of every binary operator (CodeCop AA0001)",
+      "description": "CodeCop AA0001 requires exactly one space on each side of every binary operator: assignment (`:=`), arithmetic (`+`, `-`, `*`, `/`, `mod`, `div`), comparison (`=`, `<>`, `<`, `<=`, `>`, `>=`), logical (`and`, `or`, `xor`), and string concatenation."
+    },
+    {
+      "path": "microsoft/knowledge/style/telemetry-event-id-stable-unique.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "telemetry",
+        "logmessage",
+        "event-id",
+        "sessionlogmessage",
+        "observability"
+      ],
+      "title": "Telemetry event IDs must be stable, unique, and non-placeholder",
+      "description": "The first parameter of `Session.LogMessage` is the **event ID**."
+    },
+    {
+      "path": "microsoft/knowledge/style/temporary-variable-temp-prefix.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "temporary",
+        "temp",
+        "prefix",
+        "record-variable",
+        "naming"
+      ],
+      "title": "Prefix temporary record variables with `Temp`",
+      "description": "A `Record` variable declared with the `temporary` modifier behaves nothing like a normal record variable: it never touches the database, holds rows only for the lifetime of the variable, and is not visible to filters or queries on the underlying table."
+    },
+    {
+      "path": "microsoft/knowledge/style/this-keyword-in-codeunits.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "this",
+        "codeunit",
+        "self-reference",
+        "aa0248",
+        "scope"
+      ],
+      "title": "Use the `this` keyword for self-reference inside codeunits (CodeCop AA0248)",
+      "description": "CodeCop AA0248 recommends prefixing self-references inside a codeunit with `this`."
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "tooltip",
+        "page-field",
+        "aa0218",
+        "codecop",
+        "accessibility",
+        "specifies"
+      ],
+      "title": "Every page field needs a `ToolTip` (CodeCop AA0218)",
+      "description": "CodeCop AA0218 requires a non-empty `ToolTip` property on every field control on a page."
+    },
+    {
+      "path": "microsoft/knowledge/style/variable-declaration-order-by-type.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "variable-declaration",
+        "order",
+        "var",
+        "complex-types",
+        "aa0021"
+      ],
+      "title": "Order variable declarations by type, complex types first (CodeCop AA0021)",
+      "description": "CodeCop AA0021 requires that variable declarations inside a `var` block follow a fixed ordering by type, with complex (composite) types appearing before primitive types."
+    },
+    {
+      "path": "microsoft/knowledge/style/variable-name-must-not-shadow.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "variable-name",
+        "shadow",
+        "conflict",
+        "aa0198",
+        "aa0202",
+        "aa0204",
+        "codecop"
+      ],
+      "title": "Local variable names must not shadow globals, fields, methods, or actions (CodeCop AA0198/AA0202/AA0204)",
+      "description": "Three CodeCop rules \u2014 AA0198, AA0202, AA0204 \u2014 together forbid a local variable from sharing a name with a global variable on the same object, with a field on the same table or page source, with a procedure on the same object, or with an action on the same page."
+    },
+    {
+      "path": "microsoft/knowledge/style/xmldoc-for-public-library-procedures.md",
+      "layer": "microsoft",
+      "domain": "style",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "xmldoc",
+        "summary",
+        "param",
+        "returns",
+        "public-procedure",
+        "documentation"
+      ],
+      "title": "Add XML documentation to public procedures on library/API codeunits",
+      "description": "XML documentation comments (`/// <summary>\u2026</summary>`, `/// <param>\u2026</param>`, `/// <returns>\u2026</returns>`) are expected on procedures that form the public surface of a library \u2014 codeunits intended to be called from outside the current app: System App modules, AppSource library codeunits, `Access = Public` codeunits exposed for extension."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/breaking-changes-only-on-tables-without-data.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "primary-key",
+        "field-type",
+        "breaking-change",
+        "integer-to-biginteger",
+        "existing-data"
+      ],
+      "title": "Primary-key and field-type changes are safe only on tables without existing data",
+      "description": "Primary-key changes and field-type changes (for example widening `Integer` to `BigInteger`) rewrite the on-disk layout of every row in the table."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/datatransfer-for-bulk-init.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "datatransfer",
+        "large-dataset",
+        "bulk-update",
+        "modifyall",
+        "copyfields",
+        "new-field"
+      ],
+      "title": "Use `DataTransfer` for bulk updates on large tables",
+      "description": "Tables that can contain more than 300,000 records, and any newly added field on an existing table, should be initialized with `DataTransfer` rather than a `repeat ..."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/datatransfer-skips-triggers-and-subscribers.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "datatransfer",
+        "validate-trigger",
+        "event-subscriber",
+        "side-effects",
+        "business-logic"
+      ],
+      "title": "`DataTransfer` does not fire validation triggers or event subscribers",
+      "description": "`DataTransfer` writes directly at the database layer."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/do-not-block-upgrade-on-data-errors.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "error-handling",
+        "telemetry",
+        "session-logmessage",
+        "blocking",
+        "graceful"
+      ],
+      "title": "Log telemetry; do not raise errors that block the upgrade",
+      "description": "When upgrade code encounters unexpected data \u2014 a record it expected to find, a relationship it assumed to be intact \u2014 the response is to log telemetry and continue, not to raise an error."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/enum-values-additive-at-end.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "enum",
+        "ordinal",
+        "additive",
+        "append",
+        "backward-compatible",
+        "breaking-change"
+      ],
+      "title": "Add new enum values only at the end",
+      "description": "An AL `enum` is a fixed list of ordinal-named values."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/first-install-dataversion-zero-check.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "dataversion",
+        "first-install",
+        "on-install-app-per-company",
+        "moduleinfo",
+        "zero-version"
+      ],
+      "title": "Detect first install with `DataVersion() = Version.Create('0.0.0.0')`",
+      "description": "On the first install of an extension on a tenant the platform records a zero data version: `AppInfo.DataVersion()` returns `Version.Create('0.0.0.0')`."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/guard-database-reads.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "get",
+        "findset",
+        "findlast",
+        "guard",
+        "if-then",
+        "runtime-error"
+      ],
+      "title": "Guard every database read in upgrade code with `if`",
+      "description": "Inside an upgrade codeunit (or any procedure transitively invoked from `OnUpgradePerCompany` / `OnUpgradePerDatabase`), an unguarded `Record.Get`, `Record.FindSet`, or `Record.FindLast` raises a runtime error when the row or set is missing."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/hybrid-migration-codeunits-not-standard-upgrade.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "hybrid-migration",
+        "hybrid-bc14",
+        "hybrid-sl",
+        "hybrid-gp",
+        "hybrid-base-deployment",
+        "one-time-migration"
+      ],
+      "title": "Hybrid migration codeunits are not standard upgrade codeunits",
+      "description": "Codeunits like `HybridBC14`, `HybridSL`, `HybridGP`, and `HybridBaseDeployment` implement one-time migration paths from a specific source system into Business Central."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "initvalue",
+        "new-field",
+        "existing-rows",
+        "default-value",
+        "table-extension"
+      ],
+      "title": "`InitValue` does not back-fill existing rows",
+      "description": "`InitValue` on a field defines the value the platform assigns when a *new* record is inserted."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/minimize-onvalidate-upgrade-triggers.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "on-validate-upgrade-per-company",
+        "performance-impact",
+        "skip-logic",
+        "justification",
+        "upgrade-tag"
+      ],
+      "title": "Performance-impacting upgrade triggers need justification and skip logic",
+      "description": "Triggers such as `OnValidateUpgradePerCompany` run on every upgrade pass."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/no-external-calls-in-upgrade.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "httpclient",
+        "dotnet",
+        "external-service",
+        "network-call",
+        "blocking",
+        "upgrade-rollback"
+      ],
+      "title": "No external calls inside upgrade codeunits",
+      "description": "Upgrade code runs in a constrained execution window: the tenant is mid-upgrade, no users are signed in, and a failure aborts the entire transaction."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/obsolete-pending-to-removed-staging.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "obsolete-state",
+        "pending",
+        "removed",
+        "lifecycle",
+        "clean-flag",
+        "upgrade-code-timing"
+      ],
+      "title": "Stage obsoletion `Pending \u2192 Removed`; write upgrade code on removal",
+      "description": "`ObsoleteState` has a deliberate two-step lifecycle."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/obsoletion-requires-reason-and-tag.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "obsolete-state",
+        "obsolete-reason",
+        "obsolete-tag",
+        "deprecation",
+        "metadata"
+      ],
+      "title": "Mark obsolete elements with `ObsoleteState`, `ObsoleteReason`, and `ObsoleteTag`",
+      "description": "When a procedure, field, table, page, or enum value is being retired, AL requires three pieces of metadata to declare the deprecation:"
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "upgrade-tag",
+        "event-subscriber",
+        "on-get-per-company-upgrade-tags",
+        "on-get-per-database-upgrade-tags",
+        "registration"
+      ],
+      "title": "Register every upgrade tag with the platform via an event subscriber",
+      "description": "The `Upgrade Tag` codeunit only recognizes a tag if the tag was published to the platform through one of two events on that codeunit: `OnGetPerCompanyUpgradeTags` for tags set inside `OnUpgradePerCompany`, and `OnGetPerDatabaseUpgradeTags` for tags set inside `OnUpgradePerDatabase`."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/skip-nonessential-work-via-execution-context.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "get-execution-context",
+        "execution-context-upgrade",
+        "skip",
+        "report-selection",
+        "runtime-trigger"
+      ],
+      "title": "Skip non-essential runtime work when `GetExecutionContext() = ExecutionContext::Upgrade`",
+      "description": "Runtime procedures (table triggers, install routines, helpers called from many places) sometimes fire during the upgrade window because the upgrade itself touches the data they react to."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/triggers-call-helpers-not-implementations.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "on-upgrade-per-company",
+        "on-upgrade-per-database",
+        "trigger-body",
+        "helper-procedure",
+        "structure"
+      ],
+      "title": "`OnUpgradePerCompany` / `OnUpgradePerDatabase` should call helpers, not inline logic",
+      "description": "The `OnUpgradePerCompany` and `OnUpgradePerDatabase` triggers on an upgrade codeunit are dispatch points, not implementation slots."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/upgrade-codeunit-subtype.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "upgrade-codeunit",
+        "subtype",
+        "on-upgrade-per-company",
+        "on-upgrade-per-database",
+        "trigger"
+      ],
+      "title": "Upgrade logic must live in a codeunit with `Subtype = Upgrade`",
+      "description": "A codeunit only participates in the upgrade pipeline when it sets `Subtype = Upgrade`."
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+      "layer": "microsoft",
+      "domain": "upgrade",
+      "bc-version": [
+        "all"
+      ],
+      "technologies": [
+        "al"
+      ],
+      "countries": [
+        "w1"
+      ],
+      "application-area": [
+        "all"
+      ],
+      "keywords": [
+        "upgrade-tag",
+        "version-check",
+        "dataversion",
+        "has-upgrade-tag",
+        "set-upgrade-tag",
+        "control-flow"
+      ],
+      "title": "Control upgrade execution with upgrade tags, not version checks",
+      "description": "Each piece of upgrade logic must run exactly once per company (or database) across the lifetime of an extension."
+    }
+  ]
+}
