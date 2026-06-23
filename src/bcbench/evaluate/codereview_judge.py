@@ -13,13 +13,10 @@ from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
-from bcbench.exceptions import BCBenchError
+from bcbench.exceptions import LLMJudgeError
 
 _config = get_config()
 
-
-class JudgeError(BCBenchError):
-    """The semantic judge could not produce a usable verdict."""
 
 JUDGE_RESULT_FILE = "judge_results.json"
 
@@ -69,15 +66,15 @@ def _extract_json_array(text: str) -> str:
 def _parse_judge_results(result_path: Path, num_pairs: int, stdout: str = "") -> list[bool]:
     raw_text = result_path.read_text(encoding="utf-8") if result_path.exists() else stdout
     if not raw_text.strip():
-        raise JudgeError(f"Judge produced no result file at {result_path} and no parseable output")
+        raise LLMJudgeError(f"Judge produced no result file at {result_path} and no parseable output")
 
     try:
         raw = json.loads(_extract_json_array(raw_text))
     except (json.JSONDecodeError, OSError) as exc:
-        raise JudgeError(f"Judge result is unreadable or not valid JSON: {result_path}") from exc
+        raise LLMJudgeError(f"Judge result is unreadable or not valid JSON: {result_path}") from exc
 
     if not isinstance(raw, list):
-        raise JudgeError(f"Judge result must be a JSON list, got {type(raw).__name__}")
+        raise LLMJudgeError(f"Judge result must be a JSON list, got {type(raw).__name__}")
 
     results_by_pair: dict[int, bool] = {}
     for item in raw:
@@ -119,7 +116,7 @@ def judge_comment_matches(
 
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
-        raise JudgeError("Copilot CLI not found; cannot run the semantic judge")
+        raise LLMJudgeError("Copilot CLI not found; cannot run the semantic judge")
 
     result_path = work_dir / JUDGE_RESULT_FILE
     prompt = " ".join(_build_judge_prompt(matched_pairs, JUDGE_RESULT_FILE).split())
@@ -141,7 +138,7 @@ def judge_comment_matches(
             check=True,
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
-        raise JudgeError(f"Judge subprocess failed: {exc}") from exc
+        raise LLMJudgeError(f"Judge subprocess failed: {exc}") from exc
 
     verdicts = _parse_judge_results(result_path, len(matched_pairs), stdout=completed.stdout or "")
     return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]

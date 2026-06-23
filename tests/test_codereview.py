@@ -8,7 +8,7 @@ import pytest
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.evaluate.codereview_judge import JUDGE_RESULT_FILE, JudgeError, _parse_judge_results, judge_comment_matches
+from bcbench.evaluate.codereview_judge import JUDGE_RESULT_FILE, LLMJudgeError, _parse_judge_results, judge_comment_matches
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
 from bcbench.types import EvaluationCategory
@@ -594,21 +594,21 @@ class TestJudge:
         return expected, generated
 
     def test_parse_raises_when_result_file_missing(self, tmp_path):
-        with pytest.raises(JudgeError, match="no result file"):
+        with pytest.raises(LLMJudgeError, match="no result file"):
             _parse_judge_results(tmp_path / JUDGE_RESULT_FILE, num_pairs=1)
 
     def test_parse_raises_on_invalid_json(self, tmp_path):
         result_path = tmp_path / JUDGE_RESULT_FILE
         result_path.write_text("not json", encoding="utf-8")
 
-        with pytest.raises(JudgeError, match="not valid JSON"):
+        with pytest.raises(LLMJudgeError, match="not valid JSON"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_raises_when_not_a_list(self, tmp_path):
         result_path = tmp_path / JUDGE_RESULT_FILE
         result_path.write_text('{"pair": 1, "match": true}', encoding="utf-8")
 
-        with pytest.raises(JudgeError, match="must be a JSON list"):
+        with pytest.raises(LLMJudgeError, match="must be a JSON list"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_missing_pair_counts_as_not_confirmed(self, tmp_path):
@@ -626,7 +626,7 @@ class TestJudge:
         assert judge_comment_matches([], work_dir=Path()) == []
 
     def test_raises_when_copilot_not_found(self, tmp_path):
-        with patch("bcbench.evaluate.codereview_judge._find_copilot", return_value=None), pytest.raises(JudgeError, match="Copilot CLI not found"):
+        with patch("bcbench.evaluate.codereview_judge._find_copilot", return_value=None), pytest.raises(LLMJudgeError, match="Copilot CLI not found"):
             judge_comment_matches([self._pair(10)], work_dir=tmp_path)
 
     def test_raises_when_subprocess_fails(self, tmp_path):
@@ -636,7 +636,7 @@ class TestJudge:
                 "bcbench.evaluate.codereview_judge.subprocess.run",
                 side_effect=subprocess.CalledProcessError(1, "copilot"),
             ),
-            pytest.raises(JudgeError, match="Judge subprocess failed"),
+            pytest.raises(LLMJudgeError, match="Judge subprocess failed"),
         ):
             judge_comment_matches([self._pair(10)], work_dir=tmp_path)
 

@@ -213,3 +213,7 @@ class CollectionError(BCBenchError):
     def __init__(self, message: str) -> None:
         message = f"Collection error (Note: Collection is WIP with hardcoded values): {message}"
         super().__init__(message)
+
+
+class LLMJudgeError(BCBenchError):
+    """LLM judge related errors."""
