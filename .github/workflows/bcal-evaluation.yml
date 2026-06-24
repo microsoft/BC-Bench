@@ -24,9 +24,12 @@ on:
       external-model:
         description: "Model alias passed to the external-command bridge when llm-backend=external-command"
         required: false
-        default: "gpt-5"
+        default: "gpt-53-chat-2026-03-03"
         type: choice
         options:
+          - "claude-opus-4-8"
+          - "gpt-55-2026-04-24"
+          - "gpt-5-codex-2025-09-15"
           - "gpt-5"
           - "gpt-4o"
           - "gpt-53-chat-2026-03-03"
@@ -98,6 +101,9 @@ jobs:
           BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
           BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
         run: |
+          # Let native non-zero exits set $LASTEXITCODE instead of throwing, so the retry loop can see them.
+          $PSNativeCommandUseErrorActionPreference = $false
+
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
@@ -112,18 +118,37 @@ jobs:
           } | ConvertTo-Json -Compress -Depth 5
           $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
 
-          dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
+          # The ADO Artifacts NuGet credential provider intermittently fails to start ("Unable to load
+          # the service index for source"), which otherwise fails the entire matrix job and skips the
+          # results upload. Retry the transient feed error a couple of times before giving up.
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
+            Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
+            Start-Sleep -Seconds 20
+          }
 
       - name: Build bc-eval CAPI bridge venv
         if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
           uv python install 3.12
           uv venv .bcal-capi-venv --python 3.12
-          uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.7" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+
+          # Same transient ADO feed flakiness as the bcal install above; retry the package pull.
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.7" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { throw "bc-eval[capi] install failed after 3 attempts (exit code $LASTEXITCODE)." }
+            Write-Output "::warning::bc-eval install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
+            Start-Sleep -Seconds 20
+          }
 
       - name: Resolve BC version for cache key
         id: bcversion
@@ -169,10 +194,10 @@ jobs:
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\capi-cert.pfx", [Convert]::FromBase64String($b64))
 
       - name: Run BCal for entry ${{ matrix.entry }}
-        timeout-minutes: 18
+        timeout-minutes: 28
         env:
           BCAL_LLM_BACKEND: ${{ inputs.llm-backend || 'external-command' }}
-          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
+          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-53-chat-2026-03-03') || (inputs.model || 'gpt-5.2') }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model || 'gpt-5.2' }}
           CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
@@ -212,7 +237,7 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
+      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-53-chat-2026-03-03') || (inputs.model || 'gpt-5.2') }}
       agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
       mock: ${{ inputs.test-run || false }}
       category: nl2al
