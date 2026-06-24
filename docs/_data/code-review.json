@@ -1,4 +1,71 @@
 {
-    "runs": [],
-    "aggregate": []
+  "runs": [
+    {
+      "total": 81,
+      "date": "2026-06-24",
+      "model": "claude-haiku-4-5",
+      "agent_name": "GitHub Copilot",
+      "category": "code-review",
+      "average_duration": 51.9,
+      "average_prompt_tokens": 113035.8,
+      "average_completion_tokens": 1590.2,
+      "average_llm_duration": 0.0,
+      "average_tool_usage": {
+        "report_intent": 0.93,
+        "bash": 3.19,
+        "view": 1.16,
+        "create": 0.8,
+        "read_bash": 0.37,
+        "stop_bash": 0.21,
+        "write_bash": 0.07,
+        "task": 0.01
+      },
+      "github_run_id": "28105886936",
+      "experiment": null,
+      "benchmark_version": "0.5.6",
+      "generated_comment_count": 251,
+      "expected_comment_count": 216,
+      "matched_comment_count": 51,
+      "incorrect_comment_count": 200,
+      "missed_comment_count": 165,
+      "precision": 0.203,
+      "recall": 0.236,
+      "f1": 0.218,
+      "f_beta_05": 0.209,
+      "f_beta_2": 0.229,
+      "macro_precision": 0.245,
+      "macro_recall": 0.329,
+      "macro_f1": 0.256,
+      "macro_f_beta_05": 0.242,
+      "macro_f_beta_2": 0.286,
+      "severity_mae": 0.784,
+      "valid_review_output_rate": 1.0
+    }
+  ],
+  "aggregate": [
+    {
+      "model": "claude-haiku-4-5",
+      "agent_name": "GitHub Copilot",
+      "category": "code-review",
+      "experiment": null,
+      "total": 81,
+      "num_runs": 1,
+      "average_duration": 51.9,
+      "benchmark_version": "0.5.6",
+      "f1": 0.218,
+      "f1_ci_low": null,
+      "f1_ci_high": null,
+      "f_beta_05": 0.209,
+      "f_beta_2": 0.229,
+      "precision": 0.203,
+      "recall": 0.236,
+      "macro_f1": 0.256,
+      "macro_f1_ci_low": null,
+      "macro_f1_ci_high": null,
+      "macro_f_beta_05": 0.242,
+      "macro_f_beta_2": 0.286,
+      "macro_precision": 0.245,
+      "macro_recall": 0.329
+    }
+  ]
 }
