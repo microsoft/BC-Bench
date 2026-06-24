@@ -56,8 +56,14 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         review_output_file: Path = context.repo_path / REVIEW_OUTPUT_FILE
 
         if not review_output_file.exists():
-            logger.error(f"No review generated for {context.entry.instance_id}")
-            raise RuntimeError(f"No review generated for {context.entry.instance_id}")
+            # The agent finished without writing review.json. Record an invalid (zero-score) result
+            # instead of raising, so one misbehaving agent does not abort the whole benchmark run.
+            # valid_review_output_rate then surfaces how often agents fail to produce any output.
+            logger.error(f"No review generated for {context.entry.instance_id}; recording an invalid result")
+            result = CodeReviewResult.create_invalid(context, output="", expected_comments=context.entry.expected_comments)
+            self.save_result(context, result)
+            return
+
         output: str = review_output_file.read_text(encoding="utf-8")
 
         generated_comments: list[ReviewComment] | None = parse_review_output(output)
