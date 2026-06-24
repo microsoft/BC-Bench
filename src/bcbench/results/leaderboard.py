@@ -144,7 +144,11 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
         n = len(cr_runs)
 
         f1_ci = bootstrap_ci([r.f1 for r in cr_runs])
-        macro_f1_ci = bootstrap_ci([r.macro_f1 for r in cr_runs])
+        # Bootstrap the equal-weight headline over tasks (pooled per-task F1 across runs) so the CI
+        # is meaningful even with a single run. Fall back to the per-run macro F1 if tasks were not
+        # retained (older summaries serialized before per_task_f1 existed).
+        pooled_task_f1 = [score for r in cr_runs for score in r.per_task_f1]
+        macro_f1_ci = bootstrap_ci(pooled_task_f1) if pooled_task_f1 else bootstrap_ci([r.macro_f1 for r in cr_runs])
 
         return base.model_copy(
             update={

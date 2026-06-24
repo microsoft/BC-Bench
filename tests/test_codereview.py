@@ -29,6 +29,20 @@ class TestSeverity:
     def test_unknown_severity_defaults_to_medium(self):
         assert Severity.from_input("bogus") is Severity.MEDIUM
 
+    def test_unknown_severity_warns_loudly(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            assert Severity.from_input("bogus") is Severity.MEDIUM
+        assert any("Unknown severity" in record.message for record in caplog.records)
+
+    def test_known_alias_does_not_warn(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            assert Severity.from_input("warning") is Severity.MEDIUM
+        assert not any("Unknown severity" in record.message for record in caplog.records)
+
     def test_levels_are_strictly_ordered(self):
         assert Severity.CRITICAL.level > Severity.HIGH.level > Severity.MEDIUM.level > Severity.LOW.level
 
@@ -83,6 +97,33 @@ class TestMatchComments:
         comment = ReviewComment(file="a.al", line_start=1, body="x", severity=Severity.HIGH)
         assert match_comments([], [comment], line_tolerance=5) == []
         assert match_comments([comment], [], line_tolerance=5) == []
+
+    def test_none_tolerance_pairs_same_file_regardless_of_distance(self):
+        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
+        generated = [ReviewComment(file="a.al", line_start=900, body="x", severity=Severity.HIGH)]
+
+        pairs = match_comments(expected, generated, line_tolerance=None)
+
+        assert len(pairs) == 1
+
+    def test_none_tolerance_still_never_pairs_across_files(self):
+        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
+        generated = [ReviewComment(file="b.al", line_start=10, body="x", severity=Severity.HIGH)]
+
+        assert match_comments(expected, generated, line_tolerance=None) == []
+
+    def test_none_tolerance_uses_distance_as_tiebreak(self):
+        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
+        generated = [
+            ReviewComment(file="a.al", line_start=500, body="far", severity=Severity.HIGH),
+            ReviewComment(file="a.al", line_start=12, body="near", severity=Severity.HIGH),
+        ]
+
+        pairs = match_comments(expected, generated, line_tolerance=None)
+
+        assert len(pairs) == 1
+        _, matched_generated = pairs[0]
+        assert matched_generated.line_start == 12
 
 
 class TestCodeReviewEntry:
@@ -346,6 +387,36 @@ class TestCodeReviewSummary:
         assert summary.recall == 0.25
         assert summary.f1 == 0.333
 
+    def test_macro_precision_excludes_silent_tasks(self):
+        expected_comments = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
+
+        commenting = create_codereview_result(
+            instance_id="test__macro-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
+            expected_comments=expected_comments,
+        )
+        silent = create_codereview_result(
+            instance_id="test__macro-2",
+            output="[]",
+            expected_comments=expected_comments,
+        )
+
+        summary = CodeReviewResultSummary.from_results([commenting, silent], run_id="run-1")
+
+        # Only the task where the agent actually commented (precision 1.0) feeds macro precision;
+        # the silent task's convention precision of 1.0 must not be averaged in.
+        assert summary.macro_precision == 1.0
+        # Recall still spans both tasks: 1.0 for the hit, 0.0 for the silent miss.
+        assert summary.macro_recall == 0.5
+
+    def test_macro_precision_zero_when_all_tasks_silent(self):
+        expected_comments = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
+        silent = create_codereview_result(instance_id="test__silent-1", output="[]", expected_comments=expected_comments)
+
+        summary = CodeReviewResultSummary.from_results([silent], run_id="run-1")
+
+        assert summary.macro_precision == 0.0
+
     def test_render_github_metrics_markdown_has_grouped_sections(self):
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
@@ -442,6 +513,31 @@ class TestCodeReviewLeaderboardAggregate:
         assert agg.num_runs == 1
         assert agg.f1 == run.f1
         assert not hasattr(agg, "pass_hat_5")
+
+    def test_macro_f1_ci_is_bootstrapped_over_tasks_for_single_run(self):
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, LeaderboardAggregate
+
+        expected = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
+        hit = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
+
+        results = [
+            create_codereview_result(instance_id="test__t-1", output=hit, expected_comments=expected),
+            create_codereview_result(instance_id="test__t-2", output="[]", expected_comments=expected),
+            create_codereview_result(instance_id="test__t-3", output=hit, expected_comments=expected),
+            create_codereview_result(instance_id="test__t-4", output="[]", expected_comments=expected),
+        ]
+        run = CodeReviewResultSummary.from_results(results, run_id="run-1")
+
+        # Per-task F1 is retained so the CI can be bootstrapped over tasks.
+        assert run.per_task_f1 == [1.0, 0.0, 1.0, 0.0]
+
+        agg = LeaderboardAggregate.from_runs([run])
+
+        # A single run with varying per-task F1 still yields a real (task-level) CI.
+        assert isinstance(agg, CodeReviewLeaderboardAggregate)
+        assert agg.macro_f1_ci_low is not None
+        assert agg.macro_f1_ci_high is not None
+        assert agg.macro_f1_ci_low <= agg.macro_f1 <= agg.macro_f1_ci_high
 
     def test_aggregate_serialization_excludes_pass_hat_5(self):
         from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate

@@ -69,7 +69,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             structural_matches = match_comments(
                 context.entry.expected_comments,
                 generated_comments,
-                context.entry.match_line_tolerance,
+                line_tolerance=None,
             )
             validated_matches = judge_comment_matches(
                 structural_matches,

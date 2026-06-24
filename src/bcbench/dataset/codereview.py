@@ -5,6 +5,9 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
+from bcbench.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Severity(StrEnum):
@@ -23,7 +26,12 @@ class Severity(StrEnum):
         try:
             return cls(normalized)
         except ValueError:
-            return _SEVERITY_ALIASES.get(normalized, cls.MEDIUM)
+            pass
+        alias = _SEVERITY_ALIASES.get(normalized)
+        if alias is not None:
+            return alias
+        logger.warning("Unknown severity %r; defaulting to %s. Use one of %s or a known alias.", value, cls.MEDIUM.value, [s.value for s in cls])
+        return cls.MEDIUM
 
 
 _SEVERITY_LEVELS: dict[Severity, int] = {
