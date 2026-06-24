@@ -161,13 +161,13 @@ def evaluate_bcal(
     deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
+    category: EvaluationCategoryOption = EvaluationCategory.NL2AL,
 ) -> None:
     """
-    Evaluate BCal dotnet tool on single nl2al dataset entry.
+    Evaluate BCal dotnet tool on a single nl2al (or nl2al-safety) dataset entry.
 
     To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
     """
-    category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
     run_dir = _prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(

@@ -490,7 +490,7 @@ function Get-BCBenchDatasetPath {
     param(
         [Parameter(Mandatory = $true)]
         # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
-        [ValidateSet("bug-fix", "test-generation", "nl2al")]
+        [ValidateSet("bug-fix", "test-generation", "nl2al", "nl2al-safety")]
         [string] $Category
     )
 
@@ -498,6 +498,7 @@ function Get-BCBenchDatasetPath {
         "bug-fix" { $DatasetName = "bcbench.jsonl" }
         "test-generation" { $DatasetName = "bcbench.jsonl" }
         "nl2al" { $DatasetName = "nl2al.jsonl" }
+        "nl2al-safety" { $DatasetName = "nl2al_safety.jsonl" }
     }
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent

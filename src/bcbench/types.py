@@ -131,6 +131,9 @@ class EvaluationCategory(StrEnum):
     BUG_FIX = "bug-fix"
     TEST_GENERATION = "test-generation"
     NL2AL = "nl2al"
+    # Same pipeline/judge as NL2AL but a separate dataset file (safety/negative prompts) so its
+    # results land under a distinct EvalSuiteName and never mix into the gold nl2al metric.
+    NL2AL_SAFETY = "nl2al-safety"
 
     @property
     def dataset_path(self) -> Path:
@@ -143,6 +146,8 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "bcbench.jsonl"
             case EvaluationCategory.NL2AL:
                 return get_config().paths.dataset_dir / "nl2al.jsonl"
+            case EvaluationCategory.NL2AL_SAFETY:
+                return get_config().paths.dataset_dir / "nl2al_safety.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -155,7 +160,7 @@ class EvaluationCategory(StrEnum):
                 return BugFixEntry
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenEntry
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return NL2ALEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -171,7 +176,7 @@ class EvaluationCategory(StrEnum):
                 return BugFixResult
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationResult
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return JudgeBasedEvaluationResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -186,7 +191,7 @@ class EvaluationCategory(StrEnum):
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedEvaluationResultSummary
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return JudgeBasedEvaluationResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -201,7 +206,7 @@ class EvaluationCategory(StrEnum):
                 return ExecutionBasedLeaderboardAggregate
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedLeaderboardAggregate
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return JudgeBasedLeaderboardAggregate
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -215,7 +220,7 @@ class EvaluationCategory(StrEnum):
                 return BugFixPipeline()
             case EvaluationCategory.TEST_GENERATION:
                 return TestGenerationPipeline()
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return NL2ALPipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -232,7 +237,7 @@ class EvaluationCategory(StrEnum):
                 return ["resolution_rate", "build_rate"]
             case EvaluationCategory.TEST_GENERATION:
                 return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return ["lm_checklist"]
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -243,7 +248,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "ResolutionRate"
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return "test_passed"
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -254,7 +259,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return True
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return False
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -268,7 +273,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "GitHub-BCBench"
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.NL2AL_SAFETY:
                 return "windows-latest"
 
         raise ValueError(f"Unknown evaluation category: {self}")
