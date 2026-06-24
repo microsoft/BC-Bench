@@ -89,6 +89,23 @@ def _find_copilot() -> str | None:
     return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
 
 
+def _decode_stream(stream: str | bytes | None) -> str:
+    if stream is None:
+        return ""
+    if isinstance(stream, bytes):
+        return stream.decode("utf-8", errors="replace")
+    return stream
+
+
+def _format_subprocess_output(exc: Exception, limit: int = 2000) -> str:
+    parts: list[str] = []
+    for label in ("stdout", "stderr"):
+        text = _decode_stream(getattr(exc, label, None)).strip()
+        if text:
+            parts.append(f"\n--- {label} ---\n{text[-limit:]}")
+    return "".join(parts)
+
+
 def judge_comment_matches(
     matched_pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
@@ -157,6 +174,6 @@ def judge_verdicts(
             check=True,
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
-        raise LLMJudgeError(f"Judge subprocess failed: {exc}") from exc
+        raise LLMJudgeError(f"Judge subprocess failed: {exc}{_format_subprocess_output(exc)}") from exc
 
     return _parse_judge_results(result_path, len(pairs), stdout=completed.stdout or "")

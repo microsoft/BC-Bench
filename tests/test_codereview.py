@@ -704,6 +704,15 @@ class TestJudge:
         ):
             judge_comment_matches([self._pair(10)], work_dir=tmp_path)
 
+    def test_subprocess_failure_surfaces_copilot_output(self, tmp_path):
+        error = subprocess.CalledProcessError(1, "copilot", output="partial stdout", stderr="model gpt-5.3-codex is not available")
+        with (
+            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
+            patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=error),
+            pytest.raises(LLMJudgeError, match="model gpt-5\\.3-codex is not available"),
+        ):
+            judge_comment_matches([self._pair(10)], work_dir=tmp_path)
+
     def test_filters_to_confirmed_pairs(self, tmp_path):
         pairs = [self._pair(10), self._pair(20)]
 
