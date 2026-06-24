@@ -641,19 +641,13 @@ class TestCodeReviewPipeline:
         ).stdout
         assert "src/NewObject.Codeunit.al" in diff
 
-    def test_evaluate_records_invalid_result_when_no_review_generated(self, tmp_path):
+    def test_evaluate_raises_when_no_review_generated(self, tmp_path):
         entry = create_codereview_entry()
         context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
         pipeline = CodeReviewPipeline()
 
-        with patch.object(pipeline, "save_result") as mock_save:
+        with pytest.raises(RuntimeError, match="No review generated"):
             pipeline.evaluate(context)
-
-        mock_save.assert_called_once()
-        result = mock_save.call_args.args[1]
-        assert result.valid_review_output is False
-        assert result.f1 == 0.0
-        assert result.generated_comments == []
 
 
 class TestJudge:
