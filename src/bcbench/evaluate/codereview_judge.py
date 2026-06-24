@@ -114,12 +114,29 @@ def judge_comment_matches(
     if not matched_pairs:
         return []
 
+    verdicts = judge_verdicts(matched_pairs, work_dir, model=model)
+    return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
+
+
+def judge_verdicts(
+    pairs: list[tuple[ReviewComment, ReviewComment]],
+    work_dir: Path,
+    model: str = JUDGE_MODEL,
+) -> list[bool]:
+    """Run the semantic judge over comment pairs and return one match verdict per pair.
+
+    Raises:
+        LLMJudgeError: If the judge cannot run or produce a usable verdict.
+    """
+    if not pairs:
+        return []
+
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
         raise LLMJudgeError("Copilot CLI not found; cannot run the semantic judge")
 
     result_path = work_dir / JUDGE_RESULT_FILE
-    prompt = " ".join(_build_judge_prompt(matched_pairs, JUDGE_RESULT_FILE).split())
+    prompt = " ".join(_build_judge_prompt(pairs, JUDGE_RESULT_FILE).split())
 
     try:
         completed = subprocess.run(
@@ -134,11 +151,12 @@ def judge_comment_matches(
             cwd=str(work_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_config.timeout.agent_execution,
             check=True,
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
         raise LLMJudgeError(f"Judge subprocess failed: {exc}") from exc
 
-    verdicts = _parse_judge_results(result_path, len(matched_pairs), stdout=completed.stdout or "")
-    return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
+    return _parse_judge_results(result_path, len(pairs), stdout=completed.stdout or "")

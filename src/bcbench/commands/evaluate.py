@@ -22,6 +22,8 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
+from bcbench.evaluate.codereview_judge import JUDGE_MODEL
+from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -201,6 +203,30 @@ def evaluate_bcal(
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("judge-calibration")
+def evaluate_judge_calibration(
+    model: CopilotModel = JUDGE_MODEL,
+    work_dir: RepoPath = _config.paths.testbed_path,
+    min_accuracy: Annotated[float, typer.Option(help="Fail if judge accuracy falls below this")] = 0.8,
+) -> None:
+    """Run the LLM judge over the hand-labeled calibration set and report its precision/recall.
+
+    Use this in CI to catch judge drift before it silently distorts code-review scores.
+    """
+    work_dir.mkdir(parents=True, exist_ok=True)
+    report = run_calibration(work_dir, model=model)
+
+    logger.info(f"Judge calibration ({model}) over {report.total} labeled pairs:")
+    logger.info(f"  precision={report.precision:.3f}  recall={report.recall:.3f}  accuracy={report.accuracy:.3f}")
+    logger.info(f"  TP={report.true_positives} FP={report.false_positives} TN={report.true_negatives} FN={report.false_negatives}")
+    for note in report.misclassified_notes:
+        logger.warning(f"  {note}")
+
+    if report.accuracy < min_accuracy:
+        logger.error(f"Judge accuracy {report.accuracy:.3f} is below the required {min_accuracy:.3f}")
+        raise typer.Exit(code=1)
 
 
 @evaluate_app.command("mock", hidden=True)
