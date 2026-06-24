@@ -197,7 +197,7 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_BACKEND: ${{ inputs.llm-backend || 'external-command' }}
-          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
+          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-53-chat-2026-03-03') || (inputs.model || 'gpt-5.2') }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model || 'gpt-5.2' }}
           CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
@@ -237,7 +237,7 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
+      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-53-chat-2026-03-03') || (inputs.model || 'gpt-5.2') }}
       agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
       mock: ${{ inputs.test-run || false }}
       category: nl2al
