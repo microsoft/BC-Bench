@@ -507,6 +507,52 @@ function Get-BCBenchDatasetPath {
 
 <#
 .SYNOPSIS
+    Resolves the BC sandbox version (environment_setup_version) for a dataset entry.
+.DESCRIPTION
+    Centralizes the category -> dataset -> version lookup used by container setup, symbol download,
+    and the CI artifact cache key. Resolves the dataset file via Get-BCBenchDatasetPath.
+.PARAMETER InstanceId
+    The dataset instance_id to resolve.
+.PARAMETER Category
+    The dataset category, used to locate the dataset file.
+.PARAMETER DatasetPath
+    Optional override for the dataset (.jsonl) path. Defaults to the category-specific path via Get-BCBenchDatasetPath.
+.OUTPUTS
+    The environment_setup_version string, e.g. "26.5".
+.EXAMPLE
+    Get-BCBenchEntryVersion -InstanceId "bug-fix__job-budget-report-1" -Category "bug-fix"
+#>
+function Get-BCBenchEntryVersion {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $InstanceId,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Category,
+
+        [Parameter(Mandatory = $false)]
+        [string] $DatasetPath = (Get-BCBenchDatasetPath -Category $Category)
+    )
+
+    if (-not (Test-Path $DatasetPath)) {
+        throw "Dataset file not found at: $DatasetPath"
+    }
+
+    foreach ($line in Get-Content -Path $DatasetPath) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $entry = $line | ConvertFrom-Json
+        if ($entry.instance_id -eq $InstanceId) {
+            return $entry.environment_setup_version
+        }
+    }
+
+    throw "Entry '$InstanceId' not found in $DatasetPath"
+}
+
+<#
+.SYNOPSIS
     Returns the latest BCApps release branch name (e.g. "releases/28.5").
 .DESCRIPTION
     Lists all refs under refs/heads/releases/ via the GitHub API and returns
@@ -543,4 +589,4 @@ function Get-LatestReleaseBranch {
     return $latest.Name
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo, Get-LatestReleaseBranch
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch

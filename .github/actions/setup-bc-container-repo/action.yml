@@ -63,6 +63,25 @@ runs:
         tenant-id: ${{ inputs.azure-tenant-id }}
         allow-no-subscriptions: true
 
+    - name: Resolve BC version for artifact cache
+      if: inputs.skip-container != 'true'
+      id: bcversion
+      shell: pwsh
+      run: |
+        Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
+        $version = Get-BCBenchEntryVersion -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}"
+        "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+    # Reuse BC artifacts (app + platform) at BcContainerHelper's default host cache so New-BcContainer /
+    # New-BcCompilerFolder skip the multi-GB download. Download-Artifacts is cache-first (useVolumes=$false),
+    # keyed by the entry's BC sandbox version and shared across workflows that use this action.
+    - name: Cache BC sandbox artifacts
+      if: inputs.skip-container != 'true'
+      uses: actions/cache@v5
+      with:
+        path: C:\bcartifacts.cache
+        key: bcartifacts-${{ steps.bcversion.outputs.version }}
+
     - name: Setup BC container and repository for ${{ inputs.instance-id }}
       id: setup
       env:
