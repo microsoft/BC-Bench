@@ -3,16 +3,18 @@
 import json
 from collections.abc import Callable
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
-from bcbench.dataset import BugFixEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
-from tests.conftest import create_evaluation_context
+from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_nl2al_entry
 
 
 class _StubPipeline(EvaluationPipeline[BugFixEntry]):
@@ -89,3 +91,32 @@ class TestExecuteEvaluateError:
 
         with pytest.raises(RuntimeError, match="infra blew up"):
             pipeline.execute(ctx, _noop_runner)
+
+
+def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
+    match category:
+        case EvaluationCategory.CODE_REVIEW:
+            return create_codereview_entry()
+        case EvaluationCategory.NL2AL:
+            return create_nl2al_entry()
+        case _:
+            return create_dataset_entry()
+
+
+class TestMockPipelineCoversAllCategories:
+    # Guards the CI mock-evaluation job: a newly added category must be handled here or this fails fast in unit tests.
+    @pytest.mark.parametrize("category", list(EvaluationCategory))
+    def test_every_category_produces_valid_result(self, tmp_path, category):
+        entry = _entry_for_category(category)
+        ctx = create_evaluation_context(tmp_path, entry=entry, category=category)
+        pipeline = MockEvaluationPipeline()
+
+        # Force each scenario deterministically so every branch is exercised, not just a random one.
+        for pick in (lambda seq: seq[0], lambda seq: seq[-1]):
+            with patch("bcbench.commands.evaluate.random.choice", pick):
+                pipeline.evaluate(ctx)
+
+        result_file = ctx.result_dir / f"{entry.instance_id}{get_config().file_patterns.result_pattern}"
+        results = [BaseEvaluationResult.from_json(json.loads(line)) for line in result_file.read_text(encoding="utf-8").splitlines()]
+        assert {r.category for r in results} == {category}
+        assert all(r.instance_id == entry.instance_id for r in results)
