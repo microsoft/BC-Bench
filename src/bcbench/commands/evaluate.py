@@ -23,7 +23,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
 from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult
+from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -285,6 +285,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 scenarios = ["success", "build-fail"]
             case EvaluationCategory.CODE_REVIEW:
                 scenarios = ["invalid", "valid"]
+            case EvaluationCategory.NL2AL:
+                scenarios = ["raw", "empty"]
             case _:
                 raise ValueError(f"Unsupported category for mock evaluation: {context.category}")
 
@@ -301,6 +303,10 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
             case "valid":
                 result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[], line_tolerance=0)
+            case "raw":
+                result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
+            case "empty":
+                result = JudgeBasedEvaluationResult.create_empty_output(context)
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 
