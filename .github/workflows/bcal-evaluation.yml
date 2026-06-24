@@ -33,14 +33,6 @@ on:
           - "gpt-5"
           - "gpt-4o"
           - "gpt-53-chat-2026-03-03"
-      category:
-        description: "Dataset category to evaluate: nl2al (gold) or nl2al-safety (negative/refusal entries)"
-        required: false
-        default: "nl2al"
-        type: choice
-        options:
-          - "nl2al"
-          - "nl2al-safety"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -51,7 +43,7 @@ on:
 
 
 concurrency:
-  group: bcal-evaluation-${{ inputs.category || 'nl2al' }}-${{ inputs.test-run && 'test' || 'full' }}
+  group: bcal-evaluation-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -62,7 +54,7 @@ jobs:
     uses: ./.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run || false }}
-      category: ${{ inputs.category || 'nl2al' }}
+      category: nl2al
 
   evaluate-with-bcal:
     runs-on: windows-latest
@@ -138,7 +130,7 @@ jobs:
 
       - name: Resolve BC version for cache key
         id: bcversion
-        run: uv run bcbench dataset version "${{ matrix.entry }}" --category ${{ inputs.category || 'nl2al' }} --github-output version
+        run: uv run bcbench dataset version "${{ matrix.entry }}" --category nl2al --github-output version
 
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
@@ -153,7 +145,7 @@ jobs:
         shell: pwsh
         run: |
           Install-Module -Name BcContainerHelper -Force -AllowClobber -AllowPrerelease
-          .\scripts\Download-BCSymbols.ps1 -Category ${{ inputs.category || 'nl2al' }} -InstanceId "${{ matrix.entry }}"
+          .\scripts\Download-BCSymbols.ps1 -Category nl2al -InstanceId "${{ matrix.entry }}"
 
       - name: Azure Login (OIDC) for CAPI Key Vault
         if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
@@ -205,7 +197,7 @@ jobs:
             $env:BCAL_LLM_COMMAND = "$env:GITHUB_WORKSPACE\.bcal-capi-venv\Scripts\python.exe $env:GITHUB_WORKSPACE\src\bcbench\agent\bcal\bc_eval_capi_bridge.py"
           }
 
-          uv run bcbench evaluate bcal "${{ matrix.entry }}" --category ${{ inputs.category || 'nl2al' }} --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -226,6 +218,6 @@ jobs:
       model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-5') || (inputs.model || 'gpt-5.2') }}
       agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
       mock: ${{ inputs.test-run || false }}
-      category: ${{ inputs.category || 'nl2al' }}
+      category: nl2al
       skip-leaderboard: true
     secrets: inherit
