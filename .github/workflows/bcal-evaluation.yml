@@ -24,7 +24,7 @@ on:
       external-model:
         description: "Model alias passed to the external-command bridge when llm-backend=external-command"
         required: false
-        default: "gpt-55-2026-04-24"
+        default: "gpt-53-chat-2026-03-03"
         type: choice
         options:
           - "claude-opus-4-8"

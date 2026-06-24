@@ -19,20 +19,6 @@ _config = get_config()
 _BCAL_TOOL = "bcal"
 
 
-def _per_attempt_bcal_timeout() -> int:
-    """Wall-clock timeout (seconds) for a single bcal attempt.
-
-    ``timeout.bcal_execution`` is the TOTAL bcal budget for one instance. When the NL2AL pipeline
-    retries on a transient outcome (``retry.nl2al_agent_attempts`` > 1), that budget is split evenly
-    across attempts so *all* attempts fit the same total wall-clock — and therefore the GitHub
-    Actions step cap. This is a convergence control: re-rolling a fresh attempt recovers a
-    thrashing / timed-out run more reliably than handing one stuck attempt the entire budget. With a
-    single attempt the per-attempt timeout equals the full budget (unchanged behaviour).
-    """
-    attempts = max(1, _config.retry.nl2al_agent_attempts)
-    return _config.timeout.bcal_execution // attempts
-
-
 class BCalBackendConfig(BaseModel):
     """A resolved bcal backend plus the inputs it needs to run.
 
@@ -125,13 +111,11 @@ def run_bcal_agent(
     logger.debug(f"Using prompt:\n{entry.get_task()}")
     logger.debug(f"bcal CLI command: {cmd_args}")
 
-    per_attempt_timeout = _per_attempt_bcal_timeout()
-
     try:
         start = time.monotonic()
         subprocess.run(
             cmd_args,
-            timeout=per_attempt_timeout,
+            timeout=_config.timeout.bcal_execution,
             check=True,
         )
         execution_time = time.monotonic() - start
@@ -139,8 +123,8 @@ def run_bcal_agent(
         logger.info(f"bcal CLI run complete for: {entry.instance_id}")
         return AgentMetrics(execution_time=execution_time), ExperimentConfiguration()
     except subprocess.TimeoutExpired:
-        logger.exception(f"bcal CLI timed out after {per_attempt_timeout} seconds")
-        metrics = AgentMetrics(execution_time=per_attempt_timeout)
+        logger.exception(f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds")
+        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
         raise AgentTimeoutError("bcal CLI timed out", metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"bcal CLI execution failed: {e.stderr}")

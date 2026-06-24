@@ -79,30 +79,8 @@ class TimeoutConfig:
             build_app=5 * 60,  # 5 minutes for application compilation
             test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
-            # Total bcal CLI budget per instance. The NL2AL pipeline splits this evenly across retry
-            # attempts (see RetryConfig), so the sum of all attempts stays below the GH Actions step
-            # `timeout-minutes` (28); the agent times out gracefully and still uploads results.
+            # Total bcal CLI budget per instance.
             bcal_execution=25 * 60,
-        )
-
-
-@dataclass(frozen=True)
-class RetryConfig:
-    """Retry configuration for agent execution.
-
-    ``nl2al_agent_attempts`` is the total number of attempts (including the first), so a value of
-    2 means a single retry. Retries are triggered by transient outcomes only — an agent timeout or
-    empty (no-change) output — to recover the ~13% of nl2al cases lost to a hard wall-clock timeout
-    rather than to a genuinely wrong solution.
-    """
-
-    nl2al_agent_attempts: int
-
-    @classmethod
-    def default(cls) -> RetryConfig:
-        """Get default retry configuration."""
-        return cls(
-            nl2al_agent_attempts=2,  # one retry on timeout / empty output
         )
 
 
@@ -174,7 +152,6 @@ class Config:
     paths: PathConfig
     env: EnvironmentConfig
     timeout: TimeoutConfig
-    retry: RetryConfig
     file_patterns: FilePatternConfig
 
     @classmethod
@@ -186,7 +163,6 @@ class Config:
             paths=path_config,
             env=EnvironmentConfig.from_environment(),
             timeout=TimeoutConfig.default(),
-            retry=RetryConfig.default(),
             file_patterns=FilePatternConfig.default(),
         )
 
