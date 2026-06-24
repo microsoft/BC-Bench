@@ -36,6 +36,5 @@ def test_all_retry_attempts_fit_the_ci_step_budget() -> None:
     # headroom for per-attempt setup (workspace reset + symbol copy) and graceful shutdown
     overhead_margin = 2 * 60
     assert attempts * per_attempt + overhead_margin <= step_budget, (
-        f"{attempts} attempts x {per_attempt}s + {overhead_margin}s overhead "
-        f"exceeds the {step_budget}s CI step budget — a retry would be killed mid-run"
+        f"{attempts} attempts x {per_attempt}s + {overhead_margin}s overhead exceeds the {step_budget}s CI step budget — a retry would be killed mid-run"
     )
