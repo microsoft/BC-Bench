@@ -61,7 +61,7 @@ prompt:
       - file: repo-relative path of the file the finding refers to (string, required)
       - line_start: 1-based line number where the issue starts (integer, required)
       - line_end: line number where the issue ends (integer, optional)
-      - severity: one of high, medium, or low (optional, defaults to medium)
+      - severity: one of critical, high, medium, or low (optional, defaults to medium)
       - body: concise description of the issue (string, required)
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
