@@ -101,6 +101,9 @@ jobs:
           BCAL_PACKAGE_ID: ${{ secrets.BCAL_PACKAGE_ID }}
           BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
         run: |
+          # Let native non-zero exits set $LASTEXITCODE instead of throwing, so the retry loop can see them.
+          $PSNativeCommandUseErrorActionPreference = $false
+
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
@@ -115,18 +118,37 @@ jobs:
           } | ConvertTo-Json -Compress -Depth 5
           $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
 
-          dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
+          # The ADO Artifacts NuGet credential provider intermittently fails to start ("Unable to load
+          # the service index for source"), which otherwise fails the entire matrix job and skips the
+          # results upload. Retry the transient feed error a couple of times before giving up.
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
+            Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
+            Start-Sleep -Seconds 20
+          }
 
       - name: Build bc-eval CAPI bridge venv
         if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
           uv python install 3.12
           uv venv .bcal-capi-venv --python 3.12
-          uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.7" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+
+          # Same transient ADO feed flakiness as the bcal install above; retry the package pull.
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.7" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) { throw "bc-eval[capi] install failed after 3 attempts (exit code $LASTEXITCODE)." }
+            Write-Output "::warning::bc-eval install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
+            Start-Sleep -Seconds 20
+          }
 
       - name: Resolve BC version for cache key
         id: bcversion
