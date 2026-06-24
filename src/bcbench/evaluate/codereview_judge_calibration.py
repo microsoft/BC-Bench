@@ -143,6 +143,56 @@ CALIBRATION_CASES: list[JudgeCalibrationCase] = [
         should_match=False,
         note="findset write-intent vs setloadfields — both about the same FindSet, different issue",
     ),
+    # --- Harder: same issue, large surface gap (symptom vs fix, rule# vs rationale) => should match ---
+    JudgeCalibrationCase(
+        expected=_c("src/Sales/CustList.Codeunit.al", 70, "This loop reads every column of Customer; on large tables that's a major performance hit."),
+        candidate=_c("src/Sales/CustList.Codeunit.al", 72, 'Call SetLoadFields(Name, "No.") before FindSet so only the needed fields are fetched.'),
+        should_match=True,
+        note="setloadfields: symptom (slow full read) vs fix (call SetLoadFields)",
+    ),
+    JudgeCalibrationCase(
+        expected=_c("src/Sales/SalesValidation.Codeunit.al", 25, "AA0217: the literal passed to Error() must be a Label variable."),
+        candidate=_c("src/Sales/SalesValidation.Codeunit.al", 25, "Hardcoding this error text breaks translation; move it to a Label with an Err suffix."),
+        should_match=True,
+        note="hardcoded error string: rule number (AA0217) vs translation rationale",
+    ),
+    JudgeCalibrationCase(
+        expected=_c("src/Integration/Import.Codeunit.al", 88, "The InStream is read twice without resetting position; the second read returns nothing."),
+        candidate=_c("src/Integration/Import.Codeunit.al", 90, "Reset the stream position before reading it a second time."),
+        should_match=True,
+        note="stream re-read: symptom (empty second read) vs fix (reset position)",
+    ),
+    JudgeCalibrationCase(
+        expected=_c("src/Admin/UserSetup.Page.al", 12, "This page exposes records without an OnOpenPage permission check."),
+        candidate=_c("src/Admin/UserSetup.Page.al", 12, "Add a SecurityFiltering/permission guard so unauthorized users can't read these records."),
+        should_match=True,
+        note="missing permission check: terminology variance (OnOpenPage check vs SecurityFiltering guard)",
+    ),
+    # --- Harder: overlapping/adjacent concerns that are genuinely different => should NOT match ---
+    JudgeCalibrationCase(
+        expected=_c("src/Sales/SalesPost.Codeunit.al", 60, "Missing TestField(Quantity) before posting."),
+        candidate=_c("src/Sales/SalesPost.Codeunit.al", 60, "Missing TestField(Type) before posting."),
+        should_match=False,
+        note="missing TestField but different field (Quantity vs Type)",
+    ),
+    JudgeCalibrationCase(
+        expected=_c("src/Sales/SalesPost.Codeunit.al", 142, "Commit() inside the loop breaks atomicity — move it out."),
+        candidate=_c("src/Sales/SalesPost.Codeunit.al", 142, "There is no Commit() here, so the batch changes are never persisted."),
+        should_match=False,
+        note="commit: too-many (in loop) vs missing entirely, opposite issue same line",
+    ),
+    JudgeCalibrationCase(
+        expected=_c("src/Inventory/Reorder.Codeunit.al", 120, "GET inside the loop is an N+1 performance problem."),
+        candidate=_c("src/Inventory/Reorder.Codeunit.al", 120, "The return value of this GET isn't checked; it can silently fail."),
+        should_match=False,
+        note="same GET statement: N+1 performance vs unchecked-return correctness",
+    ),
+    JudgeCalibrationCase(
+        expected=_c("src/Sales/Notify.Codeunit.al", 14, "Hardcoded message string should be a Label (AA0217)."),
+        candidate=_c("src/Sales/Notify.Codeunit.al", 14, "This Label uses a 'Msg' suffix but is passed to Error(); the suffix should be 'Err'."),
+        should_match=False,
+        note="label: not-a-Label-at-all (AA0217) vs existing-Label-wrong-suffix",
+    ),
 ]
 
 
