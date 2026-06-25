@@ -1,4 +1,3 @@
-using module .\DatasetEntry.psm1
 using module .\BCBenchUtils.psm1
 
 <#
@@ -11,9 +10,9 @@ using module .\BCBenchUtils.psm1
 .PARAMETER InstanceId
     The dataset instance_id to resolve the BC version for.
 .PARAMETER Category
-    The dataset category (`bug-fix` or `test-generation`) to resolve the dataset path for (if DatasetPath is not explicitly provided).
+    The dataset category used to resolve the dataset path (via Get-BCBenchDatasetPath).
 .PARAMETER DatasetPath
-    Path to the dataset (.jsonl). Defaults to the category-specific dataset path in the repo, for example dataset/bug-fix.jsonl or dataset/test-generation.jsonl.
+    Optional override for the dataset (.jsonl) path. Defaults to the category-specific path via Get-BCBenchDatasetPath.
 .PARAMETER Country
     BC artifact country (default: w1).
 .EXAMPLE
@@ -35,11 +34,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-[DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -InstanceId $InstanceId
-if (-not $entries -or $entries.Count -eq 0) {
-    throw "Entry '$InstanceId' not found in $DatasetPath"
-}
-[string] $version = $entries[0].environment_setup_version
+[string] $version = Get-BCBenchEntryVersion -InstanceId $InstanceId -Category $Category -DatasetPath $DatasetPath
 Write-Log "Resolved BC version $version for InstanceId $InstanceId" -Level Info
 
 Import-Module BcContainerHelper -Force -DisableNameChecking

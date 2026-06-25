@@ -33,6 +33,7 @@ on:
           - "gpt-5"
           - "gpt-4o"
           - "gpt-53-chat-2026-03-03"
+          - "gpt-41"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
