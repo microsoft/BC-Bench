@@ -7,7 +7,7 @@ title: Code Review - BC-Bench
 
 This category evaluates an agent's ability to **review** a Business Central (AL) pull request. Given a diff, the agent produces structured review comments, which are scored against an expected (gold) set of findings.
 
-Unlike the pass/fail categories, code review is scored with **Precision / Recall / F1** over the matched comments. A generated comment is counted as *matched* when it lands on the same file and line range as an expected finding (within a configured line tolerance) **and** an LLM judge confirms the two describe the same underlying issue.
+Unlike the pass/fail categories, code review is scored with **Precision / Recall / F1** over the matched comments. Expected and generated comments are paired by a globally optimal (one-to-one) assignment on file and line proximity (within a configured line tolerance), and a pair is only counted as *matched* when an LLM judge confirms the two describe the same underlying issue. Matched comments are additionally scored on how closely the agent's **severity** classification tracks the expected severity.
 
 ## Baseline Leaderboard
 
@@ -17,11 +17,12 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
     <tr>
       <th>Agent</th>
       <th>Model</th>
+      <th>F1 (95% CI)</th>
+      <th>Macro F1 (95% CI)</th>
       <th>Precision</th>
       <th>Recall</th>
-      <th>F1</th>
       <th>Fβ (β=2)</th>
-      <th>Valid Output</th>
+      <th>Runs</th>
       <th>Avg Time</th>
       <th>Ver</th>
     </tr>
@@ -33,11 +34,12 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
     <tr>
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
+      <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
+      <td>{{ agg.macro_f1 | times: 100.0 | round: 1 }}%{% if agg.macro_f1_ci_low %} ({{ agg.macro_f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.macro_f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
-      <td>{{ agg.f1 | times: 100.0 | round: 1 }}%</td>
       <td>{% if agg.f_beta_2 %}{{ agg.f_beta_2 | times: 100.0 | round: 1 }}%{% endif %}</td>
-      <td>{% if agg.valid_review_output_rate %}{{ agg.valid_review_output_rate | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{{ agg.num_runs }}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>
@@ -53,9 +55,12 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
 
 - **Precision** — of the comments the agent generated, the fraction that matched an expected finding. Penalizes noisy reviews.
 - **Recall** — of the expected findings, the fraction the agent caught. Penalizes missed issues.
-- **F1** — harmonic mean of precision and recall; balances both equally.
+- **F1** — harmonic mean of precision and recall; balances both equally (the β=1 case of Fβ).
+- **Fβ (β=0.5)** — precision-leaning F-score; use when false positives are costly (noisy reviews waste reviewer time).
 - **Fβ (β=2)** — recall-leaning F-score; weights catching issues more than avoiding noise.
-- **Valid output rate** — fraction of runs whose output parsed into a structured review. Failures score zero on every other metric.
+- **Severity MAE** — mean absolute error between the agent's and the expected severity levels, over matched comments only. Lower is better; `0` means every matched comment got the severity exactly right.
+- **Valid output rate** — fraction of tasks whose output parsed into a structured review. Failures score zero on every other metric. (Reported per run.)
 - **Micro vs. Macro** — *Micro* sums matched/generated/expected across all tasks (tasks with many comments dominate); *Macro* averages per-task scores (every task counts equally).
+- **95% CI** — confidence interval bootstrapped over the per-task F1 scores, so the leaderboard reports sampling uncertainty even for a single run. The micro `F1` CI resamples runs; the `Macro F1` CI resamples tasks.
 
 [← Back to Home](index.md)
