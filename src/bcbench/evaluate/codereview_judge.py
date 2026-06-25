@@ -18,10 +18,6 @@ from bcbench.exceptions import LLMJudgeError
 _config = get_config()
 
 
-JUDGE_RESULT_FILE = "judge_results.json"
-
-JUDGE_MODEL = "gpt-5.3-codex"
-
 _JUDGE_PROMPT_TEMPLATE = """
 You are a code review evaluation judge. Your task is to determine whether pairs of code review comments identify the SAME underlying issue.
 
@@ -109,11 +105,11 @@ def _format_subprocess_output(exc: Exception, limit: int = 2000) -> str:
 def judge_comment_matches(
     matched_pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
-    model: str = JUDGE_MODEL,
+    model: str = _config.judge.model,
 ) -> list[tuple[ReviewComment, ReviewComment]]:
     """Validate structurally matched comment pairs using an LLM semantic judge.
 
-    Defaults to a fixed judge model (``JUDGE_MODEL``) independent of the experiment
+    Defaults to a fixed judge model (``_config.judge.model``) independent of the experiment
     model, so scores reflect AL review quality rather than a model judging itself.
 
     Args:
@@ -138,7 +134,7 @@ def judge_comment_matches(
 def judge_verdicts(
     pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
-    model: str = JUDGE_MODEL,
+    model: str = _config.judge.model,
 ) -> list[bool]:
     """Run the semantic judge over comment pairs and return one match verdict per pair.
 
@@ -152,8 +148,8 @@ def judge_verdicts(
     if not copilot_cmd:
         raise LLMJudgeError("Copilot CLI not found; cannot run the semantic judge")
 
-    result_path = work_dir / JUDGE_RESULT_FILE
-    prompt = " ".join(_build_judge_prompt(pairs, JUDGE_RESULT_FILE).split())
+    result_path = work_dir / _config.judge.result_file
+    prompt = " ".join(_build_judge_prompt(pairs, _config.judge.result_file).split())
 
     try:
         completed = subprocess.run(

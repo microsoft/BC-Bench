@@ -22,7 +22,6 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
-from bcbench.evaluate.codereview_judge import JUDGE_MODEL
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -207,7 +206,7 @@ def evaluate_bcal(
 
 @evaluate_app.command("judge-calibration")
 def evaluate_judge_calibration(
-    model: CopilotModel = JUDGE_MODEL,
+    model: CopilotModel = _config.judge.model,
     work_dir: RepoPath = _config.paths.testbed_path,
     min_accuracy: Annotated[float, typer.Option(help="Fail if judge accuracy falls below this")] = 0.8,
 ) -> None:

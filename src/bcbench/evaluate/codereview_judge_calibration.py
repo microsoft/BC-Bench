@@ -15,8 +15,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.evaluate.codereview_judge import JUDGE_MODEL, judge_verdicts
+from bcbench.evaluate.codereview_judge import judge_verdicts
+
+_config = get_config()
 
 
 @dataclass(frozen=True)
@@ -231,7 +234,7 @@ def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase] =
     )
 
 
-def run_calibration(work_dir: Path, model: str = JUDGE_MODEL, cases: list[JudgeCalibrationCase] = CALIBRATION_CASES) -> JudgeCalibrationReport:
+def run_calibration(work_dir: Path, model: str = _config.judge.model, cases: list[JudgeCalibrationCase] = CALIBRATION_CASES) -> JudgeCalibrationReport:
     """Run the live judge over the calibration set and score it against the human labels.
 
     Requires the Copilot CLI (raises LLMJudgeError otherwise).

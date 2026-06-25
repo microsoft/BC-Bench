@@ -5,15 +5,18 @@ from unittest.mock import patch
 
 import pytest
 
+from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.evaluate.codereview_judge import JUDGE_RESULT_FILE, LLMJudgeError, _parse_judge_results, judge_comment_matches
+from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_comment_matches
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
+
+_config = get_config()
 
 
 class TestSeverity:
@@ -645,30 +648,30 @@ class TestJudge:
 
     def test_parse_raises_when_result_file_missing(self, tmp_path):
         with pytest.raises(LLMJudgeError, match="no result file"):
-            _parse_judge_results(tmp_path / JUDGE_RESULT_FILE, num_pairs=1)
+            _parse_judge_results(tmp_path / _config.judge.result_file, num_pairs=1)
 
     def test_parse_raises_on_invalid_json(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
         result_path.write_text("not json", encoding="utf-8")
 
         with pytest.raises(LLMJudgeError, match="not valid JSON"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_raises_when_not_a_list(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
         result_path.write_text('{"pair": 1, "match": true}', encoding="utf-8")
 
         with pytest.raises(LLMJudgeError, match="must be a JSON list"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_missing_pair_counts_as_not_confirmed(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
         result_path.write_text('[{"pair": 1, "match": true}]', encoding="utf-8")
 
         assert _parse_judge_results(result_path, num_pairs=2) == [True, False]
 
     def test_parse_falls_back_to_stdout_when_file_missing(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
 
         assert _parse_judge_results(result_path, num_pairs=1, stdout='```json\n[{"pair": 1, "match": true}]\n```') == [True]
 
@@ -703,7 +706,7 @@ class TestJudge:
         pairs = [self._pair(10), self._pair(20)]
 
         def fake_run(*args, **kwargs):
-            (tmp_path / JUDGE_RESULT_FILE).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
+            (tmp_path / _config.judge.result_file).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
             return subprocess.CompletedProcess(args, 0)
 
         with (
