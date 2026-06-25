@@ -4,10 +4,12 @@ import pytest
 
 from bcbench.evaluate.codereview_judge import _find_copilot
 from bcbench.evaluate.codereview_judge_calibration import (
-    CALIBRATION_CASES,
+    _load_calibration_cases,
     run_calibration,
     score_calibration,
 )
+
+CALIBRATION_CASES = _load_calibration_cases()
 
 
 class TestCalibrationDataset:
@@ -23,7 +25,7 @@ class TestCalibrationDataset:
 
     def test_gold_labels_score_perfectly_against_themselves(self):
         predicted = [c.should_match for c in CALIBRATION_CASES]
-        report = score_calibration(predicted)
+        report = score_calibration(predicted, CALIBRATION_CASES)
         assert report.precision == 1.0
         assert report.recall == 1.0
         assert report.accuracy == 1.0
@@ -33,12 +35,12 @@ class TestCalibrationDataset:
 class TestScoreCalibration:
     def test_length_mismatch_raises(self):
         with pytest.raises(ValueError, match="verdicts"):
-            score_calibration([True])
+            score_calibration([True], CALIBRATION_CASES)
 
     def test_counts_confusion_matrix(self):
         cases = CALIBRATION_CASES
         # Predict everything as a match: every true match is a TP, every non-match is a FP.
-        report = score_calibration([True] * len(cases))
+        report = score_calibration([True] * len(cases), cases)
         expected_matches = sum(c.should_match for c in cases)
         assert report.true_positives == expected_matches
         assert report.false_positives == len(cases) - expected_matches
@@ -47,7 +49,7 @@ class TestScoreCalibration:
 
     def test_all_wrong_predictions(self):
         cases = CALIBRATION_CASES
-        report = score_calibration([not c.should_match for c in cases])
+        report = score_calibration([not c.should_match for c in cases], cases)
         assert report.true_positives == 0
         assert report.accuracy == 0.0
         assert len(report.misclassified_notes) == len(cases)

@@ -206,14 +206,14 @@ def evaluate_bcal(
 
 @evaluate_app.command("judge-calibration")
 def evaluate_judge_calibration(
-    model: CopilotModel = _config.judge.model,
+    model: CopilotModel = _config.judge.code_review_model,
     work_dir: RepoPath = _config.paths.testbed_path,
     min_accuracy: Annotated[float, typer.Option(help="Fail if judge accuracy falls below this")] = 0.8,
 ) -> None:
     """Run the LLM judge over the hand-labeled calibration set and report its precision/recall.
 
-    Runs as a gate before code-review evaluations in CI (aborts the run if accuracy drops
-    below the threshold), and can also be run ad-hoc locally to check the judge.
+    Intended for local/ad-hoc checks of the judge; exits non-zero if accuracy drops below
+    the threshold.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
     report = run_calibration(work_dir, model=model)

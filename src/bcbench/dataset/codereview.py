@@ -20,13 +20,10 @@ class Severity(StrEnum):
     @classmethod
     def from_input(cls, value: str) -> Severity:
         normalized = value.strip().lower()
-        try:
+        if normalized in {s.value for s in cls}:
             return cls(normalized)
-        except ValueError:
-            pass
-        alias = _SEVERITY_ALIASES.get(normalized)
-        if alias is not None:
-            return alias
+        if normalized in _SEVERITY_ALIASES:
+            return _SEVERITY_ALIASES[normalized]
         valid = [s.value for s in cls] + list(_SEVERITY_ALIASES)
         raise ValueError(f"Unknown severity {value!r}; expected one of {valid}")
 

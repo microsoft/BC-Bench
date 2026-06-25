@@ -9,6 +9,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from bcbench.cli_options import CopilotModel
+
 __all__ = ["Config", "get_config"]
 
 
@@ -127,13 +129,13 @@ class FilePatternConfig:
 class JudgeConfig:
     """Configuration for the code-review LLM semantic judge."""
 
-    model: str
+    code_review_model: CopilotModel
     result_file: str
 
     @classmethod
     def default(cls) -> JudgeConfig:
         return cls(
-            model="gpt-5.3-codex",
+            code_review_model="gpt-5.3-codex",
             result_file="judge_results.json",
         )
 

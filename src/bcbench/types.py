@@ -313,7 +313,7 @@ class JudgeCalibrationReport:
     false_negatives: int
     precision: float
     recall: float
-    accuracy: float
+    accuracy: float  # (TP + TN) / total: share of judge verdicts that match the human label, not F1
     misclassified_notes: list[str]
 
 

@@ -72,52 +72,12 @@ jobs:
       test-run: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
 
-  judge-calibration:
-    runs-on: ${{ needs.get-entries.outputs.runner }}
-    needs: get-entries
-    if: inputs.category == 'code-review' && needs.get-entries.outputs.entries != '[]'
-    environment:
-      name: ado-read
-      deployment: false
-    permissions:
-      contents: read
-      id-token: write
-      copilot-requests: write
-    name: judge-calibration
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot@1.0.57
-
-      - name: Calibrate code-review judge before spending eval credits
-        timeout-minutes: 15
-        shell: pwsh
-        env:
-          COPILOT_GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
-
-          uv run bcbench evaluate judge-calibration
-
   evaluate-with-copilot-cli:
     runs-on: ${{ needs.get-entries.outputs.runner }}
-    needs: [get-entries, judge-calibration]
+    needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    if: >-
-      always() &&
-      needs.get-entries.result == 'success' &&
-      needs.get-entries.outputs.entries != '[]' &&
-      (needs.judge-calibration.result == 'success' || needs.judge-calibration.result == 'skipped')
+    if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
       deployment: false

@@ -105,11 +105,11 @@ def _format_subprocess_output(exc: Exception, limit: int = 2000) -> str:
 def judge_comment_matches(
     matched_pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
-    model: str = _config.judge.model,
+    model: str = _config.judge.code_review_model,
 ) -> list[tuple[ReviewComment, ReviewComment]]:
     """Validate structurally matched comment pairs using an LLM semantic judge.
 
-    Defaults to a fixed judge model (``_config.judge.model``) independent of the experiment
+    Defaults to a fixed judge model (``_config.judge.code_review_model``) independent of the experiment
     model, so scores reflect AL review quality rather than a model judging itself.
 
     Args:
@@ -134,7 +134,7 @@ def judge_comment_matches(
 def judge_verdicts(
     pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
-    model: str = _config.judge.model,
+    model: str = _config.judge.code_review_model,
 ) -> list[bool]:
     """Run the semantic judge over comment pairs and return one match verdict per pair.
 

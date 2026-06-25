@@ -12,9 +12,9 @@ differ in wording, severity, or line so semantic equivalence is exercised.
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
@@ -27,8 +27,9 @@ _config = get_config()
 CALIBRATION_DATASET = _config.paths.dataset_dir / "judge_calibration.jsonl"
 
 
-@dataclass(frozen=True)
-class JudgeCalibrationCase:
+class JudgeCalibrationCase(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     expected: ReviewComment
     candidate: ReviewComment
     should_match: bool
@@ -36,26 +37,14 @@ class JudgeCalibrationCase:
 
 
 def _load_calibration_cases(path: Path = CALIBRATION_DATASET) -> list[JudgeCalibrationCase]:
-    cases: list[JudgeCalibrationCase] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        raw = json.loads(line)
-        cases.append(
-            JudgeCalibrationCase(
-                expected=ReviewComment(**raw["expected"]),
-                candidate=ReviewComment(**raw["candidate"]),
-                should_match=raw["should_match"],
-                note=raw["note"],
-            )
-        )
-    return cases
+    return [
+        JudgeCalibrationCase.model_validate_json(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
-CALIBRATION_CASES: list[JudgeCalibrationCase] = _load_calibration_cases()
-
-
-def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase] = CALIBRATION_CASES) -> JudgeCalibrationReport:
+def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase]) -> JudgeCalibrationReport:
     if len(predicted) != len(cases):
         raise ValueError(f"Expected {len(cases)} verdicts, got {len(predicted)}")
 
@@ -89,11 +78,12 @@ def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase] =
     )
 
 
-def run_calibration(work_dir: Path, model: str = _config.judge.model, cases: list[JudgeCalibrationCase] = CALIBRATION_CASES) -> JudgeCalibrationReport:
+def run_calibration(work_dir: Path, model: str = _config.judge.code_review_model, dataset: Path = CALIBRATION_DATASET) -> JudgeCalibrationReport:
     """Run the live judge over the calibration set and score it against the human labels.
 
     Requires the Copilot CLI (raises LLMJudgeError otherwise).
     """
+    cases = _load_calibration_cases(dataset)
     pairs = [(case.expected, case.candidate) for case in cases]
     verdicts = judge_verdicts(pairs, work_dir, model=model)
     return score_calibration(verdicts, cases)
