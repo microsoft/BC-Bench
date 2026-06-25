@@ -3,22 +3,6 @@ layout: default
 title: Code Review - BC-Bench
 ---
 
-<style>
-  /* Widen this page so the multi-column leaderboard fits without horizontal scroll */
-  .main-content {
-    max-width: 80rem;
-  }
-  .main-content table {
-    display: table;
-    width: 100%;
-    table-layout: auto;
-  }
-  .main-content table th,
-  .main-content table td {
-    padding: 0.4rem 0.6rem;
-  }
-</style>
-
 # Code Review
 
 This category evaluates an agent's ability to **review** a Business Central (AL) pull request. Given a diff, the agent produces structured review comments, which are scored against an expected (gold) set of findings.
@@ -34,11 +18,8 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
       <th>Agent</th>
       <th>Model</th>
       <th>F1 (95% CI)</th>
-      <th>Macro F1 (95% CI)</th>
       <th>Precision</th>
       <th>Recall</th>
-      <th>Fβ (β=2)</th>
-      <th>Runs</th>
       <th>Avg Time</th>
       <th>Ver</th>
     </tr>
@@ -51,11 +32,8 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
-      <td>{{ agg.macro_f1 | times: 100.0 | round: 1 }}%{% if agg.macro_f1_ci_low %} ({{ agg.macro_f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.macro_f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
-      <td>{% if agg.f_beta_2 %}{{ agg.f_beta_2 | times: 100.0 | round: 1 }}%{% endif %}</td>
-      <td>{{ agg.num_runs }}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>
