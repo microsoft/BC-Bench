@@ -74,7 +74,6 @@ class CodeReviewEntry(BaseDatasetEntry):
     """Dataset entry for the code-review category."""
 
     expected_comments: list[ReviewComment] = Field(default_factory=list)
-    match_line_tolerance: int = Field(default=5, ge=0)
 
     def get_task(self) -> str:
         return self.patch

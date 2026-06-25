@@ -75,7 +75,6 @@ def _line_distance(line: int, start: int, end: int | None) -> int:
 def match_comments(
     expected_comments: list[ReviewComment],
     generated_comments: list[ReviewComment],
-    line_tolerance: int | None,
 ) -> list[tuple[ReviewComment, ReviewComment]]:
     """Pair expected and generated comments by globally optimal (file, line-proximity) assignment.
 
@@ -84,10 +83,8 @@ def match_comments(
     A simple order-based greedy can let an earlier-listed expected comment steal a finding that is
     a closer (often exact-line) match for a later expected comment, understating recall.
 
-    When ``line_tolerance`` is ``None`` the line distance never blocks a pair: any same-file finding
-    is an eligible candidate and the distance acts only as an assignment tiebreak. This is the mode
-    used ahead of the LLM judge, which is the authoritative semantic gate. A numeric ``line_tolerance``
-    keeps the older hard structural gate (used for judge-free scoring).
+    Only same-file findings are eligible; line distance never blocks a pair and acts solely as an
+    assignment tiebreak. The LLM judge is the authoritative semantic gate applied to these pairs.
     """
     if not expected_comments or not generated_comments:
         return []
@@ -102,8 +99,6 @@ def match_comments(
             if _normalize_path(generated.file) != expected_file:
                 continue
             distance = _line_distance(generated.line_start, expected.line_start, expected.line_end)
-            if line_tolerance is not None and distance > line_tolerance:
-                continue
             cost[expected_index, generated_index] = distance
 
     finite = cost[np.isfinite(cost)]
@@ -134,7 +129,6 @@ class CodeReviewResult(BaseEvaluationResult):
 
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
-    line_tolerance: int = Field(ge=0)
     valid_review_output: bool = False
 
     matched_comment_count: int = Field(default=0, ge=0)
@@ -155,11 +149,10 @@ class CodeReviewResult(BaseEvaluationResult):
         output: str,
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
-        line_tolerance: int,
         matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
     ) -> Self:
         if matched_pairs is None:
-            matched_pairs = match_comments(expected_comments, generated_comments, line_tolerance)
+            matched_pairs = match_comments(expected_comments, generated_comments)
         matched_count = len(matched_pairs)
         precision, recall = precision_recall(matched_count, len(generated_comments), len(expected_comments))
 
@@ -168,7 +161,6 @@ class CodeReviewResult(BaseEvaluationResult):
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
-            line_tolerance=line_tolerance,
             valid_review_output=True,
             matched_comment_count=matched_count,
             incorrect_comment_count=len(generated_comments) - matched_count,
@@ -193,7 +185,6 @@ class CodeReviewResult(BaseEvaluationResult):
             **cls._base_fields(context),
             output=output,
             expected_comments=expected_comments,
-            line_tolerance=0,
             valid_review_output=False,
         )
 

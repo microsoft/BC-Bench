@@ -58,14 +58,14 @@ class TestMatchComments:
         ]
         generated = [ReviewComment(file="a.al", line_start=16, body="Commit() inside repeat", severity=Severity.HIGH)]
 
-        pairs = match_comments(expected, generated, line_tolerance=2)
+        pairs = match_comments(expected, generated)
 
         assert len(pairs) == 1
         matched_expected, matched_generated = pairs[0]
         assert matched_expected.line_start == 16
         assert matched_generated.line_start == 16
 
-    def test_maximizes_number_of_matches_within_tolerance(self):
+    def test_maximizes_number_of_matches(self):
         expected = [
             ReviewComment(file="a.al", line_start=10, body="issue A", severity=Severity.HIGH),
             ReviewComment(file="a.al", line_start=11, body="issue B", severity=Severity.HIGH),
@@ -75,7 +75,7 @@ class TestMatchComments:
             ReviewComment(file="a.al", line_start=12, body="near A only", severity=Severity.HIGH),
         ]
 
-        pairs = match_comments(expected, generated, line_tolerance=2)
+        pairs = match_comments(expected, generated)
 
         assert len(pairs) == 2
         assert {matched_expected.line_start for matched_expected, _ in pairs} == {10, 11}
@@ -84,41 +84,29 @@ class TestMatchComments:
         expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
         generated = [ReviewComment(file="b.al", line_start=10, body="x", severity=Severity.HIGH)]
 
-        assert match_comments(expected, generated, line_tolerance=5) == []
-
-    def test_no_match_beyond_tolerance(self):
-        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
-        generated = [ReviewComment(file="a.al", line_start=20, body="x", severity=Severity.HIGH)]
-
-        assert match_comments(expected, generated, line_tolerance=5) == []
+        assert match_comments(expected, generated) == []
 
     def test_empty_inputs_return_no_pairs(self):
         comment = ReviewComment(file="a.al", line_start=1, body="x", severity=Severity.HIGH)
-        assert match_comments([], [comment], line_tolerance=5) == []
-        assert match_comments([comment], [], line_tolerance=5) == []
+        assert match_comments([], [comment]) == []
+        assert match_comments([comment], []) == []
 
-    def test_none_tolerance_pairs_same_file_regardless_of_distance(self):
+    def test_pairs_same_file_regardless_of_distance(self):
         expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
         generated = [ReviewComment(file="a.al", line_start=900, body="x", severity=Severity.HIGH)]
 
-        pairs = match_comments(expected, generated, line_tolerance=None)
+        pairs = match_comments(expected, generated)
 
         assert len(pairs) == 1
 
-    def test_none_tolerance_still_never_pairs_across_files(self):
-        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
-        generated = [ReviewComment(file="b.al", line_start=10, body="x", severity=Severity.HIGH)]
-
-        assert match_comments(expected, generated, line_tolerance=None) == []
-
-    def test_none_tolerance_uses_distance_as_tiebreak(self):
+    def test_uses_distance_as_tiebreak(self):
         expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
         generated = [
             ReviewComment(file="a.al", line_start=500, body="far", severity=Severity.HIGH),
             ReviewComment(file="a.al", line_start=12, body="near", severity=Severity.HIGH),
         ]
 
-        pairs = match_comments(expected, generated, line_tolerance=None)
+        pairs = match_comments(expected, generated)
 
         assert len(pairs) == 1
         _, matched_generated = pairs[0]
@@ -192,7 +180,6 @@ class TestCodeReviewResult:
             "agent_name": "copilot-cli",
             "category": "code-review",
             "output": "",
-            "line_tolerance": 5,
         }
 
         result = BaseEvaluationResult.from_json(payload)
@@ -264,7 +251,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
 
         assert result.matched_comment_count == 1
         assert result.missed_comment_count == 1
@@ -310,7 +297,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
 
         assert result.display_row == {
             "Generated": "2",

@@ -329,7 +329,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             case "invalid":
                 result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
             case "valid":
-                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[], line_tolerance=0)
+                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[])
             case "raw":
                 result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
             case "empty":
