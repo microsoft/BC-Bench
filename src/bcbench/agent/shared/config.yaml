@@ -117,3 +117,53 @@ mcp:
     #   type: "stdio"
     #   command: "npx"
     #   args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
+
+# BCQuality live-consumption experiment (code-review category ONLY).
+#
+# When enabled, the code-review pipeline faithfully replicates how microsoft/BCApps
+# consumes microsoft/BCQuality today (BCApps#8700): it clones BCQuality at a pinned
+# SHA, filters the clone to the allowed layers/knowledge, makes the filtered clone the
+# Copilot CLI working directory, grants the repo-under-review via --add-dir, and routes
+# the agent through skills/entry.md with a task-context document. This lets us compare
+# "vanilla copilot" (enabled: false) vs "copilot + BCQuality skills" (enabled: true).
+#
+# This switch has NO effect on bug-fix / test-generation categories.
+#
+# SECURITY: the clone becomes the agent CWD, so its skill/knowledge files are read
+# before the diff. `ref` MUST be pinned to a reviewed commit SHA and `repo` MUST point
+# only at a trusted source — a compromised fork can embed prompt-injection payloads.
+bcquality:
+  enabled: false
+
+  # HTTPS URL of the BCQuality repository to consume.
+  repo: "https://github.com/microsoft/BCQuality"
+
+  # Git SHA to clone. Pinned to the exact commit microsoft/BCApps ships today
+  # (tools/BCQuality/bcquality.config.yaml as of BCApps#8700) so the benchmark
+  # measures what BCApps actually consumes. Bump deliberately to a reviewed SHA.
+  ref: "822cae1b2771ac25f665f73369f69093bd4fd630"
+
+  # Which BCQuality layers the agent may consume. Allowed: microsoft, community, custom.
+  enabled-layers:
+    - microsoft
+
+  # Repo-relative paths (within BCQuality) of action skills to exclude.
+  disabled-skills: []
+
+  # Per-article filtering for knowledge files. Globs match repo-relative paths
+  # inside the BCQuality clone (forward slashes). Evaluation order:
+  #   1. If `allow` is non-empty, only files matching `allow` survive.
+  #   2. Files matching `deny` are then removed.
+  #   3. Files outside `enabled-layers` are always removed.
+  knowledge:
+    allow:
+      - "microsoft/knowledge/**"
+    deny: []
+
+  # Dimensions passed verbatim to BCQuality's skills/entry.md as `task-context`.
+  # Each list may be `[all]` to mean "unconstrained".
+  task-context:
+    technologies: ["al"]
+    countries: ["w1"]
+    application-area: ["all"]
+    bc-version: ["all"]
