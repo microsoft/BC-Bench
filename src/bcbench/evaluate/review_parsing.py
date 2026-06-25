@@ -47,7 +47,6 @@ def _normalize_comment(item: dict[Any, Any]) -> ReviewComment | None:
     line_end = _to_int(item.get("line_end") or item.get("lineEnd") or item.get("endLine"))
     domain = item.get("domain")
     body = item.get("body") or item.get("issue") or item.get("comment")
-    severity = Severity.from_input(str(item.get("severity", "medium")))
 
     if not isinstance(file_path, str) or not file_path.strip():
         return None
@@ -63,9 +62,21 @@ def _normalize_comment(item: dict[Any, Any]) -> ReviewComment | None:
             line_end=line_end,
             domain=domain.strip() if isinstance(domain, str) and domain.strip() else None,
             body=body.strip(),
-            severity=severity,
+            severity=_coerce_optional_severity(item.get("severity")),
         )
     except Exception:
+        return None
+
+
+def _coerce_optional_severity(value: object) -> Severity | None:
+    # Missing or unrecognized severities are kept as None (no default) so the finding still counts;
+    # this mirrors production review rendering, which surfaces unknown-severity findings rather than
+    # silently dropping or defaulting them.
+    if value is None:
+        return None
+    try:
+        return Severity.from_input(str(value))
+    except ValueError:
         return None
 
 

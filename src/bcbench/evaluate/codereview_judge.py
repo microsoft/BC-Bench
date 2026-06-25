@@ -18,10 +18,6 @@ from bcbench.exceptions import LLMJudgeError
 _config = get_config()
 
 
-JUDGE_RESULT_FILE = "judge_results.json"
-
-JUDGE_MODEL = "gpt-5.3-codex"
-
 _JUDGE_PROMPT_TEMPLATE = """
 You are a code review evaluation judge. Your task is to determine whether pairs of code review comments identify the SAME underlying issue.
 
@@ -39,8 +35,8 @@ Include exactly one entry for every pair. Do not write any other files or prose.
 def _format_pair(index: int, expected: ReviewComment, generated: ReviewComment) -> str:
     return (
         f"Pair {index}:\n"
-        f"  Expected: [{expected.severity}] {expected.file}:{expected.line_start}: {expected.body}\n"
-        f"  Candidate: [{generated.severity}] {generated.file}:{generated.line_start}: {generated.body}"
+        f"  Expected: [{expected.severity_label}] {expected.file}:{expected.line_start}: {expected.body}\n"
+        f"  Candidate: [{generated.severity_label}] {generated.file}:{generated.line_start}: {generated.body}"
     )
 
 
@@ -89,14 +85,31 @@ def _find_copilot() -> str | None:
     return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
 
 
+def _decode_stream(stream: str | bytes | None) -> str:
+    if stream is None:
+        return ""
+    if isinstance(stream, bytes):
+        return stream.decode("utf-8", errors="replace")
+    return stream
+
+
+def _format_subprocess_output(exc: Exception, limit: int = 2000) -> str:
+    parts: list[str] = []
+    for label in ("stdout", "stderr"):
+        text = _decode_stream(getattr(exc, label, None)).strip()
+        if text:
+            parts.append(f"\n--- {label} ---\n{text[-limit:]}")
+    return "".join(parts)
+
+
 def judge_comment_matches(
     matched_pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
-    model: str = JUDGE_MODEL,
+    model: str = _config.judge.code_review_model,
 ) -> list[tuple[ReviewComment, ReviewComment]]:
     """Validate structurally matched comment pairs using an LLM semantic judge.
 
-    Defaults to a fixed judge model (``JUDGE_MODEL``) independent of the experiment
+    Defaults to a fixed judge model (``_config.judge.code_review_model``) independent of the experiment
     model, so scores reflect AL review quality rather than a model judging itself.
 
     Args:
@@ -114,12 +127,29 @@ def judge_comment_matches(
     if not matched_pairs:
         return []
 
+    verdicts = judge_verdicts(matched_pairs, work_dir, model=model)
+    return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
+
+
+def judge_verdicts(
+    pairs: list[tuple[ReviewComment, ReviewComment]],
+    work_dir: Path,
+    model: str = _config.judge.code_review_model,
+) -> list[bool]:
+    """Run the semantic judge over comment pairs and return one match verdict per pair.
+
+    Raises:
+        LLMJudgeError: If the judge cannot run or produce a usable verdict.
+    """
+    if not pairs:
+        return []
+
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
         raise LLMJudgeError("Copilot CLI not found; cannot run the semantic judge")
 
-    result_path = work_dir / JUDGE_RESULT_FILE
-    prompt = " ".join(_build_judge_prompt(matched_pairs, JUDGE_RESULT_FILE).split())
+    result_path = work_dir / _config.judge.result_file
+    prompt = " ".join(_build_judge_prompt(pairs, _config.judge.result_file).split())
 
     try:
         completed = subprocess.run(
@@ -134,11 +164,12 @@ def judge_comment_matches(
             cwd=str(work_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=_config.timeout.agent_execution,
             check=True,
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
-        raise LLMJudgeError(f"Judge subprocess failed: {exc}") from exc
+        raise LLMJudgeError(f"Judge subprocess failed: {exc}{_format_subprocess_output(exc)}") from exc
 
-    verdicts = _parse_judge_results(result_path, len(matched_pairs), stdout=completed.stdout or "")
-    return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
+    return _parse_judge_results(result_path, len(pairs), stdout=completed.stdout or "")

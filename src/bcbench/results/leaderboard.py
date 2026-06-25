@@ -143,8 +143,16 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
         cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
         n = len(cr_runs)
 
+        # The micro headline pools every comment across the dataset, so there is no per-task
+        # decomposition to resample; its CI is intentionally over run-level means and captures
+        # run-to-run reproducibility (None unless >=2 runs with variance).
         f1_ci = bootstrap_ci([r.f1 for r in cr_runs])
-        macro_f1_ci = bootstrap_ci([r.macro_f1 for r in cr_runs])
+        # The macro headline weights tasks equally, so we bootstrap the equal-weight headline over the
+        # pooled per-task F1 scores across runs: the CI reflects task-level variance (resampling tasks),
+        # which is the dominant sampling uncertainty for our small task set and is meaningful even for a
+        # single run. This deliberately differs from the per-run micro CI above.
+        pooled_task_f1 = [score for r in cr_runs for score in r.per_task_f1]
+        macro_f1_ci = bootstrap_ci(pooled_task_f1)
 
         return base.model_copy(
             update={

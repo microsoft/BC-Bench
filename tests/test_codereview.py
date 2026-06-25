@@ -5,14 +5,18 @@ from unittest.mock import patch
 
 import pytest
 
+from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.evaluate.codereview_judge import JUDGE_RESULT_FILE, LLMJudgeError, _parse_judge_results, judge_comment_matches
+from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_comment_matches
+from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
+
+_config = get_config()
 
 
 class TestSeverity:
@@ -26,8 +30,9 @@ class TestSeverity:
         assert Severity.from_input("suggestion") is Severity.LOW
         assert Severity.from_input("info") is Severity.LOW
 
-    def test_unknown_severity_defaults_to_medium(self):
-        assert Severity.from_input("bogus") is Severity.MEDIUM
+    def test_unknown_severity_raises(self):
+        with pytest.raises(ValueError, match="Unknown severity"):
+            Severity.from_input("bogus")
 
     def test_levels_are_strictly_ordered(self):
         assert Severity.CRITICAL.level > Severity.HIGH.level > Severity.MEDIUM.level > Severity.LOW.level
@@ -35,6 +40,28 @@ class TestSeverity:
     def test_review_comment_normalizes_severity_on_construction(self):
         comment = ReviewComment.model_validate({"file": "src/app.al", "line_start": 1, "body": "x", "severity": "warning"})
         assert comment.severity is Severity.MEDIUM
+
+    def test_parser_keeps_comment_with_unknown_severity_as_unspecified(self):
+        output = json.dumps(
+            [
+                {"file": "a.al", "line_start": 1, "body": "valid", "severity": "high"},
+                {"file": "a.al", "line_start": 2, "body": "bad severity", "severity": "bogus"},
+                {"file": "a.al", "line_start": 3, "body": "missing severity"},
+            ]
+        )
+        comments = parse_review_output(output)
+        assert comments is not None
+        assert [(c.body, c.severity) for c in comments] == [
+            ("valid", Severity.HIGH),
+            ("bad severity", None),
+            ("missing severity", None),
+        ]
+
+    def test_unspecified_severity_renders_as_label(self):
+        comment = ReviewComment(file="a.al", line_start=1, body="x")
+        assert comment.severity is None
+        assert comment.severity_label == "unspecified"
+        assert str(comment) == "[unspecified] a.al:1: x"
 
 
 class TestMatchComments:
@@ -45,14 +72,14 @@ class TestMatchComments:
         ]
         generated = [ReviewComment(file="a.al", line_start=16, body="Commit() inside repeat", severity=Severity.HIGH)]
 
-        pairs = match_comments(expected, generated, line_tolerance=2)
+        pairs = match_comments(expected, generated)
 
         assert len(pairs) == 1
         matched_expected, matched_generated = pairs[0]
         assert matched_expected.line_start == 16
         assert matched_generated.line_start == 16
 
-    def test_maximizes_number_of_matches_within_tolerance(self):
+    def test_maximizes_number_of_matches(self):
         expected = [
             ReviewComment(file="a.al", line_start=10, body="issue A", severity=Severity.HIGH),
             ReviewComment(file="a.al", line_start=11, body="issue B", severity=Severity.HIGH),
@@ -62,7 +89,7 @@ class TestMatchComments:
             ReviewComment(file="a.al", line_start=12, body="near A only", severity=Severity.HIGH),
         ]
 
-        pairs = match_comments(expected, generated, line_tolerance=2)
+        pairs = match_comments(expected, generated)
 
         assert len(pairs) == 2
         assert {matched_expected.line_start for matched_expected, _ in pairs} == {10, 11}
@@ -71,18 +98,33 @@ class TestMatchComments:
         expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
         generated = [ReviewComment(file="b.al", line_start=10, body="x", severity=Severity.HIGH)]
 
-        assert match_comments(expected, generated, line_tolerance=5) == []
-
-    def test_no_match_beyond_tolerance(self):
-        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
-        generated = [ReviewComment(file="a.al", line_start=20, body="x", severity=Severity.HIGH)]
-
-        assert match_comments(expected, generated, line_tolerance=5) == []
+        assert match_comments(expected, generated) == []
 
     def test_empty_inputs_return_no_pairs(self):
         comment = ReviewComment(file="a.al", line_start=1, body="x", severity=Severity.HIGH)
-        assert match_comments([], [comment], line_tolerance=5) == []
-        assert match_comments([comment], [], line_tolerance=5) == []
+        assert match_comments([], [comment]) == []
+        assert match_comments([comment], []) == []
+
+    def test_pairs_same_file_regardless_of_distance(self):
+        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
+        generated = [ReviewComment(file="a.al", line_start=900, body="x", severity=Severity.HIGH)]
+
+        pairs = match_comments(expected, generated)
+
+        assert len(pairs) == 1
+
+    def test_uses_distance_as_tiebreak(self):
+        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
+        generated = [
+            ReviewComment(file="a.al", line_start=500, body="far", severity=Severity.HIGH),
+            ReviewComment(file="a.al", line_start=12, body="near", severity=Severity.HIGH),
+        ]
+
+        pairs = match_comments(expected, generated)
+
+        assert len(pairs) == 1
+        _, matched_generated = pairs[0]
+        assert matched_generated.line_start == 12
 
 
 class TestCodeReviewEntry:
@@ -152,7 +194,6 @@ class TestCodeReviewResult:
             "agent_name": "copilot-cli",
             "category": "code-review",
             "output": "",
-            "line_tolerance": 5,
         }
 
         result = BaseEvaluationResult.from_json(payload)
@@ -224,7 +265,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
 
         assert result.matched_comment_count == 1
         assert result.missed_comment_count == 1
@@ -234,7 +275,25 @@ class TestCodeReviewResult:
         assert result.f1 == 0.5
         assert result.severity_mae == 0.0
 
-    def test_severity_aliases_normalize_to_skill_levels(self):
+    def test_severity_mae_skips_pairs_with_unspecified_severity(self):
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="A", severity=Severity.HIGH),
+            ReviewComment(file="src/app.al", line_start=40, body="B", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps(
+            [
+                {"file": "src/app.al", "line_start": 11, "body": "near A", "severity": "bogus"},
+                {"file": "src/app.al", "line_start": 41, "body": "near B", "severity": "medium"},
+            ]
+        )
+
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+
+        assert result.matched_comment_count == 2
+        assert result.generated_comments[0].severity is None
+        # Only the (LOW, MEDIUM) pair is scorable; the unspecified-severity pair is skipped.
+        assert result.severity_mae == 1.0
+
         result = create_codereview_result(
             output=json.dumps(
                 [
@@ -270,7 +329,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, line_tolerance=5)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
 
         assert result.display_row == {
             "Generated": "2",
@@ -345,6 +404,36 @@ class TestCodeReviewSummary:
         assert summary.precision == 0.5
         assert summary.recall == 0.25
         assert summary.f1 == 0.333
+
+    def test_macro_precision_excludes_silent_tasks(self):
+        expected_comments = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
+
+        commenting = create_codereview_result(
+            instance_id="test__macro-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
+            expected_comments=expected_comments,
+        )
+        silent = create_codereview_result(
+            instance_id="test__macro-2",
+            output="[]",
+            expected_comments=expected_comments,
+        )
+
+        summary = CodeReviewResultSummary.from_results([commenting, silent], run_id="run-1")
+
+        # Only the task where the agent actually commented (precision 1.0) feeds macro precision;
+        # the silent task's convention precision of 1.0 must not be averaged in.
+        assert summary.macro_precision == 1.0
+        # Recall still spans both tasks: 1.0 for the hit, 0.0 for the silent miss.
+        assert summary.macro_recall == 0.5
+
+    def test_macro_precision_zero_when_all_tasks_silent(self):
+        expected_comments = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
+        silent = create_codereview_result(instance_id="test__silent-1", output="[]", expected_comments=expected_comments)
+
+        summary = CodeReviewResultSummary.from_results([silent], run_id="run-1")
+
+        assert summary.macro_precision == 0.0
 
     def test_render_github_metrics_markdown_has_grouped_sections(self):
         expected_comments = [
@@ -442,6 +531,31 @@ class TestCodeReviewLeaderboardAggregate:
         assert agg.num_runs == 1
         assert agg.f1 == run.f1
         assert not hasattr(agg, "pass_hat_5")
+
+    def test_macro_f1_ci_is_bootstrapped_over_tasks_for_single_run(self):
+        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, LeaderboardAggregate
+
+        expected = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
+        hit = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
+
+        results = [
+            create_codereview_result(instance_id="test__t-1", output=hit, expected_comments=expected),
+            create_codereview_result(instance_id="test__t-2", output="[]", expected_comments=expected),
+            create_codereview_result(instance_id="test__t-3", output=hit, expected_comments=expected),
+            create_codereview_result(instance_id="test__t-4", output="[]", expected_comments=expected),
+        ]
+        run = CodeReviewResultSummary.from_results(results, run_id="run-1")
+
+        # Per-task F1 is retained so the CI can be bootstrapped over tasks.
+        assert run.per_task_f1 == [1.0, 0.0, 1.0, 0.0]
+
+        agg = LeaderboardAggregate.from_runs([run])
+
+        # A single run with varying per-task F1 still yields a real (task-level) CI.
+        assert isinstance(agg, CodeReviewLeaderboardAggregate)
+        assert agg.macro_f1_ci_low is not None
+        assert agg.macro_f1_ci_high is not None
+        assert agg.macro_f1_ci_low <= agg.macro_f1 <= agg.macro_f1_ci_high
 
     def test_aggregate_serialization_excludes_pass_hat_5(self):
         from bcbench.results.leaderboard import Leaderboard, LeaderboardAggregate
@@ -563,30 +677,30 @@ class TestJudge:
 
     def test_parse_raises_when_result_file_missing(self, tmp_path):
         with pytest.raises(LLMJudgeError, match="no result file"):
-            _parse_judge_results(tmp_path / JUDGE_RESULT_FILE, num_pairs=1)
+            _parse_judge_results(tmp_path / _config.judge.result_file, num_pairs=1)
 
     def test_parse_raises_on_invalid_json(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
         result_path.write_text("not json", encoding="utf-8")
 
         with pytest.raises(LLMJudgeError, match="not valid JSON"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_raises_when_not_a_list(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
         result_path.write_text('{"pair": 1, "match": true}', encoding="utf-8")
 
         with pytest.raises(LLMJudgeError, match="must be a JSON list"):
             _parse_judge_results(result_path, num_pairs=1)
 
     def test_parse_missing_pair_counts_as_not_confirmed(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
         result_path.write_text('[{"pair": 1, "match": true}]', encoding="utf-8")
 
         assert _parse_judge_results(result_path, num_pairs=2) == [True, False]
 
     def test_parse_falls_back_to_stdout_when_file_missing(self, tmp_path):
-        result_path = tmp_path / JUDGE_RESULT_FILE
+        result_path = tmp_path / _config.judge.result_file
 
         assert _parse_judge_results(result_path, num_pairs=1, stdout='```json\n[{"pair": 1, "match": true}]\n```') == [True]
 
@@ -608,11 +722,20 @@ class TestJudge:
         ):
             judge_comment_matches([self._pair(10)], work_dir=tmp_path)
 
+    def test_subprocess_failure_surfaces_copilot_output(self, tmp_path):
+        error = subprocess.CalledProcessError(1, "copilot", output="partial stdout", stderr="model gpt-5.3-codex is not available")
+        with (
+            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
+            patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=error),
+            pytest.raises(LLMJudgeError, match="model gpt-5\\.3-codex is not available"),
+        ):
+            judge_comment_matches([self._pair(10)], work_dir=tmp_path)
+
     def test_filters_to_confirmed_pairs(self, tmp_path):
         pairs = [self._pair(10), self._pair(20)]
 
         def fake_run(*args, **kwargs):
-            (tmp_path / JUDGE_RESULT_FILE).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
+            (tmp_path / _config.judge.result_file).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
             return subprocess.CompletedProcess(args, 0)
 
         with (

@@ -9,6 +9,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from bcbench.cli_options import CopilotModel
+
 __all__ = ["Config", "get_config"]
 
 
@@ -125,6 +127,21 @@ class FilePatternConfig:
 
 
 @dataclass(frozen=True)
+class JudgeConfig:
+    """Configuration for the code-review LLM semantic judge."""
+
+    code_review_model: CopilotModel
+    result_file: str
+
+    @classmethod
+    def default(cls) -> JudgeConfig:
+        return cls(
+            code_review_model="gpt-5.3-codex",
+            result_file="judge_results.json",
+        )
+
+
+@dataclass(frozen=True)
 class EnvironmentConfig:
     """Environment-specific configuration."""
 
@@ -153,6 +170,7 @@ class Config:
     env: EnvironmentConfig
     timeout: TimeoutConfig
     file_patterns: FilePatternConfig
+    judge: JudgeConfig
 
     @classmethod
     def load(cls) -> Config:
@@ -164,6 +182,7 @@ class Config:
             env=EnvironmentConfig.from_environment(),
             timeout=TimeoutConfig.default(),
             file_patterns=FilePatternConfig.default(),
+            judge=JudgeConfig.default(),
         )
 
 

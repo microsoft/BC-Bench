@@ -19,7 +19,7 @@ _METRIC_EXPLANATIONS = """\
 <summary>📖 How to read these metrics</summary>
 
 - **Micro** — sums matched/generated/expected across all tasks and computes one score; tasks with many comments dominate.
-- **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume.
+- **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume. Macro precision averages only over tasks where the agent left at least one comment, so staying silent is not scored as perfect precision (recall and F1 still span every task).
 - **Matched comment** — a generated comment paired with an expected one by file and line proximity (within the configured tolerance), then confirmed by an LLM judge to describe the same underlying issue.
 - **F1** — harmonic mean of precision and recall; balances both equally. (Special case of Fβ at β=1.)
 - **Fβ** — generalized F-score with a tunable precision/recall trade-off:
@@ -40,7 +40,7 @@ _METRIC_EXPLANATIONS = """\
 
 _CONSOLE_METRIC_EXPLANATIONS = (
     "[bold]Micro[/bold] — volume-weighted across all comments; tasks with many comments dominate.\n"
-    "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same.\n"
+    "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same. Macro precision skips tasks with no comments so silence is not scored as perfect precision.\n"
     "[bold]Matched comment[/bold] — paired by file + line proximity, then confirmed by an LLM judge to describe the same underlying issue.\n"
     "[bold]F1[/bold] — harmonic mean of precision and recall (special case of Fβ at β=1).\n"
     "[bold]Fβ[/bold] — F_β = (1 + β²) · (P · R) / (β² · P + R); β<1 favors precision, β>1 favors recall.\n"
@@ -75,7 +75,6 @@ def _line_distance(line: int, start: int, end: int | None) -> int:
 def match_comments(
     expected_comments: list[ReviewComment],
     generated_comments: list[ReviewComment],
-    line_tolerance: int,
 ) -> list[tuple[ReviewComment, ReviewComment]]:
     """Pair expected and generated comments by globally optimal (file, line-proximity) assignment.
 
@@ -83,14 +82,16 @@ def match_comments(
     comment, maximizing the number of matches first and minimizing total line distance second.
     A simple order-based greedy can let an earlier-listed expected comment steal a finding that is
     a closer (often exact-line) match for a later expected comment, understating recall.
+
+    Only same-file findings are eligible; line distance never blocks a pair and acts solely as an
+    assignment tiebreak. The LLM judge is the authoritative semantic gate applied to these pairs.
     """
     if not expected_comments or not generated_comments:
         return []
 
     num_expected = len(expected_comments)
     num_generated = len(generated_comments)
-    impossible = float(line_tolerance * min(num_expected, num_generated) + 1)
-    cost = np.full((num_expected, num_generated), impossible, dtype=float)
+    cost = np.full((num_expected, num_generated), np.inf, dtype=float)
 
     for expected_index, expected in enumerate(expected_comments):
         expected_file = _normalize_path(expected.file)
@@ -98,26 +99,30 @@ def match_comments(
             if _normalize_path(generated.file) != expected_file:
                 continue
             distance = _line_distance(generated.line_start, expected.line_start, expected.line_end)
-            if distance <= line_tolerance:
-                cost[expected_index, generated_index] = distance
+            cost[expected_index, generated_index] = distance
 
-    row_indices, column_indices = linear_sum_assignment(cost)
+    finite = cost[np.isfinite(cost)]
+    sentinel = float(finite.max() + 1.0) if finite.size else 1.0
+    solvable = np.where(np.isfinite(cost), cost, sentinel)
+
+    row_indices, column_indices = linear_sum_assignment(solvable)
     return [
         (expected_comments[expected_index], generated_comments[generated_index])
         for expected_index, generated_index in zip(row_indices, column_indices, strict=False)
-        if cost[expected_index, generated_index] <= line_tolerance
+        if np.isfinite(cost[expected_index, generated_index])
     ]
 
 
 def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
     """Mean absolute difference between expected and generated severity levels over matched pairs.
 
-    Returns 0.0 when there are no matched pairs.
+    Pairs where either side has no severity are skipped, since prod keeps unknown-severity findings
+    rather than defaulting them. Returns 0.0 when there are no scorable pairs.
     """
-    if not matched_pairs:
+    errors = [abs(expected.severity.level - generated.severity.level) for expected, generated in matched_pairs if expected.severity is not None and generated.severity is not None]
+    if not errors:
         return 0.0
-    total_error: int = sum(abs(expected.severity.level - generated.severity.level) for expected, generated in matched_pairs)
-    return total_error / len(matched_pairs)
+    return sum(errors) / len(errors)
 
 
 class CodeReviewResult(BaseEvaluationResult):
@@ -125,7 +130,6 @@ class CodeReviewResult(BaseEvaluationResult):
 
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
-    line_tolerance: int = Field(ge=0)
     valid_review_output: bool = False
 
     matched_comment_count: int = Field(default=0, ge=0)
@@ -146,11 +150,10 @@ class CodeReviewResult(BaseEvaluationResult):
         output: str,
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
-        line_tolerance: int,
         matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
     ) -> Self:
         if matched_pairs is None:
-            matched_pairs = match_comments(expected_comments, generated_comments, line_tolerance)
+            matched_pairs = match_comments(expected_comments, generated_comments)
         matched_count = len(matched_pairs)
         precision, recall = precision_recall(matched_count, len(generated_comments), len(expected_comments))
 
@@ -159,7 +162,6 @@ class CodeReviewResult(BaseEvaluationResult):
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
-            line_tolerance=line_tolerance,
             valid_review_output=True,
             matched_comment_count=matched_count,
             incorrect_comment_count=len(generated_comments) - matched_count,
@@ -184,7 +186,6 @@ class CodeReviewResult(BaseEvaluationResult):
             **cls._base_fields(context),
             output=output,
             expected_comments=expected_comments,
-            line_tolerance=0,
             valid_review_output=False,
         )
 
@@ -245,6 +246,10 @@ class CodeReviewResultSummary(EvaluationResultSummary):
 
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    # Per-task F1 scores, retained so the leaderboard can bootstrap a confidence interval over tasks
+    # (meaningful even for a single run) instead of only over runs.
+    per_task_f1: list[float] = Field(default_factory=list)
 
     def render_github_metrics_markdown(self) -> str:
         micro_p = self.precision * 100
@@ -356,7 +361,11 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         f_beta_05: float = f_beta_score(precision, recall, beta=0.5)
         f_beta_2: float = f_beta_score(precision, recall, beta=2.0)
 
-        macro_precision: float = sum(r.precision for r in code_review_results) / total_results
+        # Precision is only defined where the agent actually commented. Silent tasks are assigned
+        # precision=1.0 by convention; averaging those in would reward saying nothing, so they are
+        # excluded from macro precision. Recall/F1 still span all tasks, so silence is penalized there.
+        results_with_comments = [r for r in code_review_results if r.generated_comments]
+        macro_precision: float = sum(r.precision for r in results_with_comments) / len(results_with_comments) if results_with_comments else 0.0
         macro_recall: float = sum(r.recall for r in code_review_results) / total_results
         macro_f1: float = sum(r.f1 for r in code_review_results) / total_results
         macro_f_beta_05: float = sum(r.f_beta_05 for r in code_review_results) / total_results
@@ -388,5 +397,6 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                 "macro_f_beta_2": round(macro_f_beta_2, 3),
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
+                "per_task_f1": [round(r.f1, 6) for r in code_review_results],
             }
         )

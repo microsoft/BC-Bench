@@ -20,10 +20,12 @@ class Severity(StrEnum):
     @classmethod
     def from_input(cls, value: str) -> Severity:
         normalized = value.strip().lower()
-        try:
+        if normalized in {s.value for s in cls}:
             return cls(normalized)
-        except ValueError:
-            return _SEVERITY_ALIASES.get(normalized, cls.MEDIUM)
+        if normalized in _SEVERITY_ALIASES:
+            return _SEVERITY_ALIASES[normalized]
+        valid = [s.value for s in cls] + list(_SEVERITY_ALIASES)
+        raise ValueError(f"Unknown severity {value!r}; expected one of {valid}")
 
 
 _SEVERITY_LEVELS: dict[Severity, int] = {
@@ -49,27 +51,30 @@ class ReviewComment(BaseModel):
     line_end: int | None = None
     domain: str | None = None
     body: str
-    severity: Severity
+    severity: Severity | None = None
 
     @field_validator("severity", mode="before")
     @classmethod
-    def _coerce_severity(cls, value: object) -> Severity:
-        if isinstance(value, Severity):
+    def _coerce_severity(cls, value: object) -> Severity | None:
+        if value is None or isinstance(value, Severity):
             return value
         return Severity.from_input(str(value))
+
+    @property
+    def severity_label(self) -> str:
+        return self.severity.value if self.severity is not None else "unspecified"
 
     def __str__(self) -> str:
         loc = f"{self.file}:{self.line_start}"
         if self.line_end and self.line_end != self.line_start:
             loc += f"-{self.line_end}"
-        return f"[{self.severity}] {loc}: {self.body}"
+        return f"[{self.severity_label}] {loc}: {self.body}"
 
 
 class CodeReviewEntry(BaseDatasetEntry):
     """Dataset entry for the code-review category."""
 
     expected_comments: list[ReviewComment] = Field(default_factory=list)
-    match_line_tolerance: int = Field(default=5, ge=0)
 
     def get_task(self) -> str:
         return self.patch

@@ -28,6 +28,7 @@ __all__ = [
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
+    "JudgeCalibrationReport",
 ]
 
 
@@ -301,6 +302,19 @@ class ContainerConfig:
     name: str
     username: str
     password: str
+
+
+@dataclass(frozen=True)
+class JudgeCalibrationReport:
+    total: int
+    true_positives: int
+    false_positives: int
+    true_negatives: int
+    false_negatives: int
+    precision: float
+    recall: float
+    accuracy: float  # (TP + TN) / total: share of judge verdicts that match the human label, not F1
+    misclassified_notes: list[str]
 
 
 @dataclass
