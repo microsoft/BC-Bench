@@ -35,8 +35,8 @@ Include exactly one entry for every pair. Do not write any other files or prose.
 def _format_pair(index: int, expected: ReviewComment, generated: ReviewComment) -> str:
     return (
         f"Pair {index}:\n"
-        f"  Expected: [{expected.severity}] {expected.file}:{expected.line_start}: {expected.body}\n"
-        f"  Candidate: [{generated.severity}] {generated.file}:{generated.line_start}: {generated.body}"
+        f"  Expected: [{expected.severity_label}] {expected.file}:{expected.line_start}: {expected.body}\n"
+        f"  Candidate: [{generated.severity_label}] {generated.file}:{generated.line_start}: {generated.body}"
     )
 
 

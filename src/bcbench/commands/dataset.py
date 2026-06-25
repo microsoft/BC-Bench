@@ -150,7 +150,7 @@ def view_entry(
                 lines = str(comment.line_start)
                 if comment.line_end and comment.line_end != comment.line_start:
                     lines += f"-{comment.line_end}"
-                comment_table.add_row(comment.file, lines, comment.severity, comment.body)
+                comment_table.add_row(comment.file, lines, comment.severity_label, comment.body)
             console.print(comment_table)
         else:
             console.print("[dim]No expected comments[/dim]")

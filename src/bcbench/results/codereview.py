@@ -116,12 +116,18 @@ def match_comments(
 def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
     """Mean absolute difference between expected and generated severity levels over matched pairs.
 
-    Returns 0.0 when there are no matched pairs.
+    Pairs where either side has no severity are skipped, since prod keeps unknown-severity findings
+    rather than defaulting them. Returns 0.0 when there are no scorable pairs.
     """
-    if not matched_pairs:
+    scored = [
+        (expected, generated)
+        for expected, generated in matched_pairs
+        if expected.severity is not None and generated.severity is not None
+    ]
+    if not scored:
         return 0.0
-    total_error: int = sum(abs(expected.severity.level - generated.severity.level) for expected, generated in matched_pairs)
-    return total_error / len(matched_pairs)
+    total_error: int = sum(abs(expected.severity.level - generated.severity.level) for expected, generated in scored)
+    return total_error / len(scored)
 
 
 class CodeReviewResult(BaseEvaluationResult):

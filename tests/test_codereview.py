@@ -41,16 +41,27 @@ class TestSeverity:
         comment = ReviewComment.model_validate({"file": "src/app.al", "line_start": 1, "body": "x", "severity": "warning"})
         assert comment.severity is Severity.MEDIUM
 
-    def test_parser_skips_comment_with_unknown_severity_without_dropping_review(self):
+    def test_parser_keeps_comment_with_unknown_severity_as_unspecified(self):
         output = json.dumps(
             [
                 {"file": "a.al", "line_start": 1, "body": "valid", "severity": "high"},
                 {"file": "a.al", "line_start": 2, "body": "bad severity", "severity": "bogus"},
+                {"file": "a.al", "line_start": 3, "body": "missing severity"},
             ]
         )
         comments = parse_review_output(output)
         assert comments is not None
-        assert [c.body for c in comments] == ["valid"]
+        assert [(c.body, c.severity) for c in comments] == [
+            ("valid", Severity.HIGH),
+            ("bad severity", None),
+            ("missing severity", None),
+        ]
+
+    def test_unspecified_severity_renders_as_label(self):
+        comment = ReviewComment(file="a.al", line_start=1, body="x")
+        assert comment.severity is None
+        assert comment.severity_label == "unspecified"
+        assert str(comment) == "[unspecified] a.al:1: x"
 
 
 class TestMatchComments:
@@ -264,7 +275,25 @@ class TestCodeReviewResult:
         assert result.f1 == 0.5
         assert result.severity_mae == 0.0
 
-    def test_severity_aliases_normalize_to_skill_levels(self):
+    def test_severity_mae_skips_pairs_with_unspecified_severity(self):
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="A", severity=Severity.HIGH),
+            ReviewComment(file="src/app.al", line_start=40, body="B", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps(
+            [
+                {"file": "src/app.al", "line_start": 11, "body": "near A", "severity": "bogus"},
+                {"file": "src/app.al", "line_start": 41, "body": "near B", "severity": "medium"},
+            ]
+        )
+
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+
+        assert result.matched_comment_count == 2
+        assert result.generated_comments[0].severity is None
+        # Only the (LOW, MEDIUM) pair is scorable; the unspecified-severity pair is skipped.
+        assert result.severity_mae == 1.0
+
         result = create_codereview_result(
             output=json.dumps(
                 [
