@@ -546,8 +546,13 @@ class TestCodeReviewLeaderboardAggregate:
         ]
         run = CodeReviewResultSummary.from_results(results, run_id="run-1")
 
-        # Per-task F1 is retained so the CI can be bootstrapped over tasks.
-        assert run.per_task_f1 == [1.0, 0.0, 1.0, 0.0]
+        # Per-task F1 is retained (keyed by instance_id) so the CI can be bootstrapped over tasks.
+        assert run.instance_results == {
+            "test__t-1": 1.0,
+            "test__t-2": 0.0,
+            "test__t-3": 1.0,
+            "test__t-4": 0.0,
+        }
 
         agg = LeaderboardAggregate.from_runs([run])
 

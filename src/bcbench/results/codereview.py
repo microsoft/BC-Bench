@@ -247,9 +247,9 @@ class CodeReviewResultSummary(EvaluationResultSummary):
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
-    # Per-task F1 scores, retained so the leaderboard can bootstrap a confidence interval over tasks
-    # (meaningful even for a single run) instead of only over runs.
-    per_task_f1: list[float] = Field(default_factory=list)
+    # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
+    # interval over tasks (meaningful even for a single run) instead of only over runs.
+    instance_results: dict[str, float] = Field(default_factory=dict)
 
     def render_github_metrics_markdown(self) -> str:
         micro_p = self.precision * 100
@@ -397,6 +397,6 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                 "macro_f_beta_2": round(macro_f_beta_2, 3),
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
-                "per_task_f1": [round(r.f1, 6) for r in code_review_results],
+                "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
             }
         )
