@@ -37,11 +37,7 @@ class JudgeCalibrationCase(BaseModel):
 
 
 def _load_calibration_cases(path: Path = CALIBRATION_DATASET) -> list[JudgeCalibrationCase]:
-    return [
-        JudgeCalibrationCase.model_validate_json(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [JudgeCalibrationCase.model_validate_json(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase]) -> JudgeCalibrationReport:

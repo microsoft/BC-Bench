@@ -119,15 +119,10 @@ def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, Revie
     Pairs where either side has no severity are skipped, since prod keeps unknown-severity findings
     rather than defaulting them. Returns 0.0 when there are no scorable pairs.
     """
-    scored = [
-        (expected, generated)
-        for expected, generated in matched_pairs
-        if expected.severity is not None and generated.severity is not None
-    ]
-    if not scored:
+    errors = [abs(expected.severity.level - generated.severity.level) for expected, generated in matched_pairs if expected.severity is not None and generated.severity is not None]
+    if not errors:
         return 0.0
-    total_error: int = sum(abs(expected.severity.level - generated.severity.level) for expected, generated in scored)
-    return total_error / len(scored)
+    return sum(errors) / len(errors)
 
 
 class CodeReviewResult(BaseEvaluationResult):
