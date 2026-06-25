@@ -12,14 +12,19 @@ differ in wording, severity, or line so semantic equivalence is exercised.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
 from bcbench.config import get_config
-from bcbench.dataset.codereview import ReviewComment, Severity
+from bcbench.dataset.codereview import ReviewComment
 from bcbench.evaluate.codereview_judge import judge_verdicts
+from bcbench.results.metrics import precision_recall
+from bcbench.types import JudgeCalibrationReport
 
 _config = get_config()
+
+CALIBRATION_DATASET = _config.paths.dataset_dir / "judge_calibration.jsonl"
 
 
 @dataclass(frozen=True)
@@ -30,173 +35,24 @@ class JudgeCalibrationCase:
     note: str
 
 
-@dataclass(frozen=True)
-class JudgeCalibrationReport:
-    total: int
-    true_positives: int
-    false_positives: int
-    true_negatives: int
-    false_negatives: int
-    precision: float
-    recall: float
-    accuracy: float
-    misclassified_notes: list[str]
+def _load_calibration_cases(path: Path = CALIBRATION_DATASET) -> list[JudgeCalibrationCase]:
+    cases: list[JudgeCalibrationCase] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        raw = json.loads(line)
+        cases.append(
+            JudgeCalibrationCase(
+                expected=ReviewComment(**raw["expected"]),
+                candidate=ReviewComment(**raw["candidate"]),
+                should_match=raw["should_match"],
+                note=raw["note"],
+            )
+        )
+    return cases
 
 
-def _c(file: str, line: int, body: str, severity: Severity = Severity.MEDIUM) -> ReviewComment:
-    return ReviewComment(file=file, line_start=line, body=body, severity=severity)
-
-
-CALIBRATION_CASES: list[JudgeCalibrationCase] = [
-    # --- Same issue, different wording / line / severity => should match ---
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/SalesPost.Codeunit.al", 142, "Calling Commit() inside the repeat loop can leave partial data if a later iteration fails."),
-        candidate=_c("src/Sales/SalesPost.Codeunit.al", 145, "Move the Commit() out of the loop; committing per iteration breaks atomicity."),
-        should_match=True,
-        note="commit-in-loop, paraphrased + different line",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Inventory/ItemAvail.Codeunit.al", 58, "Add SetLoadFields before FindSet so the whole record isn't loaded."),
-        candidate=_c("src/Inventory/ItemAvail.Codeunit.al", 58, "Use SetLoadFields to limit the columns read for this query."),
-        should_match=True,
-        note="setloadfields performance, same issue",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Finance/Payment.Codeunit.al", 77, "Currency code 'USD' is hardcoded; read it from setup instead."),
-        candidate=_c("src/Finance/Payment.Codeunit.al", 77, "Don't hardcode the currency — pull it from the configuration record."),
-        should_match=True,
-        note="hardcoded currency, same issue",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/Customer.Codeunit.al", 33, "GET can fail when the customer is missing; handle the not-found case."),
-        candidate=_c("src/Sales/Customer.Codeunit.al", 31, "Missing error handling if the GET on Customer returns false."),
-        should_match=True,
-        note="unchecked GET, same issue",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/SalesLine.Table.al", 210, "You can't SetRange on a FlowField without calling CalcFields first."),
-        candidate=_c("src/Sales/SalesLine.Table.al", 210, "Filtering directly on this FlowField won't work as written."),
-        should_match=True,
-        note="flowfield filter, same issue",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Reports/Statement.Report.al", 90, "Building the filter from a concatenated string risks filter injection; use SetFilter with parameters."),
-        candidate=_c("src/Reports/Statement.Report.al", 92, "Use parameterized SetFilter instead of concatenating user input into the filter."),
-        should_match=True,
-        note="filter injection, same issue",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Inventory/Reorder.Codeunit.al", 120, "This runs a database read per record — an N+1 pattern."),
-        candidate=_c("src/Inventory/Reorder.Codeunit.al", 118, "Querying inside the loop causes N+1 queries; batch the lookup."),
-        should_match=True,
-        note="n+1 query, same issue",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/SalesPost.Codeunit.al", 60, "TestField(Quantity) is missing before posting."),
-        candidate=_c("src/Sales/SalesPost.Codeunit.al", 60, "Validate that Quantity is set before posting, e.g. with TestField.", Severity.HIGH),
-        should_match=True,
-        note="missing testfield, severity differs",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Common/Util.Codeunit.al", 12, "Variable 'i' is declared but never used.", Severity.LOW),
-        candidate=_c("src/Common/Util.Codeunit.al", 12, "Remove the unused variable i.", Severity.HIGH),
-        should_match=True,
-        note="unused variable, severity differs",
-    ),
-    # --- Different concern at the same location => should NOT match ---
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/SalesPost.Codeunit.al", 142, "Calling Commit() inside the repeat loop can leave partial data on failure."),
-        candidate=_c("src/Sales/SalesPost.Codeunit.al", 142, "The procedure name should be PascalCase to match conventions."),
-        should_match=False,
-        note="commit-in-loop vs naming style, same line",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Admin/UserSetup.Page.al", 45, "Missing permission/SecurityFiltering check before exposing this data."),
-        candidate=_c("src/Admin/UserSetup.Page.al", 45, "Add a tooltip to this field for accessibility."),
-        should_match=False,
-        note="permission vs tooltip, same line",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Common/Loop.Codeunit.al", 88, "Off-by-one: the range 1..Count skips the last element."),
-        candidate=_c("src/Common/Loop.Codeunit.al", 88, "Use a temporary record here to avoid locking the table."),
-        should_match=False,
-        note="off-by-one vs locking, same line",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/Customer.Codeunit.al", 33, "Possible null/empty reference: 'Customer' may be blank after the failed GET."),
-        candidate=_c("src/Sales/Customer.Codeunit.al", 33, "Add a comment explaining what this block does."),
-        should_match=False,
-        note="null-ref vs missing comment, same line",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Inventory/ItemAvail.Codeunit.al", 58, "Use IsEmpty() instead of Count() = 0 for performance."),
-        candidate=_c("src/Inventory/ItemAvail.Codeunit.al", 58, "This label text needs to be translated/localized."),
-        should_match=False,
-        note="isempty perf vs localization, same line",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Finance/Payment.Codeunit.al", 77, "Currency code 'USD' is hardcoded; read it from setup."),
-        candidate=_c("src/Finance/Payment.Codeunit.al", 77, "The magic number 1000 should be extracted into a named constant."),
-        should_match=False,
-        note="hardcoded currency vs magic number — both 'hardcoding' but different code",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Inventory/Reorder.Codeunit.al", 118, "FindSet(true) should be FindSet(false) since records aren't modified."),
-        candidate=_c("src/Inventory/Reorder.Codeunit.al", 118, "Add SetLoadFields before this FindSet to limit columns."),
-        should_match=False,
-        note="findset write-intent vs setloadfields — both about the same FindSet, different issue",
-    ),
-    # --- Harder: same issue, large surface gap (symptom vs fix, rule# vs rationale) => should match ---
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/CustList.Codeunit.al", 70, "This loop reads every column of Customer; on large tables that's a major performance hit."),
-        candidate=_c("src/Sales/CustList.Codeunit.al", 72, 'Call SetLoadFields(Name, "No.") before FindSet so only the needed fields are fetched.'),
-        should_match=True,
-        note="setloadfields: symptom (slow full read) vs fix (call SetLoadFields)",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/SalesValidation.Codeunit.al", 25, "AA0217: the literal passed to Error() must be a Label variable."),
-        candidate=_c("src/Sales/SalesValidation.Codeunit.al", 25, "Hardcoding this error text breaks translation; move it to a Label with an Err suffix."),
-        should_match=True,
-        note="hardcoded error string: rule number (AA0217) vs translation rationale",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Integration/Import.Codeunit.al", 88, "The InStream is read twice without resetting position; the second read returns nothing."),
-        candidate=_c("src/Integration/Import.Codeunit.al", 90, "Reset the stream position before reading it a second time."),
-        should_match=True,
-        note="stream re-read: symptom (empty second read) vs fix (reset position)",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Admin/UserSetup.Page.al", 12, "This page exposes records without an OnOpenPage permission check."),
-        candidate=_c("src/Admin/UserSetup.Page.al", 12, "Add a SecurityFiltering/permission guard so unauthorized users can't read these records."),
-        should_match=True,
-        note="missing permission check: terminology variance (OnOpenPage check vs SecurityFiltering guard)",
-    ),
-    # --- Harder: overlapping/adjacent concerns that are genuinely different => should NOT match ---
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/SalesPost.Codeunit.al", 60, "Missing TestField(Quantity) before posting."),
-        candidate=_c("src/Sales/SalesPost.Codeunit.al", 60, "Missing TestField(Type) before posting."),
-        should_match=False,
-        note="missing TestField but different field (Quantity vs Type)",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/SalesPost.Codeunit.al", 142, "Commit() inside the loop breaks atomicity — move it out."),
-        candidate=_c("src/Sales/SalesPost.Codeunit.al", 142, "There is no Commit() here, so the batch changes are never persisted."),
-        should_match=False,
-        note="commit: too-many (in loop) vs missing entirely, opposite issue same line",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Inventory/Reorder.Codeunit.al", 120, "GET inside the loop is an N+1 performance problem."),
-        candidate=_c("src/Inventory/Reorder.Codeunit.al", 120, "The return value of this GET isn't checked; it can silently fail."),
-        should_match=False,
-        note="same GET statement: N+1 performance vs unchecked-return correctness",
-    ),
-    JudgeCalibrationCase(
-        expected=_c("src/Sales/Notify.Codeunit.al", 14, "Hardcoded message string should be a Label (AA0217)."),
-        candidate=_c("src/Sales/Notify.Codeunit.al", 14, "This Label uses a 'Msg' suffix but is passed to Error(); the suffix should be 'Err'."),
-        should_match=False,
-        note="label: not-a-Label-at-all (AA0217) vs existing-Label-wrong-suffix",
-    ),
-]
+CALIBRATION_CASES: list[JudgeCalibrationCase] = _load_calibration_cases()
 
 
 def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase] = CALIBRATION_CASES) -> JudgeCalibrationReport:
@@ -217,8 +73,7 @@ def score_calibration(predicted: list[bool], cases: list[JudgeCalibrationCase] =
         else:
             tn += 1
 
-    precision = tp / (tp + fp) if (tp + fp) else 1.0
-    recall = tp / (tp + fn) if (tp + fn) else 1.0
+    precision, recall = precision_recall(tp, tp + fp, tp + fn)
     accuracy = (tp + tn) / len(cases) if cases else 0.0
 
     return JudgeCalibrationReport(
