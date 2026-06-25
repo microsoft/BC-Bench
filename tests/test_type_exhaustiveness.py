@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bcbench.dataset import BugFixEntry, CodeReviewEntry, NL2ALEntry
+from bcbench.dataset import BugFixEntry, CodeReviewEntry, HelloWorldEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentType, EvaluationCategory
 
@@ -40,7 +40,7 @@ def test_all_categories_have_aggregate_classes():
         assert issubclass(aggregate_cls, LeaderboardAggregate)
 
 
-def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry):
+def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry, sample_hello_world_entry: HelloWorldEntry):
     for category in EvaluationCategory:
         entry_cls = category.entry_class
         if entry_cls == CodeReviewEntry:
@@ -56,6 +56,8 @@ def test_all_categories_handled_in_get_expected_output(sample_dataset_entry_with
             )
         elif entry_cls is NL2ALEntry:
             entry = sample_nl2al_entry
+        elif entry_cls is HelloWorldEntry:
+            entry = sample_hello_world_entry
         else:
             # Reconstruct entry as the category-specific type so get_expected_output() works
             entry = entry_cls.model_validate(sample_dataset_entry_with_problem_statement.model_dump(by_alias=True))

@@ -31,6 +31,7 @@ on:
           - "bug-fix"
           - "test-generation"
           - "code-review"
+          - "hello-world"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
