@@ -3,6 +3,22 @@ layout: default
 title: Code Review - BC-Bench
 ---
 
+<style>
+  /* Widen this page so the multi-column leaderboard fits without horizontal scroll */
+  .main-content {
+    max-width: 80rem;
+  }
+  .main-content table {
+    display: table;
+    width: 100%;
+    table-layout: auto;
+  }
+  .main-content table th,
+  .main-content table td {
+    padding: 0.4rem 0.6rem;
+  }
+</style>
+
 # Code Review
 
 This category evaluates an agent's ability to **review** a Business Central (AL) pull request. Given a diff, the agent produces structured review comments, which are scored against an expected (gold) set of findings.
