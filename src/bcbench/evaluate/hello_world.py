@@ -37,11 +37,10 @@ def _git_init_and_commit(repo_path: Path) -> None:
 
 
 class HelloWorldPipeline(EvaluationPipeline[HelloWorldEntry]):
-    """Imaginary demo pipeline: the agent writes a tiny AL greeting codeunit.
+    """Smallest possible example category: the agent writes a tiny AL greeting codeunit.
 
-    Self-contained (no BC container, no symbols), so it doubles as the smallest possible
-    example of a category. Scoring is judge-based and happens downstream, so evaluate()
-    only captures the agent's diff as the raw output.
+    Self-contained (no BC container, no symbols); scoring is judge-based downstream, so
+    evaluate() only captures the agent's diff as the raw output.
     """
 
     def setup_workspace(self, entry: HelloWorldEntry, repo_path: Path) -> None:
