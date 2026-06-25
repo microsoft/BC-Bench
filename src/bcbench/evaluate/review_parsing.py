@@ -47,7 +47,6 @@ def _normalize_comment(item: dict[Any, Any]) -> ReviewComment | None:
     line_end = _to_int(item.get("line_end") or item.get("lineEnd") or item.get("endLine"))
     domain = item.get("domain")
     body = item.get("body") or item.get("issue") or item.get("comment")
-    severity = Severity.from_input(str(item.get("severity", "medium")))
 
     if not isinstance(file_path, str) or not file_path.strip():
         return None
@@ -57,6 +56,7 @@ def _normalize_comment(item: dict[Any, Any]) -> ReviewComment | None:
         return None
 
     try:
+        severity = Severity.from_input(str(item.get("severity", "medium")))
         return ReviewComment(
             file=file_path.strip(),
             line_start=line_start,

@@ -213,7 +213,8 @@ def evaluate_judge_calibration(
 ) -> None:
     """Run the LLM judge over the hand-labeled calibration set and report its precision/recall.
 
-    Use this in CI to catch judge drift before it silently distorts code-review scores.
+    Runs as a gate before code-review evaluations in CI (aborts the run if accuracy drops
+    below the threshold), and can also be run ad-hoc locally to check the judge.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
     report = run_calibration(work_dir, model=model)

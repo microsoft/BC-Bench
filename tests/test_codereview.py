@@ -9,6 +9,7 @@ from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.evaluate.codereview_judge import JUDGE_RESULT_FILE, LLMJudgeError, _parse_judge_results, judge_comment_matches
+from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
 from bcbench.types import EvaluationCategory
@@ -26,22 +27,9 @@ class TestSeverity:
         assert Severity.from_input("suggestion") is Severity.LOW
         assert Severity.from_input("info") is Severity.LOW
 
-    def test_unknown_severity_defaults_to_medium(self):
-        assert Severity.from_input("bogus") is Severity.MEDIUM
-
-    def test_unknown_severity_warns_loudly(self, caplog):
-        import logging
-
-        with caplog.at_level(logging.WARNING):
-            assert Severity.from_input("bogus") is Severity.MEDIUM
-        assert any("Unknown severity" in record.message for record in caplog.records)
-
-    def test_known_alias_does_not_warn(self, caplog):
-        import logging
-
-        with caplog.at_level(logging.WARNING):
-            assert Severity.from_input("warning") is Severity.MEDIUM
-        assert not any("Unknown severity" in record.message for record in caplog.records)
+    def test_unknown_severity_raises(self):
+        with pytest.raises(ValueError, match="Unknown severity"):
+            Severity.from_input("bogus")
 
     def test_levels_are_strictly_ordered(self):
         assert Severity.CRITICAL.level > Severity.HIGH.level > Severity.MEDIUM.level > Severity.LOW.level
@@ -49,6 +37,17 @@ class TestSeverity:
     def test_review_comment_normalizes_severity_on_construction(self):
         comment = ReviewComment.model_validate({"file": "src/app.al", "line_start": 1, "body": "x", "severity": "warning"})
         assert comment.severity is Severity.MEDIUM
+
+    def test_parser_skips_comment_with_unknown_severity_without_dropping_review(self):
+        output = json.dumps(
+            [
+                {"file": "a.al", "line_start": 1, "body": "valid", "severity": "high"},
+                {"file": "a.al", "line_start": 2, "body": "bad severity", "severity": "bogus"},
+            ]
+        )
+        comments = parse_review_output(output)
+        assert comments is not None
+        assert [c.body for c in comments] == ["valid"]
 
 
 class TestMatchComments:
