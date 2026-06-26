@@ -114,14 +114,8 @@ jobs:
           dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.160
-
-      # The code-review category scores findings with a semantic judge that runs on Copilot CLI,
-      # regardless of the agent under test. Provision it only when judging is needed.
-      - name: Install GitHub Copilot CLI (code-review judge)
-        if: ${{ inputs.category == 'code-review' }}
-        run: npm install -g @github/copilot@1.0.57
+      - name: Install evaluation CLIs
+        uses: ./.github/actions/install-eval-clis
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
