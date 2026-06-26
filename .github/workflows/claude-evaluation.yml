@@ -114,7 +114,7 @@ jobs:
           dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
-      - name: Install evaluation CLIs
+      - name: Install Agent Harnesses
         uses: ./.github/actions/install-eval-clis
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
