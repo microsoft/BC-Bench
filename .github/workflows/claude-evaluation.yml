@@ -77,6 +77,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      copilot-requests: write  # code-review semantic judge runs via Copilot CLI
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
@@ -116,13 +117,21 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.160
 
+      # The code-review category scores findings with a semantic judge that runs on Copilot CLI,
+      # regardless of the agent under test. Provision it only when judging is needed.
+      - name: Install GitHub Copilot CLI (code-review judge)
+        if: ${{ inputs.category == 'code-review' }}
+        run: npm install -g @github/copilot@1.0.57
+
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
         shell: pwsh
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}  # used by the code-review semantic judge
         run: |
           Write-Output "::add-mask::$env:ANTHROPIC_API_KEY"
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
           uv run bcbench evaluate claude "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
