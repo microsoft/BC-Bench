@@ -32,12 +32,13 @@ Keep dataset entry classes and result classes focused on typed data. Put categor
 
 1. Add the enum value and all `match` arms in [src/bcbench/types.py](src/bcbench/types.py).
 2. Add the entry class in [src/bcbench/dataset/dataset_entry.py](src/bcbench/dataset/dataset_entry.py), export it from [src/bcbench/dataset/__init__.py](src/bcbench/dataset/__init__.py), and add the dataset JSONL under [dataset/](dataset/).
-3. Add (or reuse) a result class under [src/bcbench/results/](src/bcbench/results/) and map it from `EvaluationCategory.result_class` (plus `summary_class` and `aggregate_class`).
-4. Add a pipeline under [src/bcbench/evaluate/](src/bcbench/evaluate/) and export it from [src/bcbench/evaluate/__init__.py](src/bcbench/evaluate/__init__.py).
-5. Add the prompt template to [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
-6. Handle the category in `MockEvaluationPipeline.evaluate` in [src/bcbench/commands/evaluate.py](src/bcbench/commands/evaluate.py) so the CI mock-evaluation job passes.
-7. Add the category to workflow choice lists in [.github/workflows/](.github/workflows/), especially evaluation workflows and CI category selection.
-8. Add test fixtures/handling (e.g. in [tests/conftest.py](tests/conftest.py), [tests/test_type_exhaustiveness.py](tests/test_type_exhaustiveness.py), [tests/test_evaluate_pipeline.py](tests/test_evaluate_pipeline.py)) and docs, leaderboard data, and notebooks where relevant.
+3. Register the category and its dataset file in the `Get-BCBenchDatasetPath` `ValidateSet`/`switch` in [scripts/BCBenchUtils.psm1](scripts/BCBenchUtils.psm1) so the PowerShell setup scripts accept it.
+4. Add (or reuse) a result class under [src/bcbench/results/](src/bcbench/results/) and map it from `EvaluationCategory.result_class` (plus `summary_class` and `aggregate_class`).
+5. Add a pipeline under [src/bcbench/evaluate/](src/bcbench/evaluate/) and export it from [src/bcbench/evaluate/__init__.py](src/bcbench/evaluate/__init__.py).
+6. Add the prompt template to [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml).
+7. Handle the category in `MockEvaluationPipeline.evaluate` in [src/bcbench/commands/evaluate.py](src/bcbench/commands/evaluate.py) so the CI mock-evaluation job passes.
+8. Add the category to workflow choice lists in [.github/workflows/](.github/workflows/), especially evaluation workflows and CI category selection.
+9. Add test fixtures/handling (e.g. in [tests/conftest.py](tests/conftest.py), [tests/test_type_exhaustiveness.py](tests/test_type_exhaustiveness.py), [tests/test_evaluate_pipeline.py](tests/test_evaluate_pipeline.py)) and docs, leaderboard data, and notebooks where relevant.
 
 ## Validation
 
