@@ -14,7 +14,7 @@ from bcbench.types import Checklist, ChecklistAssertion, ExpectedOutput
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "HelloWorldEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -165,6 +165,25 @@ class NL2ALEntry(BaseDatasetEntry):
 
     def get_task(self) -> str:
         return self.nl_prompt
+
+    def get_expected_output(self) -> Checklist:
+        return {"assertions": self.expected}
+
+
+class HelloWorldEntry(BaseDatasetEntry):
+    """Dataset entry for the imaginary hello-world demo category.
+
+    A deliberately tiny, self-contained category used to demonstrate how to add a new
+    category to BC-Bench: the agent writes a small AL codeunit that returns a greeting,
+    and the output is scored by an lm_checklist judge.
+    """
+
+    base_commit: str | None = None
+    language: str
+    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
+
+    def get_task(self) -> str:
+        return f"Create an AL codeunit named Greeting with a procedure that returns a friendly 'Hello, World!' greeting written in {self.language}."
 
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}

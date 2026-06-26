@@ -14,7 +14,7 @@ from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
-from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_nl2al_entry
+from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_hello_world_entry, create_nl2al_entry
 
 
 class _StubPipeline(EvaluationPipeline[BugFixEntry]):
@@ -99,6 +99,8 @@ def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
             return create_codereview_entry()
         case EvaluationCategory.NL2AL:
             return create_nl2al_entry()
+        case EvaluationCategory.HELLO_WORLD:
+            return create_hello_world_entry()
         case _:
             return create_dataset_entry()
 

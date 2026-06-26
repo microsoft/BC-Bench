@@ -313,6 +313,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
                 scenarios = ["raw", "empty"]
+            case EvaluationCategory.HELLO_WORLD:
+                scenarios = ["raw", "empty"]
             case _:
                 raise ValueError(f"Unsupported category for mock evaluation: {context.category}")
 

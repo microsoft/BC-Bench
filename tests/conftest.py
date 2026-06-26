@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, HelloWorldEntry, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -340,3 +340,37 @@ def create_nl2al_entry(
 @pytest.fixture
 def sample_nl2al_entry() -> NL2ALEntry:
     return create_nl2al_entry()
+
+
+def create_hello_world_entry(
+    instance_id: str = "helloworld__greeting-english-1",
+    repo: str = "helloworld/template",
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    patch: str = VALID_PATCH,
+    language: str = "English",
+    created_at: str = VALID_CREATED_AT,
+    expected: list[ChecklistAssertion] | None = None,
+) -> HelloWorldEntry:
+    if project_paths is None:
+        project_paths = ["HelloWorldGreeting"]
+
+    if expected is None:
+        expected = [ChecklistAssertion(text="The output defines an AL codeunit named Greeting.", level="critical")]
+
+    return HelloWorldEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=None,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths,
+        patch=patch,
+        language=language,
+        created_at=created_at,
+        expected=expected,
+    )
+
+
+@pytest.fixture
+def sample_hello_world_entry() -> HelloWorldEntry:
+    return create_hello_world_entry()

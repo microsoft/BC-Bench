@@ -66,6 +66,15 @@ prompt:
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
 
+  hello-world-template: |
+    You are working with an AL project at {{repo_path}}.
+
+    Task: {{task}}
+
+    Important constraints:
+    - Create a single new .al file for the codeunit
+    - Do NOT commit any changes to the repository
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
