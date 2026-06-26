@@ -130,3 +130,52 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
     assert "[HAS_PATCH]" in result  # gold patch should be indicated
     assert "[HAS_ISSUE]" in result  # problem statement should be indicated
     assert "Fix payment validation bug" in result  # task should be included in both mode
+
+
+def _build_with_lsp(tmp_path: Path, category: EvaluationCategory, template_key: str, template: str, al_lsp: bool):
+    entry = create_dataset_entry(
+        instance_id="microsoftInternal__NAV-6",
+        project_paths=["App/Apps/W1/Payment/app"],
+    )
+    repo_path = tmp_path / "navapp"
+    repo_path.mkdir()
+    problem_dir = create_problem_statement_dir(tmp_path, "Fix payment validation bug")
+
+    config = {
+        "prompt": {
+            template_key: template,
+            "lsp-instruction": "- Use the AL Language Server, not grep, to verify symbols.",
+            "include_project_paths": False,
+        }
+    }
+
+    with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
+        return build_prompt(entry, repo_path, config, category, al_lsp=al_lsp)
+
+
+def test_lsp_instruction_present_when_enabled(tmp_path: Path):
+    template = "Task: {{task}}{% if al_lsp %}\n{{ lsp_instruction }}{% endif %}"
+    result = _build_with_lsp(tmp_path, EvaluationCategory.BUG_FIX, "bug-fix-template", template, al_lsp=True)
+
+    assert "AL Language Server" in result
+
+
+def test_lsp_instruction_absent_when_disabled(tmp_path: Path):
+    template = "Task: {{task}}{% if al_lsp %}\n{{ lsp_instruction }}{% endif %}"
+    result = _build_with_lsp(tmp_path, EvaluationCategory.BUG_FIX, "bug-fix-template", template, al_lsp=False)
+
+    assert "AL Language Server" not in result
+
+
+def test_lsp_instruction_present_in_test_generation(tmp_path: Path):
+    template = "Task: {{task}}{% if al_lsp %}\n{{ lsp_instruction }}{% endif %}"
+    result = _build_with_lsp(tmp_path, EvaluationCategory.TEST_GENERATION, "test-generation-template", template, al_lsp=True)
+
+    assert "AL Language Server" in result
+
+
+def test_lsp_instruction_present_in_code_review(tmp_path: Path):
+    template = "/review{% if al_lsp %}\n{{ lsp_instruction }}{% endif %}"
+    result = _build_with_lsp(tmp_path, EvaluationCategory.CODE_REVIEW, "code-review-template", template, al_lsp=True)
+
+    assert "AL Language Server" in result

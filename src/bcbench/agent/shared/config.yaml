@@ -7,6 +7,16 @@ prompt:
   # - both: Agent sees both the bug description and the fixed code                       => Combined context for test generation
   test-generation-input: "both"
 
+  # Injected into prompts only when the AL LSP server is enabled (--al-lsp). Steers the agent to
+  # prefer the language server over grep for symbol-level work.
+  lsp-instruction: |-
+    - An AL Language Server is available for .al files and is the authoritative source of truth for code
+      navigation. Use it — not grep/ripgrep — to confirm a procedure, object, table, or field exists and to
+      read its exact signature (go-to-definition, hover, completion), and check its diagnostics to catch
+      compile errors before finalizing. Do NOT use text search to verify symbols: grep matches raw text and
+      returns false positives from comments, string literals, and similarly named identifiers in other objects.
+      Fall back to grep only for non-symbol patterns (comments, literals, config values) or if the server is unavailable.
+
   bug-fix-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
@@ -17,6 +27,9 @@ prompt:
     - Focus solely on fixing the reported issue
     {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
+    {% endif %}
+    {% if al_lsp %}
+    {{ lsp_instruction }}
     {% endif %}
     - Do NOT commit any changes to the repository
     - Focus on W1 localization, do NOT worry about other localizations (e.g. DK, APAC)
@@ -43,6 +56,9 @@ prompt:
     {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
+    {% if al_lsp %}
+    {{ lsp_instruction }}
+    {% endif %}
     - Do NOT commit any changes to the repository
     - Focus on W1 localization, do NOT worry about other localizations (e.g. DK, APAC)
     {% if is_problem_statement %}
@@ -64,6 +80,9 @@ prompt:
       - severity: one of critical, high, medium, or low (optional, defaults to medium)
       - body: concise description of the issue (string, required)
 
+    {% if al_lsp %}
+    {{ lsp_instruction }}
+    {% endif %}
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
 
 # controls:
