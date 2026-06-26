@@ -1,4 +1,4 @@
-name: Install evaluation CLIs
+name: Install Agent Harnesses
 description: Install the Claude Code and GitHub Copilot CLIs used by the evaluation workflows
 
 runs:
