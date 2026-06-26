@@ -276,3 +276,5 @@ docs/Gemfile
 docs/Gemfile.lock
 
 *.orig
+
+lsp.json
