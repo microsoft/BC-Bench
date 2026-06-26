@@ -54,7 +54,8 @@ def run_copilot_agent(
         # Live BCQuality consumption: clone+filter BCQuality and route the agent through skills/entry.md.
         # The filtered clone (not the repo) becomes the Copilot CLI working directory; the repo under
         # review is granted via --add-dir. No static instruction/skill/agent injection in this mode.
-        bcquality_root, prompt = prepare_bcquality_workspace(bcquality_config, output_dir / "bcquality-clone", repo_path, REVIEW_OUTPUT_FILE)
+        bootstrap_template: str = copilot_config["prompt"]["bcquality-bootstrap-template"]
+        bcquality_root, prompt = prepare_bcquality_workspace(bcquality_config, output_dir / "bcquality-clone", repo_path, REVIEW_OUTPUT_FILE, bootstrap_template)
         work_dir: Path = bcquality_root
         instructions_enabled: bool = False
         skills_enabled: bool = False

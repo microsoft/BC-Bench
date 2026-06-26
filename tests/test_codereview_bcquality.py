@@ -207,8 +207,13 @@ class TestTaskContext:
 
 
 class TestBootstrapPrompt:
+    def _template(self) -> str:
+        config_file: Path = get_config().paths.agent_share_dir / "config.yaml"
+        raw = yaml.safe_load(config_file.read_text())
+        return raw["prompt"]["bcquality-bootstrap-template"]
+
     def test_contains_contract_and_output_schema(self):
-        prompt = build_bootstrap_prompt(Path("/repo/under/review"), "_task-context.json", "review.json")
+        prompt = build_bootstrap_prompt(self._template(), Path("/repo/under/review"), "_task-context.json", "review.json")
 
         assert "./skills/entry.md" in prompt
         assert "_task-context.json" in prompt
