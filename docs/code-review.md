@@ -61,6 +61,53 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
 <p><em>No results available yet. Check back soon!</em></p>
 {% endif %}
 
+## Experiment Leaderboard
+
+Compares review-knowledge configurations against the plain (vanilla) agent for the same model:
+
+- **Vanilla** — plain agent, no extra review knowledge (reference row).
+- **Inline knowledge (pre-#8700)** — the review checklists BCApps shipped inline before adopting BCQuality, injected as custom instructions.
+- **BCQuality (live skills)** — the agent dynamically consumes the live BCQuality skill tree.
+
+{% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
+<table>
+  <thead>
+    <tr>
+      <th>Variant</th>
+      <th>Model</th>
+      <th>F1 (95% CI)</th>
+      <th>Macro F1 (95% CI)</th>
+      <th>Precision</th>
+      <th>Recall</th>
+      <th>Avg Time</th>
+      <th>Ver</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% assign experiment_results = site.data.code-review.aggregate | sort: "f1" | reverse %}
+    {% for agg in experiment_results %}
+    <tr>
+      <td>
+        {%- if agg.experiment.bcquality -%}BCQuality (live skills)
+        {%- elsif agg.experiment.custom_instructions -%}Inline knowledge (pre-#8700)
+        {%- elsif agg.experiment == null -%}Vanilla (reference)
+        {%- else -%}Other{%- endif -%}
+      </td>
+      <td>{{ agg.model }}</td>
+      <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
+      <td>{{ agg.macro_f1 | times: 100.0 | round: 1 }}%{% if agg.macro_f1_ci_low %} ({{ agg.macro_f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.macro_f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
+      <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p><em>No results available yet. Check back soon!</em></p>
+{% endif %}
+
 ## How metrics are computed
 
 - **Precision** — of the comments the agent generated, the fraction that matched an expected finding. Penalizes noisy reviews.
