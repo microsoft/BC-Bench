@@ -151,7 +151,7 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
         # pooled per-task F1 scores across runs: the CI reflects task-level variance (resampling tasks),
         # which is the dominant sampling uncertainty for our small task set and is meaningful even for a
         # single run. This deliberately differs from the per-run micro CI above.
-        pooled_task_f1 = [score for r in cr_runs for score in r.per_task_f1]
+        pooled_task_f1 = [score for r in cr_runs for score in r.instance_results.values()]
         macro_f1_ci = bootstrap_ci(pooled_task_f1)
 
         return base.model_copy(
