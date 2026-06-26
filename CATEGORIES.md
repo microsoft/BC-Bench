@@ -1,8 +1,10 @@
 # Adding a New Category
 
-BC-Bench is **category-based**. A category is a distinct evaluation scenario: `bug-fix` asks an agent to patch buggy code, while `test-generation` asks it to write reproduction tests.
+BC-Bench is **category-based**. A category is a distinct evaluation scenario: `bug-fix` asks an agent to patch buggy code, `test-generation` asks it to write reproduction tests, `code-review` asks it to flag issues in a diff, and `nl2al` asks it to turn a natural-language spec into AL code.
 
-The `bug-fix` and `test-generation` categories happen to share one dataset today. A new category should have its own: dataset schema, entry type, result type, pipeline, etc.
+Categories also differ in how they're scored and run. `bug-fix` and `test-generation` are execution-based: they build and run AL code, so they need a BC container. `code-review` and `nl2al` both leverage LLM-as-a-judge: `code-review` scores precision/recall/F1 of flagged issues against expected findings (an LLM judge only matches comments), and `nl2al` has an LLM grade the output against an LMChecklist. The `EvaluationCategory` properties (`requires_container`, `runner`, `evaluators`, `core_score`) capture these differences for the workflows.
+
+Categories may share a dataset (`bug-fix` and `test-generation` do today), but a new category should generally have its own: dataset schema, entry type, result type, pipeline, etc.
 
 This doc is a map; the source files and their comments are the source of truth. To experiment with agent setup on existing categories, see [EXPERIMENT.md](EXPERIMENT.md).
 
@@ -13,15 +15,17 @@ Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py).
 - `dataset_path` — the dataset file for raw tasks.
 - `entry_class` — the typed Python model for one dataset row (aka one task).
 - `result_class` — the recorded outcome for one evaluated task.
-- `summary_class` — the aggregate view used by result summaries and leaderboards.
+- `summary_class` / `aggregate_class` — the aggregate views used by result summaries and leaderboards.
 - `pipeline` — the category-specific setup, agent run, and evaluation behavior.
+- `evaluators` / `core_score` — the bc-eval evaluator list and headline score, emitted to workflows by [src/bcbench/commands/category.py](src/bcbench/commands/category.py).
+- `requires_container` / `runner` — whether the category needs a BC container and which runner evaluates it.
 - Prompt template — the category-specific prompt in [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml), loaded by [src/bcbench/agent/shared/prompt.py](src/bcbench/agent/shared/prompt.py).
 
 Keep dataset entry classes and result classes focused on typed data. Put category-specific behavior in the pipeline.
 
 ## Checklist
 
-Use the existing `bug-fix` and `test-generation` implementations as examples.
+Use the existing implementations as examples: `bug-fix` and `test-generation` for execution-based categories, `code-review` and `nl2al` for judge-based ones.
 
 1. Add the enum value and mappings in [src/bcbench/types.py](src/bcbench/types.py).
 2. Add the category dataset JSONL and entry class in [src/bcbench/dataset/dataset_entry.py](src/bcbench/dataset/dataset_entry.py).
