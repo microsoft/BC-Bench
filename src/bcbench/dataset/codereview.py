@@ -40,6 +40,10 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
     "warning": Severity.MEDIUM,
     "suggestion": Severity.LOW,
     "info": Severity.LOW,
+    # BCQuality-native severities, mapped deterministically so agents can emit them verbatim.
+    "blocker": Severity.CRITICAL,
+    "major": Severity.HIGH,
+    "minor": Severity.MEDIUM,
 }
 
 

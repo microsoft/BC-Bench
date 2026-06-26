@@ -10,16 +10,14 @@ import yaml
 
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks
+from bcbench.agent.shared.codereview_bcquality import parse_bcquality_config, prepare_bcquality_workspace
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.evaluate.codereview_bcquality import parse_bcquality_config, prepare_bcquality_workspace
+from bcbench.evaluate.codereview import REVIEW_OUTPUT_FILE
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
 from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
-
-# review.json output file the BCQuality bootstrap prompt instructs the agent to write (read by CodeReviewPipeline).
-_REVIEW_OUTPUT_FILE = "review.json"
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -56,7 +54,7 @@ def run_copilot_agent(
         # Live BCQuality consumption: clone+filter BCQuality and route the agent through skills/entry.md.
         # The filtered clone (not the repo) becomes the Copilot CLI working directory; the repo under
         # review is granted via --add-dir. No static instruction/skill/agent injection in this mode.
-        bcquality_root, prompt = prepare_bcquality_workspace(bcquality_config, output_dir / "bcquality-clone", repo_path, _REVIEW_OUTPUT_FILE)
+        bcquality_root, prompt = prepare_bcquality_workspace(bcquality_config, output_dir / "bcquality-clone", repo_path, REVIEW_OUTPUT_FILE)
         work_dir: Path = bcquality_root
         instructions_enabled: bool = False
         skills_enabled: bool = False

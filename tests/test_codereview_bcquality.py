@@ -7,8 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from bcbench.config import get_config
-from bcbench.evaluate.codereview_bcquality import (
+from bcbench.agent.shared.codereview_bcquality import (
     BCQualityConfig,
     build_bootstrap_prompt,
     build_task_context,
@@ -16,6 +15,7 @@ from bcbench.evaluate.codereview_bcquality import (
     glob_match,
     parse_bcquality_config,
 )
+from bcbench.config import get_config
 
 _PINNED_SHA = "822cae1b2771ac25f665f73369f69093bd4fd630"
 
@@ -214,5 +214,5 @@ class TestBootstrapPrompt:
         assert "_task-context.json" in prompt
         assert "review.json" in prompt
         assert "git diff HEAD" in prompt
-        assert "blocker=critical" in prompt
+        assert "blocker, major, minor, or info" in prompt
         assert "/repo/under/review" in prompt

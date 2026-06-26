@@ -48,9 +48,6 @@ _TASK_CONTEXT_DIMENSIONS: tuple[str, ...] = ("technologies", "countries", "appli
 _TASK_CONTEXT_FILENAME = "_task-context.json"
 _FILTER_REPORT_FILENAME = "_filter-report.json"
 
-# BCQuality emits blocker/major/minor/info; BC-Bench review.json uses critical/high/medium/low.
-_SEVERITY_MAP: dict[str, str] = {"blocker": "critical", "major": "high", "minor": "medium", "info": "low"}
-
 
 @dataclass(frozen=True)
 class BCQualityConfig:
@@ -281,7 +278,6 @@ def write_task_context(root: Path, context: dict) -> Path:
 
 def build_bootstrap_prompt(repo_path: Path, task_context_filename: str, review_output_file: str) -> str:
     repo = repo_path.as_posix()
-    severity_map = ", ".join(f"{k}={v}" for k, v in _SEVERITY_MAP.items())
     return f"""\
 TASK:
 Review the uncommitted working-tree changes in the Business Central (AL) repository at {repo}. \
@@ -321,7 +317,8 @@ finding into this schema. {review_output_file} must contain a single JSON array.
   - file: repo-relative path of the file the finding refers to (string, required)
   - line_start: 1-based line number where the issue starts (integer, required)
   - line_end: line number where the issue ends (integer, optional)
-  - severity: one of critical, high, medium, or low (optional, defaults to medium). Map BCQuality severities as: {severity_map}.
+  - severity: the BCQuality severity of the finding, verbatim — one of blocker, major, minor, or info \
+(optional). Do not remap to other scales; BC-Bench normalizes these deterministically.
   - body: concise description of the issue (string, required)
 If there are no findings, write an empty array. Write only valid JSON to {review_output_file}, with no surrounding \
 markdown or commentary."""
