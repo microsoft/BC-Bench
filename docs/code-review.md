@@ -33,7 +33,7 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
     <tr>
       <th>Agent</th>
       <th>Model</th>
-      <th>F1 (95% CI)</th>
+      <th>Micro F1 (95% CI)</th>
       <th>Precision</th>
       <th>Recall</th>
       <th>Avg Time</th>
@@ -76,7 +76,7 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
       <th>Variant</th>
       <th>Agent</th>
       <th>Model</th>
-      <th>F1 (95% CI)</th>
+      <th>Micro F1 (95% CI)</th>
       <th>Macro F1 (95% CI)</th>
       <th>Precision</th>
       <th>Recall</th>

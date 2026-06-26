@@ -45,7 +45,7 @@ Upgrade codeunits must follow the correct structure and be properly organized:
 codeunit [ID] [CodeunitName]
 {
     Subtype = Upgrade;
-    
+
     trigger OnUpgradePerCompany()
     begin
         UpgradeMyFeature();
@@ -73,7 +73,7 @@ end;
 codeunit 4123 UpgradeMyFeature
 {
     Subtype = Upgrade;
-   
+
     trigger OnUpgradePerCompany()
     begin
         UpgradeMyFeature();
@@ -116,7 +116,7 @@ begin
     // Written justification: Critical data validation required for regulatory compliance
     if UpgradeTag.HasUpgradeTag(MyValidationUpgradeTag()) then
         exit; // Skip if already completed
-        
+
     ValidateAllCustomers();
     UpgradeTag.SetUpgradeTag(MyValidationUpgradeTag());
 end;
@@ -175,7 +175,7 @@ Control upgrade execution using upgrade tags rather than version checks. Upgrade
 ### Bad:
 ```al
 // Version check approach - AVOID
-if MyApplication.DataVersion().Major > 14 then 
+if MyApplication.DataVersion().Major > 14 then
     exit;
 
 // Complex version structure - AVOID
@@ -313,7 +313,7 @@ begin
     // Don't add report selection entries during upgrade
     if GetExecutionContext() = ExecutionContext::Upgrade then
         exit;
-        
+
     ReportSelections.Insert();
 end;
 ```
@@ -367,16 +367,16 @@ begin
     // Update Job-related records
     PriceListLineDataTransfer.SetTables(Database::"Price List Line", Database::"Price List Line");
     PriceListLineDataTransfer.AddSourceFilter(PriceListLine.FieldNo("Source Group"), '=%1', "Price Source Group"::All);
-    PriceListLineDataTransfer.AddSourceFilter(PriceListLine.FieldNo("Source Type"), '%1|%2|%3', 
+    PriceListLineDataTransfer.AddSourceFilter(PriceListLine.FieldNo("Source Type"), '%1|%2|%3',
         "Price Source Type"::"All Jobs", "Price Source Type"::Job, "Price Source Type"::"Job Task");
     PriceListLineDataTransfer.AddConstantValue("Price Source Group"::Job, PriceListLine.FieldNo("Source Group"));
     PriceListLineDataTransfer.CopyFields();
     Clear(PriceListLineDataTransfer);
 
-    // Update Vendor-related records  
+    // Update Vendor-related records
     PriceListLineDataTransfer.SetTables(Database::"Price List Line", Database::"Price List Line");
     PriceListLineDataTransfer.AddSourceFilter(PriceListLine.FieldNo("Source Group"), '=%1', "Price Source Group"::All);
-    PriceListLineDataTransfer.AddSourceFilter(PriceListLine.FieldNo("Source Type"), '<>%1&<>%2&<>%3', 
+    PriceListLineDataTransfer.AddSourceFilter(PriceListLine.FieldNo("Source Type"), '<>%1&<>%2&<>%3',
         "Price Source Type"::"All Jobs", "Price Source Type"::Job, "Price Source Type"::"Job Task");
     PriceListLineDataTransfer.AddSourceFilter(PriceListLine.FieldNo("Price Type"), '=%1', "Price Type"::Purchase);
     PriceListLineDataTransfer.AddConstantValue("Price Source Group"::Vendor, PriceListLine.FieldNo("Source Group"));
@@ -435,7 +435,7 @@ end;
 
 **Context-Aware Exceptions:**
 - New fields in brand-new tables don't need upgrade code (existing records don't exist yet)
-- New Boolean fields without InitValue that default to `false` often don't need upgrade code if that's the intended behavior  
+- New Boolean fields without InitValue that default to `false` often don't need upgrade code if that's the intended behavior
 - Fields in new extensions, new feature tables, or configuration/setup tables may not need upgrade code if they have no meaningful "existing data to migrate"
 - Informational/optional fields (logging, preferences, tracking) may not need migration if `false`/empty is a valid state
 
@@ -477,8 +477,8 @@ enum 50100 MyEnum
 enum 50100 MyEnum
 {
     value(0; "First") { }
-    value(1; "Second") 
-    { 
+    value(1; "Second")
+    {
         ObsoleteState = Removed;
         ObsoleteReason = 'Replaced by NewValue';
         ObsoleteTag = '22.0';
@@ -577,7 +577,7 @@ When reviewing upgrade code, verify:
 ## Common Anti-Patterns to Flag
 
 - Version checking instead of upgrade tags
-- Direct database operations without IF protection  
+- Direct database operations without IF protection
 - Loop/Modify pattern on large datasets
 - Missing upgrade code for InitValue fields on existing tables
 - External service calls in upgrade codeunits
