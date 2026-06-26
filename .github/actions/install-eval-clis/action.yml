@@ -1,0 +1,13 @@
+name: Install Agent Harnesses
+description: Install the Claude Code and GitHub Copilot CLIs used by the evaluation workflows
+
+runs:
+  using: composite
+  steps:
+    - name: Install Claude Code
+      run: npm install -g @anthropic-ai/claude-code@2.1.160
+      shell: pwsh
+
+    - name: Install GitHub Copilot CLI
+      run: npm install -g @github/copilot@1.0.57
+      shell: pwsh

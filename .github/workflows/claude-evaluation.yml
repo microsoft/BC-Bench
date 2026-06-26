@@ -77,6 +77,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      copilot-requests: write  # code-review semantic judge runs via Copilot CLI
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
@@ -113,16 +114,18 @@ jobs:
           dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.160
+      - name: Install Agent Harnesses
+        uses: ./.github/actions/install-eval-clis
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
         shell: pwsh
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}  # used by the code-review semantic judge
         run: |
           Write-Output "::add-mask::$env:ANTHROPIC_API_KEY"
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
           uv run bcbench evaluate claude "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
