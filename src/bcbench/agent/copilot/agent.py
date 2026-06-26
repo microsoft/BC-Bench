@@ -12,10 +12,14 @@ from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
+from bcbench.evaluate.codereview_bcquality import parse_bcquality_config, prepare_bcquality_workspace
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
 from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
+
+# review.json output file the BCQuality bootstrap prompt instructs the agent to write (read by CodeReviewPipeline).
+_REVIEW_OUTPUT_FILE = "review.json"
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -41,22 +45,48 @@ def run_copilot_agent(
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentType.COPILOT, al_lsp=al_lsp, container_name=container_name)
-    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
-    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
-    custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
-    tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
-    config = ExperimentConfiguration(
-        mcp_servers=mcp_server_names,
-        al_lsp_enabled=lsp_plugin_dir is not None,
-        custom_instructions=instructions_enabled,
-        skills_enabled=skills_enabled,
-        custom_agent=custom_agent,
-    )
 
-    logger.info(f"Executing Copilot CLI in directory: {repo_path}")
+    bcquality_config = parse_bcquality_config(copilot_config)
+    bcquality_live: bool = category == EvaluationCategory.CODE_REVIEW and bcquality_config is not None and bcquality_config.enabled
+
+    if bcquality_live:
+        assert bcquality_config is not None
+        # Live BCQuality consumption: clone+filter BCQuality and route the agent through skills/entry.md.
+        # The filtered clone (not the repo) becomes the Copilot CLI working directory; the repo under
+        # review is granted via --add-dir. No static instruction/skill/agent injection in this mode.
+        bcquality_root, prompt = prepare_bcquality_workspace(bcquality_config, output_dir / "bcquality-clone", repo_path, _REVIEW_OUTPUT_FILE)
+        work_dir: Path = bcquality_root
+        instructions_enabled: bool = False
+        skills_enabled: bool = False
+        custom_agent: str | None = None
+        # Copilot reads hooks from the CWD's .github/hooks, so install them into the clone to keep tool-usage metrics.
+        tool_log_path: Path = setup_hooks(bcquality_root, AgentType.COPILOT, output_dir)
+        config = ExperimentConfiguration(
+            mcp_servers=mcp_server_names,
+            al_lsp_enabled=lsp_plugin_dir is not None,
+            custom_instructions=False,
+            skills_enabled=False,
+            custom_agent=None,
+            bcquality=True,
+        )
+    else:
+        prompt = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
+        work_dir = repo_path
+        instructions_enabled = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+        skills_enabled = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+        custom_agent = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+        tool_log_path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
+        config = ExperimentConfiguration(
+            mcp_servers=mcp_server_names,
+            al_lsp_enabled=lsp_plugin_dir is not None,
+            custom_instructions=instructions_enabled,
+            skills_enabled=skills_enabled,
+            custom_agent=custom_agent,
+        )
+
+    logger.info(f"Executing Copilot CLI in directory: {work_dir}")
     logger.debug(f"Using prompt:\n{prompt}")
 
     # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
@@ -83,12 +113,15 @@ def run_copilot_agent(
             cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
+        if bcquality_live:
+            # Grant the agent access to the repo under review (it lives outside the BCQuality CWD).
+            cmd_args.extend(["--add-dir", str(repo_path)])
 
         logger.debug(f"Copilot command args: {cmd_args}")
 
         result = subprocess.run(
             cmd_args,
-            cwd=str(repo_path),
+            cwd=str(work_dir),
             env={
                 **os.environ,
                 "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
