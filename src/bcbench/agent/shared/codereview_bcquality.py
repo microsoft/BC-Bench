@@ -60,6 +60,8 @@ class BCQualityConfig:
     disabled_skills: tuple[str, ...]
     knowledge_allow: tuple[str, ...]
     knowledge_deny: tuple[str, ...]
+    goal: str
+    inputs_available: tuple[str, ...]
     task_context: dict[str, tuple[str, ...]]
 
     @classmethod
@@ -80,6 +82,8 @@ class BCQualityConfig:
             disabled_skills=_as_str_tuple(raw.get("disabled-skills")),
             knowledge_allow=_as_str_tuple(knowledge.get("allow")),
             knowledge_deny=_as_str_tuple(knowledge.get("deny")),
+            goal=str(task_context_raw.get("goal", "")).strip(),
+            inputs_available=_as_str_tuple(task_context_raw.get("inputs-available")),
             task_context=task_context,
         )
         config.validate()
@@ -262,8 +266,8 @@ def filter_clone(root: Path, config: BCQualityConfig, report_path: Path | None =
 
 def build_task_context(config: BCQualityConfig) -> dict:
     context: dict[str, object] = {
-        "goal": "review pull request",
-        "inputs-available": ["pr-diff", "file-path", "repository"],
+        "goal": config.goal,
+        "inputs-available": list(config.inputs_available),
         "enabled-layers": list(config.enabled_layers),
         "disabled-skills": list(config.disabled_skills),
     }

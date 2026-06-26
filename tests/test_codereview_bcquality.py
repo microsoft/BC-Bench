@@ -27,6 +27,8 @@ _BASE_CONFIG = BCQualityConfig(
     disabled_skills=(),
     knowledge_allow=("microsoft/knowledge/**",),
     knowledge_deny=(),
+    goal="review pull request",
+    inputs_available=("pr-diff", "file-path", "repository"),
     task_context={"technologies": ("al",), "countries": ("w1",)},
 )
 
@@ -48,7 +50,14 @@ class TestParseConfig:
                 "enabled-layers": ["microsoft"],
                 "disabled-skills": [],
                 "knowledge": {"allow": ["microsoft/knowledge/**"], "deny": []},
-                "task-context": {"technologies": ["al"], "countries": ["w1"], "application-area": ["all"], "bc-version": ["all"]},
+                "task-context": {
+                    "goal": "review pull request",
+                    "inputs-available": ["pr-diff", "file-path", "repository"],
+                    "technologies": ["al"],
+                    "countries": ["w1"],
+                    "application-area": ["all"],
+                    "bc-version": ["all"],
+                },
             }
         }
         config = parse_bcquality_config(raw)
@@ -60,6 +69,8 @@ class TestParseConfig:
         assert config.knowledge_allow == ("microsoft/knowledge/**",)
         assert config.task_context["technologies"] == ("al",)
         assert config.task_context["application-area"] == ("all",)
+        assert config.goal == "review pull request"
+        assert config.inputs_available == ("pr-diff", "file-path", "repository")
 
     def test_unknown_layer_raises(self):
         with pytest.raises(ValueError, match="enabled-layers"):
@@ -204,6 +215,12 @@ class TestTaskContext:
         assert context["enabled-layers"] == ["microsoft"]
         assert context["technologies"] == ["al"]
         assert context["countries"] == ["w1"]
+
+    def test_goal_and_inputs_are_config_driven(self):
+        context = build_task_context(_enabled_config(goal="generate tests", inputs_available=("file-path", "repository")))
+
+        assert context["goal"] == "generate tests"
+        assert context["inputs-available"] == ["file-path", "repository"]
 
 
 class TestBootstrapPrompt:

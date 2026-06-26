@@ -202,9 +202,13 @@ bcquality:
       - "microsoft/knowledge/**"
     deny: []
 
-  # Dimensions passed verbatim to BCQuality's skills/entry.md as `task-context`.
-  # Each list may be `[all]` to mean "unconstrained".
+  # Passed verbatim to BCQuality's skills/entry.md as `task-context`. `goal` and
+  # `inputs-available` describe the flow BCQuality is driving (today: code review);
+  # change them to drive BCQuality from a different category. Each dimension list
+  # may be `[all]` to mean "unconstrained".
   task-context:
+    goal: "review pull request"
+    inputs-available: ["pr-diff", "file-path", "repository"]
     technologies: ["al"]
     countries: ["w1"]
     application-area: ["all"]
