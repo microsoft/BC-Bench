@@ -63,17 +63,18 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
 
 ## Experiment Leaderboard
 
-Compares review-knowledge configurations against the plain (vanilla) agent for the same model:
+Compares review-knowledge configurations for the same model (see the Baseline Leaderboard above for the plain agent):
 
-- **Vanilla** — plain agent, no extra review knowledge (reference row).
 - **Inline knowledge (pre-#8700)** — the review checklists BCApps shipped inline before adopting BCQuality, injected as custom instructions.
 - **BCQuality (live skills)** — the agent dynamically consumes the live BCQuality skill tree.
 
-{% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
+{% assign experiment_rows = site.data.code-review.aggregate | where_exp: "agg", "agg.experiment" %}
+{% if experiment_rows and experiment_rows.size > 0 %}
 <table>
   <thead>
     <tr>
       <th>Variant</th>
+      <th>Agent</th>
       <th>Model</th>
       <th>F1 (95% CI)</th>
       <th>Macro F1 (95% CI)</th>
@@ -84,15 +85,15 @@ Compares review-knowledge configurations against the plain (vanilla) agent for t
     </tr>
   </thead>
   <tbody>
-    {% assign experiment_results = site.data.code-review.aggregate | sort: "f1" | reverse %}
+    {% assign experiment_results = experiment_rows | sort: "f1" | reverse %}
     {% for agg in experiment_results %}
     <tr>
       <td>
         {%- if agg.experiment.bcquality -%}BCQuality (live skills)
         {%- elsif agg.experiment.custom_instructions -%}Inline knowledge (pre-#8700)
-        {%- elsif agg.experiment == null -%}Vanilla (reference)
         {%- else -%}Other{%- endif -%}
       </td>
+      <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.macro_f1 | times: 100.0 | round: 1 }}%{% if agg.macro_f1_ci_low %} ({{ agg.macro_f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.macro_f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
@@ -105,7 +106,7 @@ Compares review-knowledge configurations against the plain (vanilla) agent for t
   </tbody>
 </table>
 {% else %}
-<p><em>No results available yet. Check back soon!</em></p>
+<p><em>No experiment results available yet. Check back soon!</em></p>
 {% endif %}
 
 ## How metrics are computed
