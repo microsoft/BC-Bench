@@ -11,11 +11,9 @@ from bcbench.agent.shared.codereview_bcquality import (
     BCQualityConfig,
     build_bootstrap_prompt,
     build_task_context,
-    ensure_bcquality_cache,
     filter_clone,
     glob_match,
     parse_bcquality_config,
-    prepare_bcquality_workspace,
 )
 from bcbench.config import get_config
 
@@ -218,42 +216,3 @@ class TestBootstrapPrompt:
         assert "git diff HEAD" in prompt
         assert "blocker, major, minor, or info" in prompt
         assert "/repo/under/review" in prompt
-
-
-class TestCache:
-    def test_clones_once_then_reuses(self, tmp_path: Path, monkeypatch):
-        calls: list[Path] = []
-
-        def fake_clone(config: BCQualityConfig, dest: Path) -> Path:
-            calls.append(dest)
-            _make_bcquality_tree(dest)
-            return dest
-
-        monkeypatch.setattr("bcbench.agent.shared.codereview_bcquality.clone_bcquality", fake_clone)
-        cache_root = tmp_path / "cache"
-
-        first = ensure_bcquality_cache(_enabled_config(), cache_root)
-        second = ensure_bcquality_cache(_enabled_config(), cache_root)
-
-        assert first == second == cache_root / _PINNED_SHA
-        assert (first / "skills" / "entry.md").exists()
-        assert len(calls) == 1  # second call served from cache
-
-    def test_prepare_workspace_materializes_and_filters_without_touching_cache(self, tmp_path: Path, monkeypatch):
-        def fake_clone(config: BCQualityConfig, dest: Path) -> Path:
-            _make_bcquality_tree(dest)
-            return dest
-
-        monkeypatch.setattr("bcbench.agent.shared.codereview_bcquality.clone_bcquality", fake_clone)
-        cache_root = tmp_path / "cache"
-        clone_dest = tmp_path / "out" / "bcquality-clone"
-
-        root, prompt = prepare_bcquality_workspace(_enabled_config(), clone_dest, Path("/repo"), "review.json", cache_root)
-
-        assert root == clone_dest
-        assert (clone_dest / "skills" / "entry.md").exists()
-        assert (clone_dest / "_task-context.json").exists()
-        assert not (clone_dest / "community" / "knowledge" / "c.md").exists()  # filtered out of the workspace
-        assert "review.json" in prompt
-        # The per-SHA cache must remain unfiltered so other entries reuse the full tree.
-        assert (cache_root / _PINNED_SHA / "community" / "knowledge" / "c.md").exists()

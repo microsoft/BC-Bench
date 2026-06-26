@@ -17,13 +17,11 @@ http(s) URL pointing at a trusted source.
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from uuid import uuid4
 
 from bcbench.logger import get_logger
 
@@ -36,7 +34,6 @@ __all__ = [
     "build_bootstrap_prompt",
     "build_task_context",
     "clone_bcquality",
-    "ensure_bcquality_cache",
     "filter_clone",
     "glob_match",
     "parse_bcquality_config",
@@ -189,47 +186,6 @@ def clone_bcquality(config: BCQualityConfig, dest: Path) -> Path:
     return dest
 
 
-def ensure_bcquality_cache(config: BCQualityConfig, cache_root: Path) -> Path:
-    """Clone BCQuality once into a per-SHA cache and return the cached clone path.
-
-    The cache is keyed by the immutable commit SHA, so it never goes stale and is
-    reused across entries and runs. Concurrent first-time clones race-resolve via an
-    atomic rename: the loser discards its staging copy and uses the winner's cache.
-    """
-    config.validate()
-    cache_dir = cache_root / config.ref
-    marker = cache_dir / "skills" / "entry.md"
-    if marker.exists():
-        logger.info(f"Reusing cached BCQuality clone at {cache_dir}")
-        return cache_dir
-
-    cache_root.mkdir(parents=True, exist_ok=True)
-    staging = cache_root / f".staging-{config.ref}-{os.getpid()}-{uuid4().hex}"
-    clone_bcquality(config, staging)
-    if not (staging / "skills" / "entry.md").exists():
-        shutil.rmtree(staging, ignore_errors=True)
-        raise FileNotFoundError(f"BCQuality clone at {config.ref} is missing skills/entry.md; check bcquality repo and ref.")
-    shutil.rmtree(staging / ".git", ignore_errors=True)  # not needed after checkout; keeps per-entry copies small
-
-    try:
-        staging.replace(cache_dir)
-    except OSError:
-        # Another process populated the cache first (or the dest already exists). Reuse it if valid.
-        shutil.rmtree(staging, ignore_errors=True)
-        if marker.exists():
-            return cache_dir
-        raise
-    logger.info(f"Cached BCQuality clone at {cache_dir}")
-    return cache_dir
-
-
-def _materialize_from_cache(cache_dir: Path, dest: Path) -> None:
-    if dest.exists():
-        shutil.rmtree(dest)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(cache_dir, dest)
-
-
 def _is_within(target: Path, root: Path) -> bool:
     try:
         target.relative_to(root)
@@ -370,18 +326,13 @@ If there are no findings, write an empty array. Write only valid JSON to {review
 markdown or commentary."""
 
 
-def prepare_bcquality_workspace(config: BCQualityConfig, clone_dest: Path, repo_path: Path, review_output_file: str, cache_root: Path) -> tuple[Path, str]:
-    """Materialize a filtered BCQuality workspace from the per-SHA cache and build the bootstrap prompt.
-
-    Clones BCQuality once per SHA into `cache_root`, copies it into `clone_dest`, then
-    filters the copy (filtering mutates files and writes per-run reports, so the cache
-    is never touched).
+def prepare_bcquality_workspace(config: BCQualityConfig, clone_dest: Path, repo_path: Path, review_output_file: str) -> tuple[Path, str]:
+    """Clone + filter BCQuality, write task-context, and build the bootstrap prompt.
 
     Returns:
         Tuple of (filtered BCQuality clone root, bootstrap prompt string).
     """
-    cached = ensure_bcquality_cache(config, cache_root)
-    _materialize_from_cache(cached, clone_dest)
+    clone_bcquality(config, clone_dest)
     entry_skill = clone_dest / "skills" / "entry.md"
     if not entry_skill.exists():
         raise FileNotFoundError(f"BCQuality clone at {clone_dest} is missing skills/entry.md; check bcquality repo and ref.")

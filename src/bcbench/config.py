@@ -44,7 +44,6 @@ class PathConfig:
     agent_share_dir: Path
     hook_script_path: Path
     bc_artifacts_cache: Path
-    bcquality_cache: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -61,7 +60,6 @@ class PathConfig:
             agent_share_dir=agent_share_dir,
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
             bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
-            bcquality_cache=Path.home() / ".bcbench" / "bcquality.cache",
         )
 
 
