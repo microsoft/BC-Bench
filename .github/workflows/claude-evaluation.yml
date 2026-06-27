@@ -121,10 +121,10 @@ jobs:
         timeout-minutes: 120
         shell: pwsh
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
           COPILOT_GITHUB_TOKEN: ${{ github.token }}  # used by the code-review semantic judge
         run: |
-          Write-Output "::add-mask::$env:ANTHROPIC_API_KEY"
+          Write-Output "::add-mask::$env:CLAUDE_CODE_OAUTH_TOKEN"
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
           uv run bcbench evaluate claude "${{ matrix.entry }}" `
