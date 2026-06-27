@@ -5937,9 +5937,11 @@
         "mcp_servers": [
           "altool"
         ],
+        "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "bcquality": false
       },
       "benchmark_version": "0.5.0",
       "resolved": 76,
@@ -6081,9 +6083,11 @@
         "mcp_servers": [
           "altool"
         ],
+        "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "bcquality": false
       },
       "benchmark_version": "0.5.0",
       "resolved": 71,
@@ -6226,9 +6230,11 @@
         "mcp_servers": [
           "altool"
         ],
+        "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "bcquality": false
       },
       "benchmark_version": "0.5.0",
       "resolved": 70,
@@ -6372,9 +6378,11 @@
         "mcp_servers": [
           "altool"
         ],
+        "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "bcquality": false
       },
       "benchmark_version": "0.5.0",
       "resolved": 71,
@@ -6517,9 +6525,11 @@
         "mcp_servers": [
           "altool"
         ],
+        "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "bcquality": false
       },
       "benchmark_version": "0.5.0",
       "resolved": 72,
@@ -9286,6 +9296,153 @@
         "microsoftInternal__NAV-218253": true,
         "microsoftInternal__NAV-178045": false
       }
+    },
+    {
+      "total": 101,
+      "date": "2026-06-27",
+      "model": "claude-opus-4-8",
+      "agent_name": "GitHub Copilot",
+      "category": "bug-fix",
+      "average_duration": 309.5,
+      "average_prompt_tokens": 1615763.3,
+      "average_completion_tokens": 17553.2,
+      "average_llm_duration": 0.0,
+      "average_tool_usage": {
+        "report_intent": 1.38,
+        "grep": 9.96,
+        "view": 9.75,
+        "edit": 2.18,
+        "powershell": 2.56,
+        "glob": 0.81,
+        "stop_powershell": 0.03,
+        "task": 0.02,
+        "lsp:documentSymbol": 0.05,
+        "lsp:hover": 0.03,
+        "web_fetch": 1.45,
+        "write_powershell": 0.01,
+        "create": 0.02,
+        "sql": 0.01,
+        "lsp:findReferences": 0.01,
+        "read_agent": 0.03,
+        "read_powershell": 0.02
+      },
+      "github_run_id": "28293713101",
+      "experiment": {
+        "mcp_servers": null,
+        "al_lsp_enabled": true,
+        "custom_instructions": false,
+        "skills_enabled": false,
+        "custom_agent": null,
+        "bcquality": false
+      },
+      "benchmark_version": "0.6.0",
+      "resolved": 72,
+      "failed": 29,
+      "build": 99,
+      "percentage": 71.3,
+      "instance_results": {
+        "microsoftInternal__NAV-223493": true,
+        "microsoftInternal__NAV-223790": true,
+        "microsoftInternal__NAV-220452": true,
+        "microsoftInternal__NAV-210200": false,
+        "microsoftInternal__NAV-175577": true,
+        "microsoftInternal__NAV-227219": true,
+        "microsoftInternal__NAV-217974": true,
+        "microsoftInternal__NAV-206977": true,
+        "microsoftInternal__NAV-207247": true,
+        "microsoftInternal__NAV-227358": true,
+        "microsoftInternal__NAV-179733": true,
+        "microsoftInternal__NAV-177750": false,
+        "microsoftInternal__NAV-181900": false,
+        "microsoftInternal__NAV-210528": true,
+        "microsoftInternal__NAV-206527": true,
+        "microsoftInternal__NAV-192565": true,
+        "microsoftInternal__NAV-182354": false,
+        "microsoftInternal__NAV-216572": true,
+        "microsoftInternal__NAV-175765": false,
+        "microsoftInternal__NAV-218062": true,
+        "microsoftInternal__NAV-208748": true,
+        "microsoftInternal__NAV-218323": false,
+        "microsoftInternal__NAV-193649": true,
+        "microsoftInternal__NAV-216918": false,
+        "microsoftInternal__NAV-207177": true,
+        "microsoftInternal__NAV-213629": true,
+        "microsoftInternal__NAV-214825": true,
+        "microsoftInternal__NAV-201169": false,
+        "microsoftInternal__NAV-209737": true,
+        "microsoftInternal__NAV-216057": false,
+        "microsoftInternal__NAV-188438": false,
+        "microsoftInternal__NAV-206135": true,
+        "microsoftInternal__NAV-209835": true,
+        "microsoftInternal__NAV-220036": false,
+        "microsoftInternal__NAV-207878": true,
+        "microsoftInternal__NAV-220984": true,
+        "microsoftInternal__NAV-227240": true,
+        "microsoftInternal__NAV-223819": true,
+        "microsoft__BCApps-4699": true,
+        "microsoftInternal__NAV-185488": true,
+        "microsoftInternal__NAV-174794": true,
+        "microsoftInternal__NAV-213524": true,
+        "microsoftInternal__NAV-211548": true,
+        "microsoftInternal__NAV-224668": true,
+        "microsoftInternal__NAV-209496": true,
+        "microsoft__BCApps-4822": false,
+        "microsoftInternal__NAV-221877": true,
+        "microsoftInternal__NAV-214926": true,
+        "microsoftInternal__NAV-177493": true,
+        "microsoftInternal__NAV-204450": true,
+        "microsoftInternal__NAV-222488": true,
+        "microsoftInternal__NAV-208649": true,
+        "microsoftInternal__NAV-215972": true,
+        "microsoftInternal__NAV-213671": true,
+        "microsoftInternal__NAV-215225": false,
+        "microsoftInternal__NAV-212355": true,
+        "microsoftInternal__NAV-178045": false,
+        "microsoftInternal__NAV-183399": false,
+        "microsoftInternal__NAV-214557": false,
+        "microsoftInternal__NAV-220314": true,
+        "microsoftInternal__NAV-185696": true,
+        "microsoftInternal__NAV-208320": false,
+        "microsoftInternal__NAV-174087": true,
+        "microsoftInternal__NAV-223202": true,
+        "microsoftInternal__NAV-217797": true,
+        "microsoftInternal__NAV-218786": true,
+        "microsoftInternal__NAV-193853": true,
+        "microsoftInternal__NAV-226875": true,
+        "microsoftInternal__NAV-211710": true,
+        "microsoftInternal__NAV-218856": false,
+        "microsoftInternal__NAV-219082": false,
+        "microsoftInternal__NAV-222092": true,
+        "microsoftInternal__NAV-226004": true,
+        "microsoftInternal__NAV-224009": false,
+        "microsoftInternal__NAV-203923": true,
+        "microsoftInternal__NAV-176426": false,
+        "microsoftInternal__NAV-224447": true,
+        "microsoft__BCApps-4766": false,
+        "microsoftInternal__NAV-176194": false,
+        "microsoftInternal__NAV-227153": true,
+        "microsoftInternal__NAV-215645": false,
+        "microsoftInternal__NAV-222484": true,
+        "microsoft__BCApps-5633": false,
+        "microsoftInternal__NAV-208851": true,
+        "microsoftInternal__NAV-209450": false,
+        "microsoftInternal__NAV-185792": true,
+        "microsoftInternal__NAV-205825": true,
+        "microsoftInternal__NAV-191624": false,
+        "microsoftInternal__NAV-226448": true,
+        "microsoftInternal__NAV-176150": true,
+        "microsoftInternal__NAV-213741": false,
+        "microsoftInternal__NAV-213683": true,
+        "microsoftInternal__NAV-211521": true,
+        "microsoftInternal__NAV-218995": true,
+        "microsoftInternal__NAV-218253": true,
+        "microsoftInternal__NAV-207236": true,
+        "microsoftInternal__NAV-226223": true,
+        "microsoftInternal__NAV-217104": true,
+        "microsoftInternal__NAV-195193": true,
+        "microsoftInternal__NAV-180484": false,
+        "microsoftInternal__NAV-176082": true
+      }
     }
   ],
   "aggregate": [
@@ -9423,9 +9580,11 @@
         "mcp_servers": [
           "altool"
         ],
+        "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "bcquality": false
       },
       "total": 101,
       "num_runs": 5,
@@ -9491,6 +9650,27 @@
       "ci_low": 0.655,
       "ci_high": 0.699,
       "pass_hat_5": 0.545
+    },
+    {
+      "model": "claude-opus-4-8",
+      "agent_name": "GitHub Copilot",
+      "category": "bug-fix",
+      "experiment": {
+        "mcp_servers": null,
+        "al_lsp_enabled": true,
+        "custom_instructions": false,
+        "skills_enabled": false,
+        "custom_agent": null,
+        "bcquality": false
+      },
+      "total": 101,
+      "num_runs": 1,
+      "average_duration": 309.5,
+      "benchmark_version": "0.6.0",
+      "average": 0.713,
+      "ci_low": null,
+      "ci_high": null,
+      "pass_hat_5": null
     }
   ]
 }
