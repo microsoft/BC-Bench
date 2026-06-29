@@ -175,7 +175,7 @@ mcp:
 # before the diff. `ref` MUST be pinned to a reviewed commit SHA and `repo` MUST point
 # only at a trusted source — a compromised fork can embed prompt-injection payloads.
 bcquality:
-  enabled: false
+  enabled: true
 
   # HTTPS URL of the BCQuality repository to consume.
   repo: "https://github.com/microsoft/BCQuality"
