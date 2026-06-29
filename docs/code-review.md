@@ -66,7 +66,6 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
 Compares review-knowledge configurations for the same model (see the Baseline Leaderboard above for the plain agent):
 
 - **Inline knowledge (pre-#8700)** — the review checklists BCApps shipped inline before adopting BCQuality, injected as custom instructions.
-- **BCQuality (live skills)** — the agent dynamically consumes the live BCQuality skill tree.
 
 {% assign experiment_rows = site.data.code-review.aggregate | where_exp: "agg", "agg.experiment" %}
 {% if experiment_rows and experiment_rows.size > 0 %}
@@ -89,8 +88,7 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
     {% for agg in experiment_results %}
     <tr>
       <td>
-        {%- if agg.experiment.bcquality -%}BCQuality (live skills)
-        {%- elsif agg.experiment.custom_instructions -%}Inline knowledge (pre-#8700)
+        {%- if agg.experiment.custom_instructions -%}Inline knowledge (pre-#8700)
         {%- else -%}Other{%- endif -%}
       </td>
       <td>{{ agg.agent_name }}</td>
