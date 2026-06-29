@@ -3315,7 +3315,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "bcquality": false
       },
       "benchmark_version": "0.5.1",
       "resolved": 65,
@@ -3457,7 +3458,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "bcquality": false
       },
       "benchmark_version": "0.5.1",
       "resolved": 63,
@@ -3600,7 +3602,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "bcquality": false
       },
       "benchmark_version": "0.5.1",
       "resolved": 64,
@@ -3743,7 +3746,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "bcquality": false
       },
       "benchmark_version": "0.5.1",
       "resolved": 61,
@@ -3884,7 +3888,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "bcquality": false
       },
       "benchmark_version": "0.5.1",
       "resolved": 62,
@@ -5415,7 +5420,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "bcquality": false
       },
       "total": 101,
       "num_runs": 5,
