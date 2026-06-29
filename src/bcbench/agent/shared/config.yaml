@@ -66,13 +66,13 @@ prompt:
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
     {% if inline_instructions_enabled %}
-    Evaluate the diff against every one of the following domain checklists. Read each file under `{{ instructions_dir }}/` and apply its guidance:
-      - `{{ instructions_dir }}/security.md` — security
-      - `{{ instructions_dir }}/performance.md` — performance
-      - `{{ instructions_dir }}/privacy.md` — privacy and data protection
-      - `{{ instructions_dir }}/style.md` — AL style and conventions
-      - `{{ instructions_dir }}/accessibility.md` — accessibility
-      - `{{ instructions_dir }}/upgrade.md` — upgrade and data-migration safety
+    Evaluate the diff against every one of the following domain checklists. Read each file under `.github/instructions/` (or `.claude/instructions/`) and apply its guidance:
+      - `instructions/security.md` — security
+      - `instructions/performance.md` — performance
+      - `instructions/privacy.md` — privacy and data protection
+      - `instructions/style.md` — AL style and conventions
+      - `instructions/accessibility.md` — accessibility
+      - `instructions/upgrade.md` — upgrade and data-migration safety
     Only raise findings supported by one of these checklists. For each finding, cite the concrete rule it violates and point to the exact file and line in the diff.
     {% endif %}
 

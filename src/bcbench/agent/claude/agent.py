@@ -38,7 +38,7 @@ def run_claude_code(
 
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp, agent_type=AgentType.CLAUDE)
+    prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)
     mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentType.CLAUDE, al_lsp=al_lsp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)

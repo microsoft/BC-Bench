@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bcbench.agent.shared import build_prompt
-from bcbench.types import AgentType, EvaluationCategory
+from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry, create_problem_statement_dir
 
 
@@ -23,7 +23,7 @@ def test_build_prompt_without_project_paths(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX, agent_type=AgentType.COPILOT)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
 
     assert "Working at" in result
     assert "navapp" in result
@@ -49,7 +49,7 @@ def test_build_prompt_with_project_paths(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX, agent_type=AgentType.COPILOT)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
 
     assert "navapp" in result
     assert "App/Apps/W1/Sales/app, App/Apps/W1/Inventory/app" in result
@@ -74,7 +74,7 @@ def test_build_prompt_test_generation_gold_patch_mode(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION, agent_type=AgentType.COPILOT)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
 
     assert "navapp" in result
     assert "Generate test for fix" in result
@@ -99,7 +99,7 @@ def test_build_prompt_test_generation_problem_statement_mode(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION, agent_type=AgentType.COPILOT)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
 
     assert "navapp" in result
     assert "Generate test for issue:" in result
@@ -124,7 +124,7 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION, agent_type=AgentType.COPILOT)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
 
     assert "navapp" in result
     assert "[HAS_PATCH]" in result  # gold patch should be indicated
@@ -137,13 +137,11 @@ def test_code_review_prompt_checklists_only_with_custom_instructions(tmp_path: P
     repo_path = tmp_path / "navapp"
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Review the change")
-    template = {"code-review-template": "/review\n{% if inline_instructions_enabled %}Read {{ instructions_dir }}/security.md{% endif %}"}
+    template = {"code-review-template": "/review\n{% if inline_instructions_enabled %}Read instructions/security.md{% endif %}"}
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        copilot = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.COPILOT)
-        claude = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.CLAUDE)
-        without_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": False}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.COPILOT)
+        with_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW)
+        without_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": False}}, EvaluationCategory.CODE_REVIEW)
 
-    assert ".github/instructions/security.md" in copilot
-    assert ".claude/instructions/security.md" in claude
+    assert "security.md" in with_inline
     assert "security.md" not in without_inline

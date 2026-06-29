@@ -5,7 +5,7 @@ from jinja2 import Template
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import AgentType, EvaluationCategory
+from bcbench.types import EvaluationCategory
 
 _config = get_config()
 
@@ -15,7 +15,7 @@ def _transform_image_paths(content: str) -> str:
     return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
 
-def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, agent_type: AgentType, al_mcp: bool = False) -> str:
+def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
 
@@ -26,12 +26,12 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
         "include_project_paths": prompt_config.get("include_project_paths"),
         "al_mcp": al_mcp,
     }
-    context |= _category_context(category, config, agent_type, repo_path)
+    context |= _category_context(category, config)
 
     return Template(template_str).render(**context)
 
 
-def _category_context(category: EvaluationCategory, config: dict, agent_type: AgentType, repo_path: Path) -> dict:
+def _category_context(category: EvaluationCategory, config: dict) -> dict:
     match category:
         case EvaluationCategory.TEST_GENERATION:
             mode = config.get("prompt", {}).get("test-generation-input", "problem-statement")
@@ -40,9 +40,6 @@ def _category_context(category: EvaluationCategory, config: dict, agent_type: Ag
                 "is_problem_statement": mode in ("problem-statement", "both"),
             }
         case EvaluationCategory.CODE_REVIEW:
-            return {
-                "inline_instructions_enabled": config.get("instructions", {}).get("enabled", False),
-                "instructions_dir": f"{agent_type.get_target_dir(repo_path).name}/instructions",
-            }
+            return {"inline_instructions_enabled": config.get("instructions", {}).get("enabled", False)}
         case _:
             return {}
