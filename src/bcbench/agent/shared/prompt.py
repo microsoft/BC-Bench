@@ -18,28 +18,21 @@ def _transform_image_paths(content: str) -> str:
 def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
+    include_project_paths = prompt_config.get("include_project_paths")
 
-    context = {
-        "repo_path": repo_path,
-        "task": _transform_image_paths(entry.get_task()),
-        "project_paths": ", ".join(entry.project_paths),
-        "include_project_paths": prompt_config.get("include_project_paths"),
-        "al_mcp": al_mcp,
-    }
-    context |= _category_context(category, config)
+    test_gen_input: str = prompt_config.get("test-generation-input", "problem-statement")
+    is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
+    is_problem_statement: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("problem-statement", "both")
 
-    return Template(template_str).render(**context)
+    task = _transform_image_paths(entry.get_task())
 
-
-def _category_context(category: EvaluationCategory, config: dict) -> dict:
-    match category:
-        case EvaluationCategory.TEST_GENERATION:
-            mode = config.get("prompt", {}).get("test-generation-input", "problem-statement")
-            return {
-                "is_gold_patch": mode in ("gold-patch", "both"),
-                "is_problem_statement": mode in ("problem-statement", "both"),
-            }
-        case EvaluationCategory.CODE_REVIEW:
-            return {"inline_instructions_enabled": config.get("instructions", {}).get("enabled", False)}
-        case _:
-            return {}
+    template = Template(template_str)
+    return template.render(
+        repo_path=repo_path,
+        task=task,
+        project_paths=", ".join(entry.project_paths),
+        include_project_paths=include_project_paths,
+        is_gold_patch=is_gold_patch,  # only relevant for test-generation
+        is_problem_statement=is_problem_statement,  # only relevant for test-generation
+        al_mcp=al_mcp,  # whether AL MCP server is enabled
+    )
