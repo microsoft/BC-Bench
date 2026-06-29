@@ -23,7 +23,7 @@ def test_build_prompt_without_project_paths(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX, agent_type=AgentType.COPILOT)
 
     assert "Working at" in result
     assert "navapp" in result
@@ -49,7 +49,7 @@ def test_build_prompt_with_project_paths(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.BUG_FIX, agent_type=AgentType.COPILOT)
 
     assert "navapp" in result
     assert "App/Apps/W1/Sales/app, App/Apps/W1/Inventory/app" in result
@@ -74,7 +74,7 @@ def test_build_prompt_test_generation_gold_patch_mode(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION, agent_type=AgentType.COPILOT)
 
     assert "navapp" in result
     assert "Generate test for fix" in result
@@ -99,7 +99,7 @@ def test_build_prompt_test_generation_problem_statement_mode(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION, agent_type=AgentType.COPILOT)
 
     assert "navapp" in result
     assert "Generate test for issue:" in result
@@ -124,7 +124,7 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
     }
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION)
+        result = build_prompt(entry, repo_path, config, EvaluationCategory.TEST_GENERATION, agent_type=AgentType.COPILOT)
 
     assert "navapp" in result
     assert "[HAS_PATCH]" in result  # gold patch should be indicated
@@ -142,7 +142,7 @@ def test_code_review_prompt_checklists_only_with_custom_instructions(tmp_path: P
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
         copilot = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.COPILOT)
         claude = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.CLAUDE)
-        without_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": False}}, EvaluationCategory.CODE_REVIEW)
+        without_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": False}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.COPILOT)
 
     assert ".github/instructions/security.md" in copilot
     assert ".claude/instructions/security.md" in claude
