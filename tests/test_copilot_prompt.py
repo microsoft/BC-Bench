@@ -137,15 +137,11 @@ def test_code_review_prompt_checklists_only_with_custom_instructions(tmp_path: P
     repo_path = tmp_path / "navapp"
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Review the change")
-    config = {
-        "prompt": {
-            "code-review-template": "/review\n{% if custom_instructions %}Read .github/instructions/security.md{% endif %}",
-        }
-    }
+    template = {"code-review-template": "/review\n{% if custom_instructions %}Read .github/instructions/security.md{% endif %}"}
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        with_inline = build_prompt(entry, repo_path, config, EvaluationCategory.CODE_REVIEW, custom_instructions=True)
-        without_inline = build_prompt(entry, repo_path, config, EvaluationCategory.CODE_REVIEW, custom_instructions=False)
+        with_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW)
+        without_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": False}}, EvaluationCategory.CODE_REVIEW)
 
     assert "security.md" in with_inline
     assert "security.md" not in without_inline

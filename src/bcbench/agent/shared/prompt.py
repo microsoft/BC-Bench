@@ -15,10 +15,11 @@ def _transform_image_paths(content: str) -> str:
     return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
 
-def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False, custom_instructions: bool = False) -> str:
+def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")
+    custom_instructions = config.get("instructions", {}).get("enabled", False)
 
     test_gen_input: str = prompt_config.get("test-generation-input", "problem-statement")
     is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
@@ -35,5 +36,5 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
         is_gold_patch=is_gold_patch,  # only relevant for test-generation
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
         al_mcp=al_mcp,  # whether AL MCP server is enabled
-        custom_instructions=custom_instructions,  # whether inline instructions were copied
+        custom_instructions=custom_instructions,  # whether inline instructions are enabled
     )
