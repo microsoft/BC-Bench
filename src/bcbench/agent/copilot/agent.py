@@ -41,10 +41,10 @@ def run_copilot_agent(
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
+    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp, custom_instructions=instructions_enabled)
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentType.COPILOT, al_lsp=al_lsp, container_name=container_name)
-    instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)

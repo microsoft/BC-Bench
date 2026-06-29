@@ -65,6 +65,16 @@ prompt:
       - body: concise description of the issue (string, required)
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
+    {% if custom_instructions %}
+    Evaluate the diff against every one of the following domain checklists. Read each file under `.github/instructions/` and apply its guidance:
+      - `.github/instructions/security.md` — security
+      - `.github/instructions/performance.md` — performance
+      - `.github/instructions/privacy.md` — privacy and data protection
+      - `.github/instructions/style.md` — AL style and conventions
+      - `.github/instructions/accessibility.md` — accessibility
+      - `.github/instructions/upgrade.md` — upgrade and data-migration safety
+    Only raise findings supported by one of these checklists. For each finding, cite the concrete rule it violates and point to the exact file and line in the diff.
+    {% endif %}
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`

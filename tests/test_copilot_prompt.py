@@ -130,3 +130,22 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
     assert "[HAS_PATCH]" in result  # gold patch should be indicated
     assert "[HAS_ISSUE]" in result  # problem statement should be indicated
     assert "Fix payment validation bug" in result  # task should be included in both mode
+
+
+def test_code_review_prompt_checklists_only_with_custom_instructions(tmp_path: Path):
+    entry = create_dataset_entry(instance_id="microsoftInternal__NAV-9", project_paths=["App/app"])
+    repo_path = tmp_path / "navapp"
+    repo_path.mkdir()
+    problem_dir = create_problem_statement_dir(tmp_path, "Review the change")
+    config = {
+        "prompt": {
+            "code-review-template": "/review\n{% if custom_instructions %}Read .github/instructions/security.md{% endif %}",
+        }
+    }
+
+    with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
+        with_inline = build_prompt(entry, repo_path, config, EvaluationCategory.CODE_REVIEW, custom_instructions=True)
+        without_inline = build_prompt(entry, repo_path, config, EvaluationCategory.CODE_REVIEW, custom_instructions=False)
+
+    assert "security.md" in with_inline
+    assert "security.md" not in without_inline
