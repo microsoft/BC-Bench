@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bcbench.agent.shared import build_prompt
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentType, EvaluationCategory
 from tests.conftest import create_dataset_entry, create_problem_statement_dir
 
 
@@ -137,11 +137,13 @@ def test_code_review_prompt_checklists_only_with_custom_instructions(tmp_path: P
     repo_path = tmp_path / "navapp"
     repo_path.mkdir()
     problem_dir = create_problem_statement_dir(tmp_path, "Review the change")
-    template = {"code-review-template": "/review\n{% if inline_instructions_enabled %}Read .github/instructions/security.md{% endif %}"}
+    template = {"code-review-template": "/review\n{% if inline_instructions_enabled %}Read {{ instructions_dir }}/security.md{% endif %}"}
 
     with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
-        with_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW)
+        copilot = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.COPILOT)
+        claude = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": True}}, EvaluationCategory.CODE_REVIEW, agent_type=AgentType.CLAUDE)
         without_inline = build_prompt(entry, repo_path, {"prompt": template, "instructions": {"enabled": False}}, EvaluationCategory.CODE_REVIEW)
 
-    assert "security.md" in with_inline
+    assert ".github/instructions/security.md" in copilot
+    assert ".claude/instructions/security.md" in claude
     assert "security.md" not in without_inline

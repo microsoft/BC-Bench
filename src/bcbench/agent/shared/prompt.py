@@ -5,7 +5,7 @@ from jinja2 import Template
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import EvaluationCategory
+from bcbench.types import AgentType, EvaluationCategory
 
 _config = get_config()
 
@@ -15,11 +15,12 @@ def _transform_image_paths(content: str) -> str:
     return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
 
-def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
+def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False, agent_type: AgentType = AgentType.COPILOT) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")
     inline_instructions_enabled = config.get("instructions", {}).get("enabled", False)
+    instructions_dir = f"{agent_type.get_target_dir(repo_path).name}/instructions"
 
     test_gen_input: str = prompt_config.get("test-generation-input", "problem-statement")
     is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
@@ -37,4 +38,5 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
         al_mcp=al_mcp,  # whether AL MCP server is enabled
         inline_instructions_enabled=inline_instructions_enabled,  # whether inline instructions are enabled
+        instructions_dir=instructions_dir,  # agent-specific instructions folder (.github/.claude)
     )
