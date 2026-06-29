@@ -15,7 +15,7 @@ def _transform_image_paths(content: str) -> str:
     return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
 
-def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, agent_type: AgentType, al_mcp: bool = False) -> str:
+def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False, *, agent_type: AgentType) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
 
