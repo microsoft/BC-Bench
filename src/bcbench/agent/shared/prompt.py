@@ -19,7 +19,7 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")
-    custom_instructions = config.get("instructions", {}).get("enabled", False)
+    inline_instructions_enabled = config.get("instructions", {}).get("enabled", False)
 
     test_gen_input: str = prompt_config.get("test-generation-input", "problem-statement")
     is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
@@ -36,5 +36,5 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
         is_gold_patch=is_gold_patch,  # only relevant for test-generation
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
         al_mcp=al_mcp,  # whether AL MCP server is enabled
-        custom_instructions=custom_instructions,  # whether inline instructions are enabled
+        inline_instructions_enabled=inline_instructions_enabled,  # whether inline instructions are enabled
     )

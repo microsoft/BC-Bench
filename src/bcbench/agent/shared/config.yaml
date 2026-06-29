@@ -65,7 +65,7 @@ prompt:
       - body: concise description of the issue (string, required)
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
-    {% if custom_instructions %}
+    {% if inline_instructions_enabled %}
     Evaluate the diff against every one of the following domain checklists. Read each file under `.github/instructions/` and apply its guidance:
       - `.github/instructions/security.md` — security
       - `.github/instructions/performance.md` — performance
