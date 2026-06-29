@@ -117,3 +117,14 @@ mcp:
     #   type: "stdio"
     #   command: "npx"
     #   args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
+
+# controls:
+# 1. which Copilot CLI plugins to install before running the agent
+#    https://docs.github.com/en/copilot/concepts/agents/about-plugins
+# Plugins are installed via `copilot plugin install <name>@<marketplace>` and are
+# Copilot-only (ignored by other agents). `copilot-plugins` and `awesome-copilot`
+# marketplaces are registered by default; add others (OWNER/REPO or local path) here.
+plugins:
+  marketplaces: []
+  install: []
+    # - "database-data-management@awesome-copilot"

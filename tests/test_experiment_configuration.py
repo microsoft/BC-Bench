@@ -8,10 +8,18 @@ class TestExperimentConfiguration:
         config = ExperimentConfiguration()
 
         assert config.mcp_servers is None
+        assert config.plugins is None
         assert config.al_lsp_enabled is False
         assert config.custom_instructions is False
         assert config.skills_enabled is False
         assert config.custom_agent is None
+
+    def test_with_plugins(self):
+        plugins = ["plugin-1", "plugin-2"]
+        config = ExperimentConfiguration(plugins=plugins)
+
+        assert config.plugins == plugins
+        assert not config.is_empty()
 
     def test_with_mcp_servers(self):
         mcp_servers = ["mcp-server-1", "mcp-server-2"]
