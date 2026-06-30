@@ -18,7 +18,7 @@ _CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
 
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
-_DEFAULT_REASONING_EFFORT: str | None = None
+_DEFAULT_REASONING_EFFORT: str | None = "none"
 
 
 def _to_jsonable(value: object) -> dict[str, object]:
