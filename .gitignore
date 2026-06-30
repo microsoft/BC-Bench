@@ -264,6 +264,10 @@ dmypy.json
 evaluation_results/
 verification_results/
 
+# Private red-team / harms seeds (kept out of the public repo; use .sample as a template)
+dataset/redteam/attack_objectives.json
+dataset/private/
+
 # Jekyll (GitHub Pages) - docs folder
 docs/_site/
 docs/.sass-cache/
