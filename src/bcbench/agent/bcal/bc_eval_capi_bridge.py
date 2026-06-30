@@ -16,6 +16,10 @@ _CERT_FILE_ENV = "CAPI_CERT_FILE"
 _CERT_TENANT_ENV = "CAPI_TENANT_ID"
 _CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
 
+# Reasoning effort (not all models support this parameter), different models might have different available values:
+# Set to None to omit the parameter entirely (lets the model/service use its own default).
+_DEFAULT_REASONING_EFFORT: str | None = None
+
 
 def _to_jsonable(value: object) -> dict[str, object]:
     model_dump = getattr(value, "model_dump", None)
@@ -147,6 +151,10 @@ def main() -> int:
     }
     if request.get("tools"):
         kwargs["tools"] = request["tools"]
+
+    reasoning_effort = request.get("reasoning_effort", _DEFAULT_REASONING_EFFORT)
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
 
     response = _create_with_retry(client, kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
