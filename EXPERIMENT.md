@@ -24,7 +24,7 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 | `skills.enabled` | `false` | Copy **only** `instructions/<owner>-<repo>/skills/` |
 | `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<owner>-<repo>/agents/` and pass `--agent=<name>` to the CLI |
 | `mcp.servers` | _(none)_ | List of MCP servers to register |
-| `plugins.install` | _(none)_ | List of Copilot plugins to install (`<plugin>@<marketplace>`); `plugins.marketplaces` adds extra marketplaces. Copilot-only |
+| `plugins.install` | _(none)_ | List of plugins to install (Copilot CLI **and** Claude Code). Each entry has `repo` (marketplace OWNER/REPO or git URL), `sha` (commit to pin the marketplace to), and `name` (`<plugin>@<marketplace>`). The marketplace is cloned at the pinned SHA and added locally before install |
 
 Note: `instructions.enabled: true` is a superset — you don't also need to enable `skills` or `agents` to get them. Use `skills`/`agents` when you want to isolate the effect of just that piece.
 

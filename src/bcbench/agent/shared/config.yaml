@@ -119,12 +119,19 @@ mcp:
     #   args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
 
 # controls:
-# 1. which Copilot CLI plugins to install before running the agent
+# which plugins to install before running the agent (works for both Copilot CLI and Claude Code)
 #    https://docs.github.com/en/copilot/concepts/agents/about-plugins
-# Plugins are installed via `copilot plugin install <name>@<marketplace>` and are
-# Copilot-only (ignored by other agents). `copilot-plugins` and `awesome-copilot`
-# marketplaces are registered by default; add others (OWNER/REPO or local path) here.
+# Each entry pins a marketplace to a specific commit SHA for reproducibility: the marketplace
+# repo is cloned at that SHA and added locally (no marketplace is assumed to be registered by
+# default), then the plugin is installed via `<cli> plugin install <plugin>@<marketplace>`.
+#   - repo: marketplace GitHub repo as OWNER/REPO (or a full git URL)
+#   - sha:  commit SHA to pin the marketplace to
+#   - name: install spec, "<plugin-name>@<marketplace-name>"
 plugins:
-  marketplaces: []
   install: []
-    # - "database-data-management@awesome-copilot"
+    # Example: the awesome-copilot plugin from github/awesome-copilot
+    # https://github.com/github/awesome-copilot/blob/main/plugins/awesome-copilot/README.md
+    # Uncomment to enable locally (update `sha` to the commit you want to pin):
+    # - repo: "github/awesome-copilot"
+    #   sha: "28c3a14af4e6232091071ddb40272f72d9d96b2f"
+    #   name: "awesome-copilot@awesome-copilot"
