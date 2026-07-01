@@ -11,7 +11,7 @@ from bcbench.types import EvaluationCategory
 # Note: Defaults are provided in function signatures, not here
 RepoPath = Annotated[Path, typer.Option(help="Path to repository")]
 
-OutputDir = Annotated[Path, typer.Option(help="Directory to save evaluation results")]
+OutputDir = Annotated[Path, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)]
 
 RunId = Annotated[str, typer.Option(envvar="GITHUB_RUN_ID", help="Unique identifier for this evaluation run")]
 
