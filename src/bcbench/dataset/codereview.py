@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -46,11 +47,11 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
 class ReviewComment(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    file: str
-    line_start: int
-    line_end: int | None = None
+    file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9./_-]*\.(al|json)$")]
+    line_start: Annotated[int, Field(ge=1)]
+    line_end: Annotated[int, Field(ge=1)] | None = None
     domain: str | None = None
-    body: str
+    body: Annotated[str, Field(min_length=1)]
     severity: Severity | None = None
 
     @field_validator("severity", mode="before")
