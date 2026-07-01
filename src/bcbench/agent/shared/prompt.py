@@ -1,13 +1,15 @@
 import re
 from pathlib import Path
 
-from jinja2 import Template
+from jinja2.sandbox import SandboxedEnvironment
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.types import EvaluationCategory
 
 _config = get_config()
+
+_jinja = SandboxedEnvironment(autoescape=False)
 
 
 def _transform_image_paths(content: str) -> str:
@@ -26,8 +28,7 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
 
     task = _transform_image_paths(entry.get_task())
 
-    template = Template(template_str)
-    return template.render(
+    return _jinja.from_string(template_str).render(
         repo_path=repo_path,
         task=task,
         project_paths=", ".join(entry.project_paths),
