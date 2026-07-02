@@ -1,5 +1,6 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import os
 import shutil
 import subprocess
 import time
@@ -77,6 +78,21 @@ def _resolve_bcal_executable() -> str:
     return resolved
 
 
+_PARENT_PYTHON_ENV_VARS = ("PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV")
+
+
+def _bcal_subprocess_env() -> dict[str, str]:
+    # bcbench runs under `uv run`, which exports PYTHONHOME for uv's managed interpreter. The
+    # external-command bridge is spawned by bcal using a *different-version* venv python; an
+    # inherited PYTHONHOME makes that interpreter load the wrong stdlib and crash at startup
+    # ("SRE module mismatch"), which bcal only surfaces as "The pipe is being closed.". Drop the
+    # parent venv vars so the bridge python resolves its own environment.
+    env = os.environ.copy()
+    for var in _PARENT_PYTHON_ENV_VARS:
+        env.pop(var, None)
+    return env
+
+
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
@@ -115,6 +131,7 @@ def run_bcal_agent(
         start = time.monotonic()
         subprocess.run(
             cmd_args,
+            env=_bcal_subprocess_env(),
             timeout=_config.timeout.bcal_execution,
             check=True,
         )
@@ -168,6 +185,7 @@ def run_bcal_prompt(
     try:
         result = subprocess.run(
             cmd_args,
+            env=_bcal_subprocess_env(),
             timeout=_config.timeout.bcal_execution,
             capture_output=True,
             text=True,

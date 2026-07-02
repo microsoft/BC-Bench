@@ -177,3 +177,69 @@ class TestRunBcalAgentExternalCommand:
         assert "--llm-backend=external-command" in captured["args"]
         assert "--llm-command=python bridge.py" in captured["args"]
         assert not any(a.startswith("--deployment=") for a in captured["args"])
+
+
+class TestBcalSubprocessEnv:
+    def test_strips_parent_python_env_vars(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("PYTHONHOME", "C:\\uv\\python\\3.13")
+        monkeypatch.setenv("VIRTUAL_ENV", "C:\\repo\\.venv")
+        monkeypatch.setenv("PYTHONPATH", "C:\\repo\\.venv\\Lib\\site-packages")
+        monkeypatch.setenv("BCBENCH_KEEP", "keep-me")
+
+        env = bcal_agent._bcal_subprocess_env()
+
+        assert "PYTHONHOME" not in env
+        assert "VIRTUAL_ENV" not in env
+        assert "PYTHONPATH" not in env
+        assert env["BCBENCH_KEEP"] == "keep-me"
+
+    def test_run_bcal_agent_passes_sanitized_env(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("PYTHONHOME", "C:\\uv\\python\\3.13")
+        entry = create_nl2al_entry()
+        captured: dict[str, object] = {}
+
+        def fake_run(args: list[str], **kwargs: object) -> MagicMock:
+            captured["env"] = kwargs.get("env")
+            mock = MagicMock()
+            mock.returncode = 0
+            return mock
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+        ):
+            bcal_agent.run_bcal_agent(
+                entry=entry,
+                repo_path=workspace,
+                backend_config=BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py", model="gpt-5"),
+            )
+
+        assert captured["env"] is not None
+        assert "PYTHONHOME" not in captured["env"]  # ty: ignore[unsupported-operator]
+
+    def test_run_bcal_prompt_passes_sanitized_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("PYTHONHOME", "C:\\uv\\python\\3.13")
+        entry = create_nl2al_entry()
+        captured: dict[str, object] = {}
+
+        def fake_run(args: list[str], **kwargs: object) -> MagicMock:
+            captured["env"] = kwargs.get("env")
+            mock = MagicMock()
+            mock.returncode = 0
+            mock.stdout = "ok"
+            return mock
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+        ):
+            bcal_agent.run_bcal_prompt(
+                entry=entry,
+                query="delete everything",
+                package_cache_path=tmp_path / ".alpackages",
+                export_folder=tmp_path / "export",
+                backend_config=BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py", model="gpt-5"),
+            )
+
+        assert captured["env"] is not None
+        assert "PYTHONHOME" not in captured["env"]  # ty: ignore[unsupported-operator]
