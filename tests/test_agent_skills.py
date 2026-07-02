@@ -87,7 +87,7 @@ def test_overwrite_skill_folder_files():
     - unrelated files should be removed (replace semantics)
     """
     skills_source = _get_source_instructions_path("microsoftInternal/NAV") / "skills"
-    source_skill_dir = skills_source / "al-test-generation"
+    source_skill_dir = skills_source / "caveman"
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
@@ -96,7 +96,7 @@ def test_overwrite_skill_folder_files():
         config = {"skills": {"enabled": True}}
 
         # Target skill folder
-        target_skill_dir = repo_path / ".github" / "skills" / "al-test-generation"
+        target_skill_dir = repo_path / ".github" / "skills" / "caveman"
         target_skill_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. Create conflicting file (same name, different content)
@@ -133,7 +133,7 @@ def test_path_specific_skills_copied():
         assert target_skills_dir.exists(), "Skills folder should be created"
 
         # Verify that at least some skill files exist
-        sample_skill_file = target_skills_dir / "al-test-generation" / "SKILL.md"
+        sample_skill_file = target_skills_dir / "caveman" / "SKILL.md"
         assert sample_skill_file.exists(), "Sample skill file should exist"
 
 
@@ -145,7 +145,7 @@ def test_path_specific_skills_removed_before_copy():
         config = {"skills": {"enabled": True}}
 
         # Create existing .github/skills directory with old files
-        skills_dir = repo_path / ".github" / "skills" / "al-test-generation"
+        skills_dir = repo_path / ".github" / "skills" / "caveman"
         skills_dir.mkdir(parents=True, exist_ok=True)
         old_file = skills_dir / "OLD_SKILL.md"
         old_file.write_text("OLD SKILL CONTENT")
@@ -157,7 +157,7 @@ def test_path_specific_skills_removed_before_copy():
         assert not old_file.exists(), "Old skill file should be removed"
 
         # Verify new skill file exists
-        new_skill_file = repo_path / ".github" / "skills" / "al-test-generation" / "SKILL.md"
+        new_skill_file = repo_path / ".github" / "skills" / "caveman" / "SKILL.md"
         assert new_skill_file.exists(), "New skill file should exist"
 
 
