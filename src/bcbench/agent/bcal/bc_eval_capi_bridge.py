@@ -58,10 +58,6 @@ def _create_with_retry(client: object, kwargs: dict[str, object]) -> object:
             return client.chat.completions.create(**kwargs)  # ty: ignore[unresolved-attribute]
         except HttpResponseError as exc:
             last_exc = exc
-            # Some models reject an explicit temperature; drop it once and retry immediately.
-            if "temperature" in kwargs and "temperature" in str(exc).lower():
-                kwargs = {k: v for k, v in kwargs.items() if k != "temperature"}
-                continue
             if attempt == _TRANSIENT_RETRY_ATTEMPTS - 1:
                 raise
             time.sleep(_TRANSIENT_RETRY_BACKOFF_SEC * (2**attempt))
@@ -152,11 +148,6 @@ def main() -> int:
         "model": model,
         "messages": messages,
         "max_completion_tokens": request.get("max_completion_tokens", 16384),
-        # Deterministic decoding for reproducible evals. bcal does not set a temperature,
-        # so the provider default (~1.0) otherwise causes large run-to-run variance
-        # (~8/20 failing tasks churned between identical runs). Falls back gracefully in
-        # _create_with_retry if a model rejects an explicit temperature.
-        "temperature": request.get("temperature", 0),
     }
     if request.get("tools"):
         kwargs["tools"] = request["tools"]

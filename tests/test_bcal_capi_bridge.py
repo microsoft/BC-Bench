@@ -68,23 +68,6 @@ def test_create_with_retry_gives_up_after_max_attempts(monkeypatch, http_respons
     assert create.call_count == bc_eval_capi_bridge._TRANSIENT_RETRY_ATTEMPTS
 
 
-def test_create_with_retry_drops_temperature_when_model_rejects_it(monkeypatch, http_response_error):
-    monkeypatch.setattr(bc_eval_capi_bridge, "_TRANSIENT_RETRY_BACKOFF_SEC", 0.0)
-    expected = {"id": "ok"}
-    client, create = _stub_client(
-        [http_response_error("Unsupported value: 'temperature' is not supported"), expected]
-    )
-
-    result = bc_eval_capi_bridge._create_with_retry(
-        client, {"model": "m", "messages": [], "temperature": 0}
-    )
-
-    assert result is expected
-    assert create.call_count == 2
-    # The retry after a temperature rejection must have dropped the temperature kwarg.
-    assert "temperature" not in create.call_args_list[1].kwargs
-
-
 @pytest.fixture
 def fake_capi_auth(monkeypatch):
     """Provide stubs for bc_eval.capi.capi_auth and azure.identity used by the cert patcher."""
