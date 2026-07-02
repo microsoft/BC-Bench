@@ -29,6 +29,11 @@ on:
         required: false
         type: boolean
         default: false
+      git-ref:
+        description: "Git ref (branch) the evaluation was dispatched from; preserved across requeue for experiment tracking"
+        required: false
+        type: string
+        default: ""
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
@@ -58,7 +63,7 @@ jobs:
           merge-multiple: true
 
       - name: Summarize evaluation results
-        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}"
+        run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "${{ inputs.git-ref || github.ref_name }}"
 
       - name: Upload evaluation summary to artifacts
         uses: actions/upload-artifact@v6
@@ -93,11 +98,13 @@ jobs:
           # Upload summary using bc-eval
           MODEL_TAG="${{ inputs.model }}"
           MODEL_TAG="${MODEL_TAG//./-}"
+          BRANCH_TAG="${{ inputs.git-ref || github.ref_name }}"
+          BRANCH_TAG="${BRANCH_TAG//./-}"
           bceval metrics calculate \
             --feature-name "BC-Bench" \
             --eval-suite-name "${{ inputs.category }}" \
             --eval-run-name "${{ inputs.agent }} (${{ inputs.model }}) - #${{ github.run_id }}" \
-            --tags "${{ inputs.agent }},${MODEL_TAG}" \
+            --tags "${{ inputs.agent }},${MODEL_TAG},${BRANCH_TAG}" \
             --source "${{ github.sha }}" \
             --input-file "${{ inputs.results-dir }}/${{ github.run_id }}/${{ env.BCEVAL_RESULT_FILE }}" \
             --evaluator-definitions "${{ github.workspace }}/evaluator/scores.py" \

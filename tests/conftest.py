@@ -20,7 +20,7 @@ from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -109,6 +109,7 @@ def create_bugfix_result(
     output: str = "diff --git a/test.al b/test.al\n+fixed",
     error_message: str | None = None,
     metrics: AgentMetrics | None = None,
+    experiment: ExperimentConfiguration | None = None,
 ) -> BugFixResult:
     return BugFixResult(
         instance_id=instance_id,
@@ -121,6 +122,7 @@ def create_bugfix_result(
         output=output,
         error_message=error_message,
         metrics=metrics,
+        experiment=experiment,
     )
 
 
