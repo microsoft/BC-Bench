@@ -26,6 +26,7 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     console.print(f"Total Processed: [bold]{len(results)}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
     console.print(f"MCP Servers: [bold]{', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}[/bold]")
+    console.print(f"Plugins: [bold]{', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}[/bold]")
     console.print(f"AL LSP: [bold]{'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}[/bold]")
     console.print(f"Custom Instructions: [bold]{'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}[/bold]")
     console.print(f"Skills: [bold]{'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}[/bold]")
@@ -93,6 +94,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             f"Total entries processed: {len(results)}, using **{results[0].agent_name} ({results[0].model})**",
             f"- Category: `{results[0].category.value}`",
             f"- MCP Servers used: {', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}",
+            f"- Plugins: {', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}",
             f"- AL LSP: {'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}",
             f"- Custom Instructions: {'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}",
             f"- Skills: {'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}",
