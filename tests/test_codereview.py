@@ -435,6 +435,56 @@ class TestCodeReviewSummary:
 
         assert summary.macro_precision == 0.0
 
+    def test_negative_task_silent_gets_full_score(self):
+        # A negative task (no expected findings) where the agent correctly stays silent scores perfectly.
+        silent_negative = create_codereview_result(instance_id="test__negative-1", output="[]", expected_comments=[])
+
+        assert silent_negative.precision == 1.0
+        assert silent_negative.recall == 1.0
+        assert silent_negative.f1 == 1.0
+
+        summary = CodeReviewResultSummary.from_results([silent_negative], run_id="run-1")
+
+        # Correct silence on a negative task is rewarded, not excluded, so macro precision is full.
+        assert summary.macro_precision == 1.0
+        assert summary.macro_f1 == 1.0
+
+    def test_negative_task_false_positive_penalized(self):
+        # Any comment on a negative task is a false positive and drives precision to zero.
+        noisy_negative = create_codereview_result(
+            instance_id="test__negative-2",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Imagined issue", "severity": "warning"}]),
+            expected_comments=[],
+        )
+
+        assert noisy_negative.precision == 0.0
+        assert noisy_negative.f1 == 0.0
+
+        summary = CodeReviewResultSummary.from_results([noisy_negative], run_id="run-1")
+
+        assert summary.macro_precision == 0.0
+        assert summary.macro_f1 == 0.0
+
+    def test_macro_precision_full_when_all_negatives_silent(self):
+        # A batch of purely negative tasks with no false positives should report perfect macro precision,
+        # not the degenerate 0.0 that silent-positive exclusion would produce.
+        negatives = [create_codereview_result(instance_id=f"test__negative-batch-{i}", output="[]", expected_comments=[]) for i in range(3)]
+
+        summary = CodeReviewResultSummary.from_results(negatives, run_id="run-1")
+
+        assert summary.macro_precision == 1.0
+
+    def test_macro_recall_excludes_negative_tasks(self):
+        # Recall averages only over positive tasks; silent negatives must not dilute or inflate it.
+        expected_comments = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
+        positive_miss = create_codereview_result(instance_id="test__mix-pos-1", output="[]", expected_comments=expected_comments)
+        negatives = [create_codereview_result(instance_id=f"test__mix-neg-{i}", output="[]", expected_comments=[]) for i in range(3)]
+
+        summary = CodeReviewResultSummary.from_results([positive_miss, *negatives], run_id="run-1")
+
+        # Only the single positive task (a miss, recall 0.0) counts — the three negatives are ignored.
+        assert summary.macro_recall == 0.0
+
     def test_render_github_metrics_markdown_has_grouped_sections(self):
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),

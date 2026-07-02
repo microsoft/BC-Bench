@@ -1,5 +1,6 @@
 import contextlib
 import json
+import shlex
 from pathlib import Path
 
 from bcbench.config import get_config
@@ -60,7 +61,8 @@ def _setup_claude_hooks(repo_path: Path, script_path: str, tool_log_path: Path) 
         with contextlib.suppress(json.JSONDecodeError):
             existing_settings = json.loads(settings_file.read_text(encoding="utf-8"))
 
-    tool_log_resolved = str(tool_log_path.resolve())
+    tool_log_quoted = shlex.quote(str(tool_log_path.resolve()))
+    script_path_quoted = shlex.quote(script_path)
     existing_settings["hooks"] = {
         "PreToolUse": [
             {
@@ -68,7 +70,7 @@ def _setup_claude_hooks(repo_path: Path, script_path: str, tool_log_path: Path) 
                 "hooks": [
                     {
                         "type": "command",
-                        "command": f'BCBENCH_TOOL_LOG="{tool_log_resolved}" pwsh -ExecutionPolicy Bypass -File "{script_path}"',
+                        "command": f"BCBENCH_TOOL_LOG={tool_log_quoted} pwsh -ExecutionPolicy Bypass -File {script_path_quoted}",
                     }
                 ],
             }

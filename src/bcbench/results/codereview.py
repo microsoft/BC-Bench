@@ -19,7 +19,7 @@ _METRIC_EXPLANATIONS = """\
 <summary>📖 How to read these metrics</summary>
 
 - **Micro** — sums matched/generated/expected across all tasks and computes one score; tasks with many comments dominate.
-- **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume. Macro precision averages only over tasks where the agent left at least one comment, so staying silent is not scored as perfect precision (recall and F1 still span every task).
+- **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume. Macro precision averages over tasks where the agent commented plus negative tasks (no expected findings), where correct silence scores as perfect precision; silence on a positive task is still not rewarded. Macro recall averages only over positive tasks, since negative tasks have nothing to recall.
 - **Matched comment** — a generated comment paired with an expected one by file and line proximity (within the configured tolerance), then confirmed by an LLM judge to describe the same underlying issue.
 - **F1** — harmonic mean of precision and recall; balances both equally. (Special case of Fβ at β=1.)
 - **Fβ** — generalized F-score with a tunable precision/recall trade-off:
@@ -40,7 +40,7 @@ _METRIC_EXPLANATIONS = """\
 
 _CONSOLE_METRIC_EXPLANATIONS = (
     "[bold]Micro[/bold] — volume-weighted across all comments; tasks with many comments dominate.\n"
-    "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same. Macro precision skips tasks with no comments so silence is not scored as perfect precision.\n"
+    "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same. Macro precision rewards correct silence on negative tasks but not on positive ones; macro recall averages only over positive tasks.\n"
     "[bold]Matched comment[/bold] — paired by file + line proximity, then confirmed by an LLM judge to describe the same underlying issue.\n"
     "[bold]F1[/bold] — harmonic mean of precision and recall (special case of Fβ at β=1).\n"
     "[bold]Fβ[/bold] — F_β = (1 + β²) · (P · R) / (β² · P + R); β<1 favors precision, β>1 favors recall.\n"
@@ -361,12 +361,17 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         f_beta_05: float = f_beta_score(precision, recall, beta=0.5)
         f_beta_2: float = f_beta_score(precision, recall, beta=2.0)
 
-        # Precision is only defined where the agent actually commented. Silent tasks are assigned
-        # precision=1.0 by convention; averaging those in would reward saying nothing, so they are
-        # excluded from macro precision. Recall/F1 still span all tasks, so silence is penalized there.
-        results_with_comments = [r for r in code_review_results if r.generated_comments]
-        macro_precision: float = sum(r.precision for r in results_with_comments) / len(results_with_comments) if results_with_comments else 0.0
-        macro_recall: float = sum(r.recall for r in code_review_results) / total_results
+        # Precision is only defined where the agent actually commented, so silent tasks are normally
+        # excluded from macro precision (rewarding silence would inflate precision on positive tasks).
+        # Exception: negative tasks (no expected findings) ARE scored when silent — staying quiet is the
+        # correct answer and earns precision=1.0, while any comment is a false positive (precision=0).
+        results_for_macro_precision = [r for r in code_review_results if r.generated_comments or not r.expected_comments]
+        macro_precision: float = sum(r.precision for r in results_for_macro_precision) / len(results_for_macro_precision) if results_for_macro_precision else 0.0
+        # Recall measures the ability to find planted issues, so it only averages over positive tasks.
+        # Negative tasks (no expected findings) have a vacuous recall of 1.0 that would otherwise inflate
+        # the metric; when a run is all-negative there is nothing to recall, so recall defaults to 1.0.
+        positive_results = [r for r in code_review_results if r.expected_comments]
+        macro_recall: float = sum(r.recall for r in positive_results) / len(positive_results) if positive_results else 1.0
         macro_f1: float = sum(r.f1 for r in code_review_results) / total_results
         macro_f_beta_05: float = sum(r.f_beta_05 for r in code_review_results) / total_results
         macro_f_beta_2: float = sum(r.f_beta_2 for r in code_review_results) / total_results

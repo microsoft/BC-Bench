@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Template
+from jinja2.sandbox import SandboxedEnvironment
 
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, compiler_symbol_folder_for_container
 from bcbench.dataset import BaseDatasetEntry
@@ -12,6 +12,8 @@ from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
+
+_jinja = SandboxedEnvironment(autoescape=False)
 
 
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -26,7 +28,7 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
             }
         case "stdio":
             args: list[str] = server["args"]
-            rendered_args = [Template(arg).render(**template_context) for arg in args]
+            rendered_args = [_jinja.from_string(arg).render(**template_context) for arg in args]
             command: str = shutil.which(server["command"]) or server["command"]
             entry: dict[str, Any] = {
                 "type": server_type,
