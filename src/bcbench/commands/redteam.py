@@ -42,7 +42,7 @@ def scan(
     risk_category: Annotated[list[RiskCategory] | None, typer.Option("--risk-category", help="Built-in risk category (repeatable), e.g. code_vulnerability. Mutually exclusive with --seeds.")] = None,
     attack_strategy: Annotated[list[AttackStrategy] | None, typer.Option("--attack-strategy", help="Attack strategy (repeatable), e.g. base64, flip, easy.")] = None,
     target: Annotated[RedTeamTarget, typer.Option(help="Agent under test")] = RedTeamTarget.BCAL,
-    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend used by the bcal target.")] = BCalLLMBackend.AZURE_OPENAI,
+    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend used by the bcal target.")] = BCalLLMBackend.EXTERNAL_COMMAND,
     endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend).")] = None,
     deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend).")] = None,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
