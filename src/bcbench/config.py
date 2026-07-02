@@ -44,22 +44,25 @@ class PathConfig:
     agent_share_dir: Path
     hook_script_path: Path
     bc_artifacts_cache: Path
+    redteam_scorecard: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
         """Create path configuration from repository root."""
         agent_share_dir = root / "src" / "bcbench" / "agent" / "shared"
+        evaluation_results_path = root / "evaluation_results"
         return cls(
             bc_bench_root=root,
             dataset_dir=root / "dataset",
             problem_statement_dir=root / "dataset" / "problemstatement",
             testbed_path=root.parent / "NAV",
             ps_script_path=root / "scripts",
-            evaluation_results_path=root / "evaluation_results",
+            evaluation_results_path=evaluation_results_path,
             leaderboard_dir=root / "docs" / "_data",
             agent_share_dir=agent_share_dir,
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
             bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
+            redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
         )
 
 
