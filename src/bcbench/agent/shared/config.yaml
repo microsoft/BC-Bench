@@ -109,9 +109,9 @@ mcp:
           "{{package_cache_path}}",
         ]
 
-    - name: "mslearn"
-      type: "http"
-      url: "https://learn.microsoft.com/api/mcp"
+    # - name: "mslearn"
+    #   type: "http"
+    #   url: "https://learn.microsoft.com/api/mcp"
 
     # - name: "filesystem"
     #   type: "stdio"
