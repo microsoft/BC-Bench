@@ -33,23 +33,55 @@ Decide upfront which mode applies — it controls whether STEP 1 / STEP 2 (propo
 
 ## Prerequisites
 
-- The AL extension (`ms-dynamics-smb.al`) is installed and the AL workspace is open.
-- A Business Central server instance is reachable and configured in `.vscode/launch.json`.
+- The AL MCP tools are available (see [AL tool resolution](#al-tool-resolution) below): either the VS Code AL extension (`ms-dynamics-smb.al`) with the AL workspace open, or the `al` MCP server configured in `.mcp.json` (Copilot CLI).
+- A Business Central server instance is reachable and configured in `.vscode/launch.json`. The publish/test tools read the connection (`server`, `serverInstance`, `port`, `authentication`) from this file, so ensure it includes the developer-services `port`.
 - The repository can run `init.ps1` (NAV/BC enlistment).
+
+## AL tool resolution
+
+The same AL MCP tools are exposed under **different tool IDs** depending on the host. Refer to the tools by their **base name** (e.g. `al_build`) throughout this skill and resolve the concrete ID for the current environment:
+
+| Base name | VS Code AL extension | Copilot CLI (`al` MCP server) |
+|-----------|----------------------|-------------------------------|
+| `al_addproject` | *(implicit — workspace already open)* | `al-al_addproject` |
+| `al_downloadsymbols` | *(implicit — extension manages symbols)* | `al-al_downloadsymbols` |
+| `al_build` | `ms-dynamics-smb.al/al_build` | `al-al_build` |
+| `al_publish` (without debug) | `ms-dynamics-smb.al/al_publish_without_debug` | `al-al_publish` (with `debug: false`) |
+| `al_run_tests` | *(use PowerShell `Run-NAVALTests`, see STEP 7)* | `al-al_run_tests` |
+
+**Detecting the environment:** load the tools via `tool_search` (pattern `al_`). If IDs are prefixed `ms-dynamics-smb.al/`, you are in VS Code; if prefixed `al-al_`, you are in Copilot CLI. Use whichever the search returns.
 
 ## Build & Run Tool Rules
 
 **CRITICAL: Only use the designated AL tools for build/publish.**
 
-- **ONLY** use the AL extension's build tool (`ms-dynamics-smb.al/al_build`) for building AL projects.
-- **ONLY** use the AL extension's publish-without-debug tool (`ms-dynamics-smb.al/al_publish_without_debug`) for publishing.
+- **ONLY** use the AL `al_build` tool for building AL projects.
+- **ONLY** use the AL `al_publish` (without debug) tool for publishing.
 - **NEVER** run `dotnet build`, `alc.exe`, `msbuild`, or any other build commands in the terminal.
 
-If those deferred tools are not loaded yet, load them via `tool_search` before STEP 5. If they cannot be loaded (extension missing, workspace not AL), abort STEP 5 with a clear message — do not fall back to terminal builds.
+If those deferred tools are not loaded yet, load them via `tool_search` before STEP 5. If they cannot be loaded (extension missing, workspace not AL, or `al` MCP server not configured), abort STEP 5 with a clear message — do not fall back to terminal builds.
+
+### Copilot CLI only — project & symbol setup
+
+In VS Code the open workspace already provides projects and symbols, so skip this whole subsection. In Copilot CLI:
+
+**Register projects (dynamic — no restart).** `al_addproject` loads a project into the running server *without* restarting it; call it once per project (the folder containing each `app.json`). Register both the app under test and the test app.
+
+**Target one app with `projectPath`.** `al_build`, `al_publish`, and `al_run_tests` accept `projectPath` and act on exactly that project. Always pass it so the tool targets the intended app when several are registered. This is the reliable way to switch between the app and its test app — no restart needed.
+
+**`al_compile` is workspace-wide.** Unlike the above, `al_compile` (and `al_getdiagnostics` without a path) validate the *entire* registered workspace, not a single project — `al_addproject` does **not** narrow it. For single-app error checking use `al_build … onlyErrors=true projectPath=<app>` (or `ide-get_diagnostics`).
+
+**Symbols come from the package cache, not `.alpackages`.** When the `al` MCP server is started with `--packagecachepath` (in `.mcp.json`), `al_build`/`al_compile` resolve dependency symbols from that folder and ignore per-project `.alpackages`. `AL1045`/`AL1022` ("package … could not be found in the package cache folders …") means the required symbol is absent from that folder — a symbol/config problem, not a code error (it cascades into `AL0791`/`AL0185`/`AL0132`). To fix:
+- Prefer pointing `--packagecachepath` at the **country's** cache `Run/<CC>/AllExtensions` (derive `<CC>` from the app path: `App/Apps/<CC>/…`, `App/BCApps/src/Apps/<CC>/…`, `App/Layers/<CC>/…`; `W1` is the base). That folder is a **superset** that already contains the app, its test app, and test libraries — one path covers both, so you do **not** change it when switching between the app and its test.
+- If `--packagecachepath` is not set, call `al_downloadsymbols` (with `projectPath` + the `launch.json` connection) to populate the project's `.alpackages`, then rebuild.
+
+**The package cache is scanned only at startup.** If you change `--packagecachepath` (e.g. switch country) or add/update a dependency `.app` in that folder, the running server won't see it until the `al` MCP server is reloaded. Reload it via the **`/mcp`** command (this restarts just the server and preserves the session — do **not** restart the whole CLI). `al_addproject` does not trigger a rescan.
+
+**Publish order:** publish the app under test **before** the test app (the test app depends on it).
 
 ## Defaults
 
-When STEP 4 has no example to mirror (or the example does not constrain a choice), apply the rules in [references/defaults.md](./references/defaults.md). Load that file once during STEP 4e.
+When STEP 4 needs to make a choice (helper, assertion form, naming, structure), apply the rules in [references/defaults.md](./references/defaults.md). Load that file once during STEP 4b.
 
 ## Workflow
 
@@ -84,44 +116,6 @@ The SUT is the production AL object(s) the new tests will exercise. Resolve **pa
    - SUT is `Access = Internal` (or the SUT app defaults to internal) AND the SUT app's `app.json` lists the test app under `internalsVisibleTo` → fine.
    - SUT is `Access = Internal` AND no `internalsVisibleTo` link → the test cannot reference the codeunit / table / page directly. **Pick a public entry point instead** (a public procedure on a public facade codeunit, a page action, a posting routine, an event the SUT subscribes to). If no public entry point exercises the changed lines, in interactive mode flag this to the user and ask whether to (a) add the test app to `internalsVisibleTo`, (b) test via a different public surface, or (c) skip. In non-interactive mode, abort STEP 0 with a clear message naming the SUT and the missing access path — do not write a test that will not compile.
 
-### STEP 0.7 — Classify the SUT *(runs in both modes)*
-
-All scripts are bundled in the skill folder. Run them from the skill root (the directory containing this SKILL.md file). They have no external dependencies.
-
-Run the classifier and **print its JSON output as a fenced code block**:
-
-```powershell
-pwsh -NoProfile -File ./scripts/Classify-Sut.ps1 -Path "<absolute-path-to-SUT>"
-```
-
-Output: `{"subject":"<label>","interaction":"<label>"}`. Capture both values — they are required inputs to STEP 0.8 and STEP 4c.
-
-Labels: `subject` = posting / pages / reports / xml-integration / calculation / setup / permissions / other; `interaction` = direct-call / confirm-dialog / modal-page / report-request / notification / asserterror / none.
-
-**Do not invent or guess the classification. Run the script. If it fails, report the error and stop.**
-
-### STEP 0.8 — Retrieve example test(s) *(runs in both modes)*
-
-Run the retrieval script immediately after STEP 0.7, using the classification just captured:
-
-```powershell
-pwsh -NoProfile -File ./scripts/Find-SimilarTests.ps1 `
-    -SutPath "<absolute-path-to-SUT>" `
-    -PrTitle "<work-item title or short scenario>" `
-    -Subject "<subject from 0.7>" `
-    -Interaction "<interaction from 0.7>" `
-    -TopN 3
-```
-
-The script returns top-N corpus rows as JSON (`file`, `name`, `body`, `callsLibraries`, `score`).
-
-**In interactive mode**: print a one-line summary per example (`<name> — score <N.NN>`) so the developer can see what will be mirrored before approving tests in STEP 2.
-**In non-interactive mode**: capture the results silently — no summary line needed, but the data is required input for the evidence block in STEP 4d.5.
-
-If retrieval returns nothing useful (empty or all scores < 0.3), state this explicitly: *"No useful examples retrieved — STEP 4e will rely on defaults.md entirely."* Do not silently discard the result.
-
-**Do not skip this step.** The corpus results are required inputs to STEP 4c and the evidence block in STEP 4d.5.
-
 ### STEP 1 — Propose tests *(interactive mode only — skip in non-interactive mode)*
 For each SUT (in the order found in STEP 0), present a per-SUT block containing:
 - The SUT path.
@@ -143,70 +137,53 @@ For each approved SUT, open the planned test file from STEP 0.5. If it does not 
 
 ### STEP 4 — Implement only the approved tests
 
-STEP 4 is corpus-grounded: inspect the examples captured in STEP 0.8, resolve the Library helpers they call, emit the mandatory evidence block, then write the AL test. Sub-steps 4a–4e are mandatory in order.
+Write each approved test, then structure and refactor it to production quality. Sub-steps 4a–4c are mandatory in order. **Load [references/coding-rules.md](./references/coding-rules.md), [references/handlers.md](./references/handlers.md), and [references/table-relations.md](./references/table-relations.md) before writing any AL code — they always apply, regardless of the SUT.**
 
-#### 4a. Confirm classification from STEP 0.7
-
-State the `{subject, interaction}` values captured in STEP 0.7. **Do not re-run Classify-Sut.ps1.** If STEP 0.7 was skipped (classification is missing), stop — go back and run STEP 0.7 before continuing. For diff-driven runs, also keep the changed-hunks summary handy — 4e must target those lines.
-
-#### 4b. Confirm examples from STEP 0.8
-
-State the top-N examples (name + score) captured in STEP 0.8. **Do not re-run Find-SimilarTests.ps1.** If STEP 0.8 was skipped (examples are missing), stop — go back and run STEP 0.8 before continuing. If STEP 0.8 explicitly reported no useful results, state *"No examples — using defaults.md entirely"* and proceed.
-
-#### 4c. Inspect example bodies
-Read the bodies of the top picks. List the Library procedures they call (the `callsLibraries` field is the easy index). Note their structure: which Library is used to create master data (customer, vendor, item, GL account), how the SUT is invoked (direct call / posting routine / page action / report run), what assertion forms close each `[THEN]`.
-
-#### 4d. Look up Library helpers
-For each Library procedure called by the example(s), look it up in [references/library-api.md](./references/library-api.md) to confirm semantics, side effects, and (when relevant) `Prefer over:` notes before reusing it in the new test.
+#### 4a. Look up Library helpers
+Identify the Library helpers the test needs (master-data creators, posting routines, assertions) and look each one up in [references/library-api.md](./references/library-api.md) to confirm semantics, side effects, and (when relevant) `Prefer over:` notes before using it. Prefer existing Library procedures over hand-rolled record inserts or local helpers.
 
 `library-api.md` ships pre-generated with the skill — do not regenerate at task time. (Maintainers: the regeneration script is [scripts/Scan-LibraryDocs.ps1](./scripts/Scan-LibraryDocs.ps1); it requires a BC source tree on disk and is run out-of-band when the Library API surface changes.)
 
-#### 4d.5 — Emit evidence block *(mandatory in both modes)*
-
-**Do not write any AL code until this block is printed.** Fill every field with the actual values from STEP 0.7, 0.8, 4c, and 4d. Write `none` for any field that is genuinely empty — never omit or abbreviate the block.
-
-```
-=== STEP 4 EVIDENCE ===
-SUT classification : <subject> / <interaction>
-Retrieved examples : <test name> (score <N.NN>)
-                     <test name> (score <N.NN>)
-Library helpers    : <Procedure1>, <Procedure2>, ...
-Verified in api.md : ✓ <Procedure1> — <one-line semantic note from library-api.md>
-                     ✓ <Procedure2> — <one-line semantic note>
-======================
-```
-
-If any choice in the upcoming 4e deviates from what the example uses (different helper, different assertion style, different data-creation pattern), add a `Deviation:` line for each one with a reason. Random or unexplained deviations are not allowed.
-
-#### 4e. Write the new test
-Mirror the example's structure adapted to the SUT. For every choice that the example does **not** constrain (e.g. which random helper, which assert form, which customer creator), apply the rules in [references/defaults.md](./references/defaults.md).
+#### 4b. Write the new test
+For every choice (which random helper, which assert form, which master-data creator, how to structure the body), apply the rules in [references/defaults.md](./references/defaults.md) and [references/coding-rules.md](./references/coding-rules.md).
 
 **For diff-driven runs**, each new test MUST exercise a specific changed line/branch from STEP 0's hunks: a new validation must be hit by at least one positive and one `asserterror` test; a new conditional branch must have a test that takes that branch; a new field must be set and asserted. **If a changed line is not covered by the proposed tests, add a test for it.** Do not silently leave a coverage gap.
 
 Required structure (full rationale in [references/defaults.md](./references/defaults.md)):
 - **First line after `begin`**: `// [FEATURE] [AI test skill <version>]`, where `<version>` is the value from the `<!-- Version: "X.Y" -->` marker at the top of this file (e.g. `// [FEATURE] [AI test skill 0.1]`).
 - Naming: PascalCase, descriptive (e.g. `PostingDoesNotChangeBalanceWhenZeroAmount`).
-- **Second line after `begin`**: `// [SCENARIO <work-item-id>] <one-line description>` (e.g. `// [SCENARIO 312912] Set Dimension Value with dot in the value as Department Filter`). The `<work-item-id>` is the ADO work item ID that motivated the test. Resolve it from (in order): (1) explicit ID in the prompt (`bug 12345`, `#67890`, `AB#54321`); (2) the work-item ID parsed from the `-PrTitle` you passed to retrieval (3) the parent agent's context if the skill was invoked by one. If no ID is available, in interactive mode ASK the user; in non-interactive mode emit `// [SCENARIO]` and call out the missing ID in the final report.
+- **Second line after `begin`**: `// [SCENARIO <work-item-id>] <one-line description>` (e.g. `// [SCENARIO 312912] Set Dimension Value with dot in the value as Department Filter`). The `<work-item-id>` is the ADO work item ID that motivated the test. Resolve it from (in order): (1) explicit ID in the prompt (`bug 12345`, `#67890`, `AB#54321`); (2) the parent agent's context if the skill was invoked by one. If no ID is available, in interactive mode ASK the user; in non-interactive mode emit `// [SCENARIO]` and call out the missing ID in the final report.
 - Then `// [GIVEN]` / `// [WHEN]` / `// [THEN]` comments structure the body, each preceded by an empty line.
-- Assertions: at least one `Assert.*` per test; for error paths, use `asserterror` plus `Assert.ExpectedError` or `Assert.ExpectedErrorCode`.
+- Assertions: at least one `Assert.*` per test; for error paths, use `asserterror` plus **both** `Assert.ExpectedError` **and** `Assert.ExpectedErrorCode` (never `TestField` for assertions).
 - **Respect the access decision from STEP 0.6.** If the SUT was reachable directly, declare `var X: Codeunit "<SutName>"` and call its public procedures. If STEP 0.6 routed the test through a public entry point (page action, posting routine, event), declare a variable for *that* entry-point object instead — never declare a variable for an internal codeunit / table / page that is not visible to the test app, the build will fail with `'... is inaccessible due to its protection level'`.
 - **Do NOT add `[Scope('OnPrem')]`.** The attribute is deprecated.
 - Drain handler queues at the end of any test that wired a `ConfirmHandler` / `ModalPageHandler` / `MessageHandler`: call `LibraryVariableStorage.AssertEmpty()`.
 
 References to consult while implementing:
-- [references/defaults.md](./references/defaults.md) — fallback rules and rationale (always loaded in 4e).
-- [references/handlers.md](./references/handlers.md) — required when the SUT calls `Confirm`, `Message`, `StrMenu`, opens pages/reports/notifications, etc.
-- [references/table-relations.md](./references/table-relations.md) — required when inserting test data into tables with `TableRelation` constraints.
-- [references/library-api.md](./references/library-api.md) — looked up in 4d for each Library helper the new test calls.
+- [references/coding-rules.md](./references/coding-rules.md) — forbidden/required patterns, procedure order, library usage (always applies).
+- [references/defaults.md](./references/defaults.md) — fallback rules and rationale (always loaded in 4b).
+- [references/handlers.md](./references/handlers.md) — UI handler methods; always check whether the SUT calls `Confirm`, `Message`, `StrMenu`, or opens pages/reports/notifications.
+- [references/table-relations.md](./references/table-relations.md) — always check `TableRelation` constraints before inserting test data.
+- [references/library-api.md](./references/library-api.md) — looked up in 4a for each Library helper the new test calls.
+
+#### 4c. Review & refactor to production quality
+After writing the tests (and before build), do a dedicated quality pass over everything written — this mirrors the standalone review the AL Test agent performs:
+1. **Structure**: every test has `// [FEATURE]`, `// [SCENARIO]`, `Initialize();`, and empty-line-separated `[GIVEN]`/`[WHEN]`/`[THEN]` comments.
+2. **Procedure order**: Test procedures first, then `Initialize`, then local helpers (`Verify*` for verification), then handlers — move procedures if needed.
+3. **Replace local helpers with library calls**: for any hand-rolled setup, search [references/library-api.md](./references/library-api.md) for an existing Library procedure; if one exists, use it and delete the local helper. Declare new library variables in the global `var` section and remove unused variables.
+4. **Coding rules**: apply [references/coding-rules.md](./references/coding-rules.md) — no conditionals in the test body, no `TestField` for assertions, `asserterror` paths use both `Assert.ExpectedError` AND `Assert.ExpectedErrorCode`, no `Commit` in helpers/handlers, handlers only set values.
 
 ### STEP 5 — Build (max 3 attempts)
-Build the test app with the AL build tool (`ms-dynamics-smb.al/al_build`). On compile errors, fix and rebuild. **Cap the build/fix loop at 3 attempts.** If the test app still does not compile after the 3rd attempt, stop. Report the remaining compile errors and the changes made on each attempt; do not proceed to STEP 6.
+Build the test app with the AL `al_build` tool, passing `projectPath` = the test app folder (resolve the ID per [AL tool resolution](#al-tool-resolution); in Copilot CLI ensure the [project & symbol setup](#copilot-cli-only--project--symbol-setup) is done first). On compile errors, fix and rebuild. **Distinguish symbol/config errors from code errors:** `AL1045`/`AL1022` (package cache) are not fixable by editing test code — resolve them via the package-cache guidance in that setup subsection (and reload with `/mcp` if you changed the cache), then rebuild without counting it as a code-fix attempt. **Cap the code build/fix loop at 3 attempts.** If the test app still does not compile after the 3rd attempt, stop. Report the remaining compile errors and the changes made on each attempt; do not proceed to STEP 6.
 
 ### STEP 6 — Publish
-Publish the test app with the AL publish-without-debug tool (`ms-dynamics-smb.al/al_publish_without_debug`).
+Publish the test app with the AL `al_publish` (without debug) tool, passing `projectPath` = the test app folder (resolve the ID per [AL tool resolution](#al-tool-resolution)). If you also (re)built the app under test, publish **it first**, then the test app.
 
 ### STEP 7 — Run tests
-Follow [references/run-al-tests.md](./references/run-al-tests.md) **strictly in order**. The key rule: `init.ps1` and `Run-NAVALTests` MUST be invoked in a SINGLE combined PowerShell command — terminal sessions lose their initialized environment between tool calls.
+Run the published tests using whichever path fits the environment:
+
+- **Copilot CLI:** use the `al_run_tests` MCP tool with the test `codeunitId` and `projectPath` (the test app folder); connection is read from `launch.json`.
+- **VS Code / PowerShell:** follow [references/run-al-tests.md](./references/run-al-tests.md) **strictly in order**. The key rule: `init.ps1` and `Run-NAVALTests` MUST be invoked in a SINGLE combined PowerShell command — terminal sessions lose their initialized environment between tool calls.
 
 ### STEP 8 — Verify
 Verify all tests pass. Do NOT attempt fixes silently — if any test fails, the failure handling depends on the invocation mode:

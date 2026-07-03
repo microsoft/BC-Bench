@@ -1,27 +1,12 @@
 # AL Test Implementor — Defaults
 
-## Priority rule: examples override defaults
-
-When at least one example was retrieved in STEP 0.8 with score ≥ 0.3, the example's concrete choices **take precedence over every row in this table** for the same category. Use a default only when the example does **not** constrain that particular choice.
-
-**Silent deviations from the example are not allowed.** If you use a different helper, assertion style, or data-creation pattern than the example uses, record it as a `Deviation:` line in the STEP 4d.5 evidence block with a reason.
-
-Specific examples of what *"the example constrains"* means:
-- Example uses `LibraryRandom.RandDecInRange(100, 200, 2)` → do **not** hardcode `100` or call `RandDec(max, 2)` for amounts.
-- Example uses `LibraryIRS1099Document.MockFormDocumentForVendor(...)` → do **not** hand-roll a direct `IRS1099FormDocHeader.Insert()` for the same data.
-- Example calls `Assert.AreEqual(expected, actual, msg)` → do **not** use `TestField` for the same kind of equality assertion.
-
-When no example was retrieved (STEP 0.8 returned nothing useful), apply every row in this table.
-
----
-
-These defaults are distilled from 942 historical test procedures. When no example constrains a choice, pick the entry from this table.
+These defaults are distilled from historical BC test procedures. Apply the matching row whenever the test needs to make that choice. The `Why` column is rationale only.
 
 | Need | Default | Why |
 |---|---|---|
 | Author / origin tag | First line after `begin` is `// [FEATURE] [AI test skill <version>]`, where `<version>` is the value from the `<!-- Version: "X.Y" -->` marker at the top of `SKILL.md` (e.g. `// [FEATURE] [AI test skill 0.1]`). | Mirrors the `ALTestImplementor` agent convention; lets reviewers trace which automated author wrote the test |
 | Naming | `PascalCase`, descriptive, ~30–60 chars | 91% of corpus names are PascalCase, avg ~47 chars |
-| Scenario tag | `// [SCENARIO <work-item-id>] <one-line description>` (e.g. `// [SCENARIO 312912] Posting fails when amount is zero`) immediately after the `[FEATURE]` line. Resolve `<work-item-id>` from (in order): explicit ID in the prompt (`bug 12345`, `#67890`, `AB#54321`); the ID parsed from the `-PrTitle` passed to retrieval; the parent agent's context. If unknown, in interactive mode ASK; in non-interactive mode use `0` and flag it in the final report. | The `[SCENARIO 123456]` form links the test to its ADO work item — the dominant convention in the corpus |
+| Scenario tag | `// [SCENARIO <work-item-id>] <one-line description>` (e.g. `// [SCENARIO 312912] Posting fails when amount is zero`) immediately after the `[FEATURE]` line. Resolve `<work-item-id>` from (in order): explicit ID in the prompt (`bug 12345`, `#67890`, `AB#54321`); the parent agent's context. If unknown, in interactive mode ASK; in non-interactive mode use `0` and flag it in the final report. | The `[SCENARIO 123456]` form links the test to its ADO work item — the dominant convention in the corpus |
 | Body structure | Each `// [GIVEN]` / `// [WHEN]` / `// [THEN]` comment preceded by an empty line, interleaved with code | 91% of corpus tests use the GWT structure |
 | `[Scope('OnPrem')]` | **Do NOT add it** | Deprecated — only legacy rows carry it (67% of corpus, but new tests must not) |
 | Internal SUT access | Before declaring `var X: Codeunit "<SutName>"` (or `Record`, `Page`, etc.), check the SUT object header for `Access = Internal` and the SUT app's `app.json` for an `internalsVisibleTo` entry naming the test app. If the SUT is internal AND not exposed via `internalsVisibleTo`, **do not declare a variable for it** — the test app cannot see it and the build will fail with `'... is inaccessible due to its protection level'`. Test through a public entry point (public facade procedure, page action, posting routine, subscribed event) instead. | Compile-time access modifier rule — most common cause of "declared but won't compile" failures |

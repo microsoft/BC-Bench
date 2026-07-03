@@ -12,20 +12,17 @@
 #   -RootPath  Path to a BC source tree to scan recursively for
 #              `Library*.Codeunit.al` files. No default — must be supplied
 #              by the maintainer.
-#   -FreqPath  Path to library-frequency.json (default: bundled
-#              `data/library-frequency.json`).
 #   -OutPath   Output Markdown file (default: bundled
 #              `references/library-api.md`).
 #   -Force     Bypass mtime cache and regenerate unconditionally.
 #
 # mtime cache: if -OutPath exists and its LastWriteTime is newer than every
-# scanned source AL file *and* -FreqPath, the script exits without rewriting.
+# scanned source AL file, the script exits without rewriting.
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
     [string] $RootPath,
-    [string] $FreqPath  = (Join-Path $PSScriptRoot '..\data\library-frequency.json'),
     [string] $OutPath   = (Join-Path $PSScriptRoot '..\references\library-api.md'),
     [switch] $Force
 )
@@ -56,33 +53,10 @@ if ($libFiles.Count -eq 0) {
 if (-not $Force.IsPresent -and (Test-Path -LiteralPath $OutPath)) {
     $outMtime = (Get-Item -LiteralPath $OutPath).LastWriteTimeUtc
     $newestSrc = ($libFiles | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum
-    if (Test-Path -LiteralPath $FreqPath) {
-        $freqMtime = (Get-Item -LiteralPath $FreqPath).LastWriteTimeUtc
-        if ($freqMtime -gt $newestSrc) { $newestSrc = $freqMtime }
-    }
     if ($newestSrc -le $outMtime) {
         Write-Host "Up to date — output mtime $outMtime is newer than all sources. Use -Force to override." -ForegroundColor Green
         return
     }
-}
-
-# ---------------------------------------------------------------------------
-# Load frequency index (optional)
-# ---------------------------------------------------------------------------
-
-$freqByLibProc = @{}    # "LibrarySales|CreateCustomer" -> int
-$freqByLib     = @{}    # "LibrarySales" -> int (total calls)
-if (Test-Path -LiteralPath $FreqPath) {
-    Write-Host "Loading frequency index from $FreqPath" -ForegroundColor Cyan
-    $freq = Get-Content -Raw -LiteralPath $FreqPath | ConvertFrom-Json -Depth 5
-    foreach ($p in $freq.byProcedure) {
-        $freqByLibProc["$($p.library)|$($p.procedure)"] = [int]$p.calls
-    }
-    foreach ($l in $freq.byLibrary) {
-        $freqByLib[$l.library] = [int]$l.calls
-    }
-} else {
-    Write-Host "Frequency index not found at $FreqPath; documenting in alphabetical order." -ForegroundColor Yellow
 }
 
 # ---------------------------------------------------------------------------
@@ -114,7 +88,7 @@ function Parse-LibraryFile {
     if (-not $hdr.Success) { return $null }
 
     $friendly = $hdr.Groups[1].Value.Trim()
-    # Normalize "Library - Sales" -> "LibrarySales" to match callsLibraries[].
+    # Normalize "Library - Sales" -> "LibrarySales".
     $normalized = ($friendly -replace '[^A-Za-z0-9]', '')
 
     $fileSummary = Get-FileSummary -Text $text
@@ -231,26 +205,10 @@ $libraries = $librariesDeduped
 Write-Host ("  deduped layer mirrors: {0} -> {1}" -f $beforeDedup, $libraries.Count)
 
 # ---------------------------------------------------------------------------
-# Sort: libraries by total call count (then alphabetical), procedures within
-# each library by call count (then alphabetical). Skip libraries with zero
-# calls AND zero documented procedures (they're noise for this index).
+# Sort: libraries alphabetically; procedures within each library alphabetically.
 # ---------------------------------------------------------------------------
 
-function Get-LibCalls {
-    param([string]$Normalized)
-    if ($freqByLib.ContainsKey($Normalized)) { return $freqByLib[$Normalized] }
-    return 0
-}
-function Get-ProcCalls {
-    param([string]$Normalized, [string]$ProcName)
-    $key = "$Normalized|$ProcName"
-    if ($freqByLibProc.ContainsKey($key)) { return $freqByLibProc[$key] }
-    return 0
-}
-
-$librariesSorted = @($libraries | Sort-Object -Property `
-    @{ Expression = { Get-LibCalls -Normalized $_.normalized }; Descending = $true }, `
-    @{ Expression = 'friendly' })
+$librariesSorted = @($libraries | Sort-Object -Property 'friendly')
 
 # ---------------------------------------------------------------------------
 # Emit Markdown
@@ -264,9 +222,6 @@ $sb = New-Object System.Text.StringBuilder
 [void]$sb.AppendLine()
 [void]$sb.AppendLine(('Generated: `{0}`' -f (Get-Date).ToString('o')))
 [void]$sb.AppendLine(('Source root: `{0}`' -f $RootPath))
-if (Test-Path -LiteralPath $FreqPath) {
-    [void]$sb.AppendLine(('Frequency index: `{0}`' -f $FreqPath))
-}
 [void]$sb.AppendLine()
 
 # Counts
@@ -281,41 +236,12 @@ $coveragePct = if ($totalProcs -gt 0) { [math]::Round(100.0 * $documentedProcs /
 [void]$sb.AppendLine(('- Missing documentation: **{0}**' -f $undocumentedProcs))
 [void]$sb.AppendLine()
 
-# Top 50 by usage (only when frequency index is available).
-if (Test-Path -LiteralPath $FreqPath) {
-    [void]$sb.AppendLine('## Top 50 procedures by corpus call frequency')
-    [void]$sb.AppendLine()
-    [void]$sb.AppendLine('Cross-cutting view of the procedures the BC test corpus actually calls. Use this section first when looking for a Library helper.')
-    [void]$sb.AppendLine()
-    [void]$sb.AppendLine('| Calls | Library | Procedure | Documented |')
-    [void]$sb.AppendLine('|------:|---------|-----------|:----------:|')
-
-    $allProcs = New-Object 'System.Collections.Generic.List[object]'
-    foreach ($lib in $librariesSorted) {
-        foreach ($p in $lib.procedures) {
-            $allProcs.Add([pscustomobject]@{
-                calls    = Get-ProcCalls -Normalized $lib.normalized -ProcName $p.name
-                library  = $lib.normalized
-                friendly = $lib.friendly
-                proc     = $p
-            }) | Out-Null
-        }
-    }
-    $top50 = @($allProcs | Where-Object { $_.calls -gt 0 } | Sort-Object -Property calls -Descending | Select-Object -First 50)
-    foreach ($r in $top50) {
-        $doc = if ($r.proc.hasDocs) { 'yes' } else { '**no**' }
-        [void]$sb.AppendLine(('| {0} | `{1}` | `{2}` | {3} |' -f $r.calls, $r.library, $r.proc.name, $doc))
-    }
-    [void]$sb.AppendLine()
-}
-
 # Per-library sections.
-[void]$sb.AppendLine('## Libraries (by total corpus call frequency)')
+[void]$sb.AppendLine('## Libraries (alphabetical)')
 [void]$sb.AppendLine()
 
 foreach ($lib in $librariesSorted) {
-    $libCalls = Get-LibCalls -Normalized $lib.normalized
-    [void]$sb.AppendLine(('### `{0}` -- {1} call(s) in corpus' -f $lib.friendly, $libCalls))
+    [void]$sb.AppendLine(('### `{0}`' -f $lib.friendly))
     [void]$sb.AppendLine()
     if ($lib.fileSummary) {
         [void]$sb.AppendLine($lib.fileSummary)
@@ -328,18 +254,15 @@ foreach ($lib in $librariesSorted) {
     [void]$sb.AppendLine(('Source: `{0}`' -f $relPath))
     [void]$sb.AppendLine()
 
-    # Sort procedures: by call count desc, then alphabetical.
-    $procsSorted = @($lib.procedures | Sort-Object -Property `
-        @{ Expression = { Get-ProcCalls -Normalized $lib.normalized -ProcName $_.name }; Descending = $true }, `
-        @{ Expression = 'name' })
+    # Sort procedures alphabetically.
+    $procsSorted = @($lib.procedures | Sort-Object -Property 'name')
 
     $documented   = @($procsSorted | Where-Object { $_.hasDocs })
     $undocumented = @($procsSorted | Where-Object { -not $_.hasDocs })
 
     if ($documented.Count -gt 0) {
         foreach ($p in $documented) {
-            $calls = Get-ProcCalls -Normalized $lib.normalized -ProcName $p.name
-            [void]$sb.AppendLine(('#### `{0}` -- {1} call(s)' -f $p.name, $calls))
+            [void]$sb.AppendLine(('#### `{0}`' -f $p.name))
             [void]$sb.AppendLine()
             [void]$sb.AppendLine(('Signature: `{0}({1})`' -f $p.name, $p.params))
             [void]$sb.AppendLine()
@@ -366,8 +289,7 @@ foreach ($lib in $librariesSorted) {
         [void]$sb.AppendLine(('**Missing documentation ({0} procedure(s)):**' -f $undocumented.Count))
         [void]$sb.AppendLine()
         foreach ($p in $undocumented) {
-            $calls = Get-ProcCalls -Normalized $lib.normalized -ProcName $p.name
-            [void]$sb.AppendLine(('- `{0}({1})` -- {2} call(s)' -f $p.name, $p.params, $calls))
+            [void]$sb.AppendLine(('- `{0}({1})`' -f $p.name, $p.params))
         }
         [void]$sb.AppendLine()
     }
