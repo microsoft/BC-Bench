@@ -99,7 +99,6 @@ def run_bcal_agent(
         bcal_executable,
         f"--packagecachepath={package_cache_path}",
         *backend_args,
-        "--review",
         f"--audience={entry.audience}",
         f"--page={entry.page}",
         f"--prompt={entry.get_task()}",
