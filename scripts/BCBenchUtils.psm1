@@ -15,13 +15,13 @@
 .PARAMETER Password
     Optional SecureString password parameter
 .PARAMETER EnvironmentVariableName
-    Name of environment variable containing password (default: BC_CONTAINER_PASSWORD)
+    Name of environment variable containing password (default: BC_SERVER_PASSWORD)
 .OUTPUTS
     PSCredential object
 .EXAMPLE
     $cred = Get-BCCredential -Username "admin" -Password $securePassword
 .EXAMPLE
-    $cred = Get-BCCredential -Username "admin" # Uses BC_CONTAINER_PASSWORD env var
+    $cred = Get-BCCredential -Username "admin" # Uses BC_SERVER_PASSWORD env var
 #>
 function Get-BCCredential {
     [CmdletBinding()]
@@ -34,7 +34,7 @@ function Get-BCCredential {
         [SecureString]$Password,
 
         [Parameter(Mandatory = $false)]
-        [string]$EnvironmentVariableName = "BC_CONTAINER_PASSWORD"
+        [string]$EnvironmentVariableName = "BC_SERVER_PASSWORD"
     )
 
     # Get environment password
@@ -490,17 +490,65 @@ function Get-BCBenchDatasetPath {
     param(
         [Parameter(Mandatory = $true)]
         # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
-        [ValidateSet("bug-fix", "test-generation")]
+        [ValidateSet("bug-fix", "test-generation", "code-review", "nl2al")]
         [string] $Category
     )
 
     switch ($Category) {
         "bug-fix" { $DatasetName = "bcbench.jsonl" }
         "test-generation" { $DatasetName = "bcbench.jsonl" }
+        "code-review" { $DatasetName = "codereview.jsonl" }
+        "nl2al" { $DatasetName = "nl2al.jsonl" }
     }
 
     [string] $projectRoot = Split-Path $PSScriptRoot -Parent
     return Join-Path $projectRoot "dataset" $DatasetName
+}
+
+<#
+.SYNOPSIS
+    Resolves the BC sandbox version (environment_setup_version) for a dataset entry.
+.DESCRIPTION
+    Centralizes the category -> dataset -> version lookup used by container setup, symbol download,
+    and the CI artifact cache key. Resolves the dataset file via Get-BCBenchDatasetPath.
+.PARAMETER InstanceId
+    The dataset instance_id to resolve.
+.PARAMETER Category
+    The dataset category, used to locate the dataset file.
+.PARAMETER DatasetPath
+    Optional override for the dataset (.jsonl) path. Defaults to the category-specific path via Get-BCBenchDatasetPath.
+.OUTPUTS
+    The environment_setup_version string, e.g. "26.5".
+.EXAMPLE
+    Get-BCBenchEntryVersion -InstanceId "bug-fix__job-budget-report-1" -Category "bug-fix"
+#>
+function Get-BCBenchEntryVersion {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $InstanceId,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Category,
+
+        [Parameter(Mandatory = $false)]
+        [string] $DatasetPath = (Get-BCBenchDatasetPath -Category $Category)
+    )
+
+    if (-not (Test-Path $DatasetPath)) {
+        throw "Dataset file not found at: $DatasetPath"
+    }
+
+    foreach ($line in Get-Content -Path $DatasetPath) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $entry = $line | ConvertFrom-Json
+        if ($entry.instance_id -eq $InstanceId) {
+            return $entry.environment_setup_version
+        }
+    }
+
+    throw "Entry '$InstanceId' not found in $DatasetPath"
 }
 
 <#
@@ -541,4 +589,4 @@ function Get-LatestReleaseBranch {
     return $latest.Name
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-RepoCloneInfo, Get-LatestReleaseBranch
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch

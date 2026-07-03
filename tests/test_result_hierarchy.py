@@ -6,7 +6,7 @@ Covers:
 - from_json dispatch to correct subclass
 - EvaluationResultSummary.from_results dispatch and super() chain
 - ExecutionBasedEvaluationResultSummary category-specific aggregation
-- display_summary on summaries
+- metrics rendering on summaries
 - display.py console/GitHub summary rendering
 """
 
@@ -20,6 +20,7 @@ from bcbench.results.display import create_console_summary, create_github_job_su
 from bcbench.results.summary import (
     EvaluationResultSummary,
     ExecutionBasedEvaluationResultSummary,
+    JudgeBasedEvaluationResultSummary,
 )
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory
@@ -257,13 +258,13 @@ class TestSummaryFromResults:
 
 
 # ---------------------------------------------------------------------------
-# display_summary
+# metrics rendering
 # ---------------------------------------------------------------------------
 
 
-class TestDisplaySummary:
-    def test_execution_based_display_summary(self):
-        summary = ExecutionBasedEvaluationResultSummary(
+class TestMetricsRendering:
+    def _summary(self) -> ExecutionBasedEvaluationResultSummary:
+        return ExecutionBasedEvaluationResultSummary(
             total=10,
             resolved=7,
             failed=3,
@@ -278,8 +279,30 @@ class TestDisplaySummary:
             average_completion_tokens=500.0,
             benchmark_version="0.1.0",
         )
-        display = summary.display_summary()
-        assert display == {"resolved": 7, "failed": 3, "build": 9}
+
+    def test_execution_based_github_metrics_markdown(self):
+        markdown = self._summary().render_github_metrics_markdown()
+        assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Build: 9\n- Pass Rate: 70.0%\n"
+
+    def test_execution_based_console_metrics_renders_nothing(self):
+        # execution-based categories intentionally render no console metrics block
+        assert self._summary().render_console_metrics() is None
+
+    def test_judge_based_renders_no_metrics(self):
+        # JudgeBased explicitly surfaces no GitHub metrics and inherits the console no-op default
+        summary = JudgeBasedEvaluationResultSummary(
+            total=3,
+            date=date.today(),
+            model="gpt-4o",
+            agent_name="copilot",
+            category=EvaluationCategory.BUG_FIX,
+            average_duration=1.0,
+            average_prompt_tokens=1.0,
+            average_completion_tokens=1.0,
+            benchmark_version="0.1.0",
+        )
+        assert summary.render_github_metrics_markdown() == ""
+        assert summary.render_console_metrics() is None
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +388,8 @@ class TestGitHubJobSummary:
         assert "test__1" in content
         assert "test__2" in content
         assert "bug-fix" in content
+        assert "- Custom Agent: N/A\n\n## Result Summary" in content
+        assert "- Pass Rate: 50.0%\n\n## Detailed Results" in content
 
     def test_github_summary_includes_testgen_columns(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"

@@ -12,7 +12,6 @@ from bcbench.logger import get_logger
 from bcbench.results import (
     BaseEvaluationResult,
     EvaluationResultSummary,
-    ExecutionBasedEvaluationResultSummary,
     Leaderboard,
     LeaderboardAggregate,
     create_console_summary,
@@ -36,6 +35,7 @@ def result_summarize(
     result_pattern: Annotated[str, typer.Option(help="Pattern for the per instances result files")] = f"*{_config.file_patterns.result_pattern}",
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
+    git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
 ) -> None:
     """
     Summarize evaluation results from a completed run.
@@ -71,7 +71,7 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category)
+    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
 
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
 
@@ -83,18 +83,11 @@ def result_summarize(
     summary.save(run_dir, summary_output)
 
 
-def _get_combination_key(result: EvaluationResultSummary) -> tuple[str, str, str | None, str]:
-    exp_key = None
-    if result.experiment and not result.experiment.is_empty():
-        exp_key = json.dumps(result.experiment.model_dump(mode="json"), sort_keys=True)
-    return (result.agent_name, result.model, exp_key, result.benchmark_version)
-
-
-def _rebuild_aggregates(runs: list[ExecutionBasedEvaluationResultSummary]) -> list[LeaderboardAggregate]:
-    grouped: defaultdict[tuple[str, str, str | None, str], list[ExecutionBasedEvaluationResultSummary]] = defaultdict(list)
+def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:
+    grouped: defaultdict[tuple[str, str, str | None, str], list[EvaluationResultSummary]] = defaultdict(list)
     for run in runs:
-        grouped[_get_combination_key(run)].append(run)
-    return [LeaderboardAggregate.from_runs(group) for group in grouped.values()]
+        grouped[run.combination_key()].append(run)
+    return [group[0].category.aggregate_class.from_runs(group) for group in grouped.values()]
 
 
 @result_app.command("update")
@@ -111,7 +104,7 @@ def result_update(
     """
     logger.info(f"Loading evaluation summary from: {evaluation_summary}")
     with open(evaluation_summary, encoding="utf-8") as f:
-        new_result = ExecutionBasedEvaluationResultSummary.model_validate_json(f.read())
+        new_result = EvaluationResultSummary.from_json(json.load(f))
 
     logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}' in category '{new_result.category.value}'")
 
@@ -120,13 +113,13 @@ def result_update(
 
     # Load existing leaderboard
     leaderboard: Leaderboard = Leaderboard.load(leaderboard_path)
-    runs: list[ExecutionBasedEvaluationResultSummary] = list(leaderboard.runs)
+    runs: list[EvaluationResultSummary] = list(leaderboard.runs)
     logger.info(f"Loaded {len(runs)} existing runs")
 
     # Find runs matching this combination
-    new_result_key = _get_combination_key(new_result)
-    matching_runs: list[ExecutionBasedEvaluationResultSummary] = [r for r in runs if _get_combination_key(r) == new_result_key]
-    other_runs: list[ExecutionBasedEvaluationResultSummary] = [r for r in runs if _get_combination_key(r) != new_result_key]
+    new_result_key = new_result.combination_key()
+    matching_runs: list[EvaluationResultSummary] = [r for r in runs if r.combination_key() == new_result_key]
+    other_runs: list[EvaluationResultSummary] = [r for r in runs if r.combination_key() != new_result_key]
 
     if len(matching_runs) < n:
         logger.info(f"Adding run ({len(matching_runs) + 1}/{n}) for '{new_result.agent_name}' + '{new_result.model}'")
@@ -137,7 +130,7 @@ def result_update(
         matching_runs = [*matching_runs[1:], new_result]
 
     # Combine and rebuild aggregates
-    all_runs: list[ExecutionBasedEvaluationResultSummary] = other_runs + matching_runs
+    all_runs: list[EvaluationResultSummary] = other_runs + matching_runs
     aggregates = _rebuild_aggregates(all_runs)
 
     # Write back
@@ -171,14 +164,14 @@ def result_refresh(
         logger.info(f"Refreshing: {leaderboard_path.name}")
 
         leaderboard: Leaderboard = Leaderboard.load(leaderboard_path)
-        runs: list[ExecutionBasedEvaluationResultSummary] = list(leaderboard.runs)
+        runs: list[EvaluationResultSummary] = list(leaderboard.runs)
 
         if not runs:
             logger.warning(f"No runs found in {leaderboard_path.name}, skipping")
             continue
 
         # Rebuild aggregates from existing runs
-        aggregates = _rebuild_aggregates(runs)
+        aggregates: list[LeaderboardAggregate] = _rebuild_aggregates(runs)
 
         # Write back
         leaderboard = Leaderboard(runs=runs, aggregate=aggregates)

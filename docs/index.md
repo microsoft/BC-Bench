@@ -11,7 +11,7 @@ A benchmark for evaluating AI coding agents on real-world **Business Central (AL
 |----------|-------------|
 | [Bug Fixing](bug-fix.md) | Follows [SWE-Bench](https://www.swebench.com/) methodology to evaluate bug fixing in AL code |
 | [Test Generation](test-generation.md) | "Reverses" SWE-Bench: Generates reproduction tests (TDD) instead of fixes |
-| Code Review | *Coming Soon* |
+| [Code Review](code-review.md) | Reviews AL pull requests; scored with Precision / Recall / F1 against gold findings |
 
 ## What is Business Central?
 

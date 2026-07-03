@@ -2,11 +2,12 @@ import random
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import run_claude_code, run_copilot_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -19,11 +20,12 @@ from bcbench.cli_options import (
     RunId,
 )
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
+from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
-from bcbench.results import BaseEvaluationResult, ExecutionBasedEvaluationResult
-from bcbench.types import AgentMetrics, ContainerConfig, EvaluationContext, ExperimentConfiguration
+from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
+from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -51,6 +53,7 @@ def evaluate_copilot(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
+    al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -84,6 +87,7 @@ def evaluate_copilot(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp if ctx.container else False,
+            al_lsp=al_lsp,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
@@ -104,6 +108,7 @@ def evaluate_claude_code(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_code_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
+    al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
 ) -> None:
     """
     Evaluate Claude Code on single dataset entry.
@@ -137,12 +142,91 @@ def evaluate_claude_code(
             model=ctx.model,
             output_dir=ctx.result_dir,
             al_mcp=al_mcp if ctx.container else False,
+            al_lsp=al_lsp,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("bcal")
+def evaluate_bcal(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    repo_path: RepoPath = _config.paths.evaluation_results_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    run_id: RunId = "bcal_test_run",
+    backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend to use")] = BCalLLMBackend.EXTERNAL_COMMAND,
+    endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend)")] = None,
+    deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend)")] = None,
+    llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (required for external-command backend)")] = None,
+    llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (optional for external-command backend)")] = None,
+) -> None:
+    """
+    Evaluate BCal dotnet tool on single nl2al dataset entry.
+
+    To only run the agent to generate AL code without building, use 'bcbench run bcal' instead.
+    """
+    category = EvaluationCategory.NL2AL
+    entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
+    run_dir = _prepare_run_dir(output_dir, run_id)
+    backend_config = BCalBackendConfig(
+        backend=backend,
+        endpoint=endpoint,
+        deployment=deployment,
+        command=llm_command,
+        model=llm_model,
+    )
+
+    logger.info(f"Running evaluation on entry {entry_id} with BCal")
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container=None,
+        model=backend_config.model_label(),
+        agent_name="BCal",
+        category=category,
+    )
+
+    category.pipeline.execute(
+        context,
+        lambda ctx: run_bcal_agent(
+            entry=cast(NL2ALEntry, ctx.entry),
+            repo_path=ctx.repo_path,
+            backend_config=backend_config,
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("judge-calibration")
+def evaluate_judge_calibration(
+    model: CopilotModel = _config.judge.code_review_model,
+    work_dir: RepoPath = _config.paths.testbed_path,
+    min_accuracy: Annotated[float, typer.Option(help="Fail if judge accuracy falls below this")] = 0.8,
+) -> None:
+    """Run the LLM judge over the hand-labeled calibration set and report its precision/recall.
+
+    Intended for local/ad-hoc checks of the judge; exits non-zero if accuracy drops below
+    the threshold.
+    """
+    work_dir.mkdir(parents=True, exist_ok=True)
+    report = run_calibration(work_dir, model=model)
+
+    logger.info(f"Judge calibration ({model}) over {report.total} labeled pairs:")
+    logger.info(f"  precision={report.precision:.3f}  recall={report.recall:.3f}  accuracy={report.accuracy:.3f}")
+    logger.info(f"  TP={report.true_positives} FP={report.false_positives} TN={report.true_negatives} FN={report.false_negatives}")
+    for note in report.misclassified_notes:
+        logger.warning(f"  {note}")
+
+    if report.accuracy < min_accuracy:
+        logger.error(f"Judge accuracy {report.accuracy:.3f} is below the required {min_accuracy:.3f}")
+        raise typer.Exit(code=1)
 
 
 @evaluate_app.command("mock", hidden=True)
@@ -222,8 +306,17 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         """Create random evaluation result to test different outcome scenarios."""
         logger.info("Mock pipeline: Generating random evaluation result")
 
-        # Randomly choose success or build failure
-        scenario = random.choice(["success", "build-fail"])
+        match context.category:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                scenarios = ["success", "build-fail"]
+            case EvaluationCategory.CODE_REVIEW:
+                scenarios = ["invalid", "valid"]
+            case EvaluationCategory.NL2AL:
+                scenarios = ["raw", "empty"]
+            case _:
+                raise ValueError(f"Unsupported category for mock evaluation: {context.category}")
+
+        scenario = random.choice(scenarios)
         logger.info(f"Mock pipeline: Selected scenario: {scenario}")
 
         result: BaseEvaluationResult
@@ -232,6 +325,14 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = ExecutionBasedEvaluationResult.create_success(context, "MOCK_PATCH_CONTENT")
             case "build-fail":
                 result = ExecutionBasedEvaluationResult.create_build_failure(context, "MOCK_PATCH_CONTENT", "Mock build failure")
+            case "invalid":
+                result = CodeReviewResult.create_invalid(context, output="MOCK_INVALID_REVIEW_OUTPUT", expected_comments=[])
+            case "valid":
+                result = CodeReviewResult.create(context, output="[]", expected_comments=[], generated_comments=[])
+            case "raw":
+                result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
+            case "empty":
+                result = JudgeBasedEvaluationResult.create_empty_output(context)
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

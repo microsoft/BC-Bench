@@ -24,12 +24,20 @@ on:
       entries:
         description: JSON array of dataset entries
         value: ${{ jobs.get-entries.outputs.entries }}
+      runner:
+        description: GitHub Actions runner label to evaluate this category on
+        value: ${{ jobs.get-entries.outputs.runner }}
+      requires-container:
+        description: Whether this category needs a BC container ("true"/"false")
+        value: ${{ jobs.get-entries.outputs.requires-container }}
 
 jobs:
   get-entries:
     runs-on: ubuntu-latest
     outputs:
       entries: ${{ steps.get-entries.outputs.entries }}
+      runner: ${{ steps.runtime-config.outputs.runner }}
+      requires-container: ${{ steps.runtime-config.outputs.requires-container }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -38,6 +46,10 @@ jobs:
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
+
+      - name: Get runtime config for matrix
+        id: runtime-config
+        run: uv run bcbench category runtime-config --category ${{ inputs.category }}
 
       - name: Get entries for matrix
         id: get-entries

@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from bcbench.dataset.dataset_entry import BaseDatasetEntry
+
+
+class Severity(StrEnum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+    @property
+    def level(self) -> int:
+        return _SEVERITY_LEVELS[self]
+
+    @classmethod
+    def from_input(cls, value: str) -> Severity:
+        normalized = value.strip().lower()
+        if normalized in {s.value for s in cls}:
+            return cls(normalized)
+        if normalized in _SEVERITY_ALIASES:
+            return _SEVERITY_ALIASES[normalized]
+        valid = [s.value for s in cls] + list(_SEVERITY_ALIASES)
+        raise ValueError(f"Unknown severity {value!r}; expected one of {valid}")
+
+
+_SEVERITY_LEVELS: dict[Severity, int] = {
+    Severity.CRITICAL: 4,
+    Severity.HIGH: 3,
+    Severity.MEDIUM: 2,
+    Severity.LOW: 1,
+}
+
+_SEVERITY_ALIASES: dict[str, Severity] = {
+    "error": Severity.HIGH,
+    "warning": Severity.MEDIUM,
+    "suggestion": Severity.LOW,
+    "info": Severity.LOW,
+}
+
+
+class ReviewComment(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9./_-]*\.(al|json)$")]
+    line_start: Annotated[int, Field(ge=1)]
+    line_end: Annotated[int, Field(ge=1)] | None = None
+    domain: str | None = None
+    body: Annotated[str, Field(min_length=1)]
+    severity: Severity | None = None
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _coerce_severity(cls, value: object) -> Severity | None:
+        if value is None or isinstance(value, Severity):
+            return value
+        return Severity.from_input(str(value))
+
+    @property
+    def severity_label(self) -> str:
+        return self.severity.value if self.severity is not None else "unspecified"
+
+    def __str__(self) -> str:
+        loc = f"{self.file}:{self.line_start}"
+        if self.line_end and self.line_end != self.line_start:
+            loc += f"-{self.line_end}"
+        return f"[{self.severity_label}] {loc}: {self.body}"
+
+
+class CodeReviewEntry(BaseDatasetEntry):
+    """Dataset entry for the code-review category."""
+
+    expected_comments: list[ReviewComment] = Field(default_factory=list)
+
+    def get_task(self) -> str:
+        return self.patch
+
+    def get_expected_output(self) -> str:
+        return "\n".join(str(c) for c in self.expected_comments)

@@ -1,9 +1,9 @@
 import json
 from unittest.mock import PropertyMock, patch
 
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
 
 
@@ -180,3 +180,113 @@ class TestWriteBcevalResults:
         assert data["metadata"]["prompt_tokens"] == 0
         assert data["metadata"]["completion_tokens"] == 1500
         assert data["metadata"]["latency"] == 100.0
+
+    def test_preserves_dict_expected_output_for_lm_checklist_style_categories(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
+        """A category whose `get_expected_output()` returns assertions (dict) must surface them as a JSON object in `expected`."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        checklist_payload = {
+            "assertions": [
+                {"text": "The output identifies the root cause.", "level": "critical"},
+                {"text": "The output mentions the affected codeunit.", "level": "expected"},
+            ]
+        }
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+            patch.object(BugFixEntry, "get_expected_output", lambda self: checklist_payload),
+        ):
+            write_bceval_results(
+                results=[sample_bugfix_result_with_metrics],
+                out_dir=output_dir,
+                run_id="test_run_checklist",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        with open(output_dir / "results.jsonl") as f:
+            data = json.loads(f.readline())
+
+        assert data["expected"] == checklist_payload
+
+    def test_marks_run_as_baseline_when_no_experiment(self, tmp_path, sample_dataset_file, problem_statement_dir):
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = create_bugfix_result(metrics=AgentMetrics(execution_time=1.0), experiment=None)
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[result],
+                out_dir=output_dir,
+                run_id="run_baseline",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+                git_ref="main",
+            )
+
+        with open(output_dir / "results.jsonl") as f:
+            data = json.loads(f.readline())
+
+        assert data["metadata"]["EvalRunType"] == "baseline"
+        assert data["metadata"]["experiment"] is None
+        assert data["metadata"]["git_branch"] == "main"
+        assert data["metadata"]["benchmark_version"]
+
+    def test_marks_run_as_baseline_when_experiment_is_empty(self, tmp_path, sample_dataset_file, problem_statement_dir):
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = create_bugfix_result(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration())
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[result],
+                out_dir=output_dir,
+                run_id="run_empty_experiment",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        with open(output_dir / "results.jsonl") as f:
+            data = json.loads(f.readline())
+
+        assert data["metadata"]["EvalRunType"] == "baseline"
+        assert data["metadata"]["experiment"] is None
+
+    def test_marks_run_as_experiment_with_config(self, tmp_path, sample_dataset_file, problem_statement_dir):
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        experiment = ExperimentConfiguration(mcp_servers=["al-mcp"], al_lsp_enabled=True, custom_instructions=True)
+        result = create_bugfix_result(metrics=AgentMetrics(execution_time=1.0), experiment=experiment)
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[result],
+                out_dir=output_dir,
+                run_id="run_experiment",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+                git_ref="feat/al-mcp",
+            )
+
+        with open(output_dir / "results.jsonl") as f:
+            data = json.loads(f.readline())
+
+        assert data["metadata"]["EvalRunType"] == "experiment"
+        assert data["metadata"]["experiment"]["mcp_servers"] == ["al-mcp"]
+        assert data["metadata"]["experiment"]["al_lsp_enabled"] is True
+        assert data["metadata"]["experiment"]["custom_instructions"] is True
+        assert data["metadata"]["git_branch"] == "feat/al-mcp"

@@ -15,9 +15,7 @@ prompt:
     Important constraints:
     - Do NOT modify any testing logic or test files
     - Focus solely on fixing the reported issue
-    {% if al_mcp %}
-    - Do NOT try to run tests
-    {% else %}
+    {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
     - Do NOT commit any changes to the repository
@@ -42,9 +40,7 @@ prompt:
     Important constraints:
     - Do NOT modify any production code or existing tests
     - Focus solely on generating tests {% if is_gold_patch %}that verify the fix works correctly{% else %}for the reported issue{% endif %}
-    {% if al_mcp %}
-    - Do NOT try to run tests
-    {% else %}
+    {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
     - Do NOT commit any changes to the repository
@@ -53,6 +49,22 @@ prompt:
     Issue details:
     {{task}}
     {% endif %}
+
+  code-review-template: |
+    /review
+
+    Review only the uncommitted working-tree changes (git diff HEAD); do not compare commits such as HEAD~1..HEAD or origin/main.
+
+    Your only deliverable is a file named review.json in the repository root. You MUST write it before finishing; if you do not, your review is lost and counts as no output.
+
+    review.json must contain a single JSON array. Each finding is an object with these fields:
+      - file: repo-relative path of the file the finding refers to (string, required)
+      - line_start: 1-based line number where the issue starts (integer, required)
+      - line_end: line number where the issue ends (integer, optional)
+      - severity: one of critical, high, medium, or low (optional, defaults to medium)
+      - body: concise description of the issue (string, required)
+
+    If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`

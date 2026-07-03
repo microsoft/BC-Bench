@@ -13,7 +13,7 @@ on:
         type: choice
         options:
           - "claude-sonnet-4-6"
-          - "claude-opus-4-7"
+          - "claude-opus-4-8"
           - "claude-haiku-4-5"
       category:
         description: "Evaluation category to run"
@@ -23,6 +23,7 @@ on:
         options:
           - "bug-fix"
           - "test-generation"
+          - "code-review"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -30,6 +31,11 @@ on:
         type: boolean
       al-mcp:
         description: "Enable AL MCP server"
+        required: false
+        default: false
+        type: boolean
+      al-lsp:
+        description: "Enable AL LSP server"
         required: false
         default: false
         type: boolean
@@ -44,6 +50,11 @@ on:
           - "3"
           - "4"
           - "5"
+      git-ref:
+        description: "Branch to record for experiment tracking (auto-filled on requeue; leave blank for manual runs)"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: claude-evaluation-${{ inputs.test-run && 'test' || 'full' }}
@@ -60,7 +71,7 @@ jobs:
       category: ${{ inputs.category }}
 
   evaluate-with-claude-code:
-    runs-on: [ GitHub-BCBench ]
+    runs-on: ${{ needs.get-entries.outputs.runner }}
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
@@ -71,6 +82,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      copilot-requests: write  # code-review semantic judge runs via Copilot CLI
     name: ${{ matrix.entry }}
     strategy:
       fail-fast: false
@@ -91,6 +103,7 @@ jobs:
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
@@ -100,27 +113,32 @@ jobs:
           node-version: 24
 
       - name: Install AL Tool
-        if: ${{ inputs.al-mcp }}
+        if: ${{ inputs.al-mcp || inputs.al-lsp }}
+        shell: pwsh
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 17.0.33.55542
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.116
+      - name: Install Agent Harnesses
+        uses: ./.github/actions/install-eval-clis
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
+        shell: pwsh
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}  # used by the code-review semantic judge
         run: |
-          Write-Output "::add-mask::$env:ANTHROPIC_API_KEY"
+          Write-Output "::add-mask::$env:CLAUDE_CODE_OAUTH_TOKEN"
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
           uv run bcbench evaluate claude "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
             --category "${{ inputs.category }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            ${{ inputs.al-mcp && '--al-mcp' || '' }}
+            ${{ inputs.al-mcp && '--al-mcp' || '' }} `
+            ${{ inputs.al-lsp && '--al-lsp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -142,6 +160,7 @@ jobs:
       agent: "Claude Code"
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
+      git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
 
   requeue:
@@ -155,4 +174,4 @@ jobs:
       workflow-file: claude-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

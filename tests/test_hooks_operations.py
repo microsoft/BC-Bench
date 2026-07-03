@@ -1,4 +1,5 @@
 import json
+import shlex
 from pathlib import Path
 
 from bcbench.operations.hooks_operations import setup_hooks
@@ -24,7 +25,7 @@ class TestSetupHooks:
 
         hook = hooks_config["hooks"]["preToolUse"][0]
         assert hook["type"] == "command"
-        assert "powershell" in hook
+        assert "command" in hook
         assert "BCBENCH_TOOL_LOG" in hook["env"]
         assert hook["timeoutSec"] == 5
 
@@ -83,7 +84,7 @@ class TestSetupHooks:
 
         hooks_file = repo_path / ".github" / "hooks" / "bcbench-hooks.json"
         hooks_config = json.loads(hooks_file.read_text(encoding="utf-8"))
-        powershell_cmd = hooks_config["hooks"]["preToolUse"][0]["powershell"]
+        powershell_cmd = hooks_config["hooks"]["preToolUse"][0]["command"]
 
         # The command should contain an absolute path to the script
         assert "log-tool-usage.ps1" in powershell_cmd
@@ -102,3 +103,19 @@ class TestSetupHooks:
         log_path = hooks_config["hooks"]["preToolUse"][0]["env"]["BCBENCH_TOOL_LOG"]
 
         assert Path(log_path).is_absolute()
+
+    def test_claude_command_escapes_shell_metacharacters(self, tmp_path: Path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        output_dir = tmp_path / "results$(id)`whoami`"
+        output_dir.mkdir()
+
+        setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
+
+        settings = json.loads((repo_path / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+        command = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+
+        # shlex.quote wraps the path in single quotes so $() and backticks are inert.
+        assert command.startswith("BCBENCH_TOOL_LOG='")
+        assert 'BCBENCH_TOOL_LOG="' not in command
+        assert shlex.quote(str((output_dir / "tool_usage.jsonl").resolve())) in command

@@ -3,13 +3,11 @@
 import logging
 import re
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import ClassVar
 
 from bcbench.config import get_config
 
-__all__ = ["get_logger", "github_log_group", "setup_logger"]
+__all__ = ["get_logger", "setup_logger"]
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -217,17 +215,3 @@ def get_logger(name: str) -> logging.Logger:
         name = f"bcbench.{name}"
 
     return logging.getLogger(name)
-
-
-@contextmanager
-def github_log_group(title: str) -> Iterator[None]:
-    config = get_config()
-
-    if config.env.github_actions:
-        print(f"::group::{title}", flush=True)  # noqa: T201
-
-    try:
-        yield
-    finally:
-        if config.env.github_actions:
-            print("::endgroup::", flush=True)  # noqa: T201

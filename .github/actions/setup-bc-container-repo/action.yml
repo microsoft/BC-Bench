@@ -40,9 +40,14 @@ runs:
         # Mask the password in GitHub Actions logs
         Write-Output "::add-mask::$password"
 
-        "BC_CONTAINER_NAME=bcbench-$("${{ inputs.instance-id }}".Split('-')[1])" | Out-File -FilePath $env:GITHUB_ENV -Append
-        "BC_CONTAINER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
-        "BC_CONTAINER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
+        $containerName = "bcbench-$("${{ inputs.instance-id }}".Split('-')[1])"
+        "BC_CONTAINER_NAME=$containerName" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+        # Connection target + credentials consumed by altool
+        "BC_SERVER_URL=http://$containerName" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_SERVER_INSTANCE=BC" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_SERVER_USERNAME=admin" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "BC_SERVER_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
       shell: pwsh
 
     - name: Install BcContainerHelper module
@@ -57,6 +62,22 @@ runs:
         client-id: ${{ inputs.azure-client-id }}
         tenant-id: ${{ inputs.azure-tenant-id }}
         allow-no-subscriptions: true
+
+    - name: Resolve BC version for artifact cache
+      if: inputs.skip-container != 'true'
+      id: bcversion
+      shell: pwsh
+      run: |
+        Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
+        $version = Get-BCBenchEntryVersion -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}"
+        "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+    - name: Cache BC sandbox artifacts
+      if: inputs.skip-container != 'true'
+      uses: actions/cache@v5
+      with:
+        path: C:\bcartifacts.cache
+        key: bcartifacts-${{ steps.bcversion.outputs.version }}
 
     - name: Setup BC container and repository for ${{ inputs.instance-id }}
       id: setup

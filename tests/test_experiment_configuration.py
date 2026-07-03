@@ -8,6 +8,7 @@ class TestExperimentConfiguration:
         config = ExperimentConfiguration()
 
         assert config.mcp_servers is None
+        assert config.al_lsp_enabled is False
         assert config.custom_instructions is False
         assert config.skills_enabled is False
         assert config.custom_agent is None
@@ -17,9 +18,23 @@ class TestExperimentConfiguration:
         config = ExperimentConfiguration(mcp_servers=mcp_servers)
 
         assert config.mcp_servers == mcp_servers
+        assert config.al_lsp_enabled is False
         assert config.custom_instructions is False
         assert config.skills_enabled is False
         assert config.custom_agent is None
+
+    def test_with_al_lsp_enabled(self):
+        config = ExperimentConfiguration(al_lsp_enabled=True)
+
+        assert config.mcp_servers is None
+        assert config.al_lsp_enabled is True
+
+    def test_with_both_mcp_and_al_lsp(self):
+        config = ExperimentConfiguration(mcp_servers=["altool"], al_lsp_enabled=True)
+
+        assert config.mcp_servers == ["altool"]
+        assert config.al_lsp_enabled is True
+        assert not config.is_empty()
 
     def test_with_custom_instructions(self):
         config = ExperimentConfiguration(custom_instructions=True)
