@@ -97,6 +97,18 @@ jobs:
 
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
+      - name: Identify configured feed (diagnostic)
+        shell: pwsh
+        env:
+          BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
+        run: |
+          # Classify the (masked) feed URL against known feed names/GUIDs.
+          # The printed label is NOT the secret value, so it is not masked.
+          $u = $env:BCAL_FEED_URL
+          if     ($u -match 'DynamicsSMBTest'     -or $u -match '986caaa0-ac2b-4c39-9e33-c37569e6bc83') { Write-Output 'CONFIGURED FEED: DynamicsSMBTest' }
+          elseif ($u -match 'DynamicsSMBPackages' -or $u -match '71e7dd80-1e53-4c33-b5f6-2603011e73b4') { Write-Output 'CONFIGURED FEED: DynamicsSMBPackages' }
+          else   { Write-Output 'CONFIGURED FEED: (neither known name/guid matched)' }
+
       - name: Install bcal CLI from internal feed
         shell: pwsh
         env:
