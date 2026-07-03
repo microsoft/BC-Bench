@@ -97,18 +97,6 @@ jobs:
 
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
-      - name: Identify configured feed (diagnostic)
-        shell: pwsh
-        env:
-          BCAL_FEED_URL: ${{ secrets.BCAL_FEED_URL }}
-        run: |
-          # Classify the (masked) feed URL against known feed names/GUIDs.
-          # The printed label is NOT the secret value, so it is not masked.
-          $u = $env:BCAL_FEED_URL
-          if     ($u -match 'DynamicsSMBTest'     -or $u -match '986caaa0-ac2b-4c39-9e33-c37569e6bc83') { Write-Output 'CONFIGURED FEED: DynamicsSMBTest' }
-          elseif ($u -match 'DynamicsSMBPackages' -or $u -match '71e7dd80-1e53-4c33-b5f6-2603011e73b4') { Write-Output 'CONFIGURED FEED: DynamicsSMBPackages' }
-          else   { Write-Output 'CONFIGURED FEED: (neither known name/guid matched)' }
-
       - name: Install bcal CLI from internal feed
         shell: pwsh
         env:
@@ -117,11 +105,6 @@ jobs:
         run: |
           # Let native non-zero exits set $LASTEXITCODE instead of throwing, so the retry loop can see them.
           $PSNativeCommandUseErrorActionPreference = $false
-
-          # TEMPORARY (branch only): also install from the DynamicsSMBTest feed so a branch-published
-          # bcal.cli (higher prerelease version) is picked up WITHOUT changing the shared BCAL_FEED_URL
-          # secret. The Test feed URL is not a secret; auth uses the same ADO token. Revert when done.
-          $bcalTestFeed = "https://pkgs.dev.azure.com/dynamicssmb2/_packaging/DynamicsSMBTest/nuget/v3/index.json"
 
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
@@ -133,11 +116,6 @@ jobs:
                 username = "anything"
                 password = $adoToken
               }
-              @{
-                endpoint = $bcalTestFeed
-                username = "anything"
-                password = $adoToken
-              }
             )
           } | ConvertTo-Json -Compress -Depth 5
           $env:VSS_NUGET_EXTERNAL_FEED_ENDPOINTS = $endpoints
@@ -146,7 +124,7 @@ jobs:
           # the service index for source"), which otherwise fails the entire matrix job and skips the
           # results upload. Retry the transient feed error a couple of times before giving up.
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL --add-source $bcalTestFeed
+            dotnet tool install -g $env:BCAL_PACKAGE_ID --prerelease --add-source $env:BCAL_FEED_URL
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -eq 3) { throw "bcal CLI install failed after 3 attempts (exit code $LASTEXITCODE)." }
             Write-Output "::warning::bcal CLI install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
