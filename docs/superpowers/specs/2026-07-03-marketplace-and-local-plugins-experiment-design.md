@@ -78,7 +78,7 @@ Copilot CLI `1.0.69-0`, Claude Code `2.1.161`.
   non-interactive, offline, exit 0 each:
   - `copilot plugin marketplace add <local path>` → "Marketplace added successfully."
   - `copilot plugin install <plugin>@<marketplace>` → "Plugin installed successfully. Installed 1 skill."
-  - `copilot plugin uninstall <plugin>` / `plugin marketplace remove <marketplace>` → success; baseline fully restored.
+  - `copilot plugin uninstall <plugin>` / `plugin marketplace remove <marketplace>` → success; baseline fully restored (verified reversible, but **not used** — see §2.5, we isolate via a per-entry home instead of tearing down).
 - Marketplace source accepts a **local path** (the marketplace ROOT — the dir
   containing `marketplace.json`); the CLI records a local source as
   `{"source":"directory","path":…}`. The plugin is selected `<plugin>@<name>`
