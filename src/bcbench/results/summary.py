@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _get_benchmark_version() -> str:
+def get_benchmark_version() -> str:
     pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
     if not pyproject_path.exists():
         try:
@@ -105,7 +105,7 @@ class EvaluationResultSummary(BaseModel, ABC):
             average_tool_usage=calculate_average_tool_usage(tool_usages) if tool_usages else None,
             github_run_id=run_id,
             experiment=experiment,
-            benchmark_version=_get_benchmark_version(),
+            benchmark_version=get_benchmark_version(),
         )
 
     @classmethod
