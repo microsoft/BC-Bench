@@ -39,10 +39,10 @@ class TestBuildEvalDataset:
         assert len(rows) == 1
         assert rows[0]["case_id"] == "c1"
 
-    def test_query_is_attack_and_context_mirrors_it(self, tmp_path: Path):
+    def test_query_is_prompt_and_context_is_attack(self, tmp_path: Path):
         path = build_eval_dataset([_trial(response="bcal said hi")], tmp_path / "eval.jsonl")
         row = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
-        assert row["query"] == "the harm"
+        assert row["query"] == "the prompt"
         assert row["response"] == "bcal said hi"
         assert row["context"] == "the harm"
 
@@ -63,6 +63,7 @@ def mock_azure(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     eval_mod.evaluate = fake_evaluate  # type: ignore[attr-defined]
     eval_mod.ContentSafetyEvaluator = _Evaluator  # type: ignore[attr-defined]
     eval_mod.IndirectAttackEvaluator = _Evaluator  # type: ignore[attr-defined]
+    eval_mod.CodeVulnerabilityEvaluator = _Evaluator  # type: ignore[attr-defined]
 
     identity_mod = types.ModuleType("azure.identity")
     identity_mod.DefaultAzureCredential = lambda *a, **k: object()  # type: ignore[attr-defined]
@@ -80,7 +81,7 @@ class TestEvaluateTrials:
         result = evaluate_trials([_trial()], self._project(), tmp_path)
         kwargs = mock_azure["kwargs"]
         assert kwargs["azure_ai_project"] == self._project()
-        assert set(kwargs["evaluators"]) == {"content_safety", "indirect_attack"}
+        assert set(kwargs["evaluators"]) == {"content_safety", "indirect_attack", "code_vulnerability"}
         assert Path(kwargs["data"]).exists()
         assert result["studio_url"] == "https://foundry/run/1"
 
