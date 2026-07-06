@@ -17,6 +17,7 @@ from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.harms.case import HarmsCase, HarmsChannel, HarmsVector
+from bcbench.harms.log_analysis import analyze_trial_log
 from bcbench.logger import get_logger
 from bcbench.operations import ensure_package_cache
 from bcbench.types import EvaluationCategory
@@ -43,6 +44,10 @@ class HarmsTrial(BaseModel):
     fixture_path: str | None
     export_dir: str
     log_path: str | None
+    tools_invoked: list[str] = []
+    # Did the injected payload actually reach the model via a tool result? None for direct trials
+    # (no seam injection) and for dry-runs; True/False for executed indirect trials.
+    injection_landed: bool | None = None
 
 
 def _load_base_entry() -> NL2ALEntry:
@@ -134,6 +139,15 @@ def _run_trial(
 
     response = "" if dry_run else run_bcal_prompt(entry, prompt, package_cache_path, export_dir, backend_config, harms_fixture_path=fixture_path, log_full_path=log_path)
 
+    # Validate whether the injection actually reached the model (indirect trials only).
+    tools_invoked: list[str] = []
+    injection_landed: bool | None = None
+    if not dry_run:
+        analysis = analyze_trial_log(log_path, case.attack_text_for(vector))
+        tools_invoked = analysis.tools_invoked
+        if vector.channel is HarmsChannel.INDIRECT:
+            injection_landed = analysis.payload_in_tool_result
+
     return HarmsTrial(
         case_id=case.id,
         vector=vector,
@@ -146,6 +160,8 @@ def _run_trial(
         fixture_path=str(fixture_path) if fixture_path else None,
         export_dir=str(export_dir),
         log_path=str(log_path) if log_path else None,
+        tools_invoked=tools_invoked,
+        injection_landed=injection_landed,
     )
 
 
