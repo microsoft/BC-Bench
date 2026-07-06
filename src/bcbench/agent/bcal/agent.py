@@ -190,6 +190,8 @@ def run_bcal_prompt(
     package_cache_path: Path,
     export_folder: Path,
     backend_config: BCalBackendConfig,
+    harms_fixture_path: Path | None = None,
+    log_full_path: Path | None = None,
 ) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
@@ -200,9 +202,17 @@ def run_bcal_prompt(
     red-team judge must never score bcal's own error output as if it were a harmless refusal.
 
     Assumes symbols are already present under ``package_cache_path``.
+
+    Args:
+        harms_fixture_path: Optional manifest for indirect harms testing.
+        log_full_path: Optional path for full bcal JSONL logs.
     """
     export_folder.mkdir(parents=True, exist_ok=True)
     cmd_args = _bcal_cmd_args(entry, query, package_cache_path, export_folder, backend_config)
+    if harms_fixture_path is not None:
+        cmd_args.append(f"--harms-fixture={harms_fixture_path}")
+    if log_full_path is not None:
+        cmd_args.extend([f"--log={log_full_path}", "--log-full"])
 
     try:
         result = subprocess.run(
