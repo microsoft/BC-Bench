@@ -45,6 +45,7 @@ class PathConfig:
     hook_script_path: Path
     bc_artifacts_cache: Path
     redteam_scorecard: Path
+    harms_results: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -63,6 +64,7 @@ class PathConfig:
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
             bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
             redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
+            harms_results=evaluation_results_path / "harms",
         )
 
 

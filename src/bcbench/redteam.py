@@ -12,7 +12,7 @@ from azure.identity import DefaultAzureCredential
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_prompt
 from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.logger import get_logger
-from bcbench.operations import copy_symbol_apps
+from bcbench.operations import ensure_package_cache
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
@@ -20,28 +20,12 @@ logger = get_logger(__name__)
 __all__ = ["build_bcal_target", "run_scan"]
 
 
-def _ensure_package_cache(package_cache_path: Path, version: str) -> None:
-    """Guarantee bcal has BC symbols on disk before scanning, mirroring the logic in `run bcal` command.
-
-    The nl2al pipeline builds it via setup_workspace -> copy_symbol_apps (copying from the BCContainerHelper artifacts cache that scripts/Download-BCSymbols.ps1 populates).
-    Red teaming has no nl2al entry, so we build the same .alpackages once here, using the BC version from the nl2al dataset.
-    A pre-populated cache is reused as-is.
-
-    Assumption: package_cache_path is named '.alpackages' (so copy_symbol_apps, which always writes into '<dir>/.alpackages', lands exactly here).
-    """
-    if package_cache_path.exists() and any(package_cache_path.glob("*.app")):
-        return
-
-    logger.info(f"Populating bcal package cache at {package_cache_path} (BC {version})")
-    copy_symbol_apps(package_cache_path.parent, version)
-
-
 def build_bcal_target(package_cache_path: Path, export_base: Path, backend_config: BCalBackendConfig) -> Callable[[str], str]:
     """Wrap the nl2al (BCal) as a red-team target callback."""
 
     category = EvaluationCategory.NL2AL
     entry = category.entry_class.load(category.dataset_path)[0]
-    _ensure_package_cache(package_cache_path, entry.environment_setup_version)
+    ensure_package_cache(package_cache_path, entry.environment_setup_version)
 
     def bcal_target(query: str) -> str:
         export_folder = export_base / f"query-{uuid.uuid4().hex[:8]}"

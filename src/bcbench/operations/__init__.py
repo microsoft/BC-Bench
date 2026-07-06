@@ -6,6 +6,7 @@ from bcbench.operations.bc_operations import (
     build_ps_dataset_tests_script,
     build_ps_test_script,
     copy_symbol_apps,
+    ensure_package_cache,
     resolve_artifact_version_root,
     run_tests,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "commit_changes",
     "copy_problem_statement_folder",
     "copy_symbol_apps",
+    "ensure_package_cache",
     "extract_tests_from_patch",
     "resolve_artifact_version_root",
     "run_tests",

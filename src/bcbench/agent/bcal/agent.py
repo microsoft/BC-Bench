@@ -140,6 +140,8 @@ def run_bcal_prompt(
     package_cache_path: Path,
     export_folder: Path,
     backend_config: BCalBackendConfig,
+    harms_fixture_path: Path | None = None,
+    log_full_path: Path | None = None,
 ) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
@@ -150,6 +152,10 @@ def run_bcal_prompt(
     assumptions:
       - Symbols are already present.
       - ``query`` is the (adversarial) prompt sent to bcal; ``--page``/``--audience`` come from the dataset entry and for adversarial prompts the page is irrelevant since bcal is expected to refuse.
+
+    Args:
+        harms_fixture_path: optional harms-fixture manifest injected via ``--harms-fixture`` (indirect/XPIA harms testing). When None, behavior is unchanged.
+        log_full_path: optional path for bcal ``--log <path> --log-full`` JSONL, capturing full request/response payloads for post-hoc tool-call inspection.
     """
     bcal_executable = _resolve_bcal_executable()
     backend_args = backend_config.cli_args()
@@ -164,6 +170,10 @@ def run_bcal_prompt(
         f"--prompt={query}",
         f"--exportfolder={export_folder}",
     ]
+    if harms_fixture_path is not None:
+        cmd_args.append(f"--harms-fixture={harms_fixture_path}")
+    if log_full_path is not None:
+        cmd_args.extend([f"--log={log_full_path}", "--log-full"])
 
     try:
         result = subprocess.run(
