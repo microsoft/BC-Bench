@@ -16,6 +16,7 @@ from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
 from bcbench.harms import HarmsTrial, ManualHarmsSource, evaluate_trials, run_harms_suite
 from bcbench.harms.case import HarmsVector
+from bcbench.harms.evaluate import DEFAULT_EVALUATORS
 from bcbench.logger import get_logger
 from bcbench.types import BCalLLMBackend
 
@@ -52,6 +53,7 @@ def run(
     vector: Annotated[list[HarmsVector] | None, typer.Option("--vector", help="Restrict the vector matrix (repeatable), e.g. --vector direct. Overrides case/suite matrices.")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Build fixtures + eval rows but skip bcal and Foundry (instant validation).")] = False,
     no_upload: Annotated[bool, typer.Option("--no-upload", help="Run bcal + local scoring but skip the Foundry upload.")] = False,
+    evaluator: Annotated[list[str] | None, typer.Option("--evaluator", help="Override the evaluator set (repeatable): content_safety, indirect_attack, code_vulnerability.")] = None,
 ) -> None:
     """
     Run a harms suite against BCAL: expand each vector-invariant case across the vector matrix, run
@@ -89,7 +91,39 @@ def run(
         "resource_group_name": resource_group,
         "project_name": project_name,
     }
-    result = evaluate_trials(trials, azure_ai_project, results_dir, upload=not no_upload)
+    result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
+    print(f"Harms results written to {results_dir / 'harms_results.json'}")
+    _render_results(result, trials)
+
+
+@harms_app.command("evaluate")
+def evaluate(
+    trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
+    subscription_id: Annotated[str | None, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Foundry Hub subscription ID.")] = None,
+    resource_group: Annotated[str | None, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group.")] = None,
+    project_name: Annotated[str | None, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name.")] = None,
+    evaluator: Annotated[list[str] | None, typer.Option("--evaluator", help="Override the evaluator set (repeatable).")] = None,
+    no_upload: Annotated[bool, typer.Option("--no-upload", help="Score locally but skip the Foundry upload.")] = False,
+) -> None:
+    """
+    Re-score existing bcal trials with the safety evaluators, without re-running bcal.
+
+    Lets you iterate on the evaluator set cheaply after an expensive `harms run`.
+
+    Example:
+        uv run bcbench harms evaluate evaluation_results/harms/smoke-run
+    """
+    if not all((subscription_id, resource_group, project_name)):
+        raise typer.BadParameter("Foundry project (AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME) is required.")
+
+    results_dir = trials_path if trials_path.is_dir() else trials_path.parent
+    trials_file = trials_path / "trials.jsonl" if trials_path.is_dir() else trials_path
+    if not trials_file.exists():
+        raise typer.BadParameter(f"No trials.jsonl found at {trials_file}.")
+
+    trials = _load_trials(trials_file)
+    azure_ai_project = {"subscription_id": subscription_id, "resource_group_name": resource_group, "project_name": project_name}
+    result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
     print(f"Harms results written to {results_dir / 'harms_results.json'}")
     _render_results(result, trials)
 

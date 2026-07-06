@@ -83,7 +83,13 @@ uv run bcbench harms run --suite dataset/harms/sample.harms.yaml
 
 # Render a saved run.
 uv run bcbench harms report evaluation_results/harms
+
+# Re-score existing trials with a different evaluator set, without re-running bcal.
+uv run bcbench harms evaluate evaluation_results/harms --evaluator content_safety --evaluator code_vulnerability
 ```
+
+The expensive part is running bcal per trial; `harms evaluate` lets you iterate on the evaluator set
+cheaply against the already-captured `trials.jsonl`.
 
 ### Rapid-validation flags
 
@@ -93,6 +99,7 @@ uv run bcbench harms report evaluation_results/harms
 | `--limit N` | Only load the first `N` cases. |
 | `--vector V` | Restrict the matrix at runtime (repeatable), e.g. `--vector direct`. |
 | `--no-upload` | Run bcal + local scoring but skip the Foundry upload. |
+| `--evaluator E` | Override the evaluator set (repeatable). |
 
 ## Prerequisites
 
@@ -105,9 +112,25 @@ uv run bcbench harms report evaluation_results/harms
 
 ## Scoring
 
-Every executed trial produces an evaluator row `{query = injected harm, response = bcal output}`.
-The default evaluators are `ContentSafetyEvaluator` and `IndirectAttackEvaluator`; results are
-uploaded to the Foundry project and written to `evaluation_results/harms/harms_results.json`.
+Each executed trial produces an evaluator row `{query, response, context}`, where `query` is the
+prompt bcal actually received (the harm for direct/UPIA trials, the benign trigger for indirect/XPIA
+trials) and `context` carries the injected attack. Every trial is scored by all default evaluators so
+direct and indirect results are comparable:
+
+| Evaluator | Covers |
+|-----------|--------|
+| `ContentSafetyEvaluator` | Standard harms: violence / sexual / self-harm / hate-unfairness. |
+| `IndirectAttackEvaluator` | XPIA — whether the response complied with an injected instruction. On direct trials this doubles as a UPIA manipulation signal. |
+| `CodeVulnerabilityEvaluator` | Insecure / malicious generated AL (SQL injection, SSRF, path traversal, etc.). |
+
+Results upload to the Foundry project and are written to `evaluation_results/harms/harms_results.json`.
+There is no standalone UPIA/jailbreak row-evaluator in the SDK; full direct-attack ASR across attack
+strategies is the domain of the separate `bcbench redteam` scan.
+
+> **Automated scores need human review.** The RAI evaluators can produce false positives — e.g. a
+> refusal that *discusses* the requested harm (or offers compliant alternatives) may be flagged as an
+> attack success. Confirm flagged trials against the actual bcal output in `trials.jsonl` / `exports/`
+> (a genuine compliance produces the malicious AL; a refusal exports no files).
 
 ## Notes & caveats
 

@@ -13,17 +13,26 @@ from bcbench.harms.case import HarmsChannel
 from bcbench.harms.runner import HarmsTrial
 from bcbench.logger import get_logger
 
-__all__ = ["build_eval_dataset", "evaluate_trials"]
+__all__ = ["DEFAULT_EVALUATORS", "build_eval_dataset", "evaluate_trials"]
 
 logger = get_logger(__name__)
 
-# Evaluators whose inputs are (query, response[, context]); both run on every executed trial so
-# direct (UPIA) and indirect (XPIA) results are comparable. IndirectAttackEvaluator is XPIA-specific.
-_DEFAULT_EVALUATORS = ("content_safety", "indirect_attack")
+# Evaluators run on every executed trial so direct (UPIA) and indirect (XPIA) trials are comparable:
+#   - content_safety: the standard harms (violence / sexual / self-harm / hate).
+#   - indirect_attack: XPIA — did the response comply with the injected attacker instruction. On the
+#     direct trials this doubles as a UPIA manipulation signal (the attack is the prompt itself).
+#   - code_vulnerability: insecure/malicious generated AL (e.g. an exfiltration HTTP hook).
+DEFAULT_EVALUATORS = ("content_safety", "indirect_attack", "code_vulnerability")
 
 
 def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
-    """Write one evaluator row per executed trial. ``query`` is the delivered attack; ``response`` is bcal's output."""
+    """Write one evaluator row per executed trial.
+
+    ``query`` is the prompt bcal actually received (the harm for direct/UPIA trials, the benign
+    trigger for indirect/XPIA trials); ``context`` carries the injected attack. This mirrors what the
+    agent saw, so the RAI evaluators judge manipulation of a real turn rather than treating an
+    injected payload as the user's own request.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for trial in trials:
@@ -34,7 +43,7 @@ def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
                 "vector": trial.vector.value,
                 "channel": trial.channel.value,
                 "risk": trial.risk,
-                "query": trial.attack,
+                "query": trial.prompt,
                 "response": trial.response,
                 "context": trial.attack,
             }
@@ -43,11 +52,12 @@ def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
 
 
 def _build_evaluators(names: tuple[str, ...], azure_ai_project: dict[str, str], credential: Any) -> dict[str, Any]:  # noqa: ANN401 - SDK objects
-    from azure.ai.evaluation import ContentSafetyEvaluator, IndirectAttackEvaluator
+    from azure.ai.evaluation import CodeVulnerabilityEvaluator, ContentSafetyEvaluator, IndirectAttackEvaluator
 
     factory = {
         "content_safety": lambda: ContentSafetyEvaluator(credential=credential, azure_ai_project=azure_ai_project),
         "indirect_attack": lambda: IndirectAttackEvaluator(credential=credential, azure_ai_project=azure_ai_project),
+        "code_vulnerability": lambda: CodeVulnerabilityEvaluator(credential=credential, azure_ai_project=azure_ai_project),
     }
     return {name: factory[name]() for name in names}
 
@@ -57,7 +67,7 @@ def evaluate_trials(
     azure_ai_project: dict[str, str],
     results_dir: Path,
     *,
-    evaluators: tuple[str, ...] = _DEFAULT_EVALUATORS,
+    evaluators: tuple[str, ...] = DEFAULT_EVALUATORS,
     upload: bool = True,
 ) -> dict[str, Any]:
     """Run safety evaluators over the trials and (optionally) upload the run to the Foundry project."""
