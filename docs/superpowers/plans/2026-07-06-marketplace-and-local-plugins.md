@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a config-driven experiment toggle that installs agent plugins (marketplace-pinned-to-commit or local) into the running CLI via its own `plugin marketplace add` + `plugin install` commands, records them in results, and cleanly removes them afterward.
+**Goal:** Add a config-driven experiment toggle that installs agent plugins (marketplace-pinned-to-commit or local) into the running CLI via its own `plugin marketplace add` + `plugin install` commands, records them in results, and keeps concurrent entries isolated.
 
-**Architecture:** A new `operations/plugin_operations.py` reads a `plugins` list from `agent/shared/config.yaml`, clones each marketplace at its pinned commit into `<repo>/.bcbench/plugins/`, installs the requested plugins by name via the CLI commands (user scope, both Copilot and Claude), and returns records folded into `ExperimentConfiguration`. A symmetric teardown (`uninstall` + `marketplace remove`) runs in a `finally` in each agent runner. `.bcbench` content is removed by `git clean` and an inline clean-before. Config injection (`extraKnownMarketplaces`) is NOT used — it is trust-dialog-gated and ignored in headless mode.
+**Architecture:** A new `operations/plugin_operations.py` reads a `plugins` list from `agent/shared/config.yaml`, clones each marketplace at its pinned commit into `<repo>/.bcbench/plugins/`, and installs the requested plugins by name via the CLI commands into a **fresh per-entry config home** (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` under `<repo>/.bcbench/`). It returns `(plugin_records, env_overrides)`: the records fold into `ExperimentConfiguration`, and `env_overrides` is merged into the agent-launch environment so the agent runs against the same isolated home. The per-entry home means concurrent matrix entries never share the user-scope plugin store — so there is **no teardown** (the home is discarded with the checkout; a clean-before removes any stale one). Config injection (`extraKnownMarketplaces`) is NOT used — it is trust-dialog-gated and ignored in headless mode.
 
 **Tech Stack:** Python 3.13, Pydantic v2, Typer, `subprocess` for `git` + the agent CLIs, pytest with `unittest.mock`, `uv` for running commands.
 
@@ -16,6 +16,7 @@
 - Line length 200; ruff rules per `pyproject.toml`. `subprocess.run` MUST pass an explicit `check=` (ruff `PLW1510`).
 - No new domain model types for recording — `ExperimentConfiguration.plugins` is `list[str] | None`, mirroring `mcp_servers`.
 - Marketplace/local source content must be a **marketplace root** (a directory containing `.claude-plugin/marketplace.json` or `.github/plugin/marketplace.json`).
+- `operations/plugin_operations.py` must NOT import from `bcbench.agent.*` (would create a cycle: `bcbench.agent.__init__` imports the runners, which import `bcbench.operations`).
 - Do NOT modify the AL-LSP plugin mechanism (`build_al_lsp_plugin`, `--al-lsp`, `--plugin-dir`).
 - Commit after every task (frequent commits).
 
@@ -114,7 +115,7 @@ Add to `tests/test_git_operations.py` (create the file if it does not exist, wit
 
 ```python
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 from bcbench.operations.git_operations import clone_at_commit
 
@@ -213,7 +214,6 @@ git commit -m "feat: add clone_at_commit git helper for pinned marketplace clone
 
 **Interfaces:**
 - Produces:
-  - `class InstalledPlugin(NamedTuple)` with `plugin: str`, `marketplace: str`, `record: str`.
   - `_read_marketplace_name(marketplace_dir: Path) -> str` — reads `name` from `.claude-plugin/marketplace.json` or `.github/plugin/marketplace.json`.
   - `_materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -> tuple[Path, str]` — clones (marketplace) or copies (local) into `plugins_root`, returns `(marketplace_dir, record_suffix)` where `record_suffix` is the commit (marketplace) or the literal `"local"`.
 
@@ -320,17 +320,22 @@ Create `src/bcbench/operations/plugin_operations.py`:
 
 Config injection (`extraKnownMarketplaces` / `enabledPlugins`) is trust-dialog-gated and ignored in
 headless mode, so we drive the CLI's real `plugin marketplace add` + `plugin install` commands.
-Marketplace content is cloned at its pinned commit into `<repo>/.bcbench/plugins/` (repo-local,
-cleaned by `git clean` and an inline clean-before).
+Because the plugin store is user-scope/global and execution-based categories run entries as a
+parallel matrix on a shared self-hosted runner, each entry installs into a fresh per-entry config
+home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR`) under `<repo>/.bcbench/`, which the runner also applies
+to the agent launch. Marketplace content is cloned at its pinned commit into `<repo>/.bcbench/plugins/`.
+
+NOTE: do NOT import from `bcbench.agent.*` here — `bcbench.agent.__init__` imports the runners,
+which import `bcbench.operations`; importing agent from operations would create a cycle.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from shutil import copytree, rmtree
-from typing import NamedTuple
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
@@ -341,18 +346,9 @@ from bcbench.types import AgentType
 
 logger = get_logger(__name__)
 
-# NOTE: do NOT import from `bcbench.agent.*` here. `bcbench.agent.__init__` imports the runners,
-# which import `bcbench.operations` — importing agent from operations would create a cycle. We
-# therefore inline the `.bcbench/plugins` cleanup instead of reusing `remove_agent_plugin`.
 _BCBENCH_ROOT = ".bcbench"
 _PLUGINS_FOLDER = "plugins"  # under <repo>/.bcbench/plugins/
 _MARKETPLACE_MANIFESTS = (".claude-plugin/marketplace.json", ".github/plugin/marketplace.json")
-
-
-class InstalledPlugin(NamedTuple):
-    plugin: str
-    marketplace: str
-    record: str  # "<name>@<commit>" (marketplace) or "<name>@local"
 
 
 def _slug(text: str) -> str:
@@ -397,6 +393,8 @@ def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -
             raise AgentError(f"Unknown plugin source: {source!r}")
 ```
 
+(`os` and `subprocess` are used by the setup function added in Task 4.)
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_plugin_operations.py -v`
@@ -411,35 +409,32 @@ git commit -m "feat: add plugin materialize + marketplace-name helpers"
 
 ---
 
-### Task 4: `plugin_operations.py` — setup + teardown commands
+### Task 4: `plugin_operations.py` — install into a per-entry isolated home
 
 **Files:**
 - Modify: `src/bcbench/operations/plugin_operations.py`
-- Modify: `src/bcbench/operations/__init__.py` (exports)
+- Modify: `src/bcbench/operations/__init__.py` (export)
 - Test: `tests/test_plugin_operations.py`
 
 **Interfaces:**
-- Consumes: `InstalledPlugin`, `_materialize`, `_read_marketplace_name` (Task 3); `AgentType`.
+- Consumes: `_materialize`, `_read_marketplace_name` (Task 3); `AgentType`.
 - Produces:
-  - `setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType, cli_cmd: str) -> list[InstalledPlugin]`
-  - `teardown_plugins(cli_cmd: str, agent_type: AgentType, installed: list[InstalledPlugin]) -> None`
+  - `setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType, cli_cmd: str) -> tuple[list[str], dict[str, str]]` — returns `(plugin_records, env_overrides)`; `env_overrides` is `{"COPILOT_HOME": <dir>}` / `{"CLAUDE_CONFIG_DIR": <dir>}` (or `{}` when nothing is enabled) that the runner must merge into the agent-launch env.
 
 - [ ] **Step 1: Write the failing tests**
 
 Append to `tests/test_plugin_operations.py`:
 
 ```python
-from unittest.mock import call
-
 from bcbench.types import AgentType
 
 
 class _Recorder:
     def __init__(self):
-        self.calls: list[list[str]] = []
+        self.calls: list[tuple[list[str], dict | None]] = []
 
     def __call__(self, args, **kwargs):
-        self.calls.append(args)
+        self.calls.append((args, kwargs.get("env")))
 
         class _R:
             returncode = 0
@@ -452,18 +447,20 @@ def _marketplace_entry_cfg():
 
 
 def test_setup_no_plugins_returns_empty(tmp_path):
-    installed = po.setup_plugins_from_config({}, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
-    assert installed == []
+    records, env = po.setup_plugins_from_config({}, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+    assert records == []
+    assert env == {}
 
 
 def test_setup_disabled_entry_skipped(tmp_path, monkeypatch):
     monkeypatch.setattr(po.subprocess, "run", _Recorder())
     cfg = {"plugins": [{**_marketplace_entry_cfg(), "enabled": False}]}
-    installed = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
-    assert installed == []
+    records, env = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+    assert records == []
+    assert env == {}
 
 
-def test_setup_installs_and_records(tmp_path, monkeypatch):
+def test_setup_installs_into_isolated_home_and_records(tmp_path, monkeypatch):
     def fake_clone(repo, commit, dest):
         _make_marketplace(dest, name="awesome-copilot")
 
@@ -472,142 +469,120 @@ def test_setup_installs_and_records(tmp_path, monkeypatch):
     monkeypatch.setattr(po.subprocess, "run", rec)
 
     cfg = {"plugins": [_marketplace_entry_cfg()]}
-    installed = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+    records, env = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
 
-    assert installed == [po.InstalledPlugin(plugin="probe-plugin", marketplace="awesome-copilot", record="probe-plugin@" + "a" * 40)]
-    # marketplace add + install were issued (self-heal remove/uninstall may precede them)
-    assert ["copilot", "plugin", "marketplace", "add", str(tmp_path / ".bcbench" / "plugins" / "github-awesome-copilot")] in rec.calls
-    assert ["copilot", "plugin", "install", "probe-plugin@awesome-copilot"] in rec.calls
+    home = str(tmp_path / ".bcbench" / "copilot-home")
+    assert records == ["probe-plugin@" + "a" * 40]
+    assert env == {"COPILOT_HOME": home}
+
+    add_call = next(c for c in rec.calls if c[0][:4] == ["copilot", "plugin", "marketplace", "add"])
+    install_call = next(c for c in rec.calls if c[0][:3] == ["copilot", "plugin", "install"])
+    assert add_call[0][4] == str(tmp_path / ".bcbench" / "plugins" / "github-awesome-copilot")
+    assert install_call[0] == ["copilot", "plugin", "install", "probe-plugin@awesome-copilot"]
+    # commands ran with the isolated home in their env
+    assert add_call[1]["COPILOT_HOME"] == home
+    assert install_call[1]["COPILOT_HOME"] == home
 
 
-def test_setup_failure_tears_down_partial_and_raises(tmp_path, monkeypatch):
+def test_setup_claude_uses_claude_config_dir(tmp_path, monkeypatch):
+    def fake_clone(repo, commit, dest):
+        _make_marketplace(dest, name="awesome-copilot")
+
+    monkeypatch.setattr(po, "clone_at_commit", fake_clone)
+    monkeypatch.setattr(po.subprocess, "run", _Recorder())
+    cfg = {"plugins": [_marketplace_entry_cfg()]}
+
+    _records, env = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.CLAUDE, "claude")
+
+    assert env == {"CLAUDE_CONFIG_DIR": str(tmp_path / ".bcbench" / "claude-home")}
+
+
+def test_setup_failure_removes_partial_home_and_raises(tmp_path, monkeypatch):
     def fake_clone(repo, commit, dest):
         _make_marketplace(dest, name="awesome-copilot")
 
     monkeypatch.setattr(po, "clone_at_commit", fake_clone)
 
-    def flaky_run(args, **kwargs):
-        class _R:
-            returncode = 0
+    def failing_run(args, **kwargs):
+        raise po.subprocess.CalledProcessError(1, args)
 
-        if args[:4] == ["copilot", "plugin", "marketplace", "add"]:
-            raise po.subprocess.CalledProcessError(1, args)
-        return _R()
-
-    monkeypatch.setattr(po.subprocess, "run", flaky_run)
+    monkeypatch.setattr(po.subprocess, "run", failing_run)
     cfg = {"plugins": [_marketplace_entry_cfg()]}
 
     with pytest.raises(AgentError, match="Plugin setup failed"):
         po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
 
-
-def test_teardown_copilot_uninstalls_by_name(monkeypatch):
-    rec = _Recorder()
-    monkeypatch.setattr(po.subprocess, "run", rec)
-    installed = [po.InstalledPlugin("probe-plugin", "awesome-copilot", "probe-plugin@abc")]
-
-    po.teardown_plugins("copilot", AgentType.COPILOT, installed)
-
-    assert ["copilot", "plugin", "uninstall", "probe-plugin"] in rec.calls
-    assert ["copilot", "plugin", "marketplace", "remove", "awesome-copilot"] in rec.calls
-
-
-def test_teardown_claude_uninstalls_by_qualified_name(monkeypatch):
-    rec = _Recorder()
-    monkeypatch.setattr(po.subprocess, "run", rec)
-    installed = [po.InstalledPlugin("probe-plugin", "awesome-copilot", "probe-plugin@abc")]
-
-    po.teardown_plugins("claude", AgentType.CLAUDE, installed)
-
-    assert ["claude", "plugin", "uninstall", "probe-plugin@awesome-copilot"] in rec.calls
-    assert ["claude", "plugin", "marketplace", "remove", "awesome-copilot"] in rec.calls
-
-
-def test_teardown_empty_is_noop(monkeypatch):
-    rec = _Recorder()
-    monkeypatch.setattr(po.subprocess, "run", rec)
-    po.teardown_plugins("copilot", AgentType.COPILOT, [])
-    assert rec.calls == []
+    assert not (tmp_path / ".bcbench" / "copilot-home").exists()
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_plugin_operations.py -k "setup or teardown" -v`
+Run: `uv run pytest tests/test_plugin_operations.py -k "setup" -v`
 Expected: FAIL — `AttributeError: module 'bcbench.operations.plugin_operations' has no attribute 'setup_plugins_from_config'`.
 
-- [ ] **Step 3: Implement setup + teardown**
+- [ ] **Step 3: Implement `setup_plugins_from_config`**
 
 Append to `src/bcbench/operations/plugin_operations.py`:
 
 ```python
-def _run_plugin_cmd(cli_cmd: str, args: list[str], *, check: bool) -> None:
-    subprocess.run([cli_cmd, "plugin", *args], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=check)
-
-
-def _uninstall_args(agent_type: AgentType, plugin: str, marketplace: str) -> list[str]:
-    # Copilot uninstalls by plugin name; Claude by "<plugin>@<marketplace>" (both verified live).
+def _home_env_var(agent_type: AgentType) -> str:
     match agent_type:
         case AgentType.COPILOT:
-            return ["uninstall", plugin]
+            return "COPILOT_HOME"
         case AgentType.CLAUDE:
-            return ["uninstall", f"{plugin}@{marketplace}"]
+            return "CLAUDE_CONFIG_DIR"
         case _:
-            raise AgentError(f"Unsupported agent type for plugin teardown: {agent_type}")
+            raise AgentError(f"Unsupported agent type for plugins: {agent_type}")
 
 
-def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType, cli_cmd: str) -> list[InstalledPlugin]:
-    """Install every enabled plugin entry into the CLI, before the agent launches.
+def _run_plugin_cmd(cli_cmd: str, args: list[str], env: dict[str, str]) -> None:
+    subprocess.run([cli_cmd, "plugin", *args], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
-    Returns the installed plugins (for recording and teardown). Raises AgentError on failure
-    (after tearing down any partial installs). Skips silently when no entry is enabled.
+
+def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType, cli_cmd: str) -> tuple[list[str], dict[str, str]]:
+    """Install every enabled plugin entry into a fresh per-entry CLI config home.
+
+    Returns (plugin_records, env_overrides). env_overrides sets the isolated config home
+    (COPILOT_HOME / CLAUDE_CONFIG_DIR) that the runner must also apply to the agent launch, so
+    concurrent matrix entries never share the user-scope plugin store. Returns ([], {}) when no
+    entry is enabled. Raises AgentError on failure (after removing the partial home).
     """
     entries = [e for e in (agent_config.get("plugins") or []) if e.get("enabled", True)]
     if not entries:
-        return []
+        return [], {}
 
-    plugins_root = repo_path / _BCBENCH_ROOT / _PLUGINS_FOLDER
-    if plugins_root.exists():
-        rmtree(plugins_root)  # clean-before: wipe stale clones
-    plugins_root.mkdir(parents=True, exist_ok=True)
+    bcbench_dir = repo_path / _BCBENCH_ROOT
+    plugins_root = bcbench_dir / _PLUGINS_FOLDER
+    home = bcbench_dir / f"{agent_type.value}-home"
+    for path in (plugins_root, home):
+        if path.exists():
+            rmtree(path)  # clean-before
+        path.mkdir(parents=True, exist_ok=True)
 
-    installed: list[InstalledPlugin] = []
+    home_var = _home_env_var(agent_type)
+    env = {**os.environ, home_var: str(home)}
+    records: list[str] = []
     try:
         for entry_cfg in entries:
             marketplace_dir, record_suffix = _materialize(entry_cfg, entry, plugins_root)
             marketplace_name = _read_marketplace_name(marketplace_dir)
-
-            # self-heal: drop any stale registration left by a crashed prior run (best-effort)
+            _run_plugin_cmd(cli_cmd, ["marketplace", "add", str(marketplace_dir)], env)
             for plugin in entry_cfg["plugins"]:
-                _run_plugin_cmd(cli_cmd, _uninstall_args(agent_type, plugin, marketplace_name), check=False)
-            _run_plugin_cmd(cli_cmd, ["marketplace", "remove", marketplace_name], check=False)
-
-            _run_plugin_cmd(cli_cmd, ["marketplace", "add", str(marketplace_dir)], check=True)
-            for plugin in entry_cfg["plugins"]:
-                _run_plugin_cmd(cli_cmd, ["install", f"{plugin}@{marketplace_name}"], check=True)
-                installed.append(InstalledPlugin(plugin=plugin, marketplace=marketplace_name, record=f"{plugin}@{record_suffix}"))
-                logger.info(f"Installed plugin {plugin}@{marketplace_name}")
+                _run_plugin_cmd(cli_cmd, ["install", f"{plugin}@{marketplace_name}"], env)
+                records.append(f"{plugin}@{record_suffix}")
+                logger.info(f"Installed plugin {plugin}@{marketplace_name} into {home}")
     except (subprocess.CalledProcessError, OSError) as e:
-        teardown_plugins(cli_cmd, agent_type, installed)
+        if home.exists():
+            rmtree(home)
         raise AgentError(f"Plugin setup failed: {e}") from e
 
-    return installed
-
-
-def teardown_plugins(cli_cmd: str, agent_type: AgentType, installed: list[InstalledPlugin]) -> None:
-    """Uninstall plugins and remove their marketplaces (best-effort; never raises)."""
-    if not installed:
-        return
-    for p in installed:
-        _run_plugin_cmd(cli_cmd, _uninstall_args(agent_type, p.plugin, p.marketplace), check=False)
-    for marketplace in dict.fromkeys(p.marketplace for p in installed):
-        _run_plugin_cmd(cli_cmd, ["marketplace", "remove", marketplace], check=False)
-    logger.info(f"Tore down plugins: {[p.record for p in installed]}")
+    return records, {home_var: str(home)}
 ```
 
-In `src/bcbench/operations/__init__.py`, add the imports and `__all__` entries (keep alphabetized within the block):
+In `src/bcbench/operations/__init__.py`, add the import and `__all__` entry (keep alphabetized within the block):
 
 ```python
-from bcbench.operations.plugin_operations import setup_plugins_from_config, teardown_plugins
+from bcbench.operations.plugin_operations import setup_plugins_from_config
 ```
 
 ```python
@@ -615,8 +590,6 @@ from bcbench.operations.plugin_operations import setup_plugins_from_config, tear
     "setup_instructions_from_config",
     "setup_plugins_from_config",
     "setup_repo_prebuild",
-    "stage_and_get_diff",
-    "teardown_plugins",
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -628,19 +601,19 @@ Expected: PASS (all tests).
 
 ```bash
 git add src/bcbench/operations/plugin_operations.py src/bcbench/operations/__init__.py tests/test_plugin_operations.py
-git commit -m "feat: install/teardown plugins via CLI commands (user scope, both agents)"
+git commit -m "feat: install plugins into a per-entry isolated CLI config home"
 ```
 
 ---
 
-### Task 5: Wire plugin setup/teardown into the Copilot runner
+### Task 5: Wire plugin setup into the Copilot runner
 
 **Files:**
 - Modify: `src/bcbench/agent/copilot/agent.py`
 - Test: `tests/test_plugin_operations.py`
 
 **Interfaces:**
-- Consumes: `setup_plugins_from_config`, `teardown_plugins` (Task 4); `ExperimentConfiguration.plugins` (Task 1).
+- Consumes: `setup_plugins_from_config` (Task 4); `ExperimentConfiguration.plugins` (Task 1).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -652,7 +625,6 @@ from unittest.mock import MagicMock, patch
 from bcbench.dataset import BaseDatasetEntry
 
 
-@patch("bcbench.agent.copilot.agent.teardown_plugins")
 @patch("bcbench.agent.copilot.agent.setup_plugins_from_config")
 @patch("bcbench.agent.copilot.agent.parse_tool_usage_from_hooks", return_value=None)
 @patch("bcbench.agent.copilot.agent.parse_metrics", return_value=None)
@@ -665,14 +637,15 @@ from bcbench.dataset import BaseDatasetEntry
 @patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task")
 @patch("bcbench.agent.copilot.agent.shutil.which", return_value="copilot")
 @patch("bcbench.agent.copilot.agent.subprocess.run")
-def test_copilot_runner_records_plugins_and_tears_down(
-    mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, mock_teardown, tmp_path
+def test_copilot_runner_records_plugins_and_sets_home(
+    mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path
 ):
     from bcbench.agent.copilot.agent import run_copilot_agent
     from bcbench.types import EvaluationCategory
 
     mock_run.return_value = MagicMock(stderr=b"")
-    mock_setup.return_value = [po.InstalledPlugin("frontend-web-dev", "awesome-copilot", "frontend-web-dev@a1b2c3d4")]
+    home = str(tmp_path / ".bcbench" / "copilot-home")
+    mock_setup.return_value = (["frontend-web-dev@a1b2c3d4"], {"COPILOT_HOME": home})
     entry = MagicMock(spec=BaseDatasetEntry)
     entry.instance_id = "microsoftInternal__NAV-1"
 
@@ -680,23 +653,24 @@ def test_copilot_runner_records_plugins_and_tears_down(
 
     assert config.plugins == ["frontend-web-dev@a1b2c3d4"]
     mock_setup.assert_called_once()
-    mock_teardown.assert_called_once()
+    _args, kwargs = mock_run.call_args
+    assert kwargs["env"]["COPILOT_HOME"] == home
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_plugin_operations.py -k copilot_runner -v`
-Expected: FAIL — `AttributeError`/`ImportError` for `setup_plugins_from_config` in `bcbench.agent.copilot.agent` (not imported/wired yet), or `config.plugins` is `None`.
+Expected: FAIL — `setup_plugins_from_config` not imported/wired in `bcbench.agent.copilot.agent`, or `config.plugins is None`.
 
 - [ ] **Step 3: Wire the runner**
 
-In `src/bcbench/agent/copilot/agent.py`, update the operations import line to include the new functions:
+In `src/bcbench/agent/copilot/agent.py`, update the operations import line to include the new function:
 
 ```python
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config, setup_plugins_from_config, teardown_plugins
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config, setup_plugins_from_config
 ```
 
-Resolve the CLI binary **before** the plugin setup and reuse it for the launch. Replace the existing block that computes `config`/finds `copilot_cmd` so it reads:
+Resolve the CLI binary **before** the plugin setup and reuse it. Replace the existing block that computes `config` / finds `copilot_cmd` so it reads:
 
 ```python
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
@@ -707,7 +681,7 @@ Resolve the CLI binary **before** the plugin setup and reuse it for the launch. 
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
-    installed_plugins = setup_plugins_from_config(copilot_config, entry, repo_path, AgentType.COPILOT, copilot_cmd)
+    plugin_records, plugin_env = setup_plugins_from_config(copilot_config, entry, repo_path, AgentType.COPILOT, copilot_cmd)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
@@ -715,7 +689,7 @@ Resolve the CLI binary **before** the plugin setup and reuse it for the launch. 
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
-        plugins=[p.record for p in installed_plugins] or None,
+        plugins=plugin_records or None,
     )
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
@@ -724,23 +698,18 @@ Resolve the CLI binary **before** the plugin setup and reuse it for the launch. 
 
 Then delete the now-duplicate `copilot_cmd = shutil.which(...)` / `if not copilot_cmd: raise AgentError(...)` block that currently sits just before the `try:` (it has moved up).
 
-Wrap the agent subprocess in a `finally` that tears the plugins down. Change the `try:` that runs the agent so it ends with:
+Merge `plugin_env` into the agent-launch environment. In the `subprocess.run(...)` call, change the `env=` dict to include `**plugin_env`:
 
 ```python
-        return metrics, config
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
-        raise AgentError(f"Copilot CLI execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running Copilot CLI")
-        raise
-    finally:
-        teardown_plugins(copilot_cmd, AgentType.COPILOT, installed_plugins)
+            env={
+                **os.environ,
+                "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
+                "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
+                **plugin_env,
+            },
 ```
+
+(No `finally`/teardown — the per-entry home is discarded with the checkout; `setup_plugins_from_config` clean-befores any stale home.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -751,26 +720,25 @@ Expected: PASS.
 
 ```bash
 git add src/bcbench/agent/copilot/agent.py tests/test_plugin_operations.py
-git commit -m "feat: install plugins in the Copilot runner and tear down after the run"
+git commit -m "feat: install plugins into a per-entry home in the Copilot runner"
 ```
 
 ---
 
-### Task 6: Wire plugin setup/teardown into the Claude runner
+### Task 6: Wire plugin setup into the Claude runner
 
 **Files:**
 - Modify: `src/bcbench/agent/claude/agent.py`
 - Test: `tests/test_plugin_operations.py`
 
 **Interfaces:**
-- Consumes: `setup_plugins_from_config`, `teardown_plugins`; `ExperimentConfiguration.plugins`.
+- Consumes: `setup_plugins_from_config`; `ExperimentConfiguration.plugins`.
 
 - [ ] **Step 1: Write the failing test**
 
 Append to `tests/test_plugin_operations.py`:
 
 ```python
-@patch("bcbench.agent.claude.agent.teardown_plugins")
 @patch("bcbench.agent.claude.agent.setup_plugins_from_config")
 @patch("bcbench.agent.claude.agent.parse_tool_usage_from_hooks", return_value=None)
 @patch("bcbench.agent.claude.agent.parse_metrics", return_value=None)
@@ -783,14 +751,15 @@ Append to `tests/test_plugin_operations.py`:
 @patch("bcbench.agent.claude.agent.build_prompt", return_value="do the task")
 @patch("bcbench.agent.claude.agent.shutil.which", return_value="claude")
 @patch("bcbench.agent.claude.agent.subprocess.run")
-def test_claude_runner_records_plugins_and_tears_down(
-    mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, mock_teardown, tmp_path
+def test_claude_runner_records_plugins_and_sets_config_dir(
+    mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path
 ):
     from bcbench.agent.claude.agent import run_claude_code
     from bcbench.types import EvaluationCategory
 
     mock_run.return_value = MagicMock(stdout=b'{"result": "ok"}')
-    mock_setup.return_value = [po.InstalledPlugin("frontend-web-dev", "awesome-copilot", "frontend-web-dev@a1b2c3d4")]
+    cfg_dir = str(tmp_path / ".bcbench" / "claude-home")
+    mock_setup.return_value = (["frontend-web-dev@a1b2c3d4"], {"CLAUDE_CONFIG_DIR": cfg_dir})
     entry = MagicMock(spec=BaseDatasetEntry)
     entry.instance_id = "microsoftInternal__NAV-1"
 
@@ -798,20 +767,21 @@ def test_claude_runner_records_plugins_and_tears_down(
 
     assert config.plugins == ["frontend-web-dev@a1b2c3d4"]
     mock_setup.assert_called_once()
-    mock_teardown.assert_called_once()
+    _args, kwargs = mock_run.call_args
+    assert kwargs["env"]["CLAUDE_CONFIG_DIR"] == cfg_dir
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_plugin_operations.py -k claude_runner -v`
-Expected: FAIL — `setup_plugins_from_config` not wired in `bcbench.agent.claude.agent`, or `config.plugins is None`.
+Expected: FAIL — `setup_plugins_from_config` not wired in `bcbench.agent.claude.agent`, or the `subprocess.run` call has no `env` kwarg (`KeyError: 'env'`).
 
 - [ ] **Step 3: Wire the runner**
 
 In `src/bcbench/agent/claude/agent.py`, update the operations import:
 
 ```python
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config, setup_plugins_from_config, teardown_plugins
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config, setup_plugins_from_config
 ```
 
 Resolve the CLI binary before plugin setup and reuse it. Replace the block that builds `config` and finds `claude_cmd` so it reads:
@@ -823,7 +793,7 @@ Resolve the CLI binary before plugin setup and reuse it. Replace the block that 
     if not claude_cmd:
         raise AgentError("Claude Code not found in PATH. Please ensure it is installed and available.")
 
-    installed_plugins = setup_plugins_from_config(claude_config, entry, repo_path, AgentType.CLAUDE, claude_cmd)
+    plugin_records, plugin_env = setup_plugins_from_config(claude_config, entry, repo_path, AgentType.CLAUDE, claude_cmd)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
@@ -831,7 +801,7 @@ Resolve the CLI binary before plugin setup and reuse it. Replace the block that 
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
-        plugins=[p.record for p in installed_plugins] or None,
+        plugins=plugin_records or None,
     )
 
     logger.info(f"Executing Claude Code in directory: {repo_path}")
@@ -840,23 +810,22 @@ Resolve the CLI binary before plugin setup and reuse it. Replace the block that 
 
 Then delete the now-duplicate `claude_cmd = shutil.which("claude")` / `if not claude_cmd: raise AgentError(...)` block that currently sits just before the `try:`.
 
-Add a `finally` to the agent-run `try` block so it ends with:
+The Claude `subprocess.run(...)` call currently passes no `env`. Add one that carries the isolated home:
 
 ```python
-        return metrics, config
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Claude Code timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Claude Code execution failed with error {e.stderr}")
-        raise AgentError(f"Claude Code execution failed: {e.stderr}") from e
-    except Exception:
-        logger.exception("Unexpected error running Claude Code")
-        raise
-    finally:
-        teardown_plugins(claude_cmd, AgentType.CLAUDE, installed_plugins)
+        result = subprocess.run(
+            cmd_args,
+            cwd=str(repo_path),
+            env={**os.environ, **plugin_env},
+            timeout=_config.timeout.agent_execution,
+            check=True,
+            capture_output=True,
+        )
 ```
+
+Ensure `import os` is present at the top of `src/bcbench/agent/claude/agent.py` (add it if missing).
+
+(No `finally`/teardown.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -867,7 +836,7 @@ Expected: PASS.
 
 ```bash
 git add src/bcbench/agent/claude/agent.py tests/test_plugin_operations.py
-git commit -m "feat: install plugins in the Claude runner and tear down after the run"
+git commit -m "feat: install plugins into a per-entry home in the Claude runner"
 ```
 
 ---
@@ -889,11 +858,13 @@ In `src/bcbench/agent/shared/config.yaml`, add this block after the `agents:` bl
 
 ```yaml
 # controls installing agent plugins (skills/agents/mcp/hooks bundles) into the CLI for the run.
-# each enabled entry is installed via the CLI's `plugin marketplace add` + `plugin install`
-# (user scope, both Copilot and Claude), then uninstalled after the run. Marketplace content is
-# cloned at the pinned commit into <repo>/.bcbench/plugins/ (removed by the existing cleanup).
-# NOTE: config injection (extraKnownMarketplaces/enabledPlugins) is trust-dialog-gated and
-#       ignored in headless mode, so we drive the real CLI commands instead.
+# each enabled entry is installed via the CLI's `plugin marketplace add` + `plugin install` into a
+# fresh per-entry config home (COPILOT_HOME / CLAUDE_CONFIG_DIR under <repo>/.bcbench/), so parallel
+# matrix entries never share the user-scope plugin store and no teardown is needed.
+# NOTE: config injection (extraKnownMarketplaces/enabledPlugins) is trust-dialog-gated and ignored
+#       in headless mode, so we drive the real CLI commands instead.
+# NOTE: a fresh home authenticates via the env token the workflow sets (COPILOT_GITHUB_TOKEN;
+#       ANTHROPIC_API_KEY) — local plugin runs must have that token in the environment.
 # source: "marketplace" (repo + commit) or "local" (path under instructions/<owner>-<repo>/,
 #         which must be a marketplace root containing .claude-plugin/marketplace.json).
 plugins: []
@@ -913,7 +884,7 @@ plugins: []
 In `EXPERIMENT.md`, add a row to the config table (after the `mcp.servers` row):
 
 ```markdown
-| `plugins` | _(empty)_ | List of agent plugins to install for the run (marketplace pinned to a commit, or local). Each enabled entry is installed via the CLI's `plugin marketplace add` + `plugin install` and removed afterward. |
+| `plugins` | _(empty)_ | List of agent plugins to install for the run (marketplace pinned to a commit, or local). Each enabled entry is installed via the CLI's `plugin marketplace add` + `plugin install` into a per-entry isolated config home. |
 ```
 
 And add this subsection after the "Custom instructions / skills / custom agents" subsection:
@@ -926,7 +897,7 @@ And add this subsection after the "Custom instructions / skills / custom agents"
 - `source: marketplace` — `repo` (`owner/repo` or git URL) + `commit` (pinned for reproducibility) + `plugins` (names to install).
 - `source: local` — `path` (relative to `instructions/<owner>-<repo>/`, pointing at a marketplace root with `.claude-plugin/marketplace.json`) + `plugins`.
 
-At runtime the marketplace is cloned at its commit into `<repo>/.bcbench/plugins/`, installed with the CLI's own commands (user scope), and uninstalled after the run. Installed plugins are recorded in the result's `ExperimentConfiguration.plugins` as `"<name>@<commit>"` / `"<name>@local"`.
+At runtime the marketplace is cloned at its commit into `<repo>/.bcbench/plugins/` and installed with the CLI's own commands into a fresh per-entry config home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` under `.bcbench/`), which keeps parallel matrix entries isolated. A fresh home authenticates via the env token the workflow already sets (`COPILOT_GITHUB_TOKEN`; `ANTHROPIC_API_KEY`) — local plugin runs must have that token set. Installed plugins are recorded in the result's `ExperimentConfiguration.plugins` as `"<name>@<commit>"` / `"<name>@local"`.
 ```
 
 - [ ] **Step 3: Add a plugins scenario to the mock pipeline**
@@ -967,7 +938,9 @@ git commit -m "docs+config: document plugins toggle, add config block and mock s
 
 ## Notes for the implementer
 
-- **Do not** attempt to load plugins via `extraKnownMarketplaces`/`enabledPlugins` injection — verified (and confirmed by gist `alexey-pelykh/566a4e5160b305db703d543312a1e686`) to be ignored in headless mode.
-- The full lifecycle (`marketplace add` → `install` → `uninstall` → `marketplace remove`) was verified live on both CLIs against a local marketplace: non-interactive, offline, exit 0, baseline restored. Copilot uninstalls by `<plugin>`; Claude by `<plugin>@<marketplace>` — `_uninstall_args` encodes this.
-- `git fetch --depth 1 origin <sha>` works on GitHub (arbitrary SHA fetch is allowed). If a target host disallows it, the clone will fail loudly and surface as `AgentError` — acceptable (fails the entry like other setup failures).
-- Setup ordering: `setup_plugins_from_config` runs after `setup_hooks` and other `setup_*` — it does not touch `.github`/`.claude`, so instruction/skill setup is unaffected.
+- **Do not** load plugins via `extraKnownMarketplaces`/`enabledPlugins` injection — verified (and confirmed by gist `alexey-pelykh/566a4e5160b305db703d543312a1e686`) to be ignored in headless mode.
+- **Concurrency is why the per-entry home exists.** `copilot-evaluation.yml` runs entries with `max-parallel: 64` on the shared self-hosted `GitHub-BCBench` runner; the CLI plugin store is user-scope/global, so without a per-entry home two entries would corrupt each other's installs. The isolated home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` under `.bcbench/`) removes the race and any teardown.
+- The full plugin lifecycle and per-entry-home isolation were verified live: fresh `COPILOT_HOME` accepts `marketplace add`/`install`, `copilot skill list` shows the installed plugin's skill, and a real `copilot -p` session runs (exit 0, auth via `COPILOT_GITHUB_TOKEN`, no onboarding block), leaving the real `~/.copilot` untouched; fresh `CLAUDE_CONFIG_DIR` isolates install the same way.
+- `git fetch --depth 1 origin <sha>` works on GitHub (arbitrary SHA fetch allowed). A host that disallows it fails loudly as `AgentError` (fails the entry, like other setup failures).
+- Setup ordering: `setup_plugins_from_config` runs after `setup_hooks` and the other `setup_*` — it does not touch `.github`/`.claude`.
+- Copilot passes `--log-dir=<output_dir>` explicitly, so `process-*.log` (used for turn-count metrics) should still land in `output_dir` even with `COPILOT_HOME` redirected; confirm during Task 5.

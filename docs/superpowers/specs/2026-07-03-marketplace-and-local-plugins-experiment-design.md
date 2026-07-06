@@ -21,11 +21,16 @@ launching the agent. This is deliberate: declarative `extraKnownMarketplaces` /
 commit we clone the marketplace ourselves into `<repo>/.bcbench/` and add it as a
 **local** marketplace. Multiple plugins can be enabled at once.
 
-Both CLIs install at **user scope** (project scope is likewise ignored headless),
-so both get the same **small, targeted** post-run teardown (`plugin uninstall` +
-`marketplace remove`, verified reversible). Cloned content lives under `.bcbench`
-(removed by the existing PR #651 cleanup). Installed plugins are recorded in
-`ExperimentConfiguration`.
+Because installs go to the CLI's **user-scope** store (project scope is ignored
+headless) and execution-based categories run entries as a **parallel matrix on a
+shared self-hosted runner** (see §2.5), each entry redirects the CLI's config home
+to a **per-entry isolated directory** (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` under
+`<repo>/.bcbench/`) for both the install commands and the agent launch. This makes
+concurrent entries independent (no shared global state, no cross-entry race) and
+**removes the need for teardown** — the isolated home is discarded with the
+checkout. Auth in the fresh home comes from the env token the workflow already
+sets (`COPILOT_GITHUB_TOKEN`; `ANTHROPIC_API_KEY`). Cloned content lives under
+`.bcbench`; installed plugins are recorded in `ExperimentConfiguration`.
 
 ## 2. Background
 
@@ -82,29 +87,54 @@ Copilot CLI `1.0.69-0`, Claude Code `2.1.161`.
 - Neither CLI has a `--ref`/`--commit` flag → we pin by cloning ourselves.
 - Claude exposes the same command set (`plugin marketplace add|remove`,
   `plugin install|uninstall`); use default **user** scope (see §2.3).
-- Agent launch, model, MCP, permissions, auth are unaffected: the agent command
-  line is unchanged; the plugin is simply installed into the CLI beforehand.
+- Agent launch, model, MCP, and permissions are still passed as explicit flags;
+  the agent command line is unchanged apart from the config-home env var (§2.5).
+- **Per-entry isolated home works headless (verified):** with a fresh
+  `COPILOT_HOME`, `plugin install` succeeds, `copilot skill list` shows the
+  plugin's skill (content loads), and a real `copilot -p` session runs (exit 0,
+  auth via `COPILOT_GITHUB_TOKEN`) with no onboarding block; the real `~/.copilot`
+  is untouched. Fresh `CLAUDE_CONFIG_DIR` isolates install the same way.
+
+### 2.5 Concurrency: why a per-entry isolated config home
+Execution-based categories (`bug-fix`, `test-generation`) run entries as a
+**parallel matrix** (`max-parallel: 64` in `copilot-evaluation.yml`) on the
+self-hosted `GitHub-BCBench` runner, where legs can share a machine. The CLI's
+plugin store is **user scope / global** (`~/.copilot`, `~/.claude`) — the first
+experiment lever to touch shared state (instructions/skills are repo-local, MCP is
+a per-invocation flag, AL-LSP is repo-local `.bcbench`). Concurrent entries would
+therefore race: two `plugin install`s writing the same global config, or one
+entry's cleanup removing a marketplace/plugin an in-flight entry still uses.
+
+Fix: each entry redirects the CLI config home to a **unique per-entry directory**
+(`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` = `<repo>/.bcbench/<agent>-home`) for both
+the plugin commands and the agent launch. Installs are then fully isolated per
+entry, eliminating the race and **removing any need for teardown** — the home is
+ephemeral (fresh checkout per matrix leg; cleaned before each run locally). Fresh
+GitHub-hosted VMs (`code-review` on ubuntu-latest, `nl2al` on windows-latest) are
+already isolated, but the per-entry home is applied uniformly.
 
 ## 3. Goals / Non-goals
 
 ### Guiding principle
 Keep it simple and reuse existing architecture. Use the CLIs' documented commands
 rather than reverse-engineering config or fighting the headless trust gate. Keep
-cloned content repo-local under `.bcbench`. The teardown is minimal, symmetric
-with setup, uses documented commands, and is scoped to exactly what we installed.
+everything repo-local under `.bcbench` (cloned content **and** the per-entry
+config home), so concurrent entries never share state and there is nothing global
+to tear down.
 
 ### Goals
 - Config-driven, per-entry enable/disable, multiple plugins at once.
 - Marketplace plugins pinned to a git commit (reproducible); local plugins too.
 - Plugins installed by name via the CLI's real commands, on Copilot and Claude.
-- No config-home redirection; residue removed by a targeted post-run cleanup.
+- Concurrency-safe: per-entry isolated config home; no shared global state.
+- No teardown and no residue in the developer's real config.
 - Installed plugins recorded in `ExperimentConfiguration`.
 
 ### Non-goals
 - Changing/migrating the AL-LSP plugin (left as-is).
 - Selecting which plugin agent *drives* the run (existing `--agent` covers it).
 - Relying on `extraKnownMarketplaces`/`enabledPlugins` injection (ignored headless).
-- Redirecting `COPILOT_HOME` / `CLAUDE_CONFIG_DIR`; hand-writing CLI storage files.
+- Hand-writing CLI storage files (undocumented schema — use the commands).
 - Dataset, category, or scoring changes.
 
 ## 4. Design
@@ -113,46 +143,54 @@ with setup, uses documented commands, and is scoped to exactly what we installed
 New `operations/plugin_operations.py`:
 
 ```python
-class InstalledPlugin(NamedTuple):
-    plugin: str          # "frontend-web-dev"
-    marketplace: str     # "awesome-copilot"
-    record: str          # "frontend-web-dev@a1b2c3d4"  (for ExperimentConfiguration)
-
 def setup_plugins_from_config(
     agent_config: dict, entry: BaseDatasetEntry, repo_path: Path,
     agent_type: AgentType, cli_cmd: str,
-) -> list[InstalledPlugin]: ...
-
-def teardown_plugins(cli_cmd: str, installed: list[InstalledPlugin]) -> None: ...
+) -> tuple[list[str], dict[str, str]]: ...
+    # returns (plugin_records, env_overrides)
 ```
 
-`setup_plugins_from_config` clones/copies enabled plugins under `.bcbench`, runs
-`marketplace add` + `install` (user scope), and returns what it installed (for the
-result record and teardown). The agent launch command is unchanged.
+`setup_plugins_from_config` creates a fresh per-entry config home under
+`.bcbench`, clones/copies enabled plugins under `.bcbench`, runs `marketplace add`
++ `install` **into that home** (via `env`), and returns:
+- `plugin_records`: `["<name>@<commit>", "<name>@local", …]` for the result, and
+- `env_overrides`: `{"COPILOT_HOME": …}` / `{"CLAUDE_CONFIG_DIR": …}` (empty when
+  no plugin is enabled) that the runner merges into the agent-launch environment.
+
+There is **no** `teardown_plugins`: the isolated home is discarded with the
+checkout, and a clean-before at the top of setup removes any stale home.
 
 ### 4.2 Materialize content into `.bcbench/`
-- **Clean before / self-heal:** `remove_agent_plugin` for stale folders, and
-  defensively `uninstall` / `marketplace remove` our names (in case a prior run
-  crashed before teardown).
+- **Clean before:** inline-`rmtree` `<repo>/.bcbench/plugins` and the per-entry
+  config home (do NOT import `remove_agent_plugin` — `operations` must not import
+  `bcbench.agent`, which would create a cycle). Then recreate both fresh.
 - **marketplace** (`repo` + `commit`): shallow-clone into
-  `<repo>/.bcbench/plugins/<marketplace-name>` and `git checkout <commit>` (small
-  reused git helper). Read the marketplace `name` from its `marketplace.json`.
-- **local** (`path`): copy into `<repo>/.bcbench/plugins/<name>`. `path` resolves
-  under `src/bcbench/agent/shared/instructions/<sanitized-repo>/`.
+  `<repo>/.bcbench/plugins/<slug>` and `git checkout <commit>` (`clone_at_commit`).
+  Read the marketplace `name` from its `marketplace.json`.
+- **local** (`path`): copy into `<repo>/.bcbench/plugins/<slug>`. `path` resolves
+  under `src/bcbench/agent/shared/instructions/<sanitized-repo>/` and must be a
+  marketplace root (contains `marketplace.json`).
 - Failures raise `AgentError`.
 
-### 4.3 Install via the CLI commands (user scope, both CLIs)
-For each enabled entry, using the resolved CLI binary:
-- `<cli> plugin marketplace add <repo>/.bcbench/plugins/<marketplace-name>`
+### 4.3 Install via the CLI commands (into the per-entry home)
+With the config-home env var set to the per-entry directory, for each enabled
+entry using the resolved CLI binary:
+- `<cli> plugin marketplace add <repo>/.bcbench/plugins/<slug>`
 - `<cli> plugin install <plugin>@<marketplace-name>` for each requested plugin
-- Verify with `<cli> plugin list`; failures raise `AgentError`.
+- All plugin commands run with `env={**os.environ, <home-var>: <home>}`; failures
+  raise `AgentError` (after best-effort removal of the partial home).
 
-### 4.4 Teardown (symmetric, both CLIs)
-In a `finally` around the agent run, for each installed plugin:
-- `<cli> plugin uninstall <plugin>` then `<cli> plugin marketplace remove <marketplace>`
-  (verified reversible; best-effort, logged, never masks the run outcome).
-- `.bcbench` cloned content is removed by `remove_agent_plugin` / `git clean -fd`.
-- The developer's real global config is returned to baseline.
+### 4.4 Isolation & cleanup (no teardown commands)
+- The per-entry config home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` =
+  `<repo>/.bcbench/<agent>-home`) makes every entry's marketplace/plugin state
+  private; concurrent matrix legs never collide, and there is nothing global to
+  undo.
+- Cleanup is the clean-before `rmtree` of `.bcbench/plugins` + the home at the
+  next run, plus `git clean -fd` / fresh checkout. The developer's real
+  `~/.copilot` / `~/.claude` is never touched.
+- Auth in the fresh home comes from the env token (`COPILOT_GITHUB_TOKEN`;
+  `ANTHROPIC_API_KEY`) the workflow already sets. Local plugin runs must have that
+  token in the environment.
 
 ### 4.5 Config schema (`config.yaml`)
 `plugins` is a flat list; each entry toggles independently.
@@ -174,15 +212,13 @@ Only `enabled: true` entries are installed. `enabled` defaults to `true`.
 
 ### 4.6 Wiring into the runners
 ```python
-installed = setup_plugins_from_config(config, entry, repo_path, agent_type, cli_cmd)
-try:
-    result = subprocess.run(cmd_args, cwd=str(repo_path), ...)   # unchanged agent launch
-    ...
-finally:
-    teardown_plugins(cli_cmd, installed)
-
+plugin_records, plugin_env = setup_plugins_from_config(config, entry, repo_path, agent_type, cli_cmd)
+...
+env = {**os.environ, ...existing..., **plugin_env}   # adds COPILOT_HOME / CLAUDE_CONFIG_DIR
+result = subprocess.run(cmd_args, cwd=str(repo_path), env=env, ...)   # unchanged args
+...
 experiment_config = ExperimentConfiguration(
-    ..., plugins=[p.record for p in installed] or None,
+    ..., plugins=plugin_records or None,
 )
 ```
 
@@ -206,35 +242,47 @@ plugins feature uses the commands; the `local` source could express AL-LSP later
 ## 5. Testing
 Mirror `test_mcp_config.py` / `test_custom_instructions.py` (subprocess + git mocked):
 - `tests/test_plugin_operations.py`: per-entry `enabled` (default true, disabled
-  skipped); marketplace clone/checkout; local copy into `.bcbench`; marketplace-name
-  read from `marketplace.json`; command construction for `marketplace add` /
-  `install` (user scope, both CLIs); `InstalledPlugin` records; `teardown_plugins`
-  builds correct `uninstall` / `marketplace remove`; clean-before self-heal;
-  `AgentError` on failure.
+  skipped → returns `([], {})`); marketplace clone/checkout; local copy into
+  `.bcbench`; marketplace-name read from `marketplace.json`; the per-entry config
+  home is created and passed as `env` to every `marketplace add` / `install` call
+  (`COPILOT_HOME` for Copilot, `CLAUDE_CONFIG_DIR` for Claude); returned
+  `(plugin_records, env_overrides)`; clean-before `rmtree` of `.bcbench/plugins` +
+  home; `AgentError` on failure (partial home removed).
 - Extend `test_experiment_configuration.py`: new `plugins` field + `is_empty`.
+- Runner tests: assert `plugin_env` is merged into the agent-launch `env` and that
+  `config.plugins` is recorded.
 - Update mock `ExperimentConfiguration` scenarios
   (`commands/evaluate.py` `MockEvaluationPipeline`, result-serialization tests).
 
 ## 6. Documentation
-- `EXPERIMENT.md`: add a `plugins` row + short schema/pinning note.
+- `EXPERIMENT.md`: add a `plugins` row + short schema/pinning note, and the
+  env-token requirement for local plugin runs.
 - `config.yaml`: document the `plugins` block in comments.
 
 ## 7. Open questions / verification (small, non-blocking)
-1. Confirm the Claude lifecycle (`marketplace add` + `install` + `uninstall` +
-   `marketplace remove`, user scope) end-to-end, mirroring the verified Copilot
-   lifecycle. High confidence; verify during implementation.
-2. Ordering vs `setup_instructions_from_config`: run plugin setup after it. Low
-   risk (global config, not repo files), but keep the order explicit.
-3. Migrate AL-LSP to a `local` plugin entry (deferred).
-4. Optional agent-selection knob in a `plugins` entry (deferred; `--agent` covers it).
+1. Confirm the fresh-`CLAUDE_CONFIG_DIR` headless **session** loads the plugin and
+   runs with `ANTHROPIC_API_KEY` (Copilot's fresh-`COPILOT_HOME` session is
+   verified; Claude's install-into-fresh-dir + isolation is verified — only the
+   authenticated session remains, and CI already runs Claude headless with the env
+   key).
+2. Ensure Copilot's `--log-dir=<output_dir>` still lands `process-*.log` in
+   `output_dir` when `COPILOT_HOME` is redirected (used for turn-count metrics).
+   `--log-dir` is explicit, so this should hold; verify during implementation.
+3. Ordering vs `setup_instructions_from_config`: run plugin setup after it.
+4. Migrate AL-LSP to a `local` plugin entry (deferred).
+5. Optional agent-selection knob in a `plugins` entry (deferred; `--agent` covers it).
 
 ## 8. References (verified)
 - Independent investigation: gist `alexey-pelykh/566a4e5160b305db703d543312a1e686`
   — `extraKnownMarketplaces`/`enabledPlugins` are trust-dialog-gated and ignored in
   headless mode; recommends explicit `plugin marketplace add` / `install` commands.
 - Live probes: full Copilot plugin lifecycle against a local marketplace
-  (non-interactive, offline, exit 0, "Installed 1 skill", baseline restored); a real
-  `copilot -p` session did **not** auto-install from repo-local settings.
+  (non-interactive, offline, exit 0, "Installed 1 skill"); a real `copilot -p`
+  session did **not** auto-install from repo-local settings; **fresh `COPILOT_HOME`
+  headless session runs (exit 0) and loads an installed plugin's skill, isolated
+  from the real config**; fresh `CLAUDE_CONFIG_DIR` isolates install the same way.
+- Concurrency: `copilot-evaluation.yml` matrix `max-parallel: 64` on self-hosted
+  `GitHub-BCBench`; `types.py.runner` per-category runner labels.
 - PR #651 / commit `7eab2f9` (Haoran) — `agent/shared/plugin.py`.
 - `agent/copilot/agent.py`, `agent/claude/agent.py` — runner + `shutil.which` CLI
   resolution + subprocess pattern to reuse.
