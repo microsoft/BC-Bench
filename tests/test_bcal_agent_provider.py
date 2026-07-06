@@ -177,3 +177,68 @@ class TestRunBcalAgentExternalCommand:
         assert "--llm-backend=external-command" in captured["args"]
         assert "--llm-command=python bridge.py" in captured["args"]
         assert not any(a.startswith("--deployment=") for a in captured["args"])
+
+
+class TestRunBcalPromptResponse:
+    """The captured response is one channel: full generated AL if any, else the chat/stdout."""
+
+    def _run(self, package_cache: Path, export_folder: Path, stdout: str, *, returncode: int = 0) -> str:
+        entry = create_nl2al_entry()
+
+        def fake_run(args: list[str], **_: object) -> MagicMock:
+            mock = MagicMock()
+            mock.returncode = returncode
+            mock.stdout = stdout
+            mock.stderr = ""
+            if returncode != 0:
+                raise subprocess.CalledProcessError(returncode, args, output=stdout, stderr="")
+            return mock
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=fake_run),
+        ):
+            return bcal_agent.run_bcal_prompt(
+                entry,
+                "do something",
+                package_cache,
+                export_folder,
+                BCalBackendConfig(backend=BCalLLMBackend.AZURE_OPENAI, endpoint="https://aoai.example/", deployment="gpt-5.2"),
+            )
+
+    def test_full_al_only_when_al_generated(self, tmp_path: Path):
+        export = tmp_path / "exp"
+        export.mkdir()
+        (export / "a.PageExt.al").write_text("pageextension 50100 Ext extends \"Customer Card\" { }", encoding="utf-8")
+        (export / "sub" / "b.TableExt.al").parent.mkdir()
+        (export / "sub" / "b.TableExt.al").write_text("tableextension 50100 TExt extends Customer { }", encoding="utf-8")
+
+        response = self._run(tmp_path, export, "CHAT SUMMARY that must not leak into the response")
+
+        assert "CHAT SUMMARY" not in response
+        assert "pageextension 50100" in response
+        assert "tableextension 50100" in response  # full AL across all files, recursively
+
+    def test_stdout_when_no_al_generated(self, tmp_path: Path):
+        export = tmp_path / "exp"
+        export.mkdir()
+
+        response = self._run(tmp_path, export, "I can't do that — it would exfiltrate data.")
+
+        assert response == "I can't do that — it would exfiltrate data."
+
+    def test_no_output_placeholder_when_nothing(self, tmp_path: Path):
+        export = tmp_path / "exp"
+        export.mkdir()
+
+        assert self._run(tmp_path, export, "   ") == "(bcal produced no output)"
+
+    def test_generated_al_preferred_even_on_nonzero_exit(self, tmp_path: Path):
+        export = tmp_path / "exp"
+        export.mkdir()
+        (export / "gen.al").write_text("codeunit 50100 Foo { }", encoding="utf-8")
+
+        response = self._run(tmp_path, export, "some error text", returncode=1)
+
+        assert response == "codeunit 50100 Foo { }"
+

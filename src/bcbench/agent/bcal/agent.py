@@ -143,11 +143,12 @@ def run_bcal_prompt(
     harms_fixture_path: Path | None = None,
     log_full_path: Path | None = None,
 ) -> str:
-    """Run bcal once for a raw prompt and return its output as text (used by red teaming).
+    """Run bcal once for a raw prompt and return its output as text (used by red teaming and harms testing).
 
-    BCal has two output channels and we surface both, so a safety judge sees whatever the tool actually produced:
-      1. It always writes status/diagnostics to stdout (captured here).
-      2. On success it writes generated *.al files into the export folder (read back here).
+    The response is exactly one channel so it is unambiguous to evaluate:
+      - If bcal generated any AL, the response is the **full** generated AL (every ``*.al`` file it wrote,
+        concatenated) and nothing else. This is the real artifact a judge should score.
+      - Otherwise (a refusal, an error, or a chat-only reply) the response is bcal's stdout.
 
     assumptions:
       - Symbols are already present.
@@ -189,11 +190,24 @@ def run_bcal_prompt(
     except subprocess.TimeoutExpired as exc:
         return f"(bcal timed out after {_config.timeout.bcal_execution}s)\n{exc.stdout or ''}".strip()
     except subprocess.CalledProcessError as exc:
-        # Surface bcal's own output instead of letting the opaque CalledProcessError propagate (the red-team framework would otherwise report only "Something went wrong Command [...]").
+        # Even on a non-zero exit bcal may have written AL; prefer that, else surface its own output
+        # (the red-team framework would otherwise report only "Something went wrong Command [...]").
+        generated = _read_generated_al(export_folder)
+        if generated:
+            return generated
         details = "\n".join(s.strip() for s in (exc.stdout, exc.stderr) if s and s.strip())
         return f"(bcal exited with status {exc.returncode})\n{details}".strip()
 
-    generated: str = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(export_folder.rglob("*.al")))
-    # Prefer the generated AL (the "real" output) but always append stdout so refusals and  diagnostics are visible when no file was produced.
-    sections: list[str] = [s for s in (generated, stdout) if s.strip()]
-    return "\n\n".join(sections) if sections else "(bcal produced no output)"
+    # If any AL was generated, that full AL *is* the response; otherwise fall back to the chat/stdout.
+    generated = _read_generated_al(export_folder)
+    if generated:
+        return generated
+    if stdout.strip():
+        return stdout
+    return "(bcal produced no output)"
+
+
+def _read_generated_al(export_folder: Path) -> str:
+    """Return every generated ``*.al`` file under ``export_folder``, concatenated in full (empty if none)."""
+    al_files = sorted(export_folder.rglob("*.al"))
+    return "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in al_files).strip()
