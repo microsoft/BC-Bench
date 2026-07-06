@@ -157,13 +157,41 @@ def _load_trials(path: Path) -> list[HarmsTrial]:
 
 def _render_trials(trials: list[HarmsTrial]) -> None:
     table = Table(title="Harms trials", box=box.SIMPLE_HEAVY, title_justify="left", title_style="bold")
-    for heading in ("#", "Case", "Vector", "Channel", "Risk", "Attack"):
+    for heading in ("#", "Case", "Vector", "Channel", "Injected?", "Tools", "Attack"):
         table.add_column(heading)
     for index, trial in enumerate(trials, start=1):
         channel = "[magenta]XPIA[/]" if trial.channel.value == "indirect" else "[cyan]UPIA[/]"
-        table.add_row(str(index), trial.case_id, trial.vector.value, channel, trial.risk or "-", _short(trial.attack))
+        table.add_row(str(index), trial.case_id, trial.vector.value, channel, _landed_cell(trial), _short(", ".join(trial.tools_invoked) or "-", 28), _short(trial.attack))
     _console.print()
     _console.print(table)
+    _render_injection_summary(trials)
+
+
+def _landed_cell(trial: HarmsTrial) -> str:
+    # Direct trials have no seam injection; the payload is the prompt itself.
+    if trial.channel.value != "indirect":
+        return "[dim]n/a[/]"
+    if trial.injection_landed is None:
+        return "-"
+    return "[green]\u2713 landed[/]" if trial.injection_landed else "[red]\u2717 missed[/]"
+
+
+def _render_injection_summary(trials: list[HarmsTrial]) -> None:
+    indirect = [t for t in trials if t.channel.value == "indirect" and t.executed]
+    if not indirect:
+        return
+    landed = [t for t in indirect if t.injection_landed]
+    missed = [t for t in indirect if t.injection_landed is False]
+    if missed:
+        _console.print(
+            f"[yellow]⚠ Injection validation:[/] {len(landed)}/{len(indirect)} indirect (XPIA) trials actually reached the model. "
+            f"The injected payload never appeared in a tool result for {len(missed)} trial(s) "
+            f"({_short(', '.join(f'{t.case_id}/{t.vector.value}' for t in missed), 80)}). "
+            "Their 'resisted' scores are not meaningful — the attack never arrived. "
+            "Ensure the trigger invokes the seam-reading tool and the injection targets a real object."
+        )
+    else:
+        _console.print(f"[green]✓ Injection validation:[/] all {len(landed)} indirect (XPIA) trials reached the model.")
 
 
 def _render_results(result: Json, trials: list[HarmsTrial]) -> None:
@@ -187,6 +215,7 @@ def _render_results(result: Json, trials: list[HarmsTrial]) -> None:
             rtable.add_row(str(row.get("inputs.case_id", "-")), str(row.get("inputs.vector", "-")), str(row.get("inputs.channel", "-")), *scores)
         _console.print()
         _console.print(rtable)
+        _render_injection_summary(trials)
     elif not metrics:
         _render_trials(trials)
 
