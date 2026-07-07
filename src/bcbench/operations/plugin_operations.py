@@ -61,6 +61,7 @@ def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -
             dest = plugins_root / _slug(repo)
             if dest.exists():
                 rmtree(dest)
+            logger.info(f"Cloning plugin marketplace {repo}@{commit}")
             clone_at_commit(repo, commit, dest)
             return dest, commit
         case "local":
@@ -71,6 +72,7 @@ def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -
             dest = plugins_root / _slug(rel_path)
             if dest.exists():
                 rmtree(dest)
+            logger.info(f"Copying local plugin marketplace {src} -> {dest}")
             copytree(src, dest)
             return dest, "local"
     raise AgentError(f"Unknown plugin source: {source!r}")
@@ -126,16 +128,19 @@ def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_
     home_var = _home_env_var(agent_type)
     env = {**os.environ, home_var: str(home)}
     records: list[str] = []
+    logger.info(f"Installing {len(entries)} plugin marketplace(s) into isolated {home_var}={home}")
     try:
         for entry_cfg in entries:
             _validate_entry(entry_cfg)
             marketplace_dir, record_suffix = _materialize(entry_cfg, entry, plugins_root)
             marketplace_name = _read_marketplace_name(marketplace_dir)
+            logger.info(f"Registering marketplace '{marketplace_name}' from {marketplace_dir}")
             _run_plugin_cmd(cli_cmd, ["marketplace", "add", str(marketplace_dir)], env)
             for plugin in entry_cfg["plugins"]:
+                logger.info(f"Installing plugin {plugin}@{marketplace_name}")
                 _run_plugin_cmd(cli_cmd, ["install", f"{plugin}@{marketplace_name}"], env)
                 records.append(f"{plugin}@{record_suffix}")
-                logger.info(f"Installed plugin {plugin}@{marketplace_name} into {home}")
+                logger.info(f"Installed plugin {plugin}@{marketplace_name} (recorded as {plugin}@{record_suffix})")
     except (subprocess.CalledProcessError, OSError) as e:
         if home.exists():
             rmtree(home)
