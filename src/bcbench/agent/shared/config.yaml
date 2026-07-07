@@ -107,7 +107,7 @@ agents:
 # — flip its `enabled: true` below to smoke-test that a plugin installs and its skill loads.
 plugins:
   - source: local
-    enabled: false                        # flip to true to smoke-test the bundled example plugin
+    enabled: true                         # TEMPORARILY on to smoke-test the example — revert before merge
     path: "plugins/bcbench-example"
     plugins: ["bcbench-example-plugin"]
   # Marketplace example (pins a commit). NOTE: the marketplace's own name (in its marketplace.json)
