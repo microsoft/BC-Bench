@@ -14,7 +14,16 @@ from rich.table import Table
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
-from bcbench.harms import HarmsTrial, ManualHarmsSource, evaluate_trials, run_harms_suite
+from bcbench.harms import (
+    HarmsTrial,
+    ManualHarmsSource,
+    RedTeamHarmsSource,
+    couchings_by_id,
+    evaluate_trials,
+    harvest_objectives,
+    load_objectives,
+    run_harms_suite,
+)
 from bcbench.harms.case import HarmsVector
 from bcbench.harms.evaluate import DEFAULT_EVALUATORS
 from bcbench.logger import get_logger
@@ -54,23 +63,36 @@ def run(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Build fixtures + eval rows but skip bcal and Foundry (instant validation).")] = False,
     no_upload: Annotated[bool, typer.Option("--no-upload", help="Run bcal + local scoring but skip the Foundry upload.")] = False,
     evaluator: Annotated[list[str] | None, typer.Option("--evaluator", help="Override the evaluator set (repeatable): content_safety, indirect_attack, code_vulnerability.")] = None,
+    objectives: Annotated[Path | None, typer.Option(help="Red-team attack objectives JSON to couch + expand instead of a YAML suite (see `harms harvest`).")] = None,
+    couching: Annotated[list[str] | None, typer.Option("--couching", help="Couching template ids for --objectives (repeatable): system_override, reviewer_note, doc_comment, changelog_note.")] = None,
+    page: Annotated[str, typer.Option(help="BC page for red-team objectives (--objectives).")] = "Customer Card",
+    audience: Annotated[str, typer.Option(help="Audience for red-team objectives (--objectives).")] = "Business",
 ) -> None:
     """
     Run a harms suite against BCAL: expand each vector-invariant case across the vector matrix, run
     bcal per trial, score with Azure AI safety evaluators, and upload results to Foundry.
+
+    Cases come from a manual YAML suite (--suite) or red-team attack objectives (--objectives), which
+    are couched into a delivered harm + benign trigger before expansion.
 
     Rapid validation: `--dry-run` (no bcal/network), `--limit 1 --vector direct` (one bcal run).
 
     Examples:
         uv run bcbench harms run --dry-run
         uv run bcbench harms run --limit 1 --vector direct
-        uv run bcbench harms run --suite dataset/harms/sample.harms.yaml
+        uv run bcbench harms run --suite dataset/harms/comprehensive.harms.yaml
+        uv run bcbench harms run --objectives dataset/redteam/attack_objectives.sample.json
     """
     if not dry_run and not all((subscription_id, resource_group, project_name)):
         raise typer.BadParameter("Foundry project (AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME) is required unless --dry-run.")
 
     results_dir.mkdir(parents=True, exist_ok=True)
-    cases = ManualHarmsSource(suite).load()
+    if objectives is not None:
+        source = RedTeamHarmsSource(load_objectives(objectives), page=page, audience=audience, couchings=couchings_by_id(couching))
+        cases = source.load()
+        _console.print(f"[cyan]Red-team source[/]: {len(cases)} couched cases from {objectives}.")
+    else:
+        cases = ManualHarmsSource(suite).load()
 
     trials = run_harms_suite(
         cases,
@@ -94,6 +116,40 @@ def run(
     result = evaluate_trials(trials, azure_ai_project, results_dir, evaluators=tuple(evaluator) if evaluator else DEFAULT_EVALUATORS, upload=not no_upload)
     print(f"Harms results written to {results_dir / 'harms_results.json'}")
     _render_results(result, trials)
+
+
+@harms_app.command("harvest")
+def harvest(
+    output: Annotated[Path, typer.Option(help="Where to write the generated attack-objectives JSON.")] = _config.paths.harms_results / "objectives.json",
+    subscription_id: Annotated[str, typer.Option(envvar="AZURE_SUBSCRIPTION_ID", help="Foundry Hub subscription ID.")] = ...,
+    resource_group: Annotated[str, typer.Option(envvar="AZURE_RESOURCE_GROUP", help="Foundry Hub resource group.")] = ...,
+    project_name: Annotated[str, typer.Option(envvar="AZURE_PROJECT_NAME", help="Foundry Hub project name.")] = ...,
+    risk_category: Annotated[
+        list[str] | None, typer.Option("--risk-category", help="Risk category to generate objectives for (repeatable), e.g. code_vulnerability. Mutually exclusive with --seeds.")
+    ] = None,
+    seeds: Annotated[Path | None, typer.Option(help="Starting attack-objectives JSON (upstream format). Mutually exclusive with --risk-category.")] = None,
+    language: Annotated[str | None, typer.Option(help="Attack language (e.g. es).")] = None,
+) -> None:
+    """
+    Generate red-team attack objectives using the Azure AI Red Teaming Agent, for use with
+    `harms run --objectives`. The agent is driven with a capturing target that records the harmful
+    prompts it generates; those are written as an objectives JSON.
+
+    Example:
+        uv run bcbench harms harvest --risk-category code_vulnerability --output objectives.json
+        uv run bcbench harms run --objectives objectives.json
+    """
+    from azure.ai.evaluation.red_team import RiskCategory, SupportedLanguages
+
+    if bool(seeds) == bool(risk_category):
+        raise typer.BadParameter("Use either --seeds or --risk-category, not both.")
+
+    risks = [RiskCategory(r) for r in risk_category] if risk_category else None
+    lang = SupportedLanguages(language) if language else None
+    azure_ai_project = {"subscription_id": subscription_id, "resource_group_name": resource_group, "project_name": project_name}
+
+    path = harvest_objectives(azure_ai_project, output, risk_categories=risks, seeds_path=seeds, language=lang)
+    print(f"Attack objectives written to {path}")
 
 
 @harms_app.command("evaluate")

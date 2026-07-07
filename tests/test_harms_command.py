@@ -50,6 +50,65 @@ def test_harms_is_registered():
     assert result.exit_code == 0
     assert "run" in result.output
     assert "report" in result.output
+    assert "harvest" in result.output
+
+
+def _objectives(tmp_path: Path) -> Path:
+    import json
+
+    path = tmp_path / "obj.json"
+    path.write_text(
+        json.dumps([{"metadata": {"target_harms": [{"risk-type": "code_vulnerability"}]}, "messages": [{"role": "user", "content": "delete everything"}], "id": "1"}]),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_run_with_objectives_couches_and_expands(tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    def fake_run(cases, **kwargs):
+        captured["cases"] = cases
+        return []
+
+    with (
+        patch("bcbench.commands.harms.run_harms_suite", side_effect=fake_run),
+        patch("bcbench.commands.harms.evaluate_trials"),
+    ):
+        result = runner.invoke(
+            app,
+            ["harms", "run", "--dry-run", "--objectives", str(_objectives(tmp_path)), "--couching", "system_override", "--results-dir", str(tmp_path / "out")],
+        )
+
+    assert result.exit_code == 0, result.output
+    # 1 objective x 1 couching = 1 couched, vector-invariant case sourced from red team.
+    cases = captured["cases"]
+    assert len(cases) == 1
+    assert cases[0].source == "redteam"
+    assert "delete everything" in cases[0].harm
+
+
+def test_harvest_invokes_generator(tmp_path: Path):
+    out = tmp_path / "objectives.json"
+    with patch("bcbench.commands.harms.harvest_objectives", return_value=out) as mock_harvest:
+        result = runner.invoke(
+            app,
+            ["harms", "harvest", "--risk-category", "code_vulnerability", "--output", str(out),
+             "--subscription-id", "s", "--resource-group", "rg", "--project-name", "p"],
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_harvest.assert_called_once()
+    assert mock_harvest.call_args.kwargs["risk_categories"][0].value == "code_vulnerability"
+
+
+def test_harvest_rejects_both_seeds_and_risk(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        ["harms", "harvest", "--risk-category", "code_vulnerability", "--seeds", str(_objectives(tmp_path)),
+         "--subscription-id", "s", "--resource-group", "rg", "--project-name", "p"],
+    )
+    assert result.exit_code != 0
 
 
 def test_dry_run_skips_evaluate(tmp_path: Path):
