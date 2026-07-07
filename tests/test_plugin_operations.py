@@ -167,3 +167,40 @@ def test_setup_failure_removes_partial_home_and_raises(tmp_path, monkeypatch):
         po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
 
     assert not (tmp_path / ".bcbench" / "copilot-home").exists()
+
+
+from unittest.mock import MagicMock, patch
+
+from bcbench.dataset import BaseDatasetEntry
+
+
+@patch("bcbench.agent.copilot.agent.setup_plugins_from_config")
+@patch("bcbench.agent.copilot.agent.parse_tool_usage_from_hooks", return_value=None)
+@patch("bcbench.agent.copilot.agent.parse_metrics", return_value=None)
+@patch("bcbench.agent.copilot.agent.setup_hooks")
+@patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None)
+@patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=False)
+@patch("bcbench.agent.copilot.agent.setup_instructions_from_config", return_value=False)
+@patch("bcbench.agent.copilot.agent.build_al_lsp_plugin", return_value=None)
+@patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=(None, None))
+@patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task")
+@patch("bcbench.agent.copilot.agent.shutil.which", return_value="copilot")
+@patch("bcbench.agent.copilot.agent.subprocess.run")
+def test_copilot_runner_records_plugins_and_sets_home(
+    mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path
+):
+    from bcbench.agent.copilot.agent import run_copilot_agent
+    from bcbench.types import EvaluationCategory
+
+    mock_run.return_value = MagicMock(stderr=b"")
+    home = str(tmp_path / ".bcbench" / "copilot-home")
+    mock_setup.return_value = (["frontend-web-dev@a1b2c3d4"], {"COPILOT_HOME": home})
+    entry = MagicMock(spec=BaseDatasetEntry)
+    entry.instance_id = "microsoftInternal__NAV-1"
+
+    _metrics, config = run_copilot_agent(entry=entry, model="m", category=EvaluationCategory.BUG_FIX, repo_path=tmp_path, output_dir=tmp_path)
+
+    assert config.plugins == ["frontend-web-dev@a1b2c3d4"]
+    mock_setup.assert_called_once()
+    _args, kwargs = mock_run.call_args
+    assert kwargs["env"]["COPILOT_HOME"] == home

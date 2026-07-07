@@ -14,7 +14,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config, setup_plugins_from_config
 from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -48,22 +48,26 @@ def run_copilot_agent(
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
-    config = ExperimentConfiguration(
-        mcp_servers=mcp_server_names,
-        al_lsp_enabled=lsp_plugin_dir is not None,
-        custom_instructions=instructions_enabled,
-        skills_enabled=skills_enabled,
-        custom_agent=custom_agent,
-    )
-
-    logger.info(f"Executing Copilot CLI in directory: {repo_path}")
-    logger.debug(f"Using prompt:\n{prompt}")
 
     # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
     # which re-parses arguments and corrupts prompts containing double quotes (e.g. JSON examples).
     copilot_cmd = shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
+
+    plugin_records, plugin_env = setup_plugins_from_config(copilot_config, entry, repo_path, AgentType.COPILOT, copilot_cmd)
+
+    config = ExperimentConfiguration(
+        mcp_servers=mcp_server_names,
+        al_lsp_enabled=lsp_plugin_dir is not None,
+        custom_instructions=instructions_enabled,
+        skills_enabled=skills_enabled,
+        custom_agent=custom_agent,
+        plugins=plugin_records or None,
+    )
+
+    logger.info(f"Executing Copilot CLI in directory: {repo_path}")
+    logger.debug(f"Using prompt:\n{prompt}")
 
     try:
         cmd_args = [
@@ -93,6 +97,7 @@ def run_copilot_agent(
                 **os.environ,
                 "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
                 "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
+                **plugin_env,
             },
             stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
             timeout=_config.timeout.agent_execution,
