@@ -59,6 +59,8 @@ def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -
             repo: str = entry_cfg["repo"]
             commit: str = entry_cfg["commit"]
             dest = plugins_root / _slug(repo)
+            if dest.exists():
+                rmtree(dest)
             clone_at_commit(repo, commit, dest)
             return dest, commit
         case "local":
@@ -89,13 +91,27 @@ def _run_plugin_cmd(cli_cmd: str, args: list[str], env: dict[str, str]) -> None:
     subprocess.run([cli_cmd, "plugin", *args], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
 
 
+def _validate_entry(entry_cfg: dict) -> None:
+    source = entry_cfg.get("source")
+    match source:
+        case "marketplace":
+            required = ("repo", "commit", "plugins")
+        case "local":
+            required = ("path", "plugins")
+        case _:
+            raise AgentError(f"Unknown plugin source: {source!r}")
+    missing = [key for key in required if key not in entry_cfg]
+    if missing:
+        raise AgentError(f"Plugin entry {entry_cfg!r} is missing required key(s): {missing}")
+
+
 def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType, cli_cmd: str) -> tuple[list[str], dict[str, str]]:
     """Install every enabled plugin entry into a fresh per-entry CLI config home.
 
     Returns (plugin_records, env_overrides). env_overrides sets the isolated config home
     (COPILOT_HOME / CLAUDE_CONFIG_DIR) that the runner must also apply to the agent launch, so
     concurrent matrix entries never share the user-scope plugin store. Returns ([], {}) when no
-    entry is enabled. Raises AgentError on failure (after removing the partial home).
+    entry is enabled. Raises AgentError on failure, removing the partial home.
     """
     entries = [e for e in (agent_config.get("plugins") or []) if e.get("enabled", True)]
     if not entries:
@@ -114,6 +130,7 @@ def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_
     records: list[str] = []
     try:
         for entry_cfg in entries:
+            _validate_entry(entry_cfg)
             marketplace_dir, record_suffix = _materialize(entry_cfg, entry, plugins_root)
             marketplace_name = _read_marketplace_name(marketplace_dir)
             _run_plugin_cmd(cli_cmd, ["marketplace", "add", str(marketplace_dir)], env)
@@ -125,5 +142,9 @@ def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_
         if home.exists():
             rmtree(home)
         raise AgentError(f"Plugin setup failed: {e}") from e
+    except AgentError:
+        if home.exists():
+            rmtree(home)
+        raise
 
     return records, {home_var: str(home)}

@@ -171,6 +171,13 @@ def test_setup_failure_removes_partial_home_and_raises(tmp_path, monkeypatch):
     assert not (tmp_path / ".bcbench" / "copilot-home").exists()
 
 
+def test_setup_missing_required_key_raises_and_cleans_home(tmp_path):
+    cfg = {"plugins": [{"source": "marketplace", "repo": "github/x", "plugins": ["p"]}]}  # missing "commit"
+    with pytest.raises(AgentError, match="missing required key"):
+        po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+    assert not (tmp_path / ".bcbench" / "copilot-home").exists()
+
+
 @patch("bcbench.agent.copilot.agent.setup_plugins_from_config")
 @patch("bcbench.agent.copilot.agent.parse_tool_usage_from_hooks", return_value=None)
 @patch("bcbench.agent.copilot.agent.parse_metrics", return_value=None)
@@ -197,6 +204,7 @@ def test_copilot_runner_records_plugins_and_sets_home(mock_run, mock_which, mock
 
     assert config.plugins == ["frontend-web-dev@a1b2c3d4"]
     mock_setup.assert_called_once()
+    assert mock_setup.call_args.args[4] == "copilot"
     _args, kwargs = mock_run.call_args
     assert kwargs["env"]["COPILOT_HOME"] == home
 
@@ -229,5 +237,6 @@ def test_claude_runner_records_plugins_and_sets_config_dir(
 
     assert config.plugins == ["frontend-web-dev@a1b2c3d4"]
     mock_setup.assert_called_once()
+    assert mock_setup.call_args.args[4] == "claude"
     _args, kwargs = mock_run.call_args
     assert kwargs["env"]["CLAUDE_CONFIG_DIR"] == cfg_dir
