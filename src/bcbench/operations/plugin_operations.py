@@ -73,3 +73,57 @@ def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -
             return dest, "local"
         case _:
             raise AgentError(f"Unknown plugin source: {source!r}")
+
+
+def _home_env_var(agent_type: AgentType) -> str:
+    match agent_type:
+        case AgentType.COPILOT:
+            return "COPILOT_HOME"
+        case AgentType.CLAUDE:
+            return "CLAUDE_CONFIG_DIR"
+        case _:
+            raise AgentError(f"Unsupported agent type for plugins: {agent_type}")
+
+
+def _run_plugin_cmd(cli_cmd: str, args: list[str], env: dict[str, str]) -> None:
+    subprocess.run([cli_cmd, "plugin", *args], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+
+
+def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType, cli_cmd: str) -> tuple[list[str], dict[str, str]]:
+    """Install every enabled plugin entry into a fresh per-entry CLI config home.
+
+    Returns (plugin_records, env_overrides). env_overrides sets the isolated config home
+    (COPILOT_HOME / CLAUDE_CONFIG_DIR) that the runner must also apply to the agent launch, so
+    concurrent matrix entries never share the user-scope plugin store. Returns ([], {}) when no
+    entry is enabled. Raises AgentError on failure (after removing the partial home).
+    """
+    entries = [e for e in (agent_config.get("plugins") or []) if e.get("enabled", True)]
+    if not entries:
+        return [], {}
+
+    bcbench_dir = repo_path / _BCBENCH_ROOT
+    plugins_root = bcbench_dir / _PLUGINS_FOLDER
+    home = bcbench_dir / f"{agent_type.value}-home"
+    for path in (plugins_root, home):
+        if path.exists():
+            rmtree(path)  # clean-before
+        path.mkdir(parents=True, exist_ok=True)
+
+    home_var = _home_env_var(agent_type)
+    env = {**os.environ, home_var: str(home)}
+    records: list[str] = []
+    try:
+        for entry_cfg in entries:
+            marketplace_dir, record_suffix = _materialize(entry_cfg, entry, plugins_root)
+            marketplace_name = _read_marketplace_name(marketplace_dir)
+            _run_plugin_cmd(cli_cmd, ["marketplace", "add", str(marketplace_dir)], env)
+            for plugin in entry_cfg["plugins"]:
+                _run_plugin_cmd(cli_cmd, ["install", f"{plugin}@{marketplace_name}"], env)
+                records.append(f"{plugin}@{record_suffix}")
+                logger.info(f"Installed plugin {plugin}@{marketplace_name} into {home}")
+    except (subprocess.CalledProcessError, OSError) as e:
+        if home.exists():
+            rmtree(home)
+        raise AgentError(f"Plugin setup failed: {e}") from e
+
+    return records, {home_var: str(home)}

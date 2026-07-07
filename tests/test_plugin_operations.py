@@ -5,6 +5,7 @@ import pytest
 
 from bcbench.exceptions import AgentError
 from bcbench.operations import plugin_operations as po
+from bcbench.types import AgentType
 from tests.conftest import create_dataset_entry
 
 
@@ -30,7 +31,7 @@ def test_read_marketplace_name_github_plugin_path(tmp_path):
 
 
 def test_read_marketplace_name_missing_raises(tmp_path):
-    with pytest.raises(AgentError, match="marketplace.json"):
+    with pytest.raises(AgentError, match=r"marketplace\.json"):
         po._read_marketplace_name(tmp_path)
 
 
@@ -80,3 +81,89 @@ def test_materialize_unknown_source_raises(tmp_path):
     entry = create_dataset_entry()
     with pytest.raises(AgentError, match="Unknown plugin source"):
         po._materialize({"source": "bogus", "plugins": []}, entry, tmp_path)
+
+
+class _Recorder:
+    def __init__(self):
+        self.calls: list[tuple[list[str], dict | None]] = []
+
+    def __call__(self, args, **kwargs):
+        self.calls.append((args, kwargs.get("env")))
+
+        class _R:
+            returncode = 0
+
+        return _R()
+
+
+def _marketplace_entry_cfg():
+    return {"source": "marketplace", "repo": "github/awesome-copilot", "commit": "a" * 40, "plugins": ["probe-plugin"]}
+
+
+def test_setup_no_plugins_returns_empty(tmp_path):
+    records, env = po.setup_plugins_from_config({}, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+    assert records == []
+    assert env == {}
+
+
+def test_setup_disabled_entry_skipped(tmp_path, monkeypatch):
+    monkeypatch.setattr(po.subprocess, "run", _Recorder())
+    cfg = {"plugins": [{**_marketplace_entry_cfg(), "enabled": False}]}
+    records, env = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+    assert records == []
+    assert env == {}
+
+
+def test_setup_installs_into_isolated_home_and_records(tmp_path, monkeypatch):
+    def fake_clone(repo, commit, dest):
+        _make_marketplace(dest, name="awesome-copilot")
+
+    rec = _Recorder()
+    monkeypatch.setattr(po, "clone_at_commit", fake_clone)
+    monkeypatch.setattr(po.subprocess, "run", rec)
+
+    cfg = {"plugins": [_marketplace_entry_cfg()]}
+    records, env = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+
+    home = str(tmp_path / ".bcbench" / "copilot-home")
+    assert records == ["probe-plugin@" + "a" * 40]
+    assert env == {"COPILOT_HOME": home}
+
+    add_call = next(c for c in rec.calls if c[0][:4] == ["copilot", "plugin", "marketplace", "add"])
+    install_call = next(c for c in rec.calls if c[0][:3] == ["copilot", "plugin", "install"])
+    assert add_call[0][4] == str(tmp_path / ".bcbench" / "plugins" / "github-awesome-copilot")
+    assert install_call[0] == ["copilot", "plugin", "install", "probe-plugin@awesome-copilot"]
+    # commands ran with the isolated home in their env
+    assert add_call[1]["COPILOT_HOME"] == home
+    assert install_call[1]["COPILOT_HOME"] == home
+
+
+def test_setup_claude_uses_claude_config_dir(tmp_path, monkeypatch):
+    def fake_clone(repo, commit, dest):
+        _make_marketplace(dest, name="awesome-copilot")
+
+    monkeypatch.setattr(po, "clone_at_commit", fake_clone)
+    monkeypatch.setattr(po.subprocess, "run", _Recorder())
+    cfg = {"plugins": [_marketplace_entry_cfg()]}
+
+    _records, env = po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.CLAUDE, "claude")
+
+    assert env == {"CLAUDE_CONFIG_DIR": str(tmp_path / ".bcbench" / "claude-home")}
+
+
+def test_setup_failure_removes_partial_home_and_raises(tmp_path, monkeypatch):
+    def fake_clone(repo, commit, dest):
+        _make_marketplace(dest, name="awesome-copilot")
+
+    monkeypatch.setattr(po, "clone_at_commit", fake_clone)
+
+    def failing_run(args, **kwargs):
+        raise po.subprocess.CalledProcessError(1, args)
+
+    monkeypatch.setattr(po.subprocess, "run", failing_run)
+    cfg = {"plugins": [_marketplace_entry_cfg()]}
+
+    with pytest.raises(AgentError, match="Plugin setup failed"):
+        po.setup_plugins_from_config(cfg, create_dataset_entry(), tmp_path, AgentType.COPILOT, "copilot")
+
+    assert not (tmp_path / ".bcbench" / "copilot-home").exists()
