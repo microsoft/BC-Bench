@@ -87,10 +87,10 @@ def test_materialize_unknown_source_raises(tmp_path):
 
 class _Recorder:
     def __init__(self):
-        self.calls: list[tuple[list[str], dict | None]] = []
+        self.calls: list[tuple[list[str], dict[str, str]]] = []
 
     def __call__(self, args, **kwargs):
-        self.calls.append((args, kwargs.get("env")))
+        self.calls.append((args, kwargs.get("env") or {}))
 
         class _R:
             returncode = 0
