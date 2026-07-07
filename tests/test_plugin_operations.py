@@ -3,10 +3,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.operations import plugin_operations as po
+from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentType
 from tests.conftest import create_dataset_entry
 
@@ -240,3 +242,23 @@ def test_claude_runner_records_plugins_and_sets_config_dir(
     assert mock_setup.call_args.args[4] == "claude"
     _args, kwargs = mock_run.call_args
     assert kwargs["env"]["CLAUDE_CONFIG_DIR"] == cfg_dir
+
+
+def test_bundled_example_plugin_is_valid_and_referenced_by_config():
+    # The shipped config.yaml must reference the bundled example, and that example must be a
+    # valid marketplace root whose catalog lists the named plugin(s) with a real plugin.json.
+    config_path = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
+    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    local_entries = [e for e in (cfg.get("plugins") or []) if e.get("source") == "local"]
+    assert local_entries, "config.yaml must ship an example local plugin entry"
+
+    instructions = _get_source_instructions_path("microsoft/BCApps")
+    for entry in local_entries:
+        marketplace_dir = instructions / entry["path"]
+        assert marketplace_dir.is_dir(), f"example marketplace missing: {marketplace_dir}"
+        assert po._read_marketplace_name(marketplace_dir)  # valid marketplace.json with a name
+        catalog = json.loads((marketplace_dir / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+        catalog_by_name = {p["name"]: p["source"] for p in catalog["plugins"]}
+        for plugin in entry["plugins"]:
+            assert plugin in catalog_by_name, f"{plugin} not listed in example marketplace"
+            assert (marketplace_dir / catalog_by_name[plugin] / ".claude-plugin" / "plugin.json").is_file()

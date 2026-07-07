@@ -103,16 +103,21 @@ agents:
 #       ANTHROPIC_API_KEY) — local plugin runs must have that token in the environment.
 # source: "marketplace" (repo + commit) or "local" (path under instructions/<owner>-<repo>/,
 #         which must be a marketplace root containing .claude-plugin/marketplace.json).
-plugins: []
+# A bundled, self-contained example ships at instructions/microsoft-BCApps/plugins/bcbench-example/
+# — flip its `enabled: true` below to smoke-test that a plugin installs and its skill loads.
+plugins:
+  - source: local
+    enabled: false                        # flip to true to smoke-test the bundled example plugin
+    path: "plugins/bcbench-example"
+    plugins: ["bcbench-example-plugin"]
+  # Marketplace example (pins a commit). NOTE: the marketplace's own name (in its marketplace.json)
+  # must NOT be a Copilot built-in (copilot-plugins / awesome-copilot), or `plugin marketplace add`
+  # fails with "is a default marketplace and is already available".
   # - source: marketplace
   #   enabled: true
-  #   repo: "github/awesome-copilot"
+  #   repo: "<owner>/<repo>"
   #   commit: "<40-char-commit-sha>"
-  #   plugins: ["frontend-web-dev"]
-  # - source: local
-  #   enabled: false
-  #   path: "plugins/my-local-plugin"
-  #   plugins: ["my-local-plugin"]
+  #   plugins: ["<plugin-name>"]
 
 mcp:
   servers:

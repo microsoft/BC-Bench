@@ -1,0 +1,16 @@
+{
+  "name": "bcbench-example-marketplace",
+  "owner": {
+    "name": "BC-Bench"
+  },
+  "metadata": {
+    "description": "Bundled example marketplace used to smoke-test the BC-Bench `plugins` experiment toggle. Its name is intentionally unique so it never collides with Copilot's built-in `copilot-plugins` / `awesome-copilot` marketplaces."
+  },
+  "plugins": [
+    {
+      "name": "bcbench-example-plugin",
+      "source": "./bcbench-example-plugin",
+      "description": "Minimal example plugin bundling a single no-op skill, to verify a plugin installs into the agent's isolated config home and loads."
+    }
+  ]
+}
