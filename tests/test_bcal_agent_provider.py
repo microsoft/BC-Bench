@@ -77,6 +77,53 @@ class TestModelLabel:
         assert config.model_label() == "external-command"
 
 
+class TestResolveBcalExecutable:
+    def test_env_override_takes_precedence_over_path(self, tmp_path: Path):
+        exe = tmp_path / "bcal.exe"
+        exe.write_text("", encoding="utf-8")
+        with (
+            patch.dict("os.environ", {"BCAL_EXECUTABLE": str(exe)}),
+            patch.object(bcal_agent.shutil, "which", return_value="C:\\global\\bcal.exe") as which,
+        ):
+            assert bcal_agent._resolve_bcal_executable() == str(exe)
+            which.assert_not_called()
+
+    def test_env_override_missing_file_raises(self, tmp_path: Path):
+        with (
+            patch.dict("os.environ", {"BCAL_EXECUTABLE": str(tmp_path / "nope.exe")}),
+            pytest.raises(AgentError),
+        ):
+            bcal_agent._resolve_bcal_executable()
+
+    def test_falls_back_to_path_when_override_unset(self):
+        with (
+            patch.dict("os.environ", {"BCAL_EXECUTABLE": ""}, clear=False),
+            patch.object(bcal_agent.shutil, "which", return_value="C:\\global\\bcal.exe"),
+        ):
+            assert bcal_agent._resolve_bcal_executable() == "C:\\global\\bcal.exe"
+
+    def test_raises_when_no_override_and_not_on_path(self):
+        with (
+            patch.dict("os.environ", {"BCAL_EXECUTABLE": ""}, clear=False),
+            patch.object(bcal_agent.shutil, "which", return_value=None),
+            pytest.raises(AgentError),
+        ):
+            bcal_agent._resolve_bcal_executable()
+
+
+class TestBcalVersion:
+    def test_returns_version_string(self):
+        mock = MagicMock()
+        mock.stdout = "29+abc123\n"
+        mock.stderr = ""
+        with patch.object(subprocess, "run", return_value=mock):
+            assert bcal_agent.bcal_version("C:\\fake\\bcal.exe") == "29+abc123"
+
+    def test_never_raises_on_failure(self):
+        with patch.object(subprocess, "run", side_effect=OSError("boom")):
+            assert bcal_agent.bcal_version("C:\\fake\\bcal.exe") == "(unknown)"
+
+
 class TestRunBcalAgentAzureOpenAI:
     def test_passes_aoai_endpoint_to_subprocess(self, workspace: Path):
         entry = create_nl2al_entry()

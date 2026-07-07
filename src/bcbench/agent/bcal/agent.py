@@ -1,5 +1,6 @@
 """BCal agent for NL2AL evaluation — generates AL code from natural language via bcal CLI."""
 
+import os
 import shutil
 import subprocess
 import time
@@ -17,6 +18,7 @@ logger = get_logger(__name__)
 _config = get_config()
 
 _BCAL_TOOL = "bcal"
+_BCAL_EXECUTABLE_ENV = "BCAL_EXECUTABLE"
 
 
 class BCalBackendConfig(BaseModel):
@@ -71,9 +73,20 @@ class BCalBackendConfig(BaseModel):
 
 
 def _resolve_bcal_executable() -> str:
+    """Resolve the bcal executable, preferring an explicit ``BCAL_EXECUTABLE`` override over PATH.
+
+    Harms/XPIA injection requires a bcal build with the harm-fixture wiring; a stale global tool on
+    PATH silently produces meaningless results. Set ``BCAL_EXECUTABLE`` to the local build's exe to
+    pin it deterministically instead of relying on PATH ordering.
+    """
+    override = os.environ.get(_BCAL_EXECUTABLE_ENV, "").strip()
+    if override:
+        if not Path(override).is_file():
+            raise AgentError(f"{_BCAL_EXECUTABLE_ENV}='{override}' does not point to an existing file.")
+        return override
     resolved = shutil.which(_BCAL_TOOL)
     if not resolved:
-        raise AgentError(f"'{_BCAL_TOOL}' executable not found on PATH.")
+        raise AgentError(f"'{_BCAL_TOOL}' executable not found on PATH (and {_BCAL_EXECUTABLE_ENV} is unset).")
     return resolved
 
 
@@ -138,6 +151,16 @@ def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, exp
         f"--prompt={prompt}",
         f"--exportfolder={export_folder}",
     ]
+
+
+def bcal_version(executable: str | None = None) -> str:
+    """Return the resolved bcal ``--version`` string (best-effort; never raises)."""
+    exe = executable or _resolve_bcal_executable()
+    try:
+        result = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30, check=False)
+        return (result.stdout or result.stderr or "").strip() or "(unknown)"
+    except (OSError, subprocess.SubprocessError):
+        return "(unknown)"
 
 
 def run_bcal_agent(
