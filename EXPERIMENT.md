@@ -56,7 +56,7 @@ At runtime we copy this folder into the target repo:
 
 `plugins` is a list; each entry is toggled by its own `enabled` (default `true`):
 
-- `source: marketplace` — `repo` (`owner/repo` or git URL) + `commit` (pinned for reproducibility) + `plugins` (names to install).
+- `source: marketplace` — `repo` (`owner/repo` or git URL) + `commit` (pinned for reproducibility) + optional `path` (marketplace root within the clone, when the repo hosts the marketplace in a subdir) + `plugins` (names to install).
 - `source: local` — `path` (relative to `src/bcbench/agent/shared/plugins/`, pointing at a marketplace root with `.claude-plugin/marketplace.json`) + `plugins`.
 
 At runtime the marketplace is cloned at its commit into `<repo>/.bcbench/plugins/` and installed with the CLI's own commands into a fresh per-entry config home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` under `.bcbench/`), which keeps parallel matrix entries isolated. A fresh home authenticates via the env token the workflow already sets (`COPILOT_GITHUB_TOKEN`; `ANTHROPIC_API_KEY`) — local plugin runs must have that token set. Installed plugins are recorded in the result's `ExperimentConfiguration.plugins` as `"<name>@<commit>"` / `"<name>@local"`.

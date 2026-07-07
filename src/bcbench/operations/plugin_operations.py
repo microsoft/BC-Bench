@@ -69,7 +69,11 @@ def _materialize(entry_cfg: dict, plugins_root: Path) -> tuple[Path, str]:
                 rmtree(dest)
             logger.info(f"Cloning plugin marketplace {repo}@{commit}")
             clone_at_commit(repo, commit, dest)
-            return dest, commit
+            subpath: str | None = entry_cfg.get("path")
+            marketplace_dir = dest / subpath if subpath else dest
+            if not marketplace_dir.is_dir():
+                raise AgentError(f"Marketplace path not found in clone {repo}@{commit}: {marketplace_dir}")
+            return marketplace_dir, commit
         case "local":
             rel_path: str = entry_cfg["path"]
             src = _local_plugin_root() / rel_path

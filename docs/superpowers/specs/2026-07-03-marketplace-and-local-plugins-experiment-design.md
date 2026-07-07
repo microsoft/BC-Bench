@@ -164,9 +164,11 @@ checkout, and a clean-before at the top of setup removes any stale home.
 - **Clean before:** inline-`rmtree` `<repo>/.bcbench/plugins` and the per-entry
   config home (do NOT import `remove_agent_plugin` — `operations` must not import
   `bcbench.agent`, which would create a cycle). Then recreate both fresh.
-- **marketplace** (`repo` + `commit`): shallow-clone into
+- **marketplace** (`repo` + `commit`, optional `path`): shallow-clone into
   `<repo>/.bcbench/plugins/<slug>` and `git checkout <commit>` (`clone_at_commit`).
-  Read the marketplace `name` from its `marketplace.json`.
+  When `path` is given, the marketplace root is that subdir within the clone (for
+  repos that host the marketplace in a subdirectory). Read the marketplace `name`
+  from its `marketplace.json`.
 - **local** (`path`): copy into `<repo>/.bcbench/plugins/<slug>`. `path` resolves
   under `src/bcbench/agent/shared/plugins/` (repo-agnostic) and must be a
   marketplace root (contains `marketplace.json`).

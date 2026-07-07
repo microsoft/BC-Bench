@@ -54,6 +54,34 @@ def test_materialize_marketplace_clones_at_commit(tmp_path, monkeypatch):
     assert record_suffix == "a" * 40
 
 
+def test_materialize_marketplace_with_subpath(tmp_path, monkeypatch):
+    plugins_root = tmp_path / "plugins_root"
+    plugins_root.mkdir()
+
+    def fake_clone(repo: str, commit: str, dest: Path) -> None:
+        _make_marketplace(dest / "sub" / "mp", name="cloned-sub-mp")
+
+    monkeypatch.setattr(po, "clone_at_commit", fake_clone)
+    entry_cfg = {"source": "marketplace", "repo": "org/repo", "commit": "b" * 40, "path": "sub/mp", "plugins": ["probe-plugin"]}
+
+    marketplace_dir, record_suffix = po._materialize(entry_cfg, plugins_root)
+
+    assert marketplace_dir.name == "mp"
+    assert (marketplace_dir / ".claude-plugin" / "marketplace.json").is_file()
+    assert record_suffix == "b" * 40
+
+
+def test_materialize_marketplace_subpath_missing_raises(tmp_path, monkeypatch):
+    def fake_clone(repo: str, commit: str, dest: Path) -> None:
+        dest.mkdir(parents=True, exist_ok=True)  # clone succeeds but the requested subpath is absent
+
+    monkeypatch.setattr(po, "clone_at_commit", fake_clone)
+    entry_cfg = {"source": "marketplace", "repo": "org/repo", "commit": "c" * 40, "path": "missing", "plugins": ["x"]}
+
+    with pytest.raises(AgentError, match="Marketplace path not found"):
+        po._materialize(entry_cfg, tmp_path / "plugins_root")
+
+
 def test_materialize_local_copies_from_shared_plugins_dir(tmp_path, monkeypatch):
     plugins_root = tmp_path / "plugins_root"
     plugins_root.mkdir()
@@ -242,14 +270,23 @@ def test_claude_runner_records_plugins_and_sets_config_dir(
 def test_bundled_example_plugin_is_valid_and_referenced_by_config():
     # The shipped config.yaml must reference the bundled example, and that example must be a
     # valid marketplace root whose catalog lists the named plugin(s) with a real plugin.json.
-    config_path = Path(__file__).parent.parent / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    local_entries = [e for e in (cfg.get("plugins") or []) if e.get("source") == "local"]
-    assert local_entries, "config.yaml must ship an example local plugin entry"
+    # This validates both the local entry and the self-referential marketplace entry (which pins a
+    # commit but points `path` at the same on-disk subdir).
+    repo_root = Path(__file__).parent.parent
+    cfg = yaml.safe_load((repo_root / "src" / "bcbench" / "agent" / "shared" / "config.yaml").read_text(encoding="utf-8"))
+    entries = cfg.get("plugins") or []
+    assert entries, "config.yaml must ship at least one example plugin entry"
 
-    instructions = po._local_plugin_root()
-    for entry in local_entries:
-        marketplace_dir = instructions / entry["path"]
+    local_root = po._local_plugin_root()
+    checked = 0
+    for entry in entries:
+        if entry["source"] == "local":
+            marketplace_dir = local_root / entry["path"]
+        elif entry["source"] == "marketplace" and entry["repo"] == "microsoft/BC-Bench":
+            marketplace_dir = repo_root / entry["path"]
+        else:
+            continue
+        checked += 1
         assert marketplace_dir.is_dir(), f"example marketplace missing: {marketplace_dir}"
         assert po._read_marketplace_name(marketplace_dir)  # valid marketplace.json with a name
         catalog = json.loads((marketplace_dir / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
@@ -257,3 +294,4 @@ def test_bundled_example_plugin_is_valid_and_referenced_by_config():
         for plugin in entry["plugins"]:
             assert plugin in catalog_by_name, f"{plugin} not listed in example marketplace"
             assert (marketplace_dir / catalog_by_name[plugin] / ".claude-plugin" / "plugin.json").is_file()
+    assert checked, "config.yaml must ship a validatable bundled example entry"
