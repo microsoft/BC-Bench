@@ -1,11 +1,12 @@
 import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from bcbench.exceptions import EmptyDiffError
-from bcbench.operations.git_operations import clean_project_paths, commit_changes, stage_and_get_diff
+from bcbench.operations.git_operations import clean_project_paths, clone_at_commit, commit_changes, stage_and_get_diff
 
 
 class TestCommitChanges:
@@ -218,3 +219,25 @@ class TestCleanProjectPaths:
     def test_clean_project_paths_empty_list_raises_error(self, temp_git_repo):
         with pytest.raises(ValueError, match="No project paths provided"):
             clean_project_paths(temp_git_repo, [])
+
+
+@patch("bcbench.operations.git_operations.subprocess.run")
+def test_clone_at_commit_owner_repo_builds_https_url(mock_run, tmp_path):
+    dest = tmp_path / "clone"
+
+    clone_at_commit("github/awesome-copilot", "a" * 40, dest)
+
+    assert dest.is_dir()
+    commands = [c.args[0] for c in mock_run.call_args_list]
+    assert ["git", "init", "-q"] in commands
+    assert ["git", "remote", "add", "origin", "https://github.com/github/awesome-copilot.git"] in commands
+    assert ["git", "fetch", "--depth", "1", "origin", "a" * 40] in commands
+    assert ["git", "checkout", "-q", "FETCH_HEAD"] in commands
+
+
+@patch("bcbench.operations.git_operations.subprocess.run")
+def test_clone_at_commit_full_url_used_verbatim(mock_run, tmp_path):
+    clone_at_commit("https://gitlab.com/o/r.git", "b" * 40, tmp_path / "c")
+
+    remote_calls = [c.args[0] for c in mock_run.call_args_list if c.args[0][:3] == ["git", "remote", "add"]]
+    assert remote_calls == [["git", "remote", "add", "origin", "https://gitlab.com/o/r.git"]]

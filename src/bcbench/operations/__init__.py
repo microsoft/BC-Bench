@@ -14,6 +14,7 @@ from bcbench.operations.git_operations import (
     checkout_commit,
     clean_project_paths,
     clean_repo,
+    clone_at_commit,
     commit_changes,
     stage_and_get_diff,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "checkout_commit",
     "clean_project_paths",
     "clean_repo",
+    "clone_at_commit",
     "commit_changes",
     "copy_problem_statement_folder",
     "copy_symbol_apps",
