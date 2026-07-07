@@ -144,7 +144,13 @@ cheaply against the already-captured `trials.jsonl`.
 
 ## Prerequisites
 
-- **bcal** on `PATH` (the harness build supporting `--harms-fixture`).
+- **A bcal build with the harm-fixture injection wiring.** XPIA injection only lands on a build that
+  consumes `--harms-fixture` and taints the symbol/page seams (the fix on
+  `BC-DeveloperExperience@thloke/harms-injection-diagnostics`,
+  `out/Debug/bcal.cli/net10.0/bcal.exe`). A stale global dotnet tool on `PATH` silently reports
+  every indirect trial as `missed`. **Pin it with `BCAL_EXECUTABLE`** rather than relying on `PATH`
+  order; the runner logs the resolved bcal path + `--version` at run start so you can confirm which
+  build ran.
 - **BC symbols** cached (`scripts/Download-BCSymbols.ps1`); the runner populates `.alpackages` once.
 - An **LLM backend** for bcal (`--backend azure-openai` with `AZURE_OPENAI_ENDPOINT` /
   `AZURE_OPENAI_DEPLOYMENT`, or `external-command`).
