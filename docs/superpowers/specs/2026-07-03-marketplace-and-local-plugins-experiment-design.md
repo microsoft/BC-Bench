@@ -168,7 +168,7 @@ checkout, and a clean-before at the top of setup removes any stale home.
   `<repo>/.bcbench/plugins/<slug>` and `git checkout <commit>` (`clone_at_commit`).
   Read the marketplace `name` from its `marketplace.json`.
 - **local** (`path`): copy into `<repo>/.bcbench/plugins/<slug>`. `path` resolves
-  under `src/bcbench/agent/shared/instructions/<sanitized-repo>/` and must be a
+  under `src/bcbench/agent/shared/plugins/` (repo-agnostic) and must be a
   marketplace root (contains `marketplace.json`).
 - Failures raise `AgentError`.
 
@@ -204,7 +204,7 @@ plugins:
     plugins: ["frontend-web-dev"]       # plugin name(s) to install
   - source: local
     enabled: false                      # kept in file, parked
-    path: "plugins/my-local-plugin"     # under instructions/<sanitized-repo>/
+    path: "bcbench-example"             # under src/bcbench/agent/shared/plugins/
     plugins: ["my-local-plugin"]
 ```
 

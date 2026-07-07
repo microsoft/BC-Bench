@@ -8,7 +8,6 @@ import yaml
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.operations import plugin_operations as po
-from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentType
 from tests.conftest import create_dataset_entry
 
@@ -47,44 +46,40 @@ def test_materialize_marketplace_clones_at_commit(tmp_path, monkeypatch):
         _make_marketplace(dest, name="cloned-mp")
 
     monkeypatch.setattr(po, "clone_at_commit", fake_clone)
-    entry = create_dataset_entry()
     entry_cfg = {"source": "marketplace", "repo": "github/awesome-copilot", "commit": "a" * 40, "plugins": ["probe-plugin"]}
 
-    marketplace_dir, record_suffix = po._materialize(entry_cfg, entry, plugins_root)
+    marketplace_dir, record_suffix = po._materialize(entry_cfg, plugins_root)
 
     assert (marketplace_dir / ".claude-plugin" / "marketplace.json").is_file()
     assert record_suffix == "a" * 40
 
 
-def test_materialize_local_copies_from_instructions(tmp_path, monkeypatch):
+def test_materialize_local_copies_from_shared_plugins_dir(tmp_path, monkeypatch):
     plugins_root = tmp_path / "plugins_root"
     plugins_root.mkdir()
-    source_root = tmp_path / "instructions"
-    _make_marketplace(source_root / "plugins" / "my-mp", name="local-mp")
+    shared_root = tmp_path / "shared-plugins"
+    _make_marketplace(shared_root / "my-mp", name="local-mp")
 
-    monkeypatch.setattr(po, "_get_source_instructions_path", lambda repo: source_root)
-    entry = create_dataset_entry()
-    entry_cfg = {"source": "local", "path": "plugins/my-mp", "plugins": ["probe-plugin"]}
+    monkeypatch.setattr(po, "_local_plugin_root", lambda: shared_root)
+    entry_cfg = {"source": "local", "path": "my-mp", "plugins": ["probe-plugin"]}
 
-    marketplace_dir, record_suffix = po._materialize(entry_cfg, entry, plugins_root)
+    marketplace_dir, record_suffix = po._materialize(entry_cfg, plugins_root)
 
     assert (marketplace_dir / ".claude-plugin" / "marketplace.json").is_file()
     assert record_suffix == "local"
 
 
 def test_materialize_local_missing_raises(tmp_path, monkeypatch):
-    monkeypatch.setattr(po, "_get_source_instructions_path", lambda repo: tmp_path / "nope")
-    entry = create_dataset_entry()
-    entry_cfg = {"source": "local", "path": "plugins/absent", "plugins": ["x"]}
+    monkeypatch.setattr(po, "_local_plugin_root", lambda: tmp_path / "nope")
+    entry_cfg = {"source": "local", "path": "absent", "plugins": ["x"]}
 
     with pytest.raises(AgentError, match="Local plugin marketplace not found"):
-        po._materialize(entry_cfg, entry, tmp_path / "plugins_root")
+        po._materialize(entry_cfg, tmp_path / "plugins_root")
 
 
 def test_materialize_unknown_source_raises(tmp_path):
-    entry = create_dataset_entry()
     with pytest.raises(AgentError, match="Unknown plugin source"):
-        po._materialize({"source": "bogus", "plugins": []}, entry, tmp_path)
+        po._materialize({"source": "bogus", "plugins": []}, tmp_path)
 
 
 class _Recorder:
@@ -252,7 +247,7 @@ def test_bundled_example_plugin_is_valid_and_referenced_by_config():
     local_entries = [e for e in (cfg.get("plugins") or []) if e.get("source") == "local"]
     assert local_entries, "config.yaml must ship an example local plugin entry"
 
-    instructions = _get_source_instructions_path("microsoft/BCApps")
+    instructions = po._local_plugin_root()
     for entry in local_entries:
         marketplace_dir = instructions / entry["path"]
         assert marketplace_dir.is_dir(), f"example marketplace missing: {marketplace_dir}"

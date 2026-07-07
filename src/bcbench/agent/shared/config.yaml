@@ -101,14 +101,14 @@ agents:
 #       in headless mode, so we drive the real CLI commands instead.
 # NOTE: a fresh home authenticates via the env token the workflow sets (COPILOT_GITHUB_TOKEN;
 #       ANTHROPIC_API_KEY) — local plugin runs must have that token in the environment.
-# source: "marketplace" (repo + commit) or "local" (path under instructions/<owner>-<repo>/,
+# source: "marketplace" (repo + commit) or "local" (path under src/bcbench/agent/shared/plugins/,
 #         which must be a marketplace root containing .claude-plugin/marketplace.json).
-# A bundled, self-contained example ships at instructions/microsoft-BCApps/plugins/bcbench-example/
+# A bundled, self-contained example ships at src/bcbench/agent/shared/plugins/bcbench-example/
 # — flip its `enabled: true` below to smoke-test that a plugin installs and its skill loads.
 plugins:
   - source: local
     enabled: true                         # TEMPORARILY on to smoke-test the example — revert before merge
-    path: "plugins/bcbench-example"
+    path: "bcbench-example"
     plugins: ["bcbench-example-plugin"]
   # Marketplace example (pins a commit). NOTE: the marketplace's own name (in its marketplace.json)
   # must NOT be a Copilot built-in (copilot-plugins / awesome-copilot), or `plugin marketplace add`

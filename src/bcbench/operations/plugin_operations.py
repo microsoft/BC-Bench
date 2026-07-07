@@ -19,18 +19,24 @@ import subprocess
 from pathlib import Path
 from shutil import copytree, rmtree
 
+from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 from bcbench.operations.git_operations import clone_at_commit
-from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentType
 
 logger = get_logger(__name__)
+_config = get_config()
 
 _BCBENCH_ROOT = ".bcbench"
 _PLUGINS_FOLDER = "plugins"  # under <repo>/.bcbench/plugins/
 _MARKETPLACE_MANIFESTS = (".claude-plugin/marketplace.json", ".github/plugin/marketplace.json")
+
+
+def _local_plugin_root() -> Path:
+    """Repo-agnostic base for `source: local` plugin marketplaces (src/bcbench/agent/shared/plugins/)."""
+    return _config.paths.agent_share_dir / "plugins"
 
 
 def _slug(text: str) -> str:
@@ -47,7 +53,7 @@ def _read_marketplace_name(marketplace_dir: Path) -> str:
     raise AgentError(f"No marketplace.json with a 'name' found under {marketplace_dir}")
 
 
-def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -> tuple[Path, str]:
+def _materialize(entry_cfg: dict, plugins_root: Path) -> tuple[Path, str]:
     """Clone (marketplace) or copy (local) the marketplace into plugins_root.
 
     Returns:
@@ -66,7 +72,7 @@ def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -
             return dest, commit
         case "local":
             rel_path: str = entry_cfg["path"]
-            src = _get_source_instructions_path(entry.repo) / rel_path
+            src = _local_plugin_root() / rel_path
             if not src.is_dir():
                 raise AgentError(f"Local plugin marketplace not found: {src}")
             dest = plugins_root / _slug(rel_path)
@@ -132,7 +138,7 @@ def setup_plugins_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_
     try:
         for entry_cfg in entries:
             _validate_entry(entry_cfg)
-            marketplace_dir, record_suffix = _materialize(entry_cfg, entry, plugins_root)
+            marketplace_dir, record_suffix = _materialize(entry_cfg, plugins_root)
             marketplace_name = _read_marketplace_name(marketplace_dir)
             logger.info(f"Registering marketplace '{marketplace_name}' from {marketplace_dir}")
             _run_plugin_cmd(cli_cmd, ["marketplace", "add", str(marketplace_dir)], env)
