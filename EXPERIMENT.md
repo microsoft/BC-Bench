@@ -24,6 +24,7 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 | `skills.enabled` | `false` | Copy **only** `instructions/<owner>-<repo>/skills/` |
 | `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<owner>-<repo>/agents/` and pass `--agent=<name>` to the CLI |
 | `mcp.servers` | _(none)_ | List of MCP servers to register |
+| `plugins` | _(empty)_ | List of agent plugins to install for the run (marketplace pinned to a commit, or local). Each enabled entry is installed via the CLI's `plugin marketplace add` + `plugin install` into a per-entry isolated config home. |
 
 Note: `instructions.enabled: true` is a superset — you don't also need to enable `skills` or `agents` to get them. Use `skills`/`agents` when you want to isolate the effect of just that piece.
 
@@ -50,6 +51,15 @@ instructions/
 At runtime we copy this folder into the target repo:
 - **Copilot**: `<repo>/.github/` (`AGENTS.md` -> `copilot-instructions.md`)
 - **Claude**: `<repo>/.claude/` (`AGENTS.md` -> `CLAUDE.md`)
+
+### Marketplace & local plugins
+
+`plugins` is a list; each entry is toggled by its own `enabled` (default `true`):
+
+- `source: marketplace` — `repo` (`owner/repo` or git URL) + `commit` (pinned for reproducibility) + `plugins` (names to install).
+- `source: local` — `path` (relative to `instructions/<owner>-<repo>/`, pointing at a marketplace root with `.claude-plugin/marketplace.json`) + `plugins`.
+
+At runtime the marketplace is cloned at its commit into `<repo>/.bcbench/plugins/` and installed with the CLI's own commands into a fresh per-entry config home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` under `.bcbench/`), which keeps parallel matrix entries isolated. A fresh home authenticates via the env token the workflow already sets (`COPILOT_GITHUB_TOKEN`; `ANTHROPIC_API_KEY`) — local plugin runs must have that token set. Installed plugins are recorded in the result's `ExperimentConfiguration.plugins` as `"<name>@<commit>"` / `"<name>@local"`.
 
 ## Before You Start
 

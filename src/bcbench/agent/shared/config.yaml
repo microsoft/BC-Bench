@@ -93,6 +93,27 @@ agents:
   enabled: false
   name: ALTest
 
+# controls installing agent plugins (skills/agents/mcp/hooks bundles) into the CLI for the run.
+# each enabled entry is installed via the CLI's `plugin marketplace add` + `plugin install` into a
+# fresh per-entry config home (COPILOT_HOME / CLAUDE_CONFIG_DIR under <repo>/.bcbench/), so parallel
+# matrix entries never share the user-scope plugin store and no teardown is needed.
+# NOTE: config injection (extraKnownMarketplaces/enabledPlugins) is trust-dialog-gated and ignored
+#       in headless mode, so we drive the real CLI commands instead.
+# NOTE: a fresh home authenticates via the env token the workflow sets (COPILOT_GITHUB_TOKEN;
+#       ANTHROPIC_API_KEY) — local plugin runs must have that token in the environment.
+# source: "marketplace" (repo + commit) or "local" (path under instructions/<owner>-<repo>/,
+#         which must be a marketplace root containing .claude-plugin/marketplace.json).
+plugins: []
+  # - source: marketplace
+  #   enabled: true
+  #   repo: "github/awesome-copilot"
+  #   commit: "<40-char-commit-sha>"
+  #   plugins: ["frontend-web-dev"]
+  # - source: local
+  #   enabled: false
+  #   path: "plugins/my-local-plugin"
+  #   plugins: ["my-local-plugin"]
+
 mcp:
   servers:
     # AL MCP server (toggled via --al-mcp CLI flag), https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools

@@ -186,9 +186,7 @@ from bcbench.dataset import BaseDatasetEntry
 @patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task")
 @patch("bcbench.agent.copilot.agent.shutil.which", return_value="copilot")
 @patch("bcbench.agent.copilot.agent.subprocess.run")
-def test_copilot_runner_records_plugins_and_sets_home(
-    mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path
-):
+def test_copilot_runner_records_plugins_and_sets_home(mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path):
     from bcbench.agent.copilot.agent import run_copilot_agent
     from bcbench.types import EvaluationCategory
 
@@ -218,9 +216,7 @@ def test_copilot_runner_records_plugins_and_sets_home(
 @patch("bcbench.agent.claude.agent.build_prompt", return_value="do the task")
 @patch("bcbench.agent.claude.agent.shutil.which", return_value="claude")
 @patch("bcbench.agent.claude.agent.subprocess.run")
-def test_claude_runner_records_plugins_and_sets_config_dir(
-    mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path
-):
+def test_claude_runner_records_plugins_and_sets_config_dir(mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path):
     from bcbench.agent.claude.agent import run_claude_code
     from bcbench.types import EvaluationCategory
 
@@ -236,4 +232,3 @@ def test_claude_runner_records_plugins_and_sets_config_dir(
     mock_setup.assert_called_once()
     _args, kwargs = mock_run.call_args
     assert kwargs["env"]["CLAUDE_CONFIG_DIR"] == cfg_dir
-
