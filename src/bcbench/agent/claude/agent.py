@@ -37,6 +37,10 @@ def run_claude_code(
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     claude_config = yaml.safe_load(config_file.read_text())
 
+    claude_cmd = shutil.which("claude")
+    if not claude_cmd:
+        raise AgentError("Claude Code not found in PATH. Please ensure it is installed and available.")
+
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)
@@ -46,10 +50,6 @@ def run_claude_code(
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
-
-    claude_cmd = shutil.which("claude")
-    if not claude_cmd:
-        raise AgentError("Claude Code not found in PATH. Please ensure it is installed and available.")
 
     plugin_records, plugin_env = setup_plugins_from_config(claude_config, entry, repo_path, AgentType.CLAUDE, claude_cmd)
 
