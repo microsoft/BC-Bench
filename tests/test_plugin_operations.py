@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.operations import plugin_operations as po
 from bcbench.types import AgentType
@@ -169,11 +171,6 @@ def test_setup_failure_removes_partial_home_and_raises(tmp_path, monkeypatch):
     assert not (tmp_path / ".bcbench" / "copilot-home").exists()
 
 
-from unittest.mock import MagicMock, patch
-
-from bcbench.dataset import BaseDatasetEntry
-
-
 @patch("bcbench.agent.copilot.agent.setup_plugins_from_config")
 @patch("bcbench.agent.copilot.agent.parse_tool_usage_from_hooks", return_value=None)
 @patch("bcbench.agent.copilot.agent.parse_metrics", return_value=None)
@@ -186,7 +183,7 @@ from bcbench.dataset import BaseDatasetEntry
 @patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task")
 @patch("bcbench.agent.copilot.agent.shutil.which", return_value="copilot")
 @patch("bcbench.agent.copilot.agent.subprocess.run")
-def test_copilot_runner_records_plugins_and_sets_home(mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path):
+def test_copilot_runner_records_plugins_and_sets_home(mock_run, mock_which, mock_prompt, mock_mcp, mock_lsp, mock_instr, mock_skills, mock_agent, mock_hooks, mock_pm, mock_tu, mock_setup, tmp_path):
     from bcbench.agent.copilot.agent import run_copilot_agent
     from bcbench.types import EvaluationCategory
 
@@ -216,7 +213,9 @@ def test_copilot_runner_records_plugins_and_sets_home(mock_run, _which, _prompt,
 @patch("bcbench.agent.claude.agent.build_prompt", return_value="do the task")
 @patch("bcbench.agent.claude.agent.shutil.which", return_value="claude")
 @patch("bcbench.agent.claude.agent.subprocess.run")
-def test_claude_runner_records_plugins_and_sets_config_dir(mock_run, _which, _prompt, _mcp, _lsp, _instr, _skills, _agent, _hooks, _pm, _tu, mock_setup, tmp_path):
+def test_claude_runner_records_plugins_and_sets_config_dir(
+    mock_run, mock_which, mock_prompt, mock_mcp, mock_lsp, mock_instr, mock_skills, mock_agent, mock_hooks, mock_pm, mock_tu, mock_setup, tmp_path
+):
     from bcbench.agent.claude.agent import run_claude_code
     from bcbench.types import EvaluationCategory
 
