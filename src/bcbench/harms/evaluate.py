@@ -91,16 +91,65 @@ def evaluate_trials(
     evaluator_config = {name: {"column_mapping": column_mapping} for name in evaluator_map}
 
     logger.info(f"Evaluating {executed} harms trials with {list(evaluator_map)} (upload={upload})")
-    result: dict[str, Any] = evaluate(
-        data=str(dataset_path),
-        evaluators=evaluator_map,
-        evaluator_config=evaluator_config,
-        azure_ai_project=azure_ai_project if upload else None,
-        output_path=str(results_dir / "harms_results.json"),
-    )
+
+    upload_project = azure_ai_project if upload else None
+
+    def _run(evaluators_subset: dict[str, Any], project: dict[str, str] | None) -> dict[str, Any]:
+        return evaluate(
+            data=str(dataset_path),
+            evaluators=evaluators_subset,
+            evaluator_config={name: evaluator_config[name] for name in evaluators_subset},
+            azure_ai_project=project,
+            output_path=str(results_dir / "harms_results.json"),
+        )
+
+    try:
+        result = _run(evaluator_map, upload_project)
+    except Exception as exc:
+        # A single flaky/unreachable RAI evaluator (e.g. indirect_attack / code_vulnerability timing
+        # out) otherwise aborts the whole batch and discards the evaluators that did succeed. Fall
+        # back to scoring each evaluator independently and merge whatever we can get.
+        logger.warning(f"Combined evaluation failed ({type(exc).__name__}): {exc}. Falling back to per-evaluator scoring so partial results survive.")
+        result = _evaluate_per_evaluator(_run, evaluator_map, upload_project)
+
+    _write_result(result, results_dir / "harms_results.json")
     if url := result.get("studio_url"):
         logger.info(f"Foundry studio: {url}")
+    if failed := result.get("failed_evaluators"):
+        logger.warning(f"Evaluators that did not complete (network/RAI issues): {failed}. Re-run `harms evaluate` when connectivity is restored.")
     return result
+
+
+def _evaluate_per_evaluator(run: Any, evaluator_map: dict[str, Any], upload_project: dict[str, str] | None) -> dict[str, Any]:  # noqa: ANN401 - SDK objects
+    merged: dict[str, Any] = {"metrics": {}, "rows": [], "failed_evaluators": []}
+    for name, evaluator in evaluator_map.items():
+        try:
+            single = run({name: evaluator}, upload_project)
+        except Exception as exc:
+            logger.warning(f"Evaluator '{name}' failed ({type(exc).__name__}): {exc}. Skipping it; other evaluators still count.")
+            merged["failed_evaluators"].append(name)
+            continue
+        _merge_into(merged, single)
+    if not merged["metrics"] and not merged["rows"]:
+        raise RuntimeError(f"All evaluators failed: {merged['failed_evaluators']}")
+    return merged
+
+
+def _merge_into(merged: dict[str, Any], single: dict[str, Any]) -> None:
+    merged["metrics"].update(single.get("metrics", {}))
+    single_rows = single.get("rows", [])
+    if not merged["rows"]:
+        merged["rows"] = [dict(row) for row in single_rows]
+    else:
+        for target, source in zip(merged["rows"], single_rows, strict=False):
+            target.update({k: v for k, v in source.items() if k.startswith("outputs.")})
+    if url := single.get("studio_url"):
+        merged.setdefault("studio_url", url)
+
+
+def _write_result(result: dict[str, Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def channel_label(channel: HarmsChannel) -> str:
