@@ -73,8 +73,7 @@ def _materialize(entry_cfg: dict, entry: BaseDatasetEntry, plugins_root: Path) -
                 rmtree(dest)
             copytree(src, dest)
             return dest, "local"
-        case _:
-            raise AgentError(f"Unknown plugin source: {source!r}")
+    raise AgentError(f"Unknown plugin source: {source!r}")
 
 
 def _home_env_var(agent_type: AgentType) -> str:
@@ -83,8 +82,7 @@ def _home_env_var(agent_type: AgentType) -> str:
             return "COPILOT_HOME"
         case AgentType.CLAUDE:
             return "CLAUDE_CONFIG_DIR"
-        case _:
-            raise AgentError(f"Unsupported agent type for plugins: {agent_type}")
+    raise AgentError(f"Unsupported agent type for plugins: {agent_type}")
 
 
 def _run_plugin_cmd(cli_cmd: str, args: list[str], env: dict[str, str]) -> None:
