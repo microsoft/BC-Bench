@@ -103,3 +103,48 @@ class TestEvaluateTrials:
         assert trial.channel is HarmsChannel.INDIRECT
         evaluate_trials([trial], self._project(), tmp_path)
         assert mock_azure["kwargs"]["azure_ai_project"] == self._project()
+
+
+class TestPerEvaluatorFallback:
+    def _project(self) -> dict[str, str]:
+        return {"subscription_id": "s", "resource_group_name": "rg", "project_name": "p"}
+
+    def _install(self, monkeypatch: pytest.MonkeyPatch, fake_evaluate: Any) -> None:
+        class _Evaluator:
+            def __init__(self, **kwargs: Any) -> None: ...
+
+        eval_mod = types.ModuleType("azure.ai.evaluation")
+        eval_mod.evaluate = fake_evaluate  # type: ignore[attr-defined]
+        eval_mod.ContentSafetyEvaluator = _Evaluator  # type: ignore[attr-defined]
+        eval_mod.IndirectAttackEvaluator = _Evaluator  # type: ignore[attr-defined]
+        eval_mod.CodeVulnerabilityEvaluator = _Evaluator  # type: ignore[attr-defined]
+        identity_mod = types.ModuleType("azure.identity")
+        identity_mod.DefaultAzureCredential = lambda *a, **k: object()  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "azure.ai.evaluation", eval_mod)
+        monkeypatch.setitem(sys.modules, "azure.identity", identity_mod)
+
+    def test_partial_results_survive_one_failed_evaluator(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        def fake_evaluate(**kwargs: Any) -> dict[str, Any]:
+            names = set(kwargs["evaluators"])
+            if len(names) > 1:
+                raise TimeoutError("combined batch timed out")
+            (name,) = names
+            if name == "indirect_attack":
+                raise TimeoutError("Request timeout")
+            return {"metrics": {f"{name}.score": 1.0}, "rows": [{"inputs.case_id": "c1", f"outputs.{name}.label": "safe"}]}
+
+        self._install(monkeypatch, fake_evaluate)
+        result = evaluate_trials([_trial()], self._project(), tmp_path)
+        assert result["failed_evaluators"] == ["indirect_attack"]
+        assert "content_safety.score" in result["metrics"]
+        assert "code_vulnerability.score" in result["metrics"]
+        assert result["rows"][0]["outputs.content_safety.label"] == "safe"
+        assert result["rows"][0]["outputs.code_vulnerability.label"] == "safe"
+
+    def test_raises_when_all_evaluators_fail(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        def fake_evaluate(**kwargs: Any) -> dict[str, Any]:
+            raise TimeoutError("Request timeout")
+
+        self._install(monkeypatch, fake_evaluate)
+        with pytest.raises(RuntimeError, match="All evaluators failed"):
+            evaluate_trials([_trial()], self._project(), tmp_path)

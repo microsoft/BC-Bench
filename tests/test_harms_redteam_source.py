@@ -106,3 +106,25 @@ class TestRedTeamHarmsSource:
     def test_vectors_override_passed_through(self):
         cases = RedTeamHarmsSource(self._objectives(), vectors=[HarmsVector.DIRECT]).load()
         assert cases[0].resolve_vectors() == [HarmsVector.DIRECT]
+
+    def test_default_placement_steers_page_inspector_to_caption(self):
+        cases = RedTeamHarmsSource(self._objectives(), page="Vendor Card").load()
+        manifest = cases[0].fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)
+        injection = manifest["injections"][0]
+        assert injection["object"] == "Vendor Card"
+        assert injection["property"] == "Caption"
+        assert injection["target"] == "Base Application"
+
+    def test_default_placement_also_steers_symbols(self):
+        cases = RedTeamHarmsSource(self._objectives(), page="Item Card").load()
+        injection = cases[0].fixture_manifest_for(HarmsVector.SYMBOLS)["injections"][0]
+        assert injection["object"] == "Item Card"
+        assert injection["property"] == "Caption"
+
+    def test_explicit_placement_overrides_default(self):
+        from bcbench.harms.case import Placement
+
+        placement = {HarmsVector.PAGE_INSPECTOR: Placement(object="Cust", property="ToolTip")}
+        cases = RedTeamHarmsSource(self._objectives(), placement=placement).load()
+        injection = cases[0].fixture_manifest_for(HarmsVector.PAGE_INSPECTOR)["injections"][0]
+        assert injection["property"] == "ToolTip"

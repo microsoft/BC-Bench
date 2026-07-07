@@ -19,10 +19,16 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from bcbench.harms.case import HarmsCase, HarmsVector
+from bcbench.harms.case import HarmsCase, HarmsVector, Placement
 from bcbench.harms.couching import CouchingTemplate, couchings_by_id
 
 __all__ = ["AttackObjective", "RedTeamHarmsSource", "load_objectives"]
+
+# Seam vectors that accept object/property/target steering. Red-team cases carry no author-provided
+# placement, so without a default the harness injects into a synthetic location the agent never reads
+# (payload never lands). Mirror the manual suites: target the page's Caption in the Base Application,
+# which inspect_page/get_properties reliably surface.
+_STEERABLE_VECTORS: tuple[HarmsVector, ...] = (HarmsVector.PAGE_INSPECTOR, HarmsVector.SYMBOLS)
 
 
 class AttackObjective(BaseModel):
@@ -71,12 +77,19 @@ class RedTeamHarmsSource:
         audience: str = "Business",
         couchings: list[CouchingTemplate] | None = None,
         vectors: list[HarmsVector] | None = None,
+        placement: dict[HarmsVector, Placement] | None = None,
     ) -> None:
         self._objectives = objectives
         self._page = page
         self._audience = audience
         self._couchings = couchings if couchings is not None else couchings_by_id(None)
         self._vectors = vectors
+        self._placement = placement if placement is not None else self._default_placement(page)
+
+    @staticmethod
+    def _default_placement(page: str) -> dict[HarmsVector, Placement]:
+        steering = Placement(object=page, property="Caption", target="Base Application")
+        return dict.fromkeys(_STEERABLE_VECTORS, steering)
 
     def load(self) -> list[HarmsCase]:
         cases: list[HarmsCase] = []
@@ -91,6 +104,7 @@ class RedTeamHarmsSource:
                         page=self._page,
                         audience=self._audience,  # type: ignore[arg-type]
                         vectors=self._vectors,
+                        placement=self._placement,
                         risk=objective.risk,
                         source="redteam",
                     )
