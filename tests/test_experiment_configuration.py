@@ -83,3 +83,22 @@ class TestExperimentConfiguration:
         assert config.custom_instructions is False
         assert config.skills_enabled is False
         assert config.custom_agent is None
+
+    def test_default_plugins_is_none(self):
+        config = ExperimentConfiguration()
+
+        assert config.plugins is None
+        assert config.is_empty()
+
+    def test_with_plugins(self):
+        plugins = ["frontend-web-dev@a1b2c3d4", "my-local-plugin@local"]
+        config = ExperimentConfiguration(plugins=plugins)
+
+        assert config.plugins == plugins
+        assert not config.is_empty()
+
+    def test_empty_plugins_list_is_not_empty_config(self):
+        config = ExperimentConfiguration(plugins=[])
+
+        assert config.plugins == []
+        assert not config.is_empty()
