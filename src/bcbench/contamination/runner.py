@@ -1,0 +1,118 @@
+"""Model invocation and persistence for the file-path identification probe.
+
+The probe runs a single-shot Copilot CLI call in an isolated, empty working
+directory — deliberately withholding the target repository so the model must
+answer from the bug report alone (the context-free condition from the
+SWE-Bench Illusion paper).
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from bcbench.config import get_config
+from bcbench.contamination.filepath_probe import (
+    PREDICTION_FILENAME,
+    FilePathProbeResult,
+    build_probe_prompt,
+    parse_prediction,
+)
+from bcbench.dataset import BaseDatasetEntry
+from bcbench.exceptions import AgentError
+from bcbench.logger import get_logger
+
+logger = get_logger(__name__)
+_config = get_config()
+
+__all__ = ["load_probe_results", "run_filepath_probe", "save_probe_result"]
+
+
+def _find_copilot() -> str | None:
+    return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
+
+
+def _run_copilot_context_free(prompt: str, work_dir: Path, model: str, result_filename: str) -> str:
+    copilot_cmd = _find_copilot()
+    if not copilot_cmd:
+        raise AgentError("Copilot CLI not found in PATH; cannot run the file-path probe")
+
+    # Flatten whitespace so quotes/newlines in the prompt survive CLI arg parsing (mirrors the judge).
+    flattened = " ".join(prompt.split())
+
+    completed = subprocess.run(
+        [
+            copilot_cmd,
+            "--allow-all-tools",
+            "--disable-builtin-mcps",
+            "--no-custom-instructions",
+            f"--model={model}",
+            f"--prompt={flattened}",
+        ],
+        cwd=str(work_dir),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=_config.timeout.agent_execution,
+        check=True,
+    )
+
+    result_path = work_dir / result_filename
+    if result_path.exists():
+        return result_path.read_text(encoding="utf-8")
+    return completed.stdout or ""
+
+
+def run_filepath_probe(
+    entry: BaseDatasetEntry,
+    model: str,
+    category: str,
+    top_k: int,
+    output_dir: Path,
+) -> FilePathProbeResult:
+    prompt = build_probe_prompt(entry.get_task(), top_k, repo=entry.repo)
+
+    raw_output = ""
+    error: str | None = None
+    predicted: list[str] = []
+
+    logger.info("Running context-free file-path probe on %s (model=%s, top_k=%d)", entry.instance_id, model, top_k)
+    try:
+        with tempfile.TemporaryDirectory(prefix="bcbench-probe-") as tmp:
+            raw_output = _run_copilot_context_free(prompt, Path(tmp), model, PREDICTION_FILENAME)
+        predicted = parse_prediction(raw_output, top_k)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, AgentError) as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        logger.exception("File-path probe failed for %s", entry.instance_id)
+
+    result = FilePathProbeResult.build(
+        entry=entry,
+        model=model,
+        category=category,
+        top_k=top_k,
+        predicted_files=predicted,
+        raw_output=raw_output,
+        error=error,
+    )
+    save_probe_result(result, output_dir)
+    return result
+
+
+def save_probe_result(result: FilePathProbeResult, output_dir: Path) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"{result.instance_id}.filepath-probe.jsonl"
+    path.write_text(result.model_dump_json() + "\n", encoding="utf-8")
+    return path
+
+
+def load_probe_results(results_dir: Path) -> list[FilePathProbeResult]:
+    results: list[FilePathProbeResult] = []
+    for path in sorted(results_dir.rglob("*.filepath-probe.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped:
+                results.append(FilePathProbeResult.model_validate_json(stripped))
+    return results

@@ -1,0 +1,150 @@
+name: Contamination Probe (File-path Identification)
+
+# Context-free bug localization probe (SWE-Bench Illusion, arXiv:2506.12286):
+# the model sees ONLY the bug report — no repository, no code — and must name the
+# file(s) that contain the bug. Because it needs no BC container or build, this
+# runs cheaply on ubuntu-latest. Interpret the result RELATIVELY: pass a --cutoff
+# so old/public entries are compared against fresh control entries. The delta,
+# not the absolute rate, is the memorization signal.
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Copilot model to probe"
+        required: false
+        default: "claude-haiku-4.5"
+        type: choice
+        options:
+          - "claude-sonnet-4.6"
+          - "claude-haiku-4.5"
+          - "claude-opus-4.6"
+          - "claude-opus-4.7"
+          - "claude-opus-4.8"
+          - "gpt-5.5"
+          - "gpt-5.4"
+          - "gpt-5.3-codex"
+          - "gpt-5.2-codex"
+          - "gpt-5.2"
+      category:
+        description: "Dataset category (must be patch-based)"
+        required: false
+        default: "bug-fix"
+        type: choice
+        options:
+          - "bug-fix"
+          - "test-generation"
+      top-k:
+        description: "Number of candidate file paths to request per entry"
+        required: false
+        default: "3"
+        type: string
+      cutoff:
+        description: "ISO date (YYYY-MM-DD). Entries created before it are treated as potentially-contaminated; on/after as the clean control. Leave blank for an absolute-rate baseline."
+        required: false
+        default: ""
+        type: string
+      test-run:
+        description: "Quick run over a handful of random entries"
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    # Weekly full probe, Mondays 06:00 UTC.
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: contamination-probe-${{ inputs.category || 'bug-fix' }}
+  cancel-in-progress: false
+
+env:
+  PROBE_RESULTS_DIR: probe_results
+
+jobs:
+  get-entries:
+    uses: ./.github/workflows/get-entries.yml
+    with:
+      test-run: ${{ inputs.test-run || false }}
+      category: ${{ inputs.category || 'bug-fix' }}
+
+  probe:
+    name: ${{ matrix.entry }}
+    runs-on: ubuntu-latest
+    needs: get-entries
+    if: needs.get-entries.outputs.entries != '[]'
+    permissions:
+      contents: read
+      id-token: write
+      copilot-requests: write
+    strategy:
+      fail-fast: false
+      max-parallel: 32
+      matrix:
+        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install evaluation CLIs
+        uses: ./.github/actions/install-eval-clis
+
+      - name: Run file-path probe for entry ${{ matrix.entry }}
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
+
+          uv run bcbench contamination filepath-probe "${{ matrix.entry }}" `
+            --category "${{ inputs.category || 'bug-fix' }}" `
+            --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
+            --top-k ${{ inputs.top-k || '3' }} `
+            --output-dir "${{ env.PROBE_RESULTS_DIR }}"
+
+      - name: Upload probe result
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: probe-result-${{ github.run_id }}-${{ matrix.entry }}
+          path: ${{ env.PROBE_RESULTS_DIR }}/**/*.filepath-probe.jsonl
+          retention-days: ${{ (inputs.test-run && 1) || 30 }}
+
+  summarize:
+    name: Summarize
+    runs-on: ubuntu-latest
+    needs: probe
+    if: always() && needs.probe.result != 'skipped'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Download all probe results
+        uses: actions/download-artifact@v7
+        with:
+          path: ${{ env.PROBE_RESULTS_DIR }}/
+          merge-multiple: true
+
+      - name: Summarize contamination signal
+        shell: pwsh
+        run: |
+          $cutoff = "${{ inputs.cutoff }}"
+          $cutoffArg = if ($cutoff) { "--cutoff", $cutoff } else { @() }
+
+          uv run bcbench contamination summarize `
+            --results-dir "${{ env.PROBE_RESULTS_DIR }}" `
+            --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
+            @cutoffArg
