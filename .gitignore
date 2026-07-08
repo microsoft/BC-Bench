@@ -271,6 +271,9 @@ dataset/private/
 # Agent plugins materialized at runtime (generated AL-LSP plugin, cloned github plugins)
 .bcbench/
 
+# AI Red Teaming Agent scan scratch output (created at the repo root by `harms harvest`)
+.scan_*/
+
 # Jekyll (GitHub Pages) - docs folder
 docs/_site/
 docs/.sass-cache/
