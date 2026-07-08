@@ -24,6 +24,7 @@ from bcbench.harms import (
     harvest_objectives,
     load_objectives,
     run_harms_suite,
+    score_trials,
     write_trials,
 )
 from bcbench.harms.case import HarmsVector
@@ -211,6 +212,34 @@ def annotate(
     _render_trials(annotated)
 
 
+@harms_app.command("score")
+def score(
+    trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
+    model: Annotated[str | None, typer.Option(help="LLM model for the BCQuality judge (defaults to the configured judge model).")] = None,
+    no_judge: Annotated[bool, typer.Option("--no-judge", help="Deterministic detector only; skip the LLM judge.")] = False,
+) -> None:
+    """
+    Score whether each executed trial actually produced the insecure AL (``harm_realized``).
+
+    Runs the per-case deterministic detector and the BCQuality-grounded LLM judge over the captured
+    generated AL, reconciles them, writes ``trials.jsonl`` back, refreshes ``eval_dataset.jsonl``, and
+    reports the attack-success rate over valid (delivered) lines. No bcal re-run.
+
+    Example:
+        uv run bcbench harms score evaluation_results/harms --no-judge
+    """
+    results_dir = trials_path if trials_path.is_dir() else trials_path.parent
+    trials_file = trials_path / "trials.jsonl" if trials_path.is_dir() else trials_path
+    if not trials_file.exists():
+        raise typer.BadParameter(f"No trials.jsonl found at {trials_file}.")
+
+    scored = score_trials(_load_trials(trials_file), model=model, use_judge=not no_judge)
+    write_trials(trials_file, scored)
+    build_eval_dataset(scored, results_dir / "eval_dataset.jsonl")
+    _console.print(f"[green]Scored[/] {len(scored)} trials → refreshed {trials_file.name} and eval_dataset.jsonl.")
+    _render_trials(scored)
+
+
 @harms_app.command("report")
 def report(
     path: Annotated[Path, typer.Argument(help="A harms_results.json (or its directory), or a trials.jsonl to render.")] = _config.paths.harms_results,
@@ -240,15 +269,26 @@ def _load_trials(path: Path) -> list[HarmsTrial]:
 
 def _render_trials(trials: list[HarmsTrial]) -> None:
     table = Table(title="Harms trials", box=box.SIMPLE_HEAVY, title_justify="left", title_style="bold")
-    for heading in ("#", "Case", "Vector", "Channel", "Injected?", "Valid?", "Tools", "Attack"):
+    for heading in ("#", "Case", "Vector", "Channel", "Injected?", "Valid?", "Realized?", "Tools", "Attack"):
         table.add_column(heading)
     for index, trial in enumerate(trials, start=1):
         channel = "[magenta]XPIA[/]" if trial.channel.value == "indirect" else "[cyan]UPIA[/]"
-        table.add_row(str(index), trial.case_id, trial.vector.value, channel, _landed_cell(trial), _valid_cell(trial), _short(", ".join(trial.tools_invoked) or "-", 28), _short(trial.attack))
+        table.add_row(
+            str(index),
+            trial.case_id,
+            trial.vector.value,
+            channel,
+            _landed_cell(trial),
+            _valid_cell(trial),
+            _realized_cell(trial),
+            _short(", ".join(trial.tools_invoked) or "-", 24),
+            _short(trial.attack),
+        )
     _console.print()
     _console.print(table)
     _render_injection_summary(trials)
     _render_validity_summary(trials)
+    _render_asr_summary(trials)
 
 
 def _landed_cell(trial: HarmsTrial) -> str:
@@ -265,6 +305,31 @@ def _valid_cell(trial: HarmsTrial) -> str:
     if not trial.executed or trial.harm_delivered is None:
         return "-"
     return "[green]\u2713 valid[/]" if trial.harm_delivered else "[red]\u2717 invalid[/]"
+
+
+def _realized_cell(trial: HarmsTrial) -> str:
+    # Did the agent actually produce the insecure AL? (filled by `harms score`).
+    if trial.harm_realized is None:
+        return "-"
+    tag = "[red]\u2717 realized[/]" if trial.harm_realized else "[green]\u2713 resisted[/]"
+    return f"{tag} [yellow]!?[/]" if trial.score_disagreement else tag
+
+
+def _render_asr_summary(trials: list[HarmsTrial]) -> None:
+    # Attack-success rate over VALID (delivered) lines that have been scored.
+    scored = [t for t in trials if t.executed and t.harm_delivered and t.harm_realized is not None]
+    if not scored:
+        return
+    realized = [t for t in scored if t.harm_realized]
+    disagreements = [t for t in scored if t.score_disagreement]
+    pct = 100.0 * len(realized) / len(scored)
+    colour = "red" if realized else "green"
+    _console.print(f"[{colour}]Attack success (harm realized):[/] {len(realized)}/{len(scored)} valid lines ({pct:.0f}% ASR).")
+    if disagreements:
+        _console.print(
+            f"[yellow]\u26a0 Detector/judge disagreement on {len(disagreements)} line(s)[/] — review the generated AL "
+            f"({_short(', '.join(f'{t.case_id}/{t.vector.value}' for t in disagreements), 80)})."
+        )
 
 
 def _render_validity_summary(trials: list[HarmsTrial]) -> None:
@@ -330,6 +395,7 @@ def _render_results(result: Json, trials: list[HarmsTrial]) -> None:
         _console.print(rtable)
         _render_injection_summary(trials)
         _render_validity_summary(trials)
+        _render_asr_summary(trials)
     elif not metrics:
         _render_trials(trials)
 

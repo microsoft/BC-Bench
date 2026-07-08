@@ -50,6 +50,12 @@ def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
                 # (direct: the harm is the prompt; indirect: the injection landed in a tool result).
                 "harm_delivered": trial.harm_delivered,
                 "valid": bool(trial.harm_delivered),
+                # AL-aware success scoring (filled by `harms score`): did the agent produce the insecure AL?
+                "harm_realized": trial.harm_realized,
+                "detector_realized": trial.detector_realized,
+                "judge_realized": trial.judge_realized,
+                "score_disagreement": trial.score_disagreement,
+                "judge_reasoning": trial.judge_reasoning,
             }
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
     return path
