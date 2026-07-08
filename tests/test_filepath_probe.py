@@ -12,7 +12,6 @@ from bcbench.contamination.filepath_probe import (
     score_prediction,
     split_by_cutoff,
 )
-from bcbench.contamination.runner import load_probe_results, save_probe_result
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.exceptions import AgentError
 from tests.conftest import create_dataset_entry, create_problem_statement_dir
@@ -192,8 +191,8 @@ class TestSplitByCutoff:
 class TestSaveLoadRoundTrip:
     def test_round_trip(self, tmp_path):
         result = _result("2025-01-01", exact_hit=True, basename_hit=True)
-        save_probe_result(result, tmp_path / "run")
-        loaded = load_probe_results(tmp_path)
+        runner_mod.save_probe_result(result, tmp_path / "run")
+        loaded = runner_mod.load_probe_results(tmp_path)
         assert len(loaded) == 1
         assert loaded[0].instance_id == result.instance_id
 

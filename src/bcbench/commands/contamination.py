@@ -113,9 +113,7 @@ def _build_markdown_report(model: str, overall: ProbeAggregate, results: list[Fi
             "",
             f"**Contamination signal (basename hit, pre - control): {_pct(delta)}**",
             "",
-            "> A large positive delta indicates memorization: the model localizes old/public "
-            "bugs far better than fresh ones it could not have seen. A small delta means the "
-            "score is mostly explained by AL naming conventions, not contamination.",
+            "> A large positive delta indicates memorization: the model localizes old/public bugs far better than fresh ones it could not have seen. A small delta means the score is mostly explained by AL naming conventions, not contamination.",
         ]
         if post_agg.scored == 0:
             lines.append("")
@@ -123,9 +121,7 @@ def _build_markdown_report(model: str, overall: ProbeAggregate, results: list[Fi
     else:
         lines += [
             "",
-            "> No `--cutoff` given, so this is an absolute rate only. In AL, file names are highly "
-            "predictable from conventions, so treat this as a baseline — pass a cutoff date to compare "
-            "old/public vs fresh entries and get the actual contamination signal.",
+            "> No `--cutoff` given, so this is an absolute rate only. In AL, file names are highly predictable from conventions, so treat this as a baseline — pass a cutoff date to compare old/public vs fresh entries and get the actual contamination signal.",
         ]
 
     return "\n".join(lines)
