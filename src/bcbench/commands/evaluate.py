@@ -296,6 +296,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             None,
             ExperimentConfiguration(),
             ExperimentConfiguration(custom_agent="custom-agent-v1"),
+            ExperimentConfiguration(plugins=["frontend-web-dev@a1b2c3d4"]),
         ]
         context.experiment = random.choice(experiment_config_scenarios)
 

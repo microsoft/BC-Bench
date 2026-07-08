@@ -137,3 +137,21 @@ def stage_and_get_diff(repo_path: Path) -> str:
         raise EmptyDiffError()
 
     return patch
+
+
+def clone_at_commit(repo: str, commit: str, dest: Path) -> None:
+    """Shallow-clone `repo` at a specific `commit` into `dest`.
+
+    Args:
+        repo: A GitHub `owner/repo` slug or a full git URL (`https://...` or `...git`).
+        commit: The 40-char commit SHA to check out (GitHub allows fetching a SHA directly).
+        dest: Target directory (created if missing).
+    """
+    url = repo if ("://" in repo or repo.endswith(".git")) else f"https://github.com/{repo}.git"
+    logger.info(f"Cloning {url} @ {commit} into {dest}")
+    dest.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q"], cwd=dest, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    subprocess.run(["git", "remote", "add", "origin", url], cwd=dest, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    subprocess.run(["git", "fetch", "--depth", "1", "origin", commit], cwd=dest, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    subprocess.run(["git", "checkout", "-q", "FETCH_HEAD"], cwd=dest, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    logger.info(f"Cloned {url} @ {commit}")
