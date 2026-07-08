@@ -75,7 +75,7 @@ prompt:
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentType.instruction_filename) during setup
 instructions:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
@@ -108,6 +108,13 @@ plugins:
     repo: "obra/superpowers"
     commit: "d884ae04edebef577e82ff7c4e143debd0bbec99"
     plugins: ["superpowers"]
+  # EXPERIMENT: BCQuality packaged as a plugin (microsoft/BCQuality PR #84 head) — ships the
+  # `bcquality-al-review` skill that reviews AL against BCQuality's curated quality rules.
+  - source: marketplace
+    enabled: true
+    repo: "microsoft/BCQuality"
+    commit: "a1b0ef89c6e22987894aa6d45551d4c88879f4cb"
+    plugins: ["bcquality"]
 
 mcp:
   servers:

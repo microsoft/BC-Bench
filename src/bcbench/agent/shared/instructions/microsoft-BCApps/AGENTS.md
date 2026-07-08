@@ -7,3 +7,7 @@ Dynamics 365 Business Central is Microsoft's cloud-based ERP solution for small 
 - Apps are compiled into `.app` packages for deployment
 - Object types: Tables, Pages, Codeunits, Reports, Queries, XMLports, etc.
 - Extensibility through events and object (table/page/enum) extensions
+
+## Reviewing AL code
+
+A `bcquality-al-review` skill is available through the `skill` tool. It reviews Business Central AL changes against BCQuality's curated, BC-specific quality rules. When your task is to review AL code (a diff or a file), use it to ground your findings.
