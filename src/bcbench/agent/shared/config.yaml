@@ -121,14 +121,6 @@ plugins:
     commit: "dd4ed3f6e1fb374c5a1e2a9a697aa06236022599"
     path: "src/bcbench/agent/shared/plugins/bcbench-example"
     plugins: ["bcbench-example-plugin"]
-  # Real-world marketplace example: obra/superpowers (marketplace name "superpowers-dev", plugin "superpowers")
-  # installs a skills library (brainstorming, TDD, debugging, ...). The agent discovers and invokes these via
-  # the `skill` tool even in headless -p mode, so a run can genuinely exercise a plugin skill.
-  - source: marketplace
-    enabled: true                          # TEMPORARILY on to demo the agent using a real plugin skill — revert before merge
-    repo: "obra/superpowers"
-    commit: "d884ae04edebef577e82ff7c4e143debd0bbec99"   # v6.1.1
-    plugins: ["superpowers"]
 
 mcp:
   servers:
