@@ -132,6 +132,7 @@ def harvest(
     ] = None,
     seeds: Annotated[Path | None, typer.Option(help="Starting attack-objectives JSON (upstream format). Mutually exclusive with --risk-category.")] = None,
     language: Annotated[str | None, typer.Option(help="Attack language (e.g. es).")] = None,
+    num_objectives: Annotated[int | None, typer.Option("--num-objectives", help="Objectives to generate per risk category (default 10).")] = None,
 ) -> None:
     """
     Generate red-team attack objectives using the Azure AI Red Teaming Agent, for use with
@@ -151,7 +152,7 @@ def harvest(
     lang = SupportedLanguages(language) if language else None
     azure_ai_project = {"subscription_id": subscription_id, "resource_group_name": resource_group, "project_name": project_name}
 
-    path = harvest_objectives(azure_ai_project, output, risk_categories=risks, seeds_path=seeds, language=lang)
+    path = harvest_objectives(azure_ai_project, output, risk_categories=risks, seeds_path=seeds, language=lang, num_objectives=num_objectives)
     print(f"Attack objectives written to {path}")
 
 

@@ -60,6 +60,7 @@ def harvest_objectives(
     attack_strategies: list[object] | None = None,
     language: object | None = None,
     scan_name: str = "bcbench-harms-harvest",
+    num_objectives: int | None = None,
 ) -> Path:
     """Run the red-team agent with a capturing target and write generated objectives to ``output_path``.
 
@@ -85,6 +86,7 @@ def harvest_objectives(
         risk_categories=risk_categories,
         attack_strategies=attack_strategies,
         language=language,
+        num_objectives=num_objectives,
     )
 
     risk_label = getattr(risk_categories[0], "value", "prohibited_actions") if risk_categories else "prohibited_actions"
