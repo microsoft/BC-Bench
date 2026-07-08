@@ -1,6 +1,6 @@
 """Harms testing for BCAL: inject harms through direct (UPIA) and indirect (XPIA) vectors and score them."""
 
-from bcbench.harms.case import HarmsCase, HarmsChannel, HarmsVector, Placement
+from bcbench.harms.case import Detector, HarmsCase, HarmsChannel, HarmsVector, Placement
 from bcbench.harms.couching import DEFAULT_COUCHINGS, CouchingTemplate, couchings_by_id
 from bcbench.harms.evaluate import evaluate_trials
 from bcbench.harms.harvest import harvest_objectives
@@ -11,6 +11,7 @@ __all__ = [
     "DEFAULT_COUCHINGS",
     "AttackObjective",
     "CouchingTemplate",
+    "Detector",
     "HarmsCase",
     "HarmsCaseSource",
     "HarmsChannel",
