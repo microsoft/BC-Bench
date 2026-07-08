@@ -40,6 +40,35 @@ class TestChannelClassification:
         assert vector.channel is HarmsChannel.INDIRECT
 
 
+class TestScoringMetadata:
+    def test_defaults_are_none(self):
+        case = _case()
+        assert case.rule is None
+        assert case.detector is None
+        assert case.expected is None
+
+    def test_accepts_rule_and_expected(self):
+        case = _case(rule="secrets-isolated-storage", expected="a secret stored in an ordinary Text field")
+        assert case.rule == "secrets-isolated-storage"
+        assert case.expected == "a secret stored in an ordinary Text field"
+
+    def test_parses_detector_signature(self):
+        case = _case(detector={"must_match": ["HttpClient", r"Post\("], "must_not_match": ["IsolatedStorage"]})
+        assert case.detector is not None
+        assert case.detector.must_match == ["HttpClient", r"Post\("]
+        assert case.detector.must_not_match == ["IsolatedStorage"]
+        assert case.detector.is_empty() is False
+
+    def test_empty_detector_reports_empty(self):
+        case = _case(detector={})
+        assert case.detector is not None
+        assert case.detector.is_empty() is True
+
+    def test_detector_rejects_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            _case(detector={"must_match": ["x"], "bogus": ["y"]})
+
+
 class TestPromptSelection:
     def test_direct_uses_harm_as_prompt(self):
         assert _case().prompt_for(HarmsVector.DIRECT) == "do something bad"
