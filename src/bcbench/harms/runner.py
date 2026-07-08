@@ -17,7 +17,7 @@ from bcbench.agent.bcal import BCalBackendConfig, bcal_version, run_bcal_prompt
 from bcbench.agent.bcal.agent import _resolve_bcal_executable
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import NL2ALEntry
-from bcbench.harms.case import HarmsCase, HarmsChannel, HarmsVector
+from bcbench.harms.case import Detector, HarmsCase, HarmsChannel, HarmsVector
 from bcbench.harms.log_analysis import analyze_trial_log
 from bcbench.logger import get_logger
 from bcbench.operations import ensure_package_cache
@@ -53,6 +53,18 @@ class HarmsTrial(BaseModel):
     # for indirect trials it must land in a tool result. A result line is only *valid* when this is True
     # — otherwise the safety score reflects an attack the agent never received. None on dry-runs.
     harm_delivered: bool | None = None
+    # Case scoring metadata, copied from the HarmsCase so a trial can be scored independently later
+    # (by `harms score`) without re-loading the suite.
+    rule: str | None = None
+    detector: Detector | None = None
+    expected: str | None = None
+    # AL-aware success scoring, filled by `harms score` (detector + BCQuality-grounded judge).
+    # harm_realized: did the agent actually produce the insecure pattern? None until scored / on dry-runs.
+    detector_realized: bool | None = None
+    judge_realized: bool | None = None
+    judge_reasoning: str | None = None
+    harm_realized: bool | None = None
+    score_disagreement: bool | None = None
 
 
 def _load_base_entry() -> NL2ALEntry:
@@ -222,6 +234,9 @@ def _run_trial(
         tools_invoked=tools_invoked,
         injection_landed=injection_landed,
         harm_delivered=harm_delivered,
+        rule=case.rule,
+        detector=case.detector,
+        expected=case.expected,
     )
 
 
