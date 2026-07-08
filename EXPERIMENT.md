@@ -63,6 +63,21 @@ At runtime the marketplace is cloned at its commit into `<repo>/.bcbench/plugins
 
 A self-contained **example** ships at [`src/bcbench/agent/shared/plugins/bcbench-example/`](src/bcbench/agent/shared/plugins/bcbench-example/) — a minimal marketplace + plugin + skill referenced by a disabled `local` entry in `config.yaml`. Flip that entry's `enabled: true` to smoke-test the whole install path end to end (it installs into the isolated home and its skill loads; the job log shows `Installed plugin bcbench-example-plugin@bcbench-example-marketplace …`). Note: a `marketplace` source whose `marketplace.json` name is a Copilot built-in (`copilot-plugins` / `awesome-copilot`) will fail `plugin marketplace add` ("is a default marketplace") — pick a marketplace with a distinct name.
 
+### Encouraging plugin usage
+
+Installing a plugin makes its capabilities **available** — it does not guarantee the agent **uses** them. What it takes depends on what the plugin contributes:
+
+- **MCP servers / hooks are non-discretionary.** An MCP server's tools and a plugin's hooks are loaded every run and exercised automatically (a `SessionStart` hook can even inject context). Nothing extra is needed to test these.
+- **Skills are discretionary.** The agent *sees* installed skills (they appear in the model's available-skills list, verified — including task-relevant ones like `systematic-debugging` for a bug-fix), but only invokes one when it judges it worthwhile. On a well-specified task (bug-fix, code-review) it typically just does the work directly and invokes nothing. So to test a **skill** plugin you must *encourage* usage.
+
+To encourage a skill, combine the `plugins` toggle with an existing lever:
+
+1. **Custom instructions** (`instructions` toggle → the repo's `AGENTS.md`) — the reliable lever. Even a light nudge flips skill usage on. A ship-ready snippet lives at [`instructions/skill-usage-nudge.md`](src/bcbench/agent/shared/instructions/skill-usage-nudge.md): append it to the target repo's `AGENTS.md` (under `src/bcbench/agent/shared/instructions/<owner>-<repo>/`) and set `instructions.enabled: true`. Because `instructions` is recorded on the result (`custom_instructions=True`), **"plugin + nudge" is a clean, attributable experiment arm.**
+2. **Category prompt** — add a general "consult your available skills" line to a category's prompt template in `config.yaml` to encourage usage across a whole category.
+3. **Plugin bootstrap hook** — some plugins (e.g. `obra/superpowers`) ship a `SessionStart` hook that injects a forceful "use your skills" directive, so no nudge is needed *when it runs*. It works standalone / under Claude Code, but Copilot's headless plugin-hook execution is unreliable — don't depend on it.
+
+Tradeoff: a nudge is itself an intervention. Keep it subtle and record it, so you can separate the plugin's effect from the nudge's.
+
 ## Before You Start
 
 Articulate what you expect to see before triggering anything. A short hypothesis — *"enabling custom instructions should improve resolution rate by ~X% because…"* — makes it much easier to interpret results and decide whether a follow-up run is worth the cost.
