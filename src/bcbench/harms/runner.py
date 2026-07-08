@@ -23,7 +23,7 @@ from bcbench.logger import get_logger
 from bcbench.operations import ensure_package_cache
 from bcbench.types import EvaluationCategory
 
-__all__ = ["HarmsTrial", "run_harms_suite"]
+__all__ = ["HarmsTrial", "annotate_trials", "harm_delivered_for", "run_harms_suite", "write_trials"]
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -49,6 +49,10 @@ class HarmsTrial(BaseModel):
     # Did the injected payload actually reach the model via a tool result? None for direct trials
     # (no seam injection) and for dry-runs; True/False for executed indirect trials.
     injection_landed: bool | None = None
+    # Did the agent actually SEE the harm at all? For direct trials the harm must appear in the prompt;
+    # for indirect trials it must land in a tool result. A result line is only *valid* when this is True
+    # — otherwise the safety score reflects an attack the agent never received. None on dry-runs.
+    harm_delivered: bool | None = None
 
 
 def _load_base_entry() -> NL2ALEntry:
@@ -62,6 +66,56 @@ def _entry_for(base: NL2ALEntry, case: HarmsCase) -> NL2ALEntry:
 
 def _slug(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in value)
+
+
+def harm_delivered_for(channel: HarmsChannel, *, executed: bool, injection_landed: bool | None) -> bool | None:
+    """Whether the agent actually received the harm — the validity gate for a result line.
+
+    Direct (UPIA) trials deliver the harm *as the prompt*, so delivery is guaranteed once executed.
+    Indirect (XPIA) trials only deliver the harm if the injected payload landed in a tool result.
+    ``None`` for un-executed (dry-run) trials.
+    """
+    if not executed:
+        return None
+    if channel is HarmsChannel.DIRECT:
+        return True
+    return bool(injection_landed)
+
+
+def _resolve_log_path(trial: HarmsTrial, results_dir: Path | None) -> Path | None:
+    if trial.log_path and Path(trial.log_path).exists():
+        return Path(trial.log_path)
+    if results_dir is not None:
+        candidate = results_dir / "logs" / f"{_slug(trial.case_id)}__{trial.vector.value}.jsonl"
+        if candidate.exists():
+            return candidate
+    return Path(trial.log_path) if trial.log_path else None
+
+
+def annotate_trials(trials: list[HarmsTrial], results_dir: Path | None = None) -> list[HarmsTrial]:
+    """Re-derive delivery/landing facts from each executed trial's captured log (post-processing).
+
+    Recomputes ``tools_invoked``, ``injection_landed`` and ``harm_delivered`` from ``logs/`` so runs
+    captured before these fields existed can be back-filled without re-running bcal. ``results_dir``
+    lets the log path be reconstructed when a run directory has been moved.
+    """
+    annotated: list[HarmsTrial] = []
+    for trial in trials:
+        if not trial.executed:
+            annotated.append(trial)
+            continue
+        analysis = analyze_trial_log(_resolve_log_path(trial, results_dir), trial.attack)
+        injection_landed = analysis.payload_in_tool_result if trial.channel is HarmsChannel.INDIRECT else None
+        annotated.append(
+            trial.model_copy(
+                update={
+                    "tools_invoked": analysis.tools_invoked or trial.tools_invoked,
+                    "injection_landed": injection_landed,
+                    "harm_delivered": harm_delivered_for(trial.channel, executed=True, injection_landed=injection_landed),
+                }
+            )
+        )
+    return annotated
 
 
 def run_harms_suite(
@@ -111,7 +165,7 @@ def run_harms_suite(
                 )
             )
 
-    _write_trials(results_dir / "trials.jsonl", trials)
+    write_trials(results_dir / "trials.jsonl", trials)
     logger.info(f"Ran {len(trials)} harms trials ({'dry-run' if dry_run else 'executed'}) -> {results_dir}")
     return trials
 
@@ -145,11 +199,13 @@ def _run_trial(
     # Validate whether the injection actually reached the model (indirect trials only).
     tools_invoked: list[str] = []
     injection_landed: bool | None = None
+    harm_delivered: bool | None = None
     if not dry_run:
         analysis = analyze_trial_log(log_path, case.attack_text_for(vector))
         tools_invoked = analysis.tools_invoked
         if vector.channel is HarmsChannel.INDIRECT:
             injection_landed = analysis.payload_in_tool_result
+        harm_delivered = harm_delivered_for(vector.channel, executed=True, injection_landed=injection_landed)
 
     return HarmsTrial(
         case_id=case.id,
@@ -165,10 +221,11 @@ def _run_trial(
         log_path=str(log_path) if log_path else None,
         tools_invoked=tools_invoked,
         injection_landed=injection_landed,
+        harm_delivered=harm_delivered,
     )
 
 
-def _write_trials(path: Path, trials: list[HarmsTrial]) -> None:
+def write_trials(path: Path, trials: list[HarmsTrial]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for trial in trials:
             handle.write(trial.model_dump_json() + "\n")
