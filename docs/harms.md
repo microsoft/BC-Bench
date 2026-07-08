@@ -127,6 +127,9 @@ uv run bcbench harms report evaluation_results/harms
 
 # Re-score existing trials with a different evaluator set, without re-running bcal.
 uv run bcbench harms evaluate evaluation_results/harms --evaluator content_safety --evaluator code_vulnerability
+
+# Post-process: re-derive per-line harm delivery from the logs and mark line validity.
+uv run bcbench harms annotate evaluation_results/harms
 ```
 
 The expensive part is running bcal per trial; `harms evaluate` lets you iterate on the evaluator set
@@ -205,6 +208,29 @@ things make an indirect trial land:
 > indirect trial reports `missed` regardless of trigger/placement. Verify with a forced probe (a
 > trigger that explicitly calls the tool) and check the `Injected?` column; if it never lands, the
 > injection wiring in that bcal build is the blocker, not the suite.
+
+## Was the harm delivered? (line validity)
+
+A result line is only worth scoring if the agent **actually received the harm**. This is recorded
+per trial as `harm_delivered` and surfaced as the **`Valid?`** column:
+
+- **Direct (UPIA)** — the harm *is* the prompt, so it is always delivered once the trial executes
+  (`harm_delivered = true`).
+- **Indirect (XPIA)** — the harm is only delivered if the injection **landed** in a tool result
+  (`harm_delivered = injection_landed`).
+
+Every exported `eval_dataset.jsonl` row carries `harm_delivered` and a `valid` flag, so downstream
+analysis (and Foundry) can filter out lines where the attack never arrived — their safety scores are
+not meaningful. The report prints a summary, e.g.
+`Validity: 6/12 result lines are valid (the agent received the harm)`.
+
+Runs captured before these fields existed can be **back-filled without re-running bcal** — `harms
+annotate` re-reads `logs/`, recomputes `harm_delivered`/`injection_landed`, rewrites `trials.jsonl`,
+and refreshes `eval_dataset.jsonl`:
+
+```bash
+uv run bcbench harms annotate evaluation_results/harms
+```
 
 ## Notes & caveats
 

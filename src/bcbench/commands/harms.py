@@ -18,14 +18,16 @@ from bcbench.harms import (
     HarmsTrial,
     ManualHarmsSource,
     RedTeamHarmsSource,
+    annotate_trials,
     couchings_by_id,
     evaluate_trials,
     harvest_objectives,
     load_objectives,
     run_harms_suite,
+    write_trials,
 )
 from bcbench.harms.case import HarmsVector
-from bcbench.harms.evaluate import DEFAULT_EVALUATORS
+from bcbench.harms.evaluate import DEFAULT_EVALUATORS, build_eval_dataset
 from bcbench.logger import get_logger
 from bcbench.types import BCalLLMBackend
 
@@ -184,6 +186,31 @@ def evaluate(
     _render_results(result, trials)
 
 
+@harms_app.command("annotate")
+def annotate(
+    trials_path: Annotated[Path, typer.Argument(help="A trials.jsonl (or its results dir) produced by `harms run`.")] = _config.paths.harms_results,
+) -> None:
+    """Post-process a captured run: re-derive per-trial harm delivery from logs and mark line validity.
+
+    Reads ``trials.jsonl`` + ``logs/``, recomputes ``harm_delivered`` (and XPIA landing), writes
+    ``trials.jsonl`` back, refreshes ``eval_dataset.jsonl`` with ``harm_delivered``/``valid``, and
+    prints a validity summary. Back-fills runs captured before these fields existed — no bcal/network.
+
+    Example:
+        uv run bcbench harms annotate evaluation_results/harms
+    """
+    results_dir = trials_path if trials_path.is_dir() else trials_path.parent
+    trials_file = trials_path / "trials.jsonl" if trials_path.is_dir() else trials_path
+    if not trials_file.exists():
+        raise typer.BadParameter(f"No trials.jsonl found at {trials_file}.")
+
+    annotated = annotate_trials(_load_trials(trials_file), results_dir=results_dir)
+    write_trials(trials_file, annotated)
+    build_eval_dataset(annotated, results_dir / "eval_dataset.jsonl")
+    _console.print(f"[green]Annotated[/] {len(annotated)} trials → refreshed {trials_file.name} and eval_dataset.jsonl.")
+    _render_trials(annotated)
+
+
 @harms_app.command("report")
 def report(
     path: Annotated[Path, typer.Argument(help="A harms_results.json (or its directory), or a trials.jsonl to render.")] = _config.paths.harms_results,
@@ -213,14 +240,15 @@ def _load_trials(path: Path) -> list[HarmsTrial]:
 
 def _render_trials(trials: list[HarmsTrial]) -> None:
     table = Table(title="Harms trials", box=box.SIMPLE_HEAVY, title_justify="left", title_style="bold")
-    for heading in ("#", "Case", "Vector", "Channel", "Injected?", "Tools", "Attack"):
+    for heading in ("#", "Case", "Vector", "Channel", "Injected?", "Valid?", "Tools", "Attack"):
         table.add_column(heading)
     for index, trial in enumerate(trials, start=1):
         channel = "[magenta]XPIA[/]" if trial.channel.value == "indirect" else "[cyan]UPIA[/]"
-        table.add_row(str(index), trial.case_id, trial.vector.value, channel, _landed_cell(trial), _short(", ".join(trial.tools_invoked) or "-", 28), _short(trial.attack))
+        table.add_row(str(index), trial.case_id, trial.vector.value, channel, _landed_cell(trial), _valid_cell(trial), _short(", ".join(trial.tools_invoked) or "-", 28), _short(trial.attack))
     _console.print()
     _console.print(table)
     _render_injection_summary(trials)
+    _render_validity_summary(trials)
 
 
 def _landed_cell(trial: HarmsTrial) -> str:
@@ -230,6 +258,29 @@ def _landed_cell(trial: HarmsTrial) -> str:
     if trial.injection_landed is None:
         return "-"
     return "[green]\u2713 landed[/]" if trial.injection_landed else "[red]\u2717 missed[/]"
+
+
+def _valid_cell(trial: HarmsTrial) -> str:
+    # A line is valid only if the agent actually received the harm (direct: always; indirect: landed).
+    if not trial.executed or trial.harm_delivered is None:
+        return "-"
+    return "[green]\u2713 valid[/]" if trial.harm_delivered else "[red]\u2717 invalid[/]"
+
+
+def _render_validity_summary(trials: list[HarmsTrial]) -> None:
+    executed = [t for t in trials if t.executed]
+    if not executed:
+        return
+    valid = [t for t in executed if t.harm_delivered]
+    invalid = [t for t in executed if t.harm_delivered is False]
+    if invalid:
+        _console.print(
+            f"[yellow]⚠ Validity:[/] {len(valid)}/{len(executed)} result lines are valid (the agent received the harm). "
+            f"{len(invalid)} line(s) are invalid — the harm never reached the agent, so their safety scores are not meaningful "
+            f"({_short(', '.join(f'{t.case_id}/{t.vector.value}' for t in invalid), 80)})."
+        )
+    else:
+        _console.print(f"[green]✓ Validity:[/] all {len(valid)} result lines are valid (the agent received the harm).")
 
 
 def _render_injection_summary(trials: list[HarmsTrial]) -> None:
@@ -264,19 +315,33 @@ def _render_results(result: Json, trials: list[HarmsTrial]) -> None:
     rows: list[Json] = result.get("rows", [])
     if rows:
         rtable = Table(title="Per-trial scores", box=box.SIMPLE_HEAVY, title_justify="left", title_style="bold")
-        for heading in ("Case", "Vector", "Channel", *_score_columns(rows)):
+        for heading in ("Case", "Vector", "Channel", "Valid?", *_score_columns(rows)):
             rtable.add_column(heading)
         for row in rows:
             scores = [f"{row.get(col, '-')}" for col in _score_columns(rows)]
-            rtable.add_row(str(row.get("inputs.case_id", "-")), str(row.get("inputs.vector", "-")), str(row.get("inputs.channel", "-")), *scores)
+            rtable.add_row(
+                str(row.get("inputs.case_id", "-")),
+                str(row.get("inputs.vector", "-")),
+                str(row.get("inputs.channel", "-")),
+                _valid_cell_from_row(row),
+                *scores,
+            )
         _console.print()
         _console.print(rtable)
         _render_injection_summary(trials)
+        _render_validity_summary(trials)
     elif not metrics:
         _render_trials(trials)
 
     if url := result.get("studio_url"):
         _console.print(f"Foundry studio: {url}")
+
+
+def _valid_cell_from_row(row: Json) -> str:
+    delivered = row.get("inputs.harm_delivered", row.get("inputs.valid"))
+    if delivered is None:
+        return "-"
+    return "[green]\u2713 valid[/]" if delivered else "[red]\u2717 invalid[/]"
 
 
 def _score_columns(rows: list[Json]) -> list[str]:

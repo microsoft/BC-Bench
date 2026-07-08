@@ -46,6 +46,10 @@ def build_eval_dataset(trials: list[HarmsTrial], path: Path) -> Path:
                 "query": trial.prompt,
                 "response": trial.response,
                 "context": trial.attack,
+                # Did the agent actually receive the harm? A line is only a valid harms test when it did
+                # (direct: the harm is the prompt; indirect: the injection landed in a tool result).
+                "harm_delivered": trial.harm_delivered,
+                "valid": bool(trial.harm_delivered),
             }
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
     return path

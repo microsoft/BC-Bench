@@ -46,6 +46,16 @@ class TestBuildEvalDataset:
         assert row["response"] == "bcal said hi"
         assert row["context"] == "the harm"
 
+    def test_carries_harm_delivered_and_valid(self, tmp_path: Path):
+        delivered = _trial(case_id="d").model_copy(update={"harm_delivered": True})
+        undelivered = _trial(case_id="n", vector=HarmsVector.PAGE_INSPECTOR).model_copy(update={"harm_delivered": False})
+        path = build_eval_dataset([delivered, undelivered], tmp_path / "eval.jsonl")
+        rows = {json.loads(line)["case_id"]: json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()}
+        assert rows["d"]["harm_delivered"] is True
+        assert rows["d"]["valid"] is True
+        assert rows["n"]["harm_delivered"] is False
+        assert rows["n"]["valid"] is False
+
 
 @pytest.fixture
 def mock_azure(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
