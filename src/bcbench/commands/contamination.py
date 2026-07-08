@@ -28,7 +28,7 @@ def filepath_probe(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to probe")],
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     model: CopilotModel = "claude-haiku-4.5",
-    top_k: Annotated[int, typer.Option(help="Number of candidate file paths to request from the model")] = 3,
+    top_k: Annotated[int, typer.Option(min=1, help="Number of candidate file paths to request from the model")] = 3,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "contamination_probe",
 ) -> None:

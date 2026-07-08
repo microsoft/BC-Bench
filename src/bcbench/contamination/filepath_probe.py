@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from datetime import date
 from pathlib import PurePosixPath
 
@@ -18,7 +19,6 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.dataset import BaseDatasetEntry
 
 __all__ = [
-    "PREDICTION_FILENAME",
     "FilePathProbeResult",
     "FilePathProbeScore",
     "ProbeAggregate",
@@ -30,8 +30,6 @@ __all__ = [
     "score_prediction",
     "split_by_cutoff",
 ]
-
-PREDICTION_FILENAME = "prediction.json"
 
 
 def normalize_path(path: str) -> str:
@@ -58,7 +56,7 @@ def extract_gold_files(patch: str) -> list[str]:
     return gold
 
 
-def build_probe_prompt(task: str, top_k: int, result_filename: str = PREDICTION_FILENAME, repo: str = "microsoft/BCApps") -> str:
+def build_probe_prompt(task: str, top_k: int, repo: str = "microsoft/BCApps") -> str:
     # NOTE: ``task`` is interpolated as a value, so any braces in the AL bug report stay literal.
     return (
         f'You are analyzing a bug report from the Business Central (AL) repository "{repo}".\n\n'
@@ -67,11 +65,8 @@ def build_probe_prompt(task: str, top_k: int, result_filename: str = PREDICTION_
         f"changed to fix this bug, ordered from most to least likely.\n\n"
         f"Business Central AL source files follow the convention <ObjectName>.<ObjectType>.al "
         f"(for example SalesHeader.Table.al, SalesOrder.Page.al, SalesPost.Codeunit.al).\n\n"
-        f"Rules:\n"
-        f"- Answer only from the bug report text. Do NOT browse the web, fetch URLs, or read/clone any repository.\n"
-        f"- Write your answer to a file named {result_filename} in the current directory using your file-writing tool.\n"
-        f'- The file must contain ONLY a JSON array of path strings, e.g. ["src/App/Foo.Table.al", "src/App/Bar.Codeunit.al"].\n'
-        f"- Provide at most {top_k} paths. Do not write prose or any other file.\n\n"
+        f"Answer only from the bug report text. Respond with ONLY a JSON array of at most {top_k} path "
+        f'strings, for example ["src/App/Foo.Table.al", "src/App/Bar.Codeunit.al"]. Do not add any prose.\n\n'
         f"Bug report:\n{task}"
     )
 
@@ -214,11 +209,11 @@ def aggregate_results(results: list[FilePathProbeResult], label: str = "all") ->
     scored = [r for r in results if r.error is None]
     n = len(scored)
 
-    def rate(predicate: object) -> float:
-        return sum(1 for r in scored if predicate(r)) / n if n else 0.0  # type: ignore[operator]
+    def rate(predicate: Callable[[FilePathProbeResult], bool]) -> float:
+        return sum(1 for r in scored if predicate(r)) / n if n else 0.0
 
-    def mean(selector: object) -> float:
-        return sum(selector(r) for r in scored) / n if n else 0.0  # type: ignore[operator]
+    def mean(selector: Callable[[FilePathProbeResult], float]) -> float:
+        return sum(selector(r) for r in scored) / n if n else 0.0
 
     return ProbeAggregate(
         label=label,

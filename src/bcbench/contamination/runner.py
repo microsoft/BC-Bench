@@ -1,9 +1,11 @@
 """Model invocation and persistence for the file-path identification probe.
 
-The probe runs a single-shot Copilot CLI call in an isolated, empty working
-directory — deliberately withholding the target repository so the model must
-answer from the bug report alone (the context-free condition from the
-SWE-Bench Illusion paper).
+The probe runs a single-shot Copilot CLI call restricted to the ``write`` tool
+only — no shell, file-read, or fetch tools — so the model has no way to reach
+the target repository or the gold patch on disk. It answers from the bug report
+alone (the context-free condition from the SWE-Bench Illusion paper) and its
+reply is parsed from stdout. The call runs in an isolated empty working
+directory as an extra layer of defense.
 """
 
 from __future__ import annotations
@@ -13,28 +15,25 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from bcbench.config import get_config
-from bcbench.contamination.filepath_probe import (
-    PREDICTION_FILENAME,
-    FilePathProbeResult,
-    build_probe_prompt,
-    parse_prediction,
-)
+from bcbench.contamination.filepath_probe import FilePathProbeResult, build_probe_prompt, parse_prediction
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
-_config = get_config()
 
-__all__ = ["load_probe_results", "run_filepath_probe", "save_probe_result"]
+__all__ = ["PROBE_TIMEOUT_SECONDS", "load_probe_results", "run_filepath_probe", "save_probe_result"]
+
+# Kept below the workflow step timeout so a hung probe raises (and records an error
+# result) before the CI step is force-killed and loses its artifact.
+PROBE_TIMEOUT_SECONDS = 15 * 60
 
 
 def _find_copilot() -> str | None:
     return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
 
 
-def _run_copilot_context_free(prompt: str, work_dir: Path, model: str, result_filename: str) -> str:
+def _run_copilot_context_free(prompt: str, work_dir: Path, model: str) -> str:
     copilot_cmd = _find_copilot()
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH; cannot run the file-path probe")
@@ -45,7 +44,9 @@ def _run_copilot_context_free(prompt: str, work_dir: Path, model: str, result_fi
     completed = subprocess.run(
         [
             copilot_cmd,
-            "--allow-all-tools",
+            "--silent",  # emit only the agent response on stdout
+            "--available-tools=write",  # the model's ONLY tool: no shell/read/fetch to reach the repo or gold patch
+            "--allow-tool=write",
             "--disable-builtin-mcps",
             "--no-custom-instructions",
             f"--model={model}",
@@ -56,13 +57,10 @@ def _run_copilot_context_free(prompt: str, work_dir: Path, model: str, result_fi
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=_config.timeout.agent_execution,
+        timeout=PROBE_TIMEOUT_SECONDS,
         check=True,
     )
 
-    result_path = work_dir / result_filename
-    if result_path.exists():
-        return result_path.read_text(encoding="utf-8")
     return completed.stdout or ""
 
 
@@ -82,7 +80,7 @@ def run_filepath_probe(
     logger.info("Running context-free file-path probe on %s (model=%s, top_k=%d)", entry.instance_id, model, top_k)
     try:
         with tempfile.TemporaryDirectory(prefix="bcbench-probe-") as tmp:
-            raw_output = _run_copilot_context_free(prompt, Path(tmp), model, PREDICTION_FILENAME)
+            raw_output = _run_copilot_context_free(prompt, Path(tmp), model)
         predicted = parse_prediction(raw_output, top_k)
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, AgentError) as exc:
         error = f"{type(exc).__name__}: {exc}"

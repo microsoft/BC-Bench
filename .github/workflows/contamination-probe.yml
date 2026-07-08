@@ -141,7 +141,9 @@ jobs:
       - name: Summarize contamination signal
         shell: pwsh
         run: |
-          $cutoff = "${{ inputs.cutoff }}"
+          # Manual runs use the dispatch input; scheduled runs fall back to the
+          # CONTAMINATION_CUTOFF repo variable so the weekly report still shows the delta.
+          $cutoff = "${{ inputs.cutoff || vars.CONTAMINATION_CUTOFF }}"
           $cutoffArg = if ($cutoff) { "--cutoff", $cutoff } else { @() }
 
           uv run bcbench contamination summarize `

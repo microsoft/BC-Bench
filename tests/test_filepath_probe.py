@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+import bcbench.contamination.runner as runner_mod
 from bcbench.contamination.filepath_probe import (
     FilePathProbeResult,
     FilePathProbeScore,
@@ -9,7 +12,10 @@ from bcbench.contamination.filepath_probe import (
     score_prediction,
     split_by_cutoff,
 )
-from tests.conftest import create_dataset_entry
+from bcbench.contamination.runner import load_probe_results, save_probe_result
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.exceptions import AgentError
+from tests.conftest import create_dataset_entry, create_problem_statement_dir
 
 FULL_PATCH = """diff --git a/App/Foo/Bar.Table.al b/App/Foo/Bar.Table.al
 index 111..222 100644
@@ -181,3 +187,43 @@ class TestSplitByCutoff:
         pre, post = split_by_cutoff([bad], "2025-06-01")
         assert pre == [bad]
         assert post == []
+
+
+class TestSaveLoadRoundTrip:
+    def test_round_trip(self, tmp_path):
+        result = _result("2025-01-01", exact_hit=True, basename_hit=True)
+        save_probe_result(result, tmp_path / "run")
+        loaded = load_probe_results(tmp_path)
+        assert len(loaded) == 1
+        assert loaded[0].instance_id == result.instance_id
+
+
+class TestRunFilePathProbe:
+    def test_success_parses_and_saves(self, tmp_path, monkeypatch):
+        problem_dir = create_problem_statement_dir(tmp_path, "Sales invoice posting fails")
+        entry = create_dataset_entry(patch=FULL_PATCH)
+        monkeypatch.setattr(runner_mod, "_run_copilot_context_free", lambda prompt, work_dir, model: '["App/Foo/Bar.Table.al"]')
+
+        with patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_dir)):
+            result = runner_mod.run_filepath_probe(entry=entry, model="m", category="bug-fix", top_k=3, output_dir=tmp_path / "out")
+
+        assert result.predicted_files == ["App/Foo/Bar.Table.al"]
+        assert result.score.exact_hit
+        assert result.error is None
+        assert (tmp_path / "out" / f"{entry.instance_id}.filepath-probe.jsonl").exists()
+
+    def test_error_is_captured_and_saved(self, tmp_path, monkeypatch):
+        problem_dir = create_problem_statement_dir(tmp_path, "Sales invoice posting fails")
+        entry = create_dataset_entry(patch=FULL_PATCH)
+
+        def boom(prompt, work_dir, model):
+            raise AgentError("copilot missing")
+
+        monkeypatch.setattr(runner_mod, "_run_copilot_context_free", boom)
+
+        with patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_dir)):
+            result = runner_mod.run_filepath_probe(entry=entry, model="m", category="bug-fix", top_k=3, output_dir=tmp_path / "out")
+
+        assert result.error is not None
+        assert result.predicted_files == []
+        assert (tmp_path / "out" / f"{entry.instance_id}.filepath-probe.jsonl").exists()
