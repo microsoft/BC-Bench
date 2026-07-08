@@ -1,11 +1,9 @@
 """Install agent plugins (marketplace or local) declared in config, via the CLI's plugin commands.
 
-Config injection (`extraKnownMarketplaces` / `enabledPlugins`) is trust-dialog-gated and ignored in
-headless mode, so we drive the CLI's real `plugin marketplace add` + `plugin install` commands.
-Because the plugin store is user-scope/global and execution-based categories run entries as a
-parallel matrix on a shared self-hosted runner, each entry installs into a fresh per-entry config
-home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR`) under `<repo>/.bcbench/`, which the runner also applies
-to the agent launch. Marketplace content is cloned at its pinned commit into `<repo>/.bcbench/plugins/`.
+Each entry installs into a fresh per-entry config home (`COPILOT_HOME` / `CLAUDE_CONFIG_DIR` under
+`<repo>/.bcbench/`) so entries running as a parallel matrix on a shared self-hosted runner never share
+the user-scope plugin store; the runner applies the same home to the agent launch. Marketplace content
+is cloned at its pinned commit into `<repo>/.bcbench/plugins/`.
 
 NOTE: do NOT import from `bcbench.agent.*` here — `bcbench.agent.__init__` imports the runners,
 which import `bcbench.operations`; importing agent from operations would create a cycle.

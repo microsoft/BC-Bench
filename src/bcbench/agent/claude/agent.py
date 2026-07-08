@@ -50,7 +50,6 @@ def run_claude_code(
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
-
     plugin_records, plugin_env = setup_plugins_from_config(claude_config, entry, repo_path, AgentType.CLAUDE, claude_cmd)
 
     config = ExperimentConfiguration(

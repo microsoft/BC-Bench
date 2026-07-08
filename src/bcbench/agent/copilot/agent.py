@@ -54,7 +54,6 @@ def run_copilot_agent(
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
-
     plugin_records, plugin_env = setup_plugins_from_config(copilot_config, entry, repo_path, AgentType.COPILOT, copilot_cmd)
 
     config = ExperimentConfiguration(
