@@ -43,6 +43,7 @@ def run_scan(
     risk_categories: list[RiskCategory] | None = None,
     attack_strategies: list[AttackStrategy] | None = None,
     language: SupportedLanguages | None = None,
+    num_objectives: int | None = None,
 ) -> Path:
     red_team_kwargs: dict[str, Any] = {
         "azure_ai_project": azure_ai_project,
@@ -55,6 +56,8 @@ def run_scan(
         red_team_kwargs["risk_categories"] = risk_categories
     if language is not None:
         red_team_kwargs["language"] = language
+    if num_objectives is not None:
+        red_team_kwargs["num_objectives"] = num_objectives
 
     red_team = RedTeam(**red_team_kwargs)
 
