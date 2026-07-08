@@ -93,34 +93,21 @@ agents:
   enabled: false
   name: ALTest
 
-# controls installing agent plugins (skills/agents/mcp/hooks bundles) into the CLI for the run.
-# each enabled entry is installed via the CLI's `plugin marketplace add` + `plugin install` into a
-# fresh per-entry config home (COPILOT_HOME / CLAUDE_CONFIG_DIR under <repo>/.bcbench/), so parallel
-# matrix entries never share the user-scope plugin store and no teardown is needed.
-# NOTE: config injection (extraKnownMarketplaces/enabledPlugins) is trust-dialog-gated and ignored
-#       in headless mode, so we drive the real CLI commands instead.
-# NOTE: a fresh home authenticates via the env token the workflow sets (COPILOT_GITHUB_TOKEN;
-#       ANTHROPIC_API_KEY) — local plugin runs must have that token in the environment.
+# controls installing agent plugins into the CLI for the run. Each enabled entry is installed via the
+# CLI's `plugin marketplace add` + `plugin install` into a fresh per-entry config home (COPILOT_HOME /
+# CLAUDE_CONFIG_DIR under <repo>/.bcbench/) that the runner also applies to the agent launch.
 # source: "marketplace" (repo + commit, optional `path` = marketplace root within the clone) or
-#         "local" (path under src/bcbench/agent/shared/plugins/). Either must resolve to a marketplace
-#         root containing .claude-plugin/marketplace.json.
-# A bundled, self-contained example ships at src/bcbench/agent/shared/plugins/bcbench-example/.
+#         "local" (path under src/bcbench/agent/shared/plugins/, e.g. the bundled bcbench-example).
 plugins:
-  # Local example (self-contained, fast copy) — validated by tests; flip enabled to smoke-test the copy path.
   - source: local
     enabled: false
     path: "bcbench-example"
     plugins: ["bcbench-example-plugin"]
-  # Marketplace example — clones this repo at a pinned commit and uses the bundled example subdir as the
-  # marketplace root, so the run log shows a `git_operations` clone. Replace repo/commit/path with your own
-  # marketplace for real experiments. NOTE: the marketplace's own name (in its marketplace.json) must NOT be
-  # a Copilot built-in (copilot-plugins / awesome-copilot), or `plugin marketplace add` fails.
   - source: marketplace
     enabled: false
-    repo: "microsoft/BC-Bench"
-    commit: "dd4ed3f6e1fb374c5a1e2a9a697aa06236022599"
-    path: "src/bcbench/agent/shared/plugins/bcbench-example"
-    plugins: ["bcbench-example-plugin"]
+    repo: "obra/superpowers"
+    commit: "d884ae04edebef577e82ff7c4e143debd0bbec99"
+    plugins: ["superpowers"]
 
 mcp:
   servers:
