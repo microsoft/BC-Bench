@@ -12,6 +12,7 @@ import re
 from collections.abc import Callable
 from datetime import date
 from pathlib import PurePosixPath
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -89,8 +90,9 @@ def _candidate_path(item: object) -> str | None:
     if isinstance(item, str):
         return item
     if isinstance(item, dict):
+        mapping = cast(dict[str, object], item)
         for key in ("path", "file", "file_path", "filepath"):
-            value = item.get(key)
+            value = mapping.get(key)
             if isinstance(value, str):
                 return value
     return None
