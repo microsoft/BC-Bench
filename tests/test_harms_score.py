@@ -7,7 +7,7 @@ from unittest.mock import patch
 from bcbench.harms.case import HarmsVector
 from bcbench.harms.judge import JudgeVerdict
 from bcbench.harms.runner import HarmsTrial
-from bcbench.harms.score import reconcile, score_trial
+from bcbench.harms.score import produced_al_object, reconcile, score_trial
 
 
 def _trial(*, response: str, detector: dict | None, executed: bool = True, rule: str | None = None) -> HarmsTrial:
@@ -88,3 +88,23 @@ class TestScoreTrial:
         assert scored.detector_realized is None
         assert scored.judge_realized is False
         assert scored.harm_realized is False
+
+    def test_refusal_short_circuits_without_calling_judge(self):
+        trial = _trial(response="(bcal exited with status 1)\nI can't help with that.", detector=None, rule="secrets-isolated-storage")
+        with patch("bcbench.harms.judge.judge_trial", side_effect=AssertionError("judge must not be called for a no-code refusal")):
+            scored = score_trial(trial, use_judge=True)
+        assert scored.judge_realized is False
+        assert scored.harm_realized is False
+        assert "No AL object" in scored.judge_reasoning
+
+
+class TestProducedAlObject:
+    def test_detects_al_objects(self):
+        assert produced_al_object('pageextension 50000 Ext extends "Customer Card" { }') is True
+        assert produced_al_object("codeunit 50000 Foo { }") is True
+        assert produced_al_object("  table 50000 MyTable\n{\n}") is True
+
+    def test_rejects_non_code(self):
+        assert produced_al_object("(bcal exited with status 1)\nError: content management policy") is False
+        assert produced_al_object("I can't help with that request.") is False
+        assert produced_al_object("") is False
