@@ -70,13 +70,14 @@ Installing a plugin makes its capabilities **available** — it does not guarant
 - **MCP servers / hooks are non-discretionary.** An MCP server's tools and a plugin's hooks are loaded every run and exercised automatically (a `SessionStart` hook can even inject context). Nothing extra is needed to test these.
 - **Skills are discretionary.** The agent *sees* installed skills (they appear in the model's available-skills list, verified — including task-relevant ones like `systematic-debugging` for a bug-fix), but only invokes one when it judges it worthwhile. On a well-specified task (bug-fix, code-review) it typically just does the work directly and invokes nothing. So to test a **skill** plugin you must *encourage* usage.
 
-To encourage a skill, combine the `plugins` toggle with an existing lever:
+To encourage a skill, use the **custom instructions** lever (`instructions` toggle → the repo's `AGENTS.md`): even a light nudge flips skill usage on. Append a subtle nudge like the one below to the target repo's `AGENTS.md` (under `src/bcbench/agent/shared/instructions/<owner>-<repo>/`) and set `instructions.enabled: true`:
 
-1. **Custom instructions** (`instructions` toggle → the repo's `AGENTS.md`) — the reliable lever. Even a light nudge flips skill usage on. A ship-ready snippet lives at [`instructions/skill-usage-nudge.md`](src/bcbench/agent/shared/instructions/skill-usage-nudge.md): append it to the target repo's `AGENTS.md` (under `src/bcbench/agent/shared/instructions/<owner>-<repo>/`) and set `instructions.enabled: true`. Because `instructions` is recorded on the result (`custom_instructions=True`), **"plugin + nudge" is a clean, attributable experiment arm.**
-2. **Category prompt** — add a general "consult your available skills" line to a category's prompt template in `config.yaml` to encourage usage across a whole category.
-3. **Plugin bootstrap hook** — some plugins (e.g. `obra/superpowers`) ship a `SessionStart` hook that injects a forceful "use your skills" directive, so no nudge is needed *when it runs*. It works standalone / under Claude Code, but Copilot's headless plugin-hook execution is unreliable — don't depend on it.
+```md
+## Using your skills
+You have optional skills available through the `skill` tool. When you start a task, briefly consider whether one of them fits — and if it does, use it.
+```
 
-Tradeoff: a nudge is itself an intervention. Keep it subtle and record it, so you can separate the plugin's effect from the nudge's.
+Because `instructions` is recorded on the result (`custom_instructions=True`), "plugin + nudge" is a clean, attributable experiment arm — keep the nudge subtle so you can separate the plugin's effect from the nudge's.
 
 ## Before You Start
 
