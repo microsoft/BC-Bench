@@ -1,7 +1,6 @@
 """GitHub Copilot CLI Agent implementation."""
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +10,7 @@ import yaml
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks
 from bcbench.config import get_config
+from bcbench.copilot_cli import find_copilot
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
@@ -41,7 +41,7 @@ def run_copilot_agent(
 
     # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
     # which re-parses arguments and corrupts prompts containing double quotes (e.g. JSON examples).
-    copilot_cmd = shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
+    copilot_cmd = find_copilot()
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 

@@ -213,9 +213,11 @@ def test_setup_missing_required_key_raises_and_cleans_home(tmp_path):
 @patch("bcbench.agent.copilot.agent.build_al_lsp_plugin", return_value=None)
 @patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=(None, None))
 @patch("bcbench.agent.copilot.agent.build_prompt", return_value="do the task")
-@patch("bcbench.agent.copilot.agent.shutil.which", return_value="copilot")
+@patch("bcbench.agent.copilot.agent.find_copilot", return_value="copilot")
 @patch("bcbench.agent.copilot.agent.subprocess.run")
-def test_copilot_runner_records_plugins_and_sets_home(mock_run, mock_which, mock_prompt, mock_mcp, mock_lsp, mock_instr, mock_skills, mock_agent, mock_hooks, mock_pm, mock_tu, mock_setup, tmp_path):
+def test_copilot_runner_records_plugins_and_sets_home(
+    mock_run, mock_find_copilot, mock_prompt, mock_mcp, mock_lsp, mock_instr, mock_skills, mock_agent, mock_hooks, mock_pm, mock_tu, mock_setup, tmp_path
+):
     from bcbench.agent.copilot.agent import run_copilot_agent
     from bcbench.types import EvaluationCategory
 

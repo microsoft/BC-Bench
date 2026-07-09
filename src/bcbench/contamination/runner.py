@@ -10,31 +10,25 @@ directory as an extra layer of defense.
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
+from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult, build_identification_prompt, parse_prediction
+from bcbench.copilot_cli import find_copilot
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
+_config = get_config()
 
-__all__ = ["IDENTIFICATION_TIMEOUT_SECONDS", "load_identification_results", "run_filepath_identification", "save_identification_result"]
-
-# Kept below the workflow step timeout so a hung run raises (and records an error
-# result) before the CI step is force-killed and loses its artifact.
-IDENTIFICATION_TIMEOUT_SECONDS = 15 * 60
-
-
-def _find_copilot() -> str | None:
-    return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
+__all__ = ["load_identification_results", "run_filepath_identification", "save_identification_result"]
 
 
 def _run_copilot_context_free(prompt: str, work_dir: Path, model: str) -> str:
-    copilot_cmd = _find_copilot()
+    copilot_cmd = find_copilot()
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH; cannot run file-path identification")
 
@@ -57,7 +51,7 @@ def _run_copilot_context_free(prompt: str, work_dir: Path, model: str) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=IDENTIFICATION_TIMEOUT_SECONDS,
+        timeout=_config.timeout.filepath_identification,
         check=True,
     )
 
