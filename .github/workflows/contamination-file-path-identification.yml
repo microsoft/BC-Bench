@@ -55,12 +55,6 @@ on:
   schedule:
     # Weekly full run, Mondays 06:00 UTC.
     - cron: "0 6 * * 1"
-  # TEMPORARY (remove after this run): one-off small-sample run triggered by pushing
-  # to this branch. Push events carry no inputs, so the get-entries test-run fallback
-  # below is temporarily set to true (a handful of random entries).
-  push:
-    branches:
-      - contamination-filepath-probe
 
 concurrency:
   group: contamination-file-path-identification-${{ inputs.category || 'bug-fix' }}
@@ -73,7 +67,7 @@ jobs:
   get-entries:
     uses: ./.github/workflows/get-entries.yml
     with:
-      test-run: ${{ inputs.test-run || true }}
+      test-run: ${{ inputs.test-run || false }}
       category: ${{ inputs.category || 'bug-fix' }}
 
   identify:
