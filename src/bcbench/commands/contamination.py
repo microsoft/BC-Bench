@@ -124,6 +124,11 @@ def _build_markdown_report(model: str, overall: IdentificationAggregate, results
             "> No `--cutoff` given, so this is an absolute rate only. In AL, file names are highly predictable from conventions, so treat this as a baseline — pass a cutoff date to compare old/public vs fresh entries and get the actual contamination signal.",
         ]
 
+    lines += [
+        "",
+        "> 📖 How these metrics are calculated: [methodology & citations](https://github.com/microsoft/BC-Bench/blob/main/docs/contamination-file-path-identification.md) · based on [The SWE-Bench Illusion (arXiv:2506.12286)](https://arxiv.org/abs/2506.12286).",
+    ]
+
     return "\n".join(lines)
 
 
