@@ -39,8 +39,7 @@ def _run_copilot_context_free(prompt: str, work_dir: Path, model: str) -> str:
         [
             copilot_cmd,
             "--silent",  # emit only the agent response on stdout
-            "--available-tools=write",  # the model's ONLY tool: no shell/read/fetch to reach the repo or gold patch
-            "--allow-tool=write",
+            "--available-tools=",  # no tools at all: the model must answer as stdout text, and cannot read the repo/gold patch or write its answer to a file
             "--disable-builtin-mcps",
             "--no-custom-instructions",
             f"--model={model}",

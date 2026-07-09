@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 
 import typer
@@ -68,6 +69,12 @@ def summarize(
     When ``--cutoff`` is given, reports the pre-vs-post delta — the memorization
     signal — rather than a single (convention-inflated) accuracy number.
     """
+    if cutoff is not None:
+        try:
+            date.fromisoformat(cutoff)
+        except ValueError as exc:
+            raise typer.BadParameter("must be an ISO date (YYYY-MM-DD)", param_hint="--cutoff") from exc
+
     results = load_identification_results(results_dir)
     if not results:
         logger.error("No *.file-path-identification.jsonl results found under %s", results_dir)
@@ -109,12 +116,14 @@ def _build_markdown_report(model: str, overall: IdentificationAggregate, results
         lines.append(_aggregate_row(pre_agg))
         lines.append(_aggregate_row(post_agg))
 
-        delta = pre_agg.basename_hit_rate - post_agg.basename_hit_rate
+        exact_delta = pre_agg.exact_hit_rate - post_agg.exact_hit_rate
+        basename_delta = pre_agg.basename_hit_rate - post_agg.basename_hit_rate
         lines += [
             "",
-            f"**Contamination signal (basename hit, pre - control): {_pct(delta)}**",
+            f"**Contamination signal (exact-path hit, pre - control): {_pct(exact_delta)}**",
+            f"(basename-hit delta: {_pct(basename_delta)} — convention-inflated, shown for context)",
             "",
-            "> A large positive delta indicates memorization: the model localizes old/public bugs far better than fresh ones it could not have seen. A small delta means the score is mostly explained by AL naming conventions, not contamination.",
+            "> Exact-path hit is the convention-resistant signal: a model can guess an AL basename like `SalesHeader.Table.al` from naming conventions alone, but reproducing the full repository path is far harder without having seen the code. A large positive exact-path delta indicates memorization — the model localizes old/public bugs far better than fresh ones it could not have seen. A small delta means the score is mostly explained by AL naming conventions, not contamination.",
         ]
         if post_agg.scored == 0:
             lines.append("")

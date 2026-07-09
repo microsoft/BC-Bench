@@ -1,6 +1,10 @@
 from unittest.mock import patch
 
+import pytest
+import typer
+
 import bcbench.contamination.runner as runner_mod
+from bcbench.commands.contamination import summarize
 from bcbench.contamination.filepath_identification import (
     FilePathIdentificationResult,
     FilePathIdentificationScore,
@@ -186,6 +190,12 @@ class TestSplitByCutoff:
         pre, post = split_by_cutoff([bad], "2025-06-01")
         assert pre == [bad]
         assert post == []
+
+
+class TestSummarizeCutoffValidation:
+    def test_invalid_cutoff_raises_bad_parameter(self, tmp_path):
+        with pytest.raises(typer.BadParameter):
+            summarize(results_dir=tmp_path, cutoff="not-a-date")
 
 
 class TestSaveLoadRoundTrip:
