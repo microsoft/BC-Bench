@@ -1,4 +1,4 @@
-"""Pure, testable core for the context-free file-path identification probe.
+"""Pure, testable core for the context-free file-path identification task.
 
 No I/O or model invocation lives here — see ``runner.py`` for that. Everything
 in this module is a pure function of its inputs so it can be unit-tested without
@@ -20,11 +20,11 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.dataset import BaseDatasetEntry
 
 __all__ = [
-    "FilePathProbeResult",
-    "FilePathProbeScore",
-    "ProbeAggregate",
+    "FilePathIdentificationResult",
+    "FilePathIdentificationScore",
+    "IdentificationAggregate",
     "aggregate_results",
-    "build_probe_prompt",
+    "build_identification_prompt",
     "extract_gold_files",
     "normalize_path",
     "parse_prediction",
@@ -57,7 +57,7 @@ def extract_gold_files(patch: str) -> list[str]:
     return gold
 
 
-def build_probe_prompt(task: str, top_k: int, repo: str = "microsoft/BCApps") -> str:
+def build_identification_prompt(task: str, top_k: int, repo: str = "microsoft/BCApps") -> str:
     # NOTE: ``task`` is interpolated as a value, so any braces in the AL bug report stay literal.
     return (
         f'You are analyzing a bug report from the Business Central (AL) repository "{repo}".\n\n'
@@ -119,7 +119,7 @@ def parse_prediction(raw_text: str, top_k: int | None = None) -> list[str]:
     return paths[:top_k] if top_k is not None else paths
 
 
-class FilePathProbeScore(BaseModel):
+class FilePathIdentificationScore(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     exact_hit: bool
@@ -128,7 +128,7 @@ class FilePathProbeScore(BaseModel):
     basename_recall: float
 
 
-def score_prediction(predicted: list[str], gold: list[str]) -> FilePathProbeScore:
+def score_prediction(predicted: list[str], gold: list[str]) -> FilePathIdentificationScore:
     """Score predicted paths against gold buggy files.
 
     Reports two granularities: exact repo-relative path match (strict, needs
@@ -143,7 +143,7 @@ def score_prediction(predicted: list[str], gold: list[str]) -> FilePathProbeScor
     exact_matched = gold_paths & pred_paths
     name_matched = gold_names & pred_names
 
-    return FilePathProbeScore(
+    return FilePathIdentificationScore(
         exact_hit=bool(exact_matched),
         basename_hit=bool(name_matched),
         exact_recall=len(exact_matched) / len(gold_paths) if gold_paths else 0.0,
@@ -151,7 +151,7 @@ def score_prediction(predicted: list[str], gold: list[str]) -> FilePathProbeScor
     )
 
 
-class FilePathProbeResult(BaseModel):
+class FilePathIdentificationResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     instance_id: str
@@ -162,7 +162,7 @@ class FilePathProbeResult(BaseModel):
     top_k: int
     gold_files: list[str]
     predicted_files: list[str]
-    score: FilePathProbeScore
+    score: FilePathIdentificationScore
     raw_output: str = ""
     error: str | None = None
 
@@ -177,7 +177,7 @@ class FilePathProbeResult(BaseModel):
         predicted_files: list[str],
         raw_output: str = "",
         error: str | None = None,
-    ) -> FilePathProbeResult:
+    ) -> FilePathIdentificationResult:
         gold = extract_gold_files(entry.patch)
         return cls(
             instance_id=entry.instance_id,
@@ -194,7 +194,7 @@ class FilePathProbeResult(BaseModel):
         )
 
 
-class ProbeAggregate(BaseModel):
+class IdentificationAggregate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     label: str
@@ -207,17 +207,17 @@ class ProbeAggregate(BaseModel):
     mean_basename_recall: float
 
 
-def aggregate_results(results: list[FilePathProbeResult], label: str = "all") -> ProbeAggregate:
+def aggregate_results(results: list[FilePathIdentificationResult], label: str = "all") -> IdentificationAggregate:
     scored = [r for r in results if r.error is None]
     n = len(scored)
 
-    def rate(predicate: Callable[[FilePathProbeResult], bool]) -> float:
+    def rate(predicate: Callable[[FilePathIdentificationResult], bool]) -> float:
         return sum(1 for r in scored if predicate(r)) / n if n else 0.0
 
-    def mean(selector: Callable[[FilePathProbeResult], float]) -> float:
+    def mean(selector: Callable[[FilePathIdentificationResult], float]) -> float:
         return sum(selector(r) for r in scored) / n if n else 0.0
 
-    return ProbeAggregate(
+    return IdentificationAggregate(
         label=label,
         count=len(results),
         scored=n,
@@ -229,7 +229,7 @@ def aggregate_results(results: list[FilePathProbeResult], label: str = "all") ->
     )
 
 
-def split_by_cutoff(results: list[FilePathProbeResult], cutoff: str) -> tuple[list[FilePathProbeResult], list[FilePathProbeResult]]:
+def split_by_cutoff(results: list[FilePathIdentificationResult], cutoff: str) -> tuple[list[FilePathIdentificationResult], list[FilePathIdentificationResult]]:
     """Split results into (pre-cutoff, on-or-after-cutoff) by ``created_at``.
 
     Pre-cutoff entries were public before the boundary (potentially in training
@@ -237,8 +237,8 @@ def split_by_cutoff(results: list[FilePathProbeResult], cutoff: str) -> tuple[li
     unparseable date are conservatively grouped with the pre-cutoff set.
     """
     boundary = date.fromisoformat(cutoff)
-    pre: list[FilePathProbeResult] = []
-    post: list[FilePathProbeResult] = []
+    pre: list[FilePathIdentificationResult] = []
+    post: list[FilePathIdentificationResult] = []
     for result in results:
         try:
             created = date.fromisoformat(result.created_at[:10])

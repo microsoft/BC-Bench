@@ -1,4 +1,4 @@
-"""CLI commands for contamination / memorization probes."""
+"""CLI commands for contamination / memorization diagnostics."""
 
 from __future__ import annotations
 
@@ -10,41 +10,41 @@ from typing_extensions import Annotated
 
 from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
-from bcbench.contamination.filepath_probe import FilePathProbeResult, ProbeAggregate, aggregate_results, split_by_cutoff
-from bcbench.contamination.runner import load_probe_results, run_filepath_probe
+from bcbench.contamination.filepath_identification import FilePathIdentificationResult, IdentificationAggregate, aggregate_results, split_by_cutoff
+from bcbench.contamination.runner import load_identification_results, run_filepath_identification
 from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
 
-contamination_app = typer.Typer(help="Contamination / memorization probes for the dataset")
+contamination_app = typer.Typer(help="Contamination / memorization diagnostics for the dataset")
 
 _PATCH_BASED_CATEGORIES = (EvaluationCategory.BUG_FIX, EvaluationCategory.TEST_GENERATION)
 
 
-@contamination_app.command("filepath-probe")
-def filepath_probe(
-    entry_id: Annotated[str, typer.Argument(help="Entry ID to probe")],
+@contamination_app.command("file-path-identification")
+def filepath_identification(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to evaluate")],
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     model: CopilotModel = "claude-haiku-4.5",
     top_k: Annotated[int, typer.Option(min=1, help="Number of candidate file paths to request from the model")] = 3,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
-    run_id: RunId = "contamination_probe",
+    run_id: RunId = "contamination_identification",
 ) -> None:
-    """Context-free file-path identification probe (SWE-Bench Illusion methodology).
+    """Context-free file-path identification task (SWE-Bench Illusion methodology).
 
     Gives the model ONLY the bug report — no repository, no code — and asks which
     file(s) contain the bug, then scores against the files the gold fix patch touches.
     """
     if category not in _PATCH_BASED_CATEGORIES:
-        raise typer.BadParameter(f"filepath-probe requires a patch-based category {[c.value for c in _PATCH_BASED_CATEGORIES]}, got '{category.value}'")
+        raise typer.BadParameter(f"file-path-identification requires a patch-based category {[c.value for c in _PATCH_BASED_CATEGORIES]}, got '{category.value}'")
 
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    result = run_filepath_probe(entry=entry, model=model, category=category.value, top_k=top_k, output_dir=output_dir / run_id)
+    result = run_filepath_identification(entry=entry, model=model, category=category.value, top_k=top_k, output_dir=output_dir / run_id)
 
     if result.error:
-        logger.error("Probe errored for %s: %s", entry_id, result.error)
+        logger.error("Identification errored for %s: %s", entry_id, result.error)
     logger.info("Gold files:      %s", result.gold_files)
     logger.info("Predicted files: %s", result.predicted_files)
     logger.info(
@@ -58,18 +58,18 @@ def filepath_probe(
 
 @contamination_app.command("summarize")
 def summarize(
-    results_dir: Annotated[Path, typer.Option(help="Directory containing *.filepath-probe.jsonl results")],
+    results_dir: Annotated[Path, typer.Option(help="Directory containing *.file-path-identification.jsonl results")],
     model: Annotated[str, typer.Option(help="Model label for the report")] = "unknown",
     cutoff: Annotated[str | None, typer.Option(help="ISO date (YYYY-MM-DD). Entries created before it are treated as potentially-contaminated; on/after as the clean control.")] = None,
 ) -> None:
-    """Aggregate probe results and report the contamination signal.
+    """Aggregate identification results and report the contamination signal.
 
     When ``--cutoff`` is given, reports the pre-vs-post delta — the memorization
     signal — rather than a single (convention-inflated) accuracy number.
     """
-    results = load_probe_results(results_dir)
+    results = load_identification_results(results_dir)
     if not results:
-        logger.error("No *.filepath-probe.jsonl results found under %s", results_dir)
+        logger.error("No *.file-path-identification.jsonl results found under %s", results_dir)
         raise typer.Exit(code=1)
 
     overall = aggregate_results(results, label="all")
@@ -83,16 +83,16 @@ def _pct(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
-def _aggregate_row(agg: ProbeAggregate) -> str:
+def _aggregate_row(agg: IdentificationAggregate) -> str:
     return f"| {agg.label} | {agg.count} | {_pct(agg.basename_hit_rate)} | {_pct(agg.exact_hit_rate)} | {_pct(agg.mean_basename_recall)} | {_pct(agg.mean_exact_recall)} | {agg.error_count} |"
 
 
-def _build_markdown_report(model: str, overall: ProbeAggregate, results: list[FilePathProbeResult], cutoff: str | None) -> str:
+def _build_markdown_report(model: str, overall: IdentificationAggregate, results: list[FilePathIdentificationResult], cutoff: str | None) -> str:
     header = "| Group | N | Basename hit | Exact hit | Mean basename recall | Mean exact recall | Errors |"
     divider = "| --- | --- | --- | --- | --- | --- | --- |"
 
     lines = [
-        "## File-path identification probe",
+        "## File-path identification",
         "",
         f"Model: **{model}** · context-free bug localization (SWE-Bench Illusion methodology).",
         "",

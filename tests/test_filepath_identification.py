@@ -1,11 +1,11 @@
 from unittest.mock import patch
 
 import bcbench.contamination.runner as runner_mod
-from bcbench.contamination.filepath_probe import (
-    FilePathProbeResult,
-    FilePathProbeScore,
+from bcbench.contamination.filepath_identification import (
+    FilePathIdentificationResult,
+    FilePathIdentificationScore,
     aggregate_results,
-    build_probe_prompt,
+    build_identification_prompt,
     extract_gold_files,
     normalize_path,
     parse_prediction,
@@ -70,16 +70,16 @@ class TestParsePrediction:
         assert parse_prediction('{"path": "App/A.al"}') == []
 
 
-class TestBuildProbePrompt:
+class TestBuildIdentificationPrompt:
     def test_includes_task_and_top_k(self):
-        prompt = build_probe_prompt("Sales header total is wrong", top_k=5)
+        prompt = build_identification_prompt("Sales header total is wrong", top_k=5)
         assert "Sales header total is wrong" in prompt
         assert "5" in prompt
 
     def test_task_with_braces_does_not_break(self):
         # AL code contains braces; ensure they survive interpolation verbatim.
         task = "codeunit 50100 X { procedure P() begin end; }"
-        assert task in build_probe_prompt(task, top_k=3)
+        assert task in build_identification_prompt(task, top_k=3)
 
 
 class TestScorePrediction:
@@ -113,10 +113,10 @@ class TestScorePrediction:
         assert not score.basename_hit
 
 
-class TestFilePathProbeResultBuild:
+class TestFilePathIdentificationResultBuild:
     def test_scores_against_gold_from_patch(self):
         entry = create_dataset_entry(patch=FULL_PATCH)
-        result = FilePathProbeResult.build(
+        result = FilePathIdentificationResult.build(
             entry=entry,
             model="claude-haiku-4.5",
             category="bug-fix",
@@ -128,8 +128,8 @@ class TestFilePathProbeResultBuild:
         assert result.created_at == entry.created_at
 
 
-def _result(created_at: str, exact_hit: bool, basename_hit: bool, error: str | None = None) -> FilePathProbeResult:
-    return FilePathProbeResult(
+def _result(created_at: str, exact_hit: bool, basename_hit: bool, error: str | None = None) -> FilePathIdentificationResult:
+    return FilePathIdentificationResult(
         instance_id="x__y-1",
         model="m",
         category="bug-fix",
@@ -137,7 +137,7 @@ def _result(created_at: str, exact_hit: bool, basename_hit: bool, error: str | N
         top_k=3,
         gold_files=["A.al"],
         predicted_files=["A.al"] if basename_hit else [],
-        score=FilePathProbeScore(
+        score=FilePathIdentificationScore(
             exact_hit=exact_hit,
             basename_hit=basename_hit,
             exact_recall=1.0 if exact_hit else 0.0,
@@ -191,25 +191,25 @@ class TestSplitByCutoff:
 class TestSaveLoadRoundTrip:
     def test_round_trip(self, tmp_path):
         result = _result("2025-01-01", exact_hit=True, basename_hit=True)
-        runner_mod.save_probe_result(result, tmp_path / "run")
-        loaded = runner_mod.load_probe_results(tmp_path)
+        runner_mod.save_identification_result(result, tmp_path / "run")
+        loaded = runner_mod.load_identification_results(tmp_path)
         assert len(loaded) == 1
         assert loaded[0].instance_id == result.instance_id
 
 
-class TestRunFilePathProbe:
+class TestRunFilePathIdentification:
     def test_success_parses_and_saves(self, tmp_path, monkeypatch):
         problem_dir = create_problem_statement_dir(tmp_path, "Sales invoice posting fails")
         entry = create_dataset_entry(patch=FULL_PATCH)
         monkeypatch.setattr(runner_mod, "_run_copilot_context_free", lambda prompt, work_dir, model: '["App/Foo/Bar.Table.al"]')
 
         with patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_dir)):
-            result = runner_mod.run_filepath_probe(entry=entry, model="m", category="bug-fix", top_k=3, output_dir=tmp_path / "out")
+            result = runner_mod.run_filepath_identification(entry=entry, model="m", category="bug-fix", top_k=3, output_dir=tmp_path / "out")
 
         assert result.predicted_files == ["App/Foo/Bar.Table.al"]
         assert result.score.exact_hit
         assert result.error is None
-        assert (tmp_path / "out" / f"{entry.instance_id}.filepath-probe.jsonl").exists()
+        assert (tmp_path / "out" / f"{entry.instance_id}.file-path-identification.jsonl").exists()
 
     def test_error_is_captured_and_saved(self, tmp_path, monkeypatch):
         problem_dir = create_problem_statement_dir(tmp_path, "Sales invoice posting fails")
@@ -221,8 +221,8 @@ class TestRunFilePathProbe:
         monkeypatch.setattr(runner_mod, "_run_copilot_context_free", boom)
 
         with patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_dir)):
-            result = runner_mod.run_filepath_probe(entry=entry, model="m", category="bug-fix", top_k=3, output_dir=tmp_path / "out")
+            result = runner_mod.run_filepath_identification(entry=entry, model="m", category="bug-fix", top_k=3, output_dir=tmp_path / "out")
 
         assert result.error is not None
         assert result.predicted_files == []
-        assert (tmp_path / "out" / f"{entry.instance_id}.filepath-probe.jsonl").exists()
+        assert (tmp_path / "out" / f"{entry.instance_id}.file-path-identification.jsonl").exists()

@@ -1,6 +1,6 @@
-name: Contamination Probe (File-path Identification)
+name: Contamination - File-path Identification
 
-# Context-free bug localization probe (SWE-Bench Illusion, arXiv:2506.12286):
+# Context-free bug localization task (SWE-Bench Illusion, arXiv:2506.12286):
 # the model sees ONLY the bug report — no repository, no code — and must name the
 # file(s) that contain the bug. Because it needs no BC container or build, this
 # runs cheaply on ubuntu-latest. Interpret the result RELATIVELY: pass a --cutoff
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: "Copilot model to probe"
+        description: "Copilot model to evaluate"
         required: false
         default: "claude-haiku-4.5"
         type: choice
@@ -53,15 +53,15 @@ on:
         default: true
         type: boolean
   schedule:
-    # Weekly full probe, Mondays 06:00 UTC.
+    # Weekly full run, Mondays 06:00 UTC.
     - cron: "0 6 * * 1"
 
 concurrency:
-  group: contamination-probe-${{ inputs.category || 'bug-fix' }}
+  group: contamination-file-path-identification-${{ inputs.category || 'bug-fix' }}
   cancel-in-progress: false
 
 env:
-  PROBE_RESULTS_DIR: probe_results
+  IDENTIFICATION_RESULTS_DIR: identification_results
 
 jobs:
   get-entries:
@@ -70,7 +70,7 @@ jobs:
       test-run: ${{ inputs.test-run || false }}
       category: ${{ inputs.category || 'bug-fix' }}
 
-  probe:
+  identify:
     name: ${{ matrix.entry }}
     runs-on: ubuntu-latest
     needs: get-entries
@@ -98,7 +98,7 @@ jobs:
       - name: Install evaluation CLIs
         uses: ./.github/actions/install-eval-clis
 
-      - name: Run file-path probe for entry ${{ matrix.entry }}
+      - name: Run file-path identification for entry ${{ matrix.entry }}
         timeout-minutes: 20
         shell: pwsh
         env:
@@ -106,25 +106,25 @@ jobs:
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
-          uv run bcbench contamination filepath-probe "${{ matrix.entry }}" `
+          uv run bcbench contamination file-path-identification "${{ matrix.entry }}" `
             --category "${{ inputs.category || 'bug-fix' }}" `
             --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
             --top-k ${{ inputs.top-k || '3' }} `
-            --output-dir "${{ env.PROBE_RESULTS_DIR }}"
+            --output-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}"
 
-      - name: Upload probe result
+      - name: Upload identification result
         uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: probe-result-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.PROBE_RESULTS_DIR }}/**/*.filepath-probe.jsonl
+          name: identification-result-${{ github.run_id }}-${{ matrix.entry }}
+          path: ${{ env.IDENTIFICATION_RESULTS_DIR }}/**/*.file-path-identification.jsonl
           retention-days: ${{ (inputs.test-run && 1) || 30 }}
 
   summarize:
     name: Summarize
     runs-on: ubuntu-latest
-    needs: probe
-    if: always() && needs.probe.result != 'skipped'
+    needs: identify
+    if: always() && needs.identify.result != 'skipped'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -132,10 +132,10 @@ jobs:
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv
 
-      - name: Download all probe results
+      - name: Download all identification results
         uses: actions/download-artifact@v7
         with:
-          path: ${{ env.PROBE_RESULTS_DIR }}/
+          path: ${{ env.IDENTIFICATION_RESULTS_DIR }}/
           merge-multiple: true
 
       - name: Summarize contamination signal
@@ -147,6 +147,6 @@ jobs:
           $cutoffArg = if ($cutoff) { "--cutoff", $cutoff } else { @() }
 
           uv run bcbench contamination summarize `
-            --results-dir "${{ env.PROBE_RESULTS_DIR }}" `
+            --results-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}" `
             --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
             @cutoffArg
