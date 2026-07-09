@@ -55,6 +55,12 @@ on:
   schedule:
     # Weekly full run, Mondays 06:00 UTC.
     - cron: "0 6 * * 1"
+  # TEMPORARY (remove after this run): one-off full run triggered by pushing to this
+  # branch. Push events carry no inputs, so the model fallbacks below are also
+  # temporarily set to claude-opus-4.8 for this run.
+  push:
+    branches:
+      - contamination-filepath-probe
 
 concurrency:
   group: contamination-file-path-identification-${{ inputs.category || 'bug-fix' }}
@@ -108,7 +114,7 @@ jobs:
 
           uv run bcbench contamination file-path-identification "${{ matrix.entry }}" `
             --category "${{ inputs.category || 'bug-fix' }}" `
-            --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
+            --model "${{ inputs.model || 'claude-opus-4.8' }}" `
             --top-k ${{ inputs.top-k || '3' }} `
             --output-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}"
 
@@ -148,5 +154,5 @@ jobs:
 
           uv run bcbench contamination summarize `
             --results-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}" `
-            --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
+            --model "${{ inputs.model || 'claude-opus-4.8' }}" `
             @cutoffArg
