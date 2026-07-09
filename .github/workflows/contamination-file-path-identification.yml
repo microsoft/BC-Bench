@@ -55,13 +55,6 @@ on:
   schedule:
     # Weekly full run, Mondays 06:00 UTC.
     - cron: "0 6 * * 1"
-  # TEMPORARY (remove after this run): workflow_dispatch only registers from the
-  # default branch, so trigger a one-off full run by pushing to this feature branch.
-  # On a push there are no inputs, so job defaults apply => category=bug-fix,
-  # test-run=false (full dataset), model=claude-haiku-4.5.
-  push:
-    branches:
-      - contamination-filepath-probe
 
 concurrency:
   group: contamination-file-path-identification-${{ inputs.category || 'bug-fix' }}
