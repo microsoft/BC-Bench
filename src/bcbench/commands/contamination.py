@@ -45,6 +45,7 @@ def filepath_identification(
 
     if result.error:
         logger.error("Identification errored for %s: %s", entry_id, result.error)
+    logger.info("Issue description:\n%s", entry.get_task())
     logger.info("Gold files:      %s", result.gold_files)
     logger.info("Predicted files: %s", result.predicted_files)
     logger.info(
