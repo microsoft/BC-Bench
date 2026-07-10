@@ -7,7 +7,7 @@ from typing import cast
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_engine_review
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -197,6 +197,67 @@ def evaluate_bcal(
             entry=cast(NL2ALEntry, ctx.entry),
             repo_path=ctx.repo_path,
             backend_config=backend_config,
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("engine")
+def evaluate_engine(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    engine_scripts_dir: Annotated[
+        Path,
+        typer.Option(envvar="ENGINE_SCRIPTS_DIR", help="Path to the PR-review engine's agent/scripts directory"),
+    ],
+    model: CopilotModel = "claude-sonnet-4.6",
+    repo_path: RepoPath = _config.paths.testbed_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    run_id: RunId = "engine_test_run",
+    bcquality_repo: Annotated[
+        str | None,
+        typer.Option(envvar="BCQUALITY_REPO", help="Override BCQuality repo (owner/name); defaults to engine baseline config"),
+    ] = None,
+    bcquality_ref: Annotated[
+        str | None,
+        typer.Option(envvar="BCQUALITY_REF", help="Override BCQuality branch/SHA; defaults to engine baseline config"),
+    ] = None,
+) -> None:
+    """
+    Evaluate the BC PR-Review engine (faithful convergence arm) on a single code-review entry.
+
+    Use --bcquality-ref / --bcquality-repo to review against a modified BCQuality
+    branch/SHA without editing the engine.
+    """
+    category = EvaluationCategory.CODE_REVIEW
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    run_dir = _prepare_run_dir(output_dir, run_id)
+
+    logger.info(f"Running evaluation on entry {entry_id} with BC PR-Review Engine")
+    if bcquality_ref or bcquality_repo:
+        logger.info(f"BCQuality override: repo={bcquality_repo or '(baseline)'} ref={bcquality_ref or '(baseline)'}")
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container=None,
+        model=model,
+        agent_name="BC PR-Review Engine",
+        category=category,
+    )
+
+    category.pipeline.execute(
+        context,
+        lambda ctx: run_engine_review(
+            entry=ctx.entry,
+            model=ctx.model,
+            repo_path=ctx.repo_path,
+            output_dir=ctx.result_dir,
+            engine_scripts_dir=engine_scripts_dir,
+            bcquality_repo=bcquality_repo,
+            bcquality_ref=bcquality_ref,
         ),
     )
 
