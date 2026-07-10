@@ -69,6 +69,13 @@ concurrency:
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
+  # Code-review only: flip on a branch to run the review through the BC PR-Review
+  # engine arm against a specific BCQuality ref (branch/tag/SHA). Empty (default)
+  # keeps the current Copilot code-review. A branch that sets this reviews "with
+  # BCQuality"; recording the ref here also pins exactly which BCQuality was used.
+  CODE_REVIEW_BCQUALITY_REF: ""
+  # Engine (microsoft/BC-ALReviewAgent) ref to check out when the engine arm runs.
+  ENGINE_REF: v1.0.5
 
 jobs:
   get-entries:
@@ -129,21 +136,42 @@ jobs:
       - name: Install evaluation CLIs
         uses: ./.github/actions/install-eval-clis
 
+      - name: Checkout PR-Review engine
+        if: ${{ inputs.category == 'code-review' && env.CODE_REVIEW_BCQUALITY_REF != '' }}
+        uses: actions/checkout@v5
+        with:
+          repository: microsoft/BC-ALReviewAgent
+          ref: ${{ env.ENGINE_REF }}
+          path: engine
+          token: ${{ secrets.ENGINE_REPO_TOKEN || github.token }}
+
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
-          uv run bcbench evaluate copilot "${{ matrix.entry }}" `
-            --model "${{ inputs.model }}" `
-            --category "${{ inputs.category }}" `
-            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            ${{ inputs.al-mcp && '--al-mcp' || '' }} `
-            ${{ inputs.al-lsp && '--al-lsp' || '' }}
+          $bcqRef = "${{ env.CODE_REVIEW_BCQUALITY_REF }}"
+          if ("${{ inputs.category }}" -eq "code-review" -and $bcqRef -ne "") {
+            Write-Host "Code review via BC PR-Review engine (BCQuality ref: $bcqRef)"
+            uv run bcbench evaluate engine "${{ matrix.entry }}" `
+              --engine-scripts-dir "engine/agent/scripts" `
+              --bcquality-ref "$bcqRef" `
+              --model "${{ inputs.model }}" `
+              --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+              --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+          } else {
+            uv run bcbench evaluate copilot "${{ matrix.entry }}" `
+              --model "${{ inputs.model }}" `
+              --category "${{ inputs.category }}" `
+              --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+              --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
+              ${{ inputs.al-mcp && '--al-mcp' || '' }} `
+              ${{ inputs.al-lsp && '--al-lsp' || '' }}
+          }
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
