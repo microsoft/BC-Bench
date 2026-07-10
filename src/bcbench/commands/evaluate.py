@@ -21,7 +21,8 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
-from bcbench.evaluate import EvaluationPipeline, run_engine_review
+from bcbench.evaluate import EvaluationPipeline
+from bcbench.evaluate.codereview_engine import run_engine_review
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
