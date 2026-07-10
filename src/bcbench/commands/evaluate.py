@@ -54,6 +54,13 @@ def evaluate_copilot(
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
+    engine_scripts_dir: Annotated[
+        Path | None,
+        typer.Option(
+            envvar="ENGINE_SCRIPTS_DIR",
+            help="Code-review only: route through the BC PR-Review engine at this agent/scripts dir instead of Copilot. Set BCQUALITY_REF in env to pin a BCQuality ref.",
+        ),
+    ] = None,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -63,9 +70,10 @@ def evaluate_copilot(
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
-    logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
-
     container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
+    agent_name = "BC PR-Review Engine" if engine_scripts_dir else "GitHub Copilot"
+
+    logger.info(f"Running evaluation on entry {entry_id} with {agent_name}")
 
     context = EvaluationContext(
         entry=entry,
@@ -73,24 +81,35 @@ def evaluate_copilot(
         result_dir=run_dir,
         container=container,
         model=model,
-        agent_name="GitHub Copilot",
+        agent_name=agent_name,
         category=category,
     )
 
-    pipeline = category.pipeline
-    pipeline.execute(
-        context,
-        lambda ctx: run_copilot_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            al_mcp=al_mcp if ctx.container else False,
-            al_lsp=al_lsp,
-            container_name=ctx.get_container().name if ctx.container else "",
-        ),
-    )
+    if engine_scripts_dir:
+        context.category.pipeline.execute(
+            context,
+            lambda ctx: run_engine_review(
+                entry=ctx.entry,
+                model=ctx.model,
+                repo_path=ctx.repo_path,
+                output_dir=ctx.result_dir,
+                engine_scripts_dir=engine_scripts_dir,
+            ),
+        )
+    else:
+        category.pipeline.execute(
+            context,
+            lambda ctx: run_copilot_agent(
+                entry=ctx.entry,
+                repo_path=ctx.repo_path,
+                category=category,
+                model=ctx.model,
+                output_dir=ctx.result_dir,
+                al_mcp=al_mcp if ctx.container else False,
+                al_lsp=al_lsp,
+                container_name=ctx.get_container().name if ctx.container else "",
+            ),
+        )
 
     logger.info("Evaluation complete!")
     logger.info(f"Results saved to: {run_dir}")
@@ -197,55 +216,6 @@ def evaluate_bcal(
             entry=cast(NL2ALEntry, ctx.entry),
             repo_path=ctx.repo_path,
             backend_config=backend_config,
-        ),
-    )
-
-    logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
-
-
-@evaluate_app.command("engine")
-def evaluate_engine(
-    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    engine_scripts_dir: Annotated[
-        Path,
-        typer.Option(envvar="ENGINE_SCRIPTS_DIR", help="Path to the PR-review engine's agent/scripts directory"),
-    ],
-    model: CopilotModel = "claude-sonnet-4.6",
-    repo_path: RepoPath = _config.paths.testbed_path,
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
-    run_id: RunId = "engine_test_run",
-) -> None:
-    """
-    Evaluate the BC PR-Review engine (faithful convergence arm) on a single code-review entry.
-
-    Set BCQUALITY_REF in the environment to review against a specific BCQuality
-    branch/tag/SHA; the engine reads it directly.
-    """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with BC PR-Review Engine")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=None,
-        model=model,
-        agent_name="BC PR-Review Engine",
-        category=category,
-    )
-
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_engine_review(
-            entry=ctx.entry,
-            model=ctx.model,
-            repo_path=ctx.repo_path,
-            output_dir=ctx.result_dir,
-            engine_scripts_dir=engine_scripts_dir,
         ),
     )
 

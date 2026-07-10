@@ -153,22 +153,14 @@ jobs:
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
-          if ("${{ inputs.category }}" -eq "code-review" -and "${{ env.BCQUALITY_REF }}" -ne "") {
-            Write-Host "Code review via BC PR-Review engine (BCQuality ref: ${{ env.BCQUALITY_REF }})"
-            uv run bcbench evaluate engine "${{ matrix.entry }}" `
-              --engine-scripts-dir "engine/agent/scripts" `
-              --model "${{ inputs.model }}" `
-              --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-              --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
-          } else {
-            uv run bcbench evaluate copilot "${{ matrix.entry }}" `
-              --model "${{ inputs.model }}" `
-              --category "${{ inputs.category }}" `
-              --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-              --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-              ${{ inputs.al-mcp && '--al-mcp' || '' }} `
-              ${{ inputs.al-lsp && '--al-lsp' || '' }}
-          }
+          uv run bcbench evaluate copilot "${{ matrix.entry }}" `
+            --model "${{ inputs.model }}" `
+            --category "${{ inputs.category }}" `
+            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
+            ${{ inputs.al-mcp && '--al-mcp' || '' }} `
+            ${{ inputs.al-lsp && '--al-lsp' || '' }} `
+            ${{ (inputs.category == 'code-review' && env.BCQUALITY_REF != '') && '--engine-scripts-dir engine/agent/scripts' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
