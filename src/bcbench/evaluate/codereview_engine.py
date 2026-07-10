@@ -1,4 +1,4 @@
-"""BC PR-Review engine agent runner (faithful convergence arm).
+"""BC PR-Review engine runner for the code-review category (faithful convergence arm).
 
 Instead of BC-Bench's own review pipeline, this runner invokes the engine's
 self-contained local-review entry point (``Invoke-LocalReview.ps1`` from
