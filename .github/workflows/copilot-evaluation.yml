@@ -69,11 +69,10 @@ concurrency:
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
-  # Code-review only: flip on a branch to run the review through the BC PR-Review
-  # engine arm against a specific BCQuality ref (branch/tag/SHA). Empty (default)
-  # keeps the current Copilot code-review. A branch that sets this reviews "with
-  # BCQuality"; recording the ref here also pins exactly which BCQuality was used.
-  CODE_REVIEW_BCQUALITY_REF: ""
+  # Code-review only: set on a branch to run the review through the BC PR-Review engine
+  # arm against this BCQuality ref (branch/tag/SHA). Empty (default) keeps the current
+  # Copilot code-review. The engine reads BCQUALITY_REF directly.
+  BCQUALITY_REF: ""
   # Engine (microsoft/BC-ALReviewAgent) ref to check out when the engine arm runs.
   ENGINE_REF: v1.0.5
 
@@ -137,7 +136,7 @@ jobs:
         uses: ./.github/actions/install-eval-clis
 
       - name: Checkout PR-Review engine
-        if: ${{ inputs.category == 'code-review' && env.CODE_REVIEW_BCQUALITY_REF != '' }}
+        if: ${{ inputs.category == 'code-review' && env.BCQUALITY_REF != '' }}
         uses: actions/checkout@v5
         with:
           repository: microsoft/BC-ALReviewAgent
@@ -154,12 +153,10 @@ jobs:
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
-          $bcqRef = "${{ env.CODE_REVIEW_BCQUALITY_REF }}"
-          if ("${{ inputs.category }}" -eq "code-review" -and $bcqRef -ne "") {
-            Write-Host "Code review via BC PR-Review engine (BCQuality ref: $bcqRef)"
+          if ("${{ inputs.category }}" -eq "code-review" -and "${{ env.BCQUALITY_REF }}" -ne "") {
+            Write-Host "Code review via BC PR-Review engine (BCQuality ref: ${{ env.BCQUALITY_REF }})"
             uv run bcbench evaluate engine "${{ matrix.entry }}" `
               --engine-scripts-dir "engine/agent/scripts" `
-              --bcquality-ref "$bcqRef" `
               --model "${{ inputs.model }}" `
               --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
               --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"

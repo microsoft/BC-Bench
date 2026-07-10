@@ -215,28 +215,18 @@ def evaluate_engine(
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "engine_test_run",
-    bcquality_repo: Annotated[
-        str | None,
-        typer.Option(envvar="BCQUALITY_REPO", help="Override BCQuality repo (owner/name); defaults to engine baseline config"),
-    ] = None,
-    bcquality_ref: Annotated[
-        str | None,
-        typer.Option(envvar="BCQUALITY_REF", help="Override BCQuality branch/SHA; defaults to engine baseline config"),
-    ] = None,
 ) -> None:
     """
     Evaluate the BC PR-Review engine (faithful convergence arm) on a single code-review entry.
 
-    Use --bcquality-ref / --bcquality-repo to review against a modified BCQuality
-    branch/SHA without editing the engine.
+    Set BCQUALITY_REF in the environment to review against a specific BCQuality
+    branch/tag/SHA; the engine reads it directly.
     """
     category = EvaluationCategory.CODE_REVIEW
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with BC PR-Review Engine")
-    if bcquality_ref or bcquality_repo:
-        logger.info(f"BCQuality override: repo={bcquality_repo or '(baseline)'} ref={bcquality_ref or '(baseline)'}")
 
     context = EvaluationContext(
         entry=entry,
@@ -256,8 +246,6 @@ def evaluate_engine(
             repo_path=ctx.repo_path,
             output_dir=ctx.result_dir,
             engine_scripts_dir=engine_scripts_dir,
-            bcquality_repo=bcquality_repo,
-            bcquality_ref=bcquality_ref,
         ),
     )
 

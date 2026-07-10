@@ -66,12 +66,9 @@ def _run_local_review(
     engine_output_dir: Path,
     base_ref: str,
     model: str,
-    bcquality_repo: str | None,
-    bcquality_ref: str | None,
-    config_path: Path | None,
 ) -> None:
-    # The engine's Invoke-LocalReview.ps1 self-contains fetch+filter+run and reads GH_TOKEN from
-    # the inherited env; BCQUALITY_REPO/REF optionally point at a modified BCQuality branch/SHA.
+    # Invoke-LocalReview.ps1 self-contains fetch+filter+run and reads GH_TOKEN and the optional
+    # BCQUALITY_REF override from the inherited env (via the engine's Get-BCQualityConfig).
     args = [
         _pwsh(),
         "-NoProfile",
@@ -86,12 +83,6 @@ def _run_local_review(
         "-Model",
         model,
     ]
-    if bcquality_repo:
-        args += ["-BCQualityRepo", bcquality_repo]
-    if bcquality_ref:
-        args += ["-BCQualityRef", bcquality_ref]
-    if config_path:
-        args += ["-ConfigPath", str(config_path)]
     logger.info(f"Invoking PR-review engine: {local_review_script}")
     try:
         result = subprocess.run(args, capture_output=True, text=True, timeout=_ENGINE_TIMEOUT_SECONDS, check=False)
@@ -138,9 +129,6 @@ def run_engine_review(
     repo_path: Path,
     output_dir: Path,
     engine_scripts_dir: Path,
-    config_path: Path | None = None,
-    bcquality_repo: str | None = None,
-    bcquality_ref: str | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     local_review_script = engine_scripts_dir / LOCAL_REVIEW_SCRIPT_NAME
     if not local_review_script.exists():
@@ -154,7 +142,7 @@ def run_engine_review(
     base_ref = _commit_patched_worktree(repo_path)
 
     started_at = time.monotonic()
-    _run_local_review(local_review_script, repo_path, engine_output_dir, base_ref, model, bcquality_repo, bcquality_ref, config_path)
+    _run_local_review(local_review_script, repo_path, engine_output_dir, base_ref, model)
     execution_time = time.monotonic() - started_at
 
     _write_review_json(engine_output_dir / "review-output", repo_path)
