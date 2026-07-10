@@ -73,7 +73,7 @@ env:
   # arm against this BCQuality ref (branch/tag/SHA). Empty (default) keeps the current
   # Copilot code-review. The engine reads BCQUALITY_REF directly.
   BCQUALITY_REF: ""
-  # Engine (microsoft/BC-ALReviewAgent) ref to check out when the engine arm runs.
+  # Engine (microsoft/BC-ALAgents) ref to check out when the engine arm runs.
   ENGINE_REF: v1.0.5
 
 jobs:
@@ -139,7 +139,7 @@ jobs:
         if: ${{ inputs.category == 'code-review' && env.BCQUALITY_REF != '' }}
         uses: actions/checkout@v5
         with:
-          repository: microsoft/BC-ALReviewAgent
+          repository: microsoft/BC-ALAgents
           ref: ${{ env.ENGINE_REF }}
           path: engine
           token: ${{ secrets.ENGINE_REPO_TOKEN || github.token }}

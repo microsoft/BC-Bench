@@ -2,7 +2,7 @@
 
 Instead of BC-Bench's own review pipeline, this runner invokes the engine's
 self-contained local-review entry point (``Invoke-LocalReview.ps1`` from
-``microsoft/BC-ALReviewAgent``), which fetches+filters BCQuality and runs the
+``microsoft/BC-ALAgents``), which fetches+filters BCQuality and runs the
 exact production reviewer against the patched worktree. BC-Bench then normalizes
 the engine's ``al-code-review-findings.json`` into the ``review.json`` shape its
 scorer already understands.
