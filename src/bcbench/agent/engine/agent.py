@@ -9,7 +9,6 @@ scorer already understands.
 """
 
 import json
-import os
 import shutil
 import subprocess
 import time
@@ -33,18 +32,6 @@ def _pwsh() -> str:
     if not pwsh:
         raise AgentError("pwsh (PowerShell 7+) is required to run the PR-review engine but was not found on PATH")
     return pwsh
-
-
-def _resolve_token(gh_token: str | None) -> str:
-    token = gh_token or os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    if token:
-        return token
-    gh = shutil.which("gh")
-    if gh:
-        result = subprocess.run([gh, "auth", "token"], capture_output=True, text=True, check=False)
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    raise AgentError("No GitHub/Copilot token available. Set GH_TOKEN (or GITHUB_TOKEN), or run 'gh auth login'.")
 
 
 def _git(repo_path: Path, *args: str) -> str:
@@ -79,13 +66,12 @@ def _run_local_review(
     engine_output_dir: Path,
     base_ref: str,
     model: str,
-    token: str,
     bcquality_repo: str | None,
     bcquality_ref: str | None,
     config_path: Path | None,
 ) -> None:
-    # The engine's Invoke-LocalReview.ps1 self-contains fetch+filter+run; BCQUALITY_REPO/REF
-    # optionally point BCQuality at a modified branch/SHA without editing the engine.
+    # The engine's Invoke-LocalReview.ps1 self-contains fetch+filter+run and reads GH_TOKEN from
+    # the inherited env; BCQUALITY_REPO/REF optionally point at a modified BCQuality branch/SHA.
     args = [
         _pwsh(),
         "-NoProfile",
@@ -106,10 +92,9 @@ def _run_local_review(
         args += ["-BCQualityRef", bcquality_ref]
     if config_path:
         args += ["-ConfigPath", str(config_path)]
-    env = {**os.environ, "GH_TOKEN": token}
     logger.info(f"Invoking PR-review engine: {local_review_script}")
     try:
-        result = subprocess.run(args, env=env, capture_output=True, text=True, timeout=_ENGINE_TIMEOUT_SECONDS, check=False)
+        result = subprocess.run(args, capture_output=True, text=True, timeout=_ENGINE_TIMEOUT_SECONDS, check=False)
     except subprocess.TimeoutExpired as exc:
         raise AgentTimeoutError(f"PR-review engine timed out after {_ENGINE_TIMEOUT_SECONDS}s") from exc
     if result.stdout:
@@ -132,9 +117,6 @@ def _findings_to_review_comments(payload: dict) -> list[dict]:
         severity = finding.get("severity")
         if severity:
             comment["severity"] = str(severity).lower()
-        domain = finding.get("domain")
-        if domain:
-            comment["domain"] = domain
         comments.append(comment)
     return comments
 
@@ -157,7 +139,6 @@ def run_engine_review(
     output_dir: Path,
     engine_scripts_dir: Path,
     config_path: Path | None = None,
-    gh_token: str | None = None,
     bcquality_repo: str | None = None,
     bcquality_ref: str | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -166,7 +147,6 @@ def run_engine_review(
         raise AgentError(f"Engine script not found: {local_review_script}")
 
     logger.info(f"Running PR-review engine on: {entry.instance_id}")
-    token = _resolve_token(gh_token)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     engine_output_dir = output_dir / "engine-output"
@@ -174,7 +154,7 @@ def run_engine_review(
     base_ref = _commit_patched_worktree(repo_path)
 
     started_at = time.monotonic()
-    _run_local_review(local_review_script, repo_path, engine_output_dir, base_ref, model, token, bcquality_repo, bcquality_ref, config_path)
+    _run_local_review(local_review_script, repo_path, engine_output_dir, base_ref, model, bcquality_repo, bcquality_ref, config_path)
     execution_time = time.monotonic() - started_at
 
     _write_review_json(engine_output_dir / "review-output", repo_path)
