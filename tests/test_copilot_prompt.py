@@ -130,3 +130,40 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
     assert "[HAS_PATCH]" in result  # gold patch should be indicated
     assert "[HAS_ISSUE]" in result  # problem statement should be indicated
     assert "Fix payment validation bug" in result  # task should be included in both mode
+
+
+def _code_review_config(bcquality_enabled: bool) -> dict:
+    return {
+        "prompt": {
+            "code-review-template": "{% if bcquality_review %}BCQUALITY-MODE invoke bcquality-al-review; at or above medium{% else %}/review{% endif %}\nreview.json",
+        },
+        "plugins": [
+            {"source": "marketplace", "enabled": bcquality_enabled, "repo": "microsoft/BCQuality", "plugins": ["bcquality"]},
+        ],
+    }
+
+
+def test_code_review_prompt_without_bcquality_plugin(tmp_path: Path):
+    entry = create_dataset_entry(instance_id="microsoftInternal__NAV-6", project_paths=["App/Apps/W1/Sales/app"])
+    repo_path = tmp_path / "navapp"
+    repo_path.mkdir()
+    problem_dir = create_problem_statement_dir(tmp_path, "Review these changes")
+
+    with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
+        result = build_prompt(entry, repo_path, _code_review_config(bcquality_enabled=False), EvaluationCategory.CODE_REVIEW)
+
+    assert "/review" in result
+    assert "BCQUALITY-MODE" not in result
+
+
+def test_code_review_prompt_with_bcquality_plugin(tmp_path: Path):
+    entry = create_dataset_entry(instance_id="microsoftInternal__NAV-7", project_paths=["App/Apps/W1/Sales/app"])
+    repo_path = tmp_path / "navapp"
+    repo_path.mkdir()
+    problem_dir = create_problem_statement_dir(tmp_path, "Review these changes")
+
+    with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
+        result = build_prompt(entry, repo_path, _code_review_config(bcquality_enabled=True), EvaluationCategory.CODE_REVIEW)
+
+    assert "BCQUALITY-MODE" in result
+    assert "invoke bcquality-al-review" in result

@@ -26,6 +26,8 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
     is_gold_patch: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("gold-patch", "both")
     is_problem_statement: bool = category == EvaluationCategory.TEST_GENERATION and test_gen_input in ("problem-statement", "both")
 
+    bcquality_review: bool = category == EvaluationCategory.CODE_REVIEW and _bcquality_plugin_enabled(config)
+
     task = _transform_image_paths(entry.get_task())
 
     return _jinja.from_string(template_str).render(
@@ -35,5 +37,10 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
         include_project_paths=include_project_paths,
         is_gold_patch=is_gold_patch,  # only relevant for test-generation
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
+        bcquality_review=bcquality_review,  # only relevant for code-review
         al_mcp=al_mcp,  # whether AL MCP server is enabled
     )
+
+
+def _bcquality_plugin_enabled(config: dict) -> bool:
+    return any(plugin.get("enabled") and ("bcquality" in (plugin.get("plugins") or []) or plugin.get("repo", "").lower().endswith("/bcquality")) for plugin in config.get("plugins", []) or [])
