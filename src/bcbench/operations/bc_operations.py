@@ -235,3 +235,125 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
     except subprocess.TimeoutExpired:
         logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
         raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
+
+
+# --- data-query category: compile + run an AL query and capture its rows via a wrapped API query ---
+
+# API metadata injected into a generated/gold query so it is exposed over OData and can be fetched.
+_QUERY_API_PUBLISHER = "bcbench"
+_QUERY_API_GROUP = "eval"
+_QUERY_API_VERSION = "v1.0"
+_QUERY_API_ENTITY_SET = "bcbenchResults"
+
+_QUERY_API_PROPERTIES = (
+    "QueryType = API;\n"
+    f"    APIPublisher = '{_QUERY_API_PUBLISHER}';\n"
+    f"    APIGroup = '{_QUERY_API_GROUP}';\n"
+    f"    APIVersion = '{_QUERY_API_VERSION}';\n"
+    "    EntityName = 'bcbenchResult';\n"
+    f"    EntitySetName = '{_QUERY_API_ENTITY_SET}';\n"
+    "    Extensible = false;"
+)
+
+
+def wrap_query_as_api(query_text: str, object_id: int) -> str:
+    """Turn a plain AL query object into an API query the harness can fetch over OData.
+
+    Reassigns the object id (so generated and gold apps don't collide), drops any existing
+    ``QueryType`` line, and injects the API properties right after the object's opening brace.
+    Pure string transform so it can be unit-tested without a container.
+    """
+    import re
+
+    text = re.sub(r"(\bquery\s+)\d+", rf"\g<1>{object_id}", query_text, count=1)
+    text = re.sub(r"\n\s*QueryType\s*=\s*\w+\s*;", "", text, count=1)
+
+    brace_index = text.index("{")
+    return f"{text[: brace_index + 1]}\n    {_QUERY_API_PROPERTIES}\n{text[brace_index + 1 :]}"
+
+
+_QUERY_RUN_TEMPLATE = Template(
+    """
+Import-Module BcContainerHelper -Force -DisableNameChecking
+$$ErrorActionPreference = 'Stop'
+
+$$password = ConvertTo-SecureString '$password' -AsPlainText -Force
+$$credential = New-Object System.Management.Automation.PSCredential('$username', $$password)
+
+$$appFile = Compile-AppInBcContainer -containerName '$container_name' -credential $$credential -appProjectFolder '$app_dir' -appOutputFolder '$app_dir\\out' -UpdateSymbols
+Publish-BcContainerApp -containerName '$container_name' -appFile $$appFile -skipVerification -sync -install -credential $$credential
+
+$$base = "http://$container_name/BC/api"
+$$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Credential $$credential).value[0].id
+$$data = Invoke-RestMethod -Uri "$$base/$publisher/$group/$version/companies($$companyId)/$entity_set" -Credential $$credential
+$$data.value | ConvertTo-Json -Depth 10 -Compress | Out-File -FilePath '$result_file' -Encoding utf8
+""".strip()
+)
+
+
+def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: str) -> list[dict]:
+    """Compile + publish an AL query (wrapped as an API query) to the container and return its rows.
+
+    Builds a throwaway app under ``work_root/.bcbench-query-<suffix>``, compiles + publishes it,
+    then reads the query's OData endpoint. Raises :class:`BuildError` if the query does not
+    compile or publish.
+
+    NOTE: the container-side steps (compile/publish/OData fetch) require a running BC container
+    and have not been validated locally; the wrapping and comparison logic are unit-tested.
+    """
+    import json
+    from uuid import uuid4
+
+    object_id = 50100 if suffix == "generated" else 50101
+    app_dir = work_root / f".bcbench-query-{suffix}"
+    if app_dir.exists():
+        shutil.rmtree(app_dir, onexc=lambda func, path, _: (Path(path).chmod(0o666), func(path)))
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    app_manifest = {
+        "id": str(uuid4()),
+        "name": f"BC-Bench Query {suffix}",
+        "publisher": "BC-Bench",
+        "version": "1.0.0.0",
+        "application": f"{version.split('.')[0]}.0.0.0",
+        "platform": f"{version.split('.')[0]}.0.0.0",
+        "idRanges": [{"from": object_id, "to": object_id}],
+        "runtime": "13.0",
+        "target": "OnPrem",
+    }
+    (app_dir / "app.json").write_text(json.dumps(app_manifest, indent=2), encoding="utf-8")
+    (app_dir / "query.al").write_text(wrap_query_as_api(query_text, object_id), encoding="utf-8")
+    # Symbols come from the container via Compile-AppInBcContainer -UpdateSymbols (below); no need
+    # to pre-populate .alpackages from the artifact cache.
+
+    result_file = app_dir / "result.json"
+    ps_script = _QUERY_RUN_TEMPLATE.substitute(
+        container_name=_escape_ps_string(container.name),
+        username=_escape_ps_string(container.username),
+        password=_escape_ps_string(container.password),
+        app_dir=_escape_ps_string(str(app_dir)),
+        publisher=_QUERY_API_PUBLISHER,
+        group=_QUERY_API_GROUP,
+        version=_QUERY_API_VERSION,
+        entity_set=_QUERY_API_ENTITY_SET,
+        result_file=_escape_ps_string(str(result_file)),
+    )
+
+    try:
+        subprocess.run(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            cwd=work_root,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=_config.timeout.build_app,
+        )
+    except subprocess.CalledProcessError as e:
+        logger.debug(f"Query compile/publish/fetch failed ({suffix}): {e.stdout}\n{e.stderr}")
+        raise BuildError(f"query-{suffix}", (e.stdout or "") + (e.stderr or "")) from None
+    except subprocess.TimeoutExpired:
+        raise BuildTimeoutExpired(f"query-{suffix}", _config.timeout.build_app) from None
+
+    rows = json.loads(result_file.read_text(encoding="utf-8-sig") or "[]")
+    return rows if isinstance(rows, list) else [rows]
+

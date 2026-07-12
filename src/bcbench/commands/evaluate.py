@@ -308,7 +308,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
         logger.info("Mock pipeline: Generating random evaluation result")
 
         match context.category:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 scenarios = ["success", "build-fail"]
             case EvaluationCategory.CODE_REVIEW:
                 scenarios = ["invalid", "valid"]

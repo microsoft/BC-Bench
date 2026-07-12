@@ -66,6 +66,28 @@ prompt:
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
 
+  data-query-template: |
+    You are writing a Microsoft Dynamics 365 Business Central AL query to answer a data
+    question. Proceed without asking for confirmation.
+
+    Task: author a single AL `query` object that returns the data needed to answer the
+    question below, and write it to a file named `query.al` in {{repo_path}}.
+
+    Requirements:
+    - Write exactly one AL `query` object with an object id in the range 50100..50149 and a
+      name. Reference real Business Central tables and fields.
+    - Return the columns needed to answer the question. Use column `Method` (Sum, Count,
+      Average, Min, Max) for aggregates and `DataItemLink` to join dataitems.
+    - Do NOT add API properties (QueryType, APIPublisher, APIGroup, APIVersion, EntityName,
+      EntitySetName) — the evaluation harness adds those. Write only the query logic
+      (query id/name, elements, dataitem(s), columns, filters, order by).
+    - The file must contain only the query object, nothing else.
+
+    Question:
+    {{task}}
+
+    You MUST write query.al before finishing; if you do not, there is no output to evaluate.
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

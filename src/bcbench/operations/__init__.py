@@ -6,8 +6,10 @@ from bcbench.operations.bc_operations import (
     build_ps_dataset_tests_script,
     build_ps_test_script,
     copy_symbol_apps,
+    execute_al_query,
     resolve_artifact_version_root,
     run_tests,
+    wrap_query_as_api,
 )
 from bcbench.operations.git_operations import (
     apply_patch,
@@ -40,6 +42,7 @@ __all__ = [
     "commit_changes",
     "copy_problem_statement_folder",
     "copy_symbol_apps",
+    "execute_al_query",
     "extract_tests_from_patch",
     "resolve_artifact_version_root",
     "run_tests",
@@ -51,4 +54,5 @@ __all__ = [
     "setup_plugins_from_config",
     "setup_repo_prebuild",
     "stage_and_get_diff",
+    "wrap_query_as_api",
 ]

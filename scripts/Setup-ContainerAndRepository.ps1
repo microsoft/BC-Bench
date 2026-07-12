@@ -61,11 +61,21 @@ if (Test-Path $RepoPath) {
     throw "Repository already exists at $RepoPath. This indicates the machine was not properly cleaned up from a previous run."
 }
 
-[hashtable] $cloneInfo = Get-RepoCloneInfo -Entry $entries[0]
-[string] $commitSha = $entries[0].base_commit
+# Some categories (e.g. data-query) generate code from scratch rather than editing an existing
+# repository, so there is nothing to clone -- the agent just needs an empty working directory.
+[string[]] $noCloneCategories = @('data-query')
 
-Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
-Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
+if ($Category -in $noCloneCategories) {
+    Write-Log "Category '$Category' needs no repository clone; creating empty workspace at $RepoPath" -Level Info
+    New-Item -ItemType Directory -Path $RepoPath -Force | Out-Null
+}
+else {
+    [hashtable] $cloneInfo = Get-RepoCloneInfo -Entry $entries[0]
+    [string] $commitSha = $entries[0].base_commit
+
+    Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
+    Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
+}
 
 if (-not $SkipContainer) {
     [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
