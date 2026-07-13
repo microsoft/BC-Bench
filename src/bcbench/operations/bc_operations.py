@@ -251,8 +251,7 @@ _QUERY_API_PROPERTIES = (
     f"    APIGroup = '{_QUERY_API_GROUP}';\n"
     f"    APIVersion = '{_QUERY_API_VERSION}';\n"
     "    EntityName = 'bcbenchResult';\n"
-    f"    EntitySetName = '{_QUERY_API_ENTITY_SET}';\n"
-    "    Extensible = false;"
+    f"    EntitySetName = '{_QUERY_API_ENTITY_SET}';"
 )
 
 
