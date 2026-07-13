@@ -315,11 +315,15 @@ Invoke-AppBuildAndPublish -containerName '$container_name' -appProjectFolder '$a
 
 # Read the query's rows over the OData/API endpoint from *inside* the container, so we don't depend
 # on host->container name resolution or published ports (the runner does not update its hosts file).
+# Basic auth header is built by hand rather than via -Credential: PowerShell 7 (used inside the
+# container) refuses -Credential over plain HTTP, and a manual header works on both 5.1 and 7.
 $$json = Invoke-ScriptInBcContainer -containerName '$container_name' -argumentList $$credential, '$publisher', '$group', '$version', '$entity_set' -scriptblock {
     param($$cred, $$pub, $$grp, $$ver, $$eset)
+    $$pair = "$$($$cred.UserName):$$($$cred.GetNetworkCredential().Password)"
+    $$headers = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($$pair)) }
     $$base = 'http://localhost:7048/BC/api'
-    $$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Credential $$cred).value[0].id
-    $$data = Invoke-RestMethod -Uri "$$base/$$pub/$$grp/$$ver/companies($$companyId)/$$eset" -Credential $$cred
+    $$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Headers $$headers).value[0].id
+    $$data = Invoke-RestMethod -Uri "$$base/$$pub/$$grp/$$ver/companies($$companyId)/$$eset" -Headers $$headers
     $$data.value | ConvertTo-Json -Depth 10 -Compress
 }
 $$json | Out-File -FilePath '$result_file' -Encoding utf8

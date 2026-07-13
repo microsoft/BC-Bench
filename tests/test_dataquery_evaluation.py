@@ -1,5 +1,5 @@
 from bcbench.evaluate.dataquery import result_sets_match
-from bcbench.operations import wrap_query_as_api
+from bcbench.operations import bc_operations, wrap_query_as_api
 
 
 class TestResultSetsMatch:
@@ -72,3 +72,35 @@ class TestWrapQueryAsApi:
         wrapped = wrap_query_as_api(self.PLAIN_QUERY, 50100)
         assert "dataitem(Customer; Customer)" in wrapped
         assert 'column(No; "No.")' in wrapped
+
+
+class TestQueryRunTemplate:
+    def _render(self):
+        return bc_operations._QUERY_RUN_TEMPLATE.substitute(
+            app_utils_path="AppUtils.psm1",
+            container_name="c",
+            username="u",
+            password="p",
+            app_dir="d",
+            publisher=bc_operations._QUERY_API_PUBLISHER,
+            group=bc_operations._QUERY_API_GROUP,
+            version=bc_operations._QUERY_API_VERSION,
+            entity_set=bc_operations._entity_set_name(50100),
+            result_file="r",
+        )
+
+    def test_uses_proven_build_helper(self):
+        assert "Invoke-AppBuildAndPublish" in self._render()
+
+    def test_fetches_from_inside_container(self):
+        script = self._render()
+        assert "Invoke-ScriptInBcContainer" in script
+        assert "http://localhost:7048/BC/api" in script
+
+    def test_does_not_use_credential_over_http(self):
+        # PowerShell 7 (inside the container) refuses -Credential over plain HTTP; we must build a
+        # Basic auth header by hand instead.
+        script = self._render()
+        assert "-Credential" not in script.split("Invoke-ScriptInBcContainer", 1)[1]
+        assert "Authorization" in script
+        assert "Basic " in script
