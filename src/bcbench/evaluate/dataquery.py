@@ -105,8 +105,19 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
             self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=str(e)))
             return
 
-        # The gold query is authored to compile; a failure here is an environment/dataset problem, not the agent's.
-        gold_rows = execute_al_query(context.entry.gold_query, container, version, context.repo_path, "gold")
+        # The gold query is authored to compile; a failure here is an environment/dataset problem,
+        # not the agent's — record it without crashing the job (build succeeded, but we can't score).
+        try:
+            gold_rows = execute_al_query(context.entry.gold_query, container, version, context.repo_path, "gold")
+        except BuildError as e:
+            logger.exception(f"Gold query failed to compile/run for {context.entry.instance_id}")
+            self.save_result(
+                context,
+                ExecutionBasedEvaluationResult.create_result(
+                    context, output=generated_query, build=True, resolved=False, error_message=f"Gold query failed (harness/dataset issue, not the agent): {e}"
+                ),
+            )
+            return
 
         resolved = result_sets_match(generated_rows, gold_rows, context.entry.ordered)
         error_message = None if resolved else f"Result set mismatch: generated {len(generated_rows)} rows vs gold {len(gold_rows)} rows"
