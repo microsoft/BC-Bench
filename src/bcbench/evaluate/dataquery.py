@@ -52,10 +52,17 @@ def _force_remove_readonly(func: Callable, path: str, _: object) -> None:
     func(path)
 
 
-def _reset_repo_path(repo_path: Path) -> None:
-    if repo_path.exists():
-        shutil.rmtree(repo_path, onexc=_force_remove_readonly)
+def _prepare_repo_path(repo_path: Path) -> None:
+    # Clear the workspace *contents* but not the directory itself: for data-query the workspace is
+    # mounted into the running BC container (shared folder), so removing the top dir fails with
+    # WinError 32 (in use). The workflow hands us a fresh empty dir; locally this clears stale files.
     repo_path.mkdir(parents=True, exist_ok=True)
+    for child in repo_path.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child, onexc=_force_remove_readonly)
+        else:
+            child.chmod(0o666)
+            child.unlink()
 
 
 class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
@@ -68,7 +75,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
     """
 
     def setup_workspace(self, entry: DataQueryEntry, repo_path: Path) -> None:
-        _reset_repo_path(repo_path)
+        _prepare_repo_path(repo_path)
 
     def setup(self, context: EvaluationContext[DataQueryEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
