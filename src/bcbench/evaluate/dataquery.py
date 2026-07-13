@@ -1,5 +1,5 @@
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from bcbench.dataset import DataQueryEntry
@@ -31,14 +31,14 @@ def _normalize_value(value: object) -> str:
         return text
 
 
-def _normalize_rows(rows: list[dict[str, object]], ordered: bool) -> list[tuple[str, ...]]:
+def _normalize_rows(rows: Sequence[Mapping[str, object]], ordered: bool) -> list[tuple[str, ...]]:
     # Compare on values only: drop OData/system metadata keys ('@'-prefixed) and ignore column
     # names/order so a correct query still matches the gold even if it names columns differently.
     normalized = [tuple(sorted(_normalize_value(v) for k, v in row.items() if not k.startswith("@"))) for row in rows]
     return normalized if ordered else sorted(normalized)
 
 
-def result_sets_match(generated: list[dict[str, object]], gold: list[dict[str, object]], ordered: bool = False) -> bool:
+def result_sets_match(generated: Sequence[Mapping[str, object]], gold: Sequence[Mapping[str, object]], ordered: bool = False) -> bool:
     """Compare two query result sets for equality.
 
     Values are compared (numbers normalized, column names/order ignored); row order is ignored

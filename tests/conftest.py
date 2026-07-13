@@ -345,7 +345,9 @@ def sample_nl2al_entry() -> NL2ALEntry:
 
 
 VALID_DATA_QUERY_PROMPT = "Return the total sales amount per customer."
-VALID_GOLD_QUERY = "query 50100 SalesByCustomer\n{\n    QueryType = Normal;\n    elements\n    {\n        dataitem(Customer; Customer)\n        {\n            column(No; \"No.\") { }\n        }\n    }\n}"
+VALID_GOLD_QUERY = (
+    'query 50100 SalesByCustomer\n{\n    QueryType = Normal;\n    elements\n    {\n        dataitem(Customer; Customer)\n        {\n            column(No; "No.") { }\n        }\n    }\n}'
+)
 
 
 def create_data_query_entry(

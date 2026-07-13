@@ -356,4 +356,3 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
 
     rows = json.loads(result_file.read_text(encoding="utf-8-sig") or "[]")
     return rows if isinstance(rows, list) else [rows]
-

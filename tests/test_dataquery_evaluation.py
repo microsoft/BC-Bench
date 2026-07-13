@@ -55,5 +55,5 @@ class TestWrapQueryAsApi:
 
     def test_preserves_query_body(self):
         wrapped = wrap_query_as_api(self.PLAIN_QUERY, 50100)
-        assert 'dataitem(Customer; Customer)' in wrapped
+        assert "dataitem(Customer; Customer)" in wrapped
         assert 'column(No; "No.")' in wrapped
