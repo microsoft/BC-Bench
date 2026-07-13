@@ -302,18 +302,27 @@ def wrap_query_as_api(query_text: str, object_id: int) -> str:
 _QUERY_RUN_TEMPLATE = Template(
     """
 Import-Module BcContainerHelper -Force -DisableNameChecking
+Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
 $$password = ConvertTo-SecureString '$password' -AsPlainText -Force
 $$credential = New-Object System.Management.Automation.PSCredential('$username', $$password)
 
-$$appFile = Compile-AppInBcContainer -containerName '$container_name' -credential $$credential -appProjectFolder '$app_dir' -appOutputFolder '$app_dir\\out' -UpdateSymbols
-Publish-BcContainerApp -containerName '$container_name' -appFile $$appFile -skipVerification -sync -install -credential $$credential
+# Compile + publish the wrapped API query with the same proven helper the other categories use
+# (clears/sets an explicit .alpackages symbol folder, GenerateReportLayout=No, ForceSync,
+# dependencyPublishingOption=ignore) so Base Application symbols resolve reliably.
+Invoke-AppBuildAndPublish -containerName '$container_name' -appProjectFolder '$app_dir' -credential $$credential -skipVerification -useDevEndpoint
 
-$$base = "http://$container_name/BC/api"
-$$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Credential $$credential).value[0].id
-$$data = Invoke-RestMethod -Uri "$$base/$publisher/$group/$version/companies($$companyId)/$entity_set" -Credential $$credential
-$$data.value | ConvertTo-Json -Depth 10 -Compress | Out-File -FilePath '$result_file' -Encoding utf8
+# Read the query's rows over the OData/API endpoint from *inside* the container, so we don't depend
+# on host->container name resolution or published ports (the runner does not update its hosts file).
+$$json = Invoke-ScriptInBcContainer -containerName '$container_name' -argumentList $$credential, '$publisher', '$group', '$version', '$entity_set' -scriptblock {
+    param($$cred, $$pub, $$grp, $$ver, $$eset)
+    $$base = 'http://localhost:7048/BC/api'
+    $$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Credential $$cred).value[0].id
+    $$data = Invoke-RestMethod -Uri "$$base/$$pub/$$grp/$$ver/companies($$companyId)/$$eset" -Credential $$cred
+    $$data.value | ConvertTo-Json -Depth 10 -Compress
+}
+$$json | Out-File -FilePath '$result_file' -Encoding utf8
 """.strip()
 )
 
@@ -350,11 +359,12 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
     }
     (app_dir / "app.json").write_text(json.dumps(app_manifest, indent=2), encoding="utf-8")
     (app_dir / "query.al").write_text(wrap_query_as_api(query_text, object_id), encoding="utf-8")
-    # Symbols come from the container via Compile-AppInBcContainer -UpdateSymbols (below); no need
-    # to pre-populate .alpackages from the artifact cache.
+    # Symbols are downloaded into an explicit .alpackages folder by Invoke-AppBuildAndPublish (below).
 
     result_file = app_dir / "result.json"
+    app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
     ps_script = _QUERY_RUN_TEMPLATE.substitute(
+        app_utils_path=_escape_ps_string(str(app_utils_path)),
         container_name=_escape_ps_string(container.name),
         username=_escape_ps_string(container.username),
         password=_escape_ps_string(container.password),
