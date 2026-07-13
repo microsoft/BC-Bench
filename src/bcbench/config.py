@@ -72,6 +72,7 @@ class TimeoutConfig:
     test_execution: int
     agent_execution: int
     bcal_execution: int
+    filepath_identification: int
 
     @classmethod
     def default(cls) -> TimeoutConfig:
@@ -83,6 +84,9 @@ class TimeoutConfig:
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
             # Total bcal CLI budget per instance.
             bcal_execution=25 * 60,
+            # Context-free file-path identification; kept below the 20-min workflow step timeout
+            # so a hung run records an error result before the CI step is force-killed.
+            filepath_identification=15 * 60,
         )
 
 
