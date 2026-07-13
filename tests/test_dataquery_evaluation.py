@@ -37,17 +37,32 @@ class TestResultSetsMatch:
 
 class TestWrapQueryAsApi:
     PLAIN_QUERY = 'query 50100 MyQuery\n{\n    QueryType = Normal;\n\n    elements\n    {\n        dataitem(Customer; Customer)\n        {\n            column(No; "No.") { }\n        }\n    }\n}'
+    LONG_NAME_QUERY = 'query 50100 "Items on Open Sales and Purchase Orders"\n{\n    elements\n    {\n        dataitem(Item; Item)\n        {\n            column(No; "No.") { }\n        }\n    }\n}'
 
-    def test_reassigns_object_id(self):
+    def test_reassigns_object_id_and_name(self):
         wrapped = wrap_query_as_api(self.PLAIN_QUERY, 50101)
-        assert "query 50101 MyQuery" in wrapped
+        assert "query 50101 BCBenchQuery50101" in wrapped
         assert "query 50100" not in wrapped
+        assert "MyQuery" not in wrapped
+
+    def test_normalizes_overlong_quoted_name(self):
+        # A descriptive >30-char name would trip AL0305; the harness normalizes it away.
+        wrapped = wrap_query_as_api(self.LONG_NAME_QUERY, 50100)
+        assert "query 50100 BCBenchQuery50100" in wrapped
+        assert "Items on Open Sales and Purchase Orders" not in wrapped
 
     def test_injects_api_properties(self):
         wrapped = wrap_query_as_api(self.PLAIN_QUERY, 50100)
         assert "QueryType = API;" in wrapped
         assert "APIPublisher = 'bcbench';" in wrapped
-        assert "EntitySetName = 'bcbenchResults';" in wrapped
+        assert "EntitySetName = 'bcbenchResults50100';" in wrapped
+
+    def test_generated_and_gold_use_distinct_entity_sets(self):
+        # Both apps can be published to the same tenant; distinct entity sets avoid an OData route collision.
+        generated = wrap_query_as_api(self.PLAIN_QUERY, 50100)
+        gold = wrap_query_as_api(self.PLAIN_QUERY, 50101)
+        assert "EntitySetName = 'bcbenchResults50100';" in generated
+        assert "EntitySetName = 'bcbenchResults50101';" in gold
 
     def test_drops_existing_querytype(self):
         wrapped = wrap_query_as_api(self.PLAIN_QUERY, 50100)

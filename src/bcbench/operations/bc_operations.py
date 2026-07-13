@@ -243,32 +243,60 @@ def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "
 _QUERY_API_PUBLISHER = "bcbench"
 _QUERY_API_GROUP = "eval"
 _QUERY_API_VERSION = "v1.0"
-_QUERY_API_ENTITY_SET = "bcbenchResults"
 
-_QUERY_API_PROPERTIES = (
-    "QueryType = API;\n"
-    f"    APIPublisher = '{_QUERY_API_PUBLISHER}';\n"
-    f"    APIGroup = '{_QUERY_API_GROUP}';\n"
-    f"    APIVersion = '{_QUERY_API_VERSION}';\n"
-    "    EntityName = 'bcbenchResult';\n"
-    f"    EntitySetName = '{_QUERY_API_ENTITY_SET}';"
-)
+
+def _safe_object_name(object_id: int) -> str:
+    """A short, unique, always-valid query object name.
+
+    The object name is irrelevant to a query's result set (we score by comparing data, not
+    identifiers), but AL requires it to be a valid identifier of <=30 characters and unique in
+    the tenant. Normalizing it keeps the benchmark focused on query logic instead of failing an
+    otherwise-correct query just because the agent chose a long/descriptive name (AL0305).
+    """
+    return f"BCBenchQuery{object_id}"
+
+
+def _entity_set_name(object_id: int) -> str:
+    """Per-object OData entity set so the generated and gold API queries don't collide on route."""
+    return f"bcbenchResults{object_id}"
+
+
+def _entity_name(object_id: int) -> str:
+    return f"bcbenchResult{object_id}"
+
+
+def _query_api_properties(object_id: int) -> str:
+    return (
+        "QueryType = API;\n"
+        f"    APIPublisher = '{_QUERY_API_PUBLISHER}';\n"
+        f"    APIGroup = '{_QUERY_API_GROUP}';\n"
+        f"    APIVersion = '{_QUERY_API_VERSION}';\n"
+        f"    EntityName = '{_entity_name(object_id)}';\n"
+        f"    EntitySetName = '{_entity_set_name(object_id)}';"
+    )
 
 
 def wrap_query_as_api(query_text: str, object_id: int) -> str:
     """Turn a plain AL query object into an API query the harness can fetch over OData.
 
-    Reassigns the object id (so generated and gold apps don't collide), drops any existing
-    ``QueryType`` line, and injects the API properties right after the object's opening brace.
-    Pure string transform so it can be unit-tested without a container.
+    Reassigns the object id and normalizes the object name (so generated and gold apps don't
+    collide and long names don't cause AL0305), drops any existing ``QueryType`` line, and
+    injects the API properties right after the object's opening brace. Pure string transform so
+    it can be unit-tested without a container.
     """
     import re
 
-    text = re.sub(r"(\bquery\s+)\d+", rf"\g<1>{object_id}", query_text, count=1)
+    safe_name = _safe_object_name(object_id)
+    text = re.sub(
+        r'(\bquery\s+)\d+\s+("(?:[^"\\]|\\.)*"|\w+)',
+        rf"\g<1>{object_id} {safe_name}",
+        query_text,
+        count=1,
+    )
     text = re.sub(r"\n\s*QueryType\s*=\s*\w+\s*;", "", text, count=1)
 
     brace_index = text.index("{")
-    return f"{text[: brace_index + 1]}\n    {_QUERY_API_PROPERTIES}\n{text[brace_index + 1 :]}"
+    return f"{text[: brace_index + 1]}\n    {_query_api_properties(object_id)}\n{text[brace_index + 1 :]}"
 
 
 _QUERY_RUN_TEMPLATE = Template(
@@ -334,7 +362,7 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
         publisher=_QUERY_API_PUBLISHER,
         group=_QUERY_API_GROUP,
         version=_QUERY_API_VERSION,
-        entity_set=_QUERY_API_ENTITY_SET,
+        entity_set=_entity_set_name(object_id),
         result_file=_escape_ps_string(str(result_file)),
     )
 
