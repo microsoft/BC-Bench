@@ -110,12 +110,26 @@ jobs:
           $jobsJson = '[]'
           if ($runId) {
             for ($i = 0; $i -lt 300; $i++) {
-              $status = gh run view $runId --json status --jq '.status'
-              if ($status -eq 'completed') { break }
+              try {
+                $status = gh run view $runId --json status --jq '.status'
+                if ($status -eq 'completed') { break }
+              }
+              catch {
+                Write-Host "Validation status poll error (will retry): $_"
+              }
               Start-Sleep -Seconds 60
             }
-            $jobsJson = gh api "/repos/${{ github.repository }}/actions/runs/$runId/jobs?per_page=100" --jq '[.jobs[] | {name: .name, html_url: .html_url, conclusion: .conclusion}]'
-            if (-not $jobsJson) { $jobsJson = '[]' }
+            # A few retries so a transient failure fetching conclusions doesn't discard a completed run.
+            for ($j = 0; $j -lt 5; $j++) {
+              try {
+                $fetched = gh api "/repos/${{ github.repository }}/actions/runs/$runId/jobs?per_page=100" --jq '[.jobs[] | {name: .name, html_url: .html_url, conclusion: .conclusion}]'
+                if ($fetched) { $jobsJson = $fetched; break }
+              }
+              catch {
+                Write-Host "Jobs fetch error (will retry): $_"
+              }
+              Start-Sleep -Seconds 15
+            }
           }
           Set-Content -Path jobs.json -Value $jobsJson -Encoding utf8
 
