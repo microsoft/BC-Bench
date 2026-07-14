@@ -31,15 +31,18 @@ on the second one:
 
 The existing collect-and-screen job already triggers stage 2 on the pushed
 branch with `--modified-only`, which scopes `Verify-BuildAndTests` to exactly the
-newly added entries. This feature **surfaces that validation run on the draft
-PR** so a reviewer merges only once it is green. The PR is still created
-independent of (does not wait on) the validation result.
+newly added entries. This feature **waits for that validation run to finish**,
+then includes only the entries that passed in the draft PR's diff and documents
+the ones that failed in the PR description — so no human has to manually remove
+failed candidates after the fact.
 
 ## Goal
 
-After the weekly collect-and-screen run pushes its branch, open (or update) a
-draft PR that surfaces the newly collected bug-fix dataset entries — each linked
-to the validation job that tests that exact entry — for human review.
+After the weekly collect-and-screen run pushes its branch, wait for validation of
+the newly collected bug-fix entries, then open (or update) a draft PR whose diff
+contains **only the entries that passed**, with the failed/incomplete ones
+documented (not included) — each entry linked to the validation job that tests
+it.
 
 ## Design
 
@@ -59,49 +62,68 @@ data rather than re-parsing markdown:
 - The file is written only when there is at least one passed entry.
 - `-SummaryFile` behaviour is unchanged.
 
-### 2. Trigger validation and resolve per-eval job URLs
+### 2. Trigger validation, wait, and resolve per-eval conclusions
 
 Enhance the existing "Trigger dataset validation" step (gated on
 `steps.run.outputs.branch != ''`) so that, after dispatching
-`dataset-validation.yml` on the branch, it resolves the run and each new eval's
-matrix-job URL, exposing them as step output(s):
+`dataset-validation.yml` on the branch, it **waits for the run to finish** and
+records each new eval's conclusion and job URL:
 
 - `gh workflow run` does not return a run id, so poll
   `gh run list --workflow dataset-validation.yml --branch $branch --event
   workflow_dispatch --json databaseId,url,createdAt --limit 5`, selecting the
   newest run created at/after the dispatch time (short sleep + a few retries).
+- Poll `gh run view $runId --json status` until `status == 'completed'` or a
+  **~5-hour budget** elapses (the GitHub job hard cap is 6h; keep margin).
 - `dataset-validation.yml` runs a matrix with one job per entry, each named by
   its `instance_id` (`name: ${{ matrix.entry }}`) and running
-  `Verify-BuildAndTests` on that entry. Resolve per-eval job URLs via
-  `gh api /repos/{owner}/{repo}/actions/runs/{run_id}/jobs --paginate` and match
-  `job.name == instance_id` → `job.html_url`.
-- Matrix jobs only exist after the reusable `get-entries` job expands the matrix
-  (~1–2 min), so poll the jobs API with a bounded budget (a few minutes). Emit a
-  map of `instance_id → job_url`.
+  `Verify-BuildAndTests` on that entry. Read per-eval results via
+  `gh api /repos/{owner}/{repo}/actions/runs/{run_id}/jobs --paginate`, matching
+  `job.name == instance_id`, and emit `jobs.json` =
+  `[{ name, html_url, conclusion }]`.
+- **Passed** = `conclusion == 'success'`. Any other conclusion, or a job still
+  unfinished at the budget, counts as **not passed**.
 - All URLs are best-effort: the run URL falls back to empty and any unresolved
-  eval falls back to the run-level URL, so the PR is always created regardless.
+  eval falls back to the run-level URL.
 
-### 3. Workflow step (create-or-update draft PR)
+### 3. Prune failed entries from the branch
 
-Add a step to the `collect-and-screen` job, after the validation-trigger step,
-gated on `steps.run.outputs.branch != ''`:
+New helper `scripts/Remove-DatasetEntries.ps1` takes a list of instance-ids and
+removes them from the working tree:
 
-1. Ensure the `dataset` label exists (`gh label create dataset ...`, ignoring an
-   "already exists" failure).
-2. Build the PR body from the collected JSON, joining each entry to its resolved
-   job URL: a short header plus a bullet list of
-   `` - `instance_id` (PR #n) — 🔬 [validation](job-url) ``. An eval whose job
-   URL could not be resolved links to the run-level URL instead.
-3. Idempotent create-or-update, because re-running within the same ISO week
-   force-pushes to the same branch:
-   - `gh pr list --head $branch` → if a PR exists, `gh pr edit` refreshes its
-     title/body.
-   - Otherwise `gh pr create --draft --base main --head $branch --title <title>
-     --body-file <file> --label dataset`.
-4. Title: `Dataset refresh: week <XX> candidates from <repo>`.
-5. No work-item link in the body.
+- drop matching lines from `dataset/bcbench.jsonl` (JSONL keyed by `instance_id`);
+- delete each `dataset/problemstatement/<instance_id>` directory.
 
-### 4. Permissions and PR-creation token
+The workflow computes the not-passed set (collected ids minus passed ids) from
+`collected.json` + `jobs.json`, runs the prune, and if anything was pruned,
+`git commit --amend --no-edit` + force-push — so the branch diff (and therefore
+the PR) contains **only passing entries**. Validation already ran against the
+pre-prune branch (all entries), so failed jobs still exist and remain linkable.
+
+### 4. Create the draft PR, or summarize failures
+
+After pruning, branch on how many entries passed:
+
+- **≥1 passed** — create/update the draft PR:
+  1. Ensure the `dataset` label exists (`gh label create dataset ...`, ignoring
+     "already exists").
+  2. Build the PR body (`New-DatasetPrBody.ps1`) with two sections driven by
+     `conclusion` in `jobs.json`:
+     - `## ✅ Included (passed validation)` — passed entries, each
+       `` - `instance_id` ([PR #n](pr-url)) — 🔬 [validation](job-url) ``. These
+       are in the diff.
+     - `## ❌ Excluded (failed / incomplete validation — documented, not
+       included)` — the not-passed entries, each with its 🔬 job link and
+       conclusion. **Not** in the diff. Section omitted when empty.
+  3. Idempotent create-or-update: `gh pr list --head $branch` → `gh pr edit`
+     (refresh title/body) if a PR exists, else `gh pr create --draft --base main
+     --head $branch --title <title> --body-file <file> --label dataset`.
+  4. Title: `Dataset refresh: week <XX> candidates from <repo>`. No work-item link.
+- **0 passed** — do not open a PR. Write the failed entries + their validation
+  links to `$GITHUB_STEP_SUMMARY`, and delete the now-pointless remote
+  `dataset/week-XX` branch (`git push origin --delete`) so no orphan is left.
+
+### 5. Permissions and PR-creation token
 
 Add `pull-requests: write` to the workflow `permissions` block (currently
 `contents: write`, `actions: write`).
@@ -128,26 +150,33 @@ GH_TOKEN: ${{ secrets.DATASET_PR_TOKEN || secrets.GITHUB_TOKEN }}
 Only the PR-creation step needs this token; branch push and the validation
 dispatch continue to use `GITHUB_TOKEN` (`contents: write` / `actions: write`).
 
-### 5. Ordering
+### 6. Ordering
 
-push → trigger `dataset-validation.yml` (resolve per-eval job URLs) →
-create/update draft PR with the entry list, each entry linked to its validation
-job. The PR does **not** wait on validation results; the run finishes in parallel
-and the reviewer merges once each entry's job is green.
+push all collected → dispatch `dataset-validation.yml` and **wait** for it to
+complete → resolve per-eval conclusions → prune not-passed entries and
+force-push → if ≥1 passed, create/update the draft PR (passed in the diff,
+failed documented in the body); if 0 passed, summarize failures and delete the
+branch.
 
 ## Out of scope
 
-- Gating PR creation on validation results (we link the run, we do not block on it).
-- Running `Verify-BuildAndTests` inside the collect job.
+- Running `Verify-BuildAndTests` inside the collect job (it runs in the separate
+  `dataset-validation` run; the collect job only waits on it).
 - Auto-merging or auto-approving.
 - Linking the work item.
 - Requesting reviewers.
 
 ## Success criteria
 
-- A weekly (or manual) run that collects ≥1 candidate opens a draft PR on
-  `dataset/week-XX` containing the entry list.
-- Each listed entry links to its own `dataset-validation.yml` matrix job (or
-  falls back to the run-level URL if the job could not be resolved in time).
-- Re-running in the same ISO week updates the existing PR instead of erroring.
+- A run that collects ≥1 candidate waits for `dataset-validation` to finish, then
+  opens/updates a draft PR on `dataset/week-XX` whose **diff contains only the
+  entries that passed** validation.
+- The PR body has an ✅ Included section (passed, in the diff) and, when any
+  failed, an ❌ Excluded section documenting them with their validation-job links.
+- Each listed entry links to its own `dataset-validation.yml` matrix job (or the
+  run-level URL if the job could not be resolved).
+- If **0** entries pass, no PR is opened; the failures are written to the run
+  summary and the branch is deleted.
+- Re-running in the same ISO week re-collects, re-validates, re-prunes, and
+  updates the existing PR instead of erroring.
 - A run that collects nothing opens no PR.
