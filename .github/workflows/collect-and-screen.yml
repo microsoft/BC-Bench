@@ -120,9 +120,10 @@ jobs:
         if: steps.run.outputs.branch != ''
         env:
           # The default GITHUB_TOKEN is blocked from opening PRs when the org policy
-          # "Allow GitHub Actions to create and approve pull requests" is off, so use a
-          # PAT when available and fall back to GITHUB_TOKEN otherwise.
-          GH_TOKEN: ${{ secrets.COPILOT_PAT5 || secrets.GITHUB_TOKEN }}
+          # "Allow GitHub Actions to create and approve pull requests" is off. Provide a
+          # PAT / GitHub App token via DATASET_PR_TOKEN to bypass that; otherwise this
+          # falls back to GITHUB_TOKEN (which works only when that org policy is enabled).
+          GH_TOKEN: ${{ secrets.DATASET_PR_TOKEN || secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
