@@ -104,15 +104,16 @@ jobs:
           }
           "run-url=$runUrl" | Add-Content $env:GITHUB_OUTPUT
 
-          # Wait for the validation run to finish (~5h budget: 300 x 60s), then read
+          # Wait for the validation run to finish (~4h40m budget: 280 x 60s), then read
           # each entry's conclusion. Entries still unfinished at the budget stay
           # non-'success' and are treated as not-passed downstream.
           $jobsJson = '[]'
+          $completed = $false
           if ($runId) {
-            for ($i = 0; $i -lt 300; $i++) {
+            for ($i = 0; $i -lt 280; $i++) {
               try {
                 $status = gh run view $runId --json status --jq '.status'
-                if ($status -eq 'completed') { break }
+                if ($status -eq 'completed') { $completed = $true; break }
               }
               catch {
                 Write-Host "Validation status poll error (will retry): $_"
@@ -131,6 +132,12 @@ jobs:
               Start-Sleep -Seconds 15
             }
           }
+          # Results are determinate only if the run finished AND we fetched conclusions.
+          # An indeterminate outcome (unresolved run, budget exceeded, or fetch failure) must
+          # NOT be treated as a genuine all-fail, because that would delete the branch below.
+          $jobsCount = @($jobsJson | ConvertFrom-Json).Count
+          $determinate = if ($completed -and $jobsCount -gt 0) { 'true' } else { 'false' }
+          "results-determinate=$determinate" | Add-Content $env:GITHUB_OUTPUT
           Set-Content -Path jobs.json -Value $jobsJson -Encoding utf8
 
       - name: Prune entries that did not pass validation
@@ -199,7 +206,7 @@ jobs:
             gh pr create --draft --base main --head $branch --title $title --body-file pr-body.md --label dataset
           }
 
-      - name: Summarize failures and delete branch (no entry passed)
+      - name: Summarize failures (no entry passed)
         if: steps.run.outputs.branch != '' && steps.prune.outputs.has-passed == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -208,18 +215,19 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $branch = '${{ steps.run.outputs.branch }}'
           $runUrl = '${{ steps.validate.outputs.run-url }}'
+          $determinate = '${{ steps.validate.outputs.results-determinate }}'
 
           $collected = @(Get-Content -Raw collected.json | ConvertFrom-Json)
           $jobs = if (Test-Path jobs.json) { @(Get-Content -Raw jobs.json | ConvertFrom-Json) } else { @() }
           $jobMap = @{}
           foreach ($j in $jobs) { if ($j.name) { $jobMap[[string]$j.name] = $j } }
 
-          $lines = @(
-            '## Dataset refresh: no entry passed validation',
-            '',
-            "No PR opened. The following collected candidates failed or did not complete validation ($runUrl):",
-            ''
-          )
+          $heading = if ($determinate -eq 'true') {
+            '## Dataset refresh: no entry passed validation'
+          } else {
+            '## Dataset refresh: validation did not complete (branch kept for re-run)'
+          }
+          $lines = @($heading, '', "No PR opened. Collected candidates and their validation outcome ($runUrl):", '')
           foreach ($entry in $collected) {
             $job = $jobMap[[string]$entry.Id]
             $url = if ($job -and $job.html_url) { [string]$job.html_url } elseif ($runUrl) { $runUrl } else { '' }
@@ -229,5 +237,10 @@ jobs:
           }
           ($lines -join "`n") | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
-          git push origin --delete $branch
-          Write-Host "Deleted branch $branch (no entry passed validation)"
+          if ($determinate -eq 'true') {
+            git push origin --delete $branch
+            Write-Host "Deleted branch $branch (all collected entries failed validation)"
+          }
+          else {
+            Write-Host "Validation indeterminate; kept branch $branch for recovery / re-run"
+          }

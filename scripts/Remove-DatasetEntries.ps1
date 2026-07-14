@@ -16,10 +16,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if ($InstanceId.Count -eq 0) { return }
+$ids = @($InstanceId | Where-Object { $_ -and $_.Trim() })
+if ($ids.Count -eq 0) { return }
 
 $remove = [System.Collections.Generic.HashSet[string]]::new()
-foreach ($id in $InstanceId) { [void]$remove.Add([string]$id) }
+foreach ($id in $ids) { [void]$remove.Add([string]$id) }
 
 if (Test-Path $DatasetFile) {
     $kept = foreach ($line in [System.IO.File]::ReadAllLines($DatasetFile)) {
@@ -30,7 +31,7 @@ if (Test-Path $DatasetFile) {
     Set-Content -Path $DatasetFile -Value $kept -Encoding utf8
 }
 
-foreach ($id in $InstanceId) {
+foreach ($id in $ids) {
     $dir = Join-Path $ProblemStatementDir ([string]$id)
     if (Test-Path $dir) { Remove-Item -Recurse -Force -Path $dir }
 }
