@@ -101,10 +101,32 @@ gated on `steps.run.outputs.branch != ''`:
 4. Title: `Dataset refresh: week <XX> candidates from <repo>`.
 5. No work-item link in the body.
 
-### 4. Permissions
+### 4. Permissions and PR-creation token
 
 Add `pull-requests: write` to the workflow `permissions` block (currently
 `contents: write`, `actions: write`).
+
+`pull-requests: write` alone is **not sufficient** in this org. When the
+repository/org policy *"Allow GitHub Actions to create and approve pull
+requests"* is disabled, the default `GITHUB_TOKEN` is blocked from
+`createPullRequest` (the run fails with *"GitHub Actions is not permitted to
+create or approve pull requests"*). The PR-creation step therefore authenticates
+with a dedicated token:
+
+```yaml
+GH_TOKEN: ${{ secrets.DATASET_PR_TOKEN || secrets.GITHUB_TOKEN }}
+```
+
+- **`DATASET_PR_TOKEN`** — a repo secret holding a fine-grained PAT (or GitHub
+  App installation token) with **Contents: write** + **Pull requests: write** on
+  the BC-Bench repo. This is the operational requirement to make the feature
+  work while the org policy stays off; a PAT-opened PR also triggers CI on the
+  draft, which is desirable.
+- The `|| secrets.GITHUB_TOKEN` fallback is used only when `DATASET_PR_TOKEN` is
+  unset, and works solely if the org policy above is enabled.
+
+Only the PR-creation step needs this token; branch push and the validation
+dispatch continue to use `GITHUB_TOKEN` (`contents: write` / `actions: write`).
 
 ### 5. Ordering
 
