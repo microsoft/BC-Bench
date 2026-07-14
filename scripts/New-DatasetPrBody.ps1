@@ -3,9 +3,10 @@
 Build the markdown body for the dataset-refresh draft PR.
 
 .DESCRIPTION
-Joins collected entries (from Collect-And-Screen.ps1 -CollectedFile) to their
-dataset-validation matrix-job URLs, producing a markdown bullet per entry. An
-entry whose job URL cannot be resolved falls back to the run-level URL.
+Splits collected entries into those that passed dataset-validation (job
+conclusion 'success') and those that did not, rendering an Included section
+(in the PR diff) and, when any failed, an Excluded section (documented only).
+An entry with no resolvable job is treated as not-passed.
 #>
 [CmdletBinding()]
 param(
@@ -26,21 +27,49 @@ if (Test-Path $CollectedFile) {
 $jobMap = @{}
 if ($JobsFile -and (Test-Path $JobsFile)) {
     foreach ($job in @(Get-Content -Raw -Path $JobsFile | ConvertFrom-Json)) {
-        if ($job.name) { $jobMap[[string]$job.name] = [string]$job.html_url }
+        if ($job.name) { $jobMap[[string]$job.name] = $job }
     }
 }
+
+function Format-EntryLine {
+    param($Entry, [switch]$WithConclusion)
+    $job = $jobMap[[string]$Entry.Id]
+    $url = if ($job -and $job.html_url) { [string]$job.html_url } elseif ($RunUrl) { $RunUrl } else { $null }
+    $validation = if ($url) { " — 🔬 [validation]($url)" } else { '' }
+    $line = "- ``$($Entry.Id)`` ([PR #$($Entry.Pr)]($($Entry.Url)))$validation"
+    if ($WithConclusion) {
+        $conclusion = if ($job -and $job.conclusion) { [string]$job.conclusion } else { 'incomplete' }
+        $line += " — **$conclusion**"
+    }
+    $line
+}
+
+$passed = @($entries | Where-Object { $j = $jobMap[[string]$_.Id]; $j -and $j.conclusion -eq 'success' })
+$failed = @($entries | Where-Object { $j = $jobMap[[string]$_.Id]; -not ($j -and $j.conclusion -eq 'success') })
 
 $lines = @(
     "Automated dataset refresh: bug-fix candidates collected from ``$Repo`` for ISO week $Week.",
     '',
-    'Each entry links to the `dataset-validation` job that builds it and checks the FAIL_TO_PASS transition (test fails on base, passes after the gold patch). **Merge only once every linked job is green.**',
+    '## ✅ Included (passed validation)',
+    '',
+    'These entries passed `dataset-validation` (build + FAIL_TO_PASS transition) and are included in this PR.',
     ''
 )
 
-foreach ($entry in $entries) {
-    $url = if ($jobMap.ContainsKey([string]$entry.Id)) { $jobMap[[string]$entry.Id] } elseif ($RunUrl) { $RunUrl } else { $null }
-    $validation = if ($url) { " — 🔬 [validation]($url)" } else { '' }
-    $lines += "- ``$($entry.Id)`` ([PR #$($entry.Pr)]($($entry.Url)))$validation"
+if ($passed.Count -gt 0) {
+    foreach ($entry in $passed) { $lines += (Format-EntryLine -Entry $entry) }
+}
+else {
+    $lines += '_None._'
+}
+
+if ($failed.Count -gt 0) {
+    $lines += ''
+    $lines += '## ❌ Excluded (failed / incomplete validation — documented, not included)'
+    $lines += ''
+    $lines += 'These entries did not pass validation and are **not** part of this PR''s changes; listed for the record.'
+    $lines += ''
+    foreach ($entry in $failed) { $lines += (Format-EntryLine -Entry $entry -WithConclusion) }
 }
 
 $lines += ''
