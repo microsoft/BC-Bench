@@ -33,6 +33,7 @@ on:
 jobs:
   collect-and-screen:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     outputs:
       branch: ${{ steps.run.outputs.branch }}
     steps:
@@ -78,7 +79,7 @@ jobs:
           git push --force origin $branch
           Add-Content -Path $env:GITHUB_OUTPUT -Value "branch=$branch"
 
-      - name: Trigger validation and resolve job URLs
+      - name: Trigger validation and wait for conclusions
         id: validate
         if: steps.run.outputs.branch != ''
         env:
@@ -103,21 +104,54 @@ jobs:
           }
           "run-url=$runUrl" | Add-Content $env:GITHUB_OUTPUT
 
-          # Matrix jobs only exist after get-entries expands them; poll until more than
-          # the single get-entries job is present (or budget runs out).
+          # Wait for the validation run to finish (~5h budget: 300 x 60s), then read
+          # each entry's conclusion. Entries still unfinished at the budget stay
+          # non-'success' and are treated as not-passed downstream.
           $jobsJson = '[]'
           if ($runId) {
-            for ($i = 0; $i -lt 24; $i++) {
-              Start-Sleep -Seconds 10
-              $jobsJson = gh api "/repos/${{ github.repository }}/actions/runs/$runId/jobs?per_page=100" --jq '[.jobs[] | {name: .name, html_url: .html_url}]'
-              if (-not $jobsJson) { $jobsJson = '[]' }
-              if ((@($jobsJson | ConvertFrom-Json)).Count -gt 1) { break }
+            for ($i = 0; $i -lt 300; $i++) {
+              $status = gh run view $runId --json status --jq '.status'
+              if ($status -eq 'completed') { break }
+              Start-Sleep -Seconds 60
             }
+            $jobsJson = gh api "/repos/${{ github.repository }}/actions/runs/$runId/jobs?per_page=100" --jq '[.jobs[] | {name: .name, html_url: .html_url, conclusion: .conclusion}]'
+            if (-not $jobsJson) { $jobsJson = '[]' }
           }
           Set-Content -Path jobs.json -Value $jobsJson -Encoding utf8
 
-      - name: Create or update draft PR
+      - name: Prune entries that did not pass validation
+        id: prune
         if: steps.run.outputs.branch != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $branch = '${{ steps.run.outputs.branch }}'
+
+          $collected = @(Get-Content -Raw collected.json | ConvertFrom-Json)
+          $jobs = if (Test-Path jobs.json) { @(Get-Content -Raw jobs.json | ConvertFrom-Json) } else { @() }
+
+          $passedIds = @($jobs | Where-Object { $_.conclusion -eq 'success' } | ForEach-Object { [string]$_.name })
+          $collectedIds = @($collected | ForEach-Object { [string]$_.Id })
+          $notPassed = @($collectedIds | Where-Object { $passedIds -notcontains $_ })
+          $passedCount = @($collectedIds | Where-Object { $passedIds -contains $_ }).Count
+
+          Write-Host "collected=$($collectedIds.Count) passed=$passedCount notPassed=$($notPassed.Count)"
+
+          if ($passedCount -gt 0 -and $notPassed.Count -gt 0) {
+            .\scripts\Remove-DatasetEntries.ps1 -DatasetFile dataset/bcbench.jsonl -ProblemStatementDir dataset/problemstatement -InstanceId $notPassed
+            if (git status --porcelain) {
+              git add dataset/bcbench.jsonl dataset/problemstatement
+              git commit --amend --no-edit
+              git push --force origin $branch
+              Write-Host "Pruned $($notPassed.Count) failed entr$(if ($notPassed.Count -eq 1) { 'y' } else { 'ies' }) and force-pushed $branch"
+            }
+          }
+
+          $hasPassed = if ($passedCount -gt 0) { 'true' } else { 'false' }
+          "has-passed=$hasPassed" | Add-Content $env:GITHUB_OUTPUT
+
+      - name: Create or update draft PR
+        if: steps.run.outputs.branch != '' && steps.prune.outputs.has-passed == 'true'
         env:
           # The default GITHUB_TOKEN is blocked from opening PRs when the org policy
           # "Allow GitHub Actions to create and approve pull requests" is off. Provide a
@@ -150,3 +184,36 @@ jobs:
           else {
             gh pr create --draft --base main --head $branch --title $title --body-file pr-body.md --label dataset
           }
+
+      - name: Summarize failures and delete branch (no entry passed)
+        if: steps.run.outputs.branch != '' && steps.prune.outputs.has-passed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $branch = '${{ steps.run.outputs.branch }}'
+          $runUrl = '${{ steps.validate.outputs.run-url }}'
+
+          $collected = @(Get-Content -Raw collected.json | ConvertFrom-Json)
+          $jobs = if (Test-Path jobs.json) { @(Get-Content -Raw jobs.json | ConvertFrom-Json) } else { @() }
+          $jobMap = @{}
+          foreach ($j in $jobs) { if ($j.name) { $jobMap[[string]$j.name] = $j } }
+
+          $lines = @(
+            '## Dataset refresh: no entry passed validation',
+            '',
+            "No PR opened. The following collected candidates failed or did not complete validation ($runUrl):",
+            ''
+          )
+          foreach ($entry in $collected) {
+            $job = $jobMap[[string]$entry.Id]
+            $url = if ($job -and $job.html_url) { [string]$job.html_url } elseif ($runUrl) { $runUrl } else { '' }
+            $conclusion = if ($job -and $job.conclusion) { [string]$job.conclusion } else { 'incomplete' }
+            $link = if ($url) { " — 🔬 [validation]($url)" } else { '' }
+            $lines += "- ``$($entry.Id)`` ([PR #$($entry.Pr)]($($entry.Url)))$link — **$conclusion**"
+          }
+          ($lines -join "`n") | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+
+          git push origin --delete $branch
+          Write-Host "Deleted branch $branch (no entry passed validation)"
