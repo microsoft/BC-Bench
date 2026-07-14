@@ -2,6 +2,7 @@ name: Collect and Screen Dataset Candidates
 permissions:
   contents: write
   actions: write
+  pull-requests: write
 
 on:
   workflow_dispatch:
@@ -63,7 +64,8 @@ jobs:
             -SinceDays ${{ inputs.since-days || '7' }} `
             -Limit ${{ inputs.limit || '50' }} `
             -BaseBranch '${{ inputs.base-branch || 'main' }}' `
-            -SummaryFile $env:GITHUB_STEP_SUMMARY
+            -SummaryFile $env:GITHUB_STEP_SUMMARY `
+            -CollectedFile "$PWD/collected.json"
 
           if (-not (git status --porcelain)) {
             Write-Host 'No dataset changes; nothing to push.'
@@ -76,8 +78,71 @@ jobs:
           git push --force origin $branch
           Add-Content -Path $env:GITHUB_OUTPUT -Value "branch=$branch"
 
-      - name: Trigger dataset validation on pushed branch
+      - name: Trigger validation and resolve job URLs
+        id: validate
         if: steps.run.outputs.branch != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run dataset-validation.yml --ref "${{ steps.run.outputs.branch }}" -f modified-only=true -f test-run=false
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $branch = '${{ steps.run.outputs.branch }}'
+          $dispatchAt = (Get-Date).ToUniversalTime()
+
+          gh workflow run dataset-validation.yml --ref $branch -f modified-only=true -f test-run=false
+
+          # gh workflow run returns no id, so poll for the run it created.
+          $runId = $null
+          $runUrl = ''
+          for ($i = 0; $i -lt 12; $i++) {
+            Start-Sleep -Seconds 5
+            $runs = gh run list --workflow dataset-validation.yml --branch $branch --event workflow_dispatch --json databaseId,url,createdAt --limit 5 | ConvertFrom-Json
+            $match = $runs | Where-Object { [datetimeoffset]$_.createdAt -ge $dispatchAt.AddSeconds(-60) } |
+              Sort-Object { [datetimeoffset]$_.createdAt } -Descending | Select-Object -First 1
+            if ($match) { $runId = $match.databaseId; $runUrl = $match.url; break }
+          }
+          "run-url=$runUrl" | Add-Content $env:GITHUB_OUTPUT
+
+          # Matrix jobs only exist after get-entries expands them; poll until more than
+          # the single get-entries job is present (or budget runs out).
+          $jobsJson = '[]'
+          if ($runId) {
+            for ($i = 0; $i -lt 24; $i++) {
+              Start-Sleep -Seconds 10
+              $jobsJson = gh api "/repos/${{ github.repository }}/actions/runs/$runId/jobs?per_page=100" --jq '[.jobs[] | {name: .name, html_url: .html_url}]'
+              if (-not $jobsJson) { $jobsJson = '[]' }
+              if ((@($jobsJson | ConvertFrom-Json)).Count -gt 1) { break }
+            }
+          }
+          Set-Content -Path jobs.json -Value $jobsJson -Encoding utf8
+
+      - name: Create or update draft PR
+        if: steps.run.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $branch = '${{ steps.run.outputs.branch }}'
+          $repo = '${{ inputs.repo || 'microsoft/BCApps' }}'
+          $week = $branch -replace '^dataset/week-', ''
+
+          # Ensure the label exists; ignore "already exists".
+          gh label create dataset --color 1f6feb --description 'Automated dataset refresh candidates' 2>$null | Out-Null
+
+          .\scripts\New-DatasetPrBody.ps1 `
+            -CollectedFile collected.json `
+            -JobsFile jobs.json `
+            -RunUrl '${{ steps.validate.outputs.run-url }}' `
+            -Repo $repo `
+            -Week $week | Set-Content -Path pr-body.md -Encoding utf8
+
+          $title = "Dataset refresh: week $week candidates from $repo"
+          $existing = gh pr list --head $branch --state open --json number --jq '.[0].number'
+          if ($existing) {
+            gh pr edit $existing --title $title --body-file pr-body.md
+            Write-Host "Updated draft PR #$existing"
+          }
+          else {
+            gh pr create --draft --base main --head $branch --title $title --body-file pr-body.md --label dataset
+          }
