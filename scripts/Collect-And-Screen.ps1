@@ -33,7 +33,8 @@ param(
     [int]$SinceDays = 7,
     [int]$Limit = 200,
     [string]$BaseBranch = 'main',
-    [string]$SummaryFile
+    [string]$SummaryFile,
+    [string]$CollectedFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,7 +70,7 @@ foreach ($pr in $prs) {
         & uv run bcbench collect gh $pr --repo $Repo --environment-setup-version $envVersion
         if ($LASTEXITCODE -eq 0) {
             $instanceId = "$($Repo -replace '/', '__')-$pr"
-            $passed.Add([PSCustomObject]@{ Id = $instanceId; Url = "https://github.com/$Repo/pull/$pr" })
+            $passed.Add([PSCustomObject]@{ Id = $instanceId; Pr = $pr; Url = "https://github.com/$Repo/pull/$pr" })
             Write-Log "Collected PR #$pr -> $instanceId" -Level Success
         }
         else {
@@ -101,4 +102,9 @@ if ($SummaryFile) {
     $summary += ''
     foreach ($item in $passed) { $summary += "- [$($item.Id)]($($item.Url))" }
     Add-Content -Path $SummaryFile -Value ($summary -join [Environment]::NewLine)
+}
+
+if ($CollectedFile -and $passed.Count -gt 0) {
+    $passed | ConvertTo-Json -AsArray -Depth 4 | Set-Content -Path $CollectedFile -Encoding utf8
+    Write-Log "Wrote $($passed.Count) collected entr$(if ($passed.Count -eq 1) { 'y' } else { 'ies' }) to $CollectedFile" -Level Info
 }
