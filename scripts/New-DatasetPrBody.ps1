@@ -18,7 +18,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$entries = @(Get-Content -Raw -Path $CollectedFile | ConvertFrom-Json)
+$entries = @()
+if (Test-Path $CollectedFile) {
+    $entries = @(Get-Content -Raw -Path $CollectedFile | ConvertFrom-Json)
+}
 
 $jobMap = @{}
 if ($JobsFile -and (Test-Path $JobsFile)) {
