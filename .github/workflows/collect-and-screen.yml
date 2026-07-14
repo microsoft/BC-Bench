@@ -104,13 +104,14 @@ jobs:
           }
           "run-url=$runUrl" | Add-Content $env:GITHUB_OUTPUT
 
-          # Wait for the validation run to finish (~4h40m budget: 280 x 60s), then read
+          # Wait for the validation run to finish (~4h30m budget: 270 x 60s), then read
           # each entry's conclusion. Entries still unfinished at the budget stay
-          # non-'success' and are treated as not-passed downstream.
+          # non-'success' and are treated as not-passed downstream. The budget leaves
+          # ample headroom under the job's timeout-minutes for the surrounding steps.
           $jobsJson = '[]'
           $completed = $false
           if ($runId) {
-            for ($i = 0; $i -lt 280; $i++) {
+            for ($i = 0; $i -lt 270; $i++) {
               try {
                 $status = gh run view $runId --json status --jq '.status'
                 if ($status -eq 'completed') { $completed = $true; break }
@@ -132,11 +133,15 @@ jobs:
               Start-Sleep -Seconds 15
             }
           }
-          # Results are determinate only if the run finished AND we fetched conclusions.
-          # An indeterminate outcome (unresolved run, budget exceeded, or fetch failure) must
-          # NOT be treated as a genuine all-fail, because that would delete the branch below.
-          $jobsCount = @($jobsJson | ConvertFrom-Json).Count
-          $determinate = if ($completed -and $jobsCount -gt 0) { 'true' } else { 'false' }
+          # Results are determinate only if the run finished AND we actually got conclusions
+          # for our collected entries — i.e. at least one job whose name matches a collected
+          # instance id. Counting all jobs would include the get-entries job and mis-read an
+          # empty matrix, or a job.name/instance_id drift, as "all failed" and delete the branch.
+          $collectedIds = @()
+          if (Test-Path collected.json) { $collectedIds = @((Get-Content -Raw collected.json | ConvertFrom-Json) | ForEach-Object { [string]$_.Id }) }
+          $jobNames = @(($jobsJson | ConvertFrom-Json) | ForEach-Object { [string]$_.name })
+          $matched = @($collectedIds | Where-Object { $jobNames -contains $_ })
+          $determinate = if ($completed -and $matched.Count -gt 0) { 'true' } else { 'false' }
           "results-determinate=$determinate" | Add-Content $env:GITHUB_OUTPUT
           Set-Content -Path jobs.json -Value $jobsJson -Encoding utf8
 
@@ -198,7 +203,7 @@ jobs:
 
           $title = "Dataset refresh: week $week candidates from $repo"
           $existing = gh pr list --head $branch --state open --json number --jq '.[0].number // empty'
-          if ($existing -and $existing -ne 'null') {
+          if ($existing) {
             gh pr edit $existing --title $title --body-file pr-body.md
             Write-Host "Updated draft PR #$existing"
           }
@@ -238,8 +243,16 @@ jobs:
           ($lines -join "`n") | Add-Content -Path $env:GITHUB_STEP_SUMMARY
 
           if ($determinate -eq 'true') {
-            git push origin --delete $branch
-            Write-Host "Deleted branch $branch (all collected entries failed validation)"
+            # Don't auto-close a PR a human may already be reviewing: only delete the branch
+            # when no open PR points at it.
+            $openPr = gh pr list --head $branch --state open --json number --jq '.[0].number // empty'
+            if ($openPr) {
+              Write-Host "All collected entries failed, but PR #$openPr is open for $branch; keeping branch (not auto-closing a PR under review)"
+            }
+            else {
+              git push origin --delete $branch
+              Write-Host "Deleted branch $branch (all collected entries failed validation, no open PR)"
+            }
           }
           else {
             Write-Host "Validation indeterminate; kept branch $branch for recovery / re-run"
