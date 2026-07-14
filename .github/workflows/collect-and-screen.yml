@@ -138,8 +138,8 @@ jobs:
             -Week $week | Set-Content -Path pr-body.md -Encoding utf8
 
           $title = "Dataset refresh: week $week candidates from $repo"
-          $existing = gh pr list --head $branch --state open --json number --jq '.[0].number'
-          if ($existing) {
+          $existing = gh pr list --head $branch --state open --json number --jq '.[0].number // empty'
+          if ($existing -and $existing -ne 'null') {
             gh pr edit $existing --title $title --body-file pr-body.md
             Write-Host "Updated draft PR #$existing"
           }
