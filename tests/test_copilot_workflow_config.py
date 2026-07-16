@@ -2,42 +2,64 @@ import re
 from pathlib import Path
 from typing import get_args
 
+import yaml
+
 from bcbench.cli_options import CopilotModel
 
 REPO_ROOT = Path(__file__).parents[1]
+WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "copilot-evaluation.yml"
 
 
-def _workflow_dispatch_model_choices(workflow: str) -> set[str]:
-    choices: set[str] = set()
-    in_model_options = False
+def _workflow_dispatch_model_choices(
+    workflow_path: Path | str = WORKFLOW_PATH,
+) -> set[str]:
+    workflow = yaml.load(
+        Path(workflow_path).read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    choices = workflow["on"]["workflow_dispatch"]["inputs"]["model"]["options"]
+    return {str(choice) for choice in choices}
 
-    for line in workflow.splitlines():
-        if re.match(r"^\s*model:\s*$", line):
-            in_model_options = True
-            continue
-        if in_model_options and re.match(r"^\s*category:\s*$", line):
-            break
-        if in_model_options:
-            match = re.match(r'^\s*-\s*"([^"]+)"\s*$', line)
-            if match:
-                choices.add(match.group(1))
 
-    assert choices
-    return choices
+def test_workflow_dispatch_model_choices_ignore_other_inputs(tmp_path: Path):
+    workflow_path = tmp_path / "copilot-evaluation.yml"
+    workflow_path.write_text(
+        """
+on:
+  workflow_dispatch:
+    inputs:
+      category:
+        type: choice
+        options:
+          - bug-fix
+          - test-generation
+      model:
+        type: choice
+        options:
+          - gpt-5.6-sol
+          - gpt-5.4
+      retries:
+        type: choice
+        options:
+          - "1"
+          - "2"
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    assert _workflow_dispatch_model_choices(workflow_path) == {
+        "gpt-5.6-sol",
+        "gpt-5.4",
+    }
 
 
 def test_copilot_workflow_includes_gpt_5_6_sol():
-    workflow = (
-        REPO_ROOT / ".github" / "workflows" / "copilot-evaluation.yml"
-    ).read_text(encoding="utf-8")
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
     assert '- "gpt-5.6-sol"' in workflow
 
 
 def test_copilot_workflow_model_choices_are_supported_by_cli():
-    workflow = (
-        REPO_ROOT / ".github" / "workflows" / "copilot-evaluation.yml"
-    ).read_text(encoding="utf-8")
-    workflow_choices = _workflow_dispatch_model_choices(workflow)
+    workflow_choices = _workflow_dispatch_model_choices()
     cli_choices = set(get_args(get_args(CopilotModel)[0]))
     assert workflow_choices <= cli_choices
 
