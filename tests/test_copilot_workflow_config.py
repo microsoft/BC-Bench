@@ -26,6 +26,13 @@ def _workflow_dispatch_model_choices(workflow: str) -> set[str]:
     return choices
 
 
+def test_copilot_workflow_includes_gpt_5_6_sol():
+    workflow = (
+        REPO_ROOT / ".github" / "workflows" / "copilot-evaluation.yml"
+    ).read_text(encoding="utf-8")
+    assert '- "gpt-5.6-sol"' in workflow
+
+
 def test_copilot_workflow_model_choices_are_supported_by_cli():
     workflow = (
         REPO_ROOT / ".github" / "workflows" / "copilot-evaluation.yml"
