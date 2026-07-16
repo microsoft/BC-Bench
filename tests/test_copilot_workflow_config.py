@@ -37,9 +37,7 @@ on:
         encoding="utf-8",
     )
 
-    with pytest.raises(
-        AssertionError, match="Copilot workflow model options must not be empty"
-    ):
+    with pytest.raises(AssertionError, match="Copilot workflow model options must not be empty"):
         _workflow_dispatch_model_choices(workflow_path)
 
 
@@ -87,9 +85,7 @@ def test_copilot_workflow_model_choices_are_supported_by_cli():
 
 
 def test_copilot_harness_supports_gpt_5_6():
-    installer = (
-        REPO_ROOT / ".github" / "actions" / "install-eval-clis" / "action.yml"
-    ).read_text(encoding="utf-8")
+    installer = (REPO_ROOT / ".github" / "actions" / "install-eval-clis" / "action.yml").read_text(encoding="utf-8")
     version_match = re.search(r"@github/copilot@(\d+)\.(\d+)\.(\d+)", installer)
     assert version_match is not None
     assert tuple(map(int, version_match.groups())) >= (1, 0, 70)
