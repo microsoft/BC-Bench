@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 from typing import get_args
 
+import pytest
 import yaml
 
 from bcbench.cli_options import CopilotModel
@@ -18,7 +19,28 @@ def _workflow_dispatch_model_choices(
         Loader=yaml.BaseLoader,
     )
     choices = workflow["on"]["workflow_dispatch"]["inputs"]["model"]["options"]
+    assert choices, "Copilot workflow model options must not be empty"
     return {str(choice) for choice in choices}
+
+
+def test_workflow_dispatch_model_choices_reject_empty_options(tmp_path: Path):
+    workflow_path = tmp_path / "copilot-evaluation.yml"
+    workflow_path.write_text(
+        """
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        type: choice
+        options: []
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        AssertionError, match="Copilot workflow model options must not be empty"
+    ):
+        _workflow_dispatch_model_choices(workflow_path)
 
 
 def test_workflow_dispatch_model_choices_ignore_other_inputs(tmp_path: Path):
