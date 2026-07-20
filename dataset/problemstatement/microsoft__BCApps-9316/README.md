@@ -29,8 +29,3 @@ Fixes [AB#642033](https://dynamicssmb2.visualstudio.com/1fcb79e7-ab07-432a-a3c6-
 ## Risk & compatibility
 
 Low. The Sell-to mapping now runs only when Sell-to is blank, so automated order imports (where Sell-to Customer No. starts blank) are unchanged. The new Bill-to-from-Sell-to fallback only fires when Bill-to would otherwise remain blank. Scope is limited to the non-B2B customer path (`MapHeaderFields`); the B2B path (`MapB2BHeaderFields`) is unchanged.
-
-
-
-
-
