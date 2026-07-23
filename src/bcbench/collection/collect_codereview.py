@@ -5,10 +5,11 @@ Two ways to decide which of the PR's inline comments are the *expected* findings
 
 - ``reviewer``: keep comments authored by a given login (e.g. a human reviewer who
   wrote the gold findings directly on the PR).
-- ``reacted``: keep the reviewer-bot comments that received a positive reaction
-  (thumbs-up / heart / ...). Comments with only a thumbs-down are dropped, which
-  turns them into false-positive guards by omission (the construct stays in the
-  patch but is absent from ``expected_comments``, so flagging it costs precision).
+- ``reacted``: keep comments that received a positive reaction (thumbs-up / heart
+  / ...) from any author; combine with ``reviewer`` to restrict to the review bot.
+  Comments with only a thumbs-down are dropped, which turns them into false-positive
+  guards by omission (the construct stays in the patch but is absent from
+  ``expected_comments``, so flagging it costs precision).
 
 If neither is given, every top-level inline comment on the PR is used.
 """
@@ -21,14 +22,12 @@ from typing import Any
 import typer
 
 from bcbench.collection.gh_client import GHClient
-from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata
 from bcbench.exceptions import CollectionError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
-_config = get_config()
 
 # GitHub reaction contents that mark a comment as a confirmed (good) finding.
 POSITIVE_REACTIONS = frozenset({"+1", "heart", "hooray", "rocket"})
@@ -84,10 +83,10 @@ def _comment_line_span(comment: dict[str, Any]) -> tuple[int, int | None] | None
         return None  # thread reply, not a standalone finding
     if (comment.get("side") or "RIGHT") != "RIGHT":
         return None  # LEFT-side comments reference base lines, not the reviewed diff
-    line = comment.get("line") or comment.get("original_line")
+    line = comment.get("line")
     if not line:
-        return None  # outdated / unanchored comment
-    start = comment.get("start_line") or comment.get("original_start_line")
+        return None  # outdated / unanchored: current line no longer exists in the patch
+    start = comment.get("start_line")
     if start and start != line:
         return int(start), int(line)
     return int(line), None
@@ -105,7 +104,7 @@ def build_expected_comments(
     selected: list[ReviewComment] = []
 
     for comment in comments:
-        if reviewer is not None and (comment.get("user") or {}).get("login") != reviewer:
+        if reviewer is not None and ((comment.get("user") or {}).get("login") or "").casefold() != reviewer.casefold():
             continue
         if reacted:
             contents = {r.get("content") for r in reactions_by_id.get(comment.get("id"), [])}

@@ -87,13 +87,15 @@ class GHClient:
                 "api",
                 f"/repos/{self.repo}/pulls/{pr_number}/comments",
                 "--paginate",
+                "--slurp",
             ],
             capture_output=True,
             text=True,
             encoding="utf-8",
             check=True,
         )
-        return json.loads(result.stdout)
+        # --paginate --slurp wraps each page (itself an array) into an outer array.
+        return [item for page in json.loads(result.stdout) for item in page]
 
     def get_review_comment_reactions(self, comment_id: int) -> list[dict[str, Any]]:
         """Return reactions on a single inline review comment."""
@@ -103,13 +105,14 @@ class GHClient:
                 "api",
                 f"/repos/{self.repo}/pulls/comments/{comment_id}/reactions",
                 "--paginate",
+                "--slurp",
             ],
             capture_output=True,
             text=True,
             encoding="utf-8",
             check=True,
         )
-        return json.loads(result.stdout)
+        return [item for page in json.loads(result.stdout) for item in page]
 
     def get_file_content(self, file_path: str, ref: str) -> str:
         # URL-encode the file path to handle spaces and special characters

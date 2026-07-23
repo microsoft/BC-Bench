@@ -69,7 +69,8 @@ def collect_codereview(
     # A PR whose expected findings a reviewer wrote directly as inline comments
     bcbench collect codereview 9553 --reviewer WaelAbuSeada --environment-setup-version 27.0 --area privacy
 
-    # Harvest online-eval reactions: only reviewer-bot comments that got a thumbs-up
+    # Harvest online-eval reactions: any comment that got a thumbs-up (add
+    # --reviewer <bot-login> to restrict to the review bot)
     bcbench collect codereview 9315 --reacted --environment-setup-version 27.0
     """
     entry = collect_codereview_entry(
