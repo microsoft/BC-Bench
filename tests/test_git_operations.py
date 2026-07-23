@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.exceptions import EmptyDiffError
-from bcbench.operations.git_operations import clean_project_paths, clone_at_commit, commit_changes, stage_and_get_diff
+from bcbench.operations.git_operations import checkout_commit, clean_project_paths, clone_at_commit, commit_changes, stage_and_get_diff
 
 
 class TestCommitChanges:
@@ -241,3 +241,34 @@ def test_clone_at_commit_full_url_used_verbatim(mock_run, tmp_path):
 
     remote_calls = [c.args[0] for c in mock_run.call_args_list if c.args[0][:3] == ["git", "remote", "add"]]
     assert remote_calls == [["git", "remote", "add", "origin", "https://gitlab.com/o/r.git"]]
+
+
+@patch("bcbench.operations.git_operations.subprocess.run")
+def test_checkout_commit_present_locally_does_not_fetch(mock_run, tmp_path):
+    mock_run.return_value = subprocess.CompletedProcess([], 0)
+
+    checkout_commit(tmp_path, "a" * 40)
+
+    commands = [c.args[0] for c in mock_run.call_args_list]
+    assert commands == [["git", "checkout", "a" * 40]]
+    assert not any(cmd[:2] == ["git", "fetch"] for cmd in commands)
+
+
+@patch("bcbench.operations.git_operations.subprocess.run")
+def test_checkout_commit_missing_locally_fetches_then_retries(mock_run, tmp_path):
+    sha = "b" * 40
+    # First checkout fails (commit absent), fetch succeeds, retry checkout succeeds.
+    mock_run.side_effect = [
+        subprocess.CompletedProcess([], 1, stderr=b"error: pathspec"),
+        subprocess.CompletedProcess([], 0),
+        subprocess.CompletedProcess([], 0),
+    ]
+
+    checkout_commit(tmp_path, sha)
+
+    commands = [c.args[0] for c in mock_run.call_args_list]
+    assert commands == [
+        ["git", "checkout", sha],
+        ["git", "fetch", "--depth", "1", "origin", sha],
+        ["git", "checkout", sha],
+    ]
