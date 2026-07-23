@@ -28,6 +28,18 @@ class TestParseDomainSeverity:
         assert domain is None
         assert severity is None
 
+    def test_agent_domain_marker_wins_over_latex_escaped_header(self):
+        # Real bot comments escape the header (Severity\ \u2014\ Performance), which the
+        # header regex cannot read, but always append an agent_domain marker.
+        body = (
+            "$\\textbf{\U0001f7e1\\ Medium\\ Severity\\ \u2014\\ Performance}$\n"
+            "### CheckJobTaskIsPosting calls JobTask.Get without SetLoadFields.\n"
+            "<!-- agent_domain: performance -->"
+        )
+        domain, severity = parse_domain_severity(body)
+        assert domain == "performance"
+        assert severity == "medium"
+
 
 def _comment(cid, path, *, login="alice", line=10, start_line=None, body="finding", side="RIGHT", reply=None):
     return {

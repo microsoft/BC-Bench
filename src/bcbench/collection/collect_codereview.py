@@ -48,15 +48,22 @@ def parse_domain_severity(body: str) -> tuple[str | None, str | None]:
     import re
 
     domain: str | None = None
-    # Bot header: "<severity> Severity - <Domain>"
-    match = re.search(r"Severity\s*[\u2014-]\s*([A-Za-z][A-Za-z /]+)", body)
-    if match:
-        domain = match.group(1).strip()
+    # Preferred: the explicit metadata marker the review bot appends. It survives
+    # LaTeX-escaped headers (e.g. "Severity\ \u2014\ Performance") that the header
+    # regex below cannot read.
+    marker = re.search(r"<!--\s*agent_domain:\s*([A-Za-z][\w /-]*?)\s*-->", body)
+    if marker:
+        domain = marker.group(1).strip()
     else:
-        # Human header: leading "**<Domain> - ...**"
-        match = re.match(r"\s*\*\*\s*([A-Za-z][A-Za-z ]+?)\s*[\u2014-]", body)
+        # Bot header: "<severity> Severity - <Domain>"
+        match = re.search(r"Severity\s*[\u2014-]\s*([A-Za-z][A-Za-z /]+)", body)
         if match:
             domain = match.group(1).strip()
+        else:
+            # Human header: leading "**<Domain> - ...**"
+            match = re.match(r"\s*\*\*\s*([A-Za-z][A-Za-z ]+?)\s*[\u2014-]", body)
+            if match:
+                domain = match.group(1).strip()
 
     severity: str | None = None
     sev_match = re.search(r"\b(" + "|".join(_SEVERITY_WORDS) + r")\b", body, re.IGNORECASE)
