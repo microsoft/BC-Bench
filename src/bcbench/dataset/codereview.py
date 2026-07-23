@@ -47,7 +47,7 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
 class ReviewComment(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9./_-]*\.(al|json)$")]
+    file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./_-]*\.(al|json)$")]
     line_start: Annotated[int, Field(ge=1)]
     line_end: Annotated[int, Field(ge=1)] | None = None
     domain: str | None = None
