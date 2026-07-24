@@ -9,6 +9,7 @@ from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
+from bcbench.evaluate.codereview_engine import _finding_to_comment, _findings_to_review_comments
 from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_comment_matches
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
@@ -818,3 +819,36 @@ class TestJudge:
             result = judge_comment_matches(pairs, work_dir=tmp_path)
 
         assert result == [pairs[1]]
+
+
+class TestEngineFindingMapping:
+    """Normalization of the engine's _review-report.json findings into review comments."""
+
+    def test_maps_engine_severity_to_gold_taxonomy(self):
+        findings = [
+            {"severity": s, "message": "x", "location": {"file": "src/A.al", "line": 3}}
+            for s in ("blocker", "major", "minor", "info")
+        ]
+        got = [c["severity"] for c in _findings_to_review_comments({"findings": findings})]
+        assert got == ["critical", "high", "medium", "low"]
+
+    def test_uses_location_line_and_range_end(self):
+        finding = {"message": "x", "location": {"file": "src/A.al", "line": 14, "range": {"start-line": 14, "end-line": 17}}}
+        comment = _finding_to_comment(finding)
+        assert comment == {"file": "src/A.al", "line_start": 14, "line_end": 17, "body": "x"}
+
+    def test_falls_back_to_range_start_line_when_line_missing(self):
+        finding = {"message": "x", "location": {"file": "src/A.al", "range": {"start-line": 9}}}
+        assert _finding_to_comment(finding)["line_start"] == 9
+
+    def test_skips_findings_missing_file_line_or_message(self):
+        findings = [
+            {"message": "no location", "location": {}},
+            {"location": {"file": "src/A.al", "line": 2}},
+            {"message": "   ", "location": {"file": "src/A.al", "line": 3}},
+        ]
+        assert _findings_to_review_comments({"findings": findings}) == []
+
+    def test_unknown_severity_passes_through_lowercased(self):
+        finding = {"severity": "Weird", "message": "x", "location": {"file": "src/A.al", "line": 1}}
+        assert _finding_to_comment(finding)["severity"] == "weird"

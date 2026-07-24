@@ -74,7 +74,7 @@ env:
   # Copilot code-review. The engine reads BCQUALITY_REF directly.
   BCQUALITY_REF: ""
   # Engine (microsoft/BC-ALAgents) ref to check out when the engine arm runs.
-  ENGINE_REF: v1.0.5
+  ENGINE_REF: "1.15.4"
 
 jobs:
   get-entries:
@@ -160,7 +160,7 @@ jobs:
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             ${{ inputs.al-mcp && '--al-mcp' || '' }} `
             ${{ inputs.al-lsp && '--al-lsp' || '' }} `
-            ${{ (inputs.category == 'code-review' && env.BCQUALITY_REF != '') && '--engine-scripts-dir engine/agent/scripts' || '' }}
+            ${{ (inputs.category == 'code-review' && env.BCQUALITY_REF != '') && '--engine-scripts-dir engine/agents/ALReviewAgent/scripts' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
