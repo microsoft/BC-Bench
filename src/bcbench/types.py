@@ -98,13 +98,28 @@ class ExperimentConfiguration(BaseModel):
     # Plugins installed for this experiment: "<name>@<commit>" (marketplace) or "<name>@local"
     plugins: list[str] | None = None
 
+    # PR-Review engine arm: resolved microsoft/BC-ALAgents engine commit
+    engine_ref: str | None = None
+
+    # PR-Review engine arm: resolved BCQuality content commit reviewed against
+    bcquality_sha: str | None = None
+
     def is_empty(self) -> bool:
         """Check if this configuration has all default/empty values.
 
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.plugins is None
+            and self.engine_ref is None
+            and self.bcquality_sha is None
+        )
 
 
 class AgentType(StrEnum):

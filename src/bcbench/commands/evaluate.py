@@ -7,7 +7,7 @@ from typing import cast
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_engine_review
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -22,7 +22,6 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import EvaluationPipeline
-from bcbench.evaluate.codereview_engine import run_engine_review
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -68,6 +67,9 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
+    if engine_scripts_dir and category != EvaluationCategory.CODE_REVIEW:
+        raise typer.BadParameter("--engine-scripts-dir routes through the PR-Review engine and only supports --category code-review")
+
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 

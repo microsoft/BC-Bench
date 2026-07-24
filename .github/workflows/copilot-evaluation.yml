@@ -88,6 +88,7 @@ jobs:
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
+      agent-label: ${{ steps.agent-label.outputs.label }}
     if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
@@ -105,6 +106,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Resolve agent label
+        id: agent-label
+        shell: pwsh
+        run: |
+          $label = if ('${{ inputs.category }}' -eq 'code-review' -and $env:BCQUALITY_REF) { 'BC PR-Review Engine' } else { 'GitHub Copilot CLI' }
+          "label=$label" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup BC Container and Repository
         id: setup-env
@@ -144,6 +152,13 @@ jobs:
           path: engine
           token: ${{ secrets.ENGINE_REPO_TOKEN || github.token }}
 
+      - name: Install powershell-yaml for engine arm
+        if: ${{ inputs.category == 'code-review' && env.BCQUALITY_REF != '' }}
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml -Scope CurrentUser -Force
+
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
         shell: pwsh
@@ -179,7 +194,7 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: "GitHub Copilot CLI"
+      agent: ${{ needs.evaluate-with-copilot-cli.outputs.agent-label }}
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
       git-ref: ${{ inputs.git-ref || github.ref_name }}

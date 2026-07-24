@@ -3,9 +3,13 @@
 Instead of BC-Bench's own review pipeline, this runner invokes the engine's
 self-contained local-review entry point (``Invoke-LocalReview.ps1`` from
 ``microsoft/BC-ALAgents``), which filters a BCQuality checkout and runs the
-exact production reviewer against the patched worktree. BC-Bench then normalizes
-the engine's ``_review-report.json`` into the ``review.json`` shape its scorer
-already understands.
+exact production reviewer against the patched worktree.
+
+The entry point writes the agent's raw report to ``<OutputDir>/_review-report.json``
+(and run stats to ``_run-metrics.json``). BC-Bench normalizes that report into the
+flat ``review.json`` its scorer understands. Note this scores the raw agent report;
+the full production flow's later post-processing (dedup, volume caps, placement) is
+not represented, so this arm measures the reviewer's findings, not the posted set.
 """
 
 import base64
@@ -25,6 +29,7 @@ logger = get_logger(__name__)
 
 LOCAL_REVIEW_SCRIPT_NAME = "Invoke-LocalReview.ps1"
 REVIEW_REPORT_FILE_NAME = "_review-report.json"
+RUN_METRICS_FILE_NAME = "_run-metrics.json"
 REVIEW_OUTPUT_FILE = "review.json"
 BCQUALITY_REPO_URL = "https://github.com/microsoft/BCQuality.git"
 _ENGINE_TIMEOUT_SECONDS = 1800
@@ -49,6 +54,15 @@ def _git(repo_path: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _git_head(path: Path) -> str | None:
+    """Resolve the HEAD commit of a checkout, or None if it is not a git repo."""
+    try:
+        result = subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 def _commit_patched_worktree(repo_path: Path) -> str:
     base_ref = _git(repo_path, "rev-parse", "HEAD")
     _git(repo_path, "add", "-A")
@@ -68,12 +82,28 @@ def _commit_patched_worktree(repo_path: Path) -> str:
     return base_ref
 
 
-def _prepare_bcquality(work_dir: Path) -> Path:
-    """Provide a disposable BCQuality checkout for the engine.
+def _bcquality_repo_url() -> str:
+    """Resolve the BCQuality repo to review with, honoring the BCQUALITY_REPO override.
+
+    Accepts a full clone URL or a bare ``owner/repo`` (assumed on github.com), so a
+    CI run can point the arm at a fork without editing the engine.
+    """
+    repo = os.environ.get("BCQUALITY_REPO")
+    if not repo:
+        return BCQUALITY_REPO_URL
+    if repo.startswith(("http://", "https://", "git@")):
+        return repo
+    return f"https://github.com/{repo}.git"
+
+
+def _prepare_bcquality(work_dir: Path) -> tuple[Path, str | None]:
+    """Provide a disposable BCQuality checkout for the engine and its resolved commit.
 
     Invoke-LocalReview.ps1 requires -BCQualityRoot and its filter step DELETES files
     in place, so we never point it at a live clone. Prefer a caller-provided checkout
-    (copied minus .git); otherwise clone microsoft/BCQuality at BCQUALITY_REF.
+    (copied minus .git); otherwise clone microsoft/BCQuality (or BCQUALITY_REPO) at
+    BCQUALITY_REF. Returns the checkout path and the resolved BCQuality SHA (for
+    reproducibility), or None when the source is not a git repo.
     """
     dest = work_dir / "bcquality"
     if dest.exists():
@@ -82,8 +112,9 @@ def _prepare_bcquality(work_dir: Path) -> Path:
     local = os.environ.get("BCQUALITY_ROOT")
     if local:
         shutil.copytree(local, dest, ignore=shutil.ignore_patterns(".git"))
-        return dest
+        return dest, _git_head(Path(local))
 
+    url = _bcquality_repo_url()
     ref = os.environ.get("BCQUALITY_REF") or "main"
     token = (
         os.environ.get("BCQUALITY_REPO_TOKEN")
@@ -100,7 +131,7 @@ def _prepare_bcquality(work_dir: Path) -> Path:
 
     logger.info(f"Cloning BCQuality @ {ref}")
     clone = subprocess.run(
-        ["git", *auth, "clone", "--quiet", BCQUALITY_REPO_URL, str(dest)],
+        ["git", *auth, "clone", "--quiet", url, str(dest)],
         cwd=work_dir,
         capture_output=True,
         text=True,
@@ -116,7 +147,7 @@ def _prepare_bcquality(work_dir: Path) -> Path:
     )
     if checkout.returncode != 0:
         raise AgentError(f"Failed to checkout BCQuality ref '{ref}': {checkout.stderr.strip()}")
-    return dest
+    return dest, _git_head(dest)
 
 
 def _run_local_review(
@@ -196,6 +227,17 @@ def _write_review_json(engine_output_dir: Path, repo_path: Path) -> int:
     return len(comments)
 
 
+def _read_run_metrics(engine_output_dir: Path) -> dict:
+    """Read the engine's _run-metrics.json (token/timing stats), or {} if absent."""
+    metrics_file = engine_output_dir / RUN_METRICS_FILE_NAME
+    if not metrics_file.exists():
+        return {}
+    try:
+        return json.loads(metrics_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
 def run_engine_review(
     entry: BaseDatasetEntry,
     model: str,
@@ -212,7 +254,7 @@ def run_engine_review(
     output_dir.mkdir(parents=True, exist_ok=True)
     engine_output_dir = output_dir / "engine-output"
 
-    bcquality_root = _prepare_bcquality(output_dir)
+    bcquality_root, bcquality_sha = _prepare_bcquality(output_dir)
     base_ref = _commit_patched_worktree(repo_path)
 
     started_at = time.monotonic()
@@ -221,6 +263,15 @@ def run_engine_review(
 
     _write_review_json(engine_output_dir, repo_path)
 
-    metrics = AgentMetrics(execution_time=execution_time)
-    experiment = ExperimentConfiguration(custom_agent="bc-pr-review-engine")
+    raw_metrics = _read_run_metrics(engine_output_dir)
+    metrics = AgentMetrics(
+        execution_time=execution_time,
+        prompt_tokens=raw_metrics.get("prompt_tokens"),
+        completion_tokens=raw_metrics.get("completion_tokens"),
+    )
+    experiment = ExperimentConfiguration(
+        custom_agent="bc-pr-review-engine",
+        engine_ref=_git_head(engine_scripts_dir),
+        bcquality_sha=bcquality_sha,
+    )
     return metrics, experiment
