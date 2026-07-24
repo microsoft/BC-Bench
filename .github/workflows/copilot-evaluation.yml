@@ -62,6 +62,16 @@ on:
         required: false
         default: ""
         type: string
+      bcquality-ref:
+        description: "Code-review only: BCQuality ref (branch/tag/SHA) to review against. Blank uses the pinned default (microsoft/BCQuality@main)."
+        required: false
+        default: ""
+        type: string
+      bcquality-repo:
+        description: "Code-review only: BCQuality repo as owner/name, for testing a fork. Blank uses microsoft/BCQuality."
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.category }}
@@ -69,14 +79,6 @@ concurrency:
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
-  # Code-review only: set on a branch to run the review through the BC PR-Review engine
-  # arm against this BCQuality ref (branch/tag/SHA). Empty (default) keeps the current
-  # Copilot code-review. The engine reads BCQUALITY_REF directly.
-  BCQUALITY_REF: ""
-  # Engine (microsoft/BC-ALAgents) ref to check out when the engine arm runs.
-  # "latest" is the floating tag that tracks the newest engine release; the exact
-  # commit reviewed is still captured per run via the recorded engine_ref.
-  ENGINE_REF: "latest"
 
 jobs:
   get-entries:
@@ -113,7 +115,7 @@ jobs:
         id: agent-label
         shell: pwsh
         run: |
-          $label = if ('${{ inputs.category }}' -eq 'code-review' -and $env:BCQUALITY_REF) { 'BC PR-Review Engine' } else { 'GitHub Copilot CLI' }
+          $label = if ('${{ inputs.category }}' -eq 'code-review') { 'BC PR-Review Engine' } else { 'GitHub Copilot CLI' }
           "label=$label" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup BC Container and Repository
@@ -145,28 +147,18 @@ jobs:
       - name: Install evaluation CLIs
         uses: ./.github/actions/install-eval-clis
 
-      - name: Checkout PR-Review engine
-        if: ${{ inputs.category == 'code-review' && env.BCQUALITY_REF != '' }}
-        uses: actions/checkout@v5
-        with:
-          repository: microsoft/BC-ALAgents
-          ref: ${{ env.ENGINE_REF }}
-          path: engine
-          token: ${{ secrets.ENGINE_REPO_TOKEN || github.token }}
-
-      - name: Install powershell-yaml for engine arm
-        if: ${{ inputs.category == 'code-review' && env.BCQUALITY_REF != '' }}
-        shell: pwsh
-        run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module powershell-yaml -Scope CurrentUser -Force
-
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          # Code-review only. The engine reads these directly; blank refs use the pinned
+          # defaults (microsoft/BCQuality@main, engine _DEFAULT_ENGINE_REF). A tester sets
+          # bcquality-ref (and bcquality-repo for a fork) at dispatch to review their own.
+          BCQUALITY_REF: ${{ inputs.bcquality-ref }}
+          BCQUALITY_REPO: ${{ inputs.bcquality-repo }}
+          ENGINE_REPO_TOKEN: ${{ secrets.ENGINE_REPO_TOKEN }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -176,8 +168,7 @@ jobs:
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             ${{ inputs.al-mcp && '--al-mcp' || '' }} `
-            ${{ inputs.al-lsp && '--al-lsp' || '' }} `
-            ${{ (inputs.category == 'code-review' && env.BCQUALITY_REF != '') && '--engine-scripts-dir engine/agents/ALReviewAgent/scripts' || '' }}
+            ${{ inputs.al-lsp && '--al-lsp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -213,4 +204,4 @@ jobs:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}", "bcquality-ref": "${{ inputs.bcquality-ref }}", "bcquality-repo": "${{ inputs.bcquality-repo }}"}
