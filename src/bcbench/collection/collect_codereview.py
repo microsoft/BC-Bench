@@ -19,8 +19,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import typer
-
 from bcbench.collection.gh_client import GHClient
 from bcbench.dataset import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata
@@ -37,7 +35,7 @@ _SEVERITY_WORDS = ("critical", "high", "medium", "low", "error", "warning", "sug
 _SEVERITY_WORD_ALIASES = {"major": "high", "minor": "low"}
 
 
-def parse_domain_severity(body: str) -> tuple[str | None, str | None]:
+def parse_domain_severity(body: str) -> tuple[str | None, Severity | None]:
     """Best-effort extraction of (domain, severity) from a review-comment body.
 
     Recognises both the reviewer-bot header (``... Medium Severity - Performance ...``)
@@ -64,21 +62,19 @@ def parse_domain_severity(body: str) -> tuple[str | None, str | None]:
             if match:
                 domain = match.group(1).strip()
 
-    severity: str | None = None
+    severity: Severity | None = None
     words = "|".join(_SEVERITY_WORDS)
     # Prefer an explicit annotation over a bare severity-like word that may appear in
     # prose (e.g. "high" inside "high-impact" in a title). Order: an explicit "(minor)"
     # tag, then the bot "<severity> Severity" header, then a broad first-word fallback.
     sev_match = (
-        re.search(r"\(\s*(" + words + r")\s*\)", body, re.IGNORECASE)
-        or re.search(r"\b(" + words + r")\s+severity\b", body, re.IGNORECASE)
-        or re.search(r"\b(" + words + r")\b", body, re.IGNORECASE)
+        re.search(r"\(\s*(" + words + r")\s*\)", body, re.IGNORECASE) or re.search(r"\b(" + words + r")\s+severity\b", body, re.IGNORECASE) or re.search(r"\b(" + words + r")\b", body, re.IGNORECASE)
     )
     if sev_match:
         word = sev_match.group(1).lower()
         word = _SEVERITY_WORD_ALIASES.get(word, word)
         try:
-            severity = Severity.from_input(word).value
+            severity = Severity.from_input(word)
         except ValueError:
             severity = None
 
@@ -115,7 +111,9 @@ def build_expected_comments(
         if reviewer is not None and ((comment.get("user") or {}).get("login") or "").casefold() != reviewer.casefold():
             continue
         if reacted:
-            contents = {r.get("content") for r in reactions_by_id.get(comment.get("id"), [])}
+            cid = comment.get("id")
+            reactions = reactions_by_id.get(cid, []) if cid is not None else []
+            contents = {r.get("content") for r in reactions}
             if not (contents & POSITIVE_REACTIONS):
                 continue
 
@@ -205,14 +203,12 @@ def collect_codereview_entry(
     except CollectionError:
         raise
     except Exception as exc:
-        logger.exception("Failed to collect code-review entry")
-        raise typer.Exit(code=1) from exc
+        raise CollectionError(f"Failed to collect code-review entry for PR #{pr_number}: {exc}") from exc
 
     try:
         entry.save_to_file(output)
     except OSError as exc:
-        logger.exception("Failed to write dataset entry")
-        raise typer.Exit(code=1) from exc
+        raise CollectionError(f"Failed to write dataset entry to {output}: {exc}") from exc
 
     logger.info("Saved code-review entry %s to %s", entry.instance_id, output)
     return entry

@@ -40,11 +40,7 @@ class TestParseDomainSeverity:
     def test_agent_domain_marker_wins_over_latex_escaped_header(self):
         # Real bot comments escape the header (Severity\ \u2014\ Performance), which the
         # header regex cannot read, but always append an agent_domain marker.
-        body = (
-            "$\\textbf{\U0001f7e1\\ Medium\\ Severity\\ \u2014\\ Performance}$\n"
-            "### CheckJobTaskIsPosting calls JobTask.Get without SetLoadFields.\n"
-            "<!-- agent_domain: performance -->"
-        )
+        body = "$\\textbf{\U0001f7e1\\ Medium\\ Severity\\ \u2014\\ Performance}$\n### CheckJobTaskIsPosting calls JobTask.Get without SetLoadFields.\n<!-- agent_domain: performance -->"
         domain, severity = parse_domain_severity(body)
         assert domain == "performance"
         assert severity == "medium"
@@ -123,11 +119,7 @@ def _gh_double(comments, *, merge_base="a" * 40):
         "createdAt": "2026-01-01T00:00:00Z",
     }
     gh.get_merge_base.return_value = merge_base
-    gh.get_pr_diff.return_value = (
-        "diff --git a/src/Foo.al b/src/Foo.al\n"
-        "new file mode 100644\n--- /dev/null\n+++ b/src/Foo.al\n"
-        "@@ -0,0 +1 @@\n+codeunit 50000 Foo { }\n"
-    )
+    gh.get_pr_diff.return_value = "diff --git a/src/Foo.al b/src/Foo.al\nnew file mode 100644\n--- /dev/null\n+++ b/src/Foo.al\n@@ -0,0 +1 @@\n+codeunit 50000 Foo { }\n"
     gh.get_pr_review_comments.return_value = comments
     gh.get_review_comment_reactions.side_effect = lambda cid: [{"content": "+1"}] if cid == 1 else []
     return gh
