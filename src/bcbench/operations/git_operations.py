@@ -56,7 +56,13 @@ def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
 
 def checkout_commit(repo_path: Path, commit: str) -> None:
     logger.info(f"Checking out commit: {commit}")
-    subprocess.run(["git", "checkout", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    result = subprocess.run(["git", "checkout", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+    if result.returncode != 0:
+        # The commit may not be present locally (e.g. a real PR's base_commit that
+        # isn't in the shared clone). Fetch that SHA directly, then retry.
+        logger.info(f"Commit {commit} not present locally; fetching from origin")
+        subprocess.run(["git", "fetch", "--depth", "1", "origin", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        subprocess.run(["git", "checkout", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     logger.info(f"Commit {commit} checked out")
 
 

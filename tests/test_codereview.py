@@ -29,6 +29,10 @@ class TestSeverity:
         assert Severity.from_input("warning") is Severity.MEDIUM
         assert Severity.from_input("suggestion") is Severity.LOW
         assert Severity.from_input("info") is Severity.LOW
+        # BCQuality do.md severities emitted by the production engine.
+        assert Severity.from_input("blocker") is Severity.CRITICAL
+        assert Severity.from_input("major") is Severity.HIGH
+        assert Severity.from_input("minor") is Severity.LOW
 
     def test_unknown_severity_raises(self):
         with pytest.raises(ValueError, match="Unknown severity"):

@@ -41,6 +41,11 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
     "warning": Severity.MEDIUM,
     "suggestion": Severity.LOW,
     "info": Severity.LOW,
+    # BCQuality skills/do.md emits blocker|major|minor|info; map them so engine
+    # findings score correctly instead of coercing to unspecified severity.
+    "blocker": Severity.CRITICAL,
+    "major": Severity.HIGH,
+    "minor": Severity.LOW,
 }
 
 
