@@ -7,7 +7,14 @@ from typing import cast
 import typer
 from typing_extensions import Annotated
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_engine_review
+from bcbench.agent import (
+    BCalBackendConfig,
+    code_review_uses_engine,
+    run_bcal_agent,
+    run_claude_code,
+    run_copilot_agent,
+    run_engine_review,
+)
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -58,7 +65,7 @@ def evaluate_copilot(
         Path | None,
         typer.Option(
             envvar="ENGINE_SCRIPTS_DIR",
-            help="Code-review only: route through the BC PR-Review engine at this agent/scripts dir instead of Copilot. Set BCQUALITY_REF in env to pin a BCQuality ref.",
+            help="Code-review only: use a local engine agent/scripts dir instead of cloning the pinned release. The engine arm is the default; set BCBENCH_CODE_REVIEW_AGENT=copilot to run plain Copilot. Set BCQUALITY_REF/BCQUALITY_ROOT to vary BCQuality.",
         ),
     ] = None,
 ) -> None:
@@ -67,14 +74,17 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    if engine_scripts_dir and category != EvaluationCategory.CODE_REVIEW:
+    if engine_scripts_dir is not None and category != EvaluationCategory.CODE_REVIEW:
         raise typer.BadParameter("--engine-scripts-dir routes through the PR-Review engine and only supports --category code-review")
 
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
     container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
-    agent_name = "BC PR-Review Engine" if engine_scripts_dir else "GitHub Copilot"
+    # code-review defaults to the pinned PR-Review engine arm (BCBENCH_CODE_REVIEW_AGENT=copilot
+    # opts out); --engine-scripts-dir only overrides the engine's scripts path when it is active.
+    use_engine = category == EvaluationCategory.CODE_REVIEW and code_review_uses_engine()
+    agent_name = "BC PR-Review Engine" if use_engine else "GitHub Copilot"
 
     logger.info(f"Running evaluation on entry {entry_id} with {agent_name}")
 
@@ -88,7 +98,7 @@ def evaluate_copilot(
         category=category,
     )
 
-    if engine_scripts_dir:
+    if use_engine:
         context.category.pipeline.execute(
             context,
             lambda ctx: run_engine_review(

@@ -45,7 +45,9 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
     # findings score correctly instead of coercing to unspecified severity.
     "blocker": Severity.CRITICAL,
     "major": Severity.HIGH,
-    "minor": Severity.LOW,
+    # minor -> Medium matches the production engine's severity floor
+    # (Invoke-CopilotPRReview.ps1 $BCQualitySeverityMap); one table for every arm.
+    "minor": Severity.MEDIUM,
 }
 
 

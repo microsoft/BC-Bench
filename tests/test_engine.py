@@ -1,4 +1,5 @@
 import json
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -7,8 +8,12 @@ from bcbench.agent.engine import (
     _bcquality_repo_url,
     _finding_to_comment,
     _findings_to_review_comments,
+    _map_severity,
+    _prepare_engine,
     _read_run_metrics,
+    _run_local_review,
     _write_review_json,
+    code_review_uses_engine,
     run_engine_review,
 )
 from bcbench.exceptions import AgentError
@@ -119,6 +124,7 @@ class TestRunEngineReview:
             )
 
         with (
+            patch("bcbench.agent.engine._ensure_powershell_yaml"),
             patch("bcbench.agent.engine._prepare_bcquality", return_value=(tmp_path / "bcq", "bcqsha")),
             patch("bcbench.agent.engine._commit_patched_worktree", return_value="base"),
             patch("bcbench.agent.engine._run_local_review", side_effect=fake_run_local_review) as run_mock,
@@ -144,3 +150,75 @@ class TestRunEngineReview:
         assert experiment.engine_ref == "engsha"
         assert experiment.bcquality_sha == "bcqsha"
         assert experiment.is_empty() is False
+
+
+class TestMapSeverity:
+    """Every arm resolves severity through the one shared alias table (bcbench.dataset.codereview)."""
+
+    def test_reuses_shared_alias_table(self):
+        assert [_map_severity(s) for s in ("blocker", "major", "minor", "info")] == ["critical", "high", "medium", "low"]
+
+    def test_canonical_is_idempotent(self):
+        assert _map_severity("Medium") == "medium"
+
+    def test_unknown_passes_through_lowercased(self):
+        assert _map_severity("Weird") == "weird"
+
+
+class TestCodeReviewUsesEngine:
+    def test_defaults_to_engine(self, monkeypatch):
+        monkeypatch.delenv("BCBENCH_CODE_REVIEW_AGENT", raising=False)
+        assert code_review_uses_engine() is True
+
+    def test_copilot_opts_out(self, monkeypatch):
+        monkeypatch.setenv("BCBENCH_CODE_REVIEW_AGENT", "copilot")
+        assert code_review_uses_engine() is False
+
+
+class TestPrepareEngine:
+    def test_defaults_to_pinned_release(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("ENGINE_REF", raising=False)
+        with patch("bcbench.agent.engine._clone_at_ref", return_value="sha") as clone:
+            _, sha = _prepare_engine(tmp_path, None)
+        assert clone.call_args.args[1] == "1.15.4"
+        assert sha == "sha"
+
+    def test_env_ref_overrides_pin(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("ENGINE_REF", "1.14.4")
+        with patch("bcbench.agent.engine._clone_at_ref", return_value="sha") as clone:
+            _prepare_engine(tmp_path, None)
+        assert clone.call_args.args[1] == "1.14.4"
+
+    def test_local_scripts_dir_skips_clone(self, tmp_path):
+        with (
+            patch("bcbench.agent.engine._clone_at_ref") as clone,
+            patch("bcbench.agent.engine._git_head", return_value="localsha"),
+        ):
+            scripts, sha = _prepare_engine(tmp_path, tmp_path / "local-scripts")
+        clone.assert_not_called()
+        assert scripts == tmp_path / "local-scripts"
+        assert sha == "localsha"
+
+
+class TestRunLocalReviewEnv:
+    def test_sanitizes_clone_tokens_and_bridges_gh_token(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("BCQUALITY_REPO_TOKEN", "bcq-secret")
+        monkeypatch.setenv("ENGINE_REPO_TOKEN", "eng-secret")
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "gh-secret")
+        captured: dict = {}
+
+        def fake_run(args, **kwargs):
+            captured["env"] = kwargs["env"]
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+        with (
+            patch("bcbench.agent.engine._pwsh", return_value="pwsh"),
+            patch("bcbench.agent.engine.subprocess.run", side_effect=fake_run),
+        ):
+            _run_local_review(tmp_path / "s.ps1", tmp_path, tmp_path, tmp_path / "out", "base", "claude-haiku-4.5")
+
+        env = captured["env"]
+        assert "BCQUALITY_REPO_TOKEN" not in env
+        assert "ENGINE_REPO_TOKEN" not in env
+        assert env["GH_TOKEN"] == "gh-secret"
