@@ -65,7 +65,15 @@ def parse_domain_severity(body: str) -> tuple[str | None, str | None]:
                 domain = match.group(1).strip()
 
     severity: str | None = None
-    sev_match = re.search(r"\b(" + "|".join(_SEVERITY_WORDS) + r")\b", body, re.IGNORECASE)
+    words = "|".join(_SEVERITY_WORDS)
+    # Prefer an explicit annotation over a bare severity-like word that may appear in
+    # prose (e.g. "high" inside "high-impact" in a title). Order: an explicit "(minor)"
+    # tag, then the bot "<severity> Severity" header, then a broad first-word fallback.
+    sev_match = (
+        re.search(r"\(\s*(" + words + r")\s*\)", body, re.IGNORECASE)
+        or re.search(r"\b(" + words + r")\s+severity\b", body, re.IGNORECASE)
+        or re.search(r"\b(" + words + r")\b", body, re.IGNORECASE)
+    )
     if sev_match:
         word = sev_match.group(1).lower()
         word = _SEVERITY_WORD_ALIASES.get(word, word)
@@ -168,8 +176,18 @@ def collect_codereview_entry(
         if reacted:
             for comment in comments:
                 cid = comment.get("id")
-                if cid is not None:
-                    reactions_by_id[cid] = gh_client.get_review_comment_reactions(cid)
+                if cid is None:
+                    continue
+                # Only spend a reactions API call on comments that can actually become a
+                # finding: skip other reviewers, replies, LEFT-side/unplaceable and empty
+                # bodies (build_expected_comments applies the same filters again).
+                if reviewer is not None and ((comment.get("user") or {}).get("login") or "").casefold() != reviewer.casefold():
+                    continue
+                if _comment_line_span(comment) is None:
+                    continue
+                if not (comment.get("body") or "").strip():
+                    continue
+                reactions_by_id[cid] = gh_client.get_review_comment_reactions(cid)
 
         expected_comments = build_expected_comments(comments, reviewer=reviewer, reacted=reacted, reactions_by_id=reactions_by_id)
         logger.info("Selected %d expected comment(s) from %d PR comment(s)", len(expected_comments), len(comments))

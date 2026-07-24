@@ -73,15 +73,19 @@ def collect_codereview(
     # --reviewer <bot-login> to restrict to the review bot)
     bcbench collect codereview 9315 --reacted --environment-setup-version 27.0
     """
-    entry = collect_codereview_entry(
-        pr_number=pr_number,
-        output=output,
-        environment_setup_version=environment_setup_version,
-        repo=repo,
-        reviewer=reviewer,
-        reacted=reacted,
-        area=area,
-    )
+    try:
+        entry = collect_codereview_entry(
+            pr_number=pr_number,
+            output=output,
+            environment_setup_version=environment_setup_version,
+            repo=repo,
+            reviewer=reviewer,
+            reacted=reacted,
+            area=area,
+        )
+    except CollectionError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     typer.echo(f"Saved {entry.instance_id} with {len(entry.expected_comments)} expected comment(s) to {output}")
 
 

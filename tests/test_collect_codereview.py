@@ -1,9 +1,13 @@
 """Tests for building code-review dataset entries from GitHub PRs."""
 
+from unittest.mock import MagicMock, patch
+
 from bcbench.collection.collect_codereview import (
     build_expected_comments,
+    collect_codereview_entry,
     parse_domain_severity,
 )
+from bcbench.dataset.codereview import CodeReviewEntry
 
 
 class TestParseDomainSeverity:
@@ -27,6 +31,11 @@ class TestParseDomainSeverity:
         domain, severity = parse_domain_severity("please take another look at this")
         assert domain is None
         assert severity is None
+
+    def test_explicit_severity_tag_wins_over_word_in_prose(self):
+        # "high" appears only inside "high-impact"; the explicit tag is (minor).
+        _, severity = parse_domain_severity("high-impact change _(minor)_")
+        assert severity == "low"
 
     def test_agent_domain_marker_wins_over_latex_escaped_header(self):
         # Real bot comments escape the header (Severity\ \u2014\ Performance), which the
@@ -104,3 +113,60 @@ class TestBuildExpectedComments:
         comments = [_comment(1, "src/W1/1.Setup Data/Foo.Codeunit.al")]
         result = build_expected_comments(comments, reviewer=None, reacted=False)
         assert result[0].file == "src/W1/1.Setup Data/Foo.Codeunit.al"
+
+
+def _gh_double(comments, *, merge_base="a" * 40):
+    gh = MagicMock()
+    gh.get_pr_info.return_value = {
+        "baseRefOid": "b" * 40,
+        "headRefOid": "c" * 40,
+        "createdAt": "2026-01-01T00:00:00Z",
+    }
+    gh.get_merge_base.return_value = merge_base
+    gh.get_pr_diff.return_value = (
+        "diff --git a/src/Foo.al b/src/Foo.al\n"
+        "new file mode 100644\n--- /dev/null\n+++ b/src/Foo.al\n"
+        "@@ -0,0 +1 @@\n+codeunit 50000 Foo { }\n"
+    )
+    gh.get_pr_review_comments.return_value = comments
+    gh.get_review_comment_reactions.side_effect = lambda cid: [{"content": "+1"}] if cid == 1 else []
+    return gh
+
+
+class TestCollectCodereviewEntry:
+    def test_orchestration_writes_reloadable_entry(self, tmp_path):
+        out = tmp_path / "codereview.jsonl"
+        gh = _gh_double([_comment(1, "src/Foo.al", login="bot")])
+        with patch("bcbench.collection.collect_codereview.GHClient", return_value=gh):
+            entry = collect_codereview_entry(
+                pr_number=9999,
+                output=out,
+                environment_setup_version="27.0",
+                repo="microsoft/BCApps",
+                reviewer="bot",
+            )
+        gh.get_merge_base.assert_called_once_with("b" * 40, "c" * 40)
+        assert entry.base_commit == "a" * 40
+        reloaded = CodeReviewEntry.load(out)
+        assert len(reloaded) == 1
+        assert reloaded[0].instance_id == "microsoft__BCApps-9999"
+        assert [c.file for c in reloaded[0].expected_comments] == ["src/Foo.al"]
+
+    def test_reacted_fetches_reactions_only_for_candidates(self, tmp_path):
+        out = tmp_path / "codereview.jsonl"
+        comments = [
+            _comment(1, "src/Ok.al"),  # candidate -> reaction fetched
+            _comment(2, "src/Reply.al", reply=99),  # reply -> skipped, no API call
+            _comment(3, "src/Left.al", side="LEFT"),  # left side -> skipped, no API call
+        ]
+        gh = _gh_double(comments)
+        with patch("bcbench.collection.collect_codereview.GHClient", return_value=gh):
+            entry = collect_codereview_entry(
+                pr_number=1,
+                output=out,
+                environment_setup_version="27.0",
+                reacted=True,
+            )
+        fetched = [call.args[0] for call in gh.get_review_comment_reactions.call_args_list]
+        assert fetched == [1]  # only the placeable candidate, not the reply / left-side
+        assert [c.file for c in entry.expected_comments] == ["src/Ok.al"]
