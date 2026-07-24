@@ -74,7 +74,9 @@ env:
   # Copilot code-review. The engine reads BCQUALITY_REF directly.
   BCQUALITY_REF: ""
   # Engine (microsoft/BC-ALAgents) ref to check out when the engine arm runs.
-  ENGINE_REF: "1.15.4"
+  # "latest" is the floating tag that tracks the newest engine release; the exact
+  # commit reviewed is still captured per run via the recorded engine_ref.
+  ENGINE_REF: "latest"
 
 jobs:
   get-entries:
