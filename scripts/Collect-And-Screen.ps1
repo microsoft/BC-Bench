@@ -11,8 +11,17 @@ the working tree. Committing/pushing is left to the caller (e.g. the
 .PARAMETER Repo
 Source GitHub repository (OWNER/REPO). Defaults to microsoft/BCApps.
 
-.PARAMETER SinceDays
-Look at PRs merged within the last N days.
+.PARAMETER MergedSince
+Only consider PRs merged at or after this UTC timestamp (yyyy-MM-ddTHH:mm:ssZ).
+Defaults to the start of the ISO week selected by -WeeksAgo.
+
+.PARAMETER MergedUntil
+Only consider PRs merged at or before this UTC timestamp (yyyy-MM-ddTHH:mm:ssZ).
+Defaults to the end of the ISO week selected by -WeeksAgo.
+
+.PARAMETER WeeksAgo
+Which completed ISO week to collect when -MergedSince/-MergedUntil are omitted.
+1 (default) is the last completed week.
 
 .PARAMETER Limit
 Maximum number of merged PRs to consider.
@@ -24,13 +33,15 @@ Only consider PRs merged into this base branch. Defaults to main.
 Optional path to append a markdown summary to (e.g. $env:GITHUB_STEP_SUMMARY).
 
 .EXAMPLE
-.\scripts\Collect-And-Screen.ps1 -SinceDays 2 -Limit 5
+.\scripts\Collect-And-Screen.ps1 -WeeksAgo 1 -Limit 5
 #>
 
 [CmdletBinding()]
 param(
     [string]$Repo = 'microsoft/BCApps',
-    [int]$SinceDays = 7,
+    [string]$MergedSince,
+    [string]$MergedUntil,
+    [int]$WeeksAgo = 1,
     [int]$Limit = 200,
     [string]$BaseBranch = 'main',
     [string]$SummaryFile,
@@ -41,18 +52,35 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot 'BCBenchUtils.psm1') -Force
 
+$window = Get-IsoWeekWindow -WeeksAgo $WeeksAgo
+$timestampFormat = 'yyyy-MM-ddTHH:mm:ssZ'
+if (-not $MergedSince) { $MergedSince = $window.Start.ToString($timestampFormat) }
+if (-not $MergedUntil) { $MergedUntil = $window.End.ToString($timestampFormat) }
+
+function ConvertTo-UtcDateTime {
+    param([string]$Value)
+    [datetime]::Parse($Value, [cultureinfo]::InvariantCulture,
+        [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal)
+}
+
+$sinceUtc = ConvertTo-UtcDateTime $MergedSince
+$untilUtc = ConvertTo-UtcDateTime $MergedUntil
+if ($untilUtc -le $sinceUtc) { throw "MergedUntil ($MergedUntil) must be after MergedSince ($MergedSince)" }
+
+$isoWeek = Get-IsoWeekWindow -ReferenceDate $sinceUtc -WeeksAgo 0
+$weekLabel = if ($isoWeek.Start -eq $sinceUtc -and $isoWeek.End -eq $untilUtc) { " (ISO week $($isoWeek.Label))" } else { '' }
+
 $latestRelease = Get-LatestReleaseBranch -Repo $Repo
 if (-not $latestRelease) { throw "No releases/* branch found in $Repo" }
 $envVersion = $latestRelease -replace '^releases/', ''
 Write-Log "Latest release branch in $Repo`: $latestRelease (environment_setup_version=$envVersion)" -Level Info
 
-$since = (Get-Date).ToUniversalTime().AddDays(-$SinceDays).ToString('yyyy-MM-dd')
-Write-Log "Searching merged PRs in $Repo (base: $BaseBranch) since $since (limit $Limit)" -Level Info
+Write-Log "Searching merged PRs in $Repo (base: $BaseBranch) merged $MergedSince..$MergedUntil$weekLabel (limit $Limit)" -Level Info
 
 $requiredLabel = 'AL: Apps (W1)'
 $jqFilter = "[.[] | select((.labels | length) == 1 and .labels[0].name == `"$requiredLabel`") | .number]"
 $prsJson = & gh pr list --repo $Repo --state merged --base $BaseBranch --label $requiredLabel `
-    --search "merged:>=$since" --limit $Limit --json 'number,labels' --jq $jqFilter
+    --search "merged:$MergedSince..$MergedUntil" --limit $Limit --json 'number,labels' --jq $jqFilter
 if ($LASTEXITCODE -ne 0) { throw "gh pr list failed" }
 
 [int[]]$prs = ($prsJson | ConvertFrom-Json)
@@ -94,7 +122,7 @@ if ($SummaryFile) {
     $summary += ''
     $summary += "Env: ``$envVersion``"
     $summary += ''
-    $summary += "Window: last $SinceDays day(s) (since $since)"
+    $summary += "Window: $MergedSince .. $MergedUntil$weekLabel"
     $summary += ''
     $summary += "Considered: $($prs.Count)"
     $summary += ''

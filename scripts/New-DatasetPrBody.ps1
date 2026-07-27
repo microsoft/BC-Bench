@@ -14,7 +14,9 @@ param(
     [string]$JobsFile,
     [string]$RunUrl,
     [Parameter(Mandatory)][string]$Repo,
-    [Parameter(Mandatory)][string]$Week
+    [Parameter(Mandatory)][string]$Week,
+    [string]$MergedSince,
+    [string]$MergedUntil
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,8 +49,10 @@ function Format-EntryLine {
 $passed = @($entries | Where-Object { $j = $jobMap[[string]$_.Id]; $j -and $j.conclusion -eq 'success' })
 $failed = @($entries | Where-Object { $j = $jobMap[[string]$_.Id]; -not ($j -and $j.conclusion -eq 'success') })
 
+$mergeWindow = if ($MergedSince -and $MergedUntil) { " (merged $MergedSince .. $MergedUntil)" } else { '' }
+
 $lines = @(
-    "Automated dataset refresh: bug-fix candidates collected from ``$Repo`` for ISO week $Week.",
+    "Automated dataset refresh: bug-fix candidates collected from ``$Repo`` for ISO week $Week$mergeWindow.",
     '',
     '## ✅ Included (passed validation)',
     '',

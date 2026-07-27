@@ -589,4 +589,44 @@ function Get-LatestReleaseBranch {
     return $latest.Name
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
+<#
+.SYNOPSIS
+    Resolves the UTC bounds and label of a completed ISO-8601 week.
+.DESCRIPTION
+    Returns the Monday 00:00:00 UTC start and Sunday 23:59:59 UTC end of the ISO week that
+    is $WeeksAgo weeks before $ReferenceDate, so a weekly job labelled "week N" collects
+    exactly the work merged during week N instead of a trailing window that straddles two
+    weeks. $ReferenceDate is interpreted as UTC.
+.PARAMETER ReferenceDate
+    Date the window is measured back from. Defaults to now (UTC).
+.PARAMETER WeeksAgo
+    How many weeks back to go. 1 (default) is the last completed week.
+.OUTPUTS
+    PSCustomObject with Year, Week, Label ("2026-29"), Start and End (UTC DateTime).
+.EXAMPLE
+    $window = Get-IsoWeekWindow -WeeksAgo 1
+#>
+function Get-IsoWeekWindow {
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [datetime]$ReferenceDate = [datetime]::UtcNow,
+        [int]$WeeksAgo = 1
+    )
+
+    $shifted = $ReferenceDate.Date.AddDays(-7 * $WeeksAgo)
+    $daysSinceMonday = ([int]$shifted.DayOfWeek + 6) % 7
+    $start = [datetime]::SpecifyKind($shifted.AddDays(-$daysSinceMonday), [DateTimeKind]::Utc)
+    $year = [System.Globalization.ISOWeek]::GetYear($start)
+    $week = [System.Globalization.ISOWeek]::GetWeekOfYear($start)
+
+    [pscustomobject]@{
+        Year  = $year
+        Week  = $week
+        Label = '{0}-{1:00}' -f $year, $week
+        Start = $start
+        End   = $start.AddDays(7).AddSeconds(-1)
+    }
+}
+
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch, Get-IsoWeekWindow

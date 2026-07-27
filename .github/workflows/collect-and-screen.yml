@@ -7,10 +7,10 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      since-days:
-        description: "Look at PRs merged within the last N days"
+      weeks-ago:
+        description: "Collect PRs merged during the ISO week N weeks back (1 = last completed week)"
         required: false
-        default: "7"
+        default: "1"
         type: string
       repo:
         description: "Source GitHub repository (OWNER/REPO)"
@@ -53,8 +53,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $week = [System.Globalization.ISOWeek]::GetWeekOfYear((Get-Date).ToUniversalTime()).ToString('00')
-          $branch = "dataset/week-$week"
+          Import-Module ./scripts/BCBenchUtils.psm1 -Force
+
+          # Label the branch/PR with the ISO week the candidates were merged in — the last
+          # completed week — not the week the job happens to run in.
+          $window = Get-IsoWeekWindow -WeeksAgo ${{ inputs.weeks-ago || '1' }}
+          $branch = "dataset/week-$($window.Label)"
+          $mergedSince = $window.Start.ToString('yyyy-MM-ddTHH:mm:ssZ')
+          $mergedUntil = $window.End.ToString('yyyy-MM-ddTHH:mm:ssZ')
+          Write-Host "Collecting PRs merged in ISO week $($window.Label): $mergedSince .. $mergedUntil"
 
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
@@ -62,11 +69,15 @@ jobs:
 
           .\scripts\Collect-And-Screen.ps1 `
             -Repo '${{ inputs.repo || 'microsoft/BCApps' }}' `
-            -SinceDays ${{ inputs.since-days || '7' }} `
+            -MergedSince $mergedSince `
+            -MergedUntil $mergedUntil `
             -Limit ${{ inputs.limit || '50' }} `
             -BaseBranch '${{ inputs.base-branch || 'main' }}' `
             -SummaryFile $env:GITHUB_STEP_SUMMARY `
             -CollectedFile "$PWD/collected.json"
+
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "merged-since=$mergedSince"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "merged-until=$mergedUntil"
 
           if (-not (git status --porcelain)) {
             Write-Host 'No dataset changes; nothing to push.'
@@ -199,7 +210,9 @@ jobs:
             -JobsFile jobs.json `
             -RunUrl '${{ steps.validate.outputs.run-url }}' `
             -Repo $repo `
-            -Week $week | Set-Content -Path pr-body.md -Encoding utf8
+            -Week $week `
+            -MergedSince '${{ steps.run.outputs.merged-since }}' `
+            -MergedUntil '${{ steps.run.outputs.merged-until }}' | Set-Content -Path pr-body.md -Encoding utf8
 
           $title = "Dataset refresh: week $week candidates from $repo"
           $existing = gh pr list --head $branch --state open --json number --jq '.[0].number // empty'
