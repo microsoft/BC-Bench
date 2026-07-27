@@ -36,6 +36,11 @@ on:
         required: false
         default: true
         type: boolean
+      publish-results:
+        description: "Publish results to the shared dashboard (Braintrust/Kusto + leaderboard). Turn off to run a full experiment (e.g. your own BCQuality) without touching the dashboard."
+        required: false
+        default: true
+        type: boolean
       al-mcp:
         description: "Enable AL MCP server"
         required: false
@@ -188,7 +193,7 @@ jobs:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
       agent: ${{ needs.evaluate-with-copilot-cli.outputs.agent-label }}
-      mock: ${{ inputs.test-run }}
+      mock: ${{ inputs.test-run || !inputs.publish-results }}
       category: ${{ inputs.category }}
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
@@ -204,4 +209,4 @@ jobs:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}", "bcquality-ref": "${{ inputs.bcquality-ref }}", "bcquality-repo": "${{ inputs.bcquality-repo }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}", "bcquality-ref": "${{ inputs.bcquality-ref }}", "bcquality-repo": "${{ inputs.bcquality-repo }}", "publish-results": "${{ inputs.publish-results }}"}
