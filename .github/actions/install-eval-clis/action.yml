@@ -5,7 +5,7 @@ runs:
   using: composite
   steps:
     - name: Install Claude Code
-      run: npm install -g @anthropic-ai/claude-code@2.1.160
+      run: npm install -g @anthropic-ai/claude-code@2.1.220
       shell: pwsh
 
     - name: Install GitHub Copilot CLI
