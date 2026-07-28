@@ -93,21 +93,25 @@ agents:
   enabled: false
   name: ALTest
 
-# controls installing agent plugins into the CLI for the run. Each enabled entry is installed via the
-# CLI's `plugin marketplace add` + `plugin install` into a fresh per-entry config home (COPILOT_HOME /
-# CLAUDE_CONFIG_DIR under <repo>/.bcbench/) that the runner also applies to the agent launch.
-# source: "marketplace" (repo + commit, optional `path` = marketplace root within the clone) or
-#         "local" (path under src/bcbench/agent/shared/plugins/, e.g. the bundled bcbench-example).
+# controls loading agent plugins for the run.
+# Each plugin gets its own entry, and is passed to the CLI via `--plugin-dir` (session-scoped).
+#   name:     plugin name; also how it is recorded on the result as "<name>@<revision|local>"
+#   enabled:  per-entry toggle (defaults to false)
+#   source:   "local" (a folder on this machine) or "github" (cloned at runtime)
+#   path:     plugin root - for local an absolute path ; for github relative to the clone ("." for its root, or a subfolder when the repo hosts several plugins)
+#   repo:     github only, "owner/repo"
+#   revision: github only, a commit SHA (pinned) or a fully-spelled ref such as "refs/heads/main"
 plugins:
-  - source: local
+  - name: "bcbench-example"
     enabled: false
-    path: "bcbench-example"
-    plugins: ["bcbench-example-plugin"]
-  - source: marketplace
+    source: local
+    path: "C:/depot/BC-Bench/src/bcbench/agent/shared/plugins/bcbench-example"
+  - name: "superpowers"
     enabled: false
+    source: github
     repo: "obra/superpowers"
-    commit: "d884ae04edebef577e82ff7c4e143debd0bbec99"
-    plugins: ["superpowers"]
+    revision: "d884ae04edebef577e82ff7c4e143debd0bbec99"
+    path: "."
 
 mcp:
   servers:

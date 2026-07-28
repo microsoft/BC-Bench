@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -29,6 +29,7 @@ __all__ = [
     "ExpectedOutput",
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
+    "PluginConfig",
 ]
 
 
@@ -95,7 +96,7 @@ class ExperimentConfiguration(BaseModel):
     # Custom agent name used in experiment (if any)
     custom_agent: str | None = None
 
-    # Plugins installed for this experiment: "<name>@<commit>" (marketplace) or "<name>@local"
+    # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
     def is_empty(self) -> bool:
@@ -105,6 +106,45 @@ class ExperimentConfiguration(BaseModel):
         This is useful for comparing with None (no experiment) vs default experiment.
         """
         return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+
+
+# Where an agent plugin comes from: local, or cloned from GitHub
+type PluginSource = Literal["local", "github"]
+
+
+class PluginConfig(BaseModel):
+    """A single `plugins:` entry in the agent config."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    source: PluginSource
+    path: str
+    enabled: bool = False
+    # github only
+    repo: str | None = None  # "owner/repo"
+    revision: str | None = None  # commit SHA, or a fully-spelled ref such as "refs/heads/main"
+
+    @property
+    def record(self) -> str:
+        """How the plugin is recorded on a result's `ExperimentConfiguration`."""
+        return f"{self.name}@{self.revision or self.source}"
+
+    @model_validator(mode="after")
+    def validate_source_fields(self) -> PluginConfig:
+        github_fields = {"repo": self.repo, "revision": self.revision}
+        match self.source:
+            case "github":
+                missing = [key for key, value in github_fields.items() if not value]
+                if missing:
+                    raise ValueError(f"Plugin '{self.name}': source 'github' requires {missing}")
+            case "local":
+                unexpected = [key for key, value in github_fields.items() if value]
+                if unexpected:
+                    raise ValueError(f"Plugin '{self.name}': source 'local' does not take {unexpected}")
+                if not Path(self.path).expanduser().is_absolute():
+                    raise ValueError(f"Plugin '{self.name}': source 'local' requires an absolute 'path', got {self.path!r}")
+        return self
 
 
 class AgentType(StrEnum):
