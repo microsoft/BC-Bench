@@ -54,6 +54,7 @@ def evaluate_copilot(
     run_id: RunId = "copilot_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
+    skills: Annotated[bool, typer.Option("--skills", help="Enable agent skills for the run")] = False,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -88,6 +89,7 @@ def evaluate_copilot(
             output_dir=ctx.result_dir,
             al_mcp=al_mcp if ctx.container else False,
             al_lsp=al_lsp,
+            skills=skills,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
@@ -109,6 +111,7 @@ def evaluate_claude_code(
     run_id: RunId = "claude_code_test_run",
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
+    skills: Annotated[bool, typer.Option("--skills", help="Enable agent skills for the run")] = False,
 ) -> None:
     """
     Evaluate Claude Code on single dataset entry.
@@ -143,6 +146,7 @@ def evaluate_claude_code(
             output_dir=ctx.result_dir,
             al_mcp=al_mcp if ctx.container else False,
             al_lsp=al_lsp,
+            skills=skills,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )

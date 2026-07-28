@@ -173,3 +173,45 @@ def test_skills_disabled():
 
         assert result is False
         assert not (repo_path / ".github" / "skills").exists()
+
+
+def test_skills_override_enables_when_config_disabled():
+    """--skills (override=True) enables skills even when config.yaml has them disabled."""
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=BaseDatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"skills": {"enabled": False}}
+
+        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=True)
+
+        assert result is True
+        assert (repo_path / ".github" / "skills").exists()
+
+
+def test_skills_override_disables_when_config_enabled():
+    """override=False wins over an enabled config, so no skills are copied."""
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=BaseDatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"skills": {"enabled": True}}
+
+        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=False)
+
+        assert result is False
+        assert not (repo_path / ".github" / "skills").exists()
+
+
+def test_skills_override_none_falls_back_to_config():
+    """override=None (default) preserves the config-driven behavior."""
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=BaseDatasetEntry)
+        entry.repo = "microsoftInternal/NAV"
+        config = {"skills": {"enabled": False}}
+
+        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=None)
+
+        assert result is False
+        assert not (repo_path / ".github" / "skills").exists()

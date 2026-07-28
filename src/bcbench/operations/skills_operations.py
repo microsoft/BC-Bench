@@ -9,14 +9,24 @@ from bcbench.types import AgentType
 logger = get_logger(__name__)
 
 
-def setup_agent_skills(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
+def setup_agent_skills(
+    agent_config: dict,
+    entry: BaseDatasetEntry,
+    repo_path: Path,
+    agent_type: AgentType,
+    skills_enabled_override: bool | None = None,
+) -> bool:
     """
     Setup skills in the repository if available.
+
+    Args:
+        skills_enabled_override: When not None, takes precedence over ``config.yaml``'s
+            ``skills.enabled`` (used to toggle skills per run via the ``--skills`` CLI flag).
 
     Returns:
         True if skills were copied, False if skills are disabled.
     """
-    skills_enabled: bool = agent_config["skills"]["enabled"]
+    skills_enabled: bool = agent_config["skills"]["enabled"] if skills_enabled_override is None else skills_enabled_override
 
     if skills_enabled:
         source_skills: Path = _get_source_instructions_path(entry.repo)
