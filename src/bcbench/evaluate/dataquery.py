@@ -1,6 +1,7 @@
 import contextlib
 import json
 import shutil
+import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -20,29 +21,68 @@ __all__ = ["DataQueryPipeline", "result_sets_match"]
 GENERATED_QUERY_FILE = "query.al"
 
 
+def _strip_gold(dataset_path: Path, original: str) -> None:
+    stripped: list[str] = []
+    for line in original.splitlines():
+        if not line.strip():
+            continue
+        obj = json.loads(line)
+        obj.pop("gold_query", None)
+        stripped.append(json.dumps(obj, ensure_ascii=False))
+    dataset_path.write_text("\n".join(stripped) + "\n", encoding="utf-8")
+
+
+@contextlib.contextmanager
+def _hide_git_object_db(repo_root: Path) -> Iterator[None]:
+    """Move the checkout's ``.git`` out of the agent-reachable tree for the agent phase.
+
+    Stripping only the working-tree dataset is not enough: the agent runs with unrestricted tools in
+    a workspace *inside* the checkout, so it could recover the committed gold answers straight from
+    the object database (``git -C .. show HEAD:dataset/dataquery.jsonl``). Relocate ``.git`` to a
+    sibling of the checkout (same volume -> instant rename) so ``git`` finds no repository during
+    generation, then move it back. Best-effort: if the rename fails (e.g. a held handle) we log and
+    fall back to the working-tree strip alone rather than aborting the evaluation. Data-query never
+    needs the checkout's git during the agent phase (the agent writes to a separate testbed, and
+    scoring is file-based), so hiding it here is safe.
+    """
+    git_dir = repo_root / ".git"
+    if not git_dir.is_dir():
+        yield
+        return
+    hideaway = repo_root.parent / f".bcbench-withheld-git-{uuid.uuid4().hex}"
+    try:
+        git_dir.rename(hideaway)
+    except OSError as exc:
+        logger.warning("Could not relocate .git to withhold gold history (%s); working-tree strip only", exc)
+        yield
+        return
+    try:
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            hideaway.rename(git_dir)
+
+
 @contextlib.contextmanager
 def _withhold_gold_from_agent(dataset_path: Path) -> Iterator[None]:
-    """Strip ``gold_query`` from the on-disk dataset while the agent generates its answer.
+    """Withhold the reference answers from the agent while it generates its query.
 
     The agent runs with unrestricted filesystem tools in a workspace under the checkout, so it could
-    otherwise read the reference answers straight out of ``dataset/dataquery.jsonl`` and copy them,
-    invalidating the benchmark. The harness already loads this entry (with its gold) into memory
-    before the agent starts, so scoring is unaffected. The original file is restored on exit.
+    otherwise read the gold answers — from the working-tree ``dataset/dataquery.jsonl`` *or* from the
+    committed blob via the ``.git`` object database — and copy them, invalidating the benchmark. Strip
+    gold from the working tree and hide ``.git`` for the duration of the agent phase; both are restored
+    on exit (including on exception). The harness already loaded this entry (with its gold) into memory
+    before the agent starts, so scoring is unaffected.
     """
     if not dataset_path.exists():
         yield
         return
     original = dataset_path.read_text(encoding="utf-8")
+    repo_root = dataset_path.parent.parent
     try:
-        stripped: list[str] = []
-        for line in original.splitlines():
-            if not line.strip():
-                continue
-            obj = json.loads(line)
-            obj.pop("gold_query", None)
-            stripped.append(json.dumps(obj, ensure_ascii=False))
-        dataset_path.write_text("\n".join(stripped) + "\n", encoding="utf-8")
-        yield
+        _strip_gold(dataset_path, original)
+        with _hide_git_object_db(repo_root):
+            yield
     finally:
         dataset_path.write_text(original, encoding="utf-8")
 

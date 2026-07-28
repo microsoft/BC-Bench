@@ -156,7 +156,9 @@ class TestWithholdGoldFromAgent:
     def _write_dataset(self, tmp_path):
         import json
 
-        path = tmp_path / "dataquery.jsonl"
+        dataset_dir = tmp_path / "dataset"
+        dataset_dir.mkdir()
+        path = dataset_dir / "dataquery.jsonl"
         entries = [
             {"instance_id": "q1", "nl_prompt": "count customers", "gold_query": "query 50100 A { }"},
             {"instance_id": "q2", "nl_prompt": "sum sales", "gold_query": "query 50101 B { }"},
@@ -182,14 +184,34 @@ class TestWithholdGoldFromAgent:
         # Restored verbatim once the agent phase completes.
         assert path.read_text(encoding="utf-8") == original
 
+    def test_git_object_db_hidden_during_and_restored_after(self, tmp_path):
+        from bcbench.evaluate.dataquery import _withhold_gold_from_agent
+
+        path = self._write_dataset(tmp_path)
+        git_dir = path.parent.parent / ".git"  # <repo>/.git
+        git_dir.mkdir()
+        (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+        with _withhold_gold_from_agent(path):
+            # The committed gold must not be recoverable via `git show HEAD:...`: no reachable .git.
+            assert not git_dir.exists()
+
+        # The object database is restored intact once the agent phase completes.
+        assert git_dir.is_dir()
+        assert (git_dir / "HEAD").read_text(encoding="utf-8") == "ref: refs/heads/main\n"
+
     def test_gold_restored_on_exception(self, tmp_path):
         from bcbench.evaluate.dataquery import _withhold_gold_from_agent
 
         path = self._write_dataset(tmp_path)
         original = path.read_text(encoding="utf-8")
 
-        with pytest.raises(RuntimeError), _withhold_gold_from_agent(path):
-            raise RuntimeError("agent crashed")
+        def crash():
+            with _withhold_gold_from_agent(path):
+                raise RuntimeError("agent crashed")
+
+        with pytest.raises(RuntimeError):
+            crash()
 
         assert path.read_text(encoding="utf-8") == original
 
