@@ -57,14 +57,26 @@ def clean_project_paths(repo_path: Path, project_paths: list[str]) -> None:
 
 def checkout_commit(repo_path: Path, commit: str) -> None:
     logger.info(f"Checking out commit: {commit}")
-    result = subprocess.run(["git", "checkout", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
-    if result.returncode != 0:
-        # The commit may not be present locally (e.g. a real PR's base_commit that
-        # isn't in the shared clone). Fetch that SHA directly, then retry.
-        logger.info(f"Commit {commit} not present locally; fetching from origin")
-        subprocess.run(["git", "fetch", "--depth", "1", "origin", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
-        subprocess.run(["git", "checkout", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    subprocess.run(["git", "checkout", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
     logger.info(f"Commit {commit} checked out")
+
+
+def _commit_present(repo_path: Path, commit: str) -> bool:
+    result = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    return result.returncode == 0
+
+
+def fetch_commit_if_missing(repo_path: Path, commit: str) -> None:
+    """Fetch `commit` from origin when it is not already present in `repo_path`.
+
+    Needed in local dev, might lack base commits that were squashed away on merge. No-op in CI, where the testbed is cloned at the exact commit already.
+    """
+    if _commit_present(repo_path, commit):
+        return
+
+    logger.info(f"Commit {commit} not present locally; fetching from origin")
+    subprocess.run(["git", "fetch", "origin", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    logger.info(f"Commit {commit} fetched")
 
 
 def commit_changes(repo_path: Path, message: str) -> None:

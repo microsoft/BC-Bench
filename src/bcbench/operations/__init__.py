@@ -16,6 +16,7 @@ from bcbench.operations.git_operations import (
     clean_repo,
     clone_repo_at_revision,
     commit_changes,
+    fetch_commit_if_missing,
     stage_and_get_diff,
 )
 from bcbench.operations.hooks_operations import setup_hooks
@@ -40,6 +41,7 @@ __all__ = [
     "copy_problem_statement_folder",
     "copy_symbol_apps",
     "extract_tests_from_patch",
+    "fetch_commit_if_missing",
     "resolve_artifact_version_root",
     "run_tests",
     "set_runtime_version",
