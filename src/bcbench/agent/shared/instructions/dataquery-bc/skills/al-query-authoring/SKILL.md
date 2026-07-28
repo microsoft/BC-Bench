@@ -38,8 +38,8 @@ query 50100 TopCustomersBySales
 - **Join** by nesting a `dataitem` and linking it: `DataItemLink = "<child field>" = Parent."<field>";`.
 - **Filter** rows with `DataItemTableFilter = "<field>" = const(<value>);` (e.g. an Option
   like `Document Type`) or a range/expression.
-- **Order** with `OrderBy { descending(<column>); }` when the question asks for ranking or
-  "top N" (combine with `TopNumberOfRows` where appropriate).
+- **Order** with the `OrderBy` property: `OrderBy = descending(<column>);` (or `ascending`) when
+  the question asks for ranking or "top N" (combine with `TopNumberOfRows` where appropriate).
 - **Quote** any field or table name that contains spaces or special characters: `"No."`,
   `"Sales Line"`, `"Amount (LCY)"`.
 - Prefer stored fields; FlowFields and Option fields are supported.

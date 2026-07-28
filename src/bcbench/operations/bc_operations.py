@@ -287,15 +287,22 @@ def wrap_query_as_api(query_text: str, object_id: int) -> str:
     import re
 
     safe_name = _safe_object_name(object_id)
-    text = re.sub(
+    # AL keywords are case-insensitive; match `query`/`QueryType` in any casing.
+    text, replaced = re.subn(
         r'(\bquery\s+)\d+\s+("(?:[^"\\]|\\.)*"|\w+)',
         rf"\g<1>{object_id} {safe_name}",
         query_text,
         count=1,
+        flags=re.IGNORECASE,
     )
-    text = re.sub(r"\n\s*QueryType\s*=\s*\w+\s*;", "", text, count=1)
+    if replaced == 0:
+        raise BuildError("query-wrap", f"No AL query object declaration found in generated output:\n{query_text}")
 
-    brace_index = text.index("{")
+    text = re.sub(r"\bQueryType\s*=\s*\w+\s*;", "", text, count=1, flags=re.IGNORECASE)
+
+    brace_index = text.find("{")
+    if brace_index == -1:
+        raise BuildError("query-wrap", f"Generated query has no object body ('{{' not found):\n{query_text}")
     return f"{text[: brace_index + 1]}\n    {_query_api_properties(object_id)}\n{text[brace_index + 1 :]}"
 
 
@@ -308,25 +315,44 @@ $$ErrorActionPreference = 'Stop'
 $$password = ConvertTo-SecureString '$password' -AsPlainText -Force
 $$credential = New-Object System.Management.Automation.PSCredential('$username', $$password)
 
+# Remove any app left installed by a previous run of the same suffix so re-running against the
+# same container doesn't fail with an object-ID conflict on the fixed 50100/50101 range.
+UnInstall-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -force -doNotSaveData -ErrorAction SilentlyContinue
+UnPublish-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -ErrorAction SilentlyContinue
+
 # Compile + publish the wrapped API query with the same proven helper the other categories use
 # (clears/sets an explicit .alpackages symbol folder, GenerateReportLayout=No, ForceSync,
 # dependencyPublishingOption=ignore) so Base Application symbols resolve reliably.
 Invoke-AppBuildAndPublish -containerName '$container_name' -appProjectFolder '$app_dir' -credential $$credential -skipVerification -useDevEndpoint
 
-# Read the query's rows over the OData/API endpoint from *inside* the container, so we don't depend
-# on host->container name resolution or published ports (the runner does not update its hosts file).
-# Basic auth header is built by hand rather than via -Credential: PowerShell 7 (used inside the
-# container) refuses -Credential over plain HTTP, and a manual header works on both 5.1 and 7.
-$$json = Invoke-ScriptInBcContainer -containerName '$container_name' -argumentList $$credential, '$publisher', '$group', '$version', '$entity_set' -scriptblock {
-    param($$cred, $$pub, $$grp, $$ver, $$eset)
-    $$pair = "$$($$cred.UserName):$$($$cred.GetNetworkCredential().Password)"
-    $$headers = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($$pair)) }
-    $$base = 'http://localhost:7048/BC/api'
-    $$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Headers $$headers).value[0].id
-    $$data = Invoke-RestMethod -Uri "$$base/$$pub/$$grp/$$ver/companies($$companyId)/$$eset" -Headers $$headers
-    $$data.value | ConvertTo-Json -Depth 10 -Compress
+try {
+    # Read the query's rows over the OData/API endpoint from *inside* the container, so we don't depend
+    # on host->container name resolution or published ports (the runner does not update its hosts file).
+    # Basic auth header is built by hand rather than via -Credential: PowerShell 7 (used inside the
+    # container) refuses -Credential over plain HTTP, and a manual header works on both 5.1 and 7.
+    $$json = Invoke-ScriptInBcContainer -containerName '$container_name' -argumentList $$credential, '$publisher', '$group', '$version', '$entity_set' -scriptblock {
+        param($$cred, $$pub, $$grp, $$ver, $$eset)
+        $$pair = "$$($$cred.UserName):$$($$cred.GetNetworkCredential().Password)"
+        $$headers = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($$pair)) }
+        $$base = 'http://localhost:7048/BC/api'
+        $$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Headers $$headers).value[0].id
+        # Follow @odata.nextLink so large result sets aren't silently truncated to the first page.
+        $$rows = [System.Collections.Generic.List[object]]::new()
+        $$uri = "$$base/$$pub/$$grp/$$ver/companies($$companyId)/$$eset"
+        while ($$uri) {
+            $$page = Invoke-RestMethod -Uri $$uri -Headers $$headers
+            if ($$null -ne $$page.value) { foreach ($$row in $$page.value) { $$rows.Add($$row) } }
+            $$uri = $$page.'@odata.nextLink'
+        }
+        $$rows | ConvertTo-Json -Depth 10 -Compress
+    }
+    $$json | Out-File -FilePath '$result_file' -Encoding utf8
 }
-$$json | Out-File -FilePath '$result_file' -Encoding utf8
+finally {
+    # Best-effort teardown so the container doesn't accumulate throwaway apps between runs.
+    UnInstall-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -force -doNotSaveData -ErrorAction SilentlyContinue
+    UnPublish-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -ErrorAction SilentlyContinue
+}
 """.strip()
 )
 
@@ -373,6 +399,8 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
         username=_escape_ps_string(container.username),
         password=_escape_ps_string(container.password),
         app_dir=_escape_ps_string(str(app_dir)),
+        app_name=_escape_ps_string(app_manifest["name"]),
+        app_publisher=_escape_ps_string(app_manifest["publisher"]),
         publisher=_QUERY_API_PUBLISHER,
         group=_QUERY_API_GROUP,
         version=_QUERY_API_VERSION,

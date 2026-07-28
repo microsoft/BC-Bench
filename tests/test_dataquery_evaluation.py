@@ -1,4 +1,7 @@
+import pytest
+
 from bcbench.evaluate.dataquery import result_sets_match
+from bcbench.exceptions import BuildError
 from bcbench.operations import bc_operations, wrap_query_as_api
 
 
@@ -33,6 +36,17 @@ class TestResultSetsMatch:
 
     def test_different_row_count_mismatch(self):
         assert not result_sets_match([{"No": "C1"}], [{"No": "C1"}, {"No": "C2"}])
+
+    def test_close_but_distinct_values_do_not_match(self):
+        # Guards against numeric rounding collapsing distinct values into a false positive.
+        assert not result_sets_match([{"Total": "1.00001"}], [{"Total": "1.00002"}])
+
+    def test_high_precision_preserved(self):
+        assert result_sets_match([{"Total": "1.000000001"}], [{"Total": "1.000000001"}])
+        assert not result_sets_match([{"Total": "1.000000001"}], [{"Total": "1.000000002"}])
+
+    def test_scale_insensitive(self):
+        assert result_sets_match([{"Total": "500"}], [{"Total": "500.00"}])
 
 
 class TestWrapQueryAsApi:
@@ -73,6 +87,26 @@ class TestWrapQueryAsApi:
         assert "dataitem(Customer; Customer)" in wrapped
         assert 'column(No; "No.")' in wrapped
 
+    def test_uppercase_query_keyword_reassigned(self):
+        wrapped = wrap_query_as_api('Query 50123 "My Q"\n{\n    elements { }\n}', 50100)
+        assert "50100 BCBenchQuery50100" in wrapped
+        assert "50123" not in wrapped
+
+    def test_compact_and_cased_querytype_removed(self):
+        # QueryType on the same line as the brace (no leading newline) and in any casing must still
+        # be stripped, else the injected QueryType = API duplicates the property.
+        wrapped = wrap_query_as_api("query 50100 Q\n{ querytype = Normal; elements { } }", 50100)
+        assert wrapped.count("QueryType") == 1
+        assert "QueryType = API;" in wrapped
+
+    def test_missing_brace_raises_builderror(self):
+        with pytest.raises(BuildError):
+            wrap_query_as_api("query 50100 MyQuery no body here", 50100)
+
+    def test_no_query_declaration_raises_builderror(self):
+        with pytest.raises(BuildError):
+            wrap_query_as_api("codeunit 50100 NotAQuery { }", 50100)
+
 
 class TestQueryRunTemplate:
     def _render(self):
@@ -82,6 +116,8 @@ class TestQueryRunTemplate:
             username="u",
             password="p",
             app_dir="d",
+            app_name="BC-Bench Query generated",
+            app_publisher="BC-Bench",
             publisher=bc_operations._QUERY_API_PUBLISHER,
             group=bc_operations._QUERY_API_GROUP,
             version=bc_operations._QUERY_API_VERSION,
@@ -104,3 +140,13 @@ class TestQueryRunTemplate:
         assert "-Credential" not in script.split("Invoke-ScriptInBcContainer", 1)[1]
         assert "Authorization" in script
         assert "Basic " in script
+
+    def test_follows_odata_nextlink(self):
+        # Result sets larger than one OData page must not be silently truncated.
+        assert "@odata.nextLink" in self._render()
+
+    def test_uninstalls_throwaway_app(self):
+        # Re-running against the same container must not fail with an object-ID conflict.
+        script = self._render()
+        assert "UnPublish-BcContainerApp" in script
+        assert "UnInstall-BcContainerApp" in script

@@ -98,6 +98,9 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
 
     resolved: bool = False
     build: bool = False
+    # False marks a harness/dataset failure (e.g. the gold query didn't compile) that must be
+    # excluded from the resolution rate so it is not counted against the agent.
+    scorable: bool = True
 
     @classmethod
     def create_success(cls, context: "EvaluationContext", output: str) -> Self:
@@ -108,6 +111,11 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
         return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
 
     @classmethod
+    def create_unscorable(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
+        """A harness/dataset failure (not the agent's fault) that must not count toward the resolution rate."""
+        return cls(**cls._base_fields(context), output=output, build=True, resolved=False, scorable=False, error_message=error_message)
+
+    @classmethod
     def create_result(cls, context: "EvaluationContext", output: str, *, build: bool, resolved: bool, error_message: str | None = None) -> Self:
         """General factory for execution outcomes, e.g. compiled+ran but produced the wrong result (build=True, resolved=False)."""
         return cls(**cls._base_fields(context), output=output, build=build, resolved=resolved, error_message=error_message)
@@ -116,6 +124,8 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     def status_label(self) -> str:
         if self.timeout:
             return "Timeout"
+        if not self.scorable:
+            return "Error"
         return "Success" if self.resolved else "Failed"
 
     @property

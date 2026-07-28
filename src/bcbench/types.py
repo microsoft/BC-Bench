@@ -293,12 +293,7 @@ class EvaluationCategory(StrEnum):
     def requires_container(self) -> bool:
         """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
         match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
-                return True
-            case EvaluationCategory.DATA_QUERY:
-                # Data-query provisions its own container: it publishes the data-query seed app
-                # (al/dataquery-seed) and enables a Data-Query-Tools MCP config, then the agent
-                # queries that container's /mcp against the seeded, deterministic dataset.
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return True
             case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL:
                 return False
@@ -312,16 +307,12 @@ class EvaluationCategory(StrEnum):
         Only categories that require building BaseApp needs self-hosted runners.
         """
         match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return "GitHub-BCBench"
             case EvaluationCategory.CODE_REVIEW:
                 return "ubuntu-latest"
             case EvaluationCategory.NL2AL:
                 return "windows-latest"
-            case EvaluationCategory.DATA_QUERY:
-                # The agent queries a live BC /mcp endpoint; the self-hosted runner is where a
-                # BcContainerHelper BC container (Data Query Tools enabled) is reachable.
-                return "GitHub-BCBench"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

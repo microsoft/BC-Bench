@@ -1,10 +1,11 @@
 import shutil
 from collections.abc import Callable, Mapping, Sequence
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.exceptions import BuildError
+from bcbench.exceptions import BuildError, BuildTimeoutExpired
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.results.base import ExecutionBasedEvaluationResult
@@ -22,12 +23,12 @@ def _normalize_value(value: object) -> str:
         return ""
     if isinstance(value, bool):
         return str(value).lower()
-    if isinstance(value, (int, float)):
-        return f"{float(value):.4f}"
     text = str(value).strip()
     try:
-        return f"{float(text):.4f}"
-    except ValueError:
+        # Canonical decimal form: scale/trailing-zero-insensitive (500 == 500.0) but full precision
+        # preserved, so distinct values like 1.00001 and 1.00002 are NOT collapsed. No float rounding.
+        return str(Decimal(text).normalize())
+    except (InvalidOperation, ValueError):
         return text
 
 
@@ -100,22 +101,20 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
 
         try:
             generated_rows = execute_al_query(generated_query, container, version, context.repo_path, "generated")
-        except BuildError as e:
+        except (BuildError, BuildTimeoutExpired) as e:
             logger.exception(f"Generated query failed to compile/run for {context.entry.instance_id}")
             self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=str(e)))
             return
 
-        # The gold query is authored to compile; a failure here is an environment/dataset problem,
-        # not the agent's — record it without crashing the job (build succeeded, but we can't score).
+        # The gold query is authored to compile; a failure here is a harness/dataset problem, not the
+        # agent's. Record it as unscorable so it is not counted against the agent's resolution rate.
         try:
             gold_rows = execute_al_query(context.entry.gold_query, container, version, context.repo_path, "gold")
-        except BuildError as e:
+        except (BuildError, BuildTimeoutExpired) as e:
             logger.exception(f"Gold query failed to compile/run for {context.entry.instance_id}")
             self.save_result(
                 context,
-                ExecutionBasedEvaluationResult.create_result(
-                    context, output=generated_query, build=True, resolved=False, error_message=f"Gold query failed (harness/dataset issue, not the agent): {e}"
-                ),
+                ExecutionBasedEvaluationResult.create_unscorable(context, output=generated_query, error_message=f"Gold query failed (harness/dataset issue, not the agent): {e}"),
             )
             return
 
