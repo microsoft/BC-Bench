@@ -34,7 +34,9 @@ query 50100 TopCustomersBySales
 ## Rules of thumb
 
 - **Aggregate** a column with a method: `column(Total; "Amount (LCY)") { Method = Sum; }`
-  (also `Average`, `Count`, `Min`, `Max`). Non-aggregated columns become the GROUP BY.
+  (also `Average`, `Min`, `Max`) — these take the field to aggregate. **`Count` takes no source
+  field** — write `column(RowCount) { Method = Count; }`, not `column(RowCount; "No.") { ... }`.
+  Non-aggregated columns become the GROUP BY.
 - **Join** by nesting a `dataitem` and linking it: `DataItemLink = "<child field>" = Parent."<field>";`.
 - **Filter** rows with `DataItemTableFilter = "<field>" = const(<value>);` (e.g. an Option
   like `Document Type`) or a range/expression.
