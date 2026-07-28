@@ -117,6 +117,7 @@ plugins:
     source: github
     repo: "microsoft/BCQuality"
     revision: "ad8ccde5953fd6ce072e3b59049406783066ed60"
+    path: "."
 
 mcp:
   servers:
