@@ -92,13 +92,19 @@ def _normalize_value(value: object) -> str:
         return ""
     if isinstance(value, bool):
         return str(value).lower()
-    text = str(value).strip()
-    try:
-        # Canonical decimal form: scale/trailing-zero-insensitive (500 == 500.0) but full precision
-        # preserved, so distinct values like 1.00001 and 1.00002 are NOT collapsed. No float rounding.
-        return str(Decimal(text).normalize())
-    except (InvalidOperation, ValueError):
-        return text
+    if isinstance(value, (int, float, Decimal)):
+        # Only values that arrived as numeric JSON types are canonicalized: scale/trailing-zero-
+        # insensitive (500 == 500.0) with full precision preserved (1.00001 != 1.00002) and no float
+        # rounding (Decimal built from the value's string form). Both gold and generated rows come
+        # through the same OData->JSON pipeline, so amounts are numbers on both sides.
+        try:
+            return str(Decimal(str(value)).normalize())
+        except (InvalidOperation, ValueError):
+            return str(value)
+    # Strings (and anything else) are preserved verbatim apart from a whitespace trim. Business Central
+    # Code/No. fields are JSON strings even when digit-only, so "001" must NOT collapse to "1" — coercing
+    # them through Decimal would let a wrong result be scored as matching the gold.
+    return str(value).strip()
 
 
 def _normalize_rows(rows: Sequence[Mapping[str, object]], ordered: bool) -> list[tuple[str, ...]]:

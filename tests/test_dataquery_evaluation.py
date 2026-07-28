@@ -21,7 +21,8 @@ class TestResultSetsMatch:
         assert not result_sets_match(generated, gold, ordered=True)
 
     def test_numeric_normalization(self):
-        assert result_sets_match([{"Total": 500}], [{"Total": "500.0"}])
+        # Amounts arrive as numeric JSON types on both sides; scale differences must not matter.
+        assert result_sets_match([{"Total": 500}], [{"Total": 500.0}])
 
     def test_column_names_ignored(self):
         assert result_sets_match([{"ItemNo": "I1", "Qty": 5}], [{"No": "I1", "Total": 5}])
@@ -39,14 +40,27 @@ class TestResultSetsMatch:
 
     def test_close_but_distinct_values_do_not_match(self):
         # Guards against numeric rounding collapsing distinct values into a false positive.
-        assert not result_sets_match([{"Total": "1.00001"}], [{"Total": "1.00002"}])
+        assert not result_sets_match([{"Total": 1.00001}], [{"Total": 1.00002}])
 
     def test_high_precision_preserved(self):
-        assert result_sets_match([{"Total": "1.000000001"}], [{"Total": "1.000000001"}])
-        assert not result_sets_match([{"Total": "1.000000001"}], [{"Total": "1.000000002"}])
+        assert result_sets_match([{"Total": 1.000000001}], [{"Total": 1.000000001}])
+        assert not result_sets_match([{"Total": 1.000000001}], [{"Total": 1.000000002}])
 
     def test_scale_insensitive(self):
-        assert result_sets_match([{"Total": "500"}], [{"Total": "500.00"}])
+        assert result_sets_match([{"Total": 500}], [{"Total": 500.00}])
+
+    def test_digit_only_code_strings_not_collapsed(self):
+        # BC Code/No. fields are JSON strings even when digit-only: "001" and "1" are DISTINCT records
+        # and must never be scored as matching just because they are numerically equal.
+        assert not result_sets_match([{"No": "001"}], [{"No": "1"}])
+        assert not result_sets_match([{"No": "0010"}], [{"No": "10"}])
+
+    def test_identical_code_strings_match(self):
+        assert result_sets_match([{"No": "001", "Name": "Acme"}], [{"No": "001", "Name": "Acme"}])
+
+    def test_numeric_string_not_coerced_to_number(self):
+        # A code that happens to look like a scaled number must not match the numeric value 1.
+        assert not result_sets_match([{"Key": "1.0"}], [{"Key": 1}])
 
 
 class TestWrapQueryAsApi:
