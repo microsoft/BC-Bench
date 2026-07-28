@@ -23,6 +23,7 @@ __all__ = [
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
+    "CommitSha",
     "ContainerConfig",
     "EvaluationCategory",
     "EvaluationContext",
@@ -48,6 +49,9 @@ class Checklist(TypedDict):
 # Patch-style string for execution-based categories (bug-fix, test-generation),
 # or an lm_checklist payload for scorer-driven categories.
 type ExpectedOutput = str | Checklist
+
+# A full git commit SHA: branches and tags move, so only a SHA pins content reproducibly
+type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 
 class AgentMetrics(BaseModel):
@@ -110,8 +114,6 @@ class ExperimentConfiguration(BaseModel):
 
 # Where an agent plugin comes from: local, or cloned from GitHub
 type PluginSource = Literal["local", "github"]
-
-type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 
 class PluginConfig(BaseModel):
