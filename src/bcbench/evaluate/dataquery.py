@@ -1,5 +1,7 @@
+import contextlib
+import json
 import shutil
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -16,6 +18,33 @@ logger = get_logger(__name__)
 __all__ = ["DataQueryPipeline", "result_sets_match"]
 
 GENERATED_QUERY_FILE = "query.al"
+
+
+@contextlib.contextmanager
+def _withhold_gold_from_agent(dataset_path: Path) -> Iterator[None]:
+    """Strip ``gold_query`` from the on-disk dataset while the agent generates its answer.
+
+    The agent runs with unrestricted filesystem tools in a workspace under the checkout, so it could
+    otherwise read the reference answers straight out of ``dataset/dataquery.jsonl`` and copy them,
+    invalidating the benchmark. The harness already loads this entry (with its gold) into memory
+    before the agent starts, so scoring is unaffected. The original file is restored on exit.
+    """
+    if not dataset_path.exists():
+        yield
+        return
+    original = dataset_path.read_text(encoding="utf-8")
+    try:
+        stripped: list[str] = []
+        for line in original.splitlines():
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            obj.pop("gold_query", None)
+            stripped.append(json.dumps(obj, ensure_ascii=False))
+        dataset_path.write_text("\n".join(stripped) + "\n", encoding="utf-8")
+        yield
+    finally:
+        dataset_path.write_text(original, encoding="utf-8")
 
 
 def _normalize_value(value: object) -> str:
@@ -82,7 +111,13 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext[DataQueryEntry], agent_runner: Callable) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
+        # The agent runs with unrestricted filesystem tools in a workspace under the checkout, so it could
+        # otherwise read the reference answers from the dataset. Withhold the gold queries from disk during
+        # generation; the harness already holds this entry's gold in memory for scoring.
+        with (
+            github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"),
+            _withhold_gold_from_agent(context.category.dataset_path),
+        ):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[DataQueryEntry]) -> None:

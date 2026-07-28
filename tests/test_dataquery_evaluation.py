@@ -150,3 +150,53 @@ class TestQueryRunTemplate:
         script = self._render()
         assert "UnPublish-BcContainerApp" in script
         assert "UnInstall-BcContainerApp" in script
+
+
+class TestWithholdGoldFromAgent:
+    def _write_dataset(self, tmp_path):
+        import json
+
+        path = tmp_path / "dataquery.jsonl"
+        entries = [
+            {"instance_id": "q1", "nl_prompt": "count customers", "gold_query": "query 50100 A { }"},
+            {"instance_id": "q2", "nl_prompt": "sum sales", "gold_query": "query 50101 B { }"},
+        ]
+        path.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+        return path
+
+    def test_gold_hidden_during_and_restored_after(self, tmp_path):
+        import json
+
+        from bcbench.evaluate.dataquery import _withhold_gold_from_agent
+
+        path = self._write_dataset(tmp_path)
+        original = path.read_text(encoding="utf-8")
+
+        with _withhold_gold_from_agent(path):
+            during = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            # Gold is gone from disk while the agent runs, but the prompt/id the agent needs remain.
+            assert all("gold_query" not in e for e in during)
+            assert [e["instance_id"] for e in during] == ["q1", "q2"]
+            assert [e["nl_prompt"] for e in during] == ["count customers", "sum sales"]
+
+        # Restored verbatim once the agent phase completes.
+        assert path.read_text(encoding="utf-8") == original
+
+    def test_gold_restored_on_exception(self, tmp_path):
+        from bcbench.evaluate.dataquery import _withhold_gold_from_agent
+
+        path = self._write_dataset(tmp_path)
+        original = path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError), _withhold_gold_from_agent(path):
+            raise RuntimeError("agent crashed")
+
+        assert path.read_text(encoding="utf-8") == original
+
+    def test_missing_dataset_is_noop(self, tmp_path):
+        from bcbench.evaluate.dataquery import _withhold_gold_from_agent
+
+        missing = tmp_path / "does-not-exist.jsonl"
+        with _withhold_gold_from_agent(missing):
+            pass
+        assert not missing.exists()
