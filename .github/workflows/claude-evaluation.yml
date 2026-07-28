@@ -128,6 +128,7 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
           COPILOT_GITHUB_TOKEN: ${{ github.token }}  # used by the code-review semantic judge
+          GH_TOKEN: ${{ github.token }}
         run: |
           Write-Output "::add-mask::$env:CLAUDE_CODE_OAUTH_TOKEN"
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
