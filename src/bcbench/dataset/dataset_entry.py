@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
-from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput
+from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
 
 _config = get_config()
 
@@ -39,7 +39,7 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    repo: str = Field(default="microsoft/BCApps", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
+    repo: RepoSlug = "microsoft/BCApps"
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
     base_commit: CommitSha
     created_at: Annotated[str, Field(min_length=1)]

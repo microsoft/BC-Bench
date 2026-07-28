@@ -78,6 +78,11 @@ class TestPluginConfigValidation:
         with pytest.raises(ValueError, match="String should match pattern"):
             PluginConfig(**_github_entry(revision=revision))
 
+    @pytest.mark.parametrize("repo", ["superpowers", "https://github.com/obra/superpowers", "obra/superpowers/plugins"])
+    def test_repo_that_is_not_an_owner_slash_repo_slug_is_rejected(self, repo):
+        with pytest.raises(ValueError, match="String should match pattern"):
+            PluginConfig(**_github_entry(repo=repo))
+
     def test_github_record_is_name_at_revision(self):
         assert PluginConfig(**_github_entry()).record == f"superpowers@{'a' * 40}"
 
