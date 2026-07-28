@@ -15,6 +15,12 @@ from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
 
+# bcal nondeterministically asks for clarification instead of editing, producing no *.al file
+# (surfaces downstream as an empty diff -> auto-0). Re-run the agent on a clean workspace a couple
+# of times before accepting an empty result. Empty runs fail fast, so this stays within the CI step
+# budget; a non-empty diff breaks the loop immediately.
+_EMPTY_DIFF_MAX_ATTEMPTS = 3
+
 __all__ = ["NL2ALPipeline"]
 
 
@@ -53,8 +59,19 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: Callable) -> None:
-        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
-            context.metrics, context.experiment = agent_runner(context)
+        for attempt in range(1, _EMPTY_DIFF_MAX_ATTEMPTS + 1):
+            with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id} (attempt {attempt}/{_EMPTY_DIFF_MAX_ATTEMPTS})"):
+                context.metrics, context.experiment = agent_runner(context)
+
+            if attempt == _EMPTY_DIFF_MAX_ATTEMPTS:
+                break
+            try:
+                stage_and_get_diff(context.repo_path)
+            except EmptyDiffError:
+                logger.warning(f"nl2al agent produced an empty diff for {context.entry.instance_id} (attempt {attempt}/{_EMPTY_DIFF_MAX_ATTEMPTS}); retrying with a clean workspace")
+                self.setup_workspace(context.entry, context.repo_path)
+            else:
+                break
 
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
         try:
