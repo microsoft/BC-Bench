@@ -193,7 +193,7 @@ def test_resolve_taxonomy_headers_uses_defaults(monkeypatch):
     _clear_taxonomy_env(monkeypatch)
 
     assert bc_eval_capi_bridge._resolve_taxonomy_headers() == {
-        "X-Taxonomy-Experience": "DynamicsBusinessCentral",
+        "X-Taxonomy-Experience": "AppCopilots",
         "X-Taxonomy-Agent": "bcal",
         "X-Taxonomy-InferenceStep": "ChatCompletion",
         "X-Taxonomy-TrafficType": "Test",
@@ -221,7 +221,7 @@ def test_install_taxonomy_headers_merges_into_common_params(monkeypatch, stub_ca
 
     params = stub_capi_model._get_common_capi_parameters()
     assert params["headers"] == {
-        "X-Taxonomy-Experience": "DynamicsBusinessCentral",
+        "X-Taxonomy-Experience": "AppCopilots",
         "X-Taxonomy-Agent": "bcal",
         "X-Taxonomy-InferenceStep": "ChatCompletion",
         "X-Taxonomy-TrafficType": "Test",

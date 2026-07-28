@@ -20,9 +20,11 @@ _CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
 # bc-eval's CapiModel nor the generated CAPI client sends them, so CAPI rejects every call with
 # InvalidInferenceInput ("Required taxonomy data X-Taxonomy-* not provided"). We thread them onto
 # each request below. Each value is env-overridable so it can be corrected without a code change.
+# X-Taxonomy-Experience must be one of the LLM API's allowed values (BizChat, WXPOAgents,
+# AppCopilots, Cowork, Scout, WorkIQ); BC is an app copilot -> AppCopilots.
 # (header name, env var, default value)
 _TAXONOMY_HEADERS: tuple[tuple[str, str, str], ...] = (
-    ("X-Taxonomy-Experience", "CAPI_TAXONOMY_EXPERIENCE", "DynamicsBusinessCentral"),
+    ("X-Taxonomy-Experience", "CAPI_TAXONOMY_EXPERIENCE", "AppCopilots"),
     ("X-Taxonomy-Agent", "CAPI_TAXONOMY_AGENT", "bcal"),
     ("X-Taxonomy-InferenceStep", "CAPI_TAXONOMY_INFERENCE_STEP", "ChatCompletion"),
     ("X-Taxonomy-TrafficType", "CAPI_TAXONOMY_TRAFFIC_TYPE", "Test"),

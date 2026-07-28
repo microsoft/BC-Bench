@@ -215,7 +215,8 @@ jobs:
           # M365 LLM API taxonomy/CoS headers (aka.ms/llmapi/waves-timeline). CAPI rejects calls
           # that omit them. Set here (not secret) so the values are visible and easy to adjust; the
           # bridge falls back to the same defaults when these are unset (e.g. local runs).
-          CAPI_TAXONOMY_EXPERIENCE: DynamicsBusinessCentral
+          # Experience must be an LLM API allowed value (BizChat/WXPOAgents/AppCopilots/Cowork/Scout/WorkIQ).
+          CAPI_TAXONOMY_EXPERIENCE: AppCopilots
           CAPI_TAXONOMY_AGENT: bcal
           CAPI_TAXONOMY_INFERENCE_STEP: ChatCompletion
           CAPI_TAXONOMY_TRAFFIC_TYPE: Test

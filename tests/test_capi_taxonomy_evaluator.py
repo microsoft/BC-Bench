@@ -60,7 +60,7 @@ def test_install_merges_headers_into_common_params(monkeypatch, taxonomy, stub_c
 
     params = stub_capi_model._get_common_capi_parameters()
     assert params["headers"]["X-Taxonomy-TrafficType"] == "Test"
-    assert params["headers"]["X-Taxonomy-Experience"] == "DynamicsBusinessCentral"
+    assert params["headers"]["X-Taxonomy-Experience"] == "AppCopilots"
     assert params["customer_id"] == "c"  # existing params preserved
 
 

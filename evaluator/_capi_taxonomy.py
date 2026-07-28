@@ -18,7 +18,7 @@ import os
 # (header name, env var, default value) -- kept in sync with
 # src/bcbench/agent/bcal/bc_eval_capi_bridge.py::_TAXONOMY_HEADERS.
 _TAXONOMY_HEADERS: tuple[tuple[str, str, str], ...] = (
-    ("X-Taxonomy-Experience", "CAPI_TAXONOMY_EXPERIENCE", "DynamicsBusinessCentral"),
+    ("X-Taxonomy-Experience", "CAPI_TAXONOMY_EXPERIENCE", "AppCopilots"),
     ("X-Taxonomy-Agent", "CAPI_TAXONOMY_AGENT", "bcal"),
     ("X-Taxonomy-InferenceStep", "CAPI_TAXONOMY_INFERENCE_STEP", "ChatCompletion"),
     ("X-Taxonomy-TrafficType", "CAPI_TAXONOMY_TRAFFIC_TYPE", "Test"),
