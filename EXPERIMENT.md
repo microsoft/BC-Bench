@@ -62,7 +62,7 @@ A [plugin](https://docs.github.com/en/copilot/concepts/agents/about-plugins) is 
 | `source` | yes | `local` (a folder on this machine) or `github` (cloned at runtime) |
 | `path` | yes | Plugin root — an **absolute** path for `local`; relative to the clone for `github` (`"."` when the repo *is* the plugin) |
 | `repo` | `github` | `owner/repo` |
-| `revision` | `github` | A commit SHA (pinned) or a fully-spelled ref such as `refs/heads/main` (tracks the branch tip) |
+| `revision` | `github` | A commit SHA (pinned) |
 
 
 Entries are parsed into [`PluginConfig`](src/bcbench/types.py), and each enabled plugin is passed to the CLI as `--plugin-dir <path>` (repeatable, supported by both agents), so it is loaded for that single session only. `github` plugins are shallow-cloned with `gh repo clone` into the gitignored `<bc-bench>/.bcbench/`, deliberately outside the repo under evaluation so plugin content never reaches its diff or the agent's working directory.

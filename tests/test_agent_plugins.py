@@ -43,8 +43,8 @@ class TestPluginConfigValidation:
             PluginConfig(name="x", source="github", path=".")
 
     def test_local_rejects_github_only_fields(self, tmp_path):
-        with pytest.raises(ValueError, match=r"does not take \['revision'\]"):
-            PluginConfig(name="x", source="local", path=str(tmp_path), revision="abc")
+        with pytest.raises(ValueError, match=r"does not take \['repo'\]"):
+            PluginConfig(name="x", source="local", path=str(tmp_path), repo="o/r")
 
     def test_local_requires_absolute_path(self):
         with pytest.raises(ValueError, match="requires an absolute 'path'"):
@@ -72,9 +72,14 @@ class TestPluginConfigValidation:
         # A disabled entry must never break a run - it may hold a path that is only valid on another OS
         assert resolve_config_plugins({"plugins": [{"name": "x", "source": "local", "enabled": False, "path": "C:/only/valid/on/windows"}]}) == {}
 
-    @pytest.mark.parametrize(("revision", "expected"), [("a" * 40, f"superpowers@{'a' * 40}"), ("refs/heads/main", "superpowers@refs/heads/main")])
-    def test_github_record_is_name_at_revision(self, revision, expected):
-        assert PluginConfig(**_github_entry(revision=revision)).record == expected
+    @pytest.mark.parametrize("revision", ["refs/heads/main", "main", "v1.2.3", "HEAD", "a" * 7, "a" * 41, "z" * 40])
+    def test_revision_that_is_not_a_commit_sha_is_rejected(self, revision):
+        # A moving ref would let two runs recording the same revision load different plugin code
+        with pytest.raises(ValueError, match="String should match pattern"):
+            PluginConfig(**_github_entry(revision=revision))
+
+    def test_github_record_is_name_at_revision(self):
+        assert PluginConfig(**_github_entry()).record == f"superpowers@{'a' * 40}"
 
     def test_local_record_is_name_at_local(self, tmp_path):
         assert PluginConfig(**_local_entry(tmp_path)).record == "probe@local"

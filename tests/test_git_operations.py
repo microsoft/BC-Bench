@@ -232,13 +232,6 @@ def test_clone_repo_at_revision_shallow_clones_via_gh(mock_run, tmp_path):
 
 
 @patch("bcbench.operations.git_operations.subprocess.run")
-def test_clone_repo_at_revision_accepts_fully_spelled_ref(mock_run, tmp_path):
-    clone_repo_at_revision("obra/superpowers", "refs/heads/main", tmp_path / "clone")
-
-    assert "--revision=refs/heads/main" in mock_run.call_args_list[0].args[0]
-
-
-@patch("bcbench.operations.git_operations.subprocess.run")
 def test_clone_repo_at_revision_replaces_existing_destination(mock_run, tmp_path):
     destination = tmp_path / "clone"
     (destination / "stale").mkdir(parents=True)

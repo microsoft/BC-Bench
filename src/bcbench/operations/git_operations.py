@@ -162,7 +162,7 @@ def clone_repo_at_revision(repo: str, revision: str, destination: Path) -> None:
 
     Args:
         repo: A GitHub `owner/repo` slug.
-        revision: A commit SHA or a fully-spelled ref (e.g. `refs/heads/main`).
+        revision: A commit SHA.
         destination: Target directory, replaced if it already exists.
 
     Note:

@@ -100,7 +100,7 @@ agents:
 #   source:   "local" (a folder on this machine) or "github" (cloned at runtime)
 #   path:     plugin root - for local an absolute path ; for github relative to the clone ("." for its root, or a subfolder when the repo hosts several plugins)
 #   repo:     github only, "owner/repo"
-#   revision: github only, a commit SHA (pinned) or a fully-spelled ref such as "refs/heads/main"
+#   revision: github only, a commit SHA (pinned)
 plugins:
   - name: "bcbench-example"
     enabled: false

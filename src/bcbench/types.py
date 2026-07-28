@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -111,6 +111,8 @@ class ExperimentConfiguration(BaseModel):
 # Where an agent plugin comes from: local, or cloned from GitHub
 type PluginSource = Literal["local", "github"]
 
+type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
+
 
 class PluginConfig(BaseModel):
     """A single `plugins:` entry in the agent config."""
@@ -123,7 +125,7 @@ class PluginConfig(BaseModel):
     enabled: bool = False
     # github only
     repo: str | None = None  # "owner/repo"
-    revision: str | None = None  # commit SHA, or a fully-spelled ref such as "refs/heads/main"
+    revision: CommitSha | None = None
 
     @property
     def record(self) -> str:
