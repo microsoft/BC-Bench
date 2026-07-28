@@ -24,10 +24,11 @@ on:
       external-model:
         description: "Model alias passed to the external-command bridge when llm-backend=external-command"
         required: false
-        default: "gpt-53-chat-2026-03-03"
+        default: "gpt-55-chat-2026-04-29"
         type: choice
         options:
           - "claude-opus-4-8"
+          - "gpt-55-chat-2026-04-29"
           - "gpt-55-2026-04-24"
           - "gpt-52-2025-12-11"
           - "gpt-5-codex-2025-09-15"
@@ -199,7 +200,7 @@ jobs:
         timeout-minutes: 28
         env:
           BCAL_LLM_BACKEND: ${{ inputs.llm-backend || 'external-command' }}
-          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-53-chat-2026-03-03') || (inputs.model || 'gpt-5.2') }}
+          BCAL_LLM_MODEL: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-55-chat-2026-04-29') || (inputs.model || 'gpt-5.2') }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_DEPLOYMENT: ${{ inputs.model || 'gpt-5.2' }}
           CAPI_ENDPOINT: ${{ secrets.CAPI_ENDPOINT }}
@@ -211,6 +212,13 @@ jobs:
           CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
           CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
           CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
+          # M365 LLM API taxonomy/CoS headers (aka.ms/llmapi/waves-timeline). CAPI rejects calls
+          # that omit them. Set here (not secret) so the values are visible and easy to adjust; the
+          # bridge falls back to the same defaults when these are unset (e.g. local runs).
+          CAPI_TAXONOMY_EXPERIENCE: DynamicsBusinessCentral
+          CAPI_TAXONOMY_AGENT: bcal
+          CAPI_TAXONOMY_INFERENCE_STEP: ChatCompletion
+          CAPI_TAXONOMY_TRAFFIC_TYPE: Test
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend || 'external-command' }}" -eq "external-command") {
@@ -239,7 +247,7 @@ jobs:
       id-token: write
     with:
       results-dir: ${{ needs.evaluate-with-bcal.outputs.results-dir }}
-      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-53-chat-2026-03-03') || (inputs.model || 'gpt-5.2') }}
+      model: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && (inputs.external-model || 'gpt-55-chat-2026-04-29') || (inputs.model || 'gpt-5.2') }}
       agent: ${{ (inputs.llm-backend || 'external-command') == 'external-command' && 'BCal-external-command' || 'BCal' }}
       mock: ${{ inputs.test-run || false }}
       category: nl2al

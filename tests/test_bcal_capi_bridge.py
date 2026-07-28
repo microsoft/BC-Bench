@@ -5,6 +5,7 @@ import sys
 import types
 from io import BytesIO
 from types import SimpleNamespace
+from typing import ClassVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -158,3 +159,101 @@ def test_maybe_install_local_cert_credential_patches_factory(monkeypatch, fake_c
         # SNI (x5c) auth is required by the CAPI app registration; without it
         # AAD rejects the client assertion with AADSTS700027.
         assert cred.send_certificate_chain is True
+
+
+@pytest.fixture
+def stub_capi_model(monkeypatch):
+    """Stub bc_eval.capi.capi_model.CapiModel with the internal the taxonomy shim patches."""
+
+    class _StubCapiModel:
+        base_params: ClassVar[dict[str, object]] = {"customer_id": "c", "x_ms_correlation_id": "corr"}
+
+        @classmethod
+        def _get_common_capi_parameters(cls) -> dict[str, object]:
+            return dict(cls.base_params)
+
+    bc_eval_pkg = types.ModuleType("bc_eval")
+    bc_eval_pkg.__path__ = []
+    capi_pkg = types.ModuleType("bc_eval.capi")
+    capi_pkg.__path__ = []
+    capi_model_mod = types.ModuleType("bc_eval.capi.capi_model")
+    capi_model_mod.CapiModel = _StubCapiModel  # ty: ignore[unresolved-attribute]
+    monkeypatch.setitem(sys.modules, "bc_eval", bc_eval_pkg)
+    monkeypatch.setitem(sys.modules, "bc_eval.capi", capi_pkg)
+    monkeypatch.setitem(sys.modules, "bc_eval.capi.capi_model", capi_model_mod)
+    return _StubCapiModel
+
+
+def _clear_taxonomy_env(monkeypatch):
+    for _, env_var, _ in bc_eval_capi_bridge._TAXONOMY_HEADERS:
+        monkeypatch.delenv(env_var, raising=False)
+
+
+def test_resolve_taxonomy_headers_uses_defaults(monkeypatch):
+    _clear_taxonomy_env(monkeypatch)
+
+    assert bc_eval_capi_bridge._resolve_taxonomy_headers() == {
+        "X-Taxonomy-Experience": "DynamicsBusinessCentral",
+        "X-Taxonomy-Agent": "bcal",
+        "X-Taxonomy-InferenceStep": "ChatCompletion",
+        "X-Taxonomy-TrafficType": "Test",
+    }
+
+
+def test_resolve_taxonomy_headers_env_override_and_blank_dropped(monkeypatch):
+    _clear_taxonomy_env(monkeypatch)
+    monkeypatch.setenv("CAPI_TAXONOMY_EXPERIENCE", "MyExperience")
+    monkeypatch.setenv("CAPI_TAXONOMY_TRAFFIC_TYPE", "Prod")
+    monkeypatch.setenv("CAPI_TAXONOMY_AGENT", "   ")  # blank -> dropped
+
+    headers = bc_eval_capi_bridge._resolve_taxonomy_headers()
+
+    assert headers["X-Taxonomy-Experience"] == "MyExperience"
+    assert headers["X-Taxonomy-TrafficType"] == "Prod"
+    assert headers["X-Taxonomy-InferenceStep"] == "ChatCompletion"  # still the default
+    assert "X-Taxonomy-Agent" not in headers
+
+
+def test_install_taxonomy_headers_merges_into_common_params(monkeypatch, stub_capi_model):
+    _clear_taxonomy_env(monkeypatch)
+
+    bc_eval_capi_bridge._install_taxonomy_headers()
+
+    params = stub_capi_model._get_common_capi_parameters()
+    assert params["headers"] == {
+        "X-Taxonomy-Experience": "DynamicsBusinessCentral",
+        "X-Taxonomy-Agent": "bcal",
+        "X-Taxonomy-InferenceStep": "ChatCompletion",
+        "X-Taxonomy-TrafficType": "Test",
+    }
+    assert params["customer_id"] == "c"  # existing params preserved
+
+
+def test_install_taxonomy_headers_preserves_existing_headers(monkeypatch, stub_capi_model):
+    _clear_taxonomy_env(monkeypatch)
+    monkeypatch.setattr(stub_capi_model, "base_params", {"customer_id": "c", "headers": {"X-Existing": "1"}})
+
+    bc_eval_capi_bridge._install_taxonomy_headers()
+
+    params = stub_capi_model._get_common_capi_parameters()
+    assert params["headers"]["X-Existing"] == "1"
+    assert params["headers"]["X-Taxonomy-TrafficType"] == "Test"
+
+
+def test_install_taxonomy_headers_noop_when_all_blank(monkeypatch, stub_capi_model):
+    for _, env_var, _ in bc_eval_capi_bridge._TAXONOMY_HEADERS:
+        monkeypatch.setenv(env_var, "")
+    original = stub_capi_model.__dict__["_get_common_capi_parameters"]
+
+    bc_eval_capi_bridge._install_taxonomy_headers()
+
+    assert stub_capi_model.__dict__["_get_common_capi_parameters"] is original
+    assert "headers" not in stub_capi_model._get_common_capi_parameters()
+
+
+def test_install_taxonomy_headers_raises_when_internal_missing(monkeypatch, stub_capi_model):
+    _clear_taxonomy_env(monkeypatch)
+    delattr(stub_capi_model, "_get_common_capi_parameters")
+
+    with pytest.raises(RuntimeError, match="_get_common_capi_parameters is missing"):
+        bc_eval_capi_bridge._install_taxonomy_headers()

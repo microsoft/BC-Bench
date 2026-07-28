@@ -16,6 +16,18 @@ _CERT_FILE_ENV = "CAPI_CERT_FILE"
 _CERT_TENANT_ENV = "CAPI_TENANT_ID"
 _CERT_CLIENT_ENV = "CAPI_CLIENT_ID"
 
+# The M365 LLM API now enforces taxonomy/CoS headers (aka.ms/llmapi/waves-timeline). Neither
+# bc-eval's CapiModel nor the generated CAPI client sends them, so CAPI rejects every call with
+# InvalidInferenceInput ("Required taxonomy data X-Taxonomy-* not provided"). We thread them onto
+# each request below. Each value is env-overridable so it can be corrected without a code change.
+# (header name, env var, default value)
+_TAXONOMY_HEADERS: tuple[tuple[str, str, str], ...] = (
+    ("X-Taxonomy-Experience", "CAPI_TAXONOMY_EXPERIENCE", "DynamicsBusinessCentral"),
+    ("X-Taxonomy-Agent", "CAPI_TAXONOMY_AGENT", "bcal"),
+    ("X-Taxonomy-InferenceStep", "CAPI_TAXONOMY_INFERENCE_STEP", "ChatCompletion"),
+    ("X-Taxonomy-TrafficType", "CAPI_TAXONOMY_TRAFFIC_TYPE", "Test"),
+)
+
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
 _DEFAULT_REASONING_EFFORT: str | None = None
@@ -126,6 +138,47 @@ def _maybe_install_local_cert_credential() -> None:
     _patch_credential_from_local_file(cert_file)
 
 
+def _resolve_taxonomy_headers() -> dict[str, str]:
+    resolved: dict[str, str] = {}
+    for header, env_var, default in _TAXONOMY_HEADERS:
+        value = os.environ.get(env_var, default).strip()
+        if value:
+            resolved[header] = value
+    return resolved
+
+
+def _install_taxonomy_headers() -> None:
+    """Thread the M365 LLM API taxonomy/CoS headers onto every CAPI request.
+
+    `CapiModel._get_common_capi_parameters()` builds the kwargs splatted into the generated
+    `chat_completions` / `anthropic_messages` / `predict_with_embeddings` operations, each of which
+    forwards an otherwise-unknown `headers` kwarg onto the outgoing HTTP request. Merging our
+    headers into that single dict is the one clean injection point that covers every model family.
+    """
+    headers = _resolve_taxonomy_headers()
+    if not headers:
+        return
+
+    from bc_eval.capi.capi_model import CapiModel
+
+    get_common = getattr(CapiModel, "_get_common_capi_parameters", None)
+    if get_common is None:
+        # Fail loud rather than silently omit the now-required headers: a bc-eval upgrade that
+        # renames/removes this internal (or adds native taxonomy support) must be revisited here.
+        raise RuntimeError("bc_eval CapiModel._get_common_capi_parameters is missing; the taxonomy-header shim in bc_eval_capi_bridge.py needs updating for this bc-eval version.")
+
+    original = get_common.__func__
+
+    def _with_taxonomy_headers(cls: type) -> dict[str, object]:
+        params = original(cls)
+        merged = dict(params.get("headers") or {})
+        merged.update(headers)
+        params["headers"] = merged
+        return params
+
+    CapiModel._get_common_capi_parameters = classmethod(_with_taxonomy_headers)
+
+
 def main() -> int:
     request = _load_request(sys.stdin.buffer)
     model = request.get("model")
@@ -142,6 +195,7 @@ def main() -> int:
         raise RuntimeError("bc-eval[capi] is required for the bcal CAPI bridge.") from exc
 
     _maybe_install_local_cert_credential()
+    _install_taxonomy_headers()
 
     client = CapiModel()
     kwargs: dict[str, object] = {
