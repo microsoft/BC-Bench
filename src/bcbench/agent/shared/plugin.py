@@ -68,15 +68,31 @@ def resolve_config_plugins(agent_config: dict) -> dict[str, Path]:
 def _resolve_plugin(plugin: PluginConfig) -> Path:
     match plugin.source:
         case "local":
-            plugin_dir = Path(plugin.path).expanduser()
+            plugin_dir = Path(plugin.path).expanduser().resolve()
         case "github":
-            clone_dir: Path = _config.paths.plugin_root / plugin.name
+            clone_dir: Path = _clone_dir(plugin)
             clone_repo_at_revision(str(plugin.repo), str(plugin.revision), clone_dir)
-            plugin_dir = clone_dir / plugin.path
+            plugin_dir = _plugin_dir_in_clone(clone_dir, plugin)
 
-    plugin_dir = plugin_dir.resolve()
     if not (plugin_dir / _config.file_patterns.plugin_manifest).is_file():
         raise AgentError(f"Plugin '{plugin.name}' has no manifest at {plugin_dir / _config.file_patterns.plugin_manifest}")
 
     logger.info(f"Loading plugin {plugin.record} from {plugin_dir}")
+    return plugin_dir
+
+
+def _clone_dir(plugin: PluginConfig) -> Path:
+    """Resolve the clone destination, rejecting names that escape the plugin root."""
+    plugin_root: Path = _config.paths.plugin_root.resolve()
+    clone_dir: Path = (plugin_root / plugin.name).resolve()
+    if clone_dir.parent != plugin_root:
+        raise AgentError(f"Plugin '{plugin.name}': name must be a single directory directly under {plugin_root}")
+    return clone_dir
+
+
+def _plugin_dir_in_clone(clone_dir: Path, plugin: PluginConfig) -> Path:
+    """Resolve the plugin folder inside its clone, rejecting paths that escape the clone."""
+    plugin_dir: Path = (clone_dir / plugin.path).resolve()
+    if not plugin_dir.is_relative_to(clone_dir):
+        raise AgentError(f"Plugin '{plugin.name}': path '{plugin.path}' resolves outside its clone at {clone_dir}")
     return plugin_dir

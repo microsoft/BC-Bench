@@ -131,6 +131,26 @@ class TestResolveConfigPlugins:
         assert list(resolved) == [f"superpowers@{'a' * 40}", "probe@local"]
 
 
+@pytest.mark.usefixtures("plugin_root")
+class TestGithubPluginConfinement:
+    """A cloned plugin must stay inside the plugin root - a clone replaces its destination."""
+
+    @pytest.mark.parametrize("name", ["../escaped", "../../NAV", "nested/name", "."])
+    def test_name_escaping_the_plugin_root_is_rejected_before_cloning(self, name):
+        with patch("bcbench.agent.shared.plugin.clone_repo_at_revision") as clone, pytest.raises(AgentError, match="must be a single directory directly under"):
+            resolve_config_plugins({"plugins": [_github_entry(name=name)]})
+
+        clone.assert_not_called()
+
+    @pytest.mark.parametrize("path", ["../other-plugin", "plugins/../../elsewhere", "/absolute/plugin"])
+    def test_path_escaping_the_clone_is_rejected(self, path):
+        with (
+            patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)),
+            pytest.raises(AgentError, match="resolves outside its clone"),
+        ):
+            resolve_config_plugins({"plugins": [_github_entry(path=path)]})
+
+
 class TestShippedConfig:
     def test_shipped_config_resolves_on_any_os(self):
         # Entries are disabled, so this must hold even though the `local` example carries a Windows path
