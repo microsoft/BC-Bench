@@ -91,23 +91,13 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         query_file = context.repo_path / GENERATED_QUERY_FILE
         generated_query = query_file.read_text(encoding="utf-8").strip() if query_file.exists() else ""
 
-        if not generated_query:
-            logger.warning(f"Agent produced no {GENERATED_QUERY_FILE} for {context.entry.instance_id}")
-            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output="", error_message=f"No {GENERATED_QUERY_FILE} produced"))
-            return
-
         container = context.get_container()
         version = context.entry.environment_setup_version
 
-        try:
-            generated_rows = execute_al_query(generated_query, container, version, context.repo_path, "generated")
-        except (BuildError, BuildTimeoutExpired) as e:
-            logger.exception(f"Generated query failed to compile/run for {context.entry.instance_id}")
-            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=str(e)))
-            return
-
-        # The gold query is authored to compile; a failure here is a harness/dataset problem, not the
-        # agent's. Record it as unscorable so it is not counted against the agent's resolution rate.
+        # Establish gold validity FIRST, independent of the agent's output: a broken gold (a
+        # harness/dataset problem) must be recorded as unscorable regardless of whether the agent's
+        # query compiled — otherwise, when the agent query also fails, the broken entry is silently
+        # counted against that agent.
         try:
             gold_rows = execute_al_query(context.entry.gold_query, container, version, context.repo_path, "gold")
         except (BuildError, BuildTimeoutExpired) as e:
@@ -116,6 +106,18 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
                 context,
                 ExecutionBasedEvaluationResult.create_unscorable(context, output=generated_query, error_message=f"Gold query failed (harness/dataset issue, not the agent): {e}"),
             )
+            return
+
+        if not generated_query:
+            logger.warning(f"Agent produced no {GENERATED_QUERY_FILE} for {context.entry.instance_id}")
+            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output="", error_message=f"No {GENERATED_QUERY_FILE} produced"))
+            return
+
+        try:
+            generated_rows = execute_al_query(generated_query, container, version, context.repo_path, "generated")
+        except (BuildError, BuildTimeoutExpired) as e:
+            logger.exception(f"Generated query failed to compile/run for {context.entry.instance_id}")
+            self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=str(e)))
             return
 
         resolved = result_sets_match(generated_rows, gold_rows, context.entry.ordered)
