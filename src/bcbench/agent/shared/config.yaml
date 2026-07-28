@@ -93,7 +93,7 @@ agents:
   enabled: false
   name: ALTest
 
-# controls loading agent plugins for the run.
+# controls loading agent plugins for the run, only enabled entries are validated and loaded.
 # Each plugin gets its own entry, and is passed to the CLI via `--plugin-dir` (session-scoped).
 #   name:     plugin name; also how it is recorded on the result as "<name>@<revision|local>"
 #   enabled:  per-entry toggle (defaults to false)

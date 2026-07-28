@@ -61,8 +61,8 @@ def resolve_config_plugins(agent_config: dict) -> dict[str, Path]:
     Raises:
         AgentError: If a plugin does not resolve to a folder holding a plugin manifest.
     """
-    plugins: list[PluginConfig] = [PluginConfig(**entry) for entry in agent_config["plugins"]]
-    return {plugin.record: _resolve_plugin(plugin) for plugin in plugins if plugin.enabled}
+    plugins = [PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False)]
+    return {plugin.record: _resolve_plugin(plugin) for plugin in plugins}
 
 
 def _resolve_plugin(plugin: PluginConfig) -> Path:
