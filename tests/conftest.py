@@ -258,6 +258,19 @@ def sample_test_entry() -> TestEntry:
 
 
 @pytest.fixture
+def plugin_root(tmp_path: Path) -> Generator[Path]:
+    """Redirect the plugin root to a temp dir, so tests never write into the repo's own `.bcbench/`."""
+    from dataclasses import replace
+
+    from bcbench.agent.shared import plugin
+
+    root = tmp_path / "plugin-root"
+    patched = replace(plugin._config, paths=replace(plugin._config.paths, plugin_root=root))
+    with patch.object(plugin, "_config", patched):
+        yield root
+
+
+@pytest.fixture
 def sample_dataset_entry() -> BugFixEntry:
     return create_dataset_entry()
 

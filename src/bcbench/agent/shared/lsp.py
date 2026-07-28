@@ -79,7 +79,7 @@ def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, r
     ``.lsp.json`` differs (see :func:`_lsp_config_for`).
     """
     if not al_lsp:
-        remove_agent_plugin(repo_path, _AL_LSP_PLUGIN_FOLDER)
+        remove_agent_plugin(_AL_LSP_PLUGIN_FOLDER)
         return None
 
     project_paths = [str(repo_path / p) for p in entry.project_paths]
@@ -87,6 +87,6 @@ def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, r
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(agent_type, args)
 
-    plugin_dir = write_agent_plugin(repo_path, _AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
+    plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
     logger.debug(f"AL LSP configuration for {agent_type.value}: {lsp_config}")
     return plugin_dir

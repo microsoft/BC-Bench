@@ -41,13 +41,18 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
     "warning": Severity.MEDIUM,
     "suggestion": Severity.LOW,
     "info": Severity.LOW,
+    # BCQuality skills/do.md emits blocker|major|minor|info; map them so engine
+    # findings score correctly instead of coercing to unspecified severity.
+    "blocker": Severity.CRITICAL,
+    "major": Severity.HIGH,
+    "minor": Severity.LOW,
 }
 
 
 class ReviewComment(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9./_-]*\.(al|json)$")]
+    file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./_-]*\.(al|json)$")]
     line_start: Annotated[int, Field(ge=1)]
     line_end: Annotated[int, Field(ge=1)] | None = None
     domain: str | None = None

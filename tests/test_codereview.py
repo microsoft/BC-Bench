@@ -29,6 +29,10 @@ class TestSeverity:
         assert Severity.from_input("warning") is Severity.MEDIUM
         assert Severity.from_input("suggestion") is Severity.LOW
         assert Severity.from_input("info") is Severity.LOW
+        # BCQuality do.md severities emitted by the production engine.
+        assert Severity.from_input("blocker") is Severity.CRITICAL
+        assert Severity.from_input("major") is Severity.HIGH
+        assert Severity.from_input("minor") is Severity.LOW
 
     def test_unknown_severity_raises(self):
         with pytest.raises(ValueError, match="Unknown severity"):
@@ -667,6 +671,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with (
+            patch("bcbench.evaluate.codereview.fetch_commit_if_missing"),
             patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
             patch("bcbench.evaluate.codereview.apply_patch") as mock_apply,
         ):
@@ -698,7 +703,10 @@ class TestCodeReviewPipeline:
             check=True,
         )
 
-        with patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup:
+        with (
+            patch("bcbench.evaluate.codereview.fetch_commit_if_missing"),
+            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
+        ):
             pipeline.setup_workspace(entry, Path(tmp_path))
 
         mock_setup.assert_called_once()

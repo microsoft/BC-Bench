@@ -8,7 +8,7 @@ from bcbench.evaluate.codereview_judge import judge_comment_matches
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
-from bcbench.operations import apply_patch, setup_repo_prebuild
+from bcbench.operations import apply_patch, fetch_commit_if_missing, setup_repo_prebuild
 from bcbench.results.codereview import CodeReviewResult, match_comments
 from bcbench.types import EvaluationContext
 
@@ -32,6 +32,8 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
 
     def setup_workspace(self, entry: CodeReviewEntry, repo_path: Path) -> None:
         """Setup workspace for code review by applying the entry patch as local changes."""
+        # Code-review base commits are pre-squash PR commits, so they might be missing from local dev setups.
+        fetch_commit_if_missing(repo_path, entry.base_commit)
         setup_repo_prebuild(entry, repo_path)
         apply_patch(repo_path, entry.patch, f"{entry.instance_id} review patch")
         # Mark newly added files as intent-to-add so they appear in `git diff HEAD`;
