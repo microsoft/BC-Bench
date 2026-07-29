@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtImplementEntry, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -355,3 +355,40 @@ def create_nl2al_entry(
 @pytest.fixture
 def sample_nl2al_entry() -> NL2ALEntry:
     return create_nl2al_entry()
+
+
+def create_ext_implement_entry(
+    instance_id: str = "microsoftInternal__NAV-Ext_Impl-30361",
+    repo: str = "microsoftInternal/NAV",
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    patch: str = VALID_PATCH,
+    created_at: str = VALID_CREATED_AT,
+    expected: list[ChecklistAssertion] | None = None,
+) -> ExtImplementEntry:
+    if project_paths is None:
+        project_paths = ["App/Layers/W1/BaseApp"]
+
+    if expected is None:
+        expected = [ChecklistAssertion(text="A new integration event publisher is added to the standard codeunit.", level="critical")]
+
+    return ExtImplementEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths,
+        patch=patch,
+        created_at=created_at,
+        expected=expected,
+    )
+
+
+@pytest.fixture
+def sample_ext_implement_entry(tmp_path: Path) -> Generator[ExtImplementEntry]:
+    problem_dir = create_problem_statement_dir(tmp_path)
+    entry = create_ext_implement_entry()
+
+    with patch.object(ExtImplementEntry, "problem_statement_dir", property(lambda self: problem_dir)):
+        yield entry

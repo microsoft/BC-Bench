@@ -14,7 +14,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "ExtImplementEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -165,6 +165,31 @@ class NL2ALEntry(BaseDatasetEntry):
 
     def get_task(self) -> str:
         return self.nl_prompt
+
+    def get_expected_output(self) -> Checklist:
+        return {"assertions": self.expected}
+
+
+class ExtImplementEntry(BaseDatasetEntry):
+    """Dataset entry for the ext-implement category — implement an approved extensibility request in AL.
+
+    Judge-based (no build, no tests). The agent reads the extensibility request (provided as plain
+    text) and adds the requested extension point (typically an integration event) to the existing repo
+    checked out at `base_commit`. The agent's diff is graded by an LLM judge against `expected`, which
+    encodes both fidelity to the gold fix (`patch`) and correct propagation across the expected
+    W1 + country/region layer files.
+    """
+
+    # LLM-judge checklist: expected event/signature/placement and expected layer propagation.
+    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
+
+    @property
+    def problem_statement_dir(self) -> Path:
+        return _config.paths.problem_statement_dir / self.instance_id
+
+    def get_task(self) -> str:
+        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
+        return readme_path.read_text(encoding="utf-8")
 
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}

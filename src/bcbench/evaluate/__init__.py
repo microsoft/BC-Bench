@@ -3,7 +3,8 @@
 from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.evaluate.bugfix import BugFixPipeline
 from bcbench.evaluate.codereview import CodeReviewPipeline
+from bcbench.evaluate.extimplement import ExtImplementPipeline
 from bcbench.evaluate.nl2al import NL2ALPipeline
 from bcbench.evaluate.testgeneration import TestGenerationPipeline
 
-__all__ = ["BugFixPipeline", "CodeReviewPipeline", "EvaluationPipeline", "NL2ALPipeline", "TestGenerationPipeline"]
+__all__ = ["BugFixPipeline", "CodeReviewPipeline", "EvaluationPipeline", "ExtImplementPipeline", "NL2ALPipeline", "TestGenerationPipeline"]

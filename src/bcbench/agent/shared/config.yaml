@@ -50,6 +50,32 @@ prompt:
     {{task}}
     {% endif %}
 
+  ext-implement-template: |
+    You are working with a Business Central (AL) code repository at {{repo_path}}.
+
+    Task: Implement the extensibility request described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+
+    An extensibility request asks for a new extension point (most often an integration event / event
+    publisher) so partners can hook into standard logic without modifying it. Add the requested
+    extension point to the standard code following Business Central event guidelines.
+
+    Important constraints:
+    - Only create or modify `.al` source files. Never edit `.json`, `.xml`, `.xlf`, `.md`, or any other file type.
+    - Make the smallest diff that satisfies the request (surgical change). Do NOT reformat, rename, or refactor unrelated code.
+    - Follow standard event conventions: `[IntegrationEvent(false, false)]`, `local procedure`, empty body,
+      correct `OnBefore`/`OnAfter`/`On<Procedure>On<Timing>` naming for the event's placement, and full
+      table names (no abbreviations) for record parameters.
+    - W1-first layering: when the file to change exists under `src/Layers/W1/...`, change W1 first, then apply
+      the same change to every same-named counterpart file in the other country/region layers. If the file
+      exists only in a specific country layer, edit that layer directly.
+    {% if not al_mcp %}
+    - Do NOT try to build or run tests, just provide the code changes needed.
+    {% endif %}
+    - Do NOT commit changes, and do NOT open a pull request.
+
+    Extensibility request:
+    {{task}}
+
   code-review-template: |
     /review
 
