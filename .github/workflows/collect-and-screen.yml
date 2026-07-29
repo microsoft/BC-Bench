@@ -2,7 +2,6 @@ name: Collect and Screen Dataset Candidates
 permissions:
   contents: write
   actions: write
-  pull-requests: write
 
 on:
   workflow_dispatch:
@@ -33,7 +32,6 @@ on:
 jobs:
   collect-and-screen:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
     outputs:
       branch: ${{ steps.run.outputs.branch }}
     steps:
@@ -65,8 +63,7 @@ jobs:
             -SinceDays ${{ inputs.since-days || '7' }} `
             -Limit ${{ inputs.limit || '50' }} `
             -BaseBranch '${{ inputs.base-branch || 'main' }}' `
-            -SummaryFile $env:GITHUB_STEP_SUMMARY `
-            -CollectedFile "$PWD/collected.json"
+            -SummaryFile $env:GITHUB_STEP_SUMMARY
 
           if (-not (git status --porcelain)) {
             Write-Host 'No dataset changes; nothing to push.'
@@ -79,181 +76,8 @@ jobs:
           git push --force origin $branch
           Add-Content -Path $env:GITHUB_OUTPUT -Value "branch=$branch"
 
-      - name: Trigger validation and wait for conclusions
-        id: validate
+      - name: Trigger dataset validation on pushed branch
         if: steps.run.outputs.branch != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $branch = '${{ steps.run.outputs.branch }}'
-          $dispatchAt = (Get-Date).ToUniversalTime()
-
-          gh workflow run dataset-validation.yml --ref $branch -f modified-only=true -f test-run=false
-
-          # gh workflow run returns no id, so poll for the run it created.
-          $runId = $null
-          $runUrl = ''
-          for ($i = 0; $i -lt 12; $i++) {
-            Start-Sleep -Seconds 5
-            $runs = gh run list --workflow dataset-validation.yml --branch $branch --event workflow_dispatch --json databaseId,url,createdAt --limit 5 | ConvertFrom-Json
-            $match = $runs | Where-Object { [datetimeoffset]$_.createdAt -ge $dispatchAt.AddSeconds(-60) } |
-              Sort-Object { [datetimeoffset]$_.createdAt } -Descending | Select-Object -First 1
-            if ($match) { $runId = $match.databaseId; $runUrl = $match.url; break }
-          }
-          "run-url=$runUrl" | Add-Content $env:GITHUB_OUTPUT
-
-          # Wait for the validation run to finish (~4h30m budget: 270 x 60s), then read
-          # each entry's conclusion. Entries still unfinished at the budget stay
-          # non-'success' and are treated as not-passed downstream. The budget leaves
-          # ample headroom under the job's timeout-minutes for the surrounding steps.
-          $jobsJson = '[]'
-          $completed = $false
-          if ($runId) {
-            for ($i = 0; $i -lt 270; $i++) {
-              try {
-                $status = gh run view $runId --json status --jq '.status'
-                if ($status -eq 'completed') { $completed = $true; break }
-              }
-              catch {
-                Write-Host "Validation status poll error (will retry): $_"
-              }
-              Start-Sleep -Seconds 60
-            }
-            # A few retries so a transient failure fetching conclusions doesn't discard a completed run.
-            for ($j = 0; $j -lt 5; $j++) {
-              try {
-                $fetched = gh api "/repos/${{ github.repository }}/actions/runs/$runId/jobs?per_page=100" --jq '[.jobs[] | {name: .name, html_url: .html_url, conclusion: .conclusion}]'
-                if ($fetched) { $jobsJson = $fetched; break }
-              }
-              catch {
-                Write-Host "Jobs fetch error (will retry): $_"
-              }
-              Start-Sleep -Seconds 15
-            }
-          }
-          # Results are determinate only if the run finished AND we actually got conclusions
-          # for our collected entries — i.e. at least one job whose name matches a collected
-          # instance id. Counting all jobs would include the get-entries job and mis-read an
-          # empty matrix, or a job.name/instance_id drift, as "all failed" and delete the branch.
-          $collectedIds = @()
-          if (Test-Path collected.json) { $collectedIds = @((Get-Content -Raw collected.json | ConvertFrom-Json) | ForEach-Object { [string]$_.Id }) }
-          $jobNames = @(($jobsJson | ConvertFrom-Json) | ForEach-Object { [string]$_.name })
-          $matched = @($collectedIds | Where-Object { $jobNames -contains $_ })
-          $determinate = if ($completed -and $matched.Count -gt 0) { 'true' } else { 'false' }
-          "results-determinate=$determinate" | Add-Content $env:GITHUB_OUTPUT
-          Set-Content -Path jobs.json -Value $jobsJson -Encoding utf8
-
-      - name: Prune entries that did not pass validation
-        id: prune
-        if: steps.run.outputs.branch != ''
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $branch = '${{ steps.run.outputs.branch }}'
-
-          $collected = @(Get-Content -Raw collected.json | ConvertFrom-Json)
-          $jobs = if (Test-Path jobs.json) { @(Get-Content -Raw jobs.json | ConvertFrom-Json) } else { @() }
-
-          $passedIds = @($jobs | Where-Object { $_.conclusion -eq 'success' } | ForEach-Object { [string]$_.name })
-          $collectedIds = @($collected | ForEach-Object { [string]$_.Id })
-          $notPassed = @($collectedIds | Where-Object { $passedIds -notcontains $_ })
-          $passedCount = @($collectedIds | Where-Object { $passedIds -contains $_ }).Count
-
-          Write-Host "collected=$($collectedIds.Count) passed=$passedCount notPassed=$($notPassed.Count)"
-
-          if ($passedCount -gt 0 -and $notPassed.Count -gt 0) {
-            .\scripts\Remove-DatasetEntries.ps1 -DatasetFile dataset/bcbench.jsonl -ProblemStatementDir dataset/problemstatement -InstanceId $notPassed
-            if (git status --porcelain) {
-              git add dataset/bcbench.jsonl dataset/problemstatement
-              git commit --amend --no-edit
-              git push --force origin $branch
-              Write-Host "Pruned $($notPassed.Count) failed entr$(if ($notPassed.Count -eq 1) { 'y' } else { 'ies' }) and force-pushed $branch"
-            }
-          }
-
-          $hasPassed = if ($passedCount -gt 0) { 'true' } else { 'false' }
-          "has-passed=$hasPassed" | Add-Content $env:GITHUB_OUTPUT
-
-      - name: Create or update draft PR
-        if: steps.run.outputs.branch != '' && steps.prune.outputs.has-passed == 'true'
-        env:
-          # The default GITHUB_TOKEN is blocked from opening PRs when the org policy
-          # "Allow GitHub Actions to create and approve pull requests" is off. Provide a
-          # PAT / GitHub App token via DATASET_PR_TOKEN to bypass that; otherwise this
-          # falls back to GITHUB_TOKEN (which works only when that org policy is enabled).
-          GH_TOKEN: ${{ secrets.DATASET_PR_TOKEN || secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $branch = '${{ steps.run.outputs.branch }}'
-          $repo = '${{ inputs.repo || 'microsoft/BCApps' }}'
-          $week = $branch -replace '^dataset/week-', ''
-
-          # Ensure the label exists; ignore "already exists".
-          gh label create dataset --color 1f6feb --description 'Automated dataset refresh candidates' 2>$null | Out-Null
-
-          .\scripts\New-DatasetPrBody.ps1 `
-            -CollectedFile collected.json `
-            -JobsFile jobs.json `
-            -RunUrl '${{ steps.validate.outputs.run-url }}' `
-            -Repo $repo `
-            -Week $week | Set-Content -Path pr-body.md -Encoding utf8
-
-          $title = "Dataset refresh: week $week candidates from $repo"
-          $existing = gh pr list --head $branch --state open --json number --jq '.[0].number // empty'
-          if ($existing) {
-            gh pr edit $existing --title $title --body-file pr-body.md
-            Write-Host "Updated draft PR #$existing"
-          }
-          else {
-            gh pr create --draft --base main --head $branch --title $title --body-file pr-body.md --label dataset
-          }
-
-      - name: Summarize failures (no entry passed)
-        if: steps.run.outputs.branch != '' && steps.prune.outputs.has-passed == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $branch = '${{ steps.run.outputs.branch }}'
-          $runUrl = '${{ steps.validate.outputs.run-url }}'
-          $determinate = '${{ steps.validate.outputs.results-determinate }}'
-
-          $collected = @(Get-Content -Raw collected.json | ConvertFrom-Json)
-          $jobs = if (Test-Path jobs.json) { @(Get-Content -Raw jobs.json | ConvertFrom-Json) } else { @() }
-          $jobMap = @{}
-          foreach ($j in $jobs) { if ($j.name) { $jobMap[[string]$j.name] = $j } }
-
-          $heading = if ($determinate -eq 'true') {
-            '## Dataset refresh: no entry passed validation'
-          } else {
-            '## Dataset refresh: validation did not complete (branch kept for re-run)'
-          }
-          $lines = @($heading, '', "No PR opened. Collected candidates and their validation outcome ($runUrl):", '')
-          foreach ($entry in $collected) {
-            $job = $jobMap[[string]$entry.Id]
-            $url = if ($job -and $job.html_url) { [string]$job.html_url } elseif ($runUrl) { $runUrl } else { '' }
-            $conclusion = if ($job -and $job.conclusion) { [string]$job.conclusion } else { 'incomplete' }
-            $link = if ($url) { " — 🔬 [validation]($url)" } else { '' }
-            $lines += "- ``$($entry.Id)`` ([PR #$($entry.Pr)]($($entry.Url)))$link — **$conclusion**"
-          }
-          ($lines -join "`n") | Add-Content -Path $env:GITHUB_STEP_SUMMARY
-
-          if ($determinate -eq 'true') {
-            # Don't auto-close a PR a human may already be reviewing: only delete the branch
-            # when no open PR points at it.
-            $openPr = gh pr list --head $branch --state open --json number --jq '.[0].number // empty'
-            if ($openPr) {
-              Write-Host "All collected entries failed, but PR #$openPr is open for $branch; keeping branch (not auto-closing a PR under review)"
-            }
-            else {
-              git push origin --delete $branch
-              Write-Host "Deleted branch $branch (all collected entries failed validation, no open PR)"
-            }
-          }
-          else {
-            Write-Host "Validation indeterminate; kept branch $branch for recovery / re-run"
-          }
+        run: gh workflow run dataset-validation.yml --ref "${{ steps.run.outputs.branch }}" -f modified-only=true -f test-run=false

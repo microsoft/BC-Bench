@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.exceptions import EmptyDiffError
-from bcbench.operations.git_operations import checkout_commit, clean_project_paths, clone_at_commit, commit_changes, stage_and_get_diff
+from bcbench.operations.git_operations import checkout_commit, clean_project_paths, clone_repo_at_revision, commit_changes, fetch_commit_if_missing, stage_and_get_diff
 
 
 class TestCommitChanges:
@@ -222,53 +222,62 @@ class TestCleanProjectPaths:
 
 
 @patch("bcbench.operations.git_operations.subprocess.run")
-def test_clone_at_commit_owner_repo_builds_https_url(mock_run, tmp_path):
-    dest = tmp_path / "clone"
+def test_clone_repo_at_revision_shallow_clones_via_gh(mock_run, tmp_path):
+    destination = tmp_path / "clone"
 
-    clone_at_commit("github/awesome-copilot", "a" * 40, dest)
+    clone_repo_at_revision("obra/superpowers", "a" * 40, destination)
 
-    assert dest.is_dir()
-    commands = [c.args[0] for c in mock_run.call_args_list]
-    assert ["git", "init", "-q"] in commands
-    assert ["git", "remote", "add", "origin", "https://github.com/github/awesome-copilot.git"] in commands
-    assert ["git", "fetch", "--depth", "1", "origin", "a" * 40] in commands
-    assert ["git", "checkout", "-q", "FETCH_HEAD"] in commands
+    # `gh` resolves the URL and auth; `--revision` accepts a SHA, which `--branch` would reject
+    assert [c.args[0] for c in mock_run.call_args_list] == [["gh", "repo", "clone", "obra/superpowers", str(destination), "--", "--depth=1", f"--revision={'a' * 40}"]]
 
 
 @patch("bcbench.operations.git_operations.subprocess.run")
-def test_clone_at_commit_full_url_used_verbatim(mock_run, tmp_path):
-    clone_at_commit("https://gitlab.com/o/r.git", "b" * 40, tmp_path / "c")
+def test_clone_repo_at_revision_replaces_existing_destination(mock_run, tmp_path):
+    destination = tmp_path / "clone"
+    stale_file = destination / "stale" / "pack.idx"
+    stale_file.parent.mkdir(parents=True)
+    stale_file.write_text("stale")
+    stale_file.chmod(0o444)
 
-    remote_calls = [c.args[0] for c in mock_run.call_args_list if c.args[0][:3] == ["git", "remote", "add"]]
-    assert remote_calls == [["git", "remote", "add", "origin", "https://gitlab.com/o/r.git"]]
+    clone_repo_at_revision("o/r", "b" * 40, destination)
+
+    assert not (destination / "stale").exists()
 
 
 @patch("bcbench.operations.git_operations.subprocess.run")
-def test_checkout_commit_present_locally_does_not_fetch(mock_run, tmp_path):
+def test_clone_repo_at_revision_propagates_gh_failure(mock_run, tmp_path):
+    mock_run.side_effect = subprocess.CalledProcessError(1, "gh", stderr="gh: Not Found (HTTP 404)")
+
+    with pytest.raises(subprocess.CalledProcessError):
+        clone_repo_at_revision("o/missing", "c" * 40, tmp_path / "clone")
+
+
+@patch("bcbench.operations.git_operations.subprocess.run")
+def test_checkout_commit_runs_plain_checkout(mock_run, tmp_path):
     mock_run.return_value = subprocess.CompletedProcess([], 0)
 
     checkout_commit(tmp_path, "a" * 40)
 
     commands = [c.args[0] for c in mock_run.call_args_list]
     assert commands == [["git", "checkout", "a" * 40]]
-    assert not any(cmd[:2] == ["git", "fetch"] for cmd in commands)
 
 
 @patch("bcbench.operations.git_operations.subprocess.run")
-def test_checkout_commit_missing_locally_fetches_then_retries(mock_run, tmp_path):
-    sha = "b" * 40
-    # First checkout fails (commit absent), fetch succeeds, retry checkout succeeds.
-    mock_run.side_effect = [
-        subprocess.CompletedProcess([], 1, stderr=b"error: pathspec"),
-        subprocess.CompletedProcess([], 0),
-        subprocess.CompletedProcess([], 0),
-    ]
+def test_fetch_commit_if_missing_skips_when_commit_present(mock_run, tmp_path):
+    mock_run.return_value = subprocess.CompletedProcess([], 0)
 
-    checkout_commit(tmp_path, sha)
+    fetch_commit_if_missing(tmp_path, "a" * 40)
 
     commands = [c.args[0] for c in mock_run.call_args_list]
-    assert commands == [
-        ["git", "checkout", sha],
-        ["git", "fetch", "--depth", "1", "origin", sha],
-        ["git", "checkout", sha],
-    ]
+    assert commands == [["git", "cat-file", "-e", f"{'a' * 40}^{{commit}}"]]
+
+
+@patch("bcbench.operations.git_operations.subprocess.run")
+def test_fetch_commit_if_missing_fetches_absent_commit(mock_run, tmp_path):
+    sha = "b" * 40
+    mock_run.side_effect = [subprocess.CompletedProcess([], 1), subprocess.CompletedProcess([], 0)]
+
+    fetch_commit_if_missing(tmp_path, sha)
+
+    commands = [c.args[0] for c in mock_run.call_args_list]
+    assert commands[-1] == ["git", "fetch", "origin", sha]

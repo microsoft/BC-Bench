@@ -264,6 +264,9 @@ dmypy.json
 evaluation_results/
 verification_results/
 
+# Agent plugins materialized at runtime (generated AL-LSP plugin, cloned github plugins)
+.bcbench/
+
 # Jekyll (GitHub Pages) - docs folder
 docs/_site/
 docs/.sass-cache/

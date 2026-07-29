@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
-from bcbench.types import Checklist, ChecklistAssertion, ExpectedOutput
+from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
 
 _config = get_config()
 
@@ -39,9 +39,9 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    repo: str = Field(default="microsoft/BCApps", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
+    repo: RepoSlug = "microsoft/BCApps"
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
-    base_commit: str = Field(pattern=r"^[a-fA-F0-9]{40}$")
+    base_commit: CommitSha
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
     project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
@@ -157,7 +157,7 @@ class TestGenEntry(_BugFixTestGenBase):
 class NL2ALEntry(BaseDatasetEntry):
     """Dataset entry for NL2AL category — generate AL code from natural language."""
 
-    base_commit: str | None = None
+    base_commit: CommitSha | None = None
     nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
     page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
