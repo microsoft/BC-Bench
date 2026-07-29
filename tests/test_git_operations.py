@@ -234,7 +234,10 @@ def test_clone_repo_at_revision_shallow_clones_via_gh(mock_run, tmp_path):
 @patch("bcbench.operations.git_operations.subprocess.run")
 def test_clone_repo_at_revision_replaces_existing_destination(mock_run, tmp_path):
     destination = tmp_path / "clone"
-    (destination / "stale").mkdir(parents=True)
+    stale_file = destination / "stale" / "pack.idx"
+    stale_file.parent.mkdir(parents=True)
+    stale_file.write_text("stale")
+    stale_file.chmod(0o444)
 
     clone_repo_at_revision("o/r", "b" * 40, destination)
 

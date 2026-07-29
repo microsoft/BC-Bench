@@ -1,6 +1,5 @@
 """Git repository operations."""
 
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -8,6 +7,7 @@ from pathlib import Path
 from bcbench.config import get_config
 from bcbench.exceptions import EmptyDiffError, PatchApplicationError
 from bcbench.logger import get_logger
+from bcbench.operations.filesystem_operations import remove_tree
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -182,7 +182,7 @@ def clone_repo_at_revision(repo: str, revision: str, destination: Path) -> None:
     """
     logger.info(f"Cloning {repo} @ {revision} into {destination}")
     if destination.exists():
-        shutil.rmtree(destination)
+        remove_tree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     try:

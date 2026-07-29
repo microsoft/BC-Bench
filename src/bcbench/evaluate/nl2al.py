@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -9,7 +8,7 @@ from bcbench.evaluate.base import EvaluationPipeline
 from bcbench.exceptions import EmptyDiffError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
-from bcbench.operations import copy_symbol_apps, stage_and_get_diff
+from bcbench.operations import copy_symbol_apps, remove_tree, stage_and_get_diff
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.types import EvaluationContext
 
@@ -24,14 +23,9 @@ _EMPTY_DIFF_MAX_ATTEMPTS = 3
 __all__ = ["NL2ALPipeline"]
 
 
-def _force_remove_readonly(func: Callable, path: str, _: object) -> None:
-    Path(path).chmod(0o666)
-    func(path)
-
-
 def _reset_repo_path(repo_path: Path) -> None:
     if repo_path.exists():
-        shutil.rmtree(repo_path, onexc=_force_remove_readonly)
+        remove_tree(repo_path)
     repo_path.mkdir(parents=True, exist_ok=True)
 
 
