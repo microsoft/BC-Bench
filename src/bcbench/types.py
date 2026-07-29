@@ -332,6 +332,17 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
+    def requires_repo(self) -> bool:
+        """Whether evaluating this category works on a cloned dataset repository."""
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.CODE_REVIEW:
+                return True
+            case EvaluationCategory.NL2AL:
+                return False
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
     def runner(self) -> str:
         """GitHub Actions runner label for evaluating this category.
 

@@ -33,10 +33,11 @@ def bceval_config(category: EvaluationCategoryOption) -> None:
 
 @category_app.command("runtime-config")
 def runtime_config(category: EvaluationCategoryOption) -> None:
-    """Emit the GitHub Actions runner label and container requirement for a category."""
+    """Emit the GitHub Actions runner label and environment requirements for a category."""
     write_step_outputs(
         {
             "runner": category.runner,
             "requires-container": str(category.requires_container).lower(),
+            "requires-repo": str(category.requires_repo).lower(),
         }
     )
