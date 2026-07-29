@@ -93,6 +93,32 @@ agents:
   enabled: false
   name: ALTest
 
+# controls loading agent plugins for the run, only enabled entries are validated and loaded.
+# Each plugin gets its own entry, and is passed to the CLI via `--plugin-dir` (session-scoped).
+#   name:     plugin name; also how it is recorded on the result as "<name>@<revision|local>"
+#   enabled:  per-entry toggle (defaults to false)
+#   source:   "local" (a folder on this machine) or "github" (cloned at runtime)
+#   path:     plugin root - for local an absolute path ; for github relative to the clone ("." for its root, or a subfolder when the repo hosts several plugins)
+#   repo:     github only, "owner/repo"
+#   revision: github only, a commit SHA (pinned)
+plugins:
+  - name: "bcbench-example"
+    enabled: false
+    source: local
+    path: "C:/depot/BC-Bench/src/bcbench/agent/shared/plugins/bcbench-example"
+  - name: "superpowers"
+    enabled: false
+    source: github
+    repo: "obra/superpowers"
+    revision: "d884ae04edebef577e82ff7c4e143debd0bbec99"
+    path: "."
+  - name: "BCQuality"
+    enabled: false
+    source: github
+    repo: "microsoft/BCQuality"
+    revision: "ad8ccde5953fd6ce072e3b59049406783066ed60"
+    path: "."
+
 mcp:
   servers:
     # AL MCP server (toggled via --al-mcp CLI flag), https://www.nuget.org/packages/Microsoft.Dynamics.BusinessCentral.Development.Tools

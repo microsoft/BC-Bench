@@ -21,7 +21,7 @@ from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext
+from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -110,6 +110,7 @@ def create_bugfix_result(
     output: str = "diff --git a/test.al b/test.al\n+fixed",
     error_message: str | None = None,
     metrics: AgentMetrics | None = None,
+    experiment: ExperimentConfiguration | None = None,
 ) -> BugFixResult:
     return BugFixResult(
         instance_id=instance_id,
@@ -122,6 +123,7 @@ def create_bugfix_result(
         output=output,
         error_message=error_message,
         metrics=metrics,
+        experiment=experiment,
     )
 
 
@@ -254,6 +256,19 @@ def create_problem_statement_dir(tmp_path: Path, content: str = PROBLEM_STATEMEN
 @pytest.fixture
 def sample_test_entry() -> TestEntry:
     return create_test_entry()
+
+
+@pytest.fixture
+def plugin_root(tmp_path: Path) -> Generator[Path]:
+    """Redirect the plugin root to a temp dir, so tests never write into the repo's own `.bcbench/`."""
+    from dataclasses import replace
+
+    from bcbench.agent.shared import plugin
+
+    root = tmp_path / "plugin-root"
+    patched = replace(plugin._config, paths=replace(plugin._config.paths, plugin_root=root))
+    with patch.object(plugin, "_config", patched):
+        yield root
 
 
 @pytest.fixture

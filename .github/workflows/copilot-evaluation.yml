@@ -57,6 +57,11 @@ on:
           - "3"
           - "4"
           - "5"
+      git-ref:
+        description: "Branch to record for experiment tracking (auto-filled on requeue; leave blank for manual runs)"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.category }}
@@ -129,6 +134,7 @@ jobs:
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -160,6 +166,7 @@ jobs:
       agent: "GitHub Copilot CLI"
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
+      git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
 
   requeue:
@@ -173,4 +180,4 @@ jobs:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

@@ -45,6 +45,7 @@ class PathConfig:
     hook_script_path: Path
     bc_artifacts_cache: Path
     redteam_scorecard: Path
+    plugin_root: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -63,6 +64,8 @@ class PathConfig:
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
             bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
             redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
+            # `.bcbench` avoids colliding with agent-reserved dirs (`.claude/`, `.github/`)
+            plugin_root=root / ".bcbench",
         )
 
 
@@ -75,6 +78,7 @@ class TimeoutConfig:
     test_execution: int
     agent_execution: int
     bcal_execution: int
+    filepath_identification: int
 
     @classmethod
     def default(cls) -> TimeoutConfig:
@@ -86,6 +90,9 @@ class TimeoutConfig:
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
             # Total bcal CLI budget per instance.
             bcal_execution=25 * 60,
+            # Context-free file-path identification; kept below the 20-min workflow step timeout
+            # so a hung run records an error result before the CI step is force-killed.
+            filepath_identification=15 * 60,
         )
 
 
@@ -107,6 +114,7 @@ class FilePatternConfig:
     claude_settings_local: str
     alpackages_dirname: str
     nl2al_export_subdir: str
+    plugin_manifest: Path
 
     @classmethod
     def default(cls) -> FilePatternConfig:
@@ -126,6 +134,8 @@ class FilePatternConfig:
             claude_settings_local="settings.local.json",
             alpackages_dirname=".alpackages",
             nl2al_export_subdir="src",
+            # Where both Copilot CLI and Claude Code look for a plugin's manifest
+            plugin_manifest=Path(".claude-plugin") / "plugin.json",
         )
 
 

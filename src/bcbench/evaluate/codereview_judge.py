@@ -7,11 +7,11 @@ false positives where two comments happen to be near each other but address diff
 
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 from bcbench.config import get_config
+from bcbench.copilot_cli import find_copilot as _find_copilot
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.exceptions import LLMJudgeError
 
@@ -79,10 +79,6 @@ def _parse_judge_results(result_path: Path, num_pairs: int, stdout: str = "") ->
 
     # A pair the judge never returned a verdict for counts as not confirmed.
     return [results_by_pair.get(i + 1, False) for i in range(num_pairs)]
-
-
-def _find_copilot() -> str | None:
-    return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
 
 
 def _decode_stream(stream: str | bytes | None) -> str:

@@ -13,6 +13,12 @@ A benchmark for evaluating AI coding agents on real-world **Business Central (AL
 | [Test Generation](test-generation.md) | "Reverses" SWE-Bench: Generates reproduction tests (TDD) instead of fixes |
 | [Code Review](code-review.md) | Reviews AL pull requests; scored with Precision / Recall / F1 against gold findings |
 
+## Diagnostics
+
+| Diagnostic | Description |
+|------------|-------------|
+| [Contamination — File-path Identification](contamination-file-path-identification.md) | Context-free bug localization to detect dataset memorization, adapting [The SWE-Bench Illusion](https://arxiv.org/abs/2506.12286) |
+
 ## What is Business Central?
 
 **Microsoft Dynamics 365 Business Central** is a comprehensive business management solution for small and medium-sized organizations. It connects sales, service, finance, and operations to help businesses work smarter, adapt faster, and perform better.

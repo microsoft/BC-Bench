@@ -35,6 +35,7 @@ def result_summarize(
     result_pattern: Annotated[str, typer.Option(help="Pattern for the per instances result files")] = f"*{_config.file_patterns.result_pattern}",
     summary_output: Annotated[str, typer.Option(help="Output filename for summary JSON")] = "evaluation_summary.json",
     bceval_output: Annotated[str, typer.Option(help="Output filename for bceval results")] = "bceval_results.jsonl",
+    git_ref: Annotated[str | None, typer.Option("--git-ref", help="Git ref (branch/tag) the run was dispatched from; recorded in bceval metadata as git_branch")] = None,
 ) -> None:
     """
     Summarize evaluation results from a completed run.
@@ -70,7 +71,7 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category)
+    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
 
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
 

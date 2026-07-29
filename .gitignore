@@ -268,6 +268,9 @@ verification_results/
 dataset/redteam/attack_objectives.json
 dataset/private/
 
+# Agent plugins materialized at runtime (generated AL-LSP plugin, cloned github plugins)
+.bcbench/
+
 # Jekyll (GitHub Pages) - docs folder
 docs/_site/
 docs/.sass-cache/

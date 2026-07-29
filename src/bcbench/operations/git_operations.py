@@ -7,6 +7,7 @@ from pathlib import Path
 from bcbench.config import get_config
 from bcbench.exceptions import EmptyDiffError, PatchApplicationError
 from bcbench.logger import get_logger
+from bcbench.operations.filesystem_operations import remove_tree
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -60,6 +61,24 @@ def checkout_commit(repo_path: Path, commit: str) -> None:
     logger.info(f"Commit {commit} checked out")
 
 
+def _commit_present(repo_path: Path, commit: str) -> bool:
+    result = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    return result.returncode == 0
+
+
+def fetch_commit_if_missing(repo_path: Path, commit: str) -> None:
+    """Fetch `commit` from origin when it is not already present in `repo_path`.
+
+    Needed in local dev, might lack base commits that were squashed away on merge. No-op in CI, where the testbed is cloned at the exact commit already.
+    """
+    if _commit_present(repo_path, commit):
+        return
+
+    logger.info(f"Commit {commit} not present locally; fetching from origin")
+    subprocess.run(["git", "fetch", "origin", commit], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    logger.info(f"Commit {commit} fetched")
+
+
 def commit_changes(repo_path: Path, message: str) -> None:
     logger.info(f"Committing changes: {message}")
     subprocess.run(["git", "add", "-A"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
@@ -81,7 +100,15 @@ def apply_patch(repo_path: Path, patch_content: str, patch_name: str = "patch") 
         patch_file = f.name
 
     try:
-        subprocess.run(["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", patch_file], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        subprocess.run(
+            ["git", "apply", "--whitespace=nowarn", "--ignore-whitespace", patch_file],
+            cwd=repo_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            text=True,
+            check=True,
+        )
 
         logger.info(f"{patch_name.capitalize()} applied successfully")
     except subprocess.CalledProcessError as e:
@@ -137,3 +164,37 @@ def stage_and_get_diff(repo_path: Path) -> str:
         raise EmptyDiffError()
 
     return patch
+
+
+def clone_repo_at_revision(repo: str, revision: str, destination: Path) -> None:
+    """Shallow-clone `repo` at a specific `revision` into `destination`.
+
+    Uses `gh repo clone`, so the GitHub CLI resolves the URL and handles authentication,
+    while `git clone --revision` checks the revision out directly.
+
+    Args:
+        repo: A GitHub `owner/repo` slug.
+        revision: A commit SHA.
+        destination: Target directory, replaced if it already exists.
+
+    Note:
+        `git clone --revision` requires git 2.49+.
+    """
+    logger.info(f"Cloning {repo} @ {revision} into {destination}")
+    if destination.exists():
+        remove_tree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        subprocess.run(
+            ["gh", "repo", "clone", repo, str(destination), "--", "--depth=1", f"--revision={revision}"],
+            capture_output=True,
+            encoding="utf-8",
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        logger.exception(f"Cloning {repo} @ {revision} failed: {e.stderr}")
+        raise
+
+    logger.info(f"Cloned {repo} @ {revision}")

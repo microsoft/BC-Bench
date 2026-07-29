@@ -24,6 +24,7 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 | `skills.enabled` | `false` | Copy **only** `instructions/<owner>-<repo>/skills/` |
 | `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<owner>-<repo>/agents/` and pass `--agent=<name>` to the CLI |
 | `mcp.servers` | _(none)_ | List of MCP servers to register |
+| `plugins` | _(all disabled)_ | List of agent plugins to load for the run — one entry per plugin, local or cloned from GitHub at a revision, passed to the CLI via `--plugin-dir` |
 
 Note: `instructions.enabled: true` is a superset — you don't also need to enable `skills` or `agents` to get them. Use `skills`/`agents` when you want to isolate the effect of just that piece.
 
@@ -50,6 +51,39 @@ instructions/
 At runtime we copy this folder into the target repo:
 - **Copilot**: `<repo>/.github/` (`AGENTS.md` -> `copilot-instructions.md`)
 - **Claude**: `<repo>/.claude/` (`AGENTS.md` -> `CLAUDE.md`)
+
+### Agent plugins
+
+A [plugin](https://docs.github.com/en/copilot/concepts/agents/about-plugins) is a distributable folder bundling skills, custom agents, hooks, and MCP/LSP server configs. `plugins` is a list with **one entry per plugin**, each toggled by its own `enabled` (default `false`):
+
+| Key | Required | What it does |
+|---|---|---|
+| `name` | yes | Plugin name; also how it is recorded on the result |
+| `source` | yes | `local` (a folder on this machine) or `github` (cloned at runtime) |
+| `path` | yes | Plugin root — an **absolute** path for `local`; relative to the clone for `github` (`"."` when the repo *is* the plugin) |
+| `repo` | `github` | `owner/repo` |
+| `revision` | `github` | A commit SHA (pinned) |
+
+
+Entries are parsed into [`PluginConfig`](src/bcbench/types.py), and each enabled plugin is passed to the CLI as `--plugin-dir <path>` (repeatable, supported by both agents), so it is loaded for that single session only. `github` plugins are shallow-cloned with `gh repo clone` into the gitignored `<bc-bench>/.bcbench/`, deliberately outside the repo under evaluation so plugin content never reaches its diff or the agent's working directory.
+
+Results record `ExperimentConfiguration.plugins` as `"<name>@<revision>"` / `"<name>@local"`. A `local` path is machine-specific and won't reproduce in CI, so switch to a `github` revision for a shareable run.
+
+### Encouraging plugin usage
+
+Loading a plugin makes its capabilities **available** — it does not guarantee the agent **uses** them. What it takes depends on what the plugin contributes:
+
+- **MCP servers / hooks are non-discretionary.** An MCP server's tools and a plugin's hooks are loaded every run and exercised automatically (a `SessionStart` hook can even inject context). Nothing extra is needed to test these.
+- **Skills are discretionary.** The agent *sees* the loaded skills (they appear in the model's available-skills list, verified — including task-relevant ones like `systematic-debugging` for a bug-fix), but only invokes one when it judges it worthwhile. On a well-specified task (bug-fix, code-review) it typically just does the work directly and invokes nothing. So to test a **skill** plugin you must *encourage* usage.
+
+To encourage a skill, use the **custom instructions** lever (`instructions` toggle → the repo's `AGENTS.md`): even a light nudge flips skill usage on. Append a subtle nudge like the one below to the target repo's `AGENTS.md` (under `src/bcbench/agent/shared/instructions/<owner>-<repo>/`) and set `instructions.enabled: true`:
+
+```md
+## Using your skills
+You have optional skills available through the `skill` tool. When you start a task, briefly consider whether one of them fits — and if it does, use it.
+```
+
+Because `instructions` is recorded on the result (`custom_instructions=True`), "plugin + nudge" is a clean, attributable experiment arm — keep the nudge subtle so you can separate the plugin's effect from the nudge's.
 
 ## Before You Start
 
@@ -119,6 +153,7 @@ Each run uploads artifacts and updates a `leaderboard/<category>/<run_id>` branc
 - [ ] Skills (`skills.enabled: true`)
 - [ ] Custom agents (`agents.enabled: true`, name: ___)
 - [ ] MCP servers (list below)
+- [ ] Plugins (name + `local` path or `repo`@`revision`)
 - [ ] Other (describe)
 
 ### Agent & Model

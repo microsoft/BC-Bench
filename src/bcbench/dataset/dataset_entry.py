@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from bcbench.config import get_config
 from bcbench.exceptions import EntryNotFoundError
-from bcbench.types import Checklist, ChecklistAssertion, ExpectedOutput
+from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutput, RepoSlug
 
 _config = get_config()
 
@@ -20,7 +20,7 @@ __all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "TestEntry", "TestGe
 class TestEntry(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    codeunitID: int
+    codeunitID: Annotated[int, Field(gt=0)]
     functionName: Annotated[frozenset[str], Field(min_length=1)]
 
 
@@ -28,7 +28,7 @@ class EntryMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     area: str | None = None
-    image_count: int | None = None
+    image_count: Annotated[int, Field(ge=0)] | None = None
     persona: str | None = None
 
 
@@ -39,13 +39,13 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    repo: str = Field(default="microsoft/BCApps", pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")
+    repo: RepoSlug = "microsoft/BCApps"
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
-    base_commit: str = Field(pattern=r"^[a-fA-F0-9]{40}$")
+    base_commit: CommitSha
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
-    project_paths: list[str] = []
-    patch: Annotated[str, Field(min_length=1)]
+    project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
+    patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
 
     @classmethod
     def load(cls, dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[Self]:
@@ -112,7 +112,7 @@ class _BugFixTestGenBase(BaseDatasetEntry):
 
     fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
     pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
-    test_patch: Annotated[str, Field(min_length=1)]
+    test_patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
 
     @property
     def problem_statement_dir(self) -> Path:
@@ -157,10 +157,10 @@ class TestGenEntry(_BugFixTestGenBase):
 class NL2ALEntry(BaseDatasetEntry):
     """Dataset entry for NL2AL category — generate AL code from natural language."""
 
-    base_commit: str | None = None
-    nl_prompt: Annotated[str, Field(min_length=1)]
+    base_commit: CommitSha | None = None
+    nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
-    page: str
+    page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
     audience: Literal["Business", "Technical", "Both"]
 
     def get_task(self) -> str:

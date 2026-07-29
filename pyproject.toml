@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bcbench"
-version = "0.6.1"
+version = "0.7.1"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -88,6 +88,11 @@ ignore = [
     "TRY300",  # try-consider-else: stylistic; often hurts readability
     "TRY301",  # raise-within-try: suggested "abstract to inner function" refactor adds indirection
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Force sandboxed rendering:
+"jinja2.Template".msg = "Use jinja2.sandbox.SandboxedEnvironment instead; the bare Template is not sandboxed."
+"jinja2.Environment".msg = "Use jinja2.sandbox.SandboxedEnvironment instead; the bare Environment is not sandboxed."
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN"]
