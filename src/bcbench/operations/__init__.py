@@ -11,6 +11,7 @@ from bcbench.operations.bc_operations import (
     run_tests,
     wrap_query_as_api,
 )
+from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
@@ -45,6 +46,7 @@ __all__ = [
     "execute_al_query",
     "extract_tests_from_patch",
     "fetch_commit_if_missing",
+    "remove_tree",
     "resolve_artifact_version_root",
     "run_tests",
     "set_runtime_version",
