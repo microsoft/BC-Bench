@@ -51,7 +51,7 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    /review
+    /bcquality-al-review
 
     Review only the uncommitted working-tree changes (git diff HEAD); do not compare commits such as HEAD~1..HEAD or origin/main.
 
