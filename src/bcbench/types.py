@@ -334,13 +334,9 @@ class EvaluationCategory(StrEnum):
     @property
     def requires_repo(self) -> bool:
         """Whether evaluating this category works on a cloned dataset repository."""
-        match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.CODE_REVIEW:
-                return True
-            case EvaluationCategory.NL2AL:
-                return False
+        from bcbench.dataset import RepoGroundedEntry
 
-        raise ValueError(f"Unknown evaluation category: {self}")
+        return issubclass(self.entry_class, RepoGroundedEntry)
 
     @property
     def runner(self) -> str:

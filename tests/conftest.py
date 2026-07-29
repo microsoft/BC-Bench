@@ -321,10 +321,8 @@ VALID_NL_PROMPT = "Create a report showing budgeted cost vs actual cost broken d
 
 def create_nl2al_entry(
     instance_id: str = "nl2al__job-budget-report-1",
-    repo: str = "nl2al/template",
     environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
     project_paths: list[str] | None = None,
-    patch: str = VALID_PATCH,
     nl_prompt: str = VALID_NL_PROMPT,
     created_at: str = VALID_CREATED_AT,
     expected: list[ChecklistAssertion] | None = None,
@@ -339,11 +337,8 @@ def create_nl2al_entry(
 
     return NL2ALEntry(
         instance_id=instance_id,
-        repo=repo,
-        base_commit=None,
         environment_setup_version=environment_setup_version,
         project_paths=project_paths,
-        patch=patch,
         nl_prompt=nl_prompt,
         created_at=created_at,
         expected=expected,

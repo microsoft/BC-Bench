@@ -17,7 +17,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
 
     Args:
         agent_config: Agent configuration dictionary
-        entry: Dataset entry containing repo information
+        entry: Dataset entry naming the customization profile to apply
         repo_path: Path to repository where instructions will be copied
         agent_type: Type of agent (Copilot or Claude)
 
@@ -28,10 +28,10 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
     instructions_enabled: bool = instructions_config["enabled"]
 
     if instructions_enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.repo)
+        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
         target_dir: Path = agent_type.get_target_dir(repo_path)
 
-        logger.info(f"Setting up custom instructions for repository: {entry.repo}")
+        logger.info(f"Setting up custom instructions for profile: {entry.customization_profile}")
         if target_dir.exists():
             rmtree(target_dir)
         copytree(source_instructions, target_dir)
@@ -56,7 +56,7 @@ def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: P
     custom_agent_enabled: bool = custom_agent_config["enabled"]
 
     if custom_agent_enabled:
-        source_instructions: Path = _get_source_instructions_path(entry.repo)
+        source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
         target_dir: Path = agent_type.get_target_dir(repo_path)
         copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
 
@@ -66,20 +66,19 @@ def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: P
     return None
 
 
-def _get_source_instructions_path(repo_name: str) -> Path:
+def _get_source_instructions_path(profile: str) -> Path:
     """
-    Get path to source instruction folder for a repository.
+    Get path to the source instruction folder for an instruction profile.
 
     Instructions are stored in shared/instructions/ and used by both Copilot and Claude.
 
     Raises:
         FileNotFoundError: If instruction file doesn't exist
     """
-    sanitized_name = repo_name.replace("/", "-")
-    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.instructions_dirname / sanitized_name
+    instructions_path = _config.paths.agent_share_dir / _config.file_patterns.instructions_dirname / profile
 
     if not instructions_path.exists():
-        raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for repository: {repo_name}")
+        raise FileNotFoundError(f"Instruction folder not found: {instructions_path}\nExpected for profile: {profile}")
 
     return instructions_path
 

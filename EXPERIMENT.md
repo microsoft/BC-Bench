@@ -20,9 +20,9 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 
 | Setting | Default | What it does |
 |---|---|---|
-| `instructions.enabled` | `false` | Copy the **entire** `instructions/<owner>-<repo>/` folder (instructions + skills + agents) into the target repo before running the agent |
-| `skills.enabled` | `false` | Copy **only** `instructions/<owner>-<repo>/skills/` |
-| `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<owner>-<repo>/agents/` and pass `--agent=<name>` to the CLI |
+| `instructions.enabled` | `false` | Copy the **entire** `instructions/<profile>/` folder (instructions + skills + agents) into the target repo before running the agent |
+| `skills.enabled` | `false` | Copy **only** `instructions/<profile>/skills/` |
+| `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<profile>/agents/` and pass `--agent=<name>` to the CLI |
 | `mcp.servers` | _(none)_ | List of MCP servers to register |
 | `plugins` | _(all disabled)_ | List of agent plugins to load for the run — one entry per plugin, local or cloned from GitHub at a revision, passed to the CLI via `--plugin-dir` |
 
@@ -30,7 +30,7 @@ Note: `instructions.enabled: true` is a superset — you don't also need to enab
 
 ### Custom instructions / skills / custom agents
 
-Files live under `src/bcbench/agent/shared/instructions/<owner>-<repo>/`. The folder name mirrors the dataset's repo path with `/` replaced by `-` (e.g. `microsoft/BCApps` -> `microsoft-BCApps`).
+Files live under `src/bcbench/agent/shared/instructions/<profile>/`, where `<profile>` is the dataset entry's `customization_profile`. Repo-grounded categories derive it from the repo path with `/` replaced by `-` (e.g. `microsoft/BCApps` -> `microsoft-BCApps`), which reproduces the customization a developer would already have checked in. Categories that scaffold their own workspace and have no repo (e.g. `nl2al`) name their own folder and place it alongside the repo-keyed ones.
 
 The files checked in today are **placeholders**. Replace them with whatever you want to test — your own AGENTS.md, your own skills, your own agent definitions — then toggle the corresponding flag in `config.yaml`.
 
@@ -76,7 +76,7 @@ Loading a plugin makes its capabilities **available** — it does not guarantee 
 - **MCP servers / hooks are non-discretionary.** An MCP server's tools and a plugin's hooks are loaded every run and exercised automatically (a `SessionStart` hook can even inject context). Nothing extra is needed to test these.
 - **Skills are discretionary.** The agent *sees* the loaded skills (they appear in the model's available-skills list, verified — including task-relevant ones like `systematic-debugging` for a bug-fix), but only invokes one when it judges it worthwhile. On a well-specified task (bug-fix, code-review) it typically just does the work directly and invokes nothing. So to test a **skill** plugin you must *encourage* usage.
 
-To encourage a skill, use the **custom instructions** lever (`instructions` toggle → the repo's `AGENTS.md`): even a light nudge flips skill usage on. Append a subtle nudge like the one below to the target repo's `AGENTS.md` (under `src/bcbench/agent/shared/instructions/<owner>-<repo>/`) and set `instructions.enabled: true`:
+To encourage a skill, use the **custom instructions** lever (`instructions` toggle → the repo's `AGENTS.md`): even a light nudge flips skill usage on. Append a subtle nudge like the one below to the target repo's `AGENTS.md` (under `src/bcbench/agent/shared/instructions/<profile>/`) and set `instructions.enabled: true`:
 
 ```md
 ## Using your skills

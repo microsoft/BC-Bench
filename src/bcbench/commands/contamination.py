@@ -13,6 +13,7 @@ from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDi
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult, IdentificationAggregate, aggregate_results, split_by_cutoff
 from bcbench.contamination.runner import load_identification_results, run_filepath_identification
+from bcbench.dataset import RepoGroundedEntry
 from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
@@ -42,6 +43,9 @@ def filepath_identification(
         raise typer.BadParameter(f"file-path-identification requires a patch-based category {[c.value for c in _PATCH_BASED_CATEGORIES]}, got '{category.value}'")
 
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    if not isinstance(entry, RepoGroundedEntry):
+        raise typer.BadParameter(f"file-path-identification scores against a gold patch, which '{category.value}' entries do not have")
+
     result = run_filepath_identification(entry=entry, model=model, category=category.value, top_k=top_k, output_dir=output_dir / run_id)
 
     if result.error:

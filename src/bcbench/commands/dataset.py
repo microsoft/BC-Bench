@@ -6,7 +6,7 @@ import typer
 from typing_extensions import Annotated
 
 from bcbench.cli_options import EvaluationCategoryOption
-from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry
+from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
 from bcbench.logger import get_logger
@@ -80,15 +80,17 @@ def view_entry(
     info_table.add_column("Field", style="cyan bold")
     info_table.add_column("Value")
 
-    info_table.add_row("Repo", entry.repo or "N/A")
     info_table.add_row("Instance ID", entry.instance_id or "N/A")
-    info_table.add_row("Base Commit", entry.base_commit or "N/A")
     info_table.add_row("Created At", entry.created_at or "N/A")
     info_table.add_row("Environment Setup Version", entry.environment_setup_version or "N/A")
     info_table.add_row(
         "Project Paths",
         "\n".join(entry.project_paths) if entry.project_paths else "N/A",
     )
+
+    if isinstance(entry, RepoGroundedEntry):
+        info_table.add_row("Repo", entry.repo)
+        info_table.add_row("Base Commit", entry.base_commit)
 
     if isinstance(entry, NL2ALEntry):
         info_table.add_row("Page", entry.page)
@@ -105,9 +107,9 @@ def view_entry(
     console.print("\n[bold cyan]Problem Statement with Hints:[/bold cyan]")
     console.print(Panel(entry.get_task() or "[dim]Empty[/dim]", border_style="green"))
 
-    if show_patch:
+    if show_patch and isinstance(entry, RepoGroundedEntry):
         console.print("\n[bold cyan]Patch:[/bold cyan]")
-        console.print(Panel(entry.patch or "[dim]Empty[/dim]", border_style="magenta"))
+        console.print(Panel(entry.patch, border_style="magenta"))
 
     # Display category-specific fields
     if isinstance(entry, _BugFixTestGenBase):

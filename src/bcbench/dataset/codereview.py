@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from bcbench.dataset.dataset_entry import BaseDatasetEntry
+from bcbench.dataset.dataset_entry import RepoGroundedEntry
 
 
 class Severity(StrEnum):
@@ -77,7 +77,7 @@ class ReviewComment(BaseModel):
         return f"[{self.severity_label}] {loc}: {self.body}"
 
 
-class CodeReviewEntry(BaseDatasetEntry):
+class CodeReviewEntry(RepoGroundedEntry):
     """Dataset entry for the code-review category."""
 
     expected_comments: list[ReviewComment] = Field(default_factory=list)

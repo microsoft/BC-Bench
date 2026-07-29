@@ -17,7 +17,7 @@ from typing import cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset import RepoGroundedEntry
 
 __all__ = [
     "FilePathIdentificationResult",
@@ -170,7 +170,7 @@ class FilePathIdentificationResult(BaseModel):
     def build(
         cls,
         *,
-        entry: BaseDatasetEntry,
+        entry: RepoGroundedEntry,
         model: str,
         category: str,
         top_k: int,
