@@ -159,15 +159,11 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
         summary = super().from_results(results, run_id)
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        total = summary.total
 
-        # Exclude unscorable results (harness/dataset failures) from every rate so they are not
-        # counted against the agent.
-        scorable = [r for r in results if not (isinstance(r, ExecutionBasedEvaluationResult) and not r.scorable)]
-        total = len(scorable)
-
-        resolved = sum(1 for r in scorable if isinstance(r, ExecutionBasedEvaluationResult) and r.resolved)
-        build = sum(1 for r in scorable if isinstance(r, ExecutionBasedEvaluationResult) and r.build)
-        instance_results = {r.instance_id: (isinstance(r, ExecutionBasedEvaluationResult) and r.resolved) for r in scorable}
+        resolved = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.resolved)
+        build = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.build)
+        instance_results = {r.instance_id: (isinstance(r, ExecutionBasedEvaluationResult) and r.resolved) for r in results}
 
         return summary.model_copy(
             update={

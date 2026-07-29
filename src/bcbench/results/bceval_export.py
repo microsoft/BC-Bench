@@ -8,7 +8,7 @@ from typing import Any
 
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.logger import get_logger
-from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
+from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import get_benchmark_version
 from bcbench.types import EvaluationCategory, ExpectedOutput, ExperimentConfiguration
 
@@ -46,12 +46,6 @@ def write_bceval_results(
     output_file = out_dir / output_filename
     with open(output_file, "w") as f:
         for result in results:
-            # Unscorable results (harness/dataset failures, e.g. a gold query that didn't compile) must
-            # not reach the uploaded/core score, or they'd count against the agent's ResolutionRate.
-            if isinstance(result, ExecutionBasedEvaluationResult) and not result.scorable:
-                logger.info(f"Skipping unscorable result from bceval export: {result.instance_id}")
-                continue
-
             matching_entries = [e for e in dataset_entries if e.instance_id == result.instance_id]
 
             if not matching_entries:
