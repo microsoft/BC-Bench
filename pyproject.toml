@@ -51,6 +51,12 @@ line-length = 200
 
 [tool.ruff.lint]
 extend-select = [
+    # Restore the pyflakes/pycodestyle correctness rules that ruff 0.16 dropped from
+    # its default set (E711/E712/E713/E714/E721/E731/E741, F403/F405/F406/F722, etc.).
+    "E4",    # pycodestyle: import placement (E401/E402)
+    "E7",    # pycodestyle: statement/comparison lints (== None, lambda assignment, ...)
+    "E9",    # pycodestyle: syntax/runtime errors
+    "F",     # pyflakes: undefined names, star-import hazards, unused imports
     "PLE",   # Pylint errors (includes __all__ validation)
     "PLW",   # Pylint warnings (includes subprocess.run check requirement)
     "I",     # isort (import sorting)
@@ -76,6 +82,10 @@ extend-select = [
     "PYI",   # type stubs (no-op now, guard for future)
     "SLOT",  # require __slots__ on str/tuple/namedtuple subclasses
     "ASYNC", # async best practices (no-op now, guard for future)
+    "PERF",  # perflint: avoid needless per-iteration overhead (prefer extend/comprehensions)
+    "RSE",   # flake8-raise: drop redundant parentheses on bare exception raises
+    "FLY",   # flynt: prefer f-strings over str.join of a static sequence (guard for future)
+    "PGH",   # pygrep-hooks: require codes on noqa/type-ignore, ban eval (guard for future)
 ]
 
 ignore = [
@@ -85,6 +95,9 @@ ignore = [
     "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message
     "TRY300",  # try-consider-else: stylistic; often hurts readability
     "TRY301",  # raise-within-try: suggested "abstract to inner function" refactor adds indirection
+    "BLE001",  # blind-except: intentional best-effort/defensive catches (logging handler, fallbacks)
+    "DTZ",     # flake8-datetimez: naive local dates are fine here; no cross-timezone logic
+    "S112",    # try-except-continue: intentional in best-effort probing (e.g. version scanning)
 ]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
@@ -108,7 +121,7 @@ analysis = [
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.0",
-    "ruff>=0.15.0",
+    "ruff>=0.16.0",
     "pre-commit>=4.3.0",
     "ty>=0.0.33",
 ]

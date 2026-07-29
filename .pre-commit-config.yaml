@@ -1,12 +1,13 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.16.0
     hooks:
       # Run the linter
       - id: ruff-check
         args: [--fix]
-      # Run the formatter
+      # Run the formatter (also formats Python code blocks in Markdown, hence the markdown type)
       - id: ruff-format
+        types_or: [python, pyi, jupyter, markdown]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

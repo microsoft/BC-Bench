@@ -143,7 +143,7 @@ def stage_and_get_diff(repo_path: Path) -> str:
     except subprocess.CalledProcessError as e:
         if e.stderr and "did not match" in e.stderr:
             logger.warning("No *.al files produced by agent - treating as empty diff")
-            raise EmptyDiffError() from e
+            raise EmptyDiffError from e
         raise
 
     # Get diff of staged changes against HEAD
@@ -161,7 +161,7 @@ def stage_and_get_diff(repo_path: Path) -> str:
 
     if not patch:
         logger.error("Generated diff is empty - agent made no changes")
-        raise EmptyDiffError()
+        raise EmptyDiffError
 
     return patch
 
