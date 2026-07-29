@@ -25,6 +25,7 @@ on:
           - "test-generation"
           - "code-review"
           - "ext-implement"
+          - "ext-triage"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
