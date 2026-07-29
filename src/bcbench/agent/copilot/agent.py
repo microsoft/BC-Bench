@@ -1,5 +1,6 @@
 """GitHub Copilot CLI Agent implementation."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,21 @@ from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, Experimen
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def _find_copilot_cmd() -> str:
+    """Resolve the Copilot CLI executable path.
+
+    Checks COPILOT_EXE env var first (useful when the PATH entry is a broken WinGet shim),
+    then falls back to standard PATH lookup.
+    """
+    override = os.environ.get("COPILOT_EXE")
+    if override:
+        return override
+    cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
+    if not cmd:
+        raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
+    return cmd
 
 
 def run_copilot_agent(
@@ -48,9 +64,7 @@ def run_copilot_agent(
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
-    if not copilot_cmd:
-        raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
+    copilot_cmd = _find_copilot_cmd()
 
     try:
         cmd_args = [
@@ -129,9 +143,7 @@ def run_copilot_agent_ext(
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    copilot_cmd = shutil.which("copilot.cmd") or shutil.which("copilot")
-    if not copilot_cmd:
-        raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
+    copilot_cmd = _find_copilot_cmd()
 
     try:
         cmd_args = [
@@ -141,7 +153,6 @@ def run_copilot_agent_ext(
             "--disable-builtin-mcps",
             f"--model={model}",
             "--log-level=debug",
-            "--disable-parallel-tools-execution",
             f"--log-dir={output_dir.resolve()}",
         ]
         if not instructions_enabled:

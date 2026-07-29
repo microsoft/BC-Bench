@@ -49,7 +49,7 @@ class TestGenerationPipeline(EvaluationPipeline):
             context.container_name,
             context.username,
             context.password,
-            context.entry.environment_setup_version,
+            context.entry.environment_setup_version or "26.0",
         )
 
         # Apply gold patch / problem statement AFTER build so fix isn't included in published app
@@ -86,7 +86,7 @@ class TestGenerationPipeline(EvaluationPipeline):
                 context.container_name,
                 context.username,
                 context.password,
-                context.entry.environment_setup_version,
+                context.entry.environment_setup_version or "26.0",
             )
             run_test_suite(generated_tests, "Fail", context.container_name, context.username, context.password)
 
@@ -98,7 +98,7 @@ class TestGenerationPipeline(EvaluationPipeline):
                 context.container_name,
                 context.username,
                 context.password,
-                context.entry.environment_setup_version,
+                context.entry.environment_setup_version or "26.0",
             )
             run_test_suite(generated_tests, "Pass", context.container_name, context.username, context.password)
 

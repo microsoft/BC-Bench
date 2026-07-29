@@ -39,7 +39,7 @@ class BugFixPipeline(EvaluationPipeline):
             context.container_name,
             context.username,
             context.password,
-            context.entry.environment_setup_version,
+            context.entry.environment_setup_version or "26.0",
         )
 
         setup_repo_postbuild(context.entry, context.repo_path, context.category)
@@ -70,7 +70,7 @@ class BugFixPipeline(EvaluationPipeline):
                 context.container_name,
                 context.username,
                 context.password,
-                context.entry.environment_setup_version,
+                context.entry.environment_setup_version or "26.0",
             )
             run_tests(context.entry, context.container_name, context.username, context.password)
 

@@ -16,7 +16,9 @@ def clean_repo(repo_path: Path) -> None:
     """Clean the repository by discarding all changes, including staged files and untracked files."""
     logger.info(f"Cleaning repository: {repo_path}")
     subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
-    subprocess.run(["git", "clean", "-fd"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    result = subprocess.run(["git", "clean", "-ffd"], check=False, cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        logger.warning(f"git clean -ffd exited with {result.returncode}: {result.stderr.decode(errors='replace')}")
     logger.info("Repository cleaned successfully")
 
 

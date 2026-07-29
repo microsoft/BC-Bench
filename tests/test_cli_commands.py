@@ -1,7 +1,7 @@
 """Integration tests for CLI commands using Typer's CliRunner."""
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -88,6 +88,34 @@ def sample_results_directory(tmp_path, sample_dataset_file_for_cli):
     result3.save(results_dir, f"{result3.instance_id}.jsonl")
 
     return tmp_path, run_id, sample_dataset_file_for_cli
+
+
+@pytest.mark.integration
+def test_run_copilot_extensibility_request_does_not_require_container_name(tmp_path, monkeypatch):
+    entry = MagicMock()
+    entry.instance_id = "issue-29789"
+
+    monkeypatch.setattr("bcbench.commands.run.load_ext_dataset_entries", lambda dataset_path, entry_id: [entry])
+    monkeypatch.setattr("bcbench.commands.run.setup_repo_prebuild", lambda entry, repo_path: None)
+    monkeypatch.setattr("bcbench.commands.run.run_copilot_agent_ext", lambda **kwargs: (None, None))
+    monkeypatch.setattr("bcbench.evaluate.extensibility.compare_extensibility_output", lambda entry, metrics: (True, []))
+
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "copilot",
+            "issue-29789",
+            "--category",
+            "extensibility-request",
+            "--repo-path",
+            str(tmp_path / "repo"),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    assert result.exit_code == 0, f"Command failed:\nstdout: {result.stdout}\nstderr: {result.stderr}\nexception: {result.exception}"
 
 
 @pytest.mark.integration

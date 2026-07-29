@@ -1,3 +1,4 @@
+import stat
 from pathlib import Path
 from shutil import copytree, rmtree
 
@@ -8,6 +9,16 @@ from bcbench.types import AgentType
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def _force_rmtree(path: Path) -> None:
+    """Remove a directory tree, stripping read-only flags on Windows before retrying."""
+
+    def _on_exc(func, p, exc_info):
+        Path(p).chmod(stat.S_IWRITE)
+        func(p)
+
+    rmtree(path, onexc=_on_exc)
 
 
 def setup_instructions_from_config(agent_config: dict, entry: DatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
@@ -32,7 +43,7 @@ def setup_instructions_from_config(agent_config: dict, entry: DatasetEntry, repo
 
         logger.info(f"Setting up custom instructions for repository: {entry.repo}")
         if target_dir.exists():
-            rmtree(target_dir)
+            _force_rmtree(target_dir)
         copytree(source_instructions, target_dir)
 
         # Rename canonical instruction file to agent-specific name
@@ -97,7 +108,7 @@ def copy_problem_statement_folder(entry: DatasetEntry, repo_path: Path) -> None:
     dest_dir: Path = repo_path / _config.file_patterns.problem_statement_dest_dir
 
     if dest_dir.exists():
-        rmtree(dest_dir)
+        _force_rmtree(dest_dir)
 
     copytree(source_dir, dest_dir)
     logger.info(f"Copied problem statement folder from {source_dir} to {dest_dir}")

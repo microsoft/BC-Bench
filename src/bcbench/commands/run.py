@@ -67,7 +67,7 @@ def run_mini(
 def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
-    container_name: ContainerName,
+    container_name: Annotated[str | None, typer.Option(envvar="BC_CONTAINER_NAME", help="BC container name")] = None,
     model: CopilotModel = "claude-haiku-4.5",
     dataset_path: DatasetPath | None = None,
     repo_path: RepoPath = _config.paths.testbed_path,
@@ -92,6 +92,9 @@ def run_copilot(
             dataset_path = _config.paths.dataset_path
         entry: DatasetEntry = load_dataset_entries(dataset_path, entry_id=entry_id)[0]
 
+    if category != EvaluationCategory.EXTENSIBILITY_REQUEST and not container_name:
+        raise typer.BadParameter("Missing option '--container-name' (env var: 'BC_CONTAINER_NAME').", param_hint="--container-name")
+
     setup_repo_prebuild(entry, repo_path)
     if category != EvaluationCategory.EXTENSIBILITY_REQUEST:
         setup_repo_postbuild(entry, repo_path, category)
@@ -109,7 +112,7 @@ def run_copilot(
         else:
             logger.warning(f"✗ Entry {entry_id} does not match expected: {errors}")
     else:
-        run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name)
+        run_copilot_agent(entry=entry, repo_path=repo_path, model=model, category=category, output_dir=output_dir, al_mcp=al_mcp, container_name=container_name or "bcbench")
 
 
 @run_app.command("claude")
