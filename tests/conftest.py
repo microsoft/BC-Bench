@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtImplementEntry, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtImplementEntry, ExtTriageEntry, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -392,3 +392,40 @@ def sample_ext_implement_entry(tmp_path: Path) -> Generator[ExtImplementEntry]:
 
     with patch.object(ExtImplementEntry, "problem_statement_dir", property(lambda self: problem_dir)):
         yield entry
+
+
+def create_ext_triage_entry(
+    instance_id: str = "microsoftInternal__NAV-Ext_Triage-29447",
+    repo: str = "microsoftInternal/NAV",
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    created_at: str = VALID_CREATED_AT,
+    title: str = '[Event Request] Codeunit 5880 "Phys. Invt. Order-Finish"',
+    description: str = "Please add an integration event in CreateOrderTrackingBufferLines.",
+    comments: str = "",
+    current_labels: list[str] | None = None,
+    expected_labels: list[str] | None = None,
+    expected_issue_state: Literal["open", "closed", ""] = "open",
+    expected_comment: str = "Thanks, this event request looks valid and will be routed to the SCM team.",
+) -> ExtTriageEntry:
+    return ExtTriageEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths if project_paths is not None else ["App/Layers/W1/BaseApp"],
+        created_at=created_at,
+        title=title,
+        description=description,
+        comments=comments,
+        current_labels=current_labels if current_labels is not None else [],
+        expected_labels=expected_labels if expected_labels is not None else ["SCM", "event-request"],
+        expected_issue_state=expected_issue_state,
+        expected_comment=expected_comment,
+    )
+
+
+@pytest.fixture
+def sample_ext_triage_entry() -> ExtTriageEntry:
+    return create_ext_triage_entry()

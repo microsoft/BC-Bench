@@ -1,0 +1,331 @@
+event_request_implementation:
+  description: "Implementation rules for event-request type - best practices and patterns"
+
+  rules:
+    - id: never_suggest_ishandled_unless_requested
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "Agent must NEVER suggest IsHandled events unless explicitly requested by the author"
+      action: "internal_warning"
+      rule: "When implementing event requests, ONLY add IsHandled parameter if the author EXPLICITLY requested it using keywords like 'IsHandled', 'bypass', 'skip', 'handled', or 'prevent execution'. Regular event requests get regular events WITHOUT IsHandled."
+      guidance: |
+        **CRITICAL RULE:** The agent must NEVER suggest or implement an IsHandled event pattern unless the author explicitly requested it.
+
+        **Detection of IsHandled Request:**
+        The author must use one of these explicit indicators:
+        - "IsHandled" keyword in the request
+        - "bypass" or "skip" the standard logic
+        - "prevent" or "stop" execution
+        - "handled" parameter
+        - Explicitly mentions wanting to replace/override the standard behavior
+
+        **If NOT explicitly requested:**
+        - Implement a REGULAR IntegrationEvent without IsHandled parameter
+        - Event should provide access to data for extension purposes
+        - Event should NOT include bypass/skip functionality
+
+        **Example - Regular Event Request (NO IsHandled keywords):**
+        Author says: "Add an event publisher in TestPurchaseLines"
+
+        ❌ WRONG - Agent adds IsHandled:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeCheckIsCancellationSupported(...; var IsHandled: Boolean)
+        ```
+
+        ✅ CORRECT - Agent adds regular event:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeCheckIsCancellationSupported(...; var IsCancellationSupported: Boolean)
+        ```
+
+        **Example - IsHandled Request (explicit keywords):**
+        Author says: "Add IsHandled event to bypass the credit limit check"
+
+        ✅ CORRECT - Agent adds IsHandled:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeCreditLimitCheck(...; var IsHandled: Boolean)
+        ```
+
+        **Rationale:**
+        - IsHandled events allow bypassing critical business logic
+        - They carry higher risk and require explicit author intent
+        - Regular events are safer and provide extensibility without bypass capability
+        - Agent should not escalate the scope of a request beyond what was asked
+
+    - id: adding_var_to_event_parameter
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "Adding 'var' modifier to existing event parameter is allowed (non-breaking change)"
+      action: "internal_warning"
+      detailed_explanation: |
+        **Not applicable for NEW events.**
+        **Allowed Change:** Adding `var` to an existing event parameter is NOT a breaking change.
+
+        **Rationale:**
+        - Existing subscribers continue to work (they just won't modify the value)
+        - Expands functionality without breaking backward compatibility
+        - Allows new subscribers to modify the parameter while old ones remain unaffected
+
+        **Example - Allowed Change:**
+
+        Original event:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnAfterConfirmPost(PurchaseHeader: Record "Purchase Header"; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+
+        Changed to (ALLOWED):
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnAfterConfirmPost(var PurchaseHeader: Record "Purchase Header"; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+
+    - id: new_parameters_at_end
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "New parameters in existing events must be added at the end of the parameter list"
+      action: "internal_warning"
+      exception_note: "When adding new parameters to an existing event, ALWAYS place them at the end of the parameter list, regardless of where the author suggested placing them."
+      detailed_explanation: |
+        **Mandatory Rule:** New parameters in existing events must ALWAYS be added at the END of the parameter list.
+
+        **Rationale:**
+        - Adding parameters in the middle of the signature would be hard to track
+        - It is easier to maintain and understand changes when new parameters are added at the end
+
+        **Example - Correct Implementation:**
+
+        Original event:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnBeforeProcess(var Customer: Record Customer; var IsHandled: Boolean)
+        begin
+        end;
+        ```
+
+        Author requests to add `NewParam: Text` parameter.
+
+        ❌ Wrong (even if author suggested this):
+        ```al
+        local procedure OnBeforeProcess(var Customer: Record Customer; NewParam: Text; var IsHandled: Boolean)
+        ```
+
+        ✅ Correct (always add at the end):
+        ```al
+        local procedure OnBeforeProcess(var Customer: Record Customer; var IsHandled: Boolean; NewParam: Text)
+        ```
+
+    - id: temporary_record_parameter_naming
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "Temporary record parameters must have 'Temp' prefix"
+      check_method: "parameter_naming_analysis"
+      action: "internal_warning"
+      rule: "When adding a temporary record parameter to an event, the parameter name MUST start with 'Temp' prefix."
+      guidance: |
+        **Mandatory Rule:** All temporary record parameters in event signatures must have the 'Temp' prefix.
+
+        **Rationale:**
+        - Clearly indicates to subscribers that the record is temporary
+        - Prevents confusion about data persistence
+        - Follows BC naming conventions for temporary variables
+        - Makes code more readable and self-documenting
+
+        **Example - Correct Implementation:**
+
+        ❌ Wrong:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnAfterProcess(var InvtOrderTracking: Record "Invt. Order Tracking" temporary)
+        begin
+        end;
+        ```
+
+        ✅ Correct:
+        ```al
+        [IntegrationEvent(false, false)]
+        local procedure OnAfterProcess(var TempInvtOrderTracking: Record "Invt. Order Tracking" temporary)
+        begin
+        end;
+        ```
+
+    - id: multiple_calls_same_event_location
+      applies_to: ["event-request"]
+      severity: "warning"
+      description: "Multiple event calls requested for the same location require separate event publishers"
+      action: "internal_warning"
+      rule: "When a request asks for multiple event calls at the same location (e.g., same procedure/trigger), each call MUST have its own separate event publisher with a unique name."
+      guidance: |
+        **Mandatory Rule:** If a request includes multiple calls for the same event location, each call must be implemented as a separate event publisher with a distinct name.
+
+        **Rationale:**
+        - Each event should have a single, clear purpose
+        - Separate events allow subscribers to choose which specific event to handle
+        - Improves code readability and maintainability
+        - Allows for better performance optimization (subscribers only listen to events they need)
+        - Provides clearer semantics for what each event represents
+
+        **Naming Convention for Separate Events:**
+        - Use descriptive suffixes that indicate the specific purpose
+        - Follow pattern: `On[Before/After][Operation][SpecificPurpose]`
+        - Examples:
+          - `OnBeforePostValidateCustomer`
+          - `OnBeforePostCheckInventory`
+          - `OnAfterInsertUpdateDimensions`
+          - `OnAfterInsertNotifyWarehouse`
+
+    - id: event_naming_convention
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "Event names must follow the standard naming pattern regardless of author's suggested name"
+      action: "internal_warning"
+      rule: "Agent MUST apply the standard event naming convention even if the author proposes a different name."
+      guidance: |
+        **Mandatory Rule:** All events must follow the standard naming pattern based on their placement location.
+
+        ---
+
+        ## Option 1: Events at Beginning/End of Procedure or Trigger
+
+        **Pattern:** `OnBefore/OnAfter[ProcedureName/TriggerName]`
+
+        Use this pattern when the event fires at the very beginning or end of a procedure/trigger.
+
+        | Location | Timing | Correct Event Name |
+        |----------|--------|-------------------|
+        | PostSalesLine procedure | Beginning | `OnBeforePostSalesLine` |
+        | PostSalesLine procedure | End | `OnAfterPostSalesLine` |
+        | OnInsert trigger | Beginning | `OnBeforeOnInsert` |
+        | OnModify trigger | End | `OnAfterOnModify` |
+        | OnDelete trigger | Beginning | `OnBeforeOnDelete` |
+        | OnPreReport trigger | Beginning | `OnBeforeOnPreReport` |
+        | OnPostReport trigger | End | `OnAfterOnPostReport` |
+        | "Sell-to Customer No." OnValidate | Beginning | `OnBeforeValidateSellToCustomerNo` |
+        | Quantity OnValidate | End | `OnAfterValidateQuantity` |
+
+        ---
+
+        ## Option 2: Events in the Middle of Procedure or Trigger
+
+        **Pattern:** `On[ProcedureName/TriggerName]OnBefore/OnAfter[ActionContext]`
+
+        Use this pattern when the event fires at a specific point inside the procedure/trigger (not at the beginning/end).
+
+        | Location | Action Context | Correct Event Name |
+        |----------|----------------|-------------------|
+        | PostSalesLine procedure | Before validation | `OnPostSalesLineOnBeforeValidation` |
+        | PostSalesLine procedure | After calculation | `OnPostSalesLineOnAfterCalculation` |
+        | Code procedure | Before check | `OnCodeOnBeforeCheck` |
+        | OnInsert trigger | After init defaults | `OnOnInsertOnAfterInitDefaults` |
+        | OnModify trigger | Before validate location | `OnOnModifyOnBeforeValidateLocationCode` |
+        | "Sales Invoice Line" OnAfterGetRecord | After calc amounts | `OnSalesInvoiceLineOnAfterGetRecordOnAfterCalcAmounts` |
+
+        ---
+
+        **Summary:**
+        - **Beginning/End:** `OnBefore/OnAfter` + ProcedureName/TriggerName
+        - **Middle:** `On` + ProcedureName/TriggerName + `OnBefore/OnAfter` + ActionContext
+
+    - id: event_parameter_naming_convention
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "Event parameters must follow naming conventions - no abbreviations for records, descriptive names for simple types"
+      action: "internal_warning"
+      rule: "When defining event publisher parameters, record parameters must use the full table name without spaces, and simple parameters must use descriptive names without abbreviations."
+      guidance: |
+        **Mandatory Rule:** Event parameters must follow strict naming conventions regardless of what the author suggests.
+
+        ### Record Parameters - Remove Spaces, No Abbreviations
+
+        For record parameters, use the table name with spaces removed. Do NOT use abbreviations.
+
+        | Table Name (in AL) | Correct Parameter Name | ❌ Wrong |
+        |-------------------|------------------------|----------|
+        | "Sales Header" | `SalesHeader` | `SalesHdr`, `SH` |
+        | "Sales Line" | `SalesLine` | `SalesLn`, `SL` |
+        | "Item Ledger Entry" | `ItemLedgerEntry` | `ItemLedgEntry`, `ILE` |
+        | "G/L Entry" | `GLEntry` | `GLE`, `GenLedgEntry` |
+        | "Purchase Header" | `PurchaseHeader` | `PurchHdr`, `PH` |
+        | "Customer" | `Customer` | `Cust`, `C` |
+        | "Vendor" | `Vendor` | `Vend`, `V` |
+
+        ### Simple Parameters - Use Descriptive Names
+
+        | ❌ Wrong | ✅ Correct |
+        |----------|-----------|
+        | `DocNo` | `DocumentNo` |
+        | `Amt` | `Amount` or `TotalAmount` |
+        | `Qty` | `Quantity` |
+        | `Desc` | `Description` |
+        | `Date` | `PostingDate`, `DocumentDate`, etc. |
+
+    - id: manual_binding_for_heavily_used_procedures
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "Events in heavily-used procedures should include manual binding guidance note"
+      action: "internal_warning"
+      rule: "When suggesting an event in a procedure that is heavily used across the codebase for different scenarios, include a note about EventSubscriberInstance property and manual binding considerations."
+      guidance: |
+        **Guidance Rule:** When an event is being added to a procedure that is called from multiple
+        places across the codebase for different business scenarios, the agent should include a note
+        in the comment about manual binding considerations.
+
+        **Rationale:**
+        - Procedures can be called from multiple places for different purposes/scenarios
+        - Event subscribers bound with automatic binding will fire on EVERY call
+        - This may cause unintended side effects if subscriber was meant for a specific scenario
+        - Manual binding gives control over when the subscriber is active
+
+        **Documentation Note Template:**
+        ```
+        📝 **Note:** This procedure is called from multiple places in the codebase for different scenarios.
+        If you need your event subscriber to fire only in specific scenarios, consider using
+        [Manual Event Subscription Binding](https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/properties/devenv-eventsubscriberinstance-property#manual-binding).
+        ```
+
+    - id: ishandled_with_onafter_event_pattern
+      applies_to: ["event-request"]
+      severity: "notice"
+      description: "IsHandled events must preserve OnAfter event execution; OnAfter requests must check for existing IsHandled patterns"
+      action: "internal_warning"
+      rule: "When adding an IsHandled event that skips the whole procedure, or when adding OnAfter event to a procedure with existing IsHandled, ensure OnAfter event executes in ALL conditions (even when IsHandled=true)."
+      guidance: |
+        **Mandatory Rule:** OnBefore and OnAfter procedure events must BOTH execute in all conditions. When IsHandled=true skips the main procedure code, the OnAfter event must still fire.
+
+        **Scenarios Covered:**
+
+        **Scenario 1: Adding IsHandled event when OnAfter exists**
+        When someone requests an IsHandled event to skip the whole procedure AND there is already an OnAfter event (or one should be added), implement using `if not IsHandled then begin ... end;` pattern instead of `if IsHandled then exit;`
+
+        **Scenario 2: Adding OnAfter event (regular event without IsHandled) when IsHandled with exit exists**
+        When someone requests an OnAfter[ProcedureName] event (regular event, no IsHandled parameter) AND there is already an OnBefore with `if IsHandled then exit;`, the agent MUST:
+        1. Identify the existing `if IsHandled then exit;` pattern
+        2. Refactor it to `if not IsHandled then begin ... end;` pattern
+        3. Add the OnAfter event AFTER the `end;` of the if block
+
+        **Example - CORRECT Pattern (OnAfter always fires):**
+        ```al
+        procedure GetReservationQty(var QtyReserved: Decimal; var QtyReservedBase: Decimal)
+        var
+            IsHandled: Boolean;
+        begin
+            IsHandled := false;
+            OnBeforeGetReservationQty(Rec, QtyReserved, QtyReservedBase, IsHandled);
+
+            // ✅ CORRECT - Using if not IsHandled then begin...end pattern
+            if not IsHandled then begin
+                CalcFields("Reserved Quantity", "Reserved Qty. (Base)");
+                QtyReserved := "Reserved Quantity";
+                QtyReservedBase := "Reserved Qty. (Base)";
+            end;
+
+            // ✅ OnAfter ALWAYS executes, regardless of IsHandled value
+            OnAfterGetReservationQty(Rec, QtyReserved, QtyReservedBase);
+        end;
+        ```

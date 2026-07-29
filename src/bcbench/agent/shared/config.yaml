@@ -76,6 +76,31 @@ prompt:
     Extensibility request:
     {{task}}
 
+  ext-triage-template: |
+    You are triaging a single Business Central extensibility request. The standard AL source is checked
+    out at {{repo_path}} — treat that as CODE_ROOT for any codebase analysis.
+
+    Task: Run the `argus-triage` skill end to end on the extensibility request below and produce its
+    triage decision. Follow the skill's phases (preprocess, eligibility, classify, requirements,
+    codebase analysis, team assignment, finalize) and its knowledge base to decide the managed labels,
+    the advisory comment, and whether the request should stay open or be closed.
+
+    Important constraints:
+    - This runs offline against a local checkout. There is NO live GitHub issue: read the request from
+      the text below, not from `gh`. Do NOT call `gh`, do NOT fetch or modify any issue, and do NOT
+      post comments or change labels through any host tool.
+    - Do the codebase-analysis phase by reading local `.al` files under {{repo_path}}. Do NOT try to
+      build or run tests.
+    - Instead of applying the result, WRITE your final decision as JSON to a file named
+      `triage_result.json` in {{repo_path}}. It MUST contain exactly the `Final_Output` object from the
+      skill's result contract:
+      {"Final_Output": {"labels_to_set": ["..."], "comment_to_post": "...", "issue_state": "open", "failureStep": "", "failureReason": ""}}
+    - You MUST write `triage_result.json` before finishing; if you do not, the triage is lost and counts
+      as no output. Write only valid JSON, with no surrounding markdown.
+
+    Extensibility request:
+    {{task}}
+
   code-review-template: |
     /review
 

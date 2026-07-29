@@ -1,0 +1,231 @@
+# Event Request Specific Requirements Configuration
+# Defines ADDITIONAL requirements specific to event-request type issues
+# NOTE: General requirements (title, description, meaningful justification) are defined in ea_config_general_requirements.yaml
+# Version: 1.2
+
+event_request:
+  enabled: true
+  description: "Event publisher/subscriber requests - ADDITIONAL requirements beyond general ones"
+  detection_keywords: ["publisher", "subscriber", "IntegrationEvent", "event", "OnBefore", "OnAfter"]
+
+  # ⚠️ CRITICAL RULE: Agent must NEVER suggest IsHandled unless EXPLICITLY requested
+  ishandled_detection_rule:
+    description: "IsHandled sub-type is ONLY detected when author EXPLICITLY requests it or there is a clear intent to bypass/skip existing logic using the event, regardless of whether the specific keyword is used"
+    explicit_keywords_required: ["IsHandled", "bypass", "skip", "prevent execution", "handled parameter"]
+    behavior: |
+      - If the intent is to bypass/skip existing logic using the event, regardless of whether the specific keyword is used → classify as "IsHandled" sub-type
+      - Agent must NEVER infer or suggest IsHandled on its own
+      - Regular events do NOT include IsHandled parameter
+      - This prevents escalating request scope beyond what author asked
+
+  # Common requirements for ALL event request subtypes
+  common_requirements:
+    - id: proposed_code_change
+      name: "Proposed Code Change"
+      description: "Exact code addition/modification with surrounding context (5-10 lines)"
+      mandatory: true
+      exceptions:
+        - condition: "Adding parameter to existing event"
+          description: "When request is to add a parameter to an existing event"
+          mandatory: false
+          requirements:
+            - "Clearly specify parameter name"
+            - "Identify target event name"
+            - "Specify exact location (codeunit/procedure name and number)"
+            - "Optional: Specify parameter type if not obvious from context"
+          example: "Add parameter 'ServShipmentNo' to existing event 'OnAfterFinalizePostingOnBeforeCommit' in procedure PostWithLines of Codeunit 5980 'Service-Post'"
+          rationale: "For parameter additions, the implementation is straightforward - add the parameter to both the event declaration and invocation. Explicit code is helpful but not mandatory if the request is clear."
+      validation_hints: ["code", "procedure", "trigger", "event", "publisher", "context"]
+      #documentation_link: "{link}"
+
+  subtypes:
+    ishandled:
+      enabled: true
+      description: "IsHandled event requests with bypass functionality - ONLY when EXPLICITLY requested"
+      detection_patterns: ["IsHandled", "is handled", "Handled", "bypass", "skip", "prevent execution"]
+      detection_rule: "MUST be EXPLICITLY requested by author - agent cannot suggest or infer"
+      max_iterations: 5
+
+      additional_requirements:
+        - id: invocation_example
+          name: "Invocation Example (recommended)"
+          description: "How event will be raised and sample subscriber implementation"
+          mandatory: false
+          validation_hints: ["invoke", "subscriber", "example", "sample", "usage"]
+
+        - id: alternatives_evaluated
+          name: "Alternatives Evaluated"
+          description: "Which existing events/patterns were tried and why insufficient"
+          mandatory: true
+          validation_hints: ["alternative", "tried", "existing", "evaluated", "why not"]
+
+        - id: justification_for_ishandled
+          name: "Justification for IsHandled"
+          description: "Why standard event/redesign/contribution isn't feasible"
+          mandatory: true
+          validation_hints: ["justify", "why", "ishandled", "necessary", "bypass"]
+          quality_standards:
+            reject_generic_statements: true
+            unacceptable_patterns:
+              - "we need to bypass"
+              - "customers requested"
+              - "important for business"
+              - "flexibility required"
+            requires_specifics:
+              - "Specific technical reason why standard event insufficient"
+              - "Concrete business logic that must be skipped/replaced"
+              - "Exact scenario where bypass is essential"
+              - "Why alternative approaches won't work"
+            good_example: "We must bypass the standard credit limit check because our vertical industry (healthcare) requires real-time insurance pre-authorization instead. The standard check would block orders that are actually covered by insurance, but there's no way to inject our authorization logic before the credit check fails."
+            bad_example: "We need IsHandled to implement our custom logic."
+
+        - id: performance_considerations
+          name: "Performance Considerations"
+          description: "Expected execution frequency and potential impact assessment"
+          mandatory: true
+          validation_hints: ["performance", "frequency", "impact", "execution", "load"]
+            flexible_validation: true
+            validation_notes: |
+              A brief answer is sufficient for this requirement.
+
+              The author should acknowledge expected frequency or impact, but the agent should not require a detailed performance analysis unless the request suggests a real performance risk.
+
+              Examples of sufficient answers:
+              - "Runs only during posting, so impact should be minimal."
+              - "Called often, but subscriber logic will be lightweight."
+
+        - id: data_sensitivity_review
+          name: "Data Sensitivity Review"
+          description: "Confirmation of no sensitive data exposure or rationale if necessary"
+          mandatory: true
+          validation_hints: ["sensitive", "data", "security", "exposure", "private"]
+            flexible_validation: true
+            validation_notes: |
+              A short confirmation is sufficient for this requirement.
+
+              The author should state whether sensitive data is involved, but the agent should not ask for extra detail unless the request appears to expose confidential, personal, or security-relevant information.
+
+              Examples of sufficient answers:
+              - "No sensitive data involved."
+              - "Only standard document fields are exposed."
+
+        - id: multi_extension_interaction
+          name: "Multi-Extension Interaction"
+          description: "Risks if multiple extensions subscribe and conflict mitigation"
+          mandatory: true
+          validation_hints: ["multi", "extension", "conflict", "subscribe", "risk"]
+            flexible_validation: true
+            validation_notes: |
+              A brief acknowledgement is sufficient for this requirement.
+
+              The author should mention whether they see a conflict risk, but the agent should not be strict here unless the requested behavior clearly changes control flow or could create extension ordering conflicts.
+
+              Examples of sufficient answers:
+              - "No major conflict expected; subscriber will only add logic."
+              - "Potential overlap is acceptable because this only reads available values."
+
+        - id: no_ishandled_on_existing_events
+          name: "Adding IsHandled to Existing Events"
+          description: |
+            Adding an IsHandled pattern to an existing event is NOT allowed.
+            This fundamentally changes the purpose of the event.
+            Any request asking to introduce IsHandled into an already-published event must be rejected.
+          action: reject
+          detection_patterns: ["add IsHandled to existing", "IsHandled to current event", "modify event to include IsHandled", "extend event with IsHandled", "introduce IsHandled"]
+          rejection_message: |
+            This request cannot be approved. Adding an IsHandled pattern to an existing event is not allowed
+            because it fundamentally changes the event's purpose and contract. Existing subscribers rely on
+            the current behavior, and introducing IsHandled would break them by allowing the base logic to
+            be bypassed — something the original subscribers were never designed to account for.
+
+            If you need bypass/handled functionality, please request a NEW separate event with IsHandled
+            instead of modifying the existing one.
+
+        - id: reject_ishandled_only_for_locktable
+          name: "Reject IsHandled Used Only to Skip LockTable"
+          description: "If an IsHandled event is requested solely to skip a LockTable call and nothing else, the request must be rejected. Skipping only LockTable via IsHandled undermines data integrity and concurrency control without providing meaningful extensibility value."
+          mandatory: true
+          validation_hints: ["IsHandled", "LockTable", "skip", "concurrency", "data integrity"]
+          quality_standards:
+            reject_when_only_locktable: true
+            rationale: |
+              - LockTable ensures data consistency during concurrent operations
+              - Skipping LockTable alone via IsHandled creates race conditions and data corruption risks
+              - IsHandled is intended for replacing or extending business logic, not for bypassing infrastructure-level safeguards
+              - If the goal is to skip LockTable, the request lacks meaningful extensibility purpose
+            detection_criteria:
+              - "The request describes using IsHandled to skip only a LockTable call"
+              - "The code block protected by IsHandled contains only LockTable and no other logic"
+              - "The justification mentions only LockTable skipping without broader business logic replacement"
+            unacceptable_patterns:
+              - "We need IsHandled to skip LockTable"
+              - "We want to avoid the LockTable call"
+              - "IsHandled to bypass LockTable for performance"
+              - "We need to skip the lock on the table"
+            bad_examples:
+              - description: "IsHandled event that only skips LockTable"
+                code: |
+                  IsHandled := false;
+                  OnBeforePostSalesInvoice(SalesHeader, IsHandled);
+                  if not IsHandled then
+                      SalesHeader.LockTable();
+                reason: "The IsHandled event only gates a LockTable call - no business logic is being replaced or extended"
+            good_examples:
+              - description: "IsHandled event that skips a meaningful block of logic including LockTable"
+                code: |
+                  IsHandled := false;
+                  OnBeforePostSalesInvoice(SalesHeader, IsHandled);
+                  if not IsHandled then begin
+                      SalesHeader.LockTable();
+                      ValidatePostingDate(SalesHeader);
+                      CheckCustomerCreditLimit(SalesHeader);
+                  end;
+                reason: "The IsHandled event gates LockTable along with other business logic - this is a valid extensibility scenario"
+            action: "auto_reject"
+            polite_message_template: |
+              Thank you for your request!
+
+              After reviewing your submission, we noticed that the proposed IsHandled event is intended to skip only a LockTable call without replacing or extending any business logic.
+
+              LockTable is a critical infrastructure mechanism that ensures data consistency during concurrent operations. Skipping it alone via IsHandled does not provide meaningful extensibility value and introduces risks such as race conditions and data corruption.
+
+              If you need to replace or extend the business logic surrounding the LockTable call, please resubmit your request with a broader scope that includes the relevant business logic you wish to customize.
+
+              Thank you for your understanding!
+
+    regular:
+      enabled: true
+      description: "Regular event requests without IsHandled"
+      max_iterations: 3
+
+      additional_requirements:
+        - id: use_case_example
+          name: "Use Case Example"
+          description: "How event will be used and business scenario"
+          mandatory: false
+          validation_hints: ["use case", "example", "scenario", "business", "how"]
+
+        - id: meaningful_justification_for_parameter_addition
+          name: "Meaningful Justification (Relaxed for Parameter Additions)"
+          description: "For adding parameters to existing events, justification requirements are relaxed"
+          applies_to: "parameter_addition_to_existing_event"
+          mandatory: false
+          rationale: |
+            When adding a parameter to an existing event, the justification is inherently clear:
+            - The user needs access to data that exists in scope
+            - The data is not currently exposed through the event
+            - This is a straightforward extensibility enhancement
+
+            The requirement "I need parameter X" is sufficient UNLESS there are specific concerns:
+            - Security/sensitive data exposure
+            - Performance implications
+            - Breaking changes
+
+            Agent should only request additional justification if one of these concerns applies.
+          validation_approach: "Evaluate for potential issues, not just completeness of justification"
+
+# Requirement Validation Messages
+validation_messages:
+  insufficient_detail: "The provided information is insufficient for processing. Please add:"
+  requirement_reference: "For more details, see our Extensibility Guidelines: {link}"
+  resubmit_after_update: "Please update the issue with the missing details. We'll automatically re-analyze once updated."

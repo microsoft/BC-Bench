@@ -14,7 +14,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "ExtImplementEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "ExtImplementEntry", "ExtTriageEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -193,3 +193,45 @@ class ExtImplementEntry(BaseDatasetEntry):
 
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
+
+
+class ExtTriageEntry(BaseDatasetEntry):
+    """Dataset entry for the ext-triage category — triage a single extensibility request.
+
+    Judge-based (no build, no tests). The agent reads one extensibility-request thread (rendered from
+    `title` + `description` + any follow-up `comments`, plus `current_labels` already on the request)
+    and analyses feasibility against the standard AL source checked out at `base_commit`. It emits a
+    `Final_Output` decision — the managed labels to set, an advisory comment, and whether the request
+    stays open or is closed. Grading is hybrid: exact match on `expected_labels` and
+    `expected_issue_state`, and an LLM judge on the advisory comment against `expected_comment`.
+    """
+
+    # Triage has no gold code diff; the expected answer lives in the expected_* fields below.
+    patch: str = "N/A (ext-triage has no gold patch)"
+
+    title: Annotated[str, Field(min_length=1)]
+    description: Annotated[str, Field(min_length=1)]
+    comments: str = ""
+    current_labels: list[str] = []
+
+    expected_labels: list[str] = []
+    expected_issue_state: Literal["open", "closed", ""] = "open"
+    expected_comment: str = ""
+
+    def get_task(self) -> str:
+        sections = [f"# {self.title}", "", self.description.rstrip()]
+        if self.current_labels:
+            sections += ["", f"Current labels: {', '.join(self.current_labels)}"]
+        if self.comments.strip():
+            sections += ["", "## Follow-up conversation", "", self.comments.rstrip()]
+        return "\n".join(sections)
+
+    def get_expected_output(self) -> ExpectedOutput:
+        return json.dumps(
+            {
+                "labels_to_set": self.expected_labels,
+                "issue_state": self.expected_issue_state,
+                "comment_to_post": self.expected_comment,
+            },
+            ensure_ascii=False,
+        )
