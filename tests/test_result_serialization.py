@@ -30,7 +30,7 @@ class TestCategorySerialization:
         output_file = tmp_path / "result.jsonl"
         sample_result_bug_fix.save(tmp_path, "result.jsonl")
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         assert data["category"] == "bug-fix"
@@ -40,7 +40,7 @@ class TestCategorySerialization:
         output_file = tmp_path / "result.jsonl"
         sample_result_test_gen.save(tmp_path, "result.jsonl")
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         assert data["category"] == "test-generation"
@@ -85,7 +85,7 @@ class TestCategorySerialization:
         original.save(tmp_path, "test.jsonl")
 
         # Load from file
-        with open(tmp_path / "test.jsonl") as f:
+        with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
         loaded = BaseEvaluationResult.from_json(data)
@@ -100,7 +100,7 @@ class TestCategorySerialization:
         original.save(tmp_path, "test.jsonl")
 
         # Load from file
-        with open(tmp_path / "test.jsonl") as f:
+        with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
         loaded = BaseEvaluationResult.from_json(data)
@@ -112,7 +112,7 @@ class TestCategorySerialization:
         summary = EvaluationResultSummary.from_results([sample_result_bug_fix], "test_run")
         summary.save(tmp_path, "summary.json")
 
-        with open(tmp_path / "summary.json") as f:
+        with (tmp_path / "summary.json").open() as f:
             data = json.load(f)
 
         assert data["category"] == "bug-fix"
@@ -155,7 +155,7 @@ class TestCategorySerialization:
         output_file = tmp_path / "result.jsonl"
         result.save(tmp_path, "result.jsonl")
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         assert "pre_patch_failed" in data
@@ -165,7 +165,7 @@ class TestCategorySerialization:
         output_file = tmp_path / "result.jsonl"
         sample_result_bug_fix.save(tmp_path, "result.jsonl")
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         assert data["experiment"] is None
@@ -176,7 +176,7 @@ class TestCategorySerialization:
         output_file = tmp_path / "result.jsonl"
         sample_result_bug_fix.save(tmp_path, "result.jsonl")
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         assert data["experiment"] is not None
@@ -196,7 +196,7 @@ class TestCategorySerialization:
         output_file = tmp_path / "result.jsonl"
         result.save(tmp_path, "result.jsonl")
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         assert data["metrics"]["tool_usage"] is not None
@@ -242,7 +242,7 @@ class TestCategorySerialization:
         original.save(tmp_path, "test.jsonl")
 
         # Load from file
-        with open(tmp_path / "test.jsonl") as f:
+        with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
         loaded = BaseEvaluationResult.from_json(data)

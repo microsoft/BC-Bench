@@ -121,8 +121,6 @@ def run_copilot_agent(
         tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
         if metrics and tool_usage:
             metrics = metrics.model_copy(update={"tool_usage": tool_usage})
-
-        return metrics, config
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
@@ -133,3 +131,5 @@ def run_copilot_agent(
     except Exception:
         logger.exception("Unexpected error running Copilot CLI")
         raise
+    else:
+        return metrics, config

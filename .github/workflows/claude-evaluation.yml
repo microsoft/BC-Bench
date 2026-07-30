@@ -110,6 +110,7 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
+          skip-repo: ${{ needs.get-entries.outputs.requires-repo != 'true' }}
 
       - name: Setup Python with UV
         uses: ./.github/actions/setup-python-uv

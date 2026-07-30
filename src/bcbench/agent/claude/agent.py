@@ -118,8 +118,6 @@ def run_claude_code(
         tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
         if metrics and tool_usage:
             metrics = metrics.model_copy(update={"tool_usage": tool_usage})
-
-        return metrics, config
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
@@ -130,3 +128,5 @@ def run_claude_code(
     except Exception:
         logger.exception("Unexpected error running Claude Code")
         raise
+    else:
+        return metrics, config

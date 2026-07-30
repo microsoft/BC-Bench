@@ -44,7 +44,7 @@ def write_bceval_results(
     benchmark_version = get_benchmark_version()
 
     output_file = out_dir / output_filename
-    with open(output_file, "w") as f:
+    with output_file.open("w") as f:
         for result in results:
             matching_entries = [e for e in dataset_entries if e.instance_id == result.instance_id]
 

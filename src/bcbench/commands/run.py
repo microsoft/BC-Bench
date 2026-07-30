@@ -1,9 +1,8 @@
 """CLI commands for running agents."""
 
-from typing import cast
+from typing import Annotated, cast
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
 from bcbench.agent.claude import run_claude_code

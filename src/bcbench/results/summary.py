@@ -3,7 +3,8 @@ import tomllib
 from abc import ABC, abstractmethod
 from collections import Counter
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC, date, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,12 +24,10 @@ def get_benchmark_version() -> str:
     pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
     if not pyproject_path.exists():
         try:
-            from importlib.metadata import version
-
             return version("bcbench")
-        except Exception:
+        except PackageNotFoundError:
             return "unknown"
-    with open(pyproject_path, "rb") as f:
+    with pyproject_path.open("rb") as f:
         return tomllib.load(f).get("project", {}).get("version", "unknown")
 
 
@@ -94,7 +93,7 @@ class EvaluationResultSummary(BaseModel, ABC):
 
         return cls(
             total=len(results),
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             category=first_result.category,
             model=first_result.model,
             agent_name=first_result.agent_name,
@@ -123,7 +122,7 @@ class EvaluationResultSummary(BaseModel, ABC):
 
     def save(self, output_dir: Path, summary_file: str) -> None:
         output_file = output_dir / summary_file
-        with open(output_file, "w", encoding="utf-8") as f:
+        with output_file.open("w", encoding="utf-8") as f:
             f.write(json.dumps(self.to_dict(), indent=4))
 
         logger.info(f"Saved evaluation summary to {output_file}")

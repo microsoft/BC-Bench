@@ -349,6 +349,13 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
+    def requires_repo(self) -> bool:
+        """Whether evaluating this category works on a cloned dataset repository."""
+        from bcbench.dataset import RepoGroundedEntry
+
+        return issubclass(self.entry_class, RepoGroundedEntry)
+
+    @property
     def runner(self) -> str:
         """GitHub Actions runner label for evaluating this category.
 

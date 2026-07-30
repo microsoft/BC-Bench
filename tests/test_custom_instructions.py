@@ -10,30 +10,29 @@ from unittest.mock import MagicMock
 import pytest
 
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset import BugFixEntry, RepoGroundedEntry
 from bcbench.operations.instruction_operations import (
     _get_source_instructions_path,
     setup_instructions_from_config,
 )
-from bcbench.types import AgentType
+from bcbench.types import AgentType, EvaluationCategory
 
 _config = get_config()
 
 
 def test_get_instructions_path():
-    # Test with microsoftInternal/NAV
-    path = _get_source_instructions_path("microsoftInternal/NAV")
+    path = _get_source_instructions_path("microsoftInternal-NAV")
     assert path.exists(), f"Instruction file should exist: {path}"
     assert path.name == "microsoftInternal-NAV"
 
 
 def test_setup_custom_instructions():
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
+    instructions_source = _get_source_instructions_path("microsoftInternal-NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"instructions": {"enabled": True}}
 
         # Setup instructions
@@ -62,30 +61,36 @@ def test_setup_custom_instructions():
                         assert target_file.read_text(encoding="utf-8") == source_file.read_text(encoding="utf-8"), f"Content mismatch for {target_file}"
 
 
-def test_sanitization():
+def test_repo_grounded_profile_is_derived_from_repo():
     test_cases = [
         ("microsoftInternal/NAV", "microsoftInternal-NAV"),
         ("org/repo", "org-repo"),
         ("user/my-repo", "user-my-repo"),
     ]
 
-    for repo_name, expected_sanitized in test_cases:
-        sanitized = repo_name.replace("/", "-")
-        assert sanitized == expected_sanitized, f"Failed for {repo_name}"
+    for repo_name, expected_profile in test_cases:
+        entry = BugFixEntry.model_construct(repo=repo_name)
+        assert entry.customization_profile == expected_profile, f"Failed for {repo_name}"
+
+
+def test_every_category_entry_class_names_a_customization_profile():
+    for category in EvaluationCategory:
+        entry = category.entry_class.model_construct(repo="microsoft/BCApps")
+        assert entry.customization_profile, f"{category} has no customization profile"
 
 
 def test_nonexistent_instructions():
-    with pytest.raises(FileNotFoundError, match="nonexistent/repo"):
-        _get_source_instructions_path("nonexistent/repo")
+    with pytest.raises(FileNotFoundError, match="nonexistent-repo"):
+        _get_source_instructions_path("nonexistent-repo")
 
 
 def test_overwrite_existing_instructions():
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
+    instructions_source = _get_source_instructions_path("microsoftInternal-NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"instructions": {"enabled": True}}
 
         # Create initial instruction file with different content
@@ -109,8 +114,8 @@ def test_overwrite_existing_instructions():
 def test_path_specific_instructions_removed_before_copy():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"instructions": {"enabled": True}}
 
         # Create existing .github directory with old files
@@ -132,8 +137,8 @@ def test_path_specific_instructions_removed_before_copy():
 def test_no_path_specific_instructions_warning():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"instructions": {"enabled": True}}
 
         # Setup instructions
@@ -148,8 +153,8 @@ def test_no_path_specific_instructions_warning():
 def test_empty_instructions_folder_warning():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"instructions": {"enabled": True}}
 
         # Setup instructions
@@ -162,12 +167,12 @@ def test_empty_instructions_folder_warning():
 
 
 def test_claude_instructions_renamed():
-    instructions_source = _get_source_instructions_path("microsoftInternal/NAV")
+    instructions_source = _get_source_instructions_path("microsoftInternal-NAV")
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"instructions": {"enabled": True}}
 
         result = setup_instructions_from_config(config, entry, repo_path, agent_type=AgentType.CLAUDE)

@@ -2,9 +2,9 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.cli_options import EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
@@ -64,7 +64,7 @@ def result_summarize(
     results: list[BaseEvaluationResult] = []
     for results_path in result_files:
         logger.info(f"Reading results from: {results_path}")
-        with open(results_path) as f:
+        with results_path.open() as f:
             results.extend(BaseEvaluationResult.from_json(json.loads(line)) for line in f if line.strip())
 
     if not results:
@@ -103,7 +103,7 @@ def result_update(
     Stores up to n runs per combination, removing the oldest when exceeding n.
     """
     logger.info(f"Loading evaluation summary from: {evaluation_summary}")
-    with open(evaluation_summary, encoding="utf-8") as f:
+    with evaluation_summary.open(encoding="utf-8") as f:
         new_result = EvaluationResultSummary.from_json(json.load(f))
 
     logger.info(f"Processing result for agent '{new_result.agent_name}' with model '{new_result.model}' in category '{new_result.category.value}'")
@@ -135,7 +135,7 @@ def result_update(
 
     # Write back
     leaderboard = Leaderboard(runs=all_runs, aggregate=aggregates)
-    with open(leaderboard_path, "w", encoding="utf-8") as f:
+    with leaderboard_path.open("w", encoding="utf-8") as f:
         json.dump(leaderboard.to_dict(), f, indent=2)
         f.write("\n")
 
@@ -175,7 +175,7 @@ def result_refresh(
 
         # Write back
         leaderboard = Leaderboard(runs=runs, aggregate=aggregates)
-        with open(leaderboard_path, "w", encoding="utf-8") as f:
+        with leaderboard_path.open("w", encoding="utf-8") as f:
             json.dump(leaderboard.to_dict(), f, indent=2)
             f.write("\n")
 
