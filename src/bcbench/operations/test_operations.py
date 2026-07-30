@@ -82,7 +82,7 @@ def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]
                 found_test_attribute = False
 
     if not codeunit_functions:
-        raise NoTestsExtractedError()
+        raise NoTestsExtractedError
 
     # Convert to immutable TestEntry objects
     return [TestEntry(codeunitID=codeunit_id, functionName=frozenset(funcs)) for codeunit_id, funcs in codeunit_functions.items()]

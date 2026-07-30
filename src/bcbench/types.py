@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -23,12 +23,15 @@ __all__ = [
     "Checklist",
     "ChecklistAssertion",
     "ChecklistLevel",
+    "CommitSha",
     "ContainerConfig",
     "EvaluationCategory",
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
+    "PluginConfig",
+    "RepoSlug",
 ]
 
 
@@ -47,6 +50,12 @@ class Checklist(TypedDict):
 # Patch-style string for execution-based categories (bug-fix, test-generation),
 # or an lm_checklist payload for scorer-driven categories.
 type ExpectedOutput = str | Checklist
+
+# A full git commit SHA: branches and tags move, so only a SHA pins content reproducibly
+type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
+
+# A GitHub repository in "owner/repo" form
+type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
 
 
 class AgentMetrics(BaseModel):
@@ -95,7 +104,7 @@ class ExperimentConfiguration(BaseModel):
     # Custom agent name used in experiment (if any)
     custom_agent: str | None = None
 
-    # Plugins installed for this experiment: "<name>@<commit>" (marketplace) or "<name>@local"
+    # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
     # PR-Review engine arm: resolved microsoft/BC-ALAgents engine commit
@@ -120,6 +129,45 @@ class ExperimentConfiguration(BaseModel):
             and self.engine_ref is None
             and self.bcquality_sha is None
         )
+
+
+# Where an agent plugin comes from: local, or cloned from GitHub
+type PluginSource = Literal["local", "github"]
+
+
+class PluginConfig(BaseModel):
+    """A single `plugins:` entry in the agent config."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    source: PluginSource
+    path: str
+    enabled: bool = False
+    # github only
+    repo: RepoSlug | None = None
+    revision: CommitSha | None = None
+
+    @property
+    def record(self) -> str:
+        """How the plugin is recorded on a result's `ExperimentConfiguration`."""
+        return f"{self.name}@{self.revision or self.source}"
+
+    @model_validator(mode="after")
+    def validate_source_fields(self) -> PluginConfig:
+        github_fields = {"repo": self.repo, "revision": self.revision}
+        match self.source:
+            case "github":
+                missing = [key for key, value in github_fields.items() if not value]
+                if missing:
+                    raise ValueError(f"Plugin '{self.name}': source 'github' requires {missing}")
+            case "local":
+                unexpected = [key for key, value in github_fields.items() if value]
+                if unexpected:
+                    raise ValueError(f"Plugin '{self.name}': source 'local' does not take {unexpected}")
+                if not Path(self.path).expanduser().is_absolute():
+                    raise ValueError(f"Plugin '{self.name}': source 'local' requires an absolute 'path', got {self.path!r}")
+        return self
 
 
 class AgentType(StrEnum):
@@ -297,6 +345,13 @@ class EvaluationCategory(StrEnum):
                 return False
 
         raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def requires_repo(self) -> bool:
+        """Whether evaluating this category works on a cloned dataset repository."""
+        from bcbench.dataset import RepoGroundedEntry
+
+        return issubclass(self.entry_class, RepoGroundedEntry)
 
     @property
     def runner(self) -> str:

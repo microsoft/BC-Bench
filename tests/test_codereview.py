@@ -182,7 +182,7 @@ class TestCodeReviewResult:
 
         original.save(tmp_path, "test.jsonl")
 
-        with open(tmp_path / "test.jsonl") as f:
+        with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
         loaded = BaseEvaluationResult.from_json(data)
@@ -671,6 +671,7 @@ class TestCodeReviewPipeline:
         pipeline = CodeReviewPipeline()
 
         with (
+            patch("bcbench.evaluate.codereview.fetch_commit_if_missing"),
             patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
             patch("bcbench.evaluate.codereview.apply_patch") as mock_apply,
         ):
@@ -702,7 +703,10 @@ class TestCodeReviewPipeline:
             check=True,
         )
 
-        with patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup:
+        with (
+            patch("bcbench.evaluate.codereview.fetch_commit_if_missing"),
+            patch("bcbench.evaluate.codereview.setup_repo_prebuild") as mock_setup,
+        ):
             pipeline.setup_workspace(entry, Path(tmp_path))
 
         mock_setup.assert_called_once()

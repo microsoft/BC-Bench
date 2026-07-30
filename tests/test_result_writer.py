@@ -27,7 +27,7 @@ class TestWriteBcevalResults:
         output_file = output_dir / "results.jsonl"
         assert output_file.exists()
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             line = f.readline()
             data = json.loads(line)
 
@@ -59,7 +59,7 @@ class TestWriteBcevalResults:
             )
 
         output_file = output_dir / "results.jsonl"
-        with open(output_file) as f:
+        with output_file.open() as f:
             line = f.readline()
             data = json.loads(line)
 
@@ -84,7 +84,7 @@ class TestWriteBcevalResults:
             )
 
         output_file = output_dir / "results.jsonl"
-        with open(output_file) as f:
+        with output_file.open() as f:
             lines = f.readlines()
 
         assert len(lines) == 2
@@ -116,7 +116,7 @@ class TestWriteBcevalResults:
             )
 
         output_file = output_dir / "results.jsonl"
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         # Check all required bceval fields are present
@@ -149,7 +149,7 @@ class TestWriteBcevalResults:
             )
 
         output_file = output_dir / "results.jsonl"
-        with open(output_file) as f:
+        with output_file.open() as f:
             lines = f.readlines()
 
         # Should have 0 lines since no matching dataset entry
@@ -174,7 +174,7 @@ class TestWriteBcevalResults:
             )
 
         output_file = output_dir / "results.jsonl"
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.loads(f.readline())
 
         assert data["metadata"]["prompt_tokens"] == 0
@@ -206,7 +206,7 @@ class TestWriteBcevalResults:
                 category=EvaluationCategory.BUG_FIX,
             )
 
-        with open(output_dir / "results.jsonl") as f:
+        with (output_dir / "results.jsonl").open() as f:
             data = json.loads(f.readline())
 
         assert data["expected"] == checklist_payload
@@ -230,7 +230,7 @@ class TestWriteBcevalResults:
                 git_ref="main",
             )
 
-        with open(output_dir / "results.jsonl") as f:
+        with (output_dir / "results.jsonl").open() as f:
             data = json.loads(f.readline())
 
         assert data["metadata"]["EvalRunType"] == "baseline"
@@ -256,7 +256,7 @@ class TestWriteBcevalResults:
                 category=EvaluationCategory.BUG_FIX,
             )
 
-        with open(output_dir / "results.jsonl") as f:
+        with (output_dir / "results.jsonl").open() as f:
             data = json.loads(f.readline())
 
         assert data["metadata"]["EvalRunType"] == "baseline"
@@ -282,7 +282,7 @@ class TestWriteBcevalResults:
                 git_ref="feat/al-mcp",
             )
 
-        with open(output_dir / "results.jsonl") as f:
+        with (output_dir / "results.jsonl").open() as f:
             data = json.loads(f.readline())
 
         assert data["metadata"]["EvalRunType"] == "experiment"

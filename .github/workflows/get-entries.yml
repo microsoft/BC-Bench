@@ -30,6 +30,9 @@ on:
       requires-container:
         description: Whether this category needs a BC container ("true"/"false")
         value: ${{ jobs.get-entries.outputs.requires-container }}
+      requires-repo:
+        description: Whether this category needs the dataset repository cloned ("true"/"false")
+        value: ${{ jobs.get-entries.outputs.requires-repo }}
 
 jobs:
   get-entries:
@@ -38,6 +41,7 @@ jobs:
       entries: ${{ steps.get-entries.outputs.entries }}
       runner: ${{ steps.runtime-config.outputs.runner }}
       requires-container: ${{ steps.runtime-config.outputs.requires-container }}
+      requires-repo: ${{ steps.runtime-config.outputs.requires-repo }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5

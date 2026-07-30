@@ -21,6 +21,10 @@ inputs:
     description: Skip BC container setup (only clone repository)
     required: false
     default: "false"
+  skip-repo:
+    description: Skip cloning the dataset repository (workspace is scaffolded by the pipeline)
+    required: false
+    default: "false"
 
 outputs:
   repo_path:
@@ -57,6 +61,7 @@ runs:
       shell: pwsh
 
     - name: Azure Login with OIDC for cloning internal repository
+      if: inputs.skip-repo != 'true'
       uses: azure/login@v3
       with:
         client-id: ${{ inputs.azure-client-id }}
@@ -87,8 +92,10 @@ runs:
         Write-Output "::add-mask::$env:GITHUB_TOKEN"
 
         # Get Azure DevOps access token via OIDC
-        $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
-        Write-Output "::add-mask::$env:ADO_TOKEN"
+        if ('${{ inputs.skip-repo }}' -ne 'true') {
+          $env:ADO_TOKEN = az account get-access-token --resource "499b84ac-1321-427f-aa17-267ca6975798" --query accessToken -o tsv
+          Write-Output "::add-mask::$env:ADO_TOKEN"
+        }
 
-        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }}
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }} ${{ inputs.skip-repo == 'true' && '-SkipRepo' || '' }}
       shell: pwsh

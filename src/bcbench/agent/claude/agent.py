@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,12 +6,12 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.claude.metrics import parse_metrics
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks
+from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config, setup_plugins_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
 from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -50,7 +49,7 @@ def run_claude_code(
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
-    plugin_records, plugin_env = setup_plugins_from_config(claude_config, entry, repo_path, AgentType.CLAUDE, claude_cmd)
+    plugins: dict[str, Path] = resolve_config_plugins(claude_config)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
@@ -58,7 +57,7 @@ def run_claude_code(
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
-        plugins=plugin_records or None,
+        plugins=list(plugins.keys()) or None,
     )
 
     logger.info(f"Executing Claude Code in directory: {repo_path}")
@@ -80,6 +79,7 @@ def run_claude_code(
             cmd_args.append(f"--mcp-config={mcp_config_json}")
         if lsp_plugin_dir is not None:
             cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
+        cmd_args.extend(f"--plugin-dir={plugin_dir}" for plugin_dir in plugins.values())
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
         cmd_args.extend(
@@ -94,7 +94,6 @@ def run_claude_code(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            env={**os.environ, **plugin_env},
             timeout=_config.timeout.agent_execution,
             check=True,
             capture_output=True,
@@ -118,8 +117,6 @@ def run_claude_code(
         tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
         if metrics and tool_usage:
             metrics = metrics.model_copy(update={"tool_usage": tool_usage})
-
-        return metrics, config
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
@@ -130,3 +127,5 @@ def run_claude_code(
     except Exception:
         logger.exception("Unexpected error running Claude Code")
         raise
+    else:
+        return metrics, config

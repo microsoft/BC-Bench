@@ -15,7 +15,11 @@ env:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
@@ -28,6 +32,9 @@ jobs:
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
+        env:
+          # Render ruff lint findings as inline PR annotations (CI-only; local runs stay human-readable)
+          RUFF_OUTPUT_FORMAT: github
 
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing

@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
@@ -130,7 +131,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
 def _write_github_step_summary(content: str) -> None:
     config = get_config()
     if config.env.github_step_summary:
-        with open(config.env.github_step_summary, "a", encoding="utf-8") as f:
+        with Path(config.env.github_step_summary).open("a", encoding="utf-8") as f:
             f.write(content)
             f.write("\n")
         logger.info("Wrote evaluation summary to GitHub Actions step summary")

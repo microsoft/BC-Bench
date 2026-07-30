@@ -5,14 +5,15 @@ from __future__ import annotations
 import os
 from datetime import date
 from pathlib import Path
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult, IdentificationAggregate, aggregate_results, split_by_cutoff
 from bcbench.contamination.runner import load_identification_results, run_filepath_identification
+from bcbench.dataset import RepoGroundedEntry
 from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
@@ -42,6 +43,9 @@ def filepath_identification(
         raise typer.BadParameter(f"file-path-identification requires a patch-based category {[c.value for c in _PATCH_BASED_CATEGORIES]}, got '{category.value}'")
 
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    if not isinstance(entry, RepoGroundedEntry):
+        raise typer.BadParameter(f"file-path-identification scores against a gold patch, which '{category.value}' entries do not have")
+
     result = run_filepath_identification(entry=entry, model=model, category=category.value, top_k=top_k, output_dir=output_dir / run_id)
 
     if result.error:
@@ -146,5 +150,5 @@ def _write_step_summary(markdown: str) -> None:
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
-    with open(summary_path, "a", encoding="utf-8") as handle:
+    with Path(summary_path).open("a", encoding="utf-8") as handle:
         handle.write(markdown + "\n")

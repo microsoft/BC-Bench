@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -36,7 +36,7 @@ class TestEvaluationResultSummary:
         output_file = tmp_path / summary_file
         assert output_file.exists()
 
-        with open(output_file) as f:
+        with output_file.open() as f:
             data = json.load(f)
 
         assert data["total"] == 10
@@ -82,7 +82,7 @@ class TestEvaluationResultSummary:
             if not leaderboard_path.exists():
                 continue
 
-            with open(leaderboard_path, encoding="utf-8") as f:
+            with leaderboard_path.open(encoding="utf-8") as f:
                 data = json.load(f)
                 # New format: {"runs": [...], "aggregate": [...]}
                 if "runs" in data and "aggregate" in data:
@@ -129,7 +129,7 @@ class TestFromResults:
         assert summary.model == "gpt-4o"
         assert summary.agent_name == "copilot-cli"
         assert summary.github_run_id == "test_run_123"
-        assert summary.date == date.today()
+        assert summary.date == datetime.now(UTC).date()
 
     def test_from_results_calculates_averages_correctly(self, sample_results):
         summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
@@ -326,7 +326,7 @@ class TestExperimentConfiguration:
 
         summary.save(tmp_path, "summary_with_experiment.json")
 
-        with open(tmp_path / "summary_with_experiment.json") as f:
+        with (tmp_path / "summary_with_experiment.json").open() as f:
             data = json.load(f)
 
         assert "experiment" in data
@@ -355,7 +355,7 @@ class TestExperimentConfiguration:
 
         summary.save(tmp_path, "summary_no_experiment.json")
 
-        with open(tmp_path / "summary_no_experiment.json") as f:
+        with (tmp_path / "summary_no_experiment.json").open() as f:
             data = json.load(f)
 
         assert data["experiment"] is None
@@ -661,7 +661,7 @@ class TestLeaderboard:
             failed=4,
             build=8,
             percentage=60.0,
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4",
             agent_name="test-agent",
             category=EvaluationCategory.BUG_FIX,
@@ -705,7 +705,7 @@ class TestLeaderboard:
             build=3,
             percentage=66.7,
             instance_results={"test__1": True, "test__2": True, "test__3": False},
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -721,7 +721,7 @@ class TestLeaderboard:
             build=3,
             percentage=33.3,
             instance_results={"test__1": False, "test__2": True, "test__3": False},
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -745,7 +745,7 @@ class TestLeaderboard:
             build=3,
             percentage=66.7,
             instance_results={"test__1": True, "test__2": True, "test__3": False},
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -761,7 +761,7 @@ class TestLeaderboard:
             build=3,
             percentage=33.3,
             instance_results={"test__1": False, "test__2": True, "test__3": False},
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="claude-3",  # Different model
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -784,7 +784,7 @@ class TestLeaderboard:
             build=3,
             percentage=66.7,
             instance_results={"test__1": True, "test__2": True, "test__3": False},
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -800,7 +800,7 @@ class TestLeaderboard:
             build=2,
             percentage=50.0,
             instance_results={"test__1": False, "test__2": True},
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,

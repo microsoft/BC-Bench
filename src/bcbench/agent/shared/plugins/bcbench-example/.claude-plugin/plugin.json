@@ -1,5 +1,5 @@
 {
-  "name": "bcbench-example-plugin",
+  "name": "bcbench-example",
   "version": "0.1.0",
   "description": "Minimal example plugin bundling a single no-op skill for BC-Bench plugin smoke tests.",
   "author": {

@@ -351,9 +351,7 @@ def main() -> None:
     explicit_zip_inputs = sorted(set(explicit_zip_inputs))
     if explicit_zip_inputs:
         in_group = {zp for _, zs in run_groups for zp in zs}
-        for zp in explicit_zip_inputs:
-            if zp not in in_group:
-                run_groups.append((zp.stem, [zp]))
+        run_groups.extend((zp.stem, [zp]) for zp in explicit_zip_inputs if zp not in in_group)
 
     if run_groups:
         extract_root.mkdir(parents=True, exist_ok=True)
