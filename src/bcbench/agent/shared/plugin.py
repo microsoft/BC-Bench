@@ -65,6 +65,16 @@ def resolve_config_plugins(agent_config: dict) -> dict[str, Path]:
     return {plugin.record: _resolve_plugin(plugin) for plugin in plugins}
 
 
+def _has_plugin_manifest(plugin_dir: Path) -> bool:
+    """True if the folder holds a plugin manifest in either supported location.
+
+    Claude Code expects ``.claude-plugin/plugin.json``; GitHub Copilot CLI also loads a
+    ``plugin.json`` at the plugin root. A plugin published in either layout is loadable.
+    """
+    root_manifest: Path = plugin_dir / _config.file_patterns.plugin_manifest.name
+    return (plugin_dir / _config.file_patterns.plugin_manifest).is_file() or root_manifest.is_file()
+
+
 def _resolve_plugin(plugin: PluginConfig) -> Path:
     match plugin.source:
         case "local":
@@ -74,8 +84,8 @@ def _resolve_plugin(plugin: PluginConfig) -> Path:
             clone_repo_at_revision(str(plugin.repo), str(plugin.revision), clone_dir)
             plugin_dir = _plugin_dir_in_clone(clone_dir, plugin)
 
-    if not (plugin_dir / _config.file_patterns.plugin_manifest).is_file():
-        raise AgentError(f"Plugin '{plugin.name}' has no manifest at {plugin_dir / _config.file_patterns.plugin_manifest}")
+    if not _has_plugin_manifest(plugin_dir):
+        raise AgentError(f"Plugin '{plugin.name}' has no manifest at {plugin_dir / _config.file_patterns.plugin_manifest} or {plugin_dir / _config.file_patterns.plugin_manifest.name}")
 
     logger.info(f"Loading plugin {plugin.record} from {plugin_dir}")
     return plugin_dir

@@ -85,6 +85,9 @@ def run_copilot_agent(
         if lsp_plugin_dir is not None:
             cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
         cmd_args.extend(f"--plugin-dir={plugin_dir}" for plugin_dir in plugins.values())
+        # Plugins are cloned outside the review workspace, so grant the agent read access to each
+        # plugin's tree (e.g. a skill reading its own knowledge files); --plugin-dir only registers it.
+        cmd_args.extend(f"--add-dir={plugin_dir}" for plugin_dir in plugins.values())
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 

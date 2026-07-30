@@ -100,6 +100,13 @@ class TestResolveConfigPlugins:
 
         assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}) == {"probe@local": plugin}
 
+    def test_local_plugin_with_root_manifest_resolves(self, tmp_path):
+        plugin = tmp_path / "root-manifest-plugin"
+        plugin.mkdir()
+        (plugin / _MANIFEST.name).write_text(json.dumps({"name": "probe", "version": "0.0.1"}), encoding="utf-8")
+
+        assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}) == {"probe@local": plugin}
+
     def test_local_plugin_expands_user_home(self, tmp_path):
         plugin = _make_plugin(tmp_path / "my-plugin")
         with patch.object(Path, "expanduser", return_value=plugin):
