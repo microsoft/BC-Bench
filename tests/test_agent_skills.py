@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bcbench.dataset import RepoGroundedEntry
+from bcbench.dataset import BaseDatasetEntry, RepoGroundedEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentType
@@ -167,7 +167,7 @@ def test_skills_override_enables_when_config_disabled():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": False}}
 
         result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=True)
@@ -181,7 +181,7 @@ def test_skills_override_disables_when_config_enabled():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": True}}
 
         result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=False)
@@ -195,7 +195,7 @@ def test_skills_override_none_falls_back_to_config():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": False}}
 
         result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=None)

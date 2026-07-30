@@ -199,17 +199,18 @@ class DataQueryEntry(BaseDatasetEntry):
 
     Execution-based: the agent authors an AL query; evaluation compiles + runs both the generated
     query and the gold query against a fixed dataset (Contoso in a BC container) and compares the
-    result sets. No repo scaffold, so base_commit / patch are relaxed to optional.
+    result sets. The workspace is scaffolded by the pipeline, so there is no repo or commit.
     """
-
-    base_commit: str | None = None
-    patch: str = ""
 
     nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
     gold_query: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
     # Whether row order is significant when comparing result sets (e.g. the question asks for a
     # specific ranking). Defaults to False: result sets are compared order-insensitively.
     ordered: bool = False
+
+    @property
+    def customization_profile(self) -> str:
+        return "dataquery"
 
     def get_task(self) -> str:
         return self.nl_prompt

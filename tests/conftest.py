@@ -360,7 +360,6 @@ VALID_GOLD_QUERY = (
 
 def create_data_query_entry(
     instance_id: str = "dataquery__sales-by-customer-1",
-    repo: str = "dataquery/bc",
     environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
     nl_prompt: str = VALID_DATA_QUERY_PROMPT,
     created_at: str = VALID_CREATED_AT,
@@ -369,7 +368,6 @@ def create_data_query_entry(
 ) -> DataQueryEntry:
     return DataQueryEntry(
         instance_id=instance_id,
-        repo=repo,
         environment_setup_version=environment_setup_version,
         nl_prompt=nl_prompt,
         created_at=created_at,
