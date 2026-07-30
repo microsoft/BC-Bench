@@ -45,7 +45,7 @@ ENGINE_SCRIPTS_SUBPATH = "agents/ALReviewAgent/scripts"
 # test; a floating "latest" would let a mid-experiment engine release skew an A/B. Override
 # with ENGINE_REF. The exact commit reviewed is still recorded per run via engine_ref.
 # 1.19.4 is the first tag that carries the BCQUALITY_CONSUME=plugin path this arm relies on.
-_DEFAULT_ENGINE_REF = "1.19.4"
+_DEFAULT_ENGINE_REF = "1.20.4"
 _ENGINE_TIMEOUT_SECONDS = 1800
 
 

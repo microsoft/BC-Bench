@@ -204,7 +204,7 @@ class TestPrepareEngine:
         monkeypatch.delenv("ENGINE_REF", raising=False)
         with patch("bcbench.agent.engine._clone_at_ref", return_value="sha") as clone:
             _, sha = _prepare_engine(tmp_path, None)
-        assert clone.call_args.args[1] == "1.19.4"
+        assert clone.call_args.args[1] == "1.20.4"
         assert sha == "sha"
 
     def test_env_ref_overrides_pin(self, tmp_path, monkeypatch):
