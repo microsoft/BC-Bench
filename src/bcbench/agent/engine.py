@@ -44,7 +44,8 @@ ENGINE_SCRIPTS_SUBPATH = "agents/ALReviewAgent/scripts"
 # Pin a released engine tag by default so BCQuality content is the only variable under
 # test; a floating "latest" would let a mid-experiment engine release skew an A/B. Override
 # with ENGINE_REF. The exact commit reviewed is still recorded per run via engine_ref.
-_DEFAULT_ENGINE_REF = "1.15.4"
+# 1.19.4 is the first tag that carries the BCQUALITY_CONSUME=plugin path this arm relies on.
+_DEFAULT_ENGINE_REF = "1.19.4"
 _ENGINE_TIMEOUT_SECONDS = 1800
 
 
@@ -270,7 +271,10 @@ def _run_local_review(
     # drop them so they are never inherited by the reviewer subprocess (only GH_TOKEN remains).
     for clone_only in ("BCQUALITY_REPO_TOKEN", "ENGINE_REPO_TOKEN"):
         env.pop(clone_only, None)
-    logger.info(f"Invoking PR-review engine: {local_review_script}")
+    # Consume BCQuality as a Copilot CLI plugin (--plugin-dir) rather than a CWD checkout.
+    # The engine's own default is 'cwd'; a caller can still force cwd by presetting the env.
+    env.setdefault("BCQUALITY_CONSUME", "plugin")
+    logger.info(f"Invoking PR-review engine ({env['BCQUALITY_CONSUME']} mode): {local_review_script}")
     try:
         result = subprocess.run(
             args, capture_output=True, text=True, timeout=_ENGINE_TIMEOUT_SECONDS, check=False, env=env

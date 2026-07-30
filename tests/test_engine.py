@@ -180,7 +180,7 @@ class TestPrepareEngine:
         monkeypatch.delenv("ENGINE_REF", raising=False)
         with patch("bcbench.agent.engine._clone_at_ref", return_value="sha") as clone:
             _, sha = _prepare_engine(tmp_path, None)
-        assert clone.call_args.args[1] == "1.15.4"
+        assert clone.call_args.args[1] == "1.19.4"
         assert sha == "sha"
 
     def test_env_ref_overrides_pin(self, tmp_path, monkeypatch):
@@ -222,3 +222,35 @@ class TestRunLocalReviewEnv:
         assert "BCQUALITY_REPO_TOKEN" not in env
         assert "ENGINE_REPO_TOKEN" not in env
         assert env["GH_TOKEN"] == "gh-secret"
+
+    def test_defaults_to_plugin_consumption(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("BCQUALITY_CONSUME", raising=False)
+        captured: dict = {}
+
+        def fake_run(args, **kwargs):
+            captured["env"] = kwargs["env"]
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+        with (
+            patch("bcbench.agent.engine._pwsh", return_value="pwsh"),
+            patch("bcbench.agent.engine.subprocess.run", side_effect=fake_run),
+        ):
+            _run_local_review(tmp_path / "s.ps1", tmp_path, tmp_path, tmp_path / "out", "base", "claude-haiku-4.5")
+
+        assert captured["env"]["BCQUALITY_CONSUME"] == "plugin"
+
+    def test_honors_bcquality_consume_override(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("BCQUALITY_CONSUME", "cwd")
+        captured: dict = {}
+
+        def fake_run(args, **kwargs):
+            captured["env"] = kwargs["env"]
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+        with (
+            patch("bcbench.agent.engine._pwsh", return_value="pwsh"),
+            patch("bcbench.agent.engine.subprocess.run", side_effect=fake_run),
+        ):
+            _run_local_review(tmp_path / "s.ps1", tmp_path, tmp_path, tmp_path / "out", "base", "claude-haiku-4.5")
+
+        assert captured["env"]["BCQUALITY_CONSUME"] == "cwd"
