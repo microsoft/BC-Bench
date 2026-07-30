@@ -519,10 +519,10 @@ def sample_leaderboard_and_summary(tmp_path):
         ],
     }
 
-    with open(bugfix_leaderboard_path, "w") as f:
+    with bugfix_leaderboard_path.open("w") as f:
         json.dump(bugfix_data, f, indent=2)
 
-    with open(testgen_leaderboard_path, "w") as f:
+    with testgen_leaderboard_path.open("w") as f:
         json.dump(testgen_data, f, indent=2)
 
     # Create a new summary to update (updated copilot + gpt-4o + server1, server2)
@@ -552,7 +552,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "benchmark_version": "0.1.0",
     }
 
-    with open(summary_path, "w") as f:
+    with summary_path.open("w") as f:
         json.dump(new_summary, f, indent=2)
 
     return leaderboard_dir, summary_path
@@ -579,7 +579,7 @@ def test_result_update_replaces_existing_entry(sample_leaderboard_and_summary):
     assert result.exit_code == 0, f"Command failed:\nstdout: {result.stdout}\nstderr: {result.stderr}\nexception: {result.exception}"
 
     # Verify bug-fix leaderboard still has 2 aggregates (not 3)
-    with open(bugfix_leaderboard_path) as f:
+    with bugfix_leaderboard_path.open() as f:
         updated_leaderboard = json.load(f)
 
     assert len(updated_leaderboard["aggregate"]) == 2, "Should still have 2 aggregates (replaced, not added)"
@@ -632,7 +632,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "benchmark_version": "0.1.0",
     }
 
-    with open(summary_path, "w") as f:
+    with summary_path.open("w") as f:
         json.dump(new_summary, f, indent=2)
 
     result = runner.invoke(
@@ -651,7 +651,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
     assert result.exit_code == 0
 
     # Verify leaderboard now has 2 aggregates in test-generation
-    with open(leaderboard_dir / "test-generation.json") as f:
+    with (leaderboard_dir / "test-generation.json").open() as f:
         updated_leaderboard = json.load(f)
 
     assert len(updated_leaderboard["aggregate"]) == 2, "Should now have 2 aggregates (added new in test-generation)"
@@ -700,7 +700,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "benchmark_version": "0.1.0",
     }
 
-    with open(summary_path, "w") as f:
+    with summary_path.open("w") as f:
         json.dump(new_summary, f, indent=2)
 
     result = runner.invoke(
@@ -720,7 +720,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
 
     # Verify bug-fix leaderboard now has 3 aggregates (not replaced because mcp_servers differ)
     bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
-    with open(bugfix_leaderboard_path) as f:
+    with bugfix_leaderboard_path.open() as f:
         updated_leaderboard = json.load(f)
 
     assert len(updated_leaderboard["aggregate"]) == 3, "Should have 3 aggregates in bug-fix (added new because mcp_servers differ)"
@@ -758,7 +758,7 @@ def test_result_update_ensures_newline_at_end_of_file(sample_leaderboard_and_sum
     assert result.exit_code == 0
 
     # Verify file ends with newline
-    with open(leaderboard_dir / "bug-fix.json", "rb") as f:
+    with (leaderboard_dir / "bug-fix.json").open("rb") as f:
         content = f.read()
         assert content.endswith(b"\n"), "Leaderboard file should end with a newline character"
 
@@ -781,7 +781,7 @@ def test_result_update_does_not_add_multiple_newlines_when_run_twice(sample_lead
     assert result.exit_code == 0
 
     # Read file after first update
-    with open(leaderboard_dir / "bug-fix.json", "rb") as f:
+    with (leaderboard_dir / "bug-fix.json").open("rb") as f:
         content_after_first = f.read()
 
     # Count trailing newlines after first update
@@ -802,7 +802,7 @@ def test_result_update_does_not_add_multiple_newlines_when_run_twice(sample_lead
     assert result.exit_code == 0
 
     # Read file after second update
-    with open(leaderboard_dir / "bug-fix.json", "rb") as f:
+    with (leaderboard_dir / "bug-fix.json").open("rb") as f:
         content_after_second = f.read()
 
     # Count trailing newlines after second update
@@ -843,7 +843,7 @@ def test_result_update_stores_multiple_results_with_default_n(sample_leaderboard
         "benchmark_version": "0.1.0",
     }
 
-    with open(summary_path, "w") as f:
+    with summary_path.open("w") as f:
         json.dump(new_summary, f, indent=2)
 
     result = runner.invoke(
@@ -853,7 +853,7 @@ def test_result_update_stores_multiple_results_with_default_n(sample_leaderboard
 
     assert result.exit_code == 0
 
-    with open(bugfix_leaderboard_path) as f:
+    with bugfix_leaderboard_path.open() as f:
         updated_leaderboard = json.load(f)
 
     # Should still have 2 aggregates (the new result is added to an existing combination's runs)
@@ -899,12 +899,12 @@ def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_s
     # Add results to fill up to n=5 (original is from 2025-01-10)
     for _, (day, run_id) in enumerate([("2025-01-16", "run_second"), ("2025-01-17", "run_third"), ("2025-01-18", "run_fourth"), ("2025-01-19", "run_fifth")]):
         summary = {**base_summary, "date": day, "github_run_id": run_id}
-        with open(summary_path, "w") as f:
+        with summary_path.open("w") as f:
             json.dump(summary, f, indent=2)
         runner.invoke(app, ["result", "update", str(summary_path), "--leaderboard-dir", str(leaderboard_dir)])
 
     # Now we should have 5 runs for this combination
-    with open(bugfix_leaderboard_path) as f:
+    with bugfix_leaderboard_path.open() as f:
         leaderboard = json.load(f)
 
     copilot_runs = [r for r in leaderboard["runs"] if r["agent_name"] == "copilot" and r["model"] == "gpt-4o" and (r.get("experiment") or {}).get("mcp_servers") == ["server1", "server2"]]
@@ -922,13 +922,13 @@ def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_s
         "percentage": 90.0,
         "instance_results": newest_instance_results,
     }
-    with open(summary_path, "w") as f:
+    with summary_path.open("w") as f:
         json.dump(summary_new, f, indent=2)
 
     result = runner.invoke(app, ["result", "update", str(summary_path), "--leaderboard-dir", str(leaderboard_dir)])
     assert result.exit_code == 0
 
-    with open(bugfix_leaderboard_path) as f:
+    with bugfix_leaderboard_path.open() as f:
         final_leaderboard = json.load(f)
 
     # Should still have 5 runs for this combination
@@ -951,13 +951,13 @@ def test_result_refresh_recalculates_aggregates(sample_leaderboard_and_summary):
     bugfix_leaderboard_path = leaderboard_dir / "bug-fix.json"
 
     # Corrupt the aggregates to verify refresh recalculates them
-    with open(bugfix_leaderboard_path) as f:
+    with bugfix_leaderboard_path.open() as f:
         leaderboard = json.load(f)
 
     for agg in leaderboard["aggregate"]:
         agg["average"] = 999.0  # Invalid value
 
-    with open(bugfix_leaderboard_path, "w") as f:
+    with bugfix_leaderboard_path.open("w") as f:
         json.dump(leaderboard, f, indent=2)
 
     # Run refresh command
@@ -965,7 +965,7 @@ def test_result_refresh_recalculates_aggregates(sample_leaderboard_and_summary):
     assert result.exit_code == 0
 
     # Verify aggregates were recalculated correctly
-    with open(bugfix_leaderboard_path) as f:
+    with bugfix_leaderboard_path.open() as f:
         refreshed = json.load(f)
 
     # Should have 2 aggregates (copilot with servers, mini without)
@@ -1031,13 +1031,13 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
         ],
     }
 
-    with open(leaderboard_path, "w") as f:
+    with leaderboard_path.open("w") as f:
         json.dump(legacy_data, f, indent=2)
 
     result = runner.invoke(app, ["result", "refresh", "--leaderboard-dir", str(tmp_path)])
     assert result.exit_code == 0
 
-    with open(leaderboard_path) as f:
+    with leaderboard_path.open() as f:
         refreshed = json.load(f)
 
     # Should fall back to pass rate (resolved/total) from run
@@ -1094,13 +1094,13 @@ def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
         "aggregate": [],
     }
 
-    with open(leaderboard_path, "w") as f:
+    with leaderboard_path.open("w") as f:
         json.dump(data, f, indent=2)
 
     result = runner.invoke(app, ["result", "refresh", "--leaderboard-dir", str(tmp_path)])
     assert result.exit_code == 0
 
-    with open(leaderboard_path) as f:
+    with leaderboard_path.open() as f:
         refreshed = json.load(f)
 
     # Should have 2 separate aggregates (one per version)
@@ -1164,7 +1164,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
         ],
     }
 
-    with open(leaderboard_path, "w") as f:
+    with leaderboard_path.open("w") as f:
         json.dump(initial_data, f, indent=2)
 
     # Add a new run with v0.2.0 (same agent/model, different version)
@@ -1189,7 +1189,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
         "benchmark_version": "0.2.0",
     }
 
-    with open(summary_path, "w") as f:
+    with summary_path.open("w") as f:
         json.dump(new_summary, f, indent=2)
 
     result = runner.invoke(
@@ -1198,7 +1198,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
     )
     assert result.exit_code == 0
 
-    with open(leaderboard_path) as f:
+    with leaderboard_path.open() as f:
         updated = json.load(f)
 
     # Should have 2 runs and 2 aggregates (not merged)

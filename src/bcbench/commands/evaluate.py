@@ -2,10 +2,9 @@ import random
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Annotated, cast
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
 from bcbench.cli_options import (

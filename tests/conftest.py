@@ -226,7 +226,7 @@ def create_dataset_file(tmp_path: Path, entries: list[BugFixEntry] | None = None
         entries = [create_dataset_entry()]
 
     dataset_path = tmp_path / "dataset.jsonl"
-    with open(dataset_path, "w") as f:
+    with dataset_path.open("w") as f:
         for entry in entries:
             entry_dict = {
                 "instance_id": entry.instance_id,
