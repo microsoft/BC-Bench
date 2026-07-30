@@ -822,4 +822,3 @@ class TestJudge:
             result = judge_comment_matches(pairs, work_dir=tmp_path)
 
         assert result == [pairs[1]]
-

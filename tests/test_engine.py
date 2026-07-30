@@ -24,10 +24,7 @@ class TestEngineFindingMapping:
     """Normalization of the engine's _review-report.json findings into review comments."""
 
     def test_maps_engine_severity_to_gold_taxonomy(self):
-        findings = [
-            {"severity": s, "message": "x", "location": {"file": "src/A.al", "line": 3}}
-            for s in ("blocker", "major", "minor", "info")
-        ]
+        findings = [{"severity": s, "message": "x", "location": {"file": "src/A.al", "line": 3}} for s in ("blocker", "major", "minor", "info")]
         got = [c["severity"] for c in _findings_to_review_comments({"findings": findings})]
         assert got == ["critical", "high", "medium", "low"]
 
@@ -38,7 +35,9 @@ class TestEngineFindingMapping:
 
     def test_falls_back_to_range_start_line_when_line_missing(self):
         finding = {"message": "x", "location": {"file": "src/A.al", "range": {"start-line": 9}}}
-        assert _finding_to_comment(finding)["line_start"] == 9
+        comment = _finding_to_comment(finding)
+        assert comment is not None
+        assert comment["line_start"] == 9
 
     def test_skips_findings_missing_file_line_or_message(self):
         findings = [
@@ -50,7 +49,9 @@ class TestEngineFindingMapping:
 
     def test_unknown_severity_passes_through_lowercased(self):
         finding = {"severity": "Weird", "message": "x", "location": {"file": "src/A.al", "line": 1}}
-        assert _finding_to_comment(finding)["severity"] == "weird"
+        comment = _finding_to_comment(finding)
+        assert comment is not None
+        assert comment["severity"] == "weird"
 
 
 class TestBcqualityRepoOverride:
@@ -90,11 +91,7 @@ class TestWriteReviewJson:
         repo = tmp_path / "repo"
         repo.mkdir()
         inner = "x" + "'\\''" + "y"  # x'\''y -- the POSIX close/escape/reopen idiom
-        raw = (
-            '{"findings": [{"message": "m", '
-            '"location": {"file": "src/A.al", "line": 5}, '
-            '"suggested-code": "' + inner + '"}]}'
-        )
+        raw = '{"findings": [{"message": "m", "location": {"file": "src/A.al", "line": 5}, "suggested-code": "' + inner + '"}]}'
         with pytest.raises(json.JSONDecodeError):
             json.loads(raw)  # the corruption is genuinely invalid JSON
         (tmp_path / "_review-report.json").write_text(raw, encoding="utf-8")
@@ -163,12 +160,11 @@ class TestRunEngineReview:
             )
 
         run_mock.assert_called_once()
-        assert json.loads((repo_path / "review.json").read_text(encoding="utf-8")) == [
-            {"file": "src/A.al", "line_start": 5, "body": "boom", "severity": "high"}
-        ]
+        assert json.loads((repo_path / "review.json").read_text(encoding="utf-8")) == [{"file": "src/A.al", "line_start": 5, "body": "boom", "severity": "high"}]
         assert metrics is not None
         assert metrics.prompt_tokens == 111
         assert metrics.completion_tokens == 22
+        assert metrics.execution_time is not None
         assert metrics.execution_time >= 0
         assert experiment.custom_agent == "bc-pr-review-engine"
         assert experiment.engine_ref == "engsha"

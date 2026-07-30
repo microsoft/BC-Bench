@@ -152,9 +152,7 @@ def _clone_at_ref(url: str, ref: str, dest: Path, token: str | None) -> str | No
     clone = subprocess.run(["git", *auth, "clone", "--quiet", url, str(dest)], capture_output=True, text=True, check=False)
     if clone.returncode != 0:
         raise AgentError(f"Failed to clone {url}: {clone.stderr.strip()}")
-    checkout = subprocess.run(
-        ["git", "-C", str(dest), "checkout", "--quiet", ref], capture_output=True, text=True, check=False
-    )
+    checkout = subprocess.run(["git", "-C", str(dest), "checkout", "--quiet", ref], capture_output=True, text=True, check=False)
     if checkout.returncode != 0:
         raise AgentError(f"Failed to checkout '{ref}' from {url}: {checkout.stderr.strip()}")
     return _git_head(dest)
@@ -276,9 +274,7 @@ def _run_local_review(
     env.setdefault("BCQUALITY_CONSUME", "plugin")
     logger.info(f"Invoking PR-review engine ({env['BCQUALITY_CONSUME']} mode): {local_review_script}")
     try:
-        result = subprocess.run(
-            args, capture_output=True, text=True, timeout=_ENGINE_TIMEOUT_SECONDS, check=False, env=env
-        )
+        result = subprocess.run(args, capture_output=True, text=True, timeout=_ENGINE_TIMEOUT_SECONDS, check=False, env=env)
     except subprocess.TimeoutExpired as exc:
         raise AgentTimeoutError(f"PR-review engine timed out after {_ENGINE_TIMEOUT_SECONDS}s") from exc
     if result.stdout:
