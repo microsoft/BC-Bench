@@ -13,6 +13,7 @@ from bcbench.dataset import TestEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger
+from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
@@ -373,7 +374,7 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
     object_id = 50100 if suffix == "generated" else 50101
     app_dir = work_root / f".bcbench-query-{suffix}"
     if app_dir.exists():
-        shutil.rmtree(app_dir, onexc=lambda func, path, _: (Path(path).chmod(0o666), func(path)))
+        remove_tree(app_dir)
     app_dir.mkdir(parents=True, exist_ok=True)
 
     app_manifest = {

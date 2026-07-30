@@ -11,7 +11,7 @@ from bcbench.operations.bc_operations import (
     run_tests,
     wrap_query_as_api,
 )
-from bcbench.operations.filesystem_operations import remove_tree
+from bcbench.operations.filesystem_operations import clear_directory, remove_tree
 from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
@@ -39,6 +39,7 @@ __all__ = [
     "checkout_commit",
     "clean_project_paths",
     "clean_repo",
+    "clear_directory",
     "clone_repo_at_revision",
     "commit_changes",
     "copy_problem_statement_folder",
