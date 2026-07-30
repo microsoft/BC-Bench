@@ -207,7 +207,7 @@ wheels = [
 
 [[package]]
 name = "azure-ai-evaluation"
-version = "1.17.0"
+version = "1.18.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -223,9 +223,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "ruamel-yaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/e8/c4fa9e7ae281a55ebc4534e8438170215ad941ad0a1393db109872648fcf/azure_ai_evaluation-1.17.0.tar.gz", hash = "sha256:23c40c4693e59439e58d217e3d4a6423483749e3adeea95e11168bc97cf1b766", size = 2359543, upload-time = "2026-06-04T01:58:55.306Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/8a/a9012adf0f18c4e6d9bdb6a7ddd4b7ee3e399f86e42b5152d0bdd45580a8/azure_ai_evaluation-1.18.2.tar.gz", hash = "sha256:6581623504d8d5623a79155673eb934d535682ec546459f5d12b14592d00830c", size = 2403014, upload-time = "2026-07-22T18:21:01.555Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/39/69ecdce0a4605025203bff730293329cbf616b8739b8b09d8364bb758b31/azure_ai_evaluation-1.17.0-py3-none-any.whl", hash = "sha256:96f6ec0be8b2a14c6745a54d20064268765767691caac1ba5254403f8cb48533", size = 1227342, upload-time = "2026-06-04T01:58:57.055Z" },
+    { url = "https://files.pythonhosted.org/packages/37/36/9522fa7b1b2f64c72ae9da05201da95d779d4c5185d6cdd5d6b1a0f49d5c/azure_ai_evaluation-1.18.2-py3-none-any.whl", hash = "sha256:9fbd2b5fb76fe636c04fb6a9b244fa109d15564abd45aa166da7544d05b6ae4b", size = 1243336, upload-time = "2026-07-22T18:21:03.458Z" },
 ]
 
 [package.optional-dependencies]
@@ -326,8 +326,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "azure-ai-evaluation", extras = ["redteam"], specifier = ">=1.13.0" },
-    { name = "azure-identity", specifier = ">=1.19.0" },
+    { name = "azure-ai-evaluation", extras = ["redteam"], specifier = ">=1.18.2" },
+    { name = "azure-identity", specifier = ">=1.25.3" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "numpy", specifier = ">=2.3.5" },
