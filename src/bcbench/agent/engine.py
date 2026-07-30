@@ -329,11 +329,31 @@ def _findings_to_review_comments(payload: dict) -> list[dict]:
     return comments
 
 
+def _loads_review_report(text: str) -> dict:
+    """Parse the engine report, tolerating shell-escaped single quotes.
+
+    When a finding's ``suggested-code`` carries AL Label text emitted through a
+    single-quoted shell argument, the POSIX close/escape/reopen idiom ``'\\''``
+    can leak into ``_review-report.json``. That 4-char sequence is invalid JSON
+    and breaks ``json.loads``. Collapsing it back to a bare ``'`` is safe (the
+    sequence can never appear in well-formed JSON). Recent engine builds already
+    normalize this on disk (microsoft/BC-ALAgents ``Repair-ShellEscapedQuotes``);
+    this guard keeps the arm robust when pinned to an older engine tag.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        repaired = text.replace("'\\''", "'")
+        if repaired == text:
+            raise
+        return json.loads(repaired)
+
+
 def _write_review_json(engine_output_dir: Path, repo_path: Path) -> int:
     report_file = engine_output_dir / REVIEW_REPORT_FILE_NAME
     if not report_file.exists():
         raise AgentError(f"Engine did not produce {REVIEW_REPORT_FILE_NAME} at {engine_output_dir}")
-    payload = json.loads(report_file.read_text(encoding="utf-8"))
+    payload = _loads_review_report(report_file.read_text(encoding="utf-8"))
     comments = _findings_to_review_comments(payload)
     (repo_path / REVIEW_OUTPUT_FILE).write_text(json.dumps(comments, indent=2), encoding="utf-8")
     logger.info(f"Wrote {len(comments)} review comment(s) to {repo_path / REVIEW_OUTPUT_FILE}")

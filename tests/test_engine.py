@@ -86,6 +86,30 @@ class TestWriteReviewJson:
         with pytest.raises(AgentError):
             _write_review_json(tmp_path, tmp_path / "repo")
 
+    def test_repairs_shell_escaped_single_quotes(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        inner = "x" + "'\\''" + "y"  # x'\''y -- the POSIX close/escape/reopen idiom
+        raw = (
+            '{"findings": [{"message": "m", '
+            '"location": {"file": "src/A.al", "line": 5}, '
+            '"suggested-code": "' + inner + '"}]}'
+        )
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(raw)  # the corruption is genuinely invalid JSON
+        (tmp_path / "_review-report.json").write_text(raw, encoding="utf-8")
+        count = _write_review_json(tmp_path, repo)
+        assert count == 1
+        written = json.loads((repo / "review.json").read_text(encoding="utf-8"))
+        assert written == [{"file": "src/A.al", "line_start": 5, "body": "m"}]
+
+    def test_unrepairable_json_still_raises(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (tmp_path / "_review-report.json").write_text("{not json", encoding="utf-8")
+        with pytest.raises(json.JSONDecodeError):
+            _write_review_json(tmp_path, repo)
+
 
 class TestRunEngineReview:
     def _script_dir(self, tmp_path):
