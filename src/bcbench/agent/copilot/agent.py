@@ -88,9 +88,11 @@ def run_copilot_agent(
         # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
         # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
         # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
-        # silently widen the agent's sandbox access. Read the opt-in from the validated PluginConfig, not
-        # the raw YAML, so a non-boolean like `grant_dir_access: "false"` is not treated as truthy.
-        cmd_args.extend(f"--add-dir={plugins[plugin.record]}" for plugin in (PluginConfig(**entry) for entry in copilot_config["plugins"]) if plugin.enabled and plugin.grant_dir_access)
+        # silently widen the agent's sandbox access. Mirror resolve_config_plugins: filter on the raw
+        # `enabled` flag before constructing PluginConfig (a disabled, possibly platform-specific entry
+        # must never be validated), then gate on the validated grant_dir_access so a non-boolean like
+        # `grant_dir_access: "false"` is not treated as truthy.
+        cmd_args.extend(f"--add-dir={plugins[plugin.record]}" for plugin in (PluginConfig(**entry) for entry in copilot_config["plugins"] if entry.get("enabled", False)) if plugin.grant_dir_access)
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 
