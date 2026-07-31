@@ -50,53 +50,29 @@ prompt:
     {{task}}
     {% endif %}
 
-  ext-implement-template: |
+  extensibility-request-implement-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
     Task: Implement the extensibility request described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
 
-    An extensibility request asks for a new extension point (most often an integration event / event
-    publisher) so partners can hook into standard logic without modifying it. Add the requested
-    extension point to the standard code following Business Central event guidelines.
-
     Important constraints:
-    - Only create or modify `.al` source files. Never edit `.json`, `.xml`, `.xlf`, `.md`, or any other file type.
-    - Make the smallest diff that satisfies the request (surgical change). Do NOT reformat, rename, or refactor unrelated code.
-    - Follow standard event conventions: `[IntegrationEvent(false, false)]`, `local procedure`, empty body,
-      correct `OnBefore`/`OnAfter`/`On<Procedure>On<Timing>` naming for the event's placement, and full
-      table names (no abbreviations) for record parameters.
-    - W1-first layering: when the file to change exists under `src/Layers/W1/...`, change W1 first, then apply
-      the same change to every same-named counterpart file in the other country/region layers. If the file
-      exists only in a specific country layer, edit that layer directly.
     {% if not al_mcp %}
-    - Do NOT try to build or run tests, just provide the code changes needed.
+    - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
-    - Do NOT commit changes, and do NOT open a pull request.
+    - Do NOT commit any changes, and do NOT open a pull request
 
     Extensibility request:
     {{task}}
 
-  ext-triage-template: |
-    You are triaging a single Business Central extensibility request. The standard AL source is checked
-    out at {{repo_path}} — treat that as CODE_ROOT for any codebase analysis.
+  extensibility-request-triage-template: |
+    You are triaging a single Business Central extensibility request. The standard AL source is checked out at {{repo_path}}.
 
-    Task: Run the `argus-triage` skill end to end on the extensibility request below and produce its
-    triage decision. Follow the skill's phases (preprocess, eligibility, classify, requirements,
-    codebase analysis, team assignment, finalize) and its knowledge base to decide the managed labels,
-    the advisory comment, and whether the request should stay open or be closed.
+    Task: Triage the extensibility request below and produce your triage decision (managed labels, advisory comment, and open/closed state).
 
     Important constraints:
-    - This runs offline against a local checkout. There is NO live GitHub issue: read the request from
-      the text below, not from `gh`. Do NOT call `gh`, do NOT fetch or modify any issue, and do NOT
-      post comments or change labels through any host tool.
-    - Do the codebase-analysis phase by reading local `.al` files under {{repo_path}}. Do NOT try to
-      build or run tests.
-    - Instead of applying the result, WRITE your final decision as JSON to a file named
-      `triage_result.json` in {{repo_path}}. It MUST contain exactly the `Final_Output` object from the
-      skill's result contract:
-      {"Final_Output": {"labels_to_set": ["..."], "comment_to_post": "...", "issue_state": "open", "failureStep": "", "failureReason": ""}}
-    - You MUST write `triage_result.json` before finishing; if you do not, the triage is lost and counts
-      as no output. Write only valid JSON, with no surrounding markdown.
+    - This runs offline: read the request from the text below, do NOT call `gh` or touch any live issue.
+    - Do NOT build or run tests; base codebase analysis on the local `.al` files under {{repo_path}}.
+    - Write your final decision as valid JSON to `triage_result.json` in {{repo_path}}, containing exactly the skill's `Final_Output` object. Do not apply it through any host tool.
 
     Extensibility request:
     {{task}}

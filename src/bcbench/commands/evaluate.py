@@ -24,7 +24,6 @@ from bcbench.evaluate import EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.results.extriage import ExtTriageResult
 from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -314,10 +313,10 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
                 scenarios = ["raw", "empty"]
-            case EvaluationCategory.EXT_IMPLEMENT:
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 scenarios = ["raw", "empty"]
-            case EvaluationCategory.EXT_TRIAGE:
-                scenarios = ["triage-pass", "triage-empty"]
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                scenarios = ["raw", "empty"]
             case _:
                 raise ValueError(f"Unsupported category for mock evaluation: {context.category}")
 
@@ -338,10 +337,6 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
                 result = JudgeBasedEvaluationResult.create_raw(context, output="MOCK_PATCH_CONTENT")
             case "empty":
                 result = JudgeBasedEvaluationResult.create_empty_output(context)
-            case "triage-pass":
-                result = ExtTriageResult.create(context, output="{}", json_output="{}", labels_ok=True, state_ok=True, comment_ok=True)
-            case "triage-empty":
-                result = ExtTriageResult.create_empty_output(context, error_message="Mock: no triage_result.json")
             case _:
                 raise ValueError("Invalid mock scenario, this should not happen")
 

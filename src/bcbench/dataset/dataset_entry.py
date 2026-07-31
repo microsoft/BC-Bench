@@ -14,7 +14,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "ExtImplementEntry", "ExtTriageEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -192,70 +192,3 @@ class NL2ALEntry(BaseDatasetEntry):
 
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
-
-
-class ExtImplementEntry(RepoGroundedEntry):
-    """Dataset entry for the ext-implement category — implement an approved extensibility request in AL.
-
-    Judge-based (no build, no tests). The agent reads the extensibility request (provided as plain
-    text) and adds the requested extension point (typically an integration event) to the existing repo
-    checked out at `base_commit`. The agent's diff is graded by an LLM judge against `expected`, which
-    encodes both fidelity to the gold fix (`patch`) and correct propagation across the expected
-    W1 + country/region layer files.
-    """
-
-    # LLM-judge checklist: expected event/signature/placement and expected layer propagation.
-    expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
-
-    @property
-    def problem_statement_dir(self) -> Path:
-        return _config.paths.problem_statement_dir / self.instance_id
-
-    def get_task(self) -> str:
-        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
-        return readme_path.read_text(encoding="utf-8")
-
-    def get_expected_output(self) -> Checklist:
-        return {"assertions": self.expected}
-
-
-class ExtTriageEntry(RepoGroundedEntry):
-    """Dataset entry for the ext-triage category — triage a single extensibility request.
-
-    Judge-based (no build, no tests). The agent reads one extensibility-request thread (rendered from
-    `title` + `description` + any follow-up `comments`, plus `current_labels` already on the request)
-    and analyses feasibility against the standard AL source checked out at `base_commit`. It emits a
-    `Final_Output` decision — the managed labels to set, an advisory comment, and whether the request
-    stays open or is closed. Grading is hybrid: exact match on `expected_labels` and
-    `expected_issue_state`, and an LLM judge on the advisory comment against `expected_comment`.
-    """
-
-    # Triage has no gold code diff; the expected answer lives in the expected_* fields below.
-    patch: str = "N/A (ext-triage has no gold patch)"
-
-    title: Annotated[str, Field(min_length=1)]
-    description: Annotated[str, Field(min_length=1)]
-    comments: str = ""
-    current_labels: list[str] = []
-
-    expected_labels: list[str] = []
-    expected_issue_state: Literal["open", "closed", ""] = "open"
-    expected_comment: str = ""
-
-    def get_task(self) -> str:
-        sections = [f"# {self.title}", "", self.description.rstrip()]
-        if self.current_labels:
-            sections += ["", f"Current labels: {', '.join(self.current_labels)}"]
-        if self.comments.strip():
-            sections += ["", "## Follow-up conversation", "", self.comments.rstrip()]
-        return "\n".join(sections)
-
-    def get_expected_output(self) -> ExpectedOutput:
-        return json.dumps(
-            {
-                "labels_to_set": self.expected_labels,
-                "issue_state": self.expected_issue_state,
-                "comment_to_post": self.expected_comment,
-            },
-            ensure_ascii=False,
-        )

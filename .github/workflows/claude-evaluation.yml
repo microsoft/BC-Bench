@@ -24,8 +24,8 @@ on:
           - "bug-fix"
           - "test-generation"
           - "code-review"
-          - "ext-implement"
-          - "ext-triage"
+          - "extensibility-request-implement"
+          - "extensibility-request-triage"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false

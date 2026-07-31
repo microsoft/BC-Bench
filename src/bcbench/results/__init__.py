@@ -2,7 +2,6 @@ from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvalu
 from bcbench.results.bceval_export import write_bceval_results
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary
 from bcbench.results.display import create_console_summary, create_github_job_summary
-from bcbench.results.extriage import ExtTriageResult
 from bcbench.results.leaderboard import (
     CodeReviewLeaderboardAggregate,
     ExecutionBasedLeaderboardAggregate,
@@ -26,7 +25,6 @@ __all__ = [
     "ExecutionBasedEvaluationResult",
     "ExecutionBasedEvaluationResultSummary",
     "ExecutionBasedLeaderboardAggregate",
-    "ExtTriageResult",
     "JudgeBasedEvaluationResult",
     "JudgeBasedEvaluationResultSummary",
     "Leaderboard",

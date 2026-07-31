@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtImplementEntry, ExtTriageEntry, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -353,7 +353,7 @@ def sample_nl2al_entry() -> NL2ALEntry:
 
 
 def create_ext_implement_entry(
-    instance_id: str = "microsoftInternal__NAV-Ext_Impl-30361",
+    instance_id: str = "microsoftInternal__NAV-Ext_Request_Impl-30361",
     repo: str = "microsoftInternal/NAV",
     base_commit: str = VALID_BASE_COMMIT,
     environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
@@ -361,14 +361,14 @@ def create_ext_implement_entry(
     patch: str = VALID_PATCH,
     created_at: str = VALID_CREATED_AT,
     expected: list[ChecklistAssertion] | None = None,
-) -> ExtImplementEntry:
+) -> ExtRequestImplementEntry:
     if project_paths is None:
         project_paths = ["App/Layers/W1/BaseApp"]
 
     if expected is None:
         expected = [ChecklistAssertion(text="A new integration event publisher is added to the standard codeunit.", level="critical")]
 
-    return ExtImplementEntry(
+    return ExtRequestImplementEntry(
         instance_id=instance_id,
         repo=repo,
         base_commit=base_commit,
@@ -381,16 +381,16 @@ def create_ext_implement_entry(
 
 
 @pytest.fixture
-def sample_ext_implement_entry(tmp_path: Path) -> Generator[ExtImplementEntry]:
+def sample_ext_implement_entry(tmp_path: Path) -> Generator[ExtRequestImplementEntry]:
     problem_dir = create_problem_statement_dir(tmp_path)
     entry = create_ext_implement_entry()
 
-    with patch.object(ExtImplementEntry, "problem_statement_dir", property(lambda self: problem_dir)):
+    with patch.object(ExtRequestImplementEntry, "problem_statement_dir", property(lambda self: problem_dir)):
         yield entry
 
 
 def create_ext_triage_entry(
-    instance_id: str = "microsoftInternal__NAV-Ext_Triage-29447",
+    instance_id: str = "microsoftInternal__NAV-Ext_Request_Triage-29447",
     repo: str = "microsoftInternal/NAV",
     base_commit: str = VALID_BASE_COMMIT,
     environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
@@ -399,12 +399,10 @@ def create_ext_triage_entry(
     title: str = '[Event Request] Codeunit 5880 "Phys. Invt. Order-Finish"',
     description: str = "Please add an integration event in CreateOrderTrackingBufferLines.",
     comments: str = "",
-    current_labels: list[str] | None = None,
-    expected_labels: list[str] | None = None,
-    expected_issue_state: Literal["open", "closed", ""] = "open",
-    expected_comment: str = "Thanks, this event request looks valid and will be routed to the SCM team.",
-) -> ExtTriageEntry:
-    return ExtTriageEntry(
+    current_labels: list[ManagedLabel] | None = None,
+    expected: list[ChecklistAssertion] | None = None,
+) -> ExtRequestTriageEntry:
+    return ExtRequestTriageEntry(
         instance_id=instance_id,
         repo=repo,
         base_commit=base_commit,
@@ -415,12 +413,16 @@ def create_ext_triage_entry(
         description=description,
         comments=comments,
         current_labels=current_labels if current_labels is not None else [],
-        expected_labels=expected_labels if expected_labels is not None else ["SCM", "event-request"],
-        expected_issue_state=expected_issue_state,
-        expected_comment=expected_comment,
+        expected=expected
+        if expected is not None
+        else [
+            {"text": "The labels_to_set is exactly: SCM, event-request.", "level": "critical"},
+            {"text": "The issue_state is open.", "level": "critical"},
+            {"text": "The advisory comment confirms the event request is valid and will be routed to the SCM team.", "level": "expected"},
+        ],
     )
 
 
 @pytest.fixture
-def sample_ext_triage_entry() -> ExtTriageEntry:
+def sample_ext_triage_entry() -> ExtRequestTriageEntry:
     return create_ext_triage_entry()
