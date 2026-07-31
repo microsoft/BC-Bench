@@ -131,6 +131,8 @@ class PluginConfig(BaseModel):
     enabled: bool = False
     # Grant the agent filesystem access to this plugin's tree via Copilot `--add-dir`.
     # Off by default so enabling a plugin does not also widen the agent's sandbox access.
+    # This is a (hopefully temporary) accommodation for BCQuality, whose skill reads its own
+    # knowledge files at runtime; the long-term fix is to serve that content via skills / an MCP server.
     grant_dir_access: bool = False
     # github only
     repo: RepoSlug | None = None

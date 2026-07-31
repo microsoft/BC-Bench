@@ -49,7 +49,7 @@ def run_claude_code(
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, agent_type=AgentType.CLAUDE)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
-    plugins: dict[str, Path] = resolve_config_plugins(claude_config)
+    plugins: dict[str, Path] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,

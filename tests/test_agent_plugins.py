@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from bcbench.agent.shared.plugin import plugins_needing_dir_access, resolve_config_plugins
+from bcbench.agent.shared.plugin import resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.exceptions import AgentError
 from bcbench.types import PluginConfig
@@ -105,10 +105,10 @@ class TestResolveConfigPlugins:
         plugin.mkdir()
         (plugin / _MANIFEST.name).write_text(json.dumps({"name": "probe", "version": "0.0.1"}), encoding="utf-8")
 
-        assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}, allow_root_manifest=True) == {"probe@local": plugin}
+        assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}, allow_copilot_manifest=True) == {"probe@local": plugin}
 
     def test_root_manifest_is_rejected_without_opt_in(self, tmp_path):
-        # Claude Code cannot load a root-only manifest, so the default (allow_root_manifest=False) must
+        # Claude Code cannot load a root-only manifest, so the default (allow_copilot_manifest=False) must
         # reject it rather than forward a plugin that Claude would silently ignore.
         plugin = tmp_path / "root-manifest-plugin"
         plugin.mkdir()
@@ -159,7 +159,7 @@ class TestResolveConfigPlugins:
 
     def test_duplicate_records_are_rejected(self, tmp_path):
         # Same name + source => same record; the resolved dict would silently drop one and, worse,
-        # leak the other's grant_dir_access onto the survivor's path. Fail fast at both entry points.
+        # leak the other's grant_dir_access onto the survivor's path. Fail fast.
         entries = {
             "plugins": [
                 _local_entry(tmp_path / "a", name="dup", grant_dir_access=True),
@@ -168,28 +168,16 @@ class TestResolveConfigPlugins:
         }
         with pytest.raises(AgentError, match="Duplicate plugin record"):
             resolve_config_plugins(entries)
-        with pytest.raises(AgentError, match="Duplicate plugin record"):
-            plugins_needing_dir_access(entries)
 
-
-class TestPluginsNeedingDirAccess:
-    """--add-dir grants read+write, so it is limited to plugins that opt in - enabling a plugin never widens access."""
-
-    def test_returns_only_enabled_opted_in_records(self, tmp_path):
-        result = plugins_needing_dir_access(
-            {
-                "plugins": [
-                    _local_entry(tmp_path / "a", name="granted", grant_dir_access=True),
-                    _local_entry(tmp_path / "b", name="plain"),  # no grant_dir_access -> default off
-                    _local_entry(tmp_path / "c", name="off", enabled=False, grant_dir_access=True),  # disabled -> excluded
-                ]
-            }
-        )
-
-        assert result == {"granted@local"}
-
-    def test_no_plugin_opts_in_by_default(self, tmp_path):
-        assert plugins_needing_dir_access({"plugins": [_local_entry(tmp_path / "a", name="plain")]}) == set()
+    def test_distinct_records_resolving_to_one_folder_are_rejected(self, plugin_root):
+        # Two GitHub entries sharing a name clone into <plugin_root>/<name>, so distinct records resolve
+        # to the same folder - which would grant a non-opted-in plugin the other's --add-dir.
+        entries = {"plugins": [_github_entry(name="dup", revision="a" * 40), _github_entry(name="dup", revision="b" * 40)]}
+        with (
+            patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)),
+            pytest.raises(AgentError, match="resolve to the same folder"),
+        ):
+            resolve_config_plugins(entries)
 
 
 @pytest.mark.usefixtures("plugin_root")

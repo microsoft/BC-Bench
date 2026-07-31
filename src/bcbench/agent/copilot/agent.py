@@ -8,14 +8,14 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_metrics
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, plugins_needing_dir_access, resolve_config_plugins
+from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.copilot_cli import find_copilot
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
-from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -54,7 +54,7 @@ def run_copilot_agent(
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
-    plugins: dict[str, Path] = resolve_config_plugins(copilot_config, allow_root_manifest=True)
+    plugins: dict[str, Path] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
@@ -85,12 +85,13 @@ def run_copilot_agent(
         if lsp_plugin_dir is not None:
             cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
         cmd_args.extend(f"--plugin-dir={plugin_dir}" for plugin_dir in plugins.values())
-        # A plugin that reads its own tree at runtime (e.g. a skill loading its knowledge files)
-        # needs filesystem access beyond --plugin-dir, which only registers it. --add-dir grants
-        # read+write, so it is limited to plugins that opt in via grant_dir_access rather than
-        # handed to every plugin - keeping "plugin enabled" and "dir access granted" separate.
-        granted = plugins_needing_dir_access(copilot_config)
-        cmd_args.extend(f"--add-dir={plugins[record]}" for record in plugins if record in granted)
+        # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
+        # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
+        # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
+        # silently widen the agent's sandbox access.
+        cmd_args.extend(
+            f"--add-dir={plugins[PluginConfig(**plugin_entry).record]}" for plugin_entry in copilot_config["plugins"] if plugin_entry.get("enabled") and plugin_entry.get("grant_dir_access")
+        )
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 

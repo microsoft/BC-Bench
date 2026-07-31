@@ -44,7 +44,7 @@ def remove_agent_plugin(folder: str) -> None:
         logger.info(f"Removed stale agent plugin '{folder}': {plugin_dir}")
 
 
-def resolve_config_plugins(agent_config: dict, *, allow_root_manifest: bool = False) -> dict[str, Path]:
+def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False) -> dict[str, Path]:
     """Resolve the config's enabled plugin entries to loadable plugin folders.
 
     A plugin is either `local` (an absolute path on this machine) or `github` (cloned from its repo
@@ -54,60 +54,51 @@ def resolve_config_plugins(agent_config: dict, *, allow_root_manifest: bool = Fa
 
     Args:
         agent_config: Parsed `config.yaml`.
-        allow_root_manifest: Accept a root ``plugin.json`` in addition to ``.claude-plugin/plugin.json``.
-            Only Copilot CLI loads a root manifest, so Copilot runs pass ``True`` while Claude runs keep
-            the default ``False`` and reject a root-only plugin they could not load anyway.
+        allow_copilot_manifest: Also accept a root ``plugin.json`` - a layout only Copilot CLI loads.
 
     Returns:
         Plugin folders keyed by the record they get on the result, in config order.
 
     Raises:
-        AgentError: If two enabled plugins share a record, or a plugin does not resolve to a folder
-            holding a plugin manifest.
-    """
-    plugins = _enabled_plugins(agent_config)
-    return {plugin.record: _resolve_plugin(plugin, allow_root_manifest) for plugin in plugins}
-
-
-def plugins_needing_dir_access(agent_config: dict) -> set[str]:
-    """Records of enabled plugins that opt into filesystem access via Copilot ``--add-dir``.
-
-    ``--add-dir`` grants read+write access, so a plugin receives it only when it sets
-    ``grant_dir_access`` in its config entry. Enabling a plugin therefore never widens the agent's
-    sandbox access on its own, keeping "plugin enabled" and "directory access granted" separate.
-    """
-    return {plugin.record for plugin in _enabled_plugins(agent_config) if plugin.grant_dir_access}
-
-
-def _enabled_plugins(agent_config: dict) -> list[PluginConfig]:
-    """Parse the enabled plugin entries, enforcing that their records are unique.
-
-    A record (``name@revision-or-source``) keys both the resolved plugin folder and the plugin's
-    entry on a result. A collision would silently drop a plugin and, once ``grant_dir_access`` is in
-    play, let one entry's opt-in leak onto another entry's resolved path - so reject duplicates up front.
+        AgentError: If two enabled plugins share a record or resolve to the same folder, or a plugin
+            does not resolve to a folder holding a plugin manifest.
     """
     plugins = [PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False)]
+
+    # A record (``name@revision-or-source``) keys both the resolved folder and the plugin's entry on a
+    # result, so a collision would silently drop a plugin - and, with grant_dir_access in play, let one
+    # entry's opt-in leak onto another's path. Reject duplicate records up front.
     records = [plugin.record for plugin in plugins]
-    duplicates = sorted({record for record in records if records.count(record) > 1})
-    if duplicates:
-        raise AgentError(f"Duplicate plugin record(s) among enabled plugins: {', '.join(duplicates)}")
-    return plugins
+    duplicate_records = sorted({record for record in records if records.count(record) > 1})
+    if duplicate_records:
+        raise AgentError(f"Duplicate plugin record(s) among enabled plugins: {', '.join(duplicate_records)}")
+
+    resolved = {plugin.record: _resolve_plugin(plugin, allow_copilot_manifest) for plugin in plugins}
+
+    # Distinct records can still resolve to one folder (e.g. two GitHub entries sharing a name clone
+    # into ``<plugin_root>/<name>``, the second clobbering the first), which would grant a non-opted-in
+    # plugin the other's ``--add-dir``. Reject shared destinations too.
+    folders = [str(path) for path in resolved.values()]
+    shared_folders = sorted({folder for folder in folders if folders.count(folder) > 1})
+    if shared_folders:
+        raise AgentError(f"Distinct plugins resolve to the same folder: {', '.join(shared_folders)}")
+    return resolved
 
 
-def _has_plugin_manifest(plugin_dir: Path, allow_root_manifest: bool) -> bool:
+def _has_plugin_manifest(plugin_dir: Path, allow_copilot_manifest: bool) -> bool:
     """True if the folder holds a plugin manifest in a location the target agent can load.
 
     Claude Code loads only ``.claude-plugin/plugin.json``. GitHub Copilot CLI loads that layout too
     but also accepts a ``plugin.json`` at the plugin root, so a root-only manifest is honored only
-    when ``allow_root_manifest`` is set (Copilot runs) - never for a Claude run, which would otherwise
+    when ``allow_copilot_manifest`` is set (Copilot runs) - never for a Claude run, which would otherwise
     forward the plugin via ``--plugin-dir`` only for Claude to ignore it.
     """
     if (plugin_dir / _config.file_patterns.plugin_manifest).is_file():
         return True
-    return allow_root_manifest and (plugin_dir / _config.file_patterns.plugin_manifest.name).is_file()
+    return allow_copilot_manifest and (plugin_dir / _config.file_patterns.plugin_manifest.name).is_file()
 
 
-def _resolve_plugin(plugin: PluginConfig, allow_root_manifest: bool) -> Path:
+def _resolve_plugin(plugin: PluginConfig, allow_copilot_manifest: bool) -> Path:
     match plugin.source:
         case "local":
             plugin_dir = Path(plugin.path).expanduser().resolve()
@@ -116,9 +107,9 @@ def _resolve_plugin(plugin: PluginConfig, allow_root_manifest: bool) -> Path:
             clone_repo_at_revision(str(plugin.repo), str(plugin.revision), clone_dir)
             plugin_dir = _plugin_dir_in_clone(clone_dir, plugin)
 
-    if not _has_plugin_manifest(plugin_dir, allow_root_manifest):
+    if not _has_plugin_manifest(plugin_dir, allow_copilot_manifest):
         nested: Path = plugin_dir / _config.file_patterns.plugin_manifest
-        locations: str = f"{nested} or {plugin_dir / _config.file_patterns.plugin_manifest.name}" if allow_root_manifest else str(nested)
+        locations: str = f"{nested} or {plugin_dir / _config.file_patterns.plugin_manifest.name}" if allow_copilot_manifest else str(nested)
         raise AgentError(f"Plugin '{plugin.name}' has no manifest at {locations}")
 
     logger.info(f"Loading plugin {plugin.record} from {plugin_dir}")
