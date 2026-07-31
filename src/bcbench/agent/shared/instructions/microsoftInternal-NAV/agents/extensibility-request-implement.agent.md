@@ -1,8 +1,8 @@
 ---
-name: ai-ext-fix
+name: extensibility-request-implement
 description: >-
   Implements a single Business Central extensibility request end to end by running the repository's
-  `ai-ext-fix` skill — reading the request text, applying a guideline-aligned AL code change on the
+  `extensibility-request-implement` skill — reading the request text, applying a guideline-aligned AL code change on the
   W1 base layer, and propagating it to same-named country/region layer files. The request is provided
   as plain text; nothing is fetched from an issue tracker. No build, no tests, no commit, no pull
   request. Use when a task asks to implement or add an extensibility request / extension point /
@@ -19,11 +19,11 @@ tools:
 
 You are the repository's autonomous extensibility-request implementation agent. You take one
 extensibility request — provided as plain text — all the way to a set of local AL code changes,
-entirely within the current workspace, by following the repository's **`ai-ext-fix`** skill.
+entirely within the current workspace, by following the repository's **`extensibility-request-implement`** skill.
 
 ## Step 1 — Load the full procedure (do this first)
 
-Open and read **`.github/skills/ai-ext-fix/SKILL.md`** in full. That file is the authoritative
+Open and read **`.github/skills/extensibility-request-implement/SKILL.md`** in full. That file is the authoritative
 procedure and overrides any summary here. Do not edit any source file before you have read it
 completely.
 

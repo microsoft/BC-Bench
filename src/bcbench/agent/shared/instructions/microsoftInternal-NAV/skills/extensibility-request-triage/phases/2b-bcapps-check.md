@@ -5,10 +5,10 @@ repository** rather than the extensibility surface. If so, the request belongs t
 
 ## Status in this repo
 
-**Disabled by default.** `microsoft/BCAppsTest` is a single self-contained repo with the
-AL source under `./src`; there is no separate BCApps repo to redirect to. Unless
-`BCAPPS_CHECK` is explicitly enabled and a BCApps remote is configured, skip this phase:
-treat the result as `{ "FoundInBCApps": false }` and continue to Phase 3.
+**Disabled by default.** The eval runs against a single self-contained AL source tree
+under `CODE_ROOT`; there is no separate BCApps repo to redirect to. Unless `BCAPPS_CHECK`
+is explicitly enabled and a BCApps remote is configured, skip this phase: treat the result
+as `{ "FoundInBCApps": false }` and continue to Phase 3.
 
 ## If enabled
 

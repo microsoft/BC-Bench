@@ -185,7 +185,7 @@ class EvaluationCategory(StrEnum):
     CODE_REVIEW = "code-review"
     NL2AL = "nl2al"
     # Implement an approved extensibility request (add an event/extension point) as an AL code change.
-    # Sibling extensibility categories (extensibility-request-triage, ext-advisor) are planned but not yet implemented.
+    # The sibling ext-advisor category is planned but not yet implemented.
     EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"

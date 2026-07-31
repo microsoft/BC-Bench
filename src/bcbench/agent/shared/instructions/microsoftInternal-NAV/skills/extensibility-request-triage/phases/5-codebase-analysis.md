@@ -1,13 +1,13 @@
 # Phase 5 — Codebase analysis  (dispatched sub-agent)
 
-Evaluate the feasibility of the request against the **local AL source** at `CODE_ROOT`
-(`./src`). The orchestrator pre-loads the rules and dispatches this phase.
+Evaluate the feasibility of the request against the **local AL source** at `CODE_ROOT`.
+The orchestrator pre-loads the rules and dispatches this phase.
 
 ## Inputs (from the dispatch prompt)
-`DISTILLED_REQUEST`, `TYPE`, `SUBTYPE`, `CODE_ROOT` (`./src`), and `RULES` (the assembled
-`blockers` / `alternativeSuggestions` / `warnings` / `implementation` batches — **do not
-load rule files yourself**). Use the **code capabilities** in `compatibility.md` (local
-file search/read).
+`DISTILLED_REQUEST`, `TYPE`, `SUBTYPE`, `CODE_ROOT` (the caller-supplied repo root), and
+`RULES` (the assembled `blockers` / `alternativeSuggestions` / `warnings` /
+`implementation` batches — **do not load rule files yourself**). Use the **code
+capabilities** in `compatibility.md` (local file search/read).
 
 ## Core logic
 1. **Understand intent** — including all comments. If a prior author reply already
@@ -15,7 +15,7 @@ file search/read).
 2. **Identify targets** — the objects that actually need to change → `OBJECT_LIST`.
 3. **Locate each target file under `CODE_ROOT`:**
    1. Derive `{ObjectNameCamelCase}.{ObjectType}.al`.
-   2. Search by filename (`find ./src -iname '<File>.al'` / glob).
+   2. Search by filename (`find <CODE_ROOT> -iname '<File>.al'` / glob).
    3. If none, search by procedure or object name (`grep -rn --include='*.al'`).
    4. If still none → `agent-not-processable`.
    - Missing **trigger** → creating a new trigger is allowed. Missing **procedure** →
@@ -27,10 +27,15 @@ file search/read).
 5. **Read the full file** — mandatory before any rule evaluation. Base all rule checks on
    complete content, not grep snippets. Process large files entirely.
 6. **Expand context only when it changes the outcome** — follow callers/callees of the
-   target procedure (grep `./src` for the procedure name) if feasibility depends on them.
-   Limit depth; stop when you have enough.
-7. **Evaluate `RULES` in order; short-circuit on the first blocker:**
-   - `blockers` — first match → outcome `auto-reject`
+   target procedure (grep `<CODE_ROOT>` for the procedure name) if feasibility depends on
+   them. Limit depth; stop when you have enough.
+7. **Evaluate `RULES` in order; short-circuit on the first match:**
+   - `blockers` — first matching rule wins. **Dispatch by that rule's own `action`**, do
+     not assume every blocker means `auto-reject`. Map the rule's `action` to the outcome:
+     `reject` / `auto_reject` → `auto-reject`; `request_clarification` → `missing-info`;
+     `suggest_alternative` → `missing-info`; `include_human` /
+     `agent_not_processable` → `agent-not-processable`. If a rule has no `action`, treat it
+     as `auto-reject`.
    - `alternativeSuggestions` — any match → `missing-info`
    - `warnings` — any condition matched in code → `missing-info` (do not override with your
      own judgment; skip only if the author already addressed it)

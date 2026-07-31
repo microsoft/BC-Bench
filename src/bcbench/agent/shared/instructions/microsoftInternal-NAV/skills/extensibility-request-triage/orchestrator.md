@@ -1,19 +1,20 @@
-# Orchestrator — argus-triage
+# Orchestrator — extensibility-request-triage
 
 The end-to-end triage procedure. Follow the phases in order. `shared-rules.md` is binding
 throughout. Resolve every tool through `compatibility.md`. Each phase below names the
 phase file with the detailed instructions and the **state** it contributes.
 
-**Single-repo mode:** the issue is in this repo and the AL source is local at
-`CODE_ROOT = ./src`. Phase 5 reads local files — there is no remote code repo.
+**Offline mode:** there is no live issue — the request is read from the prompt text
+(`REQUEST_TEXT`) and the AL source is local under the caller-supplied `CODE_ROOT`. Phase 5
+reads local files — there is no remote code repo.
 
 You accumulate a single `WorkflowState` object as you go. Phases 0–6 only read and reason;
-**all writes to the issue happen once, in Phase 7.**
+the single decision is emitted once, in Phase 7, to `triage_result.json`.
 
 ## State carried between phases
 
 ```
-GH_REQUEST            # issue metadata + all comments (Phase 0)
+GH_REQUEST            # request text parsed into metadata + comments (Phase 0)
 DISTILLED_REQUEST     # goal, latestRequest, proposedCode, justification, clarifications (Phase 1)
 TYPE, SUBTYPE         # request classification (Phase 3)
 OBJECT_LIST           # target AL objects with namespace + path (Phase 5)
@@ -31,8 +32,8 @@ except where a phase explicitly says to continue.
 ## Phase 0 — Startup  →  `phases/0-startup.md`
 
 Confirm the local AL source exists at `CODE_ROOT` and the knowledge files are present.
-Fetch the issue and all its comments into `GH_REQUEST`. If a comment starts with
-`/not-accurate`, set `FailureLabel: do-nothing` and go to Phase 7.
+Parse the request text into `GH_REQUEST` (title, body, comments, current labels). If a
+comment starts with `/not-accurate`, set `FailureLabel: do-nothing` and go to Phase 7.
 
 ## Phase 1 — Preprocess  →  `phases/1-preprocess.md`
 
@@ -80,11 +81,11 @@ The heavy phase. **Pre-load the rules first**, then dispatch a sub-agent (ladder
 
 2. Dispatch Phase 5:
    - prompt: »
-       Read `internal/Argus_2/skills/argus-triage/phases/5-codebase-analysis.md` and follow
+       Read `phases/5-codebase-analysis.md` (relative to this skill directory) and follow
        it with:
        DISTILLED_REQUEST: <json>
        TYPE: <type>   SUBTYPE: <subtype>
-       CODE_ROOT: ./src
+       CODE_ROOT: <the caller-supplied repository root>
        RULES: <assembled blockers/alternativeSuggestions/warnings/implementation>
        Return only the Phase 5 JSON contract.
      «
@@ -102,16 +103,14 @@ Map `OBJECT_LIST` namespaces to a `TEAM_LABEL` via
 ## Phase 7 — Finalize  →  `phases/7-finalize.md`
 
 Work **only** from `WorkflowState`. Use the decision table to choose `labels_to_set`, the
-comment template, and `issue_state`. Emit the result contract
-(`templates/result-contract.md`) and **apply it** via `compatibility.md`. The only phase
-that writes.
+comment template, and `request_state`. Emit the result contract
+(`templates/result-contract.md`) and **write it to `triage_result.json`** via
+`compatibility.md`. The only phase that writes.
 
 ---
 
 ## Note: shared knowledge
 
-The `knowledge/` folder here is a **copy** of the original Argus knowledge so this skill is
-self-contained. This repo also contains `internal/Argus_Triage_Extensibility_Requests/ArgusAgent`
-(the original) and `internal/Argus_Extensibility_MCP` — in production all three should read
-one shared knowledge package so requirements/rules never drift. Point the Phase 4/5/6/7
-reads at that shared location when it exists.
+The `knowledge/` folder here is self-contained: it carries its own requirements and
+codebase-rules so the skill needs no external package. Keep requirements and rules in this
+folder in sync when they change.

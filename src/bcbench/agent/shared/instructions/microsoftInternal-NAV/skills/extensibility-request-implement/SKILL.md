@@ -1,5 +1,5 @@
 ---
-name: ai-ext-fix
+name: extensibility-request-implement
 description: >
   Implement a single Business Central extensibility request as an AL code change. The request is
   provided as plain text (a natural-language description of the extension point that is needed,

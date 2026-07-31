@@ -8,7 +8,7 @@ comment_templates:
   # 1. Follow the template EXACTLY - do not add extra sections
   # 2. NEVER add "Analysis Summary", "Team Assignment", or similar metadata
   # 3. NEVER add "Correction Required" or explain differences from author's proposal
-  # 4. NEVER add footer like "This issue has been analyzed by Argus Agent"
+  # 4. NEVER add footer like "This request has been analyzed by an AI agent"
   # 5. NEVER add "Thank you" messages or greetings
   # 6. Show ONLY what will be implemented - no explanations of WHY
   # 7. If request passed validation, just show the final implementation code
@@ -118,6 +118,26 @@ comment_templates:
 
       ```al
       {enum_code}
+      ```
+
+      ---
+
+      **File:** `{filename_only}`
+
+  approved_extensibility_enhancement:
+    description: "Posted when extensibility-enhancement request passes analysis and is ready for further processing"
+    applies_to: ["extensibility-enhancement"]
+    template: |
+      ✅ **Analysis complete - ready for further processing**
+
+      ---
+
+      **Implementation:**
+
+      {implementation_description}
+
+      ```al
+      {enhancement_code}
       ```
 
       ---
@@ -420,11 +440,11 @@ comment_templates:
   # STALE ISSUE COMMENT
   # =============================================================================
 
-  stale_issue_closure:
-    description: "Posted when closing stale issue (30+ days with missing-info)"
+  stale_request_closure:
+    description: "Posted when closing a stale request (30+ days with missing-info)"
     applies_to: ["all"]
     template: |
-      No recent activity, so this issue will now be closed.
+      No recent activity, so this request will now be closed.
 
   # =============================================================================
   # BCAPPS REDIRECT COMMENT

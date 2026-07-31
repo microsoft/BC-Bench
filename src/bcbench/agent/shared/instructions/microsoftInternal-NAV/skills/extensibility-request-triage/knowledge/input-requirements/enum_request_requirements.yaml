@@ -27,7 +27,7 @@ enum_request:
           mandatory: true
           validation_hints: ["usage", "context", "table", "field", "page"]
 
-    extend_enum:
+    extend_existing_enum:
       enabled: true
       description: "Request to add values to existing enum"
 

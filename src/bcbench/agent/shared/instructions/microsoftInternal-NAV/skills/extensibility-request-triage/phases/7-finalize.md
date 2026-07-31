@@ -1,12 +1,12 @@
 # Phase 7 — Finalize
 
-Produce the result contract and apply it. Work **exclusively** from `WorkflowState` — do
-not fetch files, search, or call analysis tools here. The only tools used are the issue
-write capabilities in `compatibility.md`.
+Produce the result contract and write it. Work **exclusively** from `WorkflowState` — do
+not fetch files, search, or call analysis tools here. The only tool used is the write
+capability in `compatibility.md`.
 
 ## Inputs
 `TYPE`, `TEAM_LABEL`, `FailureLabel`, `FailureReason`, `OBJECT_LIST`,
-`SUGGESTED_IMPLEMENTATION`, plus the issue author for addressing the comment.
+`SUGGESTED_IMPLEMENTATION`.
 
 ## Decision table
 | Outcome | Labels | Comment template | State |
@@ -16,7 +16,7 @@ write capabilities in `compatibility.md`.
 | `agent-not-processable` | `["agent-not-processable"]` | (none) | open |
 | Auto-reject (blocker) | `[]` | `rejected_request` | closed |
 | Already implemented | `[]` | `already_implemented` | closed |
-| `close` + reason is stale/inactive/withdrawn | `["missing-info"]` | `stale_issue_closure` | closed |
+| `close` + reason is stale/inactive/withdrawn | `["missing-info"]` | `stale_request_closure` | closed |
 | `close` + any other rejection reason | `[]` | `rejected_request` | closed |
 | `bcapps` (target exists in BCApps) | `[]` | `bcapps` | closed |
 | `do-nothing` | (none) | (none) | (no change) |
@@ -41,13 +41,11 @@ feedback footer below **verbatim** (in this order), exactly as written:
 ## Emit the contract
 Produce the object from `templates/result-contract.md`:
 ```json
-{ "Final_Output": { "labels_to_set": [...], "comment_to_post": "...", "issue_state": "open|closed|", "failureStep": "", "failureReason": "" } }
+{ "Final_Output": { "labels_to_set": [...], "comment_to_post": "...", "request_state": "open|closed|", "failureStep": "", "failureReason": "" } }
 ```
 
-## Apply it (via compatibility.md)
-1. `do-nothing` (empty state + nothing to post) → take no action.
-2. Reconcile **managed** labels: remove managed labels not in `labels_to_set`; add the rest.
-3. If `comment_to_post` non-empty → write to a file and post with `--body-file`.
-4. If `issue_state` is `closed` → close the issue.
+## Write it (via compatibility.md)
+Write the `Final_Output` object to `triage_result.json`. There is no live issue: labels,
+comment, and state are recorded in the JSON only — nothing is posted or closed on a server.
 
-Report a one-line summary: outcome, labels applied, comment posted (y/n), state.
+Report a one-line summary: outcome, labels, comment (y/n), state.
