@@ -157,6 +157,20 @@ class TestResolveConfigPlugins:
 
         assert list(resolved) == [f"superpowers@{'a' * 40}", "probe@local"]
 
+    def test_duplicate_records_are_rejected(self, tmp_path):
+        # Same name + source => same record; the resolved dict would silently drop one and, worse,
+        # leak the other's grant_dir_access onto the survivor's path. Fail fast at both entry points.
+        entries = {
+            "plugins": [
+                _local_entry(tmp_path / "a", name="dup", grant_dir_access=True),
+                _local_entry(tmp_path / "b", name="dup"),
+            ]
+        }
+        with pytest.raises(AgentError, match="Duplicate plugin record"):
+            resolve_config_plugins(entries)
+        with pytest.raises(AgentError, match="Duplicate plugin record"):
+            plugins_needing_dir_access(entries)
+
 
 class TestPluginsNeedingDirAccess:
     """--add-dir grants read+write, so it is limited to plugins that opt in - enabling a plugin never widens access."""

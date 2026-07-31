@@ -62,9 +62,10 @@ def resolve_config_plugins(agent_config: dict, *, allow_root_manifest: bool = Fa
         Plugin folders keyed by the record they get on the result, in config order.
 
     Raises:
-        AgentError: If a plugin does not resolve to a folder holding a plugin manifest.
+        AgentError: If two enabled plugins share a record, or a plugin does not resolve to a folder
+            holding a plugin manifest.
     """
-    plugins = [PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False)]
+    plugins = _enabled_plugins(agent_config)
     return {plugin.record: _resolve_plugin(plugin, allow_root_manifest) for plugin in plugins}
 
 
@@ -75,8 +76,22 @@ def plugins_needing_dir_access(agent_config: dict) -> set[str]:
     ``grant_dir_access`` in its config entry. Enabling a plugin therefore never widens the agent's
     sandbox access on its own, keeping "plugin enabled" and "directory access granted" separate.
     """
-    enabled = (PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False))
-    return {plugin.record for plugin in enabled if plugin.grant_dir_access}
+    return {plugin.record for plugin in _enabled_plugins(agent_config) if plugin.grant_dir_access}
+
+
+def _enabled_plugins(agent_config: dict) -> list[PluginConfig]:
+    """Parse the enabled plugin entries, enforcing that their records are unique.
+
+    A record (``name@revision-or-source``) keys both the resolved plugin folder and the plugin's
+    entry on a result. A collision would silently drop a plugin and, once ``grant_dir_access`` is in
+    play, let one entry's opt-in leak onto another entry's resolved path - so reject duplicates up front.
+    """
+    plugins = [PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False)]
+    records = [plugin.record for plugin in plugins]
+    duplicates = sorted({record for record in records if records.count(record) > 1})
+    if duplicates:
+        raise AgentError(f"Duplicate plugin record(s) among enabled plugins: {', '.join(duplicates)}")
+    return plugins
 
 
 def _has_plugin_manifest(plugin_dir: Path, allow_root_manifest: bool) -> bool:
