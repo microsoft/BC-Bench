@@ -44,7 +44,7 @@ def remove_agent_plugin(folder: str) -> None:
         logger.info(f"Removed stale agent plugin '{folder}': {plugin_dir}")
 
 
-def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False) -> dict[str, Path]:
+def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False) -> list[PluginConfig]:
     """Resolve the config's enabled plugin entries to loadable plugin folders.
 
     A plugin is either `local` (an absolute path on this machine) or `github` (cloned from its repo
@@ -57,7 +57,7 @@ def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool =
         allow_copilot_manifest: Also accept a root ``plugin.json`` - a layout only Copilot CLI loads.
 
     Returns:
-        Plugin folders keyed by the record they get on the result, in config order.
+        The enabled plugins, in config order, each with its resolved ``plugin_dir`` set.
 
     Raises:
         AgentError: If two enabled plugins share a name, or a plugin does not resolve to a folder
@@ -74,7 +74,7 @@ def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool =
     if duplicates:
         raise AgentError(f"Duplicate plugin name(s) among enabled plugins: {', '.join(duplicates)}")
 
-    return {plugin.record: _resolve_plugin(plugin, allow_copilot_manifest) for plugin in plugins}
+    return [plugin.model_copy(update={"plugin_dir": _resolve_plugin(plugin, allow_copilot_manifest)}) for plugin in plugins]
 
 
 def _has_plugin_manifest(plugin_dir: Path, allow_copilot_manifest: bool) -> bool:

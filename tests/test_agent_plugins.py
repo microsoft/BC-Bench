@@ -35,6 +35,11 @@ def _shipped_plugins() -> list[dict]:
     return config["plugins"]
 
 
+def _dirs_by_record(resolved: list[PluginConfig]) -> dict[str, Path | None]:
+    """Map resolved plugins back to a record -> plugin_dir dict for assertions."""
+    return {plugin.record: plugin.plugin_dir for plugin in resolved}
+
+
 class TestPluginConfigValidation:
     """Enabled entries are validated before a run starts, so a typo fails fast rather than mid-agent."""
 
@@ -70,7 +75,7 @@ class TestPluginConfigValidation:
 
     def test_disabled_entry_is_inert(self):
         # A disabled entry must never break a run - it may hold a path that is only valid on another OS
-        assert resolve_config_plugins({"plugins": [{"name": "x", "source": "local", "enabled": False, "path": "C:/only/valid/on/windows"}]}) == {}
+        assert resolve_config_plugins({"plugins": [{"name": "x", "source": "local", "enabled": False, "path": "C:/only/valid/on/windows"}]}) == []
 
     @pytest.mark.parametrize("revision", ["refs/heads/main", "main", "v1.2.3", "HEAD", "a" * 7, "a" * 41, "z" * 40])
     def test_revision_that_is_not_a_commit_sha_is_rejected(self, revision):
@@ -93,19 +98,19 @@ class TestPluginConfigValidation:
 @pytest.mark.usefixtures("plugin_root")
 class TestResolveConfigPlugins:
     def test_no_enabled_entries_resolves_to_nothing(self, tmp_path):
-        assert resolve_config_plugins({"plugins": [_local_entry(tmp_path, enabled=False)]}) == {}
+        assert resolve_config_plugins({"plugins": [_local_entry(tmp_path, enabled=False)]}) == []
 
     def test_local_plugin_resolves_to_its_absolute_path(self, tmp_path):
         plugin = _make_plugin(tmp_path / "my-plugin")
 
-        assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}) == {"probe@local": plugin}
+        assert _dirs_by_record(resolve_config_plugins({"plugins": [_local_entry(plugin)]})) == {"probe@local": plugin}
 
     def test_local_plugin_with_root_manifest_resolves_for_copilot(self, tmp_path):
         plugin = tmp_path / "root-manifest-plugin"
         plugin.mkdir()
         (plugin / _MANIFEST.name).write_text(json.dumps({"name": "probe", "version": "0.0.1"}), encoding="utf-8")
 
-        assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}, allow_copilot_manifest=True) == {"probe@local": plugin}
+        assert _dirs_by_record(resolve_config_plugins({"plugins": [_local_entry(plugin)]}, allow_copilot_manifest=True)) == {"probe@local": plugin}
 
     def test_root_manifest_is_rejected_without_opt_in(self, tmp_path):
         # Claude Code cannot load a root-only manifest, so the default (allow_copilot_manifest=False) must
@@ -120,7 +125,7 @@ class TestResolveConfigPlugins:
     def test_local_plugin_expands_user_home(self, tmp_path):
         plugin = _make_plugin(tmp_path / "my-plugin")
         with patch.object(Path, "expanduser", return_value=plugin):
-            assert resolve_config_plugins({"plugins": [_local_entry(Path("~/my-plugin"))]}) == {"probe@local": plugin}
+            assert _dirs_by_record(resolve_config_plugins({"plugins": [_local_entry(Path("~/my-plugin"))]})) == {"probe@local": plugin}
 
     def test_missing_manifest_raises_pointing_at_the_expected_location(self, tmp_path):
         (tmp_path / "not-a-plugin").mkdir()
@@ -133,21 +138,22 @@ class TestResolveConfigPlugins:
             resolved = resolve_config_plugins({"plugins": [_github_entry()]})
 
         clone.assert_called_once_with("obra/superpowers", "a" * 40, plugin_root / "superpowers")
-        assert resolved == {f"superpowers@{'a' * 40}": plugin_root / "superpowers"}
+        assert _dirs_by_record(resolved) == {f"superpowers@{'a' * 40}": plugin_root / "superpowers"}
 
     def test_github_plugin_never_lands_in_the_repo_under_evaluation(self, tmp_path, plugin_root):
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)):
             resolved = resolve_config_plugins({"plugins": [_github_entry()]})
 
         testbed = tmp_path / "repo"
-        assert not any(directory.is_relative_to(testbed) for directory in resolved.values())
-        assert list(resolved.values()) == [plugin_root / "superpowers"]
+        resolved_dirs = [plugin.plugin_dir for plugin in resolved]
+        assert not any(directory is not None and directory.is_relative_to(testbed) for directory in resolved_dirs)
+        assert resolved_dirs == [plugin_root / "superpowers"]
 
     def test_github_path_selects_a_subfolder_of_the_clone(self, plugin_root):
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination / "plugins" / "inner")):
             resolved = resolve_config_plugins({"plugins": [_github_entry(path="plugins/inner")]})
 
-        assert resolved == {f"superpowers@{'a' * 40}": plugin_root / "superpowers" / "plugins" / "inner"}
+        assert _dirs_by_record(resolved) == {f"superpowers@{'a' * 40}": plugin_root / "superpowers" / "plugins" / "inner"}
 
     def test_preserves_config_order_across_sources(self, tmp_path):
         local = _make_plugin(tmp_path / "local-plugin")
@@ -155,7 +161,7 @@ class TestResolveConfigPlugins:
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)):
             resolved = resolve_config_plugins({"plugins": [_github_entry(), _local_entry(local)]})
 
-        assert list(resolved) == [f"superpowers@{'a' * 40}", "probe@local"]
+        assert [plugin.record for plugin in resolved] == [f"superpowers@{'a' * 40}", "probe@local"]
 
     def test_duplicate_names_are_rejected(self, tmp_path):
         # Two enabled plugins sharing a name would clobber each other's clone and collide on their
@@ -201,7 +207,7 @@ class TestShippedConfig:
     def test_shipped_config_resolves_on_any_os(self):
         # Entries are disabled, so this must hold even though the `local` example carries a Windows path
         with patch.object(Path, "is_absolute", return_value=False):  # simulate posix path semantics
-            assert resolve_config_plugins({"plugins": _shipped_plugins()}) == {}
+            assert resolve_config_plugins({"plugins": _shipped_plugins()}) == []
 
     def test_shipped_entries_are_disabled_by_default(self):
         assert not [entry for entry in _shipped_plugins() if entry.get("enabled")]

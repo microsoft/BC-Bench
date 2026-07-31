@@ -54,7 +54,7 @@ def run_copilot_agent(
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
-    plugins: dict[str, Path] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
+    plugins: list[PluginConfig] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
         mcp_servers=mcp_server_names,
@@ -62,7 +62,7 @@ def run_copilot_agent(
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
-        plugins=list(plugins.keys()) or None,
+        plugins=[plugin.record for plugin in plugins] or None,
     )
 
     logger.info(f"Executing Copilot CLI in directory: {repo_path}")
@@ -84,15 +84,12 @@ def run_copilot_agent(
             cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
         if lsp_plugin_dir is not None:
             cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
-        cmd_args.extend(f"--plugin-dir={plugin_dir}" for plugin_dir in plugins.values())
+        cmd_args.extend(f"--plugin-dir={plugin.plugin_dir}" for plugin in plugins)
         # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
         # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
         # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
-        # silently widen the agent's sandbox access. Mirror resolve_config_plugins: filter on the raw
-        # `enabled` flag before constructing PluginConfig (a disabled, possibly platform-specific entry
-        # must never be validated), then gate on the validated grant_dir_access so a non-boolean like
-        # `grant_dir_access: "false"` is not treated as truthy.
-        cmd_args.extend(f"--add-dir={plugins[plugin.record]}" for plugin in (PluginConfig(**entry) for entry in copilot_config["plugins"] if entry.get("enabled", False)) if plugin.grant_dir_access)
+        # silently widen the agent's sandbox access.
+        cmd_args.extend(f"--add-dir={plugin.plugin_dir}" for plugin in plugins if plugin.grant_dir_access)
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
 
