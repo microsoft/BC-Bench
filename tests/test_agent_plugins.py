@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from bcbench.agent.shared.plugin import resolve_config_plugins
+from bcbench.agent.shared.plugin import plugins_needing_dir_access, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.exceptions import AgentError
 from bcbench.types import PluginConfig
@@ -100,12 +100,22 @@ class TestResolveConfigPlugins:
 
         assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}) == {"probe@local": plugin}
 
-    def test_local_plugin_with_root_manifest_resolves(self, tmp_path):
+    def test_local_plugin_with_root_manifest_resolves_for_copilot(self, tmp_path):
         plugin = tmp_path / "root-manifest-plugin"
         plugin.mkdir()
         (plugin / _MANIFEST.name).write_text(json.dumps({"name": "probe", "version": "0.0.1"}), encoding="utf-8")
 
-        assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}) == {"probe@local": plugin}
+        assert resolve_config_plugins({"plugins": [_local_entry(plugin)]}, allow_root_manifest=True) == {"probe@local": plugin}
+
+    def test_root_manifest_is_rejected_without_opt_in(self, tmp_path):
+        # Claude Code cannot load a root-only manifest, so the default (allow_root_manifest=False) must
+        # reject it rather than forward a plugin that Claude would silently ignore.
+        plugin = tmp_path / "root-manifest-plugin"
+        plugin.mkdir()
+        (plugin / _MANIFEST.name).write_text(json.dumps({"name": "probe", "version": "0.0.1"}), encoding="utf-8")
+
+        with pytest.raises(AgentError, match="has no manifest at"):
+            resolve_config_plugins({"plugins": [_local_entry(plugin)]})
 
     def test_local_plugin_expands_user_home(self, tmp_path):
         plugin = _make_plugin(tmp_path / "my-plugin")
@@ -146,6 +156,26 @@ class TestResolveConfigPlugins:
             resolved = resolve_config_plugins({"plugins": [_github_entry(), _local_entry(local)]})
 
         assert list(resolved) == [f"superpowers@{'a' * 40}", "probe@local"]
+
+
+class TestPluginsNeedingDirAccess:
+    """--add-dir grants read+write, so it is limited to plugins that opt in - enabling a plugin never widens access."""
+
+    def test_returns_only_enabled_opted_in_records(self, tmp_path):
+        result = plugins_needing_dir_access(
+            {
+                "plugins": [
+                    _local_entry(tmp_path / "a", name="granted", grant_dir_access=True),
+                    _local_entry(tmp_path / "b", name="plain"),  # no grant_dir_access -> default off
+                    _local_entry(tmp_path / "c", name="off", enabled=False, grant_dir_access=True),  # disabled -> excluded
+                ]
+            }
+        )
+
+        assert result == {"granted@local"}
+
+    def test_no_plugin_opts_in_by_default(self, tmp_path):
+        assert plugins_needing_dir_access({"plugins": [_local_entry(tmp_path / "a", name="plain")]}) == set()
 
 
 @pytest.mark.usefixtures("plugin_root")

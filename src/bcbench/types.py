@@ -129,6 +129,9 @@ class PluginConfig(BaseModel):
     source: PluginSource
     path: str
     enabled: bool = False
+    # Grant the agent filesystem access to this plugin's tree via Copilot `--add-dir`.
+    # Off by default so enabling a plugin does not also widen the agent's sandbox access.
+    grant_dir_access: bool = False
     # github only
     repo: RepoSlug | None = None
     revision: CommitSha | None = None
