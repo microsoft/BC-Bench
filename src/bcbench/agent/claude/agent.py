@@ -12,7 +12,7 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
-from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -80,6 +80,13 @@ def run_claude_code(
         if lsp_plugin_dir is not None:
             cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
         cmd_args.extend(f"--plugin-dir={plugin_dir}" for plugin_dir in plugins.values())
+        # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
+        # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
+        # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
+        # silently widen the agent's sandbox access.
+        cmd_args.extend(
+            f"--add-dir={plugins[PluginConfig(**plugin_entry).record]}" for plugin_entry in claude_config["plugins"] if plugin_entry.get("enabled") and plugin_entry.get("grant_dir_access")
+        )
         if custom_agent:
             cmd_args.append(f"--agent={custom_agent}")
         cmd_args.extend(
