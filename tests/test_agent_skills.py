@@ -8,26 +8,25 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset import RepoGroundedEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
 from bcbench.types import AgentType
 
 
 def test_setup_agent_skills_path():
-    # Test with microsoftInternal/NAV
-    path = _get_source_instructions_path("microsoftInternal/NAV")
+    path = _get_source_instructions_path("microsoftInternal-NAV")
     assert path.exists(), f"Skills path should exist: {path}"
     assert path.name == "microsoftInternal-NAV"
 
 
 def test_setup_agent_skills():
-    skills_source = _get_source_instructions_path("microsoftInternal/NAV") / "skills"
+    skills_source = _get_source_instructions_path("microsoftInternal-NAV") / "skills"
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": True}}
 
         # Setup skills
@@ -55,27 +54,15 @@ def test_setup_agent_skills():
                         assert target_file.read_text(encoding="utf-8") == source_file.read_text(encoding="utf-8"), f"Content mismatch for {target_file}"
 
 
-def test_sanitization():
-    test_cases = [
-        ("microsoftInternal/NAV", "microsoftInternal-NAV"),
-        ("org/repo", "org-repo"),
-        ("user/my-repo", "user-my-repo"),
-    ]
-
-    for repo_name, expected_sanitized in test_cases:
-        sanitized = repo_name.replace("/", "-").replace("\\", "-")
-        assert sanitized == expected_sanitized, f"Sanitization failed: {repo_name}"
-
-
 def test_nonexistent_skills():
-    """Test that setup_agent_skills raises FileNotFoundError for nonexistent repo."""
+    """Test that setup_agent_skills raises FileNotFoundError for nonexistent profile."""
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "nonexistent/repo"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "nonexistent-repo"
         config = {"skills": {"enabled": True}}
 
-        # Error comes from _get_source_instructions_path when repo folder doesn't exist
+        # Error comes from _get_source_instructions_path when the profile folder doesn't exist
         with pytest.raises(FileNotFoundError, match="not found"):
             setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
 
@@ -86,13 +73,13 @@ def test_overwrite_skill_folder_files():
     - same-named files should be overwritten
     - unrelated files should be removed (replace semantics)
     """
-    skills_source = _get_source_instructions_path("microsoftInternal/NAV") / "skills"
+    skills_source = _get_source_instructions_path("microsoftInternal-NAV") / "skills"
     source_skill_dir = skills_source / "al-test-generation"
 
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": True}}
 
         # Target skill folder
@@ -121,8 +108,8 @@ def test_overwrite_skill_folder_files():
 def test_path_specific_skills_copied():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": True}}
 
         # Setup skills
@@ -140,8 +127,8 @@ def test_path_specific_skills_copied():
 def test_path_specific_skills_removed_before_copy():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": True}}
 
         # Create existing .github/skills directory with old files
@@ -165,8 +152,8 @@ def test_skills_disabled():
     """When skills disabled, should return False and not create directory."""
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
-        entry = MagicMock(spec=BaseDatasetEntry)
-        entry.repo = "microsoftInternal/NAV"
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": False}}
 
         result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)

@@ -20,7 +20,7 @@ def main() -> None:
         raise SystemExit(2)
 
     iid = sys.argv[1]
-    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.datetime.now(tz=datetime.UTC).strftime("%Y%m%d_%H%M%S")
     out_dir = pathlib.Path(f"evaluation_results/iter/{iid}_{stamp}")
     out_dir.mkdir(parents=True, exist_ok=True)
 

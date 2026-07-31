@@ -96,8 +96,8 @@ def _patch_credential_from_local_file(cert_file: Path) -> None:
     if not tenant_id or not client_id:
         raise RuntimeError(f"{_CERT_FILE_ENV}={cert_file} requires {_CERT_TENANT_ENV} and {_CERT_CLIENT_ENV} to also be set.")
 
-    import bc_eval.capi.capi_auth as capi_auth
     from azure.identity import CertificateCredential
+    from bc_eval.capi import capi_auth
 
     def _credential_from_file() -> CertificateCredential:
         # send_certificate_chain=True switches azure-identity from thumbprint-based

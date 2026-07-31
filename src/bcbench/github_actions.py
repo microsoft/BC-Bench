@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.logger import get_logger
@@ -33,7 +34,7 @@ def write_step_outputs(outputs: dict[str, str]) -> None:
         logger.warning("Not running in GitHub Actions; skipping step outputs: %s", ", ".join(outputs))
         return
 
-    with open(github_output, "a", encoding="utf-8") as file:
+    with Path(github_output).open("a", encoding="utf-8") as file:
         file.writelines(f"{key}={value}\n" for key, value in outputs.items())
 
 

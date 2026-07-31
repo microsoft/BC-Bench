@@ -68,6 +68,7 @@ def test_runtime_config_supports_every_category(tmp_path, monkeypatch):
         contents = output_file.read_text(encoding="utf-8")
         assert f"runner={category.runner}" in contents
         assert f"requires-container={str(category.requires_container).lower()}" in contents
+        assert f"requires-repo={str(category.requires_repo).lower()}" in contents
 
 
 def test_runtime_config_marks_code_review_as_containerless_on_hosted_runner(tmp_path, monkeypatch):
@@ -80,3 +81,16 @@ def test_runtime_config_marks_code_review_as_containerless_on_hosted_runner(tmp_
     assert result.exit_code == 0
     contents = output_file.read_text(encoding="utf-8")
     assert "requires-container=false" in contents
+    assert "requires-repo=true" in contents
+
+
+def test_runtime_config_marks_nl2al_as_repoless(tmp_path, monkeypatch):
+    output_file = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    result = runner.invoke(app, ["category", "runtime-config", "--category", "nl2al"])
+
+    assert result.exit_code == 0
+    contents = output_file.read_text(encoding="utf-8")
+    assert "requires-repo=false" in contents

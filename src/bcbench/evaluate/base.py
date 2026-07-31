@@ -30,7 +30,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
 
         Used by the `run` command to set up the repo without building.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
     def setup(self, context: EvaluationContext[E]) -> None:
@@ -42,7 +42,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         Raises:
             Exception: If setup fails (build, checkout, etc.)
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
     def run_agent(self, context: EvaluationContext[E], agent_runner: Callable) -> None:
@@ -55,7 +55,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         Raises:
             Exception: If agent execution fails
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
     def evaluate(self, context: EvaluationContext[E]) -> None:
@@ -69,7 +69,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         Raises:
             Exception: If evaluation fails (patch application, build, tests)
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def execute(
         self,

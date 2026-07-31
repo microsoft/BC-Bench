@@ -5,7 +5,7 @@ Both `altool launchmcpserver` and `altool launchlspserver` need the same package
 
 from pathlib import Path
 
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 
 from bcbench.logger import get_logger
 from bcbench.operations import resolve_artifact_version_root
@@ -34,7 +34,7 @@ def _detect_dotnet_runtime_version() -> Version | None:
             v = Version(entry.name)
             if v.major not in _EXCLUDED_DOTNET_MAJORS:
                 versions.append(v)
-        except Exception:
+        except InvalidVersion:
             continue
 
     return max(versions) if versions else None

@@ -18,7 +18,7 @@ Start with `EvaluationCategory` in [src/bcbench/types.py](src/bcbench/types.py).
 - `summary_class` / `aggregate_class` — the aggregate views used by result summaries and leaderboards.
 - `pipeline` — the category-specific setup, agent run, and evaluation behavior.
 - `evaluators` / `core_score` — the bc-eval evaluator list and headline score, emitted to workflows by [src/bcbench/commands/category.py](src/bcbench/commands/category.py).
-- `requires_container` / `runner` — whether the category needs a BC container and which runner evaluates it.
+- `requires_container` / `requires_repo` / `runner` — whether the category needs a BC container, whether it needs the dataset repository cloned, and which runner evaluates it.
 - Prompt template — the category-specific prompt in [src/bcbench/agent/shared/config.yaml](src/bcbench/agent/shared/config.yaml), loaded by [src/bcbench/agent/shared/prompt.py](src/bcbench/agent/shared/prompt.py).
 
 Keep dataset entry classes and result classes focused on typed data. Put category-specific behavior in the pipeline.

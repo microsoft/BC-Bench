@@ -9,6 +9,7 @@ from bcbench.operations.bc_operations import (
     resolve_artifact_version_root,
     run_tests,
 )
+from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
@@ -42,6 +43,7 @@ __all__ = [
     "copy_symbol_apps",
     "extract_tests_from_patch",
     "fetch_commit_if_missing",
+    "remove_tree",
     "resolve_artifact_version_root",
     "run_tests",
     "set_runtime_version",
