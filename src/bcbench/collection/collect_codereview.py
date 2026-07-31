@@ -141,6 +141,64 @@ def build_expected_comments(
     return selected
 
 
+def _build_codereview_entry(
+    gh_client: GHClient,
+    pr_number: int,
+    repo: str,
+    environment_setup_version: str,
+    reviewer: str | None,
+    reacted: bool,
+    area: str | None,
+) -> CodeReviewEntry:
+    logger.info("Collecting code-review entry for PR #%s from %s", pr_number, repo)
+
+    pr_data: dict[str, Any] = gh_client.get_pr_info(pr_number)
+    base_ref = pr_data.get("baseRefOid", "")
+    head_ref = pr_data.get("headRefOid", "")
+    if not base_ref or not head_ref:
+        raise CollectionError("Unable to determine base/head commit from PR data")
+
+    base_commit = gh_client.get_merge_base(base_ref, head_ref)
+    if not base_commit:
+        raise CollectionError("Unable to determine merge-base commit for PR")
+
+    patch = gh_client.get_pr_diff(pr_number)
+    if not patch.strip():
+        raise CollectionError("PR diff is empty")
+
+    comments = gh_client.get_pr_review_comments(pr_number)
+    reactions_by_id: dict[int, list[dict[str, Any]]] = {}
+    if reacted:
+        for comment in comments:
+            cid = comment.get("id")
+            if cid is None:
+                continue
+            # Only spend a reactions API call on comments that can actually become a
+            # finding: skip other reviewers, replies, LEFT-side/unplaceable and empty
+            # bodies (build_expected_comments applies the same filters again).
+            if reviewer is not None and ((comment.get("user") or {}).get("login") or "").casefold() != reviewer.casefold():
+                continue
+            if _comment_line_span(comment) is None:
+                continue
+            if not (comment.get("body") or "").strip():
+                continue
+            reactions_by_id[cid] = gh_client.get_review_comment_reactions(cid)
+
+    expected_comments = build_expected_comments(comments, reviewer=reviewer, reacted=reacted, reactions_by_id=reactions_by_id)
+    logger.info("Selected %d expected comment(s) from %d PR comment(s)", len(expected_comments), len(comments))
+
+    return CodeReviewEntry(
+        repo=repo,
+        instance_id=f"{repo.replace('/', '__')}-{pr_number}",
+        base_commit=base_commit,
+        created_at=pr_data.get("createdAt", ""),
+        environment_setup_version=environment_setup_version,
+        patch=patch,
+        metadata=EntryMetadata(area=area),
+        expected_comments=expected_comments,
+    )
+
+
 def collect_codereview_entry(
     pr_number: int,
     output: Path,
@@ -153,53 +211,7 @@ def collect_codereview_entry(
     gh_client = GHClient(repo)
 
     try:
-        logger.info("Collecting code-review entry for PR #%s from %s", pr_number, repo)
-
-        pr_data: dict[str, Any] = gh_client.get_pr_info(pr_number)
-        base_ref = pr_data.get("baseRefOid", "")
-        head_ref = pr_data.get("headRefOid", "")
-        if not base_ref or not head_ref:
-            raise CollectionError("Unable to determine base/head commit from PR data")
-
-        base_commit = gh_client.get_merge_base(base_ref, head_ref)
-        if not base_commit:
-            raise CollectionError("Unable to determine merge-base commit for PR")
-
-        patch = gh_client.get_pr_diff(pr_number)
-        if not patch.strip():
-            raise CollectionError("PR diff is empty")
-
-        comments = gh_client.get_pr_review_comments(pr_number)
-        reactions_by_id: dict[int, list[dict[str, Any]]] = {}
-        if reacted:
-            for comment in comments:
-                cid = comment.get("id")
-                if cid is None:
-                    continue
-                # Only spend a reactions API call on comments that can actually become a
-                # finding: skip other reviewers, replies, LEFT-side/unplaceable and empty
-                # bodies (build_expected_comments applies the same filters again).
-                if reviewer is not None and ((comment.get("user") or {}).get("login") or "").casefold() != reviewer.casefold():
-                    continue
-                if _comment_line_span(comment) is None:
-                    continue
-                if not (comment.get("body") or "").strip():
-                    continue
-                reactions_by_id[cid] = gh_client.get_review_comment_reactions(cid)
-
-        expected_comments = build_expected_comments(comments, reviewer=reviewer, reacted=reacted, reactions_by_id=reactions_by_id)
-        logger.info("Selected %d expected comment(s) from %d PR comment(s)", len(expected_comments), len(comments))
-
-        entry = CodeReviewEntry(
-            repo=repo,
-            instance_id=f"{repo.replace('/', '__')}-{pr_number}",
-            base_commit=base_commit,
-            created_at=pr_data.get("createdAt", ""),
-            environment_setup_version=environment_setup_version,
-            patch=patch,
-            metadata=EntryMetadata(area=area),
-            expected_comments=expected_comments,
-        )
+        entry = _build_codereview_entry(gh_client, pr_number, repo, environment_setup_version, reviewer, reacted, area)
     except CollectionError:
         raise
     except Exception as exc:

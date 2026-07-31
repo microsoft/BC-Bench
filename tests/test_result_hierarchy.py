@@ -10,7 +10,7 @@ Covers:
 - display.py console/GitHub summary rendering
 """
 
-from datetime import date
+from datetime import UTC, datetime
 
 import pytest
 
@@ -230,7 +230,7 @@ class TestSummaryFromResults:
         assert summary.average_duration == pytest.approx(150.0)
         assert summary.average_prompt_tokens == pytest.approx(2000.0)
         assert summary.average_completion_tokens == pytest.approx(1000.0)
-        assert summary.date == date.today()
+        assert summary.date == datetime.now(UTC).date()
 
     def test_category_specific_fields_computed(self):
         results = [
@@ -270,7 +270,7 @@ class TestMetricsRendering:
             failed=3,
             build=9,
             percentage=70.0,
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -292,7 +292,7 @@ class TestMetricsRendering:
         # JudgeBased explicitly surfaces no GitHub metrics and inherits the console no-op default
         summary = JudgeBasedEvaluationResultSummary(
             total=3,
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,

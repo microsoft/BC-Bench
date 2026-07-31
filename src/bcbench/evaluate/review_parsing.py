@@ -2,6 +2,8 @@ import json
 import re
 from typing import Any
 
+from pydantic import ValidationError
+
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.logger import get_logger
 
@@ -64,7 +66,7 @@ def _normalize_comment(item: dict[Any, Any]) -> ReviewComment | None:
             body=body.strip(),
             severity=_coerce_optional_severity(item.get("severity")),
         )
-    except Exception:
+    except ValidationError:
         return None
 
 

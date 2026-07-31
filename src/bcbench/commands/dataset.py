@@ -1,9 +1,9 @@
 """CLI commands for dataset operations."""
 
 import json
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry

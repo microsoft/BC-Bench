@@ -143,7 +143,7 @@ class GitHubActionsHandler(logging.Handler):
             # Output to stdout (GitHub Actions reads workflow commands from stdout)
             print(annotation, flush=True)  # noqa: T201
 
-        except Exception:
+        except Exception:  # noqa: BLE001 - a logging handler must never propagate
             self.handleError(record)
 
 

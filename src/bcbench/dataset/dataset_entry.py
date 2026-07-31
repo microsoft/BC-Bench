@@ -51,7 +51,7 @@ class BaseDatasetEntry(BaseModel):
 
         entries: list[Self] = []
 
-        with open(dataset_path, encoding="utf-8") as file:
+        with dataset_path.open(encoding="utf-8") as file:
             for line in file:
                 stripped_line: str = line.strip()
                 if not stripped_line:

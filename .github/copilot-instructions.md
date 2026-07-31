@@ -44,6 +44,10 @@ def test_full_metrics_flow_to_success_result(self, sample_context):
     # No docstring needed - the name says it all
 ```
 
+### Linting and formatting
+Ruff is the single source of truth (`uv run ruff check --fix`, `uv run ruff format`); config lives in `pyproject.toml`.
+Lean on ruff's default rule set rather than growing `extend-select`, and prefer fixing violations over suppressing them. If a violation is genuinely intentional, use a targeted `# noqa: RULE - rationale` at that line instead of a repo-wide `ignore` entry.
+
 ## No Backward compatibility
 - Do NOT worry about backward compatibility unless explicitly stated
 - Do NOT worry about breaking changes

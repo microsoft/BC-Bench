@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from datetime import date
 from pathlib import Path
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.cli_options import CopilotModel, EvaluationCategoryOption, OutputDir, RunId
 from bcbench.config import get_config
@@ -150,5 +150,5 @@ def _write_step_summary(markdown: str) -> None:
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
-    with open(summary_path, "a", encoding="utf-8") as handle:
+    with Path(summary_path).open("a", encoding="utf-8") as handle:
         handle.write(markdown + "\n")

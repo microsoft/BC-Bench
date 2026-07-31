@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from unidiff import PatchSet
+from unidiff.errors import UnidiffParseError
 
 from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
@@ -104,8 +105,8 @@ def find_project_paths_from_diff(patch: str) -> list[str]:
 
     try:
         patch_set = PatchSet(str(patch))
-    except Exception:
-        raise CollectionError("Failed to parse patch data") from None
+    except UnidiffParseError as exc:
+        raise CollectionError(f"Failed to parse patch data: {exc}") from exc
 
     project_paths: set[str] = set()
 

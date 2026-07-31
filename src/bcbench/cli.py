@@ -2,9 +2,9 @@
 
 import io
 import sys
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.commands import dataset_app, evaluate_app, run_app
 from bcbench.commands.category import category_app
