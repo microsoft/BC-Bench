@@ -60,29 +60,21 @@ def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool =
         Plugin folders keyed by the record they get on the result, in config order.
 
     Raises:
-        AgentError: If two enabled plugins share a record or resolve to the same folder, or a plugin
-            does not resolve to a folder holding a plugin manifest.
+        AgentError: If two enabled plugins share a name, or a plugin does not resolve to a folder
+            holding a plugin manifest.
     """
     plugins = [PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False)]
 
-    # A record (``name@revision-or-source``) keys both the resolved folder and the plugin's entry on a
-    # result, so a collision would silently drop a plugin - and, with grant_dir_access in play, let one
-    # entry's opt-in leak onto another's path. Reject duplicate records up front.
-    records = [plugin.record for plugin in plugins]
-    duplicate_records = sorted({record for record in records if records.count(record) > 1})
-    if duplicate_records:
-        raise AgentError(f"Duplicate plugin record(s) among enabled plugins: {', '.join(duplicate_records)}")
+    # A GitHub plugin clones into ``<plugin_root>/<name>`` and every plugin is recorded as
+    # ``<name>@<revision|source>``, so two enabled plugins sharing a name would clobber each other's
+    # clone and collide on their record. There is no reason to enable the same-named plugin twice, so
+    # reject duplicate names up front.
+    names = [plugin.name for plugin in plugins]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise AgentError(f"Duplicate plugin name(s) among enabled plugins: {', '.join(duplicates)}")
 
-    resolved = {plugin.record: _resolve_plugin(plugin, allow_copilot_manifest) for plugin in plugins}
-
-    # Distinct records can still resolve to one folder (e.g. two GitHub entries sharing a name clone
-    # into ``<plugin_root>/<name>``, the second clobbering the first), which would grant a non-opted-in
-    # plugin the other's ``--add-dir``. Reject shared destinations too.
-    folders = [str(path) for path in resolved.values()]
-    shared_folders = sorted({folder for folder in folders if folders.count(folder) > 1})
-    if shared_folders:
-        raise AgentError(f"Distinct plugins resolve to the same folder: {', '.join(shared_folders)}")
-    return resolved
+    return {plugin.record: _resolve_plugin(plugin, allow_copilot_manifest) for plugin in plugins}
 
 
 def _has_plugin_manifest(plugin_dir: Path, allow_copilot_manifest: bool) -> bool:

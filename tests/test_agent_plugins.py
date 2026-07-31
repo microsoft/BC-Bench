@@ -157,26 +157,23 @@ class TestResolveConfigPlugins:
 
         assert list(resolved) == [f"superpowers@{'a' * 40}", "probe@local"]
 
-    def test_duplicate_records_are_rejected(self, tmp_path):
-        # Same name + source => same record; the resolved dict would silently drop one and, worse,
-        # leak the other's grant_dir_access onto the survivor's path. Fail fast.
+    def test_duplicate_names_are_rejected(self, tmp_path):
+        # Two enabled plugins sharing a name would clobber each other's clone and collide on their
+        # record, so the loader rejects duplicate names before resolving anything.
         entries = {
             "plugins": [
                 _local_entry(tmp_path / "a", name="dup", grant_dir_access=True),
                 _local_entry(tmp_path / "b", name="dup"),
             ]
         }
-        with pytest.raises(AgentError, match="Duplicate plugin record"):
+        with pytest.raises(AgentError, match="Duplicate plugin name"):
             resolve_config_plugins(entries)
 
-    def test_distinct_records_resolving_to_one_folder_are_rejected(self, plugin_root):
-        # Two GitHub entries sharing a name clone into <plugin_root>/<name>, so distinct records resolve
-        # to the same folder - which would grant a non-opted-in plugin the other's --add-dir.
+    def test_duplicate_github_names_are_rejected(self):
+        # Same name with different revisions still clones into <plugin_root>/<name>; the name check
+        # fails fast before any clone, so no plugin_root or clone mock is needed here.
         entries = {"plugins": [_github_entry(name="dup", revision="a" * 40), _github_entry(name="dup", revision="b" * 40)]}
-        with (
-            patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)),
-            pytest.raises(AgentError, match="resolve to the same folder"),
-        ):
+        with pytest.raises(AgentError, match="Duplicate plugin name"):
             resolve_config_plugins(entries)
 
 
