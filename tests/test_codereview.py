@@ -166,6 +166,19 @@ class TestCodeReviewEntry:
         assert entry.expected_comments == []
         assert entry.get_expected_output() == ""
 
+    def test_ignored_comments_default_empty_and_round_trip(self):
+        default_entry = create_codereview_entry(expected_comments=[])
+        assert default_entry.ignored_comments == []
+
+        entry = create_codereview_entry(
+            expected_comments=[],
+            ignored_comments=[ReviewComment(file="src/app.al", line_start=5, body="acceptable", severity=Severity.LOW)],
+        )
+        assert len(entry.ignored_comments) == 1
+        reloaded = CodeReviewEntry.model_validate_json(entry.model_dump_json())
+        assert len(reloaded.ignored_comments) == 1
+        assert reloaded.ignored_comments[0].body == "acceptable"
+
 
 class TestCodeReviewResult:
     def test_create_result(self):
@@ -278,6 +291,101 @@ class TestCodeReviewResult:
         assert result.recall == 0.5
         assert result.f1 == 0.5
         assert result.severity_mae == 0.0
+
+    def test_ignored_comment_is_neutral(self):
+        # A generated comment that matches an entry's ignored comment is dropped from scoring:
+        # it earns no recall and costs no precision.
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        ignored_comments = [
+            ReviewComment(file="src/app.al", line_start=40, body="Debatable style nit", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps(
+            [
+                {"file": "src/app.al", "line_start": 11, "body": "Potential null reference", "severity": "warning"},
+                {"file": "src/app.al", "line_start": 41, "body": "Style nit here", "severity": "low"},
+            ]
+        )
+
+        result = create_codereview_result(
+            output=generated_output,
+            expected_comments=expected_comments,
+            ignored_comments=ignored_comments,
+        )
+
+        assert result.matched_comment_count == 1
+        assert result.ignored_comment_count == 1
+        assert result.incorrect_comment_count == 0
+        assert result.missed_comment_count == 0
+        assert result.precision == 1.0
+        assert result.recall == 1.0
+
+    def test_ignored_comment_does_not_grant_recall(self):
+        # An ignored match must never be credited as finding an expected issue. The expected bug
+        # lives in a file the agent never commented on, so structural matching can't pair them.
+        expected_comments = [
+            ReviewComment(file="src/real.al", line_start=10, body="Real bug to find", severity=Severity.HIGH),
+        ]
+        ignored_comments = [
+            ReviewComment(file="src/other.al", line_start=40, body="Acceptable extra note", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps([{"file": "src/other.al", "line_start": 41, "body": "Acceptable extra note", "severity": "low"}])
+
+        result = create_codereview_result(
+            output=generated_output,
+            expected_comments=expected_comments,
+            ignored_comments=ignored_comments,
+        )
+
+        assert result.matched_comment_count == 0
+        assert result.ignored_comment_count == 1
+        assert result.incorrect_comment_count == 0
+        assert result.missed_comment_count == 1
+        # The only generated comment was neutralized, so there is nothing scorable to be wrong about.
+        assert result.precision == 1.0
+        assert result.recall == 0.0
+
+    def test_expected_takes_precedence_over_ignored(self):
+        # When a generated comment could match both an expected and an ignored comment at the same
+        # location, expected wins so the agent is credited for finding the real issue.
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Must find this", severity=Severity.HIGH),
+        ]
+        ignored_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Also acceptable here", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Found the issue", "severity": "high"}])
+
+        result = create_codereview_result(
+            output=generated_output,
+            expected_comments=expected_comments,
+            ignored_comments=ignored_comments,
+        )
+
+        assert result.matched_comment_count == 1
+        assert result.ignored_comment_count == 0
+        assert result.precision == 1.0
+        assert result.recall == 1.0
+
+    def test_ignored_empty_preserves_baseline_scoring(self):
+        # No ignored comments -> identical behavior to before the feature.
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        generated_output = json.dumps(
+            [
+                {"file": "src/app.al", "line_start": 12, "body": "Potential null reference", "severity": "warning"},
+                {"file": "src/other.al", "line_start": 99, "body": "Unrelated finding", "severity": "low"},
+            ]
+        )
+
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+
+        assert result.ignored_comment_count == 0
+        assert result.matched_comment_count == 1
+        assert result.incorrect_comment_count == 1
+        assert result.precision == 0.5
 
     def test_severity_mae_skips_pairs_with_unspecified_severity(self):
         expected_comments = [
@@ -408,6 +516,57 @@ class TestCodeReviewSummary:
         assert summary.precision == 0.5
         assert summary.recall == 0.25
         assert summary.f1 == 0.333
+
+    def test_summary_excludes_ignored_from_micro_precision(self):
+        # Two tasks each match their expected comment; the second also emits one ignored comment.
+        # Micro precision must exclude the ignored comment (2 matched / 2 scored = 1.0, not 2/3).
+        expected = [ReviewComment(file="src/app.al", line_start=10, body="expected", severity=Severity.MEDIUM)]
+        matched = create_codereview_result(
+            instance_id="test__ign-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"}]),
+            expected_comments=expected,
+        )
+        with_ignored = create_codereview_result(
+            instance_id="test__ign-2",
+            output=json.dumps(
+                [
+                    {"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"},
+                    {"file": "src/app.al", "line_start": 40, "body": "neutral note", "severity": "low"},
+                ]
+            ),
+            expected_comments=expected,
+            ignored_comments=[ReviewComment(file="src/app.al", line_start=40, body="neutral note", severity=Severity.LOW)],
+        )
+
+        summary = CodeReviewResultSummary.from_results([matched, with_ignored], run_id="run-ignored")
+
+        assert summary.generated_comment_count == 3
+        assert summary.ignored_comment_count == 1
+        assert summary.matched_comment_count == 2
+        assert summary.incorrect_comment_count == 0
+        assert summary.precision == 1.0
+
+    def test_positive_task_with_only_ignored_is_silent_for_macro_precision(self):
+        # A positive task whose sole output is neutralized as ignored must be treated like a silent
+        # positive task: excluded from macro precision (not rewarded 1.0), still penalized on recall.
+        clean = create_codereview_result(
+            instance_id="test__ign-3",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"}]),
+            expected_comments=[ReviewComment(file="src/app.al", line_start=10, body="expected", severity=Severity.MEDIUM)],
+        )
+        only_ignored = create_codereview_result(
+            instance_id="test__ign-4",
+            output=json.dumps([{"file": "src/other.al", "line_start": 40, "body": "neutral note", "severity": "low"}]),
+            expected_comments=[ReviewComment(file="src/real.al", line_start=10, body="missed bug", severity=Severity.HIGH)],
+            ignored_comments=[ReviewComment(file="src/other.al", line_start=40, body="neutral note", severity=Severity.LOW)],
+        )
+
+        summary = CodeReviewResultSummary.from_results([clean, only_ignored], run_id="run-only-ignored")
+
+        # Macro precision averages only the clean task (1.0); the only-ignored task is silent, not 1.0.
+        assert summary.macro_precision == 1.0
+        # Recall still averages over both positive tasks: (1.0 + 0.0) / 2.
+        assert summary.macro_recall == 0.5
 
     def test_macro_precision_excludes_silent_tasks(self):
         expected_comments = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]

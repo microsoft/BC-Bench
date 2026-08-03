@@ -9,7 +9,7 @@ from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, fetch_commit_if_missing, setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult, match_comments
+from bcbench.results.codereview import CodeReviewResult, match_comments, unmatched_generated
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -76,17 +76,31 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 structural_matches,
                 work_dir=context.repo_path,
             )
+            # Neutralize acceptable-but-not-required findings: pass the generated comments left
+            # over after expected matching through the same structural + judge gate against the
+            # entry's ignored set, then drop those from scoring (no recall credit, no precision hit).
+            ignored_matches: list[tuple[ReviewComment, ReviewComment]] = []
+            if context.entry.ignored_comments:
+                leftover = unmatched_generated(generated_comments, validated_matches)
+                ignored_structural = match_comments(context.entry.ignored_comments, leftover)
+                ignored_matches = judge_comment_matches(
+                    ignored_structural,
+                    work_dir=context.repo_path,
+                )
             result = CodeReviewResult.create(
                 context,
                 output=output,
                 expected_comments=context.entry.expected_comments,
                 generated_comments=generated_comments,
                 matched_pairs=validated_matches,
+                ignored_comments=context.entry.ignored_comments,
+                ignored_matched_pairs=ignored_matches,
             )
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
         logger.info(
             f"Code review metrics: matched={result.matched_comment_count}, "
             f"incorrect={result.incorrect_comment_count}, missed={result.missed_comment_count}, "
+            f"ignored={result.ignored_comment_count}, "
             f"precision={result.precision:.3f}, recall={result.recall:.3f}, f1={result.f1:.3f}"
         )
 

@@ -113,6 +113,20 @@ def match_comments(
     ]
 
 
+def unmatched_generated(
+    generated_comments: list[ReviewComment],
+    matched_pairs: list[tuple[ReviewComment, ReviewComment]],
+) -> list[ReviewComment]:
+    """Generated comments not already paired in ``matched_pairs``, preserving order.
+
+    Identity-based so two value-equal comments are treated as distinct; the pairs carry the
+    same ``ReviewComment`` instances that live in ``generated_comments``. Used to feed the
+    leftover findings into ignored-comment matching after expected matching has claimed its own.
+    """
+    matched_ids = {id(generated) for _, generated in matched_pairs}
+    return [generated for generated in generated_comments if id(generated) not in matched_ids]
+
+
 def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
     """Mean absolute difference between expected and generated severity levels over matched pairs.
 
@@ -130,11 +144,13 @@ class CodeReviewResult(BaseEvaluationResult):
 
     generated_comments: list[ReviewComment] = Field(default_factory=list)
     expected_comments: list[ReviewComment] = Field(default_factory=list)
+    ignored_comments: list[ReviewComment] = Field(default_factory=list)
     valid_review_output: bool = False
 
     matched_comment_count: int = Field(default=0, ge=0)
     missed_comment_count: int = Field(default=0, ge=0)
     incorrect_comment_count: int = Field(default=0, ge=0)
+    ignored_comment_count: int = Field(default=0, ge=0)
 
     precision: float = Field(default=0.0, ge=0.0, le=1.0)
     recall: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -151,21 +167,35 @@ class CodeReviewResult(BaseEvaluationResult):
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
         matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
+        ignored_comments: list[ReviewComment] | None = None,
+        ignored_matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
     ) -> Self:
         if matched_pairs is None:
             matched_pairs = match_comments(expected_comments, generated_comments)
         matched_count = len(matched_pairs)
-        precision, recall = precision_recall(matched_count, len(generated_comments), len(expected_comments))
+
+        ignored_comments = ignored_comments or []
+        if ignored_matched_pairs is None:
+            leftover = unmatched_generated(generated_comments, matched_pairs)
+            ignored_matched_pairs = match_comments(ignored_comments, leftover)
+        ignored_count = len(ignored_matched_pairs)
+
+        # Ignored comments are neutral: drop them from the scored generated set so they neither
+        # earn recall (they are not expected) nor cost precision (they are not false positives).
+        scored_generated_count = len(generated_comments) - ignored_count
+        precision, recall = precision_recall(matched_count, scored_generated_count, len(expected_comments))
 
         return cls(
             **cls._base_fields(context),
             output=output,
             expected_comments=expected_comments,
             generated_comments=generated_comments,
+            ignored_comments=ignored_comments,
             valid_review_output=True,
             matched_comment_count=matched_count,
-            incorrect_comment_count=len(generated_comments) - matched_count,
+            incorrect_comment_count=scored_generated_count - matched_count,
             missed_comment_count=len(expected_comments) - matched_count,
+            ignored_comment_count=ignored_count,
             precision=precision,
             recall=recall,
             f1=f1_score(precision, recall),
@@ -197,6 +227,7 @@ class CodeReviewResult(BaseEvaluationResult):
             "matched_comment_count": self.matched_comment_count,
             "incorrect_comment_count": self.incorrect_comment_count,
             "missed_comment_count": self.missed_comment_count,
+            "ignored_comment_count": self.ignored_comment_count,
             "precision": round(self.precision, 3),
             "recall": round(self.recall, 3),
             "f1": round(self.f1, 3),
@@ -231,6 +262,7 @@ class CodeReviewResultSummary(EvaluationResultSummary):
     matched_comment_count: int = Field(default=0, ge=0)
     incorrect_comment_count: int = Field(default=0, ge=0)
     missed_comment_count: int = Field(default=0, ge=0)
+    ignored_comment_count: int = Field(default=0, ge=0)
 
     precision: float = Field(default=0.0, ge=0.0, le=1.0)
     recall: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -266,9 +298,9 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         return (
             "## Comment counts\n"
             "\n"
-            "| Generated | Expected | Matched | Incorrect | Missed |\n"
-            "|----------:|---------:|--------:|----------:|-------:|\n"
-            f"| {self.generated_comment_count} | {self.expected_comment_count} | {self.matched_comment_count} | {self.incorrect_comment_count} | {self.missed_comment_count} |\n"
+            "| Generated | Expected | Matched | Incorrect | Missed | Ignored |\n"
+            "|----------:|---------:|--------:|----------:|-------:|--------:|\n"
+            f"| {self.generated_comment_count} | {self.expected_comment_count} | {self.matched_comment_count} | {self.incorrect_comment_count} | {self.missed_comment_count} | {self.ignored_comment_count} |\n"
             "\n"
             "## Micro metrics (volume-weighted across all comments)\n"
             "\n"
@@ -297,13 +329,14 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         return Group(
             _build_console_table(
                 "Comment counts",
-                ["Generated", "Expected", "Matched", "Incorrect", "Missed"],
+                ["Generated", "Expected", "Matched", "Incorrect", "Missed", "Ignored"],
                 [
                     str(self.generated_comment_count),
                     str(self.expected_comment_count),
                     str(self.matched_comment_count),
                     str(self.incorrect_comment_count),
                     str(self.missed_comment_count),
+                    str(self.ignored_comment_count),
                 ],
             ),
             _build_console_table(
@@ -355,17 +388,23 @@ class CodeReviewResultSummary(EvaluationResultSummary):
         matched_total: int = sum(r.matched_comment_count for r in code_review_results)
         incorrect_total: int = sum(r.incorrect_comment_count for r in code_review_results)
         missed_total: int = sum(r.missed_comment_count for r in code_review_results)
+        ignored_total: int = sum(r.ignored_comment_count for r in code_review_results)
 
-        precision, recall = precision_recall(matched_total, generated_total, expected_total)
+        # Ignored comments are neutral, so they leave the scored generated set exactly as each
+        # per-task precision already does -- keeping micro precision consistent with macro.
+        scored_generated_total: int = generated_total - ignored_total
+        precision, recall = precision_recall(matched_total, scored_generated_total, expected_total)
         f1: float = f1_score(precision, recall)
         f_beta_05: float = f_beta_score(precision, recall, beta=0.5)
         f_beta_2: float = f_beta_score(precision, recall, beta=2.0)
 
         # Precision is only defined where the agent actually commented, so silent tasks are normally
         # excluded from macro precision (rewarding silence would inflate precision on positive tasks).
-        # Exception: negative tasks (no expected findings) ARE scored when silent — staying quiet is the
-        # correct answer and earns precision=1.0, while any comment is a false positive (precision=0).
-        results_for_macro_precision = [r for r in code_review_results if r.generated_comments or not r.expected_comments]
+        # "Commented" means scorable comments (matched + incorrect); a positive task whose only output
+        # was neutralized as ignored is treated like silence, not rewarded. Exception: negative tasks
+        # (no expected findings) ARE scored when silent -- staying quiet earns precision=1.0, while any
+        # scorable comment is a false positive (precision=0).
+        results_for_macro_precision = [r for r in code_review_results if (r.matched_comment_count + r.incorrect_comment_count) > 0 or not r.expected_comments]
         macro_precision: float = sum(r.precision for r in results_for_macro_precision) / len(results_for_macro_precision) if results_for_macro_precision else 0.0
         # Recall measures the ability to find planted issues, so it only averages over positive tasks.
         # Negative tasks (no expected findings) have a vacuous recall of 1.0 that would otherwise inflate
@@ -390,6 +429,7 @@ class CodeReviewResultSummary(EvaluationResultSummary):
                 "matched_comment_count": matched_total,
                 "incorrect_comment_count": incorrect_total,
                 "missed_comment_count": missed_total,
+                "ignored_comment_count": ignored_total,
                 "precision": round(precision, 3),
                 "recall": round(recall, 3),
                 "f1": round(f1, 3),
