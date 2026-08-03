@@ -35,9 +35,9 @@ def _shipped_plugins() -> list[dict]:
     return config["plugins"]
 
 
-def _dirs_by_record(resolved: list[PluginConfig]) -> dict[str, Path | None]:
+def _dirs_by_record(resolved: list[tuple[PluginConfig, Path]]) -> dict[str, Path]:
     """Map resolved plugins back to a record -> plugin_dir dict for assertions."""
-    return {plugin.record: plugin.plugin_dir for plugin in resolved}
+    return {plugin.record: plugin_dir for plugin, plugin_dir in resolved}
 
 
 class TestPluginConfigValidation:
@@ -145,8 +145,8 @@ class TestResolveConfigPlugins:
             resolved = resolve_config_plugins({"plugins": [_github_entry()]})
 
         testbed = tmp_path / "repo"
-        resolved_dirs = [plugin.plugin_dir for plugin in resolved]
-        assert not any(directory is not None and directory.is_relative_to(testbed) for directory in resolved_dirs)
+        resolved_dirs = [plugin_dir for _, plugin_dir in resolved]
+        assert not any(directory.is_relative_to(testbed) for directory in resolved_dirs)
         assert resolved_dirs == [plugin_root / "superpowers"]
 
     def test_github_path_selects_a_subfolder_of_the_clone(self, plugin_root):
@@ -161,7 +161,7 @@ class TestResolveConfigPlugins:
         with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)):
             resolved = resolve_config_plugins({"plugins": [_github_entry(), _local_entry(local)]})
 
-        assert [plugin.record for plugin in resolved] == [f"superpowers@{'a' * 40}", "probe@local"]
+        assert [plugin.record for plugin, _ in resolved] == [f"superpowers@{'a' * 40}", "probe@local"]
 
     def test_duplicate_names_are_rejected(self, tmp_path):
         # Two enabled plugins sharing a name would clobber each other's clone and collide on their

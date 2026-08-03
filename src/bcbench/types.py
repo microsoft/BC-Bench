@@ -137,9 +137,6 @@ class PluginConfig(BaseModel):
     # github only
     repo: RepoSlug | None = None
     revision: CommitSha | None = None
-    # Filesystem folder this entry resolved to, set by ``resolve_config_plugins``. None on an entry
-    # parsed straight from ``config.yaml``, which has no such key.
-    plugin_dir: Path | None = None
 
     @property
     def record(self) -> str:
