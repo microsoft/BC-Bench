@@ -3,7 +3,7 @@ event_request_ishandled_alternative_suggestions:
 
   rules:
     - id: ishandled_replaceable_with_regular_event
-      applies_to: ["event-request/ishandled"]
+      applies_to: ["event-request-ishandled"]
       severity: "suggestion"
       description: "IsHandled event may be replaceable with a regular event when the skipped logic is simple"
       action: "suggest_alternative"

@@ -1,6 +1,6 @@
 """Pipeline for the extensibility-request-triage category — triage a single extensibility request.
 
-The agent runs the `extensibility-request-triage` skill in emit-only mode: it reads the request text from the prompt,
+The agent runs the `extensibility-request-triage` custom agent (instructions-based) in emit-only mode: it reads the request text from the prompt,
 analyses the standard AL source checked out at the entry's base commit, and writes its `Final_Output`
 decision (managed labels + advisory comment + open/closed state) to `triage_result.json` in the repo
 root instead of applying it via `gh`. Like NL2AL and extensibility-request-implement, the pipeline only
