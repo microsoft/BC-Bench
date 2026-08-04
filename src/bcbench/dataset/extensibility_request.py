@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field
 
-from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import RepoGroundedEntry
 from bcbench.types import Checklist, ChecklistAssertion
-
-_config = get_config()
 
 __all__ = ["ExtRequestImplementEntry", "ExtRequestTriageEntry", "ManagedLabel"]
 
@@ -27,19 +23,11 @@ class ExtRequestImplementEntry(RepoGroundedEntry):
     # LLM-judge checklist: expected event/signature/placement and expected layer propagation.
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
 
-    @property
-    def problem_statement_dir(self) -> Path:
-        return _config.paths.problem_statement_dir / self.instance_id
-
-    def get_task(self) -> str:
-        readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
-        return readme_path.read_text(encoding="utf-8")
-
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
 
 
-ManagedLabel = Literal[
+type ManagedLabel = Literal[
     "Finance",
     "SCM",
     "Integration",
