@@ -109,19 +109,19 @@ general_requirements:
       mandatory: true
       validation_hints: ["image", "screenshot", "picture", "code snippet", "text"]
       quality_standards:
-          reject_images_without_text_equivalent: true
+        reject_images_without_text_equivalent: true
         rationale: |
           - Images cannot be searched or indexed
           - Code snippets allow for proper syntax highlighting and copying
           - Text-based code is accessible and easier to work with
-            - Images may be kept as supplemental context when the request is already clear from the text submission
-            - Any attached images should be ignored for analysis when equivalent text/code is already provided
-          acceptance_criteria:
-            - "Accept when the request can be understood from the written description and any required AL code is provided as text snippets"
-            - "Accept when images are included only as supplemental context and are not required to interpret the request"
-            - "Reject when an image is the only source of code or key request details"
+          - Images may be kept as supplemental context when the request is already clear from the text submission
+          - Any attached images should be ignored for analysis when equivalent text/code is already provided
+        acceptance_criteria:
+          - "Accept when the request can be understood from the written description and any required AL code is provided as text snippets"
+          - "Accept when images are included only as supplemental context and are not required to interpret the request"
+          - "Reject when an image is the only source of code or key request details"
         required_format: |
-            All required code must be provided as text using proper markdown code blocks with AL language syntax:
+          All required code must be provided as text using proper markdown code blocks with AL language syntax:
           ```al
           // Your AL code here
           procedure Example()

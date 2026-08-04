@@ -34,6 +34,7 @@ type ManagedLabel = Literal[
     "event-request",
     "request-for-external",
     "enum-request",
+    "extensibility-enhancement",
     "missing-info",
     "agent-not-processable",
 ]
