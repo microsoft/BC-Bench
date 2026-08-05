@@ -23,7 +23,7 @@ from bcbench.results.summary import (
     JudgeBasedEvaluationResultSummary,
 )
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_evaluation_context, create_testgen_result
 
 
@@ -388,8 +388,24 @@ class TestGitHubJobSummary:
         assert "test__1" in content
         assert "test__2" in content
         assert "bug-fix" in content
-        assert "- Custom Agent: N/A\n\n## Result Summary" in content
+        assert "- Custom Agent: N/A\n" in content
+        assert "- Plugins: None\n\n## Result Summary" in content
         assert "- Pass Rate: 50.0%\n\n## Detailed Results" in content
+
+    def test_github_summary_shows_plugins_when_present(self, tmp_path, monkeypatch):
+        summary_file = tmp_path / "summary.md"
+        monkeypatch.setattr("bcbench.results.display.get_config", lambda: _make_config_with_summary(str(summary_file)))
+        plugins = ["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99", "bcbench-example@local"]
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                resolved=True,
+                experiment=ExperimentConfiguration(plugins=plugins),
+            ),
+        ]
+        create_github_job_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        content = summary_file.read_text()
+        assert "- Plugins: superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99, bcbench-example@local" in content
 
     def test_github_summary_includes_testgen_columns(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"

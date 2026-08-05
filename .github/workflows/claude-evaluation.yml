@@ -67,7 +67,7 @@ env:
 
 jobs:
   get-entries:
-    uses: ./.github/workflows/get-entries.yml
+    uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
@@ -98,7 +98,7 @@ jobs:
       - name: Setup BC Container and Repository
         id: setup-env
         timeout-minutes: 40
-        uses: ./.github/actions/setup-bc-container-repo
+        uses: $/.github/actions/setup-bc-container-repo
         with:
           instance-id: ${{ matrix.entry }}
           category: ${{ inputs.category }}
@@ -109,7 +109,7 @@ jobs:
           skip-repo: ${{ needs.get-entries.outputs.requires-repo != 'true' }}
 
       - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
+        uses: $/.github/actions/setup-python-uv
 
       - uses: actions/setup-node@v6
         with:
@@ -123,7 +123,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Agent Harnesses
-        uses: ./.github/actions/install-eval-clis
+        uses: $/.github/actions/install-eval-clis
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120
@@ -154,7 +154,7 @@ jobs:
 
   summarize-results:
     needs: evaluate-with-claude-code
-    uses: ./.github/workflows/summarize-results.yml
+    uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
@@ -170,7 +170,7 @@ jobs:
   requeue:
     needs: summarize-results
     if: ${{ !inputs.test-run }}
-    uses: ./.github/workflows/requeue-evaluation.yml
+    uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
       actions: write

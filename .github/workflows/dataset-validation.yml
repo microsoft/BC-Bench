@@ -23,7 +23,7 @@ on:
 
 jobs:
   get-entries:
-    uses: ./.github/workflows/get-entries.yml
+    uses: $/.github/workflows/get-entries.yml
     with:
       modified-only: ${{ inputs.modified-only || false }}
       test-run: ${{ inputs.test-run || false }}
@@ -51,7 +51,7 @@ jobs:
       - name: Setup BC Container and Repository
         id: setup-env
         timeout-minutes: 40
-        uses: ./.github/actions/setup-bc-container-repo
+        uses: $/.github/actions/setup-bc-container-repo
         with:
           instance-id: ${{ matrix.entry }}
           category: "bug-fix"

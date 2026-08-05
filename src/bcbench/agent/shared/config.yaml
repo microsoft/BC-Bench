@@ -124,6 +124,7 @@ agents:
 # Each plugin gets its own entry, and is passed to the CLI via `--plugin-dir` (session-scoped).
 #   name:     plugin name; also how it is recorded on the result as "<name>@<revision|local>"
 #   enabled:  per-entry toggle (defaults to false)
+#   grant_dir_access: grant the agent read+write access to this plugin's tree via --add-dir (defaults to false)
 #   source:   "local" (a folder on this machine) or "github" (cloned at runtime)
 #   path:     plugin root - for local an absolute path ; for github relative to the clone ("." for its root, or a subfolder when the repo hosts several plugins)
 #   repo:     github only, "owner/repo"
@@ -141,6 +142,10 @@ plugins:
     path: "."
   - name: "BCQuality"
     enabled: false
+    # grant_dir_access gives BCQuality's skill --add-dir access to read its own knowledge files at
+    # runtime. This is a (hopefully temporary) design that may change once that content is served
+    # via skills / an MCP server instead.
+    grant_dir_access: false
     source: github
     repo: "microsoft/BCQuality"
     revision: "ad8ccde5953fd6ce072e3b59049406783066ed60"
