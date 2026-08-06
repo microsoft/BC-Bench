@@ -79,6 +79,10 @@ class AgentMetrics(BaseModel):
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
 
+    @classmethod
+    def field_names(cls) -> frozenset[str]:
+        return frozenset(cls.model_fields)
+
 
 class ExperimentConfiguration(BaseModel):
     """Configuration for agent experiment execution.
@@ -399,6 +403,10 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # Evaluation category
     category: EvaluationCategory
+
+    # Metrics this agent is expected to report; only these are warned about when missing,
+    # so agents that never collect a metric don't produce noise on every instance.
+    expected_metrics: frozenset[str] = AgentMetrics.field_names()
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None

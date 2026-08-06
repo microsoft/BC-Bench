@@ -6,7 +6,15 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.agent import (
+    BCAL_EXPECTED_METRICS,
+    CLAUDE_EXPECTED_METRICS,
+    COPILOT_EXPECTED_METRICS,
+    BCalBackendConfig,
+    run_bcal_agent,
+    run_claude_code,
+    run_copilot_agent,
+)
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -73,6 +81,7 @@ def evaluate_copilot(
         container=container,
         model=model,
         agent_name="GitHub Copilot",
+        expected_metrics=COPILOT_EXPECTED_METRICS,
         category=category,
     )
 
@@ -128,6 +137,7 @@ def evaluate_claude_code(
         container=container,
         model=model,
         agent_name="Claude Code",
+        expected_metrics=CLAUDE_EXPECTED_METRICS,
         category=category,
     )
 
@@ -187,6 +197,7 @@ def evaluate_bcal(
         container=None,
         model=backend_config.model_label(),
         agent_name="BCal",
+        expected_metrics=BCAL_EXPECTED_METRICS,
         category=category,
     )
 

@@ -85,6 +85,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
     container_name: str = "test-container",
     password: str = "test-password",
     username: str = "test-user",
+    expected_metrics: frozenset[str] = AgentMetrics.field_names(),
 ) -> EvaluationContext[EntryT]:
     resolved_entry = entry if entry is not None else cast(EntryT, create_dataset_entry())
 
@@ -96,6 +97,7 @@ def create_evaluation_context[EntryT: BaseDatasetEntry](
         agent_name=agent_name,
         model=model,
         category=category,
+        expected_metrics=expected_metrics,
     )
 
 

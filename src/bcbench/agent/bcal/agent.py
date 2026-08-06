@@ -18,6 +18,9 @@ _config = get_config()
 
 _BCAL_TOOL = "bcal"
 
+# bcal CLI only exposes wall-clock time; token/turn/tool metrics are not available from it.
+EXPECTED_METRICS: frozenset[str] = frozenset({"execution_time"})
+
 
 class BCalBackendConfig(BaseModel):
     """A resolved bcal backend plus the inputs it needs to run.
