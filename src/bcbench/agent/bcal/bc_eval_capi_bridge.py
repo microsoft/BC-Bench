@@ -120,7 +120,6 @@ def main() -> int:
     except ImportError as exc:
         raise RuntimeError("bc-eval[capi] is required for the bcal CAPI bridge.") from exc
     _maybe_install_local_cert_credential()
-    _maybe_install_local_cert_credential()
 
     client = CapiModel()
     kwargs: dict[str, object] = {
