@@ -219,7 +219,7 @@ jobs:
           CAPI_TAXONOMY_EXPERIENCE: AppCopilots
           CAPI_TAXONOMY_AGENT: bcal
           CAPI_TAXONOMY_INFERENCE_STEP: ChatCompletion
-          CAPI_TAXONOMY_TRAFFIC_TYPE: Test
+          CAPI_TAXONOMY_TRAFFIC_TYPE: OfflineEvaluation
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend || 'external-command' }}" -eq "external-command") {

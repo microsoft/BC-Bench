@@ -1,4 +1,4 @@
-"""Inject the M365 LLM API taxonomy/CoS headers into bc-eval's CAPI judge calls.
+"""Inject the M365 LLM API headers into bc-eval's CAPI judge calls.
 
 The nl2al ``lm_checklist`` judge runs inside the ``bceval metrics calculate`` step through
 ``bc_eval``'s ``CapiModel``, which (like the bcal bridge) does not send the now-required
@@ -21,8 +21,12 @@ _TAXONOMY_HEADERS: tuple[tuple[str, str, str], ...] = (
     ("X-Taxonomy-Experience", "CAPI_TAXONOMY_EXPERIENCE", "AppCopilots"),
     ("X-Taxonomy-Agent", "CAPI_TAXONOMY_AGENT", "bcal"),
     ("X-Taxonomy-InferenceStep", "CAPI_TAXONOMY_INFERENCE_STEP", "ChatCompletion"),
-    ("X-Taxonomy-TrafficType", "CAPI_TAXONOMY_TRAFFIC_TYPE", "Test"),
+    ("X-Taxonomy-TrafficType", "CAPI_TAXONOMY_TRAFFIC_TYPE", "OfflineEvaluation"),
 )
+
+# Match production's current zero-counter scaffold. Do not add a retry loop here: correct retry
+# support also requires propagating response state and retry limits.
+_RETRY_ATTEMPT = '{"bceval":0}'
 
 _PATCH_FLAG = "_bcbench_taxonomy_patched"
 
@@ -56,6 +60,16 @@ def install() -> None:
         params = original(cls)
         merged = dict(params.get("headers") or {})
         merged.update(headers)
+        merged.update(
+            {
+                "x-llm-service-tier": os.environ.get("CAPI_SERVICE_TIER", "flex").strip() or "flex",
+                "x-retry-attempt": _RETRY_ATTEMPT,
+                "x-sticky-route-session-ticket": "",
+                "X-SessionId": params["x_ms_correlation_id"],
+                "X-InteractionId": params["x_ms_correlation_id"],
+                "x-metadata-tenant-id": params["x_ms_client_tenant_id"],
+            }
+        )
         params["headers"] = merged
         return params
 

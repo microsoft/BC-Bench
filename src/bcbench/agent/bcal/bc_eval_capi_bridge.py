@@ -5,12 +5,8 @@ from __future__ import annotations
 import json
 import os
 import sys
-import time
 from pathlib import Path
 from typing import BinaryIO, cast
-
-_TRANSIENT_RETRY_ATTEMPTS = 3
-_TRANSIENT_RETRY_BACKOFF_SEC = 2.0
 
 _CERT_FILE_ENV = "CAPI_CERT_FILE"
 _CERT_TENANT_ENV = "CAPI_TENANT_ID"
@@ -27,8 +23,12 @@ _TAXONOMY_HEADERS: tuple[tuple[str, str, str], ...] = (
     ("X-Taxonomy-Experience", "CAPI_TAXONOMY_EXPERIENCE", "AppCopilots"),
     ("X-Taxonomy-Agent", "CAPI_TAXONOMY_AGENT", "bcal"),
     ("X-Taxonomy-InferenceStep", "CAPI_TAXONOMY_INFERENCE_STEP", "ChatCompletion"),
-    ("X-Taxonomy-TrafficType", "CAPI_TAXONOMY_TRAFFIC_TYPE", "Test"),
+    ("X-Taxonomy-TrafficType", "CAPI_TAXONOMY_TRAFFIC_TYPE", "OfflineEvaluation"),
 )
+
+# Match production's current zero-counter scaffold. BC-Bench intentionally adds no outer retry
+# loop because correct retry support also requires propagating response state and retry limits.
+_RETRY_ATTEMPT = '{"bceval":0}'
 
 # Reasoning effort (not all models support this parameter), different models might have different available values:
 # Set to None to omit the parameter entirely (lets the model/service use its own default).
@@ -60,23 +60,6 @@ def _load_request(input_stream: BinaryIO) -> dict[str, object]:
         raise TypeError("External AI request must be a JSON object.")
 
     return cast(dict[str, object], request_raw)
-
-
-def _create_with_retry(client: object, kwargs: dict[str, object]) -> object:
-    # Retry transient CAPI failures (e.g. upstream OpenAI returns 5xx wrapped as DependencyFailure / server_error).
-    from azure.core.exceptions import HttpResponseError
-
-    last_exc: HttpResponseError | None = None
-    for attempt in range(_TRANSIENT_RETRY_ATTEMPTS):
-        try:
-            return client.chat.completions.create(**kwargs)  # ty: ignore[unresolved-attribute]
-        except HttpResponseError as exc:
-            last_exc = exc
-            if attempt == _TRANSIENT_RETRY_ATTEMPTS - 1:
-                raise
-            time.sleep(_TRANSIENT_RETRY_BACKOFF_SEC * (2**attempt))
-    assert last_exc is not None
-    raise last_exc
 
 
 def _patch_credential_from_local_file(cert_file: Path) -> None:
@@ -175,6 +158,16 @@ def _install_taxonomy_headers() -> None:
         params = original(cls)
         merged = dict(params.get("headers") or {})
         merged.update(headers)
+        merged.update(
+            {
+                "x-llm-service-tier": os.environ.get("CAPI_SERVICE_TIER", "flex").strip() or "flex",
+                "x-retry-attempt": _RETRY_ATTEMPT,
+                "x-sticky-route-session-ticket": "",
+                "X-SessionId": params["x_ms_correlation_id"],
+                "X-InteractionId": params["x_ms_correlation_id"],
+                "x-metadata-tenant-id": params["x_ms_client_tenant_id"],
+            }
+        )
         params["headers"] = merged
         return params
 
@@ -212,7 +205,7 @@ def main() -> int:
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
 
-    response = _create_with_retry(client, kwargs)
+    response = client.chat.completions.create(**kwargs)
     json.dump(_to_jsonable(response), sys.stdout)
     return 0
 

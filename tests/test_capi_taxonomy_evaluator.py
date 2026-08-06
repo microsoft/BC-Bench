@@ -30,7 +30,11 @@ def taxonomy():
 @pytest.fixture
 def stub_capi_model(monkeypatch):
     class _StubCapiModel:
-        base_params: ClassVar[dict[str, object]] = {"customer_id": "c"}
+        base_params: ClassVar[dict[str, object]] = {
+            "customer_id": "c",
+            "x_ms_correlation_id": "correlation",
+            "x_ms_client_tenant_id": "tenant",
+        }
 
         @classmethod
         def _get_common_capi_parameters(cls) -> dict[str, object]:
@@ -51,17 +55,38 @@ def stub_capi_model(monkeypatch):
 def _clear_env(monkeypatch, taxonomy):
     for _, env_var, _ in taxonomy._TAXONOMY_HEADERS:
         monkeypatch.delenv(env_var, raising=False)
+    monkeypatch.delenv("CAPI_SERVICE_TIER", raising=False)
 
 
 def test_install_merges_headers_into_common_params(monkeypatch, taxonomy, stub_capi_model):
     _clear_env(monkeypatch, taxonomy)
 
     taxonomy.install()
-
     params = stub_capi_model._get_common_capi_parameters()
-    assert params["headers"]["X-Taxonomy-TrafficType"] == "Test"
-    assert params["headers"]["X-Taxonomy-Experience"] == "AppCopilots"
+
+    assert params["headers"] == {
+        "X-Taxonomy-Experience": "AppCopilots",
+        "X-Taxonomy-Agent": "bcal",
+        "X-Taxonomy-InferenceStep": "ChatCompletion",
+        "X-Taxonomy-TrafficType": "OfflineEvaluation",
+        "x-llm-service-tier": "flex",
+        "x-retry-attempt": '{"bceval":0}',
+        "x-sticky-route-session-ticket": "",
+        "X-SessionId": "correlation",
+        "X-InteractionId": "correlation",
+        "x-metadata-tenant-id": "tenant",
+    }
+    assert "x-llm-models" not in params["headers"]
     assert params["customer_id"] == "c"  # existing params preserved
+
+
+def test_service_tier_allows_override(monkeypatch, taxonomy, stub_capi_model):
+    _clear_env(monkeypatch, taxonomy)
+    monkeypatch.setenv("CAPI_SERVICE_TIER", "default")
+
+    taxonomy.install()
+
+    assert stub_capi_model._get_common_capi_parameters()["headers"]["x-llm-service-tier"] == "default"
 
 
 def test_install_is_idempotent(monkeypatch, taxonomy, stub_capi_model):
