@@ -7,6 +7,7 @@ import typer
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
+from bcbench.agent.engine import run_engine_review
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -91,6 +92,40 @@ def run_claude(
         al_mcp=al_mcp if container_name else False,
         al_lsp=al_lsp,
         container_name=container_name,
+    )
+
+
+@run_app.command("engine")
+def run_engine(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    model: CopilotModel = "claude-sonnet-5",
+    repo_path: RepoPath = _config.paths.testbed_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    bcquality_ref: Annotated[str | None, typer.Option(help="Override the BCQuality ref (defaults to the engine's pinned ref)")] = None,
+    min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
+) -> None:
+    """
+    Run the BC-ALAgents review engine (generate half) on a single code-review entry.
+
+    Writes review.json in the repo root without scoring. For full evaluation, use
+    'bcbench evaluate engine' instead. Requires a local BC-ALAgents checkout
+    (engine.path in config.yaml or BC_REVIEW_ENGINE_ROOT), PowerShell 7+, and GH_TOKEN.
+
+    Example:
+        uv run bcbench run engine synthetic__style-018 --repo-path /path/to/testbed
+    """
+    category = EvaluationCategory.CODE_REVIEW
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    category.pipeline.setup_workspace(entry, repo_path)
+
+    run_engine_review(
+        entry=entry,
+        repo_path=repo_path,
+        model=model,
+        category=category,
+        output_dir=output_dir,
+        bcquality_ref=bcquality_ref,
+        min_severity=min_severity,
     )
 
 

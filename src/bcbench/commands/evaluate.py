@@ -6,7 +6,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_engine_review
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -143,6 +143,59 @@ def evaluate_claude_code(
             al_mcp=al_mcp if ctx.container else False,
             al_lsp=al_lsp,
             container_name=ctx.get_container().name if ctx.container else "",
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
+@evaluate_app.command("engine")
+def evaluate_engine(
+    entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
+    model: CopilotModel = "claude-sonnet-5",
+    repo_path: RepoPath = _config.paths.testbed_path,
+    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    run_id: RunId = "engine_test_run",
+    bcquality_ref: Annotated[str | None, typer.Option(help="Override the BCQuality ref (defaults to the engine's pinned ref)")] = None,
+    min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
+) -> None:
+    """
+    Evaluate the BC-ALAgents review engine (generate half) on a single code-review entry.
+
+    Runs the engine's own generate shell in local mode - the real PROD generate path -
+    then scores the resulting review.json with the standard code-review judge. Requires a
+    local BC-ALAgents checkout (engine.path in config.yaml or BC_REVIEW_ENGINE_ROOT),
+    PowerShell 7+, and GH_TOKEN.
+
+    To only generate review.json without scoring, use 'bcbench run engine' instead.
+    """
+    category = EvaluationCategory.CODE_REVIEW
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    run_dir = _prepare_run_dir(output_dir, run_id)
+
+    logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container=None,
+        model=model,
+        agent_name="BC Review Engine",
+        category=category,
+    )
+
+    category.pipeline.execute(
+        context,
+        lambda ctx: run_engine_review(
+            entry=ctx.entry,
+            repo_path=ctx.repo_path,
+            category=category,
+            model=ctx.model,
+            output_dir=ctx.result_dir,
+            bcquality_ref=bcquality_ref,
+            min_severity=min_severity,
         ),
     )
 
