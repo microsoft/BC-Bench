@@ -20,9 +20,6 @@ from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, Experimen
 logger = get_logger(__name__)
 _config = get_config()
 
-# Copilot CLI reports the full metric set; anything missing is a collection regression worth warning about.
-EXPECTED_METRICS: frozenset[str] = AgentMetrics.field_names()
-
 
 def run_copilot_agent(
     entry: BaseDatasetEntry,

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentType, EvaluationCategory
+from bcbench.types import AgentMetrics, AgentName, AgentType, EvaluationCategory
 
 
 def test_all_agent_types_have_target_dir():
@@ -18,6 +18,13 @@ def test_all_agent_types_have_instruction_filename():
         filename = agent_type.instruction_filename
         assert isinstance(filename, str)
         assert filename.endswith(".md")
+
+
+def test_all_agent_names_have_expected_metrics():
+    for agent_name in AgentName:
+        expected = agent_name.expected_metrics
+        assert expected
+        assert expected <= AgentMetrics.field_names()
 
 
 def test_all_categories_have_pipelines():

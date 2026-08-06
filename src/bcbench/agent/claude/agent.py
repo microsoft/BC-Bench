@@ -17,9 +17,6 @@ from bcbench.types import AgentMetrics, AgentType, EvaluationCategory, Experimen
 logger = get_logger(__name__)
 _config = get_config()
 
-# Claude Code reports the full metric set; anything missing is a collection regression worth warning about.
-EXPECTED_METRICS: frozenset[str] = AgentMetrics.field_names()
-
 
 def run_claude_code(
     entry: BaseDatasetEntry,

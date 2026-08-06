@@ -6,15 +6,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import (
-    BCAL_EXPECTED_METRICS,
-    CLAUDE_EXPECTED_METRICS,
-    COPILOT_EXPECTED_METRICS,
-    BCalBackendConfig,
-    run_bcal_agent,
-    run_claude_code,
-    run_copilot_agent,
-)
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -32,7 +24,7 @@ from bcbench.evaluate import EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, AgentName, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -80,8 +72,7 @@ def evaluate_copilot(
         result_dir=run_dir,
         container=container,
         model=model,
-        agent_name="GitHub Copilot",
-        expected_metrics=COPILOT_EXPECTED_METRICS,
+        agent_name=AgentName.COPILOT,
         category=category,
     )
 
@@ -136,8 +127,7 @@ def evaluate_claude_code(
         result_dir=run_dir,
         container=container,
         model=model,
-        agent_name="Claude Code",
-        expected_metrics=CLAUDE_EXPECTED_METRICS,
+        agent_name=AgentName.CLAUDE,
         category=category,
     )
 
@@ -196,8 +186,7 @@ def evaluate_bcal(
         result_dir=run_dir,
         container=None,
         model=backend_config.model_label(),
-        agent_name="BCal",
-        expected_metrics=BCAL_EXPECTED_METRICS,
+        agent_name=AgentName.BCAL,
         category=category,
     )
 
@@ -259,7 +248,7 @@ def evaluate_mock(
         repo_path=Path(),
         result_dir=run_dir,
         model="mock-model",
-        agent_name="mock-agent",
+        agent_name=AgentName.MOCK,
         category=category,
     )
 

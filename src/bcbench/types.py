@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AgentMetrics",
+    "AgentName",
     "AgentType",
     "BCalLLMBackend",
     "Checklist",
@@ -82,6 +83,31 @@ class AgentMetrics(BaseModel):
     @classmethod
     def field_names(cls) -> frozenset[str]:
         return frozenset(cls.model_fields)
+
+
+class AgentName(StrEnum):
+    """Agents that can be evaluated, and the metrics each of them is able to report."""
+
+    COPILOT = "GitHub Copilot"
+    CLAUDE = "Claude Code"
+    BCAL = "BCal"
+    MOCK = "mock-agent"
+
+    @property
+    def expected_metrics(self) -> frozenset[str]:
+        """Metrics this agent should always report.
+
+        Only these are warned about when missing, so agents that never collect a metric
+        don't emit a warning for every single instance of a run.
+        """
+        match self:
+            case AgentName.BCAL:
+                # The bcal CLI only exposes wall-clock time; token/turn/tool metrics are unavailable.
+                return frozenset({"execution_time"})
+            case AgentName.COPILOT | AgentName.CLAUDE | AgentName.MOCK:
+                return AgentMetrics.field_names()
+            case _:
+                raise ValueError(f"Unknown AgentName: {self}")
 
 
 class ExperimentConfiguration(BaseModel):
@@ -398,15 +424,11 @@ class EvaluationContext[E: BaseDatasetEntry]:
     result_dir: Path
 
     # Agent metadata
-    agent_name: str
+    agent_name: AgentName
     model: str
 
     # Evaluation category
     category: EvaluationCategory
-
-    # Metrics this agent is expected to report; only these are warned about when missing,
-    # so agents that never collect a metric don't produce noise on every instance.
-    expected_metrics: frozenset[str] = AgentMetrics.field_names()
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
