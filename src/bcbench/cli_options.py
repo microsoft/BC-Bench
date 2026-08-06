@@ -25,24 +25,22 @@ EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Cate
 
 CopilotModel = Annotated[
     Literal[
-        "claude-sonnet-4.6",
-        "claude-haiku-4.5",
-        "claude-opus-4.6",
-        "claude-opus-4.7",
-        "claude-opus-4.8",
-        "gpt-5.5",
-        "gpt-5.4",
+        "claude-sonnet-5",
+        "claude-opus-5",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
         "gpt-5.3-codex",
-        "gpt-5.2-codex",
-        "gpt-5.2",
+        "mai-code-1-flash",
+        "gemini-3.6-flash",
     ],
     typer.Option(help="Copilot model to use"),
 ]
 
 ClaudeCodeModel = Annotated[
     Literal[
-        "claude-sonnet-4-6",
-        "claude-opus-4-8",
+        "claude-sonnet-5",
+        "claude-opus-5",
         "claude-haiku-4-5",
     ],
     typer.Option(help="Claude Code model to use"),

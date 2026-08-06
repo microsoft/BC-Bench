@@ -182,7 +182,7 @@ class TestCodeReviewResult:
 
         original.save(tmp_path, "test.jsonl")
 
-        with open(tmp_path / "test.jsonl") as f:
+        with (tmp_path / "test.jsonl").open() as f:
             data = json.loads(f.readline())
 
         loaded = BaseEvaluationResult.from_json(data)

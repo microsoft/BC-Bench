@@ -53,6 +53,11 @@ line-length = 200
 
 [tool.ruff.lint]
 extend-select = [
+    # Restore the pyflakes/pycodestyle correctness rules that ruff 0.16 dropped from
+    # its default set (E711/E712/E713/E714/E721/E731/E741, F403/F405/F406/F722, etc.).
+    "E4",    # pycodestyle: import placement (E401/E402)
+    "E7",    # pycodestyle: statement/comparison lints (== None, lambda assignment, ...)
+    "F",     # pyflakes: undefined names, star-import hazards, unused imports
     "PLE",   # Pylint errors (includes __all__ validation)
     "PLW",   # Pylint warnings (includes subprocess.run check requirement)
     "I",     # isort (import sorting)
@@ -60,7 +65,6 @@ extend-select = [
     "B",     # flake8-bugbear (find likely bugs)
     "SIM",   # flake8-simplify (simplify code)
     "C4",    # flake8-comprehensions (better list/dict comprehensions)
-    "PIE",   # flake8-pie (misc lints)
     "RET",   # flake8-return (simplify return statements)
     "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
     "RUF",   # Ruff-specific rules
@@ -74,19 +78,20 @@ extend-select = [
     "FURB",  # refurb: modern Python idioms (e.g. x or y over x if x else y)
     "ISC",   # implicit string concat (catches missing comma in lists of strings)
     "ICN",   # import conventions (np, pd, plt aliases)
-    "FA",    # future annotations (cleaner type hints)
     "PYI",   # type stubs (no-op now, guard for future)
     "SLOT",  # require __slots__ on str/tuple/namedtuple subclasses
     "ASYNC", # async best practices (no-op now, guard for future)
+    "PERF",  # perflint: avoid needless per-iteration overhead (prefer extend/comprehensions)
+    "RSE",   # flake8-raise: drop redundant parentheses on bare exception raises
+    "PGH",   # pygrep-hooks: require codes on noqa/type-ignore comments (PGH003/PGH004)
+    "S307",  # flake8-bandit: ban eval (was PGH001, which ruff removed in favour of this rule)
 ]
 
 ignore = [
-    "UP035",   # deprecated-import (typing.Dict, etc. still valid)
-    "PTH123",  # Allow open() for now, Path.open() migration can be gradual
-    "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible
-    "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message
-    "TRY300",  # try-consider-else: stylistic; often hurts readability
-    "TRY301",  # raise-within-try: suggested "abstract to inner function" refactor adds indirection
+    # Deliberate style choices with many intentional violations; everything else is fixed in-tree
+    # (targeted `# noqa` with a rationale is preferred over adding entries here).
+    "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible (143 sites)
+    "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message (96 sites)
 ]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
@@ -110,7 +115,7 @@ analysis = [
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.0",
-    "ruff>=0.15.0",
+    "ruff>=0.16.0",
     "pre-commit>=4.3.0",
     "ty>=0.0.33",
 ]

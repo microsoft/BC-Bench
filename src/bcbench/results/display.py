@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
@@ -30,6 +31,7 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     console.print(f"Custom Instructions: [bold]{'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}[/bold]")
     console.print(f"Skills: [bold]{'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}[/bold]")
     console.print(f"Custom Agent: [bold]{results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}[/bold]")
+    console.print(f"Plugins: [bold]{', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}[/bold]")
 
     metrics = summary.render_console_metrics()
     if metrics is not None:
@@ -97,6 +99,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             f"- Custom Instructions: {'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}",
             f"- Skills: {'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}",
             f"- Custom Agent: {results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}",
+            f"- Plugins: {', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}",
         ]
     )
     sections: list[str] = [header_section, *(section for section in [metrics_section, tool_usage_section] if section), "## Detailed Results\n\n"]
@@ -130,7 +133,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
 def _write_github_step_summary(content: str) -> None:
     config = get_config()
     if config.env.github_step_summary:
-        with open(config.env.github_step_summary, "a", encoding="utf-8") as f:
+        with Path(config.env.github_step_summary).open("a", encoding="utf-8") as f:
             f.write(content)
             f.write("\n")
         logger.info("Wrote evaluation summary to GitHub Actions step summary")

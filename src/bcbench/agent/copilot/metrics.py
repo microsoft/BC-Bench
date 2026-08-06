@@ -1,6 +1,6 @@
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
@@ -64,7 +64,7 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
     if session_log_path:
         try:
             turn_count = parse_turn_count_from_log(session_log_path) or None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - metrics are best-effort; never fail a run over them
             logger.warning(f"Failed to parse turn count from {session_log_path}: {e}")
             turn_count = None
 
@@ -114,9 +114,9 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
                 completion_tokens=completion_tokens,
             )
 
-        logger.warning("No metrics found in output")
-        return None
-
     except Exception:
         logger.exception("Failed to parse metrics from output")
+        return None
+    else:
+        logger.warning("No metrics found in output")
         return None

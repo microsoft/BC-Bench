@@ -17,7 +17,7 @@ from pathlib import Path
 from bcbench.config import get_config
 from bcbench.contamination.filepath_identification import FilePathIdentificationResult, build_identification_prompt, parse_prediction
 from bcbench.copilot_cli import find_copilot
-from bcbench.dataset import BaseDatasetEntry
+from bcbench.dataset import RepoGroundedEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 
@@ -58,7 +58,7 @@ def _run_copilot_context_free(prompt: str, work_dir: Path, model: str) -> str:
 
 
 def run_filepath_identification(
-    entry: BaseDatasetEntry,
+    entry: RepoGroundedEntry,
     model: str,
     category: str,
     top_k: int,

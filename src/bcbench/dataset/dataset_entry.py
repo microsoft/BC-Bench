@@ -14,7 +14,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -39,13 +39,10 @@ class BaseDatasetEntry(BaseModel):
 
     metadata: EntryMetadata = Field(default_factory=EntryMetadata)
 
-    repo: RepoSlug = "microsoft/BCApps"
     instance_id: str = Field(pattern=_config.file_patterns.instance_pattern)
-    base_commit: CommitSha
     created_at: Annotated[str, Field(min_length=1)]
     environment_setup_version: str = Field(pattern=r"^[0-9]{2}\.[0-9]{1}$")
     project_paths: list[Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 \\/-]*$")]] = []
-    patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
 
     @classmethod
     def load(cls, dataset_path: Path, entry_id: str | None = None, random: int | None = None) -> list[Self]:
@@ -54,7 +51,7 @@ class BaseDatasetEntry(BaseModel):
 
         entries: list[Self] = []
 
-        with open(dataset_path, encoding="utf-8") as file:
+        with dataset_path.open(encoding="utf-8") as file:
             for line in file:
                 stripped_line: str = line.strip()
                 if not stripped_line:
@@ -94,6 +91,15 @@ class BaseDatasetEntry(BaseModel):
     def get_expected_output(self) -> ExpectedOutput:
         pass
 
+    @property
+    @abstractmethod
+    def customization_profile(self) -> str:
+        """Folder under `agent/shared/instructions/` holding this entry's instructions, skills and custom agents.
+
+        Repo-grounded entries key this on their repo so the agent sees the customization a developer would already have checked in.
+        Categories that scaffold their own workspace pick their own folder name and place it alongside the repo-keyed ones.
+        """
+
     def extract_project_name(self) -> str:
         if not self.project_paths:
             return ""
@@ -107,7 +113,22 @@ class BaseDatasetEntry(BaseModel):
         return parts[-1] if parts else ""
 
 
-class _BugFixTestGenBase(BaseDatasetEntry):
+class RepoGroundedEntry(BaseDatasetEntry):
+    """An entry whose task is anchored to a commit in a real repository.
+
+    Categories that scaffold their own workspace (e.g. nl2al) must not subclass this.
+    """
+
+    repo: RepoSlug = "microsoft/BCApps"
+    base_commit: CommitSha
+    patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+
+    @property
+    def customization_profile(self) -> str:
+        return self.repo.replace("/", "-")
+
+
+class _BugFixTestGenBase(RepoGroundedEntry):
     """Shared schema for bug-fix and test-generation entries (same JSONL, different semantics)."""
 
     fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
@@ -157,11 +178,14 @@ class TestGenEntry(_BugFixTestGenBase):
 class NL2ALEntry(BaseDatasetEntry):
     """Dataset entry for NL2AL category — generate AL code from natural language."""
 
-    base_commit: CommitSha | None = None
     nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
     expected: Annotated[list[ChecklistAssertion], Field(min_length=1)]
     page: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./]*$")]
     audience: Literal["Business", "Technical", "Both"]
+
+    @property
+    def customization_profile(self) -> str:
+        return "nl2al"
 
     def get_task(self) -> str:
         return self.nl_prompt

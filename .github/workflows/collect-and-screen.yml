@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
+        uses: $/.github/actions/setup-python-uv
 
       - name: Discover, screen, and collect passing PRs
         id: run

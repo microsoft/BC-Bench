@@ -19,12 +19,11 @@ def setup_agent_skills(agent_config: dict, entry: BaseDatasetEntry, repo_path: P
     skills_enabled: bool = agent_config["skills"]["enabled"]
 
     if skills_enabled:
-        source_skills: Path = _get_source_instructions_path(entry.repo)
+        source_skills: Path = _get_source_instructions_path(entry.customization_profile)
         source_skills_dir = source_skills / "skills"
 
-        # Skip if skills folder doesn't exist for this repo
         if not source_skills_dir.exists():
-            raise FileNotFoundError(f"Skills folder not found for repository: {entry.repo} at {source_skills_dir}")
+            raise FileNotFoundError(f"Skills folder not found for profile: {entry.customization_profile} at {source_skills_dir}")
 
         # Copilot reads from .github automatically, Claude reads from .claude automatically
         target_dir: Path = agent_type.get_target_dir(repo_path)

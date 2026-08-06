@@ -206,7 +206,7 @@ class Leaderboard(BaseModel):
     def load(cls, path: Path) -> "Leaderboard":
         if not path.exists():
             return cls(runs=[], aggregate=[])
-        with open(path, encoding="utf-8") as f:
+        with path.open(encoding="utf-8") as f:
             data = json.load(f)
             if not data or not isinstance(data, dict):
                 return cls(runs=[], aggregate=[])

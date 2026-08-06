@@ -26,12 +26,15 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
+        uses: $/.github/actions/setup-python-uv
         with:
           all-extras: true
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
+        env:
+          # Render ruff lint findings as inline PR annotations (CI-only; local runs stay human-readable)
+          RUFF_OUTPUT_FORMAT: github
 
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing
@@ -45,7 +48,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
+        uses: $/.github/actions/setup-python-uv
 
       - name: Select random category
         id: random
@@ -57,7 +60,7 @@ jobs:
 
   get-entries:
     needs: select-category
-    uses: ./.github/workflows/get-entries.yml
+    uses: $/.github/workflows/get-entries.yml
     with:
       test-run: true
       category: ${{ needs.select-category.outputs.category }}
@@ -78,7 +81,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
+        uses: $/.github/actions/setup-python-uv
 
       - name: Run mock evaluation for ${{ matrix.entry }}
         run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ needs.select-category.outputs.category }} --output-dir evaluation_results --run-id ${{ github.run_id }}
@@ -92,7 +95,7 @@ jobs:
 
   summarize-results:
     needs: [mock-evaluation, select-category]
-    uses: ./.github/workflows/summarize-results.yml
+    uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write

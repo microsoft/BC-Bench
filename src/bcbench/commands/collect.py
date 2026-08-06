@@ -1,9 +1,9 @@
 """CLI commands for collecting dataset entries."""
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from bcbench.collection import ScreeningResult, collect_codereview_entry, collect_gh_entry, screen_gh_candidate
 from bcbench.config import get_config

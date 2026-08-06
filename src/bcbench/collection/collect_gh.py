@@ -81,7 +81,7 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
         for file_path in extract_file_paths_from_patch(patch_test):
             try:
                 file_contents[file_path] = gh_client.get_file_content(file_path, commit_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 - missing file content must not abort screening
                 logger.debug("Could not fetch file content for %s", file_path)
     try:
         extract_tests_from_patch(patch_test, file_contents)
@@ -89,6 +89,58 @@ def screen_gh_candidate(pr_number: int, repo: str = "microsoft/BCApps") -> Scree
         return fail("No testable functions found in test patch")
 
     return ScreeningResult(pr_number=pr_number, repo=repo, passed=True)
+
+
+def _build_bugfix_entry(
+    gh_client: GHClient,
+    pr_number: int,
+    repo: str,
+    environment_setup_version: str,
+) -> BugFixEntry:
+    logger.info("Collecting dataset entry for PR #%s from %s", pr_number, repo)
+
+    pr_data: dict[str, Any] = gh_client.get_pr_info(pr_number)
+
+    diff = gh_client.get_pr_diff(pr_number)
+
+    patch, patch_fix, patch_test = separate_patches(diff, _config.file_patterns.test_project_identifiers)
+
+    # Extract problem statement from PR
+    title = pr_data.get("title", "")
+    body = pr_data.get("body", "") or ""
+    problem_statement = f"# {title}\n\n{body}" if body else f"# {title}"
+
+    merge_commit = pr_data.get("mergeCommit", {})
+    commit_id = merge_commit.get("oid", "") if merge_commit else pr_data.get("headRefOid", "")
+
+    base_commit = pr_data.get("baseRefOid", "")
+
+    if not commit_id or not base_commit:
+        raise CollectionError("Unable to determine commit IDs from PR data")
+
+    project_paths = find_project_paths_from_diff(patch)
+
+    file_contents: dict[str, str] = {}
+    for file_path in extract_file_paths_from_patch(patch_test):
+        file_contents[file_path] = gh_client.get_file_content(file_path, commit_id)
+
+    fail_to_pass = extract_tests_from_patch(patch_test, file_contents)
+
+    instance_id = f"{repo.replace('/', '__')}-{pr_number}"
+
+    _save_problem_statement(instance_id=instance_id, problem_statement=problem_statement)
+
+    return BugFixEntry(
+        repo=repo,
+        instance_id=instance_id,
+        base_commit=base_commit,
+        created_at=pr_data.get("createdAt", ""),
+        patch=patch_fix,
+        environment_setup_version=environment_setup_version,
+        test_patch=patch_test,
+        fail_to_pass=fail_to_pass,
+        project_paths=project_paths,
+    )
 
 
 def collect_gh_entry(
@@ -100,51 +152,7 @@ def collect_gh_entry(
     gh_client = GHClient(repo)
 
     try:
-        logger.info("Collecting dataset entry for PR #%s from %s", pr_number, repo)
-
-        pr_data: dict[str, Any] = gh_client.get_pr_info(pr_number)
-
-        diff = gh_client.get_pr_diff(pr_number)
-
-        patch, patch_fix, patch_test = separate_patches(diff, _config.file_patterns.test_project_identifiers)
-
-        # Extract problem statement from PR
-        title = pr_data.get("title", "")
-        body = pr_data.get("body", "") or ""
-        problem_statement = f"# {title}\n\n{body}" if body else f"# {title}"
-
-        merge_commit = pr_data.get("mergeCommit", {})
-        commit_id = merge_commit.get("oid", "") if merge_commit else pr_data.get("headRefOid", "")
-
-        base_commit = pr_data.get("baseRefOid", "")
-
-        if not commit_id or not base_commit:
-            raise CollectionError("Unable to determine commit IDs from PR data")
-
-        project_paths = find_project_paths_from_diff(patch)
-
-        file_contents: dict[str, str] = {}
-        for file_path in extract_file_paths_from_patch(patch_test):
-            file_contents[file_path] = gh_client.get_file_content(file_path, commit_id)
-
-        fail_to_pass = extract_tests_from_patch(patch_test, file_contents)
-
-        instance_id = f"{repo.replace('/', '__')}-{pr_number}"
-
-        _save_problem_statement(instance_id=instance_id, problem_statement=problem_statement)
-
-        entry = BugFixEntry(
-            repo=repo,
-            instance_id=instance_id,
-            base_commit=base_commit,
-            created_at=pr_data.get("createdAt", ""),
-            patch=patch_fix,
-            environment_setup_version=environment_setup_version,
-            test_patch=patch_test,
-            fail_to_pass=fail_to_pass,
-            project_paths=project_paths,
-        )
-
+        entry = _build_bugfix_entry(gh_client, pr_number, repo, environment_setup_version)
     except Exception as exc:
         logger.exception("Failed to collect dataset entry")
         raise typer.Exit(code=1) from exc

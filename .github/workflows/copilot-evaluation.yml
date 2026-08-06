@@ -9,19 +9,17 @@ on:
       model:
         description: "Copilot model to use for evaluation"
         required: false
-        default: "claude-haiku-4.5"
+        default: "gpt-5.6-luna"
         type: choice
         options:
-          - "claude-sonnet-4.6"
-          - "claude-haiku-4.5"
-          - "claude-opus-4.6"
-          - "claude-opus-4.7"
-          - "claude-opus-4.8"
-          - "gpt-5.5"
-          - "gpt-5.4"
+          - "claude-sonnet-5"
+          - "claude-opus-5"
+          - "gpt-5.6-sol"
+          - "gpt-5.6-terra"
+          - "gpt-5.6-luna"
           - "gpt-5.3-codex"
-          - "gpt-5.2-codex"
-          - "gpt-5.2"
+          - "mai-code-1-flash"
+          - "gemini-3.6-flash"
       category:
         description: "Evaluation category to run"
         required: false
@@ -72,7 +70,7 @@ env:
 
 jobs:
   get-entries:
-    uses: ./.github/workflows/get-entries.yml
+    uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
@@ -103,7 +101,7 @@ jobs:
       - name: Setup BC Container and Repository
         id: setup-env
         timeout-minutes: 40
-        uses: ./.github/actions/setup-bc-container-repo
+        uses: $/.github/actions/setup-bc-container-repo
         with:
           instance-id: ${{ matrix.entry }}
           category: ${{ inputs.category }}
@@ -111,9 +109,10 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
+          skip-repo: ${{ needs.get-entries.outputs.requires-repo != 'true' }}
 
       - name: Setup Python with UV
-        uses: ./.github/actions/setup-python-uv
+        uses: $/.github/actions/setup-python-uv
 
       - uses: actions/setup-node@v6
         with:
@@ -127,7 +126,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install evaluation CLIs
-        uses: ./.github/actions/install-eval-clis
+        uses: $/.github/actions/install-eval-clis
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
@@ -156,7 +155,7 @@ jobs:
 
   summarize-results:
     needs: evaluate-with-copilot-cli
-    uses: ./.github/workflows/summarize-results.yml
+    uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
@@ -172,7 +171,7 @@ jobs:
   requeue:
     needs: summarize-results
     if: ${{ !inputs.test-run }}
-    uses: ./.github/workflows/requeue-evaluation.yml
+    uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
       actions: write

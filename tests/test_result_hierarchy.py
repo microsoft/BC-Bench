@@ -10,7 +10,7 @@ Covers:
 - display.py console/GitHub summary rendering
 """
 
-from datetime import date
+from datetime import UTC, datetime
 
 import pytest
 
@@ -23,7 +23,7 @@ from bcbench.results.summary import (
     JudgeBasedEvaluationResultSummary,
 )
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, EvaluationCategory
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_evaluation_context, create_testgen_result
 
 
@@ -230,7 +230,7 @@ class TestSummaryFromResults:
         assert summary.average_duration == pytest.approx(150.0)
         assert summary.average_prompt_tokens == pytest.approx(2000.0)
         assert summary.average_completion_tokens == pytest.approx(1000.0)
-        assert summary.date == date.today()
+        assert summary.date == datetime.now(UTC).date()
 
     def test_category_specific_fields_computed(self):
         results = [
@@ -270,7 +270,7 @@ class TestMetricsRendering:
             failed=3,
             build=9,
             percentage=70.0,
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -292,7 +292,7 @@ class TestMetricsRendering:
         # JudgeBased explicitly surfaces no GitHub metrics and inherits the console no-op default
         summary = JudgeBasedEvaluationResultSummary(
             total=3,
-            date=date.today(),
+            date=datetime.now(UTC).date(),
             model="gpt-4o",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
@@ -388,8 +388,24 @@ class TestGitHubJobSummary:
         assert "test__1" in content
         assert "test__2" in content
         assert "bug-fix" in content
-        assert "- Custom Agent: N/A\n\n## Result Summary" in content
+        assert "- Custom Agent: N/A\n" in content
+        assert "- Plugins: None\n\n## Result Summary" in content
         assert "- Pass Rate: 50.0%\n\n## Detailed Results" in content
+
+    def test_github_summary_shows_plugins_when_present(self, tmp_path, monkeypatch):
+        summary_file = tmp_path / "summary.md"
+        monkeypatch.setattr("bcbench.results.display.get_config", lambda: _make_config_with_summary(str(summary_file)))
+        plugins = ["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99", "bcbench-example@local"]
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                resolved=True,
+                experiment=ExperimentConfiguration(plugins=plugins),
+            ),
+        ]
+        create_github_job_summary(results, EvaluationResultSummary.from_results(results, run_id=""))
+        content = summary_file.read_text()
+        assert "- Plugins: superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99, bcbench-example@local" in content
 
     def test_github_summary_includes_testgen_columns(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"

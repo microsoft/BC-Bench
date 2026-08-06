@@ -38,7 +38,10 @@ param(
     [string]$RepoPath,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipContainer
+    [switch]$SkipContainer,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipRepo
 )
 
 [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -Version $Version -InstanceId $InstanceId
@@ -61,11 +64,16 @@ if (Test-Path $RepoPath) {
     throw "Repository already exists at $RepoPath. This indicates the machine was not properly cleaned up from a previous run."
 }
 
-[hashtable] $cloneInfo = Get-RepoCloneInfo -Entry $entries[0]
-[string] $commitSha = $entries[0].base_commit
+if (-not $SkipRepo) {
+    [hashtable] $cloneInfo = Get-RepoCloneInfo -Entry $entries[0]
+    [string] $commitSha = $entries[0].base_commit
 
-Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
-Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
+    Write-Log "Cloning repository $($entries[0].repo) to $RepoPath" -Level Info
+    Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
+}
+else {
+    Write-Log "Skipping repository clone (SkipRepo flag set)" -Level Info
+}
 
 if (-not $SkipContainer) {
     [PSCredential]$credential = Get-BCCredential -Username $Username -Password $Password
