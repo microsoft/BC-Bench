@@ -328,7 +328,7 @@ def _build_codereview_entries(
     return entries
 
 
-def collect_codereview_entry(
+def collect_codereview_entries(
     pr_number: int,
     output: Path,
     environment_setup_version: str,
@@ -344,7 +344,7 @@ def collect_codereview_entry(
     except CollectionError:
         raise
     except Exception as exc:
-        raise CollectionError(f"Failed to collect code-review entry for PR #{pr_number}: {exc}") from exc
+        raise CollectionError(f"Failed to collect code-review entries for PR #{pr_number}: {exc}") from exc
 
     for entry in entries:
         try:

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from bcbench.collection.collect_codereview import (
     build_expected_comments,
-    collect_codereview_entry,
+    collect_codereview_entries,
     group_expected_by_commit,
     parse_domain_severity,
 )
@@ -138,7 +138,7 @@ class TestCollectCodereviewEntry:
         out = tmp_path / "codereview.jsonl"
         gh = _gh_double([_comment(1, "src/Foo.al", login="bot")])
         with patch("bcbench.collection.collect_codereview.GHClient", return_value=gh):
-            entries = collect_codereview_entry(
+            entries = collect_codereview_entries(
                 pr_number=9999,
                 output=out,
                 environment_setup_version="27.0",
@@ -164,7 +164,7 @@ class TestCollectCodereviewEntry:
         ]
         gh = _gh_double(comments)
         with patch("bcbench.collection.collect_codereview.GHClient", return_value=gh):
-            entries = collect_codereview_entry(
+            entries = collect_codereview_entries(
                 pr_number=1,
                 output=out,
                 environment_setup_version="27.0",
@@ -185,7 +185,7 @@ class TestCollectCodereviewEntry:
         ]
         gh = _gh_double(comments)
         with patch("bcbench.collection.collect_codereview.GHClient", return_value=gh):
-            entries = collect_codereview_entry(
+            entries = collect_codereview_entries(
                 pr_number=9999,
                 output=out,
                 environment_setup_version="27.0",
@@ -204,7 +204,7 @@ class TestCollectCodereviewEntry:
         # reviewer filter excludes everyone -> fallback: one per-PR entry, full diff, no findings.
         gh = _gh_double([_comment(1, "src/A.al", login="someone-else")])
         with patch("bcbench.collection.collect_codereview.GHClient", return_value=gh):
-            entries = collect_codereview_entry(
+            entries = collect_codereview_entries(
                 pr_number=42,
                 output=out,
                 environment_setup_version="27.0",

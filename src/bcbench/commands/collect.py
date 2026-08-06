@@ -5,7 +5,7 @@ from typing import Annotated
 
 import typer
 
-from bcbench.collection import ScreeningResult, collect_codereview_entry, collect_gh_entry, screen_gh_candidate
+from bcbench.collection import ScreeningResult, collect_codereview_entries, collect_gh_entry, screen_gh_candidate
 from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
 
@@ -76,7 +76,7 @@ def collect_codereview(
     bcbench collect codereview 9315 --reacted --environment-setup-version 27.0
     """
     try:
-        entries = collect_codereview_entry(
+        entries = collect_codereview_entries(
             pr_number=pr_number,
             output=output,
             environment_setup_version=environment_setup_version,
