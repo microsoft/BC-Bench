@@ -146,7 +146,7 @@ jobs:
 
           # Same transient ADO feed flakiness as the bcal install above; retry the package pull.
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.7" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.13" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -eq 3) { throw "bc-eval[capi] install failed after 3 attempts (exit code $LASTEXITCODE)." }
             Write-Output "::warning::bc-eval install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"
@@ -212,14 +212,6 @@ jobs:
           CAPI_CLIENT_ID: ${{ secrets.CAPI_CLIENT_ID }}
           CAPI_CERTIFICATE_KEY_VAULT_NAME: ${{ secrets.CAPI_CERTIFICATE_KEY_VAULT_NAME }}
           CAPI_CERTIFICATE_NAME: ${{ secrets.CAPI_CERTIFICATE_NAME }}
-          # M365 LLM API taxonomy/CoS headers (aka.ms/llmapi/waves-timeline). CAPI rejects calls
-          # that omit them. Set here (not secret) so the values are visible and easy to adjust; the
-          # bridge falls back to the same defaults when these are unset (e.g. local runs).
-          # Experience must be an LLM API allowed value (BizChat/WXPOAgents/AppCopilots/Cowork/Scout/WorkIQ).
-          CAPI_TAXONOMY_EXPERIENCE: AppCopilots
-          CAPI_TAXONOMY_AGENT: bcal
-          CAPI_TAXONOMY_INFERENCE_STEP: ChatCompletion
-          CAPI_TAXONOMY_TRAFFIC_TYPE: OfflineEvaluation
         shell: pwsh
         run: |
           if ("${{ inputs.llm-backend || 'external-command' }}" -eq "external-command") {
