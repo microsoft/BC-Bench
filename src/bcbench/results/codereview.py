@@ -18,9 +18,10 @@ _METRIC_EXPLANATIONS = """\
 <details>
 <summary>📖 How to read these metrics</summary>
 
-- **Micro** — sums matched/generated/expected across all tasks and computes one score; tasks with many comments dominate.
+- **Micro** — sums matched, scorable generated (generated minus ignored), and expected across all tasks and computes one score; tasks with many comments dominate.
 - **Macro** — computes P/R/F1 per task and averages the scores; every task counts equally regardless of comment volume. Macro precision averages over tasks where the agent commented plus negative tasks (no expected findings), where correct silence scores as perfect precision; silence on a positive task is still not rewarded. Macro recall averages only over positive tasks, since negative tasks have nothing to recall.
 - **Matched comment** — a generated comment paired with an expected one by file and line proximity (within the configured tolerance), then confirmed by an LLM judge to describe the same underlying issue.
+- **Ignored comment** — a generated comment that matched the entry's `ignored_comments` set (acceptable-but-not-required findings). Neutral: removed from the scored generated set, so it neither earns recall nor counts against precision. Precision's denominator is scorable generated (generated minus ignored).
 - **F1** — harmonic mean of precision and recall; balances both equally. (Special case of Fβ at β=1.)
 - **Fβ** — generalized F-score with a tunable precision/recall trade-off:
 
@@ -39,9 +40,10 @@ _METRIC_EXPLANATIONS = """\
 
 
 _CONSOLE_METRIC_EXPLANATIONS = (
-    "[bold]Micro[/bold] — volume-weighted across all comments; tasks with many comments dominate.\n"
+    "[bold]Micro[/bold] — volume-weighted across all comments; sums matched, scorable generated (generated minus ignored), and expected, so tasks with many comments dominate.\n"
     "[bold]Macro[/bold] — per-task P/R/F1 averaged equally; every task counts the same. Macro precision rewards correct silence on negative tasks but not on positive ones; macro recall averages only over positive tasks.\n"
     "[bold]Matched comment[/bold] — paired by file + line proximity, then confirmed by an LLM judge to describe the same underlying issue.\n"
+    "[bold]Ignored comment[/bold] — matched the entry's ignored_comments set; neutral, so it is removed from the scored generated set (no recall, no precision hit). Precision's denominator is scorable generated (generated minus ignored).\n"
     "[bold]F1[/bold] — harmonic mean of precision and recall (special case of Fβ at β=1).\n"
     "[bold]Fβ[/bold] — F_β = (1 + β²) · (P · R) / (β² · P + R); β<1 favors precision, β>1 favors recall.\n"
     "[bold]Fβ (β=0.5)[/bold] — precision-leaning; use when false positives are costly.\n"

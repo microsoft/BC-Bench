@@ -9,7 +9,7 @@ from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_comment_matches
+from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_comment_matches, judge_comment_matches_split
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
@@ -981,3 +981,37 @@ class TestJudge:
             result = judge_comment_matches(pairs, work_dir=tmp_path)
 
         assert result == [pairs[1]]
+
+
+class TestJudgeCommentMatchesSplit:
+    @staticmethod
+    def _pair(line: int, body: str) -> tuple[ReviewComment, ReviewComment]:
+        expected = ReviewComment(file="src/app.al", line_start=line, body=body, severity=Severity.MEDIUM)
+        generated = ReviewComment(file="src/app.al", line_start=line, body=f"gen {body}", severity=Severity.MEDIUM)
+        return expected, generated
+
+    def test_single_pass_splits_expected_and_ignored(self, tmp_path):
+        expected_pairs = [self._pair(10, "exp-a"), self._pair(20, "exp-b")]
+        ignored_pairs = [self._pair(30, "ign-a"), self._pair(40, "ign-b")]
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True, False, False, True]) as mock_verdicts:
+            validated_expected, validated_ignored = judge_comment_matches_split(expected_pairs, ignored_pairs, work_dir=tmp_path)
+
+        # A single judge pass over the concatenation — no second call, so no stale-verdict risk.
+        mock_verdicts.assert_called_once()
+        assert mock_verdicts.call_args.args[0] == expected_pairs + ignored_pairs
+        assert validated_expected == [expected_pairs[0]]
+        assert validated_ignored == [ignored_pairs[1]]
+
+    def test_empty_buckets_return_empty(self, tmp_path):
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[]):
+            assert judge_comment_matches_split([], [], work_dir=tmp_path) == ([], [])
+
+    def test_only_ignored_bucket(self, tmp_path):
+        ignored_pairs = [self._pair(30, "ign-a")]
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True]):
+            validated_expected, validated_ignored = judge_comment_matches_split([], ignored_pairs, work_dir=tmp_path)
+
+        assert validated_expected == []
+        assert validated_ignored == ignored_pairs

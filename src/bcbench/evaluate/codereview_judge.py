@@ -127,6 +127,29 @@ def judge_comment_matches(
     return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
 
 
+def judge_comment_matches_split(
+    expected_pairs: list[tuple[ReviewComment, ReviewComment]],
+    ignored_pairs: list[tuple[ReviewComment, ReviewComment]],
+    work_dir: Path,
+    model: str = _config.judge.code_review_model,
+) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
+    """Judge expected and ignored structural pairs in a single semantic-judge pass.
+
+    Runs ONE judge subprocess over the concatenation of the two structural buckets, then splits
+    the confirmed pairs back apart. A single pass keeps scoring to one LLM call per evaluation
+    (less run-to-run nondeterminism, one calibration target) and cannot reuse a stale verdict
+    file, since a second pass never runs.
+
+    Returns:
+        ``(validated_expected, validated_ignored)`` — the judge-confirmed subset of each bucket.
+    """
+    split = len(expected_pairs)
+    verdicts = judge_verdicts(expected_pairs + ignored_pairs, work_dir, model=model)
+    validated_expected = [pair for pair, is_match in zip(expected_pairs, verdicts[:split], strict=True) if is_match]
+    validated_ignored = [pair for pair, is_match in zip(ignored_pairs, verdicts[split:], strict=True) if is_match]
+    return validated_expected, validated_ignored
+
+
 def judge_verdicts(
     pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,

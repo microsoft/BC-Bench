@@ -4,7 +4,7 @@ from pathlib import Path
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.evaluate.codereview_judge import judge_comment_matches
+from bcbench.evaluate.codereview_judge import judge_comment_matches_split
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
@@ -72,21 +72,17 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 context.entry.expected_comments,
                 generated_comments,
             )
-            validated_matches = judge_comment_matches(
+            # Ignored comments are neutral: match them against the generated comments left over
+            # after expected structural matching (expected takes precedence), then judge both
+            # buckets in a SINGLE pass. One judge call per evaluation avoids a second LLM round
+            # (less nondeterminism, one calibration target) and cannot reuse a stale verdict file.
+            leftover = unmatched_generated(generated_comments, structural_matches)
+            ignored_structural = match_comments(context.entry.ignored_comments, leftover)
+            validated_matches, ignored_matches = judge_comment_matches_split(
                 structural_matches,
+                ignored_structural,
                 work_dir=context.repo_path,
             )
-            # Neutralize acceptable-but-not-required findings: pass the generated comments left
-            # over after expected matching through the same structural + judge gate against the
-            # entry's ignored set, then drop those from scoring (no recall credit, no precision hit).
-            ignored_matches: list[tuple[ReviewComment, ReviewComment]] = []
-            if context.entry.ignored_comments:
-                leftover = unmatched_generated(generated_comments, validated_matches)
-                ignored_structural = match_comments(context.entry.ignored_comments, leftover)
-                ignored_matches = judge_comment_matches(
-                    ignored_structural,
-                    work_dir=context.repo_path,
-                )
             result = CodeReviewResult.create(
                 context,
                 output=output,
