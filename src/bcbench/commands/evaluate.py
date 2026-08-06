@@ -48,7 +48,7 @@ def evaluate_copilot(
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
-    model: CopilotModel = "claude-haiku-4.5",
+    model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",

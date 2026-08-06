@@ -32,7 +32,7 @@ def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName = "",
-    model: CopilotModel = "claude-haiku-4.5",
+    model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
