@@ -51,7 +51,7 @@ prompt:
     {% endif %}
 
   code-review-template: |
-    /review
+    Use the `al-code-review` skill to review the current working-tree AL file changes. Run a full-domain review (do not pass a domain, so all domains run).
 
     Review only the uncommitted working-tree changes (git diff HEAD); do not compare commits such as HEAD~1..HEAD or origin/main.
 
@@ -75,7 +75,7 @@ prompt:
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentType.instruction_filename) during setup
 instructions:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
