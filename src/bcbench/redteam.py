@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from collections.abc import Callable, Coroutine
 from pathlib import Path
@@ -20,6 +21,22 @@ logger = get_logger(__name__)
 __all__ = ["build_bcal_target", "run_scan"]
 
 type RedTeamCallback = Callable[..., Coroutine[Any, Any, dict[str, object]]]
+
+
+def _ensure_utf8_file_handlers(logger: logging.Logger) -> None:
+    for handler in logger.handlers[:]:
+        if not isinstance(handler, logging.FileHandler) or handler.encoding == "utf-8":
+            continue
+
+        replacement = logging.FileHandler(handler.baseFilename, mode=handler.mode, encoding="utf-8", delay=handler.delay, errors=handler.errors)
+        replacement.setLevel(handler.level)
+        replacement.setFormatter(handler.formatter)
+        for handler_filter in handler.filters:
+            replacement.addFilter(handler_filter)
+
+        logger.removeHandler(handler)
+        handler.close()
+        logger.addHandler(replacement)
 
 
 def _ensure_package_cache(package_cache_path: Path, version: str) -> None:
@@ -111,6 +128,9 @@ def run_scan(
         session_state: str | None = None,
         context: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        # azure-ai-evaluation opens redteam.log with the Windows locale encoding. Switch it
+        # after the SDK initializes the scan logger and before it logs Unicode target output.
+        _ensure_utf8_file_handlers(logging.getLogger("RedTeamLogger"))
         try:
             return await target(messages=messages, stream=stream, session_state=session_state, context=context)
         except Exception as error:

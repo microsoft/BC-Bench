@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import subprocess
 import threading
 from pathlib import Path
@@ -115,6 +116,42 @@ def test_run_scan_rejects_empty_results(tmp_path: Path):
         pytest.raises(RuntimeError, match="without any evaluated attacks"),
     ):
         redteam.run_scan(unused_target, {}, tmp_path / "scorecard", "test-scan")
+
+
+def test_run_scan_writes_unicode_target_output_to_sdk_log(tmp_path: Path):
+    log_path = tmp_path / "redteam.log"
+    sdk_logger = logging.getLogger("RedTeamLogger")
+    original_handlers = sdk_logger.handlers[:]
+    original_level = sdk_logger.level
+    original_propagate = sdk_logger.propagate
+
+    async def successful_target(**_kwargs: object) -> dict[str, object]:
+        return {"messages": [{"role": "assistant", "content": "● generated AL"}]}
+
+    class FakeRedTeam:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def scan(self, *, target: redteam.RedTeamCallback, **_kwargs: object) -> SimpleNamespace:
+            sdk_logger.addHandler(logging.FileHandler(log_path, encoding="cp1252"))
+            sdk_logger.setLevel(logging.DEBUG)
+            await target(messages=[])
+            sdk_logger.debug("RAI evaluation result: ● generated AL")
+            return SimpleNamespace(attack_details=[{}])
+
+    sdk_logger.handlers.clear()
+    sdk_logger.propagate = False
+    try:
+        with patch.object(redteam, "RedTeam", FakeRedTeam), patch.object(redteam, "DefaultAzureCredential"):
+            redteam.run_scan(successful_target, {}, tmp_path / "scorecard", "test-scan")
+    finally:
+        for handler in sdk_logger.handlers:
+            handler.close()
+        sdk_logger.handlers = original_handlers
+        sdk_logger.setLevel(original_level)
+        sdk_logger.propagate = original_propagate
+
+    assert "RAI evaluation result: ● generated AL" in log_path.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
