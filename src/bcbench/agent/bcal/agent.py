@@ -77,6 +77,12 @@ def _resolve_bcal_executable() -> str:
     return resolved
 
 
+def _process_output(output: str | bytes | None) -> str:
+    if isinstance(output, bytes):
+        return output.decode("utf-8", errors="replace").strip()
+    return (output or "").strip()
+
+
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
@@ -177,11 +183,18 @@ def run_bcal_prompt(
         )
         stdout = result.stdout or ""
     except subprocess.TimeoutExpired as exc:
-        return f"(bcal timed out after {_config.timeout.bcal_execution}s)\n{exc.stdout or ''}".strip()
+        details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
+        message = f"bcal CLI timed out after {_config.timeout.bcal_execution} seconds"
+        if details:
+            message = f"{message}\n{details}"
+        metrics = AgentMetrics(execution_time=_config.timeout.bcal_execution)
+        raise AgentTimeoutError(message, metrics=metrics, config=ExperimentConfiguration()) from None
     except subprocess.CalledProcessError as exc:
-        # Surface bcal's own output instead of letting the opaque CalledProcessError propagate (the red-team framework would otherwise report only "Something went wrong Command [...]").
-        details = "\n".join(s.strip() for s in (exc.stdout, exc.stderr) if s and s.strip())
-        return f"(bcal exited with status {exc.returncode})\n{details}".strip()
+        details = "\n".join(filter(None, (_process_output(exc.stdout), _process_output(exc.stderr))))
+        message = f"bcal CLI exited with status {exc.returncode}"
+        if details:
+            message = f"{message}\n{details}"
+        raise AgentError(message) from None
 
     generated: str = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(export_folder.rglob("*.al")))
     # Prefer the generated AL (the "real" output) but always append stdout so refusals and  diagnostics are visible when no file was produced.
