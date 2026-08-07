@@ -10,7 +10,7 @@ import pytest
 
 from bcbench import redteam
 from bcbench.agent.bcal import BCalBackendConfig
-from bcbench.commands.redteam import _attack_result
+from bcbench.commands.redteam import _asr_table, _attack_result
 from bcbench.exceptions import AgentError
 from bcbench.types import BCalLLMBackend
 
@@ -96,3 +96,17 @@ def test_run_scan_rejects_empty_results(tmp_path: Path):
 )
 def test_attack_result_preserves_all_sdk_states(attack_success: bool | None, label: str):
     assert label in _attack_result(attack_success)
+
+
+def test_asr_table_reports_every_group_in_the_sdk_summary():
+    table = _asr_table(
+        "t", [{"overall_asr": 50.0, "overall_total": 2, "overall_successful_attacks": 1, "code_vulnerability_asr": 50.0, "code_vulnerability_total": 2, "code_vulnerability_successful_attacks": 1}]
+    )
+
+    assert table is not None
+    assert list(table.columns[0].cells) == ["code_vulnerability", "overall"]
+
+
+def test_asr_table_skips_summaries_without_asr_keys():
+    assert _asr_table("t", []) is None
+    assert _asr_table("t", [{"unrelated": 1}]) is None

@@ -23,15 +23,15 @@ type RedTeamCallback = Callable[..., Coroutine[Any, Any, dict[str, object]]]
 
 
 def _ensure_package_cache(package_cache_path: Path, version: str) -> None:
-    """Guarantee bcal has BC symbols on disk before scanning, mirroring the logic in `run bcal` command.
+    """Guarantee bcal has BC symbols on disk before scanning, mirroring the `run bcal` command.
 
-    The nl2al pipeline builds it via setup_workspace -> copy_symbol_apps (copying from the BCContainerHelper artifacts cache that scripts/Download-BCSymbols.ps1 populates).
-    Red teaming has no nl2al entry, so we build the same .alpackages once here, using the BC version from the nl2al dataset.
+    The nl2al pipeline builds these via setup_workspace -> copy_symbol_apps, copying from the BCContainerHelper artifacts cache that scripts/Download-BCSymbols.ps1 populates.
+    Red teaming has no nl2al entry of its own, so we build the same .alpackages once here using the BC version from the nl2al dataset.
     A pre-populated cache is reused as-is.
 
-    Assumption: package_cache_path is named '.alpackages' (so copy_symbol_apps, which always writes into '<dir>/.alpackages', lands exactly here).
+    `copy_symbol_apps` always writes into `<dir>/.alpackages`, hence the parent here.
     """
-    if package_cache_path.exists() and any(package_cache_path.glob("*.app")):
+    if any(package_cache_path.glob("*.app")):
         return
 
     logger.info(f"Populating bcal package cache at {package_cache_path} (BC {version})")
@@ -49,6 +49,7 @@ def build_bcal_target(package_cache_path: Path, export_base: Path, backend_confi
     """Wrap the nl2al (BCal) as a red-team target callback."""
 
     category = EvaluationCategory.NL2AL
+    # bcal always requires --page/--audience, but red teaming has no dataset entry of its own at the moment.
     entry = category.entry_class.load(category.dataset_path)[0]
     _ensure_package_cache(package_cache_path, entry.environment_setup_version)
 

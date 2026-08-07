@@ -47,7 +47,7 @@ def scan(
     deployment: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_DEPLOYMENT", help="Azure OpenAI deployment (required for azure-openai backend).")] = None,
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (external-command backend).")] = None,
-    output: Annotated[Path, typer.Option(help="Where to write the upstream scorecard JSON.")] = _config.paths.redteam_scorecard,
+    output: Annotated[Path, typer.Option(help="Where the SDK writes the scan output. It creates a *directory* at this path holding evaluation_results.json.")] = _config.paths.redteam_scorecard,
     scan_name: Annotated[str | None, typer.Option(help="Scan name shown in the shared Foundry project. Defaults to bcbench-redteam-<timestamp>.")] = None,
 ) -> None:
     """
@@ -57,13 +57,14 @@ def scan(
     The bcal symbol cache is auto-populated from the BC artifacts cache (run scripts/Download-BCSymbols.ps1 first).
 
     Examples:
-        uv run bcbench redteam scan --risk-category code_vulnerability
-        uv run bcbench redteam scan --seeds dataset/redteam/attack_objectives.json
+        uv run bcbench redteam scan --language en --risk-category code_vulnerability
+        uv run bcbench redteam scan --language es --seeds dataset/redteam/attack_objectives.json --attack-strategy base64
     """
     from bcbench.redteam import build_bcal_target, run_scan
 
+    # Upstream treats seeds and risk categories as alternative objective sources, so exactly one is required.
     if bool(seeds) == bool(risk_category):
-        raise typer.BadParameter("Use either --seeds or --risk-category, not both (they are alternative objective sources).")
+        raise typer.BadParameter("Pass exactly one of --seeds or --risk-category (they are alternative attack-objective sources).")
 
     scan_name = scan_name or f"bcbench-redteam-{datetime.now(UTC):%Y%m%d-%H%M%S}"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -95,7 +96,7 @@ def scan(
         attack_strategies=attack_strategy,
         language=language,
     )
-    print(f"Red team scorecard written to {output}")
+    _console.print(f"Red team scan output written to {output}")
     _render_scorecard(_load_scorecard(output))
 
 
@@ -154,10 +155,38 @@ def _rows_table(details: list[Json]) -> Table:
     return table
 
 
+def _asr_table(title: str, summary: list[Json]) -> Table | None:
+    """Render one of the SDK's ASR summaries.
+
+    The SDK emits a single-row list with the grouping folded into the key names --
+    `<group>_asr` / `<group>_total` / `<group>_successful_attacks`, e.g. `code_vulnerability_asr`
+    or `baseline_asr`, plus an `overall_*` triple -- so the groups are recovered from the keys.
+    """
+    if not summary:
+        return None
+    row = summary[0]
+    groups = [key.removesuffix("_asr") for key in row if key.endswith("_asr") and key != "overall_asr"]
+    if not groups:
+        return None
+
+    table = Table(title=title, box=box.SIMPLE_HEAVY, title_justify="left", title_style="bold")
+    for heading in ("Group", "ASR", "Successful", "Total"):
+        table.add_column(heading)
+    for group in [*groups, "overall"]:
+        asr = row.get(f"{group}_asr")
+        colour = "green" if asr == 0 else "red"
+        table.add_row(group, f"[{colour}]{asr}%[/]", str(row.get(f"{group}_successful_attacks", "-")), str(row.get(f"{group}_total", "-")))
+    return table
+
+
 def _render_scorecard(data: Json) -> None:
+    scorecard: Json = data.get("scorecard", {})
     details: list[Json] = data.get("attack_details", [])
 
     _console.print()
+    for title, key in (("Attack success rate by risk category", "risk_category_summary"), ("Attack success rate by technique", "attack_technique_summary")):
+        if table := _asr_table(title, scorecard.get(key, [])):
+            _console.print(table)
     if details:
         _console.print(_rows_table(details))
     if url := data.get("studio_url"):

@@ -83,14 +83,28 @@ def _process_output(output: str | bytes | None) -> str:
     return (output or "").strip()
 
 
+def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
+    """Build the bcal argv shared by the nl2al agent run and the red-team single-prompt run.
+
+    Only the prompt and the paths differ between the two, so keeping one builder stops the flag
+    set from drifting when bcal's CLI changes.
+    """
+    return [
+        _resolve_bcal_executable(),
+        f"--packagecachepath={package_cache_path}",
+        *backend_config.cli_args(),
+        f"--audience={entry.audience}",
+        f"--page={entry.page}",
+        f"--prompt={prompt}",
+        f"--exportfolder={export_folder}",
+    ]
+
+
 def run_bcal_agent(
     entry: NL2ALEntry,
     repo_path: Path,
     backend_config: BCalBackendConfig,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
-    bcal_executable = _resolve_bcal_executable()
-    backend_args = backend_config.cli_args()
-
     logger.info(f"Running bcal CLI on: {entry.instance_id} (backend={backend_config.backend.value})")
 
     # The .alpackages dir is created by the NL2AL pipeline setup step
@@ -100,18 +114,8 @@ def run_bcal_agent(
         raise AgentError(f"Package cache not found at: {package_cache_path}. Run the setup step first.")
 
     export_folder = repo_path / project_name / _config.file_patterns.nl2al_export_subdir
+    cmd_args = _bcal_cmd_args(entry, entry.get_task(), package_cache_path, export_folder, backend_config)
 
-    cmd_args = [
-        bcal_executable,
-        f"--packagecachepath={package_cache_path}",
-        *backend_args,
-        f"--audience={entry.audience}",
-        f"--page={entry.page}",
-        f"--prompt={entry.get_task()}",
-        f"--exportfolder={export_folder}",
-    ]
-
-    logger.info(f"Executing bcal CLI: {bcal_executable}")
     logger.info(f"Export folder: {export_folder}")
     logger.debug(f"Package cache path: {package_cache_path}")
     logger.debug(f"Using prompt:\n{entry.get_task()}")
@@ -153,23 +157,13 @@ def run_bcal_prompt(
       1. It always writes status/diagnostics to stdout (captured here).
       2. On success it writes generated *.al files into the export folder (read back here).
 
-    assumptions:
-      - Symbols are already present.
-      - ``query`` is the (adversarial) prompt sent to bcal; ``--page``/``--audience`` come from the dataset entry and for adversarial prompts the page is irrelevant since bcal is expected to refuse.
-    """
-    bcal_executable = _resolve_bcal_executable()
-    backend_args = backend_config.cli_args()
-    export_folder.mkdir(parents=True, exist_ok=True)
+    Unlike `run_bcal_agent` this raises on timeout/non-zero exit instead of returning the text: a
+    red-team judge must never score bcal's own error output as if it were a harmless refusal.
 
-    cmd_args = [
-        bcal_executable,
-        f"--packagecachepath={package_cache_path}",
-        *backend_args,
-        f"--audience={entry.audience}",
-        f"--page={entry.page}",
-        f"--prompt={query}",
-        f"--exportfolder={export_folder}",
-    ]
+    Assumes symbols are already present under ``package_cache_path``.
+    """
+    export_folder.mkdir(parents=True, exist_ok=True)
+    cmd_args = _bcal_cmd_args(entry, query, package_cache_path, export_folder, backend_config)
 
     try:
         result = subprocess.run(
@@ -197,6 +191,6 @@ def run_bcal_prompt(
         raise AgentError(message) from None
 
     generated: str = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(export_folder.rglob("*.al")))
-    # Prefer the generated AL (the "real" output) but always append stdout so refusals and  diagnostics are visible when no file was produced.
+    # Prefer the generated AL (the "real" output) but always append stdout so refusals and diagnostics are visible when no file was produced.
     sections: list[str] = [s for s in (generated, stdout) if s.strip()]
     return "\n\n".join(sections) if sections else "(bcal produced no output)"
