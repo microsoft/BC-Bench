@@ -66,8 +66,21 @@ prompt:
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
 
+# BC-ALAgents review engine (the `engine` code-review agent). Runs the engine's own
+# generate half (Invoke-PRReviewShell.ps1 -GenerateOnly) in local mode instead of the
+# code-review-template above, so BC-Bench measures the real PROD engine. This path is
+# ADDITIVE - the copilot/claude agents are unaffected.
+#   path:          absolute path to a local microsoft/BC-ALAgents checkout (override with
+#                  the BC_REVIEW_ENGINE_ROOT env var). Required to run the `engine` agent.
+#   agent_version: value for COPILOT_REVIEW_AGENT_VERSION; "0.0.0" avoids the engine's
+#                  git-tag version lookup (BC-Bench is not a tagged engine release).
+#   min_severity:  AGENT_MINIMUM_SEVERITY floor (Low is strictest / emits the most).
+engine:
+  path: "C:/depot/BC-ALReviewAgent"
+  agent_version: "0.0.0"
+  min_severity: "Low"
+
 # controls:
-# 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
 #    - Claude: copies to repo/.claude/ and renames AGENTS.md to CLAUDE.md
 # 2. whether to pass --disable-custom-instructions to copilot
