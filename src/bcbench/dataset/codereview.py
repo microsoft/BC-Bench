@@ -58,6 +58,10 @@ class ReviewComment(BaseModel):
     domain: str | None = None
     body: Annotated[str, Field(min_length=1)]
     severity: Severity | None = None
+    # BCQuality knowledge article this finding derives from, as `<domain>/<slug>`
+    # (e.g. `security/hardcoded-secret`). Optional and backward-compatible; drives
+    # per-article coverage tracking. Older entries leave it unset (counted as unannotated).
+    article: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$")] | None = None
 
     @field_validator("severity", mode="before")
     @classmethod
@@ -87,3 +91,14 @@ class CodeReviewEntry(RepoGroundedEntry):
 
     def get_expected_output(self) -> str:
         return "\n".join(str(c) for c in self.expected_comments)
+
+    def declared_articles(self) -> set[str]:
+        """BCQuality articles this entry is annotated against.
+
+        Union of every expected comment's `article` and the entry-level
+        `metadata.articles` (which carries the association for false-positive-guard
+        entries whose `expected_comments` is empty).
+        """
+        articles = {c.article for c in self.expected_comments if c.article}
+        articles.update(self.metadata.articles)
+        return articles
