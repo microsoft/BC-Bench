@@ -4,12 +4,12 @@ from pathlib import Path
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.evaluate.codereview_judge import judge_comment_matches
+from bcbench.evaluate.codereview_judge import judge_comment_matches_split
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, fetch_commit_if_missing, setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult, match_comments
+from bcbench.results.codereview import CodeReviewResult, match_comments, unmatched_generated
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -72,8 +72,15 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 context.entry.expected_comments,
                 generated_comments,
             )
-            validated_matches = judge_comment_matches(
+            # Ignored comments are neutral: match them against the generated comments left over
+            # after expected structural matching (expected takes precedence), then judge both
+            # buckets in a SINGLE pass. One judge call per evaluation avoids a second LLM round
+            # (less nondeterminism, one calibration target) and cannot reuse a stale verdict file.
+            leftover = unmatched_generated(generated_comments, structural_matches)
+            ignored_structural = match_comments(context.entry.ignored_comments, leftover)
+            validated_matches, ignored_matches = judge_comment_matches_split(
                 structural_matches,
+                ignored_structural,
                 work_dir=context.repo_path,
             )
             result = CodeReviewResult.create(
@@ -82,11 +89,14 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 expected_comments=context.entry.expected_comments,
                 generated_comments=generated_comments,
                 matched_pairs=validated_matches,
+                ignored_comments=context.entry.ignored_comments,
+                ignored_matched_pairs=ignored_matches,
             )
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
         logger.info(
             f"Code review metrics: matched={result.matched_comment_count}, "
             f"incorrect={result.incorrect_comment_count}, missed={result.missed_comment_count}, "
+            f"ignored={result.ignored_comment_count}, "
             f"precision={result.precision:.3f}, recall={result.recall:.3f}, f1={result.f1:.3f}"
         )
 

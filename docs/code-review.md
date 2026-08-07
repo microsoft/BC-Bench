@@ -25,6 +25,8 @@ This category evaluates an agent's ability to **review** a Business Central (AL)
 
 Unlike the pass/fail categories, code review is scored with **Precision / Recall / F1** over the matched comments. Expected and generated comments are paired by a globally optimal (one-to-one) assignment on file and line proximity (within a configured line tolerance), and a pair is only counted as *matched* when an LLM judge confirms the two describe the same underlying issue. Matched comments are additionally scored on how closely the agent's **severity** classification tracks the expected severity.
 
+A gold entry may also declare **`ignored_comments`** — legitimate-but-optional observations (out-of-scope nitpicks, maintainer-judgment calls) that should be neither required nor penalized. After expected matching runs, any leftover generated comment that matches an ignored comment (same structural pairing plus the LLM judge) is dropped from scoring entirely: it earns no recall and does not count against precision. Expected always takes precedence, so a comment that could match both is credited as a real find. Most entries leave `ignored_comments` empty, which scores identically to before.
+
 ## Baseline Leaderboard
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
@@ -109,14 +111,15 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
 
 ## How metrics are computed
 
-- **Precision** — of the comments the agent generated, the fraction that matched an expected finding. Penalizes noisy reviews.
+- **Precision** — of the scorable comments the agent generated (generated minus ignored), the fraction that matched an expected finding. Penalizes noisy reviews.
 - **Recall** — of the expected findings, the fraction the agent caught. Penalizes missed issues.
 - **F1** — harmonic mean of precision and recall; balances both equally (the β=1 case of Fβ).
 - **Fβ (β=0.5)** — precision-leaning F-score; use when false positives are costly (noisy reviews waste reviewer time).
 - **Fβ (β=2)** — recall-leaning F-score; weights catching issues more than avoiding noise.
 - **Severity MAE** — mean absolute error between the agent's and the expected severity levels, over matched comments only. Lower is better; `0` means every matched comment got the severity exactly right.
+- **Ignored** — generated comments that matched an entry's `ignored_comments` set. These are excluded from precision (they are neither correct nor incorrect); the count is surfaced for transparency only.
 - **Valid output rate** — fraction of tasks whose output parsed into a structured review. Failures score zero on every other metric. (Reported per run.)
-- **Micro vs. Macro** — *Micro* sums matched/generated/expected across all tasks (tasks with many comments dominate); *Macro* averages per-task scores (every task counts equally).
+- **Micro vs. Macro** — *Micro* sums matched, scorable generated (generated minus ignored), and expected across all tasks (tasks with many comments dominate); *Macro* averages per-task scores (every task counts equally).
 - **95% CI** — confidence interval bootstrapped over the per-task F1 scores, so the leaderboard reports sampling uncertainty even for a single run. The micro `F1` CI resamples runs; the `Macro F1` CI resamples tasks.
 
 [← Back to Home](index.md)

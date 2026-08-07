@@ -165,6 +165,7 @@ def create_codereview_entry(
     created_at: str = VALID_CREATED_AT,
     domain: str | None = None,
     expected_comments: list[ReviewComment] | None = None,
+    ignored_comments: list[ReviewComment] | None = None,
 ) -> CodeReviewEntry:
     if project_paths is None:
         project_paths = VALID_PROJECT_PATHS.copy()
@@ -184,6 +185,7 @@ def create_codereview_entry(
         created_at=created_at,
         metadata=EntryMetadata(area=domain),
         expected_comments=expected_comments,
+        ignored_comments=ignored_comments or [],
     )
 
 
@@ -195,10 +197,16 @@ def create_codereview_result(
     expected_comments: list[ReviewComment] | None = None,
     metrics: AgentMetrics | None = None,
     domain: str | None = None,
+    ignored_comments: list[ReviewComment] | None = None,
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
-    entry = create_codereview_entry(instance_id=instance_id, expected_comments=expected_comments, domain=domain)
+    entry = create_codereview_entry(
+        instance_id=instance_id,
+        expected_comments=expected_comments,
+        ignored_comments=ignored_comments,
+        domain=domain,
+    )
     context = EvaluationContext[CodeReviewEntry](
         entry=entry,
         repo_path=Path(),
@@ -218,6 +226,7 @@ def create_codereview_result(
         output=output,
         expected_comments=expected_comments,
         generated_comments=generated_comments,
+        ignored_comments=entry.ignored_comments,
     )
 
 
