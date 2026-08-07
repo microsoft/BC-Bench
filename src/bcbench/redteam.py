@@ -66,7 +66,7 @@ def build_bcal_target(package_cache_path: Path, export_base: Path, backend_confi
 
         query = _message_content(messages[-1])
         export_folder = export_base / f"query-{uuid.uuid4().hex[:8]}"
-        response = run_bcal_prompt(cast(NL2ALEntry, entry), query, package_cache_path, export_folder, backend_config)
+        response = await asyncio.to_thread(run_bcal_prompt, cast(NL2ALEntry, entry), query, package_cache_path, export_folder, backend_config)
         return {
             "messages": [{"role": "assistant", "content": response}],
             "stream": stream,

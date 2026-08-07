@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import subprocess
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,6 +12,7 @@ import pytest
 
 from bcbench import redteam
 from bcbench.agent.bcal import BCalBackendConfig
+from bcbench.agent.bcal import agent as bcal_agent
 from bcbench.commands.redteam import _asr_table, _attack_result
 from bcbench.exceptions import AgentError
 from bcbench.types import BCalLLMBackend
@@ -36,6 +39,34 @@ def test_bcal_target_returns_assistant_response(bcal_target: redteam.RedTeamCall
 
     assert result["messages"] == [{"role": "assistant", "content": "generated AL"}]
     assert run_prompt.call_args.args[1] == "attack prompt"
+
+
+def test_bcal_target_runs_concurrent_prompts_in_parallel(bcal_target: redteam.RedTeamCallback):
+    processes_started = threading.Barrier(2, timeout=5)
+    export_folders: list[str] = []
+
+    def wait_for_other_process(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        export_folders.extend(arg for arg in args if arg.startswith("--exportfolder="))
+        processes_started.wait()
+        return subprocess.CompletedProcess(args, 0, stdout="generated AL", stderr="")
+
+    async def run_concurrently() -> tuple[dict[str, object], dict[str, object]]:
+        return await asyncio.gather(
+            bcal_target(messages=[{"role": "user", "content": "first"}]),
+            bcal_target(messages=[{"role": "user", "content": "second"}]),
+        )
+
+    with (
+        patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+        patch.object(subprocess, "run", side_effect=wait_for_other_process),
+    ):
+        results = asyncio.run(run_concurrently())
+
+    assert [result["messages"] for result in results] == [
+        [{"role": "assistant", "content": "generated AL"}],
+        [{"role": "assistant", "content": "generated AL"}],
+    ]
+    assert len(export_folders) == len(set(export_folders)) == 2
 
 
 def test_bcal_target_propagates_execution_errors(bcal_target: redteam.RedTeamCallback):
