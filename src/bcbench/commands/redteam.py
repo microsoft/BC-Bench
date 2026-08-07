@@ -1,7 +1,7 @@
 """CLI command for AI red teaming BC-Bench agents (POC)."""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
@@ -48,7 +48,7 @@ def scan(
     llm_command: Annotated[str | None, typer.Option(envvar="BCAL_LLM_COMMAND", help="LLM command (external-command backend).")] = None,
     llm_model: Annotated[str | None, typer.Option(envvar="BCAL_LLM_MODEL", help="LLM model/deployment (external-command backend).")] = None,
     output: Annotated[Path, typer.Option(help="Where to write the upstream scorecard JSON.")] = _config.paths.redteam_scorecard,
-    scan_name: Annotated[str, typer.Option(help="Scan name shown in the shared Foundry project. Defaults to bcbench-redteam-<timestamp>.")] = f"bcbench-redteam-{datetime.now():%Y%m%d-%H%M%S}",
+    scan_name: Annotated[str | None, typer.Option(help="Scan name shown in the shared Foundry project. Defaults to bcbench-redteam-<timestamp>.")] = None,
 ) -> None:
     """
     Run an AI red teaming Agent scan against a BC-Bench agent.
@@ -65,6 +65,7 @@ def scan(
     if bool(seeds) == bool(risk_category):
         raise typer.BadParameter("Use either --seeds or --risk-category, not both (they are alternative objective sources).")
 
+    scan_name = scan_name or f"bcbench-redteam-{datetime.now(UTC):%Y%m%d-%H%M%S}"
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # Only support NL2AL for now, we will think about extensibility later.
@@ -135,12 +136,20 @@ def _short(text: str, limit: int = 55) -> str:
     return collapsed if len(collapsed) <= limit else collapsed[: limit - 1] + "\u2026"
 
 
+def _attack_result(attack_success: object) -> str:
+    if attack_success is True:
+        return "[red]\u2717 broke[/]"
+    if attack_success is False:
+        return "[green]\u2713 resisted[/]"
+    return "[yellow]? unevaluated[/]"
+
+
 def _rows_table(details: list[Json]) -> Table:
     table = Table(title="Attack details", box=box.SIMPLE_HEAVY, title_justify="left", title_style="bold")
     for heading in ("#", "Risk", "Technique", "Result", "Attack prompt", "Target response"):
         table.add_column(heading)
     for index, row in enumerate(details, start=1):
-        result = "[red]\u2717 broke[/]" if row.get("attack_success") else "[green]\u2713 resisted[/]"
+        result = _attack_result(row.get("attack_success"))
         table.add_row(str(index), str(row.get("risk_category", "-")), str(row.get("attack_technique", "-")), result, _short(_turn(row, "user")), _short(_turn(row, "assistant")))
     return table
 

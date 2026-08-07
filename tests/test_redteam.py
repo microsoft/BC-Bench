@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -43,6 +44,46 @@ def test_bcal_target_propagates_execution_errors(bcal_target: redteam.RedTeamCal
         pytest.raises(AgentError, match="bcal failed"),
     ):
         asyncio.run(bcal_target(messages=[{"role": "user", "content": "attack prompt"}]))
+
+
+def test_run_scan_raises_target_error_swallowed_by_sdk(tmp_path: Path):
+    async def failing_target(**_kwargs: object) -> dict[str, object]:
+        raise AgentError("bcal failed")
+
+    class FakeRedTeam:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def scan(self, *, target: redteam.RedTeamCallback, **_kwargs: object) -> SimpleNamespace:
+            with pytest.raises(AgentError):
+                await target(messages=[])
+            return SimpleNamespace(attack_details=[])
+
+    with (
+        patch.object(redteam, "RedTeam", FakeRedTeam),
+        patch.object(redteam, "DefaultAzureCredential"),
+        pytest.raises(AgentError, match="bcal failed"),
+    ):
+        redteam.run_scan(failing_target, {}, tmp_path / "scorecard", "test-scan")
+
+
+def test_run_scan_rejects_empty_results(tmp_path: Path):
+    async def unused_target(**_kwargs: object) -> dict[str, object]:
+        return {"messages": []}
+
+    class FakeRedTeam:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def scan(self, **_kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(attack_details=[])
+
+    with (
+        patch.object(redteam, "RedTeam", FakeRedTeam),
+        patch.object(redteam, "DefaultAzureCredential"),
+        pytest.raises(RuntimeError, match="without any evaluated attacks"),
+    ):
+        redteam.run_scan(unused_target, {}, tmp_path / "scorecard", "test-scan")
 
 
 @pytest.mark.parametrize(
