@@ -14,7 +14,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -192,3 +192,28 @@ class NL2ALEntry(BaseDatasetEntry):
 
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
+
+
+class DataQueryEntry(BaseDatasetEntry):
+    """Dataset entry for the data-query category — generate an AL query that answers a data question.
+
+    Execution-based: the agent authors an AL query; evaluation compiles + runs both the generated
+    query and the gold query against a fixed dataset (Contoso in a BC container) and compares the
+    result sets. The workspace is scaffolded by the pipeline, so there is no repo or commit.
+    """
+
+    nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+    gold_query: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+    # Whether row order is significant when comparing result sets (e.g. the question asks for a
+    # specific ranking). Defaults to False: result sets are compared order-insensitively.
+    ordered: bool = False
+
+    @property
+    def customization_profile(self) -> str:
+        return "dataquery"
+
+    def get_task(self) -> str:
+        return self.nl_prompt
+
+    def get_expected_output(self) -> str:
+        return self.gold_query

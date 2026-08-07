@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -350,3 +350,32 @@ def create_nl2al_entry(
 @pytest.fixture
 def sample_nl2al_entry() -> NL2ALEntry:
     return create_nl2al_entry()
+
+
+VALID_DATA_QUERY_PROMPT = "Return the total sales amount per customer."
+VALID_GOLD_QUERY = (
+    'query 50100 SalesByCustomer\n{\n    QueryType = Normal;\n    elements\n    {\n        dataitem(Customer; Customer)\n        {\n            column(No; "No.") { }\n        }\n    }\n}'
+)
+
+
+def create_data_query_entry(
+    instance_id: str = "dataquery__sales-by-customer-1",
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    nl_prompt: str = VALID_DATA_QUERY_PROMPT,
+    created_at: str = VALID_CREATED_AT,
+    gold_query: str = VALID_GOLD_QUERY,
+    ordered: bool = False,
+) -> DataQueryEntry:
+    return DataQueryEntry(
+        instance_id=instance_id,
+        environment_setup_version=environment_setup_version,
+        nl_prompt=nl_prompt,
+        created_at=created_at,
+        gold_query=gold_query,
+        ordered=ordered,
+    )
+
+
+@pytest.fixture
+def sample_data_query_entry() -> DataQueryEntry:
+    return create_data_query_entry()

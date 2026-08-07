@@ -29,6 +29,7 @@ on:
           - "bug-fix"
           - "test-generation"
           - "code-review"
+          - "data-query"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -41,6 +42,11 @@ on:
         type: boolean
       al-lsp:
         description: "Enable AL LSP server"
+        required: false
+        default: false
+        type: boolean
+      skills:
+        description: "Enable agent skills"
         required: false
         default: false
         type: boolean
@@ -143,7 +149,8 @@ jobs:
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             ${{ inputs.al-mcp && '--al-mcp' || '' }} `
-            ${{ inputs.al-lsp && '--al-lsp' || '' }}
+            ${{ inputs.al-lsp && '--al-lsp' || '' }} `
+            ${{ inputs.skills && '--skills' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -179,4 +186,4 @@ jobs:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "skills": "${{ inputs.skills }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

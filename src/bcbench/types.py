@@ -189,6 +189,7 @@ class EvaluationCategory(StrEnum):
     TEST_GENERATION = "test-generation"
     CODE_REVIEW = "code-review"
     NL2AL = "nl2al"
+    DATA_QUERY = "data-query"
     # EVENT_REQUEST = "event-request"
 
     @property
@@ -204,12 +205,14 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "codereview.jsonl"
             case EvaluationCategory.NL2AL:
                 return get_config().paths.dataset_dir / "nl2al.jsonl"
+            case EvaluationCategory.DATA_QUERY:
+                return get_config().paths.dataset_dir / "dataquery.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, CodeReviewEntry, NL2ALEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, NL2ALEntry, TestGenEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -220,12 +223,14 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewEntry
             case EvaluationCategory.NL2AL:
                 return NL2ALEntry
+            case EvaluationCategory.DATA_QUERY:
+                return DataQueryEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def result_class(self) -> type[BaseEvaluationResult]:
-        from bcbench.results.base import JudgeBasedEvaluationResult
+        from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
         from bcbench.results.codereview import CodeReviewResult
         from bcbench.results.testgeneration import TestGenerationResult
@@ -239,6 +244,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResult
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResult
+            case EvaluationCategory.DATA_QUERY:
+                return ExecutionBasedEvaluationResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -257,6 +264,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResultSummary
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResultSummary
+            case EvaluationCategory.DATA_QUERY:
+                return ExecutionBasedEvaluationResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -274,12 +283,14 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewLeaderboardAggregate
             case EvaluationCategory.NL2AL:
                 return JudgeBasedLeaderboardAggregate
+            case EvaluationCategory.DATA_QUERY:
+                return ExecutionBasedLeaderboardAggregate
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, NL2ALPipeline, TestGenerationPipeline
+        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, DataQueryPipeline, NL2ALPipeline, TestGenerationPipeline
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -290,6 +301,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:
                 return NL2ALPipeline()
+            case EvaluationCategory.DATA_QUERY:
+                return DataQueryPipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -309,6 +322,8 @@ class EvaluationCategory(StrEnum):
                 return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
             case EvaluationCategory.NL2AL:
                 return ["lm_checklist"]
+            case EvaluationCategory.DATA_QUERY:
+                return ["resolution_rate", "build_rate"]
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -322,6 +337,8 @@ class EvaluationCategory(StrEnum):
                 return "F1Score"
             case EvaluationCategory.NL2AL:
                 return "test_passed"
+            case EvaluationCategory.DATA_QUERY:
+                return "ResolutionRate"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -329,7 +346,7 @@ class EvaluationCategory(StrEnum):
     def requires_container(self) -> bool:
         """Whether evaluating this category builds/runs AL code and therefore needs a BC container."""
         match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return True
             case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL:
                 return False
@@ -350,7 +367,7 @@ class EvaluationCategory(StrEnum):
         Only categories that require building BaseApp needs self-hosted runners.
         """
         match self:
-            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
                 return "GitHub-BCBench"
             case EvaluationCategory.CODE_REVIEW:
                 return "ubuntu-latest"

@@ -72,7 +72,10 @@ if (-not $SkipRepo) {
     Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
 }
 else {
-    Write-Log "Skipping repository clone (SkipRepo flag set)" -Level Info
+    # Categories that scaffold their own workspace still need the folder to exist: it is shared into
+    # the container below, and Compile-AppInBcContainer throws for any path not shared with it.
+    Write-Log "Skipping repository clone (SkipRepo flag set); creating empty workspace at $RepoPath" -Level Info
+    New-Item -ItemType Directory -Path $RepoPath -Force | Out-Null
 }
 
 if (-not $SkipContainer) {

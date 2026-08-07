@@ -6,10 +6,12 @@ from bcbench.operations.bc_operations import (
     build_ps_dataset_tests_script,
     build_ps_test_script,
     copy_symbol_apps,
+    execute_al_query,
     resolve_artifact_version_root,
     run_tests,
+    wrap_query_as_api,
 )
-from bcbench.operations.filesystem_operations import remove_tree
+from bcbench.operations.filesystem_operations import clear_directory, remove_tree
 from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
@@ -38,10 +40,12 @@ __all__ = [
     "checkout_commit",
     "clean_project_paths",
     "clean_repo",
+    "clear_directory",
     "clone_repo_at_revision",
     "commit_changes",
     "copy_problem_statement_folder",
     "copy_symbol_apps",
+    "execute_al_query",
     "extract_tests_from_patch",
     "fetch_commit_if_missing",
     "remove_tree",
@@ -54,4 +58,5 @@ __all__ = [
     "setup_instructions_from_config",
     "setup_repo_prebuild",
     "stage_and_get_diff",
+    "wrap_query_as_api",
 ]

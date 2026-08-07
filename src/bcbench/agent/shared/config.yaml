@@ -66,6 +66,17 @@ prompt:
 
     If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
 
+  data-query-template: |
+    Answer the following Business Central data question by writing a single AL `query` object
+    to a file named `query.al` in {{repo_path}}. Write only the query logic — do not add API
+    properties (QueryType, APIPublisher, APIGroup, APIVersion, EntityName, EntitySetName); the
+    evaluation harness adds those. Proceed without asking for confirmation.
+
+    Question:
+    {{task}}
+
+    You MUST write query.al before finishing; if you do not, there is no output to evaluate.
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

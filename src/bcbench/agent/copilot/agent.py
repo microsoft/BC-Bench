@@ -29,6 +29,7 @@ def run_copilot_agent(
     output_dir: Path,
     al_mcp: bool = False,
     al_lsp: bool = False,
+    skills: bool = False,
     container_name: str = "bcbench",
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
@@ -51,7 +52,7 @@ def run_copilot_agent(
     mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentType.COPILOT, al_lsp=al_lsp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
-    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
+    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=skills)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, agent_type=AgentType.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
