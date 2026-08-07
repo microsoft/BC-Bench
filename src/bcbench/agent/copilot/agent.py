@@ -74,7 +74,7 @@ def run_copilot_agent(
             "--allow-all-tools",  # required for non-interactive mode
             "--disable-builtin-mcps",
             f"--model={model}",
-            "--log-level=debug",
+            "--log-level=all",
             f"--log-dir={output_dir.resolve()}",
             f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
