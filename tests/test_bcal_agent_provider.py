@@ -10,7 +10,7 @@ import pytest
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
-from bcbench.exceptions import AgentError
+from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.types import BCalLLMBackend
 from tests.conftest import create_nl2al_entry
 
@@ -177,3 +177,42 @@ class TestRunBcalAgentExternalCommand:
         assert "--llm-backend=external-command" in captured["args"]
         assert "--llm-command=python bridge.py" in captured["args"]
         assert not any(a.startswith("--deployment=") for a in captured["args"])
+
+
+class TestRunBcalPromptErrors:
+    def test_timeout_is_not_returned_as_target_output(self, tmp_path: Path):
+        timeout = subprocess.TimeoutExpired(cmd=["bcal"], timeout=1, output=b"partial output")
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=timeout),
+            pytest.raises(AgentTimeoutError, match="timed out") as exc_info,
+        ):
+            bcal_agent.run_bcal_prompt(
+                entry=create_nl2al_entry(),
+                query="test prompt",
+                package_cache_path=tmp_path / ".alpackages",
+                export_folder=tmp_path / "export",
+                backend_config=BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            )
+
+        assert "partial output" in str(exc_info.value)
+
+    def test_nonzero_exit_is_not_returned_as_target_output(self, tmp_path: Path):
+        failure = subprocess.CalledProcessError(returncode=2, cmd=["bcal"], output="stdout details", stderr="stderr details")
+
+        with (
+            patch.object(bcal_agent, "_resolve_bcal_executable", return_value="C:\\fake\\bcal.exe"),
+            patch.object(subprocess, "run", side_effect=failure),
+            pytest.raises(AgentError, match="status 2") as exc_info,
+        ):
+            bcal_agent.run_bcal_prompt(
+                entry=create_nl2al_entry(),
+                query="test prompt",
+                package_cache_path=tmp_path / ".alpackages",
+                export_folder=tmp_path / "export",
+                backend_config=BCalBackendConfig(backend=BCalLLMBackend.EXTERNAL_COMMAND, command="python bridge.py"),
+            )
+
+        assert "stdout details" in str(exc_info.value)
+        assert "stderr details" in str(exc_info.value)
