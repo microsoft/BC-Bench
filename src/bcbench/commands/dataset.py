@@ -182,6 +182,92 @@ def version(
         write_step_outputs({github_output: entry.environment_setup_version})
 
 
+@dataset_app.command("coverage")
+def coverage(
+    category: EvaluationCategoryOption = EvaluationCategory.CODE_REVIEW,
+    bcquality_root: Annotated[
+        str | None,
+        typer.Option(help="Path to a BCQuality checkout; enables zero-coverage detection. Falls back to $BCQUALITY_ROOT."),
+    ] = None,
+    show_zero: Annotated[bool, typer.Option(help="List every zero-coverage article (can be long)")] = False,
+    github_output: Annotated[str | None, typer.Option(help="Write the coverage report as JSON to GITHUB_OUTPUT with this key name")] = None,
+) -> None:
+    """Report per-article BCQuality coverage of the code-review dataset."""
+    from rich.console import Console
+    from rich.table import Table
+
+    from bcbench.dataset import (
+        CodeReviewEntry,
+        build_coverage_report,
+        enumerate_inventory,
+        resolve_bcquality_root,
+    )
+
+    if category is not EvaluationCategory.CODE_REVIEW:
+        raise typer.BadParameter("coverage is only supported for the code-review category")
+
+    entries: list[CodeReviewEntry] = CodeReviewEntry.load(category.dataset_path)
+
+    resolved_root = resolve_bcquality_root(bcquality_root)
+    inventory: set[str] | None = None
+    if resolved_root is not None:
+        inventory = enumerate_inventory(resolved_root)
+
+    report = build_coverage_report(entries, inventory)
+    console = Console()
+
+    if not report.inventory_available:
+        console.print("[yellow]No BCQuality checkout provided (--bcquality-root / $BCQUALITY_ROOT); reporting declared articles only, zero-coverage undetermined.[/yellow]")
+
+    domains = sorted({c.domain for c in report.covered} | {_domain_of(a) for a in report.zero_coverage})
+    covered_by_domain: dict[str, int] = {}
+    entries_by_domain: dict[str, int] = {}
+    for cov in report.covered:
+        covered_by_domain[cov.domain] = covered_by_domain.get(cov.domain, 0) + 1
+        entries_by_domain[cov.domain] = entries_by_domain.get(cov.domain, 0) + cov.count
+    zero_by_domain: dict[str, int] = {}
+    for article in report.zero_coverage:
+        domain = _domain_of(article)
+        zero_by_domain[domain] = zero_by_domain.get(domain, 0) + 1
+
+    table = Table(title="Per-article coverage (code-review)", title_justify="left", title_style="bold cyan")
+    table.add_column("Domain", style="cyan")
+    table.add_column("Covered", justify="right")
+    if report.inventory_available:
+        table.add_column("Inventory", justify="right")
+        table.add_column("Zero-cov", justify="right", style="red")
+    table.add_column("Gold entries", justify="right")
+    for domain in domains:
+        covered_count = covered_by_domain.get(domain, 0)
+        row = [domain, str(covered_count)]
+        if report.inventory_available:
+            inv = covered_count + zero_by_domain.get(domain, 0)
+            row += [str(inv), str(zero_by_domain.get(domain, 0))]
+        row.append(str(entries_by_domain.get(domain, 0)))
+        table.add_row(*row)
+    console.print(table)
+
+    summary = f"[bold]{len(report.covered)}[/bold] articles covered across [bold]{report.annotated_entries}[/bold]/{report.total_entries} annotated entries"
+    if report.inventory_available:
+        summary += f"; [red]{len(report.zero_coverage)}[/red] of {report.inventory_size} articles have zero coverage"
+    console.print(summary)
+
+    if report.unknown_articles:
+        console.print(f"[yellow]Unknown article slugs (not in inventory): {', '.join(report.unknown_articles)}[/yellow]")
+
+    if show_zero and report.zero_coverage:
+        console.print("\n[bold red]Zero-coverage articles:[/bold red]")
+        for article in report.zero_coverage:
+            console.print(f"  - {article}")
+
+    if github_output:
+        write_step_outputs({github_output: report.model_dump_json()})
+
+
+def _domain_of(article: str) -> str:
+    return article.split("/", 1)[0]
+
+
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:
     instance_ids = []
 
