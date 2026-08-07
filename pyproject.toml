@@ -7,7 +7,7 @@ name = "bcbench"
 version = "0.7.1"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 license = {text = "MIT"}
 authors = [
     {name = "Microsoft Corporation"}
