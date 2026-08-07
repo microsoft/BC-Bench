@@ -24,7 +24,7 @@ from bcbench.evaluate import EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, AgentName, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -72,7 +72,7 @@ def evaluate_copilot(
         result_dir=run_dir,
         container=container,
         model=model,
-        agent_name="GitHub Copilot",
+        agent_name=AgentName.COPILOT,
         category=category,
     )
 
@@ -127,7 +127,7 @@ def evaluate_claude_code(
         result_dir=run_dir,
         container=container,
         model=model,
-        agent_name="Claude Code",
+        agent_name=AgentName.CLAUDE,
         category=category,
     )
 
@@ -186,7 +186,7 @@ def evaluate_bcal(
         result_dir=run_dir,
         container=None,
         model=backend_config.model_label(),
-        agent_name="BCal",
+        agent_name=AgentName.BCAL,
         category=category,
     )
 
@@ -248,7 +248,7 @@ def evaluate_mock(
         repo_path=Path(),
         result_dir=run_dir,
         model="mock-model",
-        agent_name="mock-agent",
+        agent_name=AgentName.MOCK,
         category=category,
     )
 
