@@ -9971,7 +9971,7 @@
     {
       "total": 101,
       "date": "2026-08-07",
-      "model": "mai-code-1-flash-picker",
+      "model": "mai-code-1-flash",
       "agent_name": "GitHub Copilot",
       "category": "bug-fix",
       "average_duration": 584.1,
@@ -10101,7 +10101,7 @@
     {
       "total": 101,
       "date": "2026-08-07",
-      "model": "mai-code-1-flash-picker",
+      "model": "mai-code-1-flash",
       "agent_name": "GitHub Copilot",
       "category": "bug-fix",
       "average_duration": 702.7,
@@ -10234,7 +10234,7 @@
     {
       "total": 101,
       "date": "2026-08-07",
-      "model": "mai-code-1-flash-picker",
+      "model": "mai-code-1-flash",
       "agent_name": "GitHub Copilot",
       "category": "bug-fix",
       "average_duration": 704.4,
@@ -10365,7 +10365,7 @@
     {
       "total": 101,
       "date": "2026-08-08",
-      "model": "mai-code-1-flash-picker",
+      "model": "mai-code-1-flash",
       "agent_name": "GitHub Copilot",
       "category": "bug-fix",
       "average_duration": 719.2,
@@ -10497,7 +10497,7 @@
     {
       "total": 101,
       "date": "2026-08-08",
-      "model": "mai-code-1-flash-picker",
+      "model": "mai-code-1-flash",
       "agent_name": "GitHub Copilot",
       "category": "bug-fix",
       "average_duration": 280.3,
@@ -10848,7 +10848,7 @@
       "pass_hat_5": 0.505
     },
     {
-      "model": "mai-code-1-flash-picker",
+      "model": "mai-code-1-flash",
       "agent_name": "GitHub Copilot",
       "category": "bug-fix",
       "experiment": null,
