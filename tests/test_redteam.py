@@ -88,7 +88,8 @@ def test_bcal_target_runs_concurrent_prompts_in_parallel(bcal_target: redteam.Re
     def wait_for_other_process(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         export_folders.extend(arg for arg in args if arg.startswith("--exportfolder="))
         processes_started.wait()
-        return subprocess.CompletedProcess(args, 0, stdout="generated AL", stderr="")
+        prompt = next(arg.removeprefix("--prompt=") for arg in args if arg.startswith("--prompt="))
+        return subprocess.CompletedProcess(args, 0, stdout=f"> {prompt}\ngenerated AL", stderr="")
 
     async def run_concurrently() -> tuple[dict[str, object], dict[str, object]]:
         return await asyncio.gather(

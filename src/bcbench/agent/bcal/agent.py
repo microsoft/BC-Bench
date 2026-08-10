@@ -83,6 +83,46 @@ def _process_output(output: str | bytes | None) -> str:
     return (output or "").strip()
 
 
+def _trim_prompt_echo(stdout: str, query: str) -> str:
+    compact_query = "".join(query.split())
+    if not compact_query:
+        return stdout.strip()
+
+    compact_stdout_chars: list[str] = []
+    stdout_positions: list[int] = []
+    for position, character in enumerate(stdout):
+        if not character.isspace():
+            compact_stdout_chars.append(character)
+            stdout_positions.append(position)
+
+    compact_stdout = "".join(compact_stdout_chars)
+    seed_length = min(24, len(compact_query))
+    compact_start = compact_stdout.find(compact_query[:seed_length])
+    if compact_start < 0:
+        return stdout.strip()
+
+    matched_length = seed_length
+    while matched_length < len(compact_query) and compact_start + matched_length < len(compact_stdout):
+        if compact_query[matched_length] != compact_stdout[compact_start + matched_length]:
+            break
+        matched_length += 1
+
+    compact_end = compact_start + matched_length
+    if matched_length < len(compact_query):
+        if not compact_stdout.startswith("...", compact_end):
+            return stdout.strip()
+        compact_end += 3
+
+    start = stdout_positions[compact_start]
+    if stdout[:start].strip() not in ("", ">"):
+        return stdout.strip()
+
+    end = stdout_positions[compact_end - 1] + 1
+    if stdout[max(0, start - 2) : start] == "> ":
+        start -= 2
+    return f"{stdout[:start]}{stdout[end:]}".strip()
+
+
 def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, export_folder: Path, backend_config: BCalBackendConfig) -> list[str]:
     """Build the bcal argv shared by the nl2al agent run and the red-team single-prompt run.
 
@@ -153,9 +193,8 @@ def run_bcal_prompt(
 ) -> str:
     """Run bcal once for a raw prompt and return its output as text (used by red teaming).
 
-    BCal has two output channels and we surface both, so a safety judge sees whatever the tool actually produced:
-      1. It always writes status/diagnostics to stdout (captured here).
-      2. On success it writes generated *.al files into the export folder (read back here).
+    BCal writes generated AL to the export folder and status/output to stdout. Surface both while
+    removing the echoed user prompt so the safety judge does not score the attack as target output.
 
     Unlike `run_bcal_agent` this raises on timeout/non-zero exit instead of returning the text: a
     red-team judge must never score bcal's own error output as if it were a harmless refusal.
@@ -191,6 +230,6 @@ def run_bcal_prompt(
         raise AgentError(message) from None
 
     generated: str = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(export_folder.rglob("*.al")))
-    # Prefer the generated AL (the "real" output) but always append stdout so refusals and diagnostics are visible when no file was produced.
-    sections: list[str] = [s for s in (generated, stdout) if s.strip()]
+    trimmed_stdout = _trim_prompt_echo(stdout, query)
+    sections: list[str] = [section for section in (generated, trimmed_stdout) if section.strip()]
     return "\n\n".join(sections) if sections else "(bcal produced no output)"
