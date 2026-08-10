@@ -103,6 +103,7 @@ def run_scan(
     risk_categories: list[RiskCategory] | None = None,
     attack_strategies: list[AttackStrategy] | None = None,
     language: SupportedLanguages | None = None,
+    is_agent_target: bool = False,
 ) -> Path:
     red_team_kwargs: dict[str, Any] = {
         "azure_ai_project": azure_ai_project,
@@ -118,26 +119,28 @@ def run_scan(
 
     red_team = RedTeam(**red_team_kwargs)
 
-    target_errors: list[Exception] = []
+    # The SDK retries the callback and swallows failures, so keep the last one to explain an
+    # empty scan rather than failing a run the SDK recovered from.
+    last_target_error: Exception | None = None
 
-    # The SDK can convert a failed target invocation into a successful 0/0 scan. Track callback
-    # failures independently so the CLI still exits nonzero after the SDK writes partial results.
     async def tracked_target(
         messages: list[object],
         stream: bool = False,
         session_state: str | None = None,
         context: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        nonlocal last_target_error
         # azure-ai-evaluation opens redteam.log with the Windows locale encoding. Switch it
         # after the SDK initializes the scan logger and before it logs Unicode target output.
         _ensure_utf8_file_handlers(logging.getLogger("RedTeamLogger"))
         try:
             return await target(messages=messages, stream=stream, session_state=session_state, context=context)
         except Exception as error:
-            target_errors.append(error)
+            last_target_error = error
+            logger.warning(f"Red-team target invocation failed: {error}")
             raise
 
-    scan_kwargs: dict[str, Any] = {"target": tracked_target, "output_path": str(output_path)}
+    scan_kwargs: dict[str, Any] = {"target": tracked_target, "output_path": str(output_path), "is_agent_target": is_agent_target}
     if scan_name:
         scan_kwargs["scan_name"] = scan_name
     if attack_strategies:
@@ -145,9 +148,8 @@ def run_scan(
 
     logger.info(f"Starting red team scan -> {output_path}")
     result = asyncio.run(red_team.scan(**scan_kwargs))  # ty: ignore[unresolved-attribute]
-    if target_errors:
-        raise target_errors[0]
-    if not result.attack_details:
-        raise RuntimeError("Red team scan completed without any evaluated attacks. Inspect the scan logs for incomplete objectives.")
+    # A non-empty attack list can still be entirely unscored, which the SDK reports as a 0% ASR scorecard.
+    if not result.attack_details or not any(detail.get("attack_success") is not None for detail in result.attack_details):
+        raise RuntimeError("Red team scan completed without any evaluated attacks. Inspect the scan logs for incomplete objectives.") from last_target_error
     logger.info(f"Red team scan complete: {output_path}")
     return output_path

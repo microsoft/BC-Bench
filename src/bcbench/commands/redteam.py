@@ -11,6 +11,7 @@ from azure.ai.evaluation.red_team import AttackStrategy, RiskCategory, Supported
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.config import get_config
@@ -41,6 +42,13 @@ def scan(
     seeds: Annotated[Path | None, typer.Option(help="Custom attack seed prompts JSON (upstream format). Mutually exclusive with --risk-category.")] = None,
     risk_category: Annotated[list[RiskCategory] | None, typer.Option("--risk-category", help="Built-in risk category (repeatable), e.g. code_vulnerability. Mutually exclusive with --seeds.")] = None,
     attack_strategy: Annotated[list[AttackStrategy] | None, typer.Option("--attack-strategy", help="Attack strategy (repeatable), e.g. base64, flip, easy.")] = None,
+    agent_target: Annotated[
+        bool,
+        typer.Option(
+            "--agent-target/--model-target",
+            help="Scan the target as an agent. Changes the objectives the service generates and is required by agent-only risk categories (e.g. sensitive_data_leakage).",
+        ),
+    ] = False,
     target: Annotated[RedTeamTarget, typer.Option(help="Agent under test")] = RedTeamTarget.BCAL,
     backend: Annotated[BCalLLMBackend, typer.Option(envvar="BCAL_LLM_BACKEND", help="BCal LLM backend used by the bcal target.")] = BCalLLMBackend.EXTERNAL_COMMAND,
     endpoint: Annotated[str | None, typer.Option(envvar="AZURE_OPENAI_ENDPOINT", help="Azure OpenAI endpoint (required for azure-openai backend).")] = None,
@@ -95,6 +103,7 @@ def scan(
         risk_categories=risk_category,
         attack_strategies=attack_strategy,
         language=language,
+        is_agent_target=agent_target,
     )
     _console.print(f"Red team scan output written to {output}")
     _render_scorecard(_load_scorecard(output))
@@ -151,7 +160,14 @@ def _rows_table(details: list[Json]) -> Table:
         table.add_column(heading)
     for index, row in enumerate(details, start=1):
         result = _attack_result(row.get("attack_success"))
-        table.add_row(str(index), str(row.get("risk_category", "-")), str(row.get("attack_technique", "-")), result, _short(_turn(row, "user")), _short(_turn(row, "assistant")))
+        table.add_row(
+            str(index),
+            Text(str(row.get("risk_category", "-"))),
+            Text(str(row.get("attack_technique", "-"))),
+            result,
+            Text(_short(_turn(row, "user"))),
+            Text(_short(_turn(row, "assistant"))),
+        )
     return table
 
 

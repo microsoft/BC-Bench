@@ -5,11 +5,13 @@ import inspect
 import logging
 import subprocess
 import threading
+from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from rich.console import Console
 
 # Red teaming ships as the optional `redteam` dependency group, so skip when it is not installed.
 pytest.importorskip("azure.ai.evaluation.red_team")
@@ -17,7 +19,7 @@ pytest.importorskip("azure.ai.evaluation.red_team")
 from bcbench import redteam
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent
-from bcbench.commands.redteam import _asr_table, _attack_result
+from bcbench.commands.redteam import _asr_table, _attack_result, _rows_table
 from bcbench.exceptions import AgentError
 from bcbench.types import BCalLLMBackend
 
@@ -43,6 +45,40 @@ def test_bcal_target_returns_assistant_response(bcal_target: redteam.RedTeamCall
 
     assert result["messages"] == [{"role": "assistant", "content": "generated AL"}]
     assert run_prompt.call_args.args[1] == "attack prompt"
+
+
+def test_bcal_target_sends_the_latest_attack_prompt(bcal_target: redteam.RedTeamCallback):
+    messages = [
+        {"role": "user", "content": "first request"},
+        {"role": "assistant", "content": "first response"},
+        {"role": "user", "content": "follow-up request"},
+    ]
+
+    with patch.object(redteam, "run_bcal_prompt", return_value="generated AL") as run_prompt:
+        asyncio.run(bcal_target(messages=messages))
+
+    assert run_prompt.call_args.args[1] == "follow-up request"
+
+
+@pytest.mark.parametrize("is_agent_target", [False, True])
+def test_run_scan_forwards_the_target_type_to_the_sdk(tmp_path: Path, is_agent_target: bool):
+    captured: dict[str, object] = {}
+
+    async def unused_target(**_kwargs: object) -> dict[str, object]:
+        return {"messages": []}
+
+    class FakeRedTeam:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def scan(self, **kwargs: object) -> SimpleNamespace:
+            captured.update(kwargs)
+            return SimpleNamespace(attack_details=[{"attack_success": False}])
+
+    with patch.object(redteam, "RedTeam", FakeRedTeam), patch.object(redteam, "DefaultAzureCredential"):
+        redteam.run_scan(unused_target, {}, tmp_path / "scorecard", "test-scan", is_agent_target=is_agent_target)
+
+    assert captured["is_agent_target"] is is_agent_target
 
 
 def test_bcal_target_runs_concurrent_prompts_in_parallel(bcal_target: redteam.RedTeamCallback):
@@ -81,7 +117,7 @@ def test_bcal_target_propagates_execution_errors(bcal_target: redteam.RedTeamCal
         asyncio.run(bcal_target(messages=[{"role": "user", "content": "attack prompt"}]))
 
 
-def test_run_scan_raises_target_error_swallowed_by_sdk(tmp_path: Path):
+def test_run_scan_reports_target_failure_that_produced_no_results(tmp_path: Path):
     async def failing_target(**_kwargs: object) -> dict[str, object]:
         raise AgentError("bcal failed")
 
@@ -97,9 +133,37 @@ def test_run_scan_raises_target_error_swallowed_by_sdk(tmp_path: Path):
     with (
         patch.object(redteam, "RedTeam", FakeRedTeam),
         patch.object(redteam, "DefaultAzureCredential"),
-        pytest.raises(AgentError, match="bcal failed"),
+        pytest.raises(RuntimeError, match="without any evaluated attacks") as exc_info,
     ):
         redteam.run_scan(failing_target, {}, tmp_path / "scorecard", "test-scan")
+
+    assert isinstance(exc_info.value.__cause__, AgentError)
+
+
+def test_run_scan_marks_a_recovered_retry_as_successful(tmp_path: Path):
+    calls = 0
+
+    async def rate_limited_once(**_kwargs: object) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise AgentError("429 Too Many Requests")
+        return {"messages": [{"role": "assistant", "content": "generated AL"}]}
+
+    class FakeRedTeam:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def scan(self, *, target: redteam.RedTeamCallback, **_kwargs: object) -> SimpleNamespace:
+            with pytest.raises(AgentError, match="429"):
+                await target(messages=[])
+            await target(messages=[])
+            return SimpleNamespace(attack_details=[{"attack_success": False}])
+
+    with patch.object(redteam, "RedTeam", FakeRedTeam), patch.object(redteam, "DefaultAzureCredential"):
+        redteam.run_scan(rate_limited_once, {}, tmp_path / "scorecard", "test-scan")
+
+    assert calls == 2
 
 
 def test_run_scan_rejects_empty_results(tmp_path: Path):
@@ -112,6 +176,25 @@ def test_run_scan_rejects_empty_results(tmp_path: Path):
 
         async def scan(self, **_kwargs: object) -> SimpleNamespace:
             return SimpleNamespace(attack_details=[])
+
+    with (
+        patch.object(redteam, "RedTeam", FakeRedTeam),
+        patch.object(redteam, "DefaultAzureCredential"),
+        pytest.raises(RuntimeError, match="without any evaluated attacks"),
+    ):
+        redteam.run_scan(unused_target, {}, tmp_path / "scorecard", "test-scan")
+
+
+def test_run_scan_rejects_wholly_unevaluated_results(tmp_path: Path):
+    async def unused_target(**_kwargs: object) -> dict[str, object]:
+        return {"messages": []}
+
+    class FakeRedTeam:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def scan(self, **_kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(attack_details=[{"attack_success": None}])
 
     with (
         patch.object(redteam, "RedTeam", FakeRedTeam),
@@ -140,7 +223,7 @@ def test_run_scan_writes_unicode_target_output_to_sdk_log(tmp_path: Path):
             sdk_logger.setLevel(logging.DEBUG)
             await target(messages=[])
             sdk_logger.debug("RAI evaluation result: ● generated AL")
-            return SimpleNamespace(attack_details=[{}])
+            return SimpleNamespace(attack_details=[{"attack_success": False}])
 
     sdk_logger.handlers.clear()
     sdk_logger.propagate = False
@@ -167,6 +250,25 @@ def test_run_scan_writes_unicode_target_output_to_sdk_log(tmp_path: Path):
 )
 def test_attack_result_preserves_all_sdk_states(attack_success: bool | None, label: str):
     assert label in _attack_result(attack_success)
+
+
+def test_rows_table_renders_attack_text_as_literal_content():
+    output = StringIO()
+    console = Console(file=output, color_system=None, width=200)
+    details = [
+        {
+            "attack_success": False,
+            "conversation": [
+                {"role": "user", "content": "[/] attack"},
+                {"role": "assistant", "content": "[red]literal response[/red]"},
+            ],
+        }
+    ]
+
+    console.print(_rows_table(details))
+
+    assert "[/] attack" in output.getvalue()
+    assert "[red]literal response[/red]" in output.getvalue()
 
 
 def test_asr_table_reports_every_group_in_the_sdk_summary():
