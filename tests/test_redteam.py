@@ -11,6 +11,9 @@ from unittest.mock import patch
 
 import pytest
 
+# Red teaming ships as the optional `redteam` dependency group, so skip when it is not installed.
+pytest.importorskip("azure.ai.evaluation.red_team")
+
 from bcbench import redteam
 from bcbench.agent.bcal import BCalBackendConfig
 from bcbench.agent.bcal import agent as bcal_agent

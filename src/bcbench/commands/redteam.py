@@ -53,7 +53,7 @@ def scan(
     """
     Run an AI red teaming Agent scan against a BC-Bench agent.
 
-    Requires a Foundry Hub project via the AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME env vars (plus Azure credentials, e.g. `az login`).
+    Requires the optional redteam dependency group (`uv sync --group redteam`) and a Foundry Hub project via the AZURE_SUBSCRIPTION_ID / AZURE_RESOURCE_GROUP / AZURE_PROJECT_NAME env vars (plus Azure credentials, e.g. `az login`).
     The bcal symbol cache is auto-populated from the BC artifacts cache (run scripts/Download-BCSymbols.ps1 first).
 
     Examples:
