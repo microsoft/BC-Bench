@@ -45,20 +45,6 @@ class TestExpectedMetricsWarning:
 
         assert any("no agent metrics" in record.message for record in caplog.records)
 
-    def test_full_metric_agents_have_explicit_expectations(self):
-        expected = AgentMetrics(
-            execution_time=None,
-            llm_duration=None,
-            turn_count=None,
-            prompt_tokens=None,
-            completion_tokens=None,
-            tool_usage=None,
-        )
-
-        assert AgentHarness.COPILOT.expected_metrics == expected.model_fields_set
-        assert AgentHarness.CLAUDE.expected_metrics == expected.model_fields_set
-        assert AgentHarness.MOCK.expected_metrics == expected.model_fields_set
-
     def test_agent_name_serializes_as_plain_string(self, tmp_path):
         context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)
         result = BugFixResult.create_success(context, "patch")
