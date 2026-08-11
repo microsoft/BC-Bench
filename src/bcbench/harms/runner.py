@@ -13,8 +13,7 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict
 
-from bcbench.agent.bcal import BCalBackendConfig, bcal_version, run_bcal_prompt
-from bcbench.agent.bcal.agent import _resolve_bcal_executable
+from bcbench.agent.bcal import BCalBackendConfig, bcal_version, resolve_bcal_executable, run_bcal_prompt
 from bcbench.config import get_config
 from bcbench.dataset.dataset_entry import NL2ALEntry
 from bcbench.harms.case import Detector, HarmsCase, HarmsChannel, HarmsVector
@@ -154,7 +153,7 @@ def run_harms_suite(
         directory.mkdir(parents=True, exist_ok=True)
 
     if not dry_run:
-        bcal_exe = _resolve_bcal_executable()
+        bcal_exe = resolve_bcal_executable()
         logger.info(f"Harms run using bcal: {bcal_exe} (version {bcal_version(bcal_exe)})")
         ensure_package_cache(package_cache_path, base_entry.environment_setup_version)
 

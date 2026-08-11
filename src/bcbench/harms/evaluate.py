@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bcbench.harms.case import HarmsChannel
 from bcbench.harms.runner import HarmsTrial
 from bcbench.logger import get_logger
 
@@ -160,7 +159,3 @@ def _merge_into(merged: dict[str, Any], single: dict[str, Any]) -> None:
 def _write_result(result: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def channel_label(channel: HarmsChannel) -> str:
-    return "UPIA" if channel is HarmsChannel.DIRECT else "XPIA"
