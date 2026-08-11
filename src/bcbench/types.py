@@ -167,6 +167,7 @@ class AgentHarness(StrEnum):
     CLAUDE = "Claude Code"
     BCAL = "BCal"
     MOCK = "mock-agent"
+    ENGINE = "BC Review Engine"
 
     @property
     def expected_metrics(self) -> frozenset[str]:
@@ -193,7 +194,7 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL:
+            case AgentHarness.BCAL | AgentHarness.ENGINE:
                 expected = AgentMetrics(execution_time=None)
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")

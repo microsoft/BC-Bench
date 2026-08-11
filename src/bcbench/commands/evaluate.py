@@ -182,7 +182,7 @@ def evaluate_engine(
         result_dir=run_dir,
         container=None,
         model=model,
-        agent_name="BC Review Engine",
+        agent_name=AgentHarness.ENGINE,
         category=category,
     )
 
