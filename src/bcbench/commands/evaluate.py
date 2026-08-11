@@ -47,7 +47,7 @@ def evaluate_copilot(
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
-    model: CopilotModel = "claude-haiku-4.5",
+    model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
@@ -312,6 +312,10 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             case EvaluationCategory.CODE_REVIEW:
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
+                scenarios = ["raw", "empty"]
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                scenarios = ["raw", "empty"]
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
                 scenarios = ["raw", "empty"]
             case _:
                 raise ValueError(f"Unsupported category for mock evaluation: {context.category}")

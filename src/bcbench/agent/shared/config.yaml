@@ -50,6 +50,33 @@ prompt:
     {{task}}
     {% endif %}
 
+  extensibility-request-implement-template: |
+    You are working with a Business Central (AL) code repository at {{repo_path}}.
+
+    Task: Implement the extensibility request described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
+
+    Important constraints:
+    {% if not al_mcp %}
+    - Do NOT try to build or run tests, just provide the code changes needed
+    {% endif %}
+    - Do NOT commit any changes, and do NOT open a pull request
+
+    Extensibility request:
+    {{task}}
+
+  extensibility-request-triage-template: |
+    You are triaging a single Business Central extensibility request. The standard AL source is checked out at {{repo_path}}.
+
+    Task: Triage the extensibility request below and produce your triage decision (managed labels, advisory comment, and open/closed state).
+
+    Important constraints:
+    - This runs offline: read the request from the text below, do NOT call `gh` or touch any live issue.
+    - Do NOT build or run tests; base codebase analysis on the local `.al` files under {{repo_path}}.
+    - Write your final decision as valid JSON to `triage_result.json` in {{repo_path}}, containing exactly the Step 7 `Final_Output` object. Do not apply it through any host tool.
+
+    Extensibility request:
+    {{task}}
+
   code-review-template: |
     /review
 

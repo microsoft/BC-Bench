@@ -219,7 +219,11 @@ class EvaluationCategory(StrEnum):
     TEST_GENERATION = "test-generation"
     CODE_REVIEW = "code-review"
     NL2AL = "nl2al"
-    # EVENT_REQUEST = "event-request"
+    # Implement an approved extensibility request (add an event/extension point) as an AL code change.
+    # The sibling ext-advisor category is planned but not yet implemented.
+    EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
+    # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
+    EXT_REQUEST_TRIAGE = "extensibility-request-triage"
 
     @property
     def dataset_path(self) -> Path:
@@ -234,12 +238,16 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "codereview.jsonl"
             case EvaluationCategory.NL2AL:
                 return get_config().paths.dataset_dir / "nl2al.jsonl"
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                return get_config().paths.dataset_dir / "extensibility_request_implement.jsonl"
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return get_config().paths.dataset_dir / "extensibility_request_triage.jsonl"
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, CodeReviewEntry, NL2ALEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, CodeReviewEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -250,6 +258,10 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewEntry
             case EvaluationCategory.NL2AL:
                 return NL2ALEntry
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                return ExtRequestImplementEntry
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return ExtRequestTriageEntry
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -269,6 +281,10 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResult
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResult
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                return JudgeBasedEvaluationResult
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return JudgeBasedEvaluationResult
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -287,6 +303,10 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResultSummary
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResultSummary
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                return JudgeBasedEvaluationResultSummary
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return JudgeBasedEvaluationResultSummary
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -304,12 +324,16 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewLeaderboardAggregate
             case EvaluationCategory.NL2AL:
                 return JudgeBasedLeaderboardAggregate
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                return JudgeBasedLeaderboardAggregate
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return JudgeBasedLeaderboardAggregate
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, NL2ALPipeline, TestGenerationPipeline
+        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, ExtRequestImplementPipeline, ExtRequestTriagePipeline, NL2ALPipeline, TestGenerationPipeline
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -320,6 +344,10 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:
                 return NL2ALPipeline()
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                return ExtRequestImplementPipeline()
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return ExtRequestTriagePipeline()
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -339,6 +367,10 @@ class EvaluationCategory(StrEnum):
                 return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
             case EvaluationCategory.NL2AL:
                 return ["lm_checklist"]
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                return ["lm_checklist"]
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return ["lm_checklist"]
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -350,7 +382,7 @@ class EvaluationCategory(StrEnum):
                 return "ResolutionRate"
             case EvaluationCategory.CODE_REVIEW:
                 return "F1Score"
-            case EvaluationCategory.NL2AL:
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "test_passed"
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -361,7 +393,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return True
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL:
+            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return False
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -382,7 +414,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "GitHub-BCBench"
-            case EvaluationCategory.CODE_REVIEW:
+            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "ubuntu-latest"
             case EvaluationCategory.NL2AL:
                 return "windows-latest"
