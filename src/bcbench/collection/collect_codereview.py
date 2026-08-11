@@ -20,9 +20,11 @@ Two ways to decide which of the PR's inline comments are the *expected* findings
   guards by omission (the construct stays in the patch but is absent from
   ``expected_comments``, so flagging it costs precision).
 
-If neither is given, every top-level inline comment on the PR is used. If no comment
-is selected at all, a single per-PR entry carrying the full final diff and no expected
-comments is emitted as a backward-compatible fallback.
+If neither is given, every top-level inline comment on the PR is used. "Selected"
+throughout means a comment that survives these filters (and is placeable on the diff)
+and so becomes an expected finding. When nothing is selected - the reviewer/reacted
+filters match no comment, or only thumbs-down ones remain - a single per-PR entry
+carrying the full final diff and no expected comments is emitted as a fallback.
 """
 
 from __future__ import annotations
@@ -92,22 +94,21 @@ def parse_domain_severity(body: str) -> tuple[str | None, Severity | None]:
     return domain, severity
 
 
-def _comment_line_span(comment: dict[str, Any], *, use_original: bool = False) -> tuple[int, int | None] | None:
+def _comment_line_span(comment: dict[str, Any]) -> tuple[int, int | None] | None:
     """Return (line_start, line_end) for a RIGHT-side comment, or None if unplaceable.
 
-    With ``use_original`` the span is read from ``original_line`` / ``original_start_line``
-    (the comment's position in the diff of the commit it was written on) instead of the
-    live ``line`` / ``start_line`` (its position in the current head diff).
+    The span is read from ``original_line`` / ``original_start_line`` - the comment's
+    position in the diff of the commit it was written on - so it aligns with the
+    per-commit patch the entry is scored against.
     """
     if comment.get("in_reply_to_id"):
         return None  # thread reply, not a standalone finding
     if (comment.get("side") or "RIGHT") != "RIGHT":
         return None  # LEFT-side comments reference base lines, not the reviewed diff
-    line_key, start_key = ("original_line", "original_start_line") if use_original else ("line", "start_line")
-    line = comment.get(line_key)
+    line = comment.get("original_line")
     if not line:
         return None  # outdated / unanchored: the line no longer exists in the target diff
-    start = comment.get(start_key)
+    start = comment.get("original_start_line")
     if start and start != line:
         return int(start), int(line)
     return int(line), None
@@ -119,13 +120,11 @@ def _select_comment(
     reviewer: str | None,
     reacted: bool,
     reactions_by_id: dict[int, list[dict[str, Any]]],
-    use_original: bool,
 ) -> ReviewComment | None:
     """Apply the reviewer/reacted/placeable filters and convert to a ReviewComment.
 
-    Returns None when the comment is filtered out or cannot be placed on the target
-    diff. ``use_original`` selects which side of the comment's position pair to anchor
-    to (see _comment_line_span).
+    Returns None when the comment is filtered out or cannot be placed on the diff of
+    the commit it was written on (see _comment_line_span).
     """
     if reviewer is not None and ((comment.get("user") or {}).get("login") or "").casefold() != reviewer.casefold():
         return None
@@ -136,7 +135,7 @@ def _select_comment(
         if not (contents & POSITIVE_REACTIONS):
             return None
 
-    span = _comment_line_span(comment, use_original=use_original)
+    span = _comment_line_span(comment)
     if span is None:
         logger.debug("Skipping comment %s (unplaceable / reply / left-side)", comment.get("id"))
         return None
@@ -154,23 +153,6 @@ def _select_comment(
         domain=domain,
         severity=severity,
     )
-
-
-def build_expected_comments(
-    comments: list[dict[str, Any]],
-    *,
-    reviewer: str | None,
-    reacted: bool,
-    reactions_by_id: dict[int, list[dict[str, Any]]] | None = None,
-) -> list[ReviewComment]:
-    """Select PR inline comments and convert them using their head positions (per-PR)."""
-    reactions_by_id = reactions_by_id or {}
-    selected: list[ReviewComment] = []
-    for comment in comments:
-        review_comment = _select_comment(comment, reviewer=reviewer, reacted=reacted, reactions_by_id=reactions_by_id, use_original=False)
-        if review_comment is not None:
-            selected.append(review_comment)
-    return selected
 
 
 def group_expected_by_commit(
@@ -191,7 +173,7 @@ def group_expected_by_commit(
     groups: dict[str, list[ReviewComment]] = {}
     order: list[str] = []
     for comment in comments:
-        review_comment = _select_comment(comment, reviewer=reviewer, reacted=reacted, reactions_by_id=reactions_by_id, use_original=True)
+        review_comment = _select_comment(comment, reviewer=reviewer, reacted=reacted, reactions_by_id=reactions_by_id)
         if review_comment is None:
             continue
         commit = comment.get("original_commit_id") or comment.get("commit_id") or fallback_commit
@@ -268,7 +250,7 @@ def _build_codereview_entries(
             # bodies (group_expected_by_commit applies the same filters again).
             if reviewer is not None and ((comment.get("user") or {}).get("login") or "").casefold() != reviewer.casefold():
                 continue
-            if _comment_line_span(comment, use_original=True) is None:
+            if _comment_line_span(comment) is None:
                 continue
             if not (comment.get("body") or "").strip():
                 continue

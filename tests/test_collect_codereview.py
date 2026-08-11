@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 from bcbench.collection.collect_codereview import (
-    build_expected_comments,
     collect_codereview_entries,
     group_expected_by_commit,
     parse_domain_severity,
@@ -64,58 +63,6 @@ def _comment(cid, path, *, login="alice", line=10, start_line=None, body="findin
         "side": side,
         "in_reply_to_id": reply,
     }
-
-
-class TestBuildExpectedComments:
-    def test_reviewer_filter_keeps_only_that_author(self):
-        comments = [
-            _comment(1, "src/A.al", login="wael"),
-            _comment(2, "src/B.al", login="bot"),
-        ]
-        result = build_expected_comments(comments, reviewer="wael", reacted=False)
-        assert [c.file for c in result] == ["src/A.al"]
-
-    def test_no_filter_keeps_all_placeable(self):
-        comments = [_comment(1, "src/A.al"), _comment(2, "src/B.al")]
-        result = build_expected_comments(comments, reviewer=None, reacted=False)
-        assert len(result) == 2
-
-    def test_reacted_keeps_positive_drops_thumbs_down(self):
-        comments = [_comment(1, "src/Good.al"), _comment(2, "src/Bad.al")]
-        reactions = {1: [{"content": "+1"}], 2: [{"content": "-1"}]}
-        result = build_expected_comments(comments, reviewer=None, reacted=True, reactions_by_id=reactions)
-        assert [c.file for c in result] == ["src/Good.al"]
-
-    def test_reviewer_and_reacted_compose(self):
-        comments = [
-            _comment(1, "src/A.al", login="bot"),
-            _comment(2, "src/B.al", login="bot"),
-            _comment(3, "src/C.al", login="human"),
-        ]
-        reactions = {1: [{"content": "+1"}], 2: [], 3: [{"content": "+1"}]}
-        result = build_expected_comments(comments, reviewer="bot", reacted=True, reactions_by_id=reactions)
-        assert [c.file for c in result] == ["src/A.al"]
-
-    def test_skips_replies_and_left_side_and_unanchored(self):
-        comments = [
-            _comment(1, "src/Reply.al", reply=99),
-            _comment(2, "src/Left.al", side="LEFT"),
-            _comment(3, "src/NoLine.al", line=None),
-            _comment(4, "src/Ok.al"),
-        ]
-        result = build_expected_comments(comments, reviewer=None, reacted=False)
-        assert [c.file for c in result] == ["src/Ok.al"]
-
-    def test_multiline_span_sets_start_and_end(self):
-        comments = [_comment(1, "src/A.al", line=20, start_line=15)]
-        result = build_expected_comments(comments, reviewer=None, reacted=False)
-        assert result[0].line_start == 15
-        assert result[0].line_end == 20
-
-    def test_path_with_spaces_is_accepted(self):
-        comments = [_comment(1, "src/W1/1.Setup Data/Foo.Codeunit.al")]
-        result = build_expected_comments(comments, reviewer=None, reacted=False)
-        assert result[0].file == "src/W1/1.Setup Data/Foo.Codeunit.al"
 
 
 def _gh_double(comments, *, merge_base="a" * 40):
@@ -218,6 +165,50 @@ class TestCollectCodereviewEntry:
 
 
 class TestGroupExpectedByCommit:
+    def _files(self, groups):
+        return [c.file for _, rcs in groups for c in rcs]
+
+    def test_reviewer_filter_keeps_only_that_author(self):
+        comments = [
+            _comment(1, "src/A.al", login="wael"),
+            _comment(2, "src/B.al", login="bot"),
+        ]
+        groups = group_expected_by_commit(comments, reviewer="wael", reacted=False, fallback_commit="h" * 40)
+        assert self._files(groups) == ["src/A.al"]
+
+    def test_no_filter_keeps_all_placeable(self):
+        comments = [_comment(1, "src/A.al"), _comment(2, "src/B.al")]
+        groups = group_expected_by_commit(comments, reviewer=None, reacted=False, fallback_commit="h" * 40)
+        assert self._files(groups) == ["src/A.al", "src/B.al"]
+
+    def test_reacted_keeps_positive_drops_thumbs_down(self):
+        comments = [_comment(1, "src/Good.al"), _comment(2, "src/Bad.al")]
+        reactions = {1: [{"content": "+1"}], 2: [{"content": "-1"}]}
+        groups = group_expected_by_commit(comments, reviewer=None, reacted=True, fallback_commit="h" * 40, reactions_by_id=reactions)
+        assert self._files(groups) == ["src/Good.al"]
+
+    def test_reviewer_and_reacted_compose(self):
+        comments = [
+            _comment(1, "src/A.al", login="bot"),
+            _comment(2, "src/B.al", login="bot"),
+            _comment(3, "src/C.al", login="human"),
+        ]
+        reactions = {1: [{"content": "+1"}], 2: [], 3: [{"content": "+1"}]}
+        groups = group_expected_by_commit(comments, reviewer="bot", reacted=True, fallback_commit="h" * 40, reactions_by_id=reactions)
+        assert self._files(groups) == ["src/A.al"]
+
+    def test_multiline_span_sets_start_and_end(self):
+        comments = [_comment(1, "src/A.al", line=20, start_line=15)]
+        groups = group_expected_by_commit(comments, reviewer=None, reacted=False, fallback_commit="h" * 40)
+        comment = groups[0][1][0]
+        assert comment.line_start == 15
+        assert comment.line_end == 20
+
+    def test_path_with_spaces_is_accepted(self):
+        comments = [_comment(1, "src/W1/1.Setup Data/Foo.Codeunit.al")]
+        groups = group_expected_by_commit(comments, reviewer=None, reacted=False, fallback_commit="h" * 40)
+        assert groups[0][1][0].file == "src/W1/1.Setup Data/Foo.Codeunit.al"
+
     def test_groups_by_original_commit_in_first_appearance_order(self):
         comments = [
             _comment(1, "src/A.al", orig_commit="d" * 40),
@@ -247,7 +238,8 @@ class TestGroupExpectedByCommit:
         comments = [
             _comment(1, "src/Reply.al", reply=99),
             _comment(2, "src/Left.al", side="LEFT"),
-            _comment(3, "src/Ok.al", orig_commit="d" * 40),
+            _comment(3, "src/NoLine.al", line=None),
+            _comment(4, "src/Ok.al", orig_commit="d" * 40),
         ]
         groups = group_expected_by_commit(comments, reviewer=None, reacted=False, fallback_commit="h" * 40)
         assert [commit for commit, _ in groups] == ["d" * 40]
