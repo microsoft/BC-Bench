@@ -31,17 +31,13 @@ def detect(generated_al: str, detector: Detector) -> DetectorResult:
 
     matched: list[str] = []
     missing: list[str] = []
-    forbidden_hits: list[str] = []
-
     for pattern in detector.must_match:
         if _matches(pattern, generated_al):
             matched.append(pattern)
         else:
             missing.append(pattern)
 
-    for pattern in detector.must_not_match:
-        if _matches(pattern, generated_al):
-            forbidden_hits.append(pattern)
+    forbidden_hits = [pattern for pattern in detector.must_not_match if _matches(pattern, generated_al)]
 
     return DetectorResult(
         realized=not missing and not forbidden_hits,

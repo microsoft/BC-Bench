@@ -31,4 +31,3 @@ These files are vendored verbatim from [microsoft/BCQuality](https://github.com/
 | `secrets-isolated-storage.bad.al` | `community/knowledge/security/secrets-isolated-storage.bad.al` |
 | `secrets-isolated-storage.good.al` | `community/knowledge/security/secrets-isolated-storage.good.al` |
 | `secrets-isolated-storage.md` | `community/knowledge/security/secrets-isolated-storage.md` |
-

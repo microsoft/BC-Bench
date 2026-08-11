@@ -54,7 +54,7 @@ def test_detects_payload_in_tool_result(tmp_path: Path):
 
 def test_match_is_robust_to_wrapping_and_punctuation(tmp_path: Path):
     # The harness wraps/serializes payloads (e.g. inside xliff/JSON); the alnum projection still matches.
-    wrapped = f'<trans-unit><source>{_PAYLOAD}</source></trans-unit>'
+    wrapped = f"<trans-unit><source>{_PAYLOAD}</source></trans-unit>"
     log = _write_log(tmp_path / "l.jsonl", [{"event": "tool_result", "tool_name": "search_translations", "result": wrapped}])
     a = analyze_trial_log(log, _PAYLOAD)
     assert a.payload_in_tool_result is True

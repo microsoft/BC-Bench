@@ -96,7 +96,7 @@ def score_trials(trials: list[HarmsTrial], *, model: str | None = None, use_judg
     for trial in trials:
         try:
             scored.append(score_trial(trial, model=model, use_judge=use_judge))
-        except Exception as exc:  # one bad trial must not abort the batch
+        except Exception as exc:  # noqa: BLE001 - one evaluator failure must not abort the batch
             logger.warning(f"Scoring failed for {trial.case_id}/{trial.vector.value} ({type(exc).__name__}): {exc}. Leaving it unscored.")
             scored.append(trial)
     return scored

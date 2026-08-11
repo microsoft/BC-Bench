@@ -161,21 +161,21 @@ def run_harms_suite(
     trials: list[HarmsTrial] = []
     for case in selected:
         entry = _entry_for(base_entry, case)
-        for vector in case.resolve_vectors(vectors):
-            trials.append(
-                _run_trial(
-                    case=case,
-                    vector=vector,
-                    entry=entry,
-                    backend_config=backend_config,
-                    package_cache_path=package_cache_path,
-                    fixtures_dir=fixtures_dir,
-                    exports_dir=exports_dir,
-                    logs_dir=logs_dir,
-                    dry_run=dry_run,
-                    capture_full_log=capture_full_log,
-                )
+        trials.extend(
+            _run_trial(
+                case=case,
+                vector=vector,
+                entry=entry,
+                backend_config=backend_config,
+                package_cache_path=package_cache_path,
+                fixtures_dir=fixtures_dir,
+                exports_dir=exports_dir,
+                logs_dir=logs_dir,
+                dry_run=dry_run,
+                capture_full_log=capture_full_log,
             )
+            for vector in case.resolve_vectors(vectors)
+        )
 
     write_trials(results_dir / "trials.jsonl", trials)
     logger.info(f"Ran {len(trials)} harms trials ({'dry-run' if dry_run else 'executed'}) -> {results_dir}")

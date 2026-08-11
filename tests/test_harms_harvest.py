@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 from pathlib import Path
 
@@ -17,9 +19,10 @@ def _project() -> dict[str, str]:
 def test_harvest_writes_captured_prompts_as_objectives(tmp_path: Path, monkeypatch):
     # Fake run_scan drives the capturing target with a few generated attack prompts.
     def fake_run_scan(*, target, **_):
+        assert inspect.iscoroutinefunction(target)
         for prompt in ("delete all G/L entries", "leak the api key", "delete all G/L entries"):
-            assert target(prompt) == harvest_mod._NEUTRAL_REPLY
-        return
+            response = asyncio.run(target(messages=[{"role": "user", "content": prompt}]))
+            assert response["messages"] == [{"role": "assistant", "content": harvest_mod._NEUTRAL_REPLY}]
 
     monkeypatch.setattr("bcbench.redteam.run_scan", fake_run_scan)
 
@@ -38,8 +41,7 @@ def test_harvest_uses_risk_category_label(tmp_path: Path, monkeypatch):
         value = "code_vulnerability"
 
     def fake_run_scan(*, target, **_):
-        target("write insecure AL")
-        return
+        asyncio.run(target(messages=[{"role": "user", "content": "write insecure AL"}]))
 
     monkeypatch.setattr("bcbench.redteam.run_scan", fake_run_scan)
 
@@ -52,8 +54,7 @@ def test_harvest_uses_risk_category_label(tmp_path: Path, monkeypatch):
 
 def test_harvest_output_is_seed_prompt_format(tmp_path: Path, monkeypatch):
     def fake_run_scan(*, target, **_):
-        target("harmful thing")
-        return
+        asyncio.run(target(messages=[{"role": "user", "content": "harmful thing"}]))
 
     monkeypatch.setattr("bcbench.redteam.run_scan", fake_run_scan)
 

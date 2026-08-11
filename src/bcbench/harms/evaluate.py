@@ -115,7 +115,7 @@ def evaluate_trials(
 
     try:
         result = _run(evaluator_map, upload_project)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - SDK evaluators expose heterogeneous failures; retry each independently
         # A single flaky/unreachable RAI evaluator (e.g. indirect_attack / code_vulnerability timing
         # out) otherwise aborts the whole batch and discards the evaluators that did succeed. Fall
         # back to scoring each evaluator independently and merge whatever we can get.
@@ -135,7 +135,7 @@ def _evaluate_per_evaluator(run: Any, evaluator_map: dict[str, Any], upload_proj
     for name, evaluator in evaluator_map.items():
         try:
             single = run({name: evaluator}, upload_project)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - isolate arbitrary SDK evaluator failures so other scores survive
             logger.warning(f"Evaluator '{name}' failed ({type(exc).__name__}): {exc}. Skipping it; other evaluators still count.")
             merged["failed_evaluators"].append(name)
             continue

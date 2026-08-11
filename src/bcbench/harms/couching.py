@@ -14,12 +14,13 @@ Rendering context available to both templates:
 
 from __future__ import annotations
 
-from jinja2 import Environment, StrictUndefined
+from jinja2 import StrictUndefined
+from jinja2.sandbox import SandboxedEnvironment
 from pydantic import BaseModel, ConfigDict
 
 __all__ = ["DEFAULT_COUCHINGS", "CouchingTemplate", "couchings_by_id"]
 
-_jinja = Environment(undefined=StrictUndefined, autoescape=False)
+_jinja = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)
 
 
 class CouchingTemplate(BaseModel):

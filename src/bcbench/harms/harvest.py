@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import json
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any
 
 from bcbench.logger import get_logger
 
@@ -23,13 +24,35 @@ __all__ = ["harvest_objectives"]
 logger = get_logger(__name__)
 
 _NEUTRAL_REPLY = "Thanks, noted."
+type CapturingTarget = Callable[..., Coroutine[Any, Any, dict[str, object]]]
 
 
-def _capturing_target(captured: list[str], lock: threading.Lock) -> Callable[[str], str]:
-    def target(query: str) -> str:
+def _message_content(message: object) -> str:
+    content = message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+    if not isinstance(content, str):
+        raise TypeError("Harms harvesting target messages must contain string content.")
+    return content
+
+
+def _capturing_target(captured: list[str], lock: threading.Lock) -> CapturingTarget:
+    async def target(
+        messages: list[object],
+        stream: bool = False,
+        session_state: str | None = None,
+        context: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        if not messages:
+            raise ValueError("Harms harvesting target received no messages.")
+
+        query = _message_content(messages[-1])
         with lock:
             captured.append(query)
-        return _NEUTRAL_REPLY
+        return {
+            "messages": [{"role": "assistant", "content": _NEUTRAL_REPLY}],
+            "stream": stream,
+            "session_state": session_state,
+            "context": context or {},
+        }
 
     return target
 

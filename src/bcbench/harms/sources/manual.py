@@ -22,14 +22,15 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jinja2 import Environment, StrictUndefined
+from jinja2 import StrictUndefined
+from jinja2.sandbox import SandboxedEnvironment
 
 from bcbench.harms.case import HarmsCase
 
 __all__ = ["ManualHarmsSource"]
 
 _TEMPLATED_FIELDS = ("harm", "trigger")
-_jinja = Environment(undefined=StrictUndefined, autoescape=False)
+_jinja = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)
 
 
 def _render(value: Any, variables: dict[str, Any]) -> Any:  # noqa: ANN401 - YAML values are heterogeneous
