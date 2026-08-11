@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
+    "AgentHarness",
     "AgentMetrics",
-    "AgentType",
     "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
@@ -160,28 +160,64 @@ class PluginConfig(BaseModel):
         return self
 
 
-class AgentType(StrEnum):
-    COPILOT = "copilot"
-    CLAUDE = "claude"
+class AgentHarness(StrEnum):
+    """Agents that can be evaluated, and the metrics each of them is able to report."""
+
+    COPILOT = "GitHub Copilot"
+    CLAUDE = "Claude Code"
+    BCAL = "BCal"
+    MOCK = "mock-agent"
+
+    @property
+    def expected_metrics(self) -> frozenset[str]:
+        """Metrics this agent should always report.
+
+        Only these are warned about when missing, so agents that never collect a metric don't emit a warning for every single instance of a run.
+        """
+
+        match self:
+            case AgentHarness.COPILOT:
+                expected = AgentMetrics(
+                    execution_time=None,
+                    turn_count=None,
+                    prompt_tokens=None,
+                    completion_tokens=None,
+                    tool_usage=None,
+                )
+            case AgentHarness.CLAUDE | AgentHarness.MOCK:
+                expected = AgentMetrics(
+                    execution_time=None,
+                    llm_duration=None,
+                    turn_count=None,
+                    prompt_tokens=None,
+                    completion_tokens=None,
+                    tool_usage=None,
+                )
+            case AgentHarness.BCAL:
+                expected = AgentMetrics(execution_time=None)
+            case _:
+                raise ValueError(f"Unknown AgentHarness: {self}")
+
+        return frozenset(expected.model_fields_set)
 
     @property
     def instruction_filename(self) -> str:
         match self:
-            case AgentType.COPILOT:
+            case AgentHarness.COPILOT:
                 return "copilot-instructions.md"
-            case AgentType.CLAUDE:
+            case AgentHarness.CLAUDE:
                 return "CLAUDE.md"
             case _:
-                raise ValueError(f"Unknown AgentType: {self}")
+                raise ValueError(f"{self.value} does not support repository instructions")
 
     def get_target_dir(self, repo_path: Path) -> Path:
         match self:
-            case AgentType.COPILOT:
+            case AgentHarness.COPILOT:
                 return repo_path / ".github"
-            case AgentType.CLAUDE:
+            case AgentHarness.CLAUDE:
                 return repo_path / ".claude"
             case _:
-                raise ValueError(f"Unknown AgentType: {self}")
+                raise ValueError(f"{self.value} does not support repository setup")
 
 
 class EvaluationCategory(StrEnum):
@@ -426,7 +462,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     result_dir: Path
 
     # Agent metadata
-    agent_name: str
+    agent_name: AgentHarness
     model: str
 
     # Evaluation category
