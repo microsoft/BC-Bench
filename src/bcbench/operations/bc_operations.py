@@ -14,6 +14,7 @@ from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
 from bcbench.logger import get_logger
 from bcbench.operations.filesystem_operations import remove_tree
+from bcbench.operations.setup_operations import bootstrap_app_json
 from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
@@ -369,26 +370,15 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
     and have not been validated locally; the wrapping and comparison logic are unit-tested.
     """
     import json
-    from uuid import uuid4
 
     object_id = 50100 if suffix == "generated" else 50101
     app_dir = work_root / f".bcbench-query-{suffix}"
     if app_dir.exists():
         remove_tree(app_dir)
-    app_dir.mkdir(parents=True, exist_ok=True)
 
-    app_manifest = {
-        "id": str(uuid4()),
-        "name": f"BC-Bench Query {suffix}",
-        "publisher": "BC-Bench",
-        "version": "1.0.0.0",
-        "application": f"{version.split('.')[0]}.0.0.0",
-        "platform": f"{version.split('.')[0]}.0.0.0",
-        "idRanges": [{"from": object_id, "to": object_id}],
-        "runtime": "13.0",
-        "target": "OnPrem",
-    }
-    (app_dir / "app.json").write_text(json.dumps(app_manifest, indent=2), encoding="utf-8")
+    app_name = f"BC-Bench Query {suffix}"
+    app_publisher = "BC-Bench"
+    bootstrap_app_json(app_dir, app_name, version, id_range=(object_id, object_id), publisher=app_publisher)
     (app_dir / "query.al").write_text(wrap_query_as_api(query_text, object_id), encoding="utf-8")
     # Symbols are downloaded into an explicit .alpackages folder by Invoke-AppBuildAndPublish (below).
 
@@ -400,8 +390,8 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
         username=_escape_ps_string(container.username),
         password=_escape_ps_string(container.password),
         app_dir=_escape_ps_string(str(app_dir)),
-        app_name=_escape_ps_string(app_manifest["name"]),
-        app_publisher=_escape_ps_string(app_manifest["publisher"]),
+        app_name=_escape_ps_string(app_name),
+        app_publisher=_escape_ps_string(app_publisher),
         publisher=_QUERY_API_PUBLISHER,
         group=_QUERY_API_GROUP,
         version=_QUERY_API_VERSION,

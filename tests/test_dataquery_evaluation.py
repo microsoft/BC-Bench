@@ -1,8 +1,11 @@
+import json
+
 import pytest
 
 from bcbench.evaluate.dataquery import result_sets_match
 from bcbench.exceptions import BuildError
 from bcbench.operations import bc_operations, wrap_query_as_api
+from bcbench.types import ContainerConfig
 
 
 class TestResultSetsMatch:
@@ -120,6 +123,29 @@ class TestWrapQueryAsApi:
     def test_no_query_declaration_raises_builderror(self):
         with pytest.raises(BuildError):
             wrap_query_as_api("codeunit 50100 NotAQuery { }", 50100)
+
+
+def test_execute_al_query_bootstraps_app_manifest(tmp_path, monkeypatch):
+    app_dir = tmp_path / ".bcbench-query-generated"
+
+    def write_empty_result(*args, **kwargs):
+        (app_dir / "result.json").write_text("[]", encoding="utf-8")
+
+    monkeypatch.setattr(bc_operations.subprocess, "run", write_empty_result)
+
+    rows = bc_operations.execute_al_query(
+        'query 50100 MyQuery { elements { dataitem(Customer; Customer) { column(No; "No.") { } } } }',
+        ContainerConfig(name="bcserver", username="admin", password="password"),
+        "26.0.12345.0",
+        tmp_path,
+        "generated",
+    )
+
+    manifest = json.loads((app_dir / "app.json").read_text(encoding="utf-8"))
+    assert rows == []
+    assert manifest["name"] == "BC-Bench Query generated"
+    assert manifest["idRanges"] == [{"from": 50100, "to": 50100}]
+    assert manifest["runtime"] == "15.0"
 
 
 class TestQueryRunTemplate:
