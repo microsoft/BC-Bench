@@ -7,7 +7,7 @@ name = "bcbench"
 version = "0.8.0"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 license = {text = "MIT"}
 authors = [
     {name = "Microsoft Corporation"}
@@ -30,6 +30,11 @@ dependencies = [
 
 [project.scripts]
 bcbench = "bcbench.cli:app"
+
+[[tool.uv.index]]
+name = "microsoft-cfs"
+url = "https://packagefeedproxy.microsoft.io/pypi/simple"
+default = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -116,4 +121,10 @@ dev = [
     "ruff>=0.16.0",
     "pre-commit>=4.3.0",
     "ty>=0.0.33",
+]
+# `bcbench redteam` only, and not in default-groups: azure-ai-evaluation[redteam] pulls in ~76
+# packages (pyrit, transformers, datasets, ...) that no other command needs.
+redteam = [
+    "azure-ai-evaluation[redteam]>=1.18.2",
+    "azure-identity>=1.25.3",
 ]

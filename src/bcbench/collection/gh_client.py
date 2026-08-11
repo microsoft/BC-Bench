@@ -58,6 +58,30 @@ class GHClient:
         )
         return result.stdout
 
+    def get_compare_diff(self, base: str, head: str) -> str:
+        """Return the raw unified diff of the three-dot range `base...head`.
+
+        This is what GitHub renders for a review comment anchored at `head`: the
+        cumulative PR diff as of that commit (computed against merge-base(base, head)).
+        Used to reconstruct the diff an earlier reviewed commit was reviewed against,
+        so per-commit code-review entries score the agent on the same patch the
+        reviewer saw. Both arguments must be full 40-character SHAs.
+        """
+        result = subprocess.run(
+            [
+                "gh",
+                "api",
+                f"/repos/{self.repo}/compare/{base}...{head}",
+                "-H",
+                "Accept: application/vnd.github.diff",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        return result.stdout
+
     def get_merge_base(self, base: str, head: str) -> str:
         """Return the merge-base SHA of `base` and `head`.
 

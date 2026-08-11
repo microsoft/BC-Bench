@@ -5,7 +5,7 @@ from typing import Annotated
 
 import typer
 
-from bcbench.collection import ScreeningResult, collect_codereview_entry, collect_gh_entry, screen_gh_candidate
+from bcbench.collection import ScreeningResult, collect_codereview_entries, collect_gh_entry, screen_gh_candidate
 from bcbench.config import get_config
 from bcbench.exceptions import CollectionError
 
@@ -58,10 +58,12 @@ def collect_codereview(
     area: Annotated[str | None, typer.Option(help="Value to record in metadata.area")] = None,
 ) -> None:
     """
-    Build a code-review dataset entry from a real GitHub pull request.
+    Build code-review dataset entries from a real GitHub pull request.
 
-    The PR diff becomes the review patch; its inline comments become the expected
-    findings. Choose which comments count as expected with --reviewer or --reacted
+    The PR is split into one entry per reviewed commit: each inline comment is
+    anchored to the commit it was written on and that commit's diff, so the expected
+    findings match the patch the agent is scored against. A single-pass PR yields one
+    entry. Choose which comments count as expected with --reviewer or --reacted
     (default: all top-level inline comments).
 
     Example usage:
@@ -74,7 +76,7 @@ def collect_codereview(
     bcbench collect codereview 9315 --reacted --environment-setup-version 27.0
     """
     try:
-        entry = collect_codereview_entry(
+        entries = collect_codereview_entries(
             pr_number=pr_number,
             output=output,
             environment_setup_version=environment_setup_version,
@@ -86,7 +88,9 @@ def collect_codereview(
     except CollectionError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"Saved {entry.instance_id} with {len(entry.expected_comments)} expected comment(s) to {output}")
+    total_comments = sum(len(entry.expected_comments) for entry in entries)
+    plural = "y" if len(entries) == 1 else "ies"
+    typer.echo(f"Saved {len(entries)} entr{plural} with {total_comments} expected comment(s) to {output}")
 
 
 @collect_app.command("screen")

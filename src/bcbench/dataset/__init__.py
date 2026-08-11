@@ -10,6 +10,7 @@ from bcbench.dataset.coverage import (
     resolve_bcquality_root,
 )
 from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, NL2ALEntry, RepoGroundedEntry, TestEntry, TestGenEntry
+from bcbench.dataset.extensibility_request import ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel
 
 __all__ = [
     "ArticleCoverage",
@@ -17,6 +18,9 @@ __all__ = [
     "BugFixEntry",
     "CodeReviewEntry",
     "CoverageReport",
+    "ExtRequestImplementEntry",
+    "ExtRequestTriageEntry",
+    "ManagedLabel",
     "NL2ALEntry",
     "RepoGroundedEntry",
     "ReviewComment",

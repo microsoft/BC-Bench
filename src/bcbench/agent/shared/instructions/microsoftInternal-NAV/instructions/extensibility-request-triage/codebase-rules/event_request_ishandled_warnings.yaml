@@ -1,0 +1,174 @@
+event_request_ishandled_warnings:
+  description: "Warning rules specific to event-request/ishandled subtype"
+
+  rules:
+    - id: ishandled_in_loops
+      applies_to: ["event-request/ishandled"]
+      severity: "warning"
+      description: "IsHandled event placement inside loops"
+      action: "suggest_alternative"
+      warning_message: "IsHandled events inside loops can cause severe performance degradation as the bypass logic is evaluated on every iteration."
+      guidance: |
+        Instead of placing an IsHandled event inside the loop, consider adding a regular event **before the loop** after all filtering is complete.
+
+        **Recommended approach:**
+        1. Apply all necessary filters to the record (e.g., `DetailedVendorLedgEntry.SetRange(...)`)
+        2. Add a regular IntegrationEvent AFTER filtering, before the loop starts
+        3. Subscribers can then modify the filtered set without bypassing critical code inside the loop
+
+        This approach:
+        - ✅ Avoids repeated IsHandled checks in the loop
+        - ✅ Allows extensions to modify filtering logic
+        - ✅ Maintains performance (event fires once, not per iteration)
+        - ✅ Achieves the same extensibility goal
+
+    - id: ishandled_unsafe_code_block
+      applies_to: ["event-request/ishandled"]
+      severity: "warning"
+      description: "IsHandled event with unsafe/critical code block"
+      action: "request_author_confirmation"
+      warning_message: "The code block that would be bypassed contains critical operations that may not be safe to skip. Please confirm you understand the risks before proceeding."
+      requires_confirmation: true
+      guidance: |
+        **Warning Rule:** When an IsHandled event is requested, the agent MUST analyze the code block that would be bypassed to identify unsafe or critical operations. If such operations are found, the agent must warn the author and ask for explicit confirmation before proceeding — but must NOT auto-reject the request.
+
+        **What Makes a Code Block Risky to Bypass (triggers a warning):**
+
+        1. **Database Operations Without Compensation**
+           - INSERT/MODIFY/DELETE operations that other code depends on
+           - Operations that maintain referential integrity
+           - Ledger entry creation or posting operations
+
+        2. **State Management Operations**
+           - Status field updates that control workflow
+           - Lock/unlock operations
+           - Commit statements that other operations depend on
+
+        3. **Critical Validation Logic**
+           - Security checks or permission validations
+           - Data integrity validations
+           - Business rule enforcements that prevent data corruption
+
+        ---
+
+        **Example 1 - RISKY: Bypassing Ledger Entry Creation**
+        Author requests: "Add IsHandled event to skip the G/L posting in PostSalesInvoice"
+        ```al
+        local procedure PostSalesInvoice(var SalesHeader: Record "Sales Header")
+        var
+            GenJnlLine: Record "Gen. Journal Line";
+        begin
+            // ⚠️ RISKY TO BYPASS - These operations maintain financial integrity
+            GenJnlLine.Init();
+            GenJnlLine."Document Type" := GenJnlLine."Document Type"::Invoice;
+            GenJnlLine."Account Type" := GenJnlLine."Account Type"::Customer;
+            GenJnlLine.Amount := SalesHeader."Amount Including VAT";
+            GenJnlPostLine.RunWithCheck(GenJnlLine);  // Creates G/L entries
+
+            SalesHeader.Status := SalesHeader.Status::Posted;
+            SalesHeader.Modify();
+        end;
+        ```
+        **Why Risky:** Skipping this block would:
+        - Leave financial records incomplete (invoice without G/L entries)
+        - Cause imbalanced ledgers
+        - Break audit trails
+        - Potentially mark document as posted without actual posting
+
+        ---
+        **Example 2 - RISKY: Bypassing Referential Integrity Operations**
+        Author requests: "Add IsHandled event to skip dimension validation in PostPurchaseLine"
+
+        ```al
+        local procedure PostPurchaseLine(var PurchLine: Record "Purchase Line")
+        begin
+            // ⚠️ RISKY TO BYPASS - Maintains referential integrity
+            DimensionMgt.CheckDimValuePosting(
+                TableArray, NoArray,
+                PurchLine."Dimension Set ID");
+
+            // Creates dimension set entries linked to the posted document
+            PostedDimSetID := DimensionMgt.CreateDimSetFromJobTaskDim(
+                PurchLine."Job No.",
+                PurchLine."Job Task No.",
+                PurchLine."Dimension Set ID");
+
+            PurchInvLine."Dimension Set ID" := PostedDimSetID;
+            PurchInvLine.Insert();
+        end;
+        ```
+        **Why Risky:** Skipping this block would:
+        - Allow invalid dimension combinations to be posted
+        - Create posted documents without proper dimension linkage
+        - Break dimension reporting and analysis
+        ---
+
+        **Agent Analysis Checklist:**
+
+        | Check | Question | If YES |
+        |-------|----------|--------|
+        | Database writes | Does the block INSERT/MODIFY/DELETE records that other code depends on? | ⚠️ Warn author |
+        | Ledger operations | Does it create ledger entries or posting operations? | ⚠️ Warn author |
+        | Status changes | Does it update status fields that control workflow? | ⚠️ Review carefully |
+        | External calls | Does it call external services or APIs? | ⚠️ Review carefully |
+        | Validation | Does it perform security or integrity validations? | ⚠️ Warn author |
+        | Number series | Does it consume document numbers? | ⚠️ Warn author |
+        | Only assignments | Does it only assign/calculate values without side effects? | ✅ Safe |
+
+        ---
+        **Agent Response Template (when risky code is detected):**
+        ```
+        ⚠️ **Warning: The code block that would be bypassed contains potentially critical operations.**
+
+        Bypassing this block may have unintended consequences:
+        [list specific risky operations found in the block]
+
+        **Please confirm:** Are you aware of these risks and do you still want to proceed with adding this IsHandled event?
+
+        If yes, please reply with a confirmation and explain how your extension will handle the bypassed logic correctly.
+        ```
+
+        ---
+        **Alternative Suggestions to Mention:**
+        1. **Use regular event instead** - Allows extensions to ADD logic without BYPASSING
+        2. **Add event at different location** - Before or after the critical block
+        3. **Request parameter access** - Add parameters to existing events to modify behavior
+        4. **Suggest code refactoring** - Extract safe portions into separate procedures
+
+    - id: ishandled_large_code_block_extraction
+      applies_to: ["event-request/ishandled"]
+      severity: "warning"
+      description: "Large code blocks with IsHandled should be extracted to separate procedures"
+      action: "suggest_alternative"
+      rule: "When adding an IsHandled event that surrounds a larger block of code, consider extracting that code into a separate procedure and adding an OnBefore[ProcedureName] event with IsHandled."
+      guidance: |
+        **Recommended Practice:** When an IsHandled event would wrap a significant block of code (typically 5+ lines with related logic), the agent should evaluate whether extracting that code into a separate procedure would be a better approach.
+
+        **Rationale:**
+        - Improves code organization and readability
+        - Creates a clear, named operation that can be bypassed
+        - Makes the code's intent more explicit
+        - Easier for subscribers to understand what they're bypassing
+        - Better maintainability and testability
+        - Follows single responsibility principle
+
+        **Agent Analysis Required:**
+        Before suggesting extraction, the agent MUST verify:
+        1. **Code Cohesion:** Are the values/variables in the code block logically connected?
+        2. **Single Purpose:** Does the code block perform a single, identifiable operation?
+        3. **Meaningful Name:** Can a descriptive procedure name be assigned that clearly describes the operation?
+        4. **Parameter Set:** Can the required inputs/outputs be clearly defined as procedure parameters?
+
+        **When NOT to Extract:**
+        - Code block is very small (1-3 lines)
+        - Variables in the block are not logically related
+        - No meaningful procedure name can be derived
+        - Extraction would require passing too many unrelated parameters
+
+        **Decision Criteria for Agent:**
+        | Factor | Extract | Keep Inline |
+        |--------|---------|-------------|
+        | Lines of code | 5+ lines | 1-4 lines |
+        | Variables related | Yes, single purpose | No, mixed concerns |
+        | Meaningful name possible | Yes | No clear name |
+        | Parameter count | Reasonable (1-5) | Too many (6+) |

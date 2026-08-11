@@ -98,33 +98,41 @@ def _format_subprocess_output(exc: Exception, limit: int = 2000) -> str:
     return "".join(parts)
 
 
-def judge_comment_matches(
-    matched_pairs: list[tuple[ReviewComment, ReviewComment]],
+def judge_expected_and_ignored(
+    expected_pairs: list[tuple[ReviewComment, ReviewComment]],
+    ignored_pairs: list[tuple[ReviewComment, ReviewComment]],
     work_dir: Path,
     model: str = _config.judge.code_review_model,
-) -> list[tuple[ReviewComment, ReviewComment]]:
-    """Validate structurally matched comment pairs using an LLM semantic judge.
+) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
+    """Judge the expected and ignored structural buckets in a single semantic-judge pass.
 
-    Defaults to a fixed judge model (``_config.judge.code_review_model``) independent of the experiment
-    model, so scores reflect AL review quality rather than a model judging itself.
+    Runs ONE judge subprocess over the concatenation of both buckets, then splits the confirmed
+    pairs apart. A single pass keeps scoring to one LLM call per evaluation (less run-to-run
+    nondeterminism, one calibration target) and cannot reuse a stale verdict file, since a second
+    pass never runs. Defaults to a fixed judge model (``_config.judge.code_review_model``)
+    independent of the experiment model, so scores reflect AL review quality rather than a model
+    judging itself.
 
-    Args:
-        matched_pairs: Pairs from structural matching (expected, generated).
-        work_dir: Directory to write judge results to.
-        model: Judge model to use; defaults to the fixed LTS model.
+    Expected takes precedence: a generated comment the judge confirms as an expected match is
+    dropped from the ignored bucket, so a finding is never both credited as expected and
+    neutralized as ignored. Because ignored pairs are matched against every generated comment
+    (not only the ones left over after expected structural matching), a finding whose expected
+    pair the judge rejects can still be neutralized as ignored instead of counting as a false
+    positive.
 
     Returns:
-        Filtered list of pairs where the judge confirmed a semantic match.
+        ``(validated_expected, validated_ignored)`` — the judge-confirmed subset of each bucket.
 
     Raises:
-        JudgeError: If the judge cannot run or produce a usable verdict. Failing
-            loudly avoids silently inflating scores when the judge is broken.
+        LLMJudgeError: If the judge cannot run or produce a usable verdict. Failing loudly avoids
+            silently inflating scores when the judge is broken.
     """
-    if not matched_pairs:
-        return []
-
-    verdicts = judge_verdicts(matched_pairs, work_dir, model=model)
-    return [pair for pair, is_match in zip(matched_pairs, verdicts, strict=True) if is_match]
+    split = len(expected_pairs)
+    verdicts = judge_verdicts(expected_pairs + ignored_pairs, work_dir, model=model)
+    validated_expected = [pair for pair, is_match in zip(expected_pairs, verdicts[:split], strict=True) if is_match]
+    expected_generated_ids = {id(generated) for _, generated in validated_expected}
+    validated_ignored = [pair for pair, is_match in zip(ignored_pairs, verdicts[split:], strict=True) if is_match and id(pair[1]) not in expected_generated_ids]
+    return validated_expected, validated_ignored
 
 
 def judge_verdicts(

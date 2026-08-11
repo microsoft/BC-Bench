@@ -141,12 +141,12 @@ jobs:
           $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
           Write-Output "::add-mask::$adoToken"
 
-          uv python install 3.12
-          uv venv .bcal-capi-venv --python 3.12
+          # Match the bridge runtime to BC-Bench so BCal can safely inherit its Python environment.
+          uv venv .bcal-capi-venv --python .\.venv\Scripts\python.exe
 
           # Same transient ADO feed flakiness as the bcal install above; retry the package pull.
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.13" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
+            uv pip install --python .\.bcal-capi-venv\Scripts\python.exe "bc-eval[capi]==0.3.14" --index "https://anything:$($adoToken)@dynamicssmb2.pkgs.visualstudio.com/1fcb79e7-ab07-432a-a3c6-6cf5a88ba4a5/_packaging/BC_PythonFeed/pypi/simple/"
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -eq 3) { throw "bc-eval[capi] install failed after 3 attempts (exit code $LASTEXITCODE)." }
             Write-Output "::warning::bc-eval install attempt $attempt failed (exit $LASTEXITCODE); retrying in 20s"

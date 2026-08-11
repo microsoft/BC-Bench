@@ -28,7 +28,7 @@ jobs:
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
         with:
-          all-extras: true
+          all-groups: true
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1

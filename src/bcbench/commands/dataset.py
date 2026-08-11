@@ -109,7 +109,7 @@ def view_entry(
 
     if show_patch and isinstance(entry, RepoGroundedEntry):
         console.print("\n[bold cyan]Patch:[/bold cyan]")
-        console.print(Panel(entry.patch, border_style="magenta"))
+        console.print(Panel(entry.patch or "[dim]Empty[/dim]", border_style="magenta"))
 
     # Display category-specific fields
     if isinstance(entry, _BugFixTestGenBase):

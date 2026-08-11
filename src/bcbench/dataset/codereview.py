@@ -85,6 +85,12 @@ class CodeReviewEntry(RepoGroundedEntry):
     """Dataset entry for the code-review category."""
 
     expected_comments: list[ReviewComment] = Field(default_factory=list)
+    # Comments that are acceptable but not required. If the agent raises a matching
+    # comment it is neither rewarded (recall) nor penalized (precision) -- it is dropped
+    # from scoring. Use for legitimate-but-debatable or out-of-scope findings that should
+    # not force recall yet must not count as false positives. Expected comments take
+    # precedence, so a generated comment is only ever neutralized after expected matching.
+    ignored_comments: list[ReviewComment] = Field(default_factory=list)
 
     def get_task(self) -> str:
         return self.patch
