@@ -4,12 +4,12 @@ from pathlib import Path
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.evaluate.codereview_judge import judge_comment_matches_split
+from bcbench.evaluate.codereview_judge import judge_expected_and_ignored
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, fetch_commit_if_missing, setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult, match_comments, unmatched_generated
+from bcbench.results.codereview import CodeReviewResult, match_comments
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -68,18 +68,22 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             logger.warning(f"Invalid review output for {context.entry.instance_id}")
             result = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
         else:
-            structural_matches = match_comments(
+            expected_structural = match_comments(
                 context.entry.expected_comments,
                 generated_comments,
             )
-            # Ignored comments are neutral: match them against the generated comments left over
-            # after expected structural matching (expected takes precedence), then judge both
-            # buckets in a SINGLE pass. One judge call per evaluation avoids a second LLM round
+            # Ignored comments are neutral. Match them against ALL generated comments (not only the
+            # ones left over after expected structural matching) so a finding whose expected pair
+            # the judge later rejects can still be neutralized as ignored rather than counting as a
+            # false positive. Both buckets are judged in a SINGLE pass with expected taking
+            # precedence on any overlap: one judge call per evaluation avoids a second LLM round
             # (less nondeterminism, one calibration target) and cannot reuse a stale verdict file.
-            leftover = unmatched_generated(generated_comments, structural_matches)
-            ignored_structural = match_comments(context.entry.ignored_comments, leftover)
-            validated_matches, ignored_matches = judge_comment_matches_split(
-                structural_matches,
+            ignored_structural = match_comments(
+                context.entry.ignored_comments,
+                generated_comments,
+            )
+            validated_matches, ignored_matches = judge_expected_and_ignored(
+                expected_structural,
                 ignored_structural,
                 work_dir=context.repo_path,
             )
@@ -96,7 +100,7 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
         logger.info(
             f"Code review metrics: matched={result.matched_comment_count}, "
             f"incorrect={result.incorrect_comment_count}, missed={result.missed_comment_count}, "
-            f"ignored={result.ignored_comment_count}, "
+            f"ignored={result.ignored_matched_comment_count}, "
             f"precision={result.precision:.3f}, recall={result.recall:.3f}, f1={result.f1:.3f}"
         )
 
