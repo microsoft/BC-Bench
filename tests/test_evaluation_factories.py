@@ -1,6 +1,6 @@
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentName
+from bcbench.types import AgentHarness
 from tests.conftest import create_dataset_entry, create_evaluation_context
 
 
@@ -13,7 +13,7 @@ class TestEvaluationResultFactories:
         assert result.resolved is True
         assert result.build is True
         assert result.model == "test-model"
-        assert result.agent_name == AgentName.COPILOT
+        assert result.agent_name == AgentHarness.COPILOT
         assert result.error_message is None
 
     def test_create_build_failure_result_fills_all_fields_correctly(self, sample_evaluation_context):
@@ -25,7 +25,7 @@ class TestEvaluationResultFactories:
         assert result.resolved is False
         assert result.build is False
         assert result.model == "test-model"
-        assert result.agent_name == AgentName.COPILOT
+        assert result.agent_name == AgentHarness.COPILOT
         assert result.error_message == error_msg
 
     def test_create_test_failure_result_fills_all_fields_correctly(self, sample_evaluation_context):
@@ -36,7 +36,7 @@ class TestEvaluationResultFactories:
         assert result.resolved is False
         assert result.build is True
         assert result.model == "test-model"
-        assert result.agent_name == AgentName.COPILOT
+        assert result.agent_name == AgentHarness.COPILOT
         assert result.error_message == "Tests failed"
 
     def test_different_context_values_are_correctly_populated(self, tmp_path):
@@ -47,7 +47,7 @@ class TestEvaluationResultFactories:
         context = create_evaluation_context(
             tmp_path,
             entry=entry,
-            agent_name=AgentName.CLAUDE,
+            agent_name=AgentHarness.CLAUDE,
             model="different-model",
         )
 
@@ -56,7 +56,7 @@ class TestEvaluationResultFactories:
         assert result.instance_id == "microsoftInternal__NAV-456"
         assert result.project == "BaseApp"
         assert result.model == "different-model"
-        assert result.agent_name == AgentName.CLAUDE
+        assert result.agent_name == AgentHarness.CLAUDE
 
     def test_build_failure_with_patch_application_error_message(self, sample_evaluation_context):
         error_msg = "Failed to apply custom_fix.patch"

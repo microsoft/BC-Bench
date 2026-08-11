@@ -20,7 +20,7 @@ from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, AgentName, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -79,7 +79,7 @@ def create_dataset_entry(
 def create_evaluation_context[EntryT: BaseDatasetEntry](
     tmp_path: Path,
     entry: EntryT | None = None,
-    agent_name: AgentName = AgentName.COPILOT,
+    agent_name: AgentHarness = AgentHarness.COPILOT,
     model: str = "test-model",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
@@ -190,7 +190,7 @@ def create_codereview_entry(
 def create_codereview_result(
     instance_id: str = VALID_INSTANCE_ID,
     model: str = "gpt-4o",
-    agent_name: AgentName = AgentName.COPILOT,
+    agent_name: AgentHarness = AgentHarness.COPILOT,
     output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
     expected_comments: list[ReviewComment] | None = None,
     metrics: AgentMetrics | None = None,

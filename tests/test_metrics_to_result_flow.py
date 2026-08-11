@@ -4,14 +4,14 @@ import pytest
 
 from bcbench.agent.copilot.metrics import parse_metrics
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import AgentMetrics, AgentName
+from bcbench.types import AgentHarness, AgentMetrics
 from tests.conftest import create_evaluation_context
 
 
 class TestCopilotMetricsToResultFlow:
     @pytest.fixture
     def sample_context(self, tmp_path):
-        return create_evaluation_context(tmp_path, agent_name=AgentName.COPILOT, model="gpt-4o")
+        return create_evaluation_context(tmp_path, agent_name=AgentHarness.COPILOT, model="gpt-4o")
 
     def test_full_metrics_flow_to_success_result(self, sample_context):
         output_lines = [
@@ -184,7 +184,7 @@ class TestCopilotMetricsToResultFlow:
         assert result.instance_id == sample_context.entry.instance_id
         assert result.project == "Shopify"
         assert result.model == "gpt-4o"
-        assert result.agent_name == AgentName.COPILOT
+        assert result.agent_name == AgentHarness.COPILOT
         assert result.resolved is True
         assert result.build is True
         assert result.error_message is None

@@ -11,7 +11,7 @@ import pytest
 from bcbench.dataset import RepoGroundedEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
-from bcbench.types import AgentType
+from bcbench.types import AgentHarness
 
 
 def test_setup_agent_skills_path():
@@ -30,7 +30,7 @@ def test_setup_agent_skills():
         config = {"skills": {"enabled": True}}
 
         # Setup skills
-        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
         assert result is True
 
         # Verify
@@ -64,7 +64,7 @@ def test_nonexistent_skills():
 
         # Error comes from _get_source_instructions_path when the profile folder doesn't exist
         with pytest.raises(FileNotFoundError, match="not found"):
-            setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+            setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
 
 def test_overwrite_skill_folder_files():
@@ -96,7 +96,7 @@ def test_overwrite_skill_folder_files():
         extra_file.write_text("SHOULD BE REMOVED")
 
         # Run setup
-        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         # Assert overwrite happened
         assert target_file.read_text() == source_file.read_text()
@@ -113,7 +113,7 @@ def test_path_specific_skills_copied():
         config = {"skills": {"enabled": True}}
 
         # Setup skills
-        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         # Verify path-specific skills were copied
         target_skills_dir = repo_path / ".github" / "skills"
@@ -138,7 +138,7 @@ def test_path_specific_skills_removed_before_copy():
         old_file.write_text("OLD SKILL CONTENT")
 
         # Setup skills
-        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         # Verify old file was removed
         assert not old_file.exists(), "Old skill file should be removed"
@@ -156,7 +156,7 @@ def test_skills_disabled():
         entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": False}}
 
-        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         assert result is False
         assert not (repo_path / ".github" / "skills").exists()

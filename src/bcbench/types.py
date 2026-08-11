@@ -17,9 +17,8 @@ if TYPE_CHECKING:
     from bcbench.results.summary import EvaluationResultSummary
 
 __all__ = [
+    "AgentHarness",
     "AgentMetrics",
-    "AgentName",
-    "AgentType",
     "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
@@ -79,35 +78,6 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
-
-    @classmethod
-    def field_names(cls) -> frozenset[str]:
-        return frozenset(cls.model_fields)
-
-
-class AgentName(StrEnum):
-    """Agents that can be evaluated, and the metrics each of them is able to report."""
-
-    COPILOT = "GitHub Copilot"
-    CLAUDE = "Claude Code"
-    BCAL = "BCal"
-    MOCK = "mock-agent"
-
-    @property
-    def expected_metrics(self) -> frozenset[str]:
-        """Metrics this agent should always report.
-
-        Only these are warned about when missing, so agents that never collect a metric
-        don't emit a warning for every single instance of a run.
-        """
-        match self:
-            case AgentName.BCAL:
-                # The bcal CLI only exposes wall-clock time; token/turn/tool metrics are unavailable.
-                return frozenset({"execution_time"})
-            case AgentName.COPILOT | AgentName.CLAUDE | AgentName.MOCK:
-                return AgentMetrics.field_names()
-            case _:
-                raise ValueError(f"Unknown AgentName: {self}")
 
 
 class ExperimentConfiguration(BaseModel):
@@ -190,28 +160,56 @@ class PluginConfig(BaseModel):
         return self
 
 
-class AgentType(StrEnum):
-    COPILOT = "copilot"
-    CLAUDE = "claude"
+class AgentHarness(StrEnum):
+    """Agents that can be evaluated, and the metrics each of them is able to report."""
+
+    COPILOT = "GitHub Copilot"
+    CLAUDE = "Claude Code"
+    BCAL = "BCal"
+    MOCK = "mock-agent"
+
+    @property
+    def expected_metrics(self) -> frozenset[str]:
+        """Metrics this agent should always report.
+
+        Only these are warned about when missing, so agents that never collect a metric don't emit a warning for every single instance of a run.
+        """
+
+        match self:
+            case AgentHarness.COPILOT | AgentHarness.CLAUDE | AgentHarness.MOCK:
+                expected = AgentMetrics(
+                    execution_time=None,
+                    llm_duration=None,
+                    turn_count=None,
+                    prompt_tokens=None,
+                    completion_tokens=None,
+                    tool_usage=None,
+                )
+            case AgentHarness.BCAL:
+                expected = AgentMetrics(execution_time=None)
+            case _:
+                raise ValueError(f"Unknown AgentHarness: {self}")
+
+        return frozenset(expected.model_fields_set)
 
     @property
     def instruction_filename(self) -> str:
         match self:
-            case AgentType.COPILOT:
+            case AgentHarness.COPILOT:
                 return "copilot-instructions.md"
-            case AgentType.CLAUDE:
+            case AgentHarness.CLAUDE:
                 return "CLAUDE.md"
             case _:
-                raise ValueError(f"Unknown AgentType: {self}")
+                raise ValueError(f"{self.value} does not support repository instructions")
 
     def get_target_dir(self, repo_path: Path) -> Path:
         match self:
-            case AgentType.COPILOT:
+            case AgentHarness.COPILOT:
                 return repo_path / ".github"
-            case AgentType.CLAUDE:
+            case AgentHarness.CLAUDE:
                 return repo_path / ".claude"
             case _:
-                raise ValueError(f"Unknown AgentType: {self}")
+                raise ValueError(f"{self.value} does not support repository setup")
 
 
 class EvaluationCategory(StrEnum):
@@ -456,7 +454,7 @@ class EvaluationContext[E: BaseDatasetEntry]:
     result_dir: Path
 
     # Agent metadata
-    agent_name: AgentName
+    agent_name: AgentHarness
     model: str
 
     # Evaluation category
