@@ -176,7 +176,15 @@ class AgentHarness(StrEnum):
         """
 
         match self:
-            case AgentHarness.COPILOT | AgentHarness.CLAUDE | AgentHarness.MOCK:
+            case AgentHarness.COPILOT:
+                expected = AgentMetrics(
+                    execution_time=None,
+                    turn_count=None,
+                    prompt_tokens=None,
+                    completion_tokens=None,
+                    tool_usage=None,
+                )
+            case AgentHarness.CLAUDE | AgentHarness.MOCK:
                 expected = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
