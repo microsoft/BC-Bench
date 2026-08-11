@@ -160,6 +160,15 @@ def test_harvest_rejects_both_seeds_and_risk(tmp_path: Path):
     assert result.exit_code != 0
 
 
+def test_harvest_requires_seeds_or_risk():
+    result = runner.invoke(
+        app,
+        ["harms", "harvest", "--subscription-id", "s", "--resource-group", "rg", "--project-name", "p"],
+    )
+    assert result.exit_code != 0
+    assert "Provide either --seeds or --risk-category" in result.output
+
+
 def test_dry_run_skips_evaluate(tmp_path: Path):
     with (
         patch("bcbench.commands.harms.run_harms_suite", return_value=[]) as mock_run,

@@ -145,8 +145,10 @@ def harvest(
     """
     from azure.ai.evaluation.red_team import RiskCategory, SupportedLanguages
 
-    if bool(seeds) == bool(risk_category):
+    if seeds and risk_category:
         raise typer.BadParameter("Use either --seeds or --risk-category, not both.")
+    if not seeds and not risk_category:
+        raise typer.BadParameter("Provide either --seeds or --risk-category.")
 
     risks = [RiskCategory(r) for r in risk_category] if risk_category else None
     lang = SupportedLanguages(language) if language else None

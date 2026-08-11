@@ -123,6 +123,10 @@ class TestBcalVersion:
         with patch.object(subprocess, "run", side_effect=OSError("boom")):
             assert bcal_agent.bcal_version("C:\\fake\\bcal.exe") == "(unknown)"
 
+    def test_unknown_when_executable_cannot_be_resolved(self):
+        with patch.object(bcal_agent, "_resolve_bcal_executable", side_effect=AgentError("missing")):
+            assert bcal_agent.bcal_version() == "(unknown)"
+
 
 class TestRunBcalAgentAzureOpenAI:
     def test_passes_aoai_endpoint_to_subprocess(self, workspace: Path):

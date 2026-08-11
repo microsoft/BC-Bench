@@ -155,11 +155,11 @@ def _bcal_cmd_args(entry: NL2ALEntry, prompt: str, package_cache_path: Path, exp
 
 def bcal_version(executable: str | None = None) -> str:
     """Return the resolved bcal ``--version`` string (best-effort; never raises)."""
-    exe = executable or _resolve_bcal_executable()
     try:
+        exe = executable or _resolve_bcal_executable()
         result = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30, check=False)
         return (result.stdout or result.stderr or "").strip() or "(unknown)"
-    except (OSError, subprocess.SubprocessError):
+    except (AgentError, OSError, subprocess.SubprocessError):
         return "(unknown)"
 
 
