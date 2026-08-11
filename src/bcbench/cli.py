@@ -2,6 +2,7 @@
 
 import io
 import sys
+from importlib import import_module
 from typing import Annotated
 
 import typer
@@ -37,6 +38,36 @@ app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(result_app, name="result")
 app.add_typer(category_app, name="category")
 app.add_typer(contamination_app, name="contamination")
+
+
+def _redteam_group_installed() -> bool:
+    try:
+        import_module("azure.ai.evaluation.red_team")
+    except ImportError:
+        return False
+    return True
+
+
+def _add_redteam_app() -> None:
+    """Register `bcbench redteam`, whose azure-ai-evaluation[redteam] tree ships as an optional dependency group.
+
+    Importing `bcbench.commands.redteam` pulls that tree in, so probe for it first and otherwise
+    register a catch-all that names the missing group instead of an opaque "no such command".
+    """
+    if not _redteam_group_installed():
+
+        @app.command("redteam", context_settings={"ignore_unknown_options": True}, help="Red team BC-Bench agents (needs `uv sync --group redteam`)")
+        def _missing_group(args: Annotated[list[str] | None, typer.Argument(hidden=True)] = None) -> None:
+            raise typer.BadParameter("`bcbench redteam` needs the optional redteam dependency group. Install it with `uv sync --group redteam`.")
+
+        return
+
+    from bcbench.commands.redteam import redteam_app
+
+    app.add_typer(redteam_app, name="redteam")
+
+
+_add_redteam_app()
 
 
 @app.callback()

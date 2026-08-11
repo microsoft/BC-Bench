@@ -24,7 +24,7 @@ from bcbench.evaluate import EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.types import AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -47,7 +47,7 @@ def evaluate_copilot(
     container_name: ContainerName = "",
     username: ContainerUsername = "",
     password: ContainerPassword = "",
-    model: CopilotModel = "claude-haiku-4.5",
+    model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_test_run",
@@ -72,7 +72,7 @@ def evaluate_copilot(
         result_dir=run_dir,
         container=container,
         model=model,
-        agent_name="GitHub Copilot",
+        agent_name=AgentHarness.COPILOT,
         category=category,
     )
 
@@ -127,7 +127,7 @@ def evaluate_claude_code(
         result_dir=run_dir,
         container=container,
         model=model,
-        agent_name="Claude Code",
+        agent_name=AgentHarness.CLAUDE,
         category=category,
     )
 
@@ -186,7 +186,7 @@ def evaluate_bcal(
         result_dir=run_dir,
         container=None,
         model=backend_config.model_label(),
-        agent_name="BCal",
+        agent_name=AgentHarness.BCAL,
         category=category,
     )
 
@@ -248,7 +248,7 @@ def evaluate_mock(
         repo_path=Path(),
         result_dir=run_dir,
         model="mock-model",
-        agent_name="mock-agent",
+        agent_name=AgentHarness.MOCK,
         category=category,
     )
 
@@ -312,6 +312,10 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             case EvaluationCategory.CODE_REVIEW:
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
+                scenarios = ["raw", "empty"]
+            case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
+                scenarios = ["raw", "empty"]
+            case EvaluationCategory.EXT_REQUEST_TRIAGE:
                 scenarios = ["raw", "empty"]
             case _:
                 raise ValueError(f"Unsupported category for mock evaluation: {context.category}")

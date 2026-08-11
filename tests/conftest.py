@@ -13,14 +13,14 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 # Valid test data that passes all BugFixEntry validation rules
 VALID_INSTANCE_ID = "microsoftInternal__NAV-123456"
@@ -79,7 +79,7 @@ def create_dataset_entry(
 def create_evaluation_context[EntryT: BaseDatasetEntry](
     tmp_path: Path,
     entry: EntryT | None = None,
-    agent_name: str = "test-agent",
+    agent_name: AgentHarness = AgentHarness.COPILOT,
     model: str = "test-model",
     category: EvaluationCategory = EvaluationCategory.BUG_FIX,
     container_name: str = "test-container",
@@ -190,7 +190,7 @@ def create_codereview_entry(
 def create_codereview_result(
     instance_id: str = VALID_INSTANCE_ID,
     model: str = "gpt-4o",
-    agent_name: str = "copilot-cli",
+    agent_name: AgentHarness = AgentHarness.COPILOT,
     output: str = '[{"file": "test.al", "line_start": 5, "body": "Good catch"}]',
     expected_comments: list[ReviewComment] | None = None,
     metrics: AgentMetrics | None = None,
@@ -350,3 +350,79 @@ def create_nl2al_entry(
 @pytest.fixture
 def sample_nl2al_entry() -> NL2ALEntry:
     return create_nl2al_entry()
+
+
+def create_ext_implement_entry(
+    instance_id: str = "microsoftInternal__NAV-Ext_Request_Impl-30361",
+    repo: str = "microsoftInternal/NAV",
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    patch: str = VALID_PATCH,
+    created_at: str = VALID_CREATED_AT,
+    expected: list[ChecklistAssertion] | None = None,
+) -> ExtRequestImplementEntry:
+    if project_paths is None:
+        project_paths = ["App/Layers/W1/BaseApp"]
+
+    if expected is None:
+        expected = [ChecklistAssertion(text="A new integration event publisher is added to the standard codeunit.", level="critical")]
+
+    return ExtRequestImplementEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths,
+        patch=patch,
+        created_at=created_at,
+        expected=expected,
+    )
+
+
+@pytest.fixture
+def sample_ext_implement_entry(tmp_path: Path) -> Generator[ExtRequestImplementEntry]:
+    problem_dir = create_problem_statement_dir(tmp_path)
+    entry = create_ext_implement_entry()
+
+    with patch.object(ExtRequestImplementEntry, "problem_statement_dir", property(lambda self: problem_dir)):
+        yield entry
+
+
+def create_ext_triage_entry(
+    instance_id: str = "microsoftInternal__NAV-Ext_Request_Triage-29447",
+    repo: str = "microsoftInternal/NAV",
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    created_at: str = VALID_CREATED_AT,
+    title: str = '[Event Request] Codeunit 5880 "Phys. Invt. Order-Finish"',
+    description: str = "Please add an integration event in CreateOrderTrackingBufferLines.",
+    comments: str = "",
+    current_labels: list[ManagedLabel] | None = None,
+    expected: list[ChecklistAssertion] | None = None,
+) -> ExtRequestTriageEntry:
+    return ExtRequestTriageEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths if project_paths is not None else ["App/Layers/W1/BaseApp"],
+        created_at=created_at,
+        title=title,
+        description=description,
+        comments=comments,
+        current_labels=current_labels if current_labels is not None else [],
+        expected=expected
+        if expected is not None
+        else [
+            {"text": "The labels_to_set is exactly: SCM, event-request.", "level": "critical"},
+            {"text": "The issue_state is open.", "level": "critical"},
+            {"text": "The advisory comment confirms the event request is valid and will be routed to the SCM team.", "level": "expected"},
+        ],
+    )
+
+
+@pytest.fixture
+def sample_ext_triage_entry() -> ExtRequestTriageEntry:
+    return create_ext_triage_entry()

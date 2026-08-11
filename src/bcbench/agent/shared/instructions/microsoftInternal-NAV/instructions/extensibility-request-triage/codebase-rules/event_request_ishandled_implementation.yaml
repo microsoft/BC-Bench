@@ -1,0 +1,45 @@
+event_request_ishandled_implementation:
+  description: "Implementation rules specific to event-request/ishandled subtype"
+
+  rules:
+    - id: ishandled_initialization_required
+      applies_to: ["event-request/ishandled"]
+      severity: "blocking"
+      description: "IsHandled parameter must be initialized to false before calling the event"
+      action: "internal_warning"
+      rule: "When adding a new event with IsHandled parameter or adding IsHandled parameter to an existing event, ALWAYS initialize IsHandled to false before the event call."
+      guidance: |
+        **Mandatory Rule:** The IsHandled parameter must ALWAYS be initialized to `false` immediately before calling an event that has an IsHandled parameter.
+
+        **Rationale:**
+        - Ensures predictable behavior - IsHandled starts as false (not handled)
+        - Prevents undefined/garbage values from affecting event flow
+        - Subscribers expect IsHandled to be false when they receive the event
+        - Makes code intent clear - the default is to NOT skip the code block
+        - Follows BC standard patterns for IsHandled events
+
+        **Correct Pattern:**
+        ```al
+        var
+            IsHandled: Boolean;
+        begin
+            IsHandled := false;
+            OnBeforeSalesPost(SalesHeader, IsHandled);
+            if IsHandled then
+                exit;
+
+            // Standard logic here
+        end;
+        ```
+
+        **❌ Wrong - Missing initialization:**
+        ```al
+        var
+            IsHandled: Boolean;
+        begin
+            // ❌ WRONG - IsHandled not initialized!
+            OnBeforeSalesPost(SalesHeader, IsHandled);
+            if IsHandled then
+                exit;
+        end;
+        ```
