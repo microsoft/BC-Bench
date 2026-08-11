@@ -127,14 +127,6 @@ class RepoGroundedEntry(BaseDatasetEntry):
     def customization_profile(self) -> str:
         return self.repo.replace("/", "-")
 
-
-class _BugFixTestGenBase(RepoGroundedEntry):
-    """Shared schema for bug-fix and test-generation entries (same JSONL, different semantics)."""
-
-    fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
-    pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
-    test_patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
-
     @property
     def problem_statement_dir(self) -> Path:
         return _config.paths.problem_statement_dir / self.instance_id
@@ -142,6 +134,14 @@ class _BugFixTestGenBase(RepoGroundedEntry):
     def get_task(self) -> str:
         readme_path = self.problem_statement_dir / _config.file_patterns.problem_statement_readme
         return readme_path.read_text(encoding="utf-8")
+
+
+class _BugFixTestGenBase(RepoGroundedEntry):
+    """Shared schema for bug-fix and test-generation entries (same JSONL, different semantics)."""
+
+    fail_to_pass: Annotated[list[TestEntry], Field(alias="FAIL_TO_PASS", min_length=1)]
+    pass_to_pass: Annotated[list[TestEntry], Field(alias="PASS_TO_PASS")] = []
+    test_patch: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
 
     @model_validator(mode="after")
     def validate_baseapp_patches_are_w1_only(self) -> Self:

@@ -44,7 +44,7 @@ def remove_agent_plugin(folder: str) -> None:
         logger.info(f"Removed stale agent plugin '{folder}': {plugin_dir}")
 
 
-def resolve_config_plugins(agent_config: dict) -> dict[str, Path]:
+def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False) -> list[tuple[PluginConfig, Path]]:
     """Resolve the config's enabled plugin entries to loadable plugin folders.
 
     A plugin is either `local` (an absolute path on this machine) or `github` (cloned from its repo
@@ -54,18 +54,43 @@ def resolve_config_plugins(agent_config: dict) -> dict[str, Path]:
 
     Args:
         agent_config: Parsed `config.yaml`.
+        allow_copilot_manifest: Also accept a root ``plugin.json`` - a layout only Copilot CLI loads.
 
     Returns:
-        Plugin folders keyed by the record they get on the result, in config order.
+        Each enabled plugin, in config order, paired with the folder it resolved to.
 
     Raises:
-        AgentError: If a plugin does not resolve to a folder holding a plugin manifest.
+        AgentError: If two enabled plugins share a name, or a plugin does not resolve to a folder
+            holding a plugin manifest.
     """
     plugins = [PluginConfig(**entry) for entry in agent_config["plugins"] if entry.get("enabled", False)]
-    return {plugin.record: _resolve_plugin(plugin) for plugin in plugins}
+
+    # A GitHub plugin clones into ``<plugin_root>/<name>`` and every plugin is recorded as
+    # ``<name>@<revision|source>``, so two enabled plugins sharing a name would clobber each other's
+    # clone and collide on their record. There is no reason to enable the same-named plugin twice, so
+    # reject duplicate names up front.
+    names = [plugin.name for plugin in plugins]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise AgentError(f"Duplicate plugin name(s) among enabled plugins: {', '.join(duplicates)}")
+
+    return [(plugin, _resolve_plugin(plugin, allow_copilot_manifest)) for plugin in plugins]
 
 
-def _resolve_plugin(plugin: PluginConfig) -> Path:
+def _has_plugin_manifest(plugin_dir: Path, allow_copilot_manifest: bool) -> bool:
+    """True if the folder holds a plugin manifest in a location the target agent can load.
+
+    Claude Code loads only ``.claude-plugin/plugin.json``. GitHub Copilot CLI loads that layout too
+    but also accepts a ``plugin.json`` at the plugin root, so a root-only manifest is honored only
+    when ``allow_copilot_manifest`` is set (Copilot runs) - never for a Claude run, which would otherwise
+    forward the plugin via ``--plugin-dir`` only for Claude to ignore it.
+    """
+    if (plugin_dir / _config.file_patterns.plugin_manifest).is_file():
+        return True
+    return allow_copilot_manifest and (plugin_dir / _config.file_patterns.plugin_manifest.name).is_file()
+
+
+def _resolve_plugin(plugin: PluginConfig, allow_copilot_manifest: bool) -> Path:
     match plugin.source:
         case "local":
             plugin_dir = Path(plugin.path).expanduser().resolve()
@@ -74,8 +99,10 @@ def _resolve_plugin(plugin: PluginConfig) -> Path:
             clone_repo_at_revision(str(plugin.repo), str(plugin.revision), clone_dir)
             plugin_dir = _plugin_dir_in_clone(clone_dir, plugin)
 
-    if not (plugin_dir / _config.file_patterns.plugin_manifest).is_file():
-        raise AgentError(f"Plugin '{plugin.name}' has no manifest at {plugin_dir / _config.file_patterns.plugin_manifest}")
+    if not _has_plugin_manifest(plugin_dir, allow_copilot_manifest):
+        nested: Path = plugin_dir / _config.file_patterns.plugin_manifest
+        locations: str = f"{nested} or {plugin_dir / _config.file_patterns.plugin_manifest.name}" if allow_copilot_manifest else str(nested)
+        raise AgentError(f"Plugin '{plugin.name}' has no manifest at {locations}")
 
     logger.info(f"Loading plugin {plugin.record} from {plugin_dir}")
     return plugin_dir

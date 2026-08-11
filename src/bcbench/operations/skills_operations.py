@@ -4,7 +4,7 @@ from shutil import copytree, rmtree
 from bcbench.dataset.dataset_entry import BaseDatasetEntry
 from bcbench.logger import get_logger
 from bcbench.operations.instruction_operations import _get_source_instructions_path
-from bcbench.types import AgentType
+from bcbench.types import AgentHarness
 
 logger = get_logger(__name__)
 
@@ -13,7 +13,7 @@ def setup_agent_skills(
     agent_config: dict,
     entry: BaseDatasetEntry,
     repo_path: Path,
-    agent_type: AgentType,
+    harness: AgentHarness,
     skills_enabled_override: bool | None = None,
 ) -> bool:
     """
@@ -36,7 +36,7 @@ def setup_agent_skills(
             raise FileNotFoundError(f"Skills folder not found for profile: {entry.customization_profile} at {source_skills_dir}")
 
         # Copilot reads from .github automatically, Claude reads from .claude automatically
-        target_dir: Path = agent_type.get_target_dir(repo_path)
+        target_dir: Path = harness.get_target_dir(repo_path)
         skills_dir = target_dir / "skills"
 
         # Remove existing skills directory to ensure clean state

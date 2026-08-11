@@ -9,7 +9,7 @@ from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import AgentType, EvaluationCategory
+from bcbench.types import AgentHarness, EvaluationCategory
 
 logger = get_logger(__name__)
 
@@ -48,7 +48,7 @@ def _build_lsp_args(project_paths: list[str], package_cache_paths: list[str], as
     return args
 
 
-def _lsp_config_for(agent_type: AgentType, args: list[str]) -> dict:
+def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict:
     """Build the agent-specific `.lsp.json` content.
 
     Both agents launch the same `al launchlspserver` process — only the surrounding LSP-routing schema differs:
@@ -61,16 +61,16 @@ def _lsp_config_for(agent_type: AgentType, args: list[str]) -> dict:
     (`al`) must resolve via PATH on both sides.
     """
     server = {"command": "al", "args": args}
-    match agent_type:
-        case AgentType.COPILOT:
+    match harness:
+        case AgentHarness.COPILOT:
             return {"lspServers": {"altool": {**server, "fileExtensions": {".al": "al"}}}}
-        case AgentType.CLAUDE:
+        case AgentHarness.CLAUDE:
             return {"altool": {**server, "extensionToLanguage": {".al": "al"}}}
         case _:
-            raise AgentError(f"Unsupported agent type for AL LSP config: {agent_type}")
+            raise AgentError(f"Unsupported agent type for AL LSP config: {harness}")
 
 
-def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, agent_type: AgentType, al_lsp: bool, container_name: str = "") -> Path | None:
+def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, harness: AgentHarness, al_lsp: bool, container_name: str = "") -> Path | None:
     """Build a per-task AL-LSP plugin folder, return its path or None.
 
     Loaded by both Copilot CLI and Claude Code via ``--plugin-dir <path>`` for a single
@@ -85,8 +85,8 @@ def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, r
     project_paths = [str(repo_path / p) for p in entry.project_paths]
     package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container_name)
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
-    lsp_config = _lsp_config_for(agent_type, args)
+    lsp_config = _lsp_config_for(harness, args)
 
     plugin_dir = write_agent_plugin(_AL_LSP_PLUGIN_FOLDER, _AL_LSP_MANIFEST, {".lsp.json": lsp_config})
-    logger.debug(f"AL LSP configuration for {agent_type.value}: {lsp_config}")
+    logger.debug(f"AL LSP configuration for {harness.value}: {lsp_config}")
     return plugin_dir

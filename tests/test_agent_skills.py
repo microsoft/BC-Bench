@@ -11,7 +11,7 @@ import pytest
 from bcbench.dataset import BaseDatasetEntry, RepoGroundedEntry
 from bcbench.operations import setup_agent_skills
 from bcbench.operations.instruction_operations import _get_source_instructions_path
-from bcbench.types import AgentType
+from bcbench.types import AgentHarness
 
 
 def test_setup_agent_skills_path():
@@ -30,7 +30,7 @@ def test_setup_agent_skills():
         config = {"skills": {"enabled": True}}
 
         # Setup skills
-        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
         assert result is True
 
         # Verify
@@ -44,14 +44,14 @@ def test_setup_agent_skills():
 
             # Verify file content matches
             if item.is_file():
-                assert target_item.read_text() == item.read_text(), f"Content mismatch for {item.name}"
+                assert target_item.read_text(encoding="utf-8") == item.read_text(encoding="utf-8"), f"Content mismatch for {item.name}"
             elif item.is_dir():
                 # For directories, verify all files match recursively
                 for source_file in item.rglob("*"):
                     if source_file.is_file():
                         target_file = target_item / source_file.relative_to(item)
                         assert target_file.exists(), f"{target_file} should exist"
-                        assert target_file.read_text() == source_file.read_text(), f"Content mismatch for {target_file}"
+                        assert target_file.read_text(encoding="utf-8") == source_file.read_text(encoding="utf-8"), f"Content mismatch for {target_file}"
 
 
 def test_nonexistent_skills():
@@ -64,7 +64,7 @@ def test_nonexistent_skills():
 
         # Error comes from _get_source_instructions_path when the profile folder doesn't exist
         with pytest.raises(FileNotFoundError, match="not found"):
-            setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+            setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
 
 def test_overwrite_skill_folder_files():
@@ -96,7 +96,7 @@ def test_overwrite_skill_folder_files():
         extra_file.write_text("SHOULD BE REMOVED")
 
         # Run setup
-        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         # Assert overwrite happened
         assert target_file.read_text() == source_file.read_text()
@@ -113,7 +113,7 @@ def test_path_specific_skills_copied():
         config = {"skills": {"enabled": True}}
 
         # Setup skills
-        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         # Verify path-specific skills were copied
         target_skills_dir = repo_path / ".github" / "skills"
@@ -138,7 +138,7 @@ def test_path_specific_skills_removed_before_copy():
         old_file.write_text("OLD SKILL CONTENT")
 
         # Setup skills
-        setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         # Verify old file was removed
         assert not old_file.exists(), "Old skill file should be removed"
@@ -156,7 +156,7 @@ def test_skills_disabled():
         entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": False}}
 
-        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT)
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
         assert result is False
         assert not (repo_path / ".github" / "skills").exists()
@@ -170,7 +170,7 @@ def test_skills_override_enables_when_config_disabled():
         entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": False}}
 
-        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=True)
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT, skills_enabled_override=True)
 
         assert result is True
         assert (repo_path / ".github" / "skills").exists()
@@ -184,7 +184,7 @@ def test_skills_override_disables_when_config_enabled():
         entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": True}}
 
-        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=False)
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT, skills_enabled_override=False)
 
         assert result is False
         assert not (repo_path / ".github" / "skills").exists()
@@ -198,7 +198,7 @@ def test_skills_override_none_falls_back_to_config():
         entry.customization_profile = "microsoftInternal-NAV"
         config = {"skills": {"enabled": False}}
 
-        result = setup_agent_skills(config, entry, repo_path, agent_type=AgentType.COPILOT, skills_enabled_override=None)
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT, skills_enabled_override=None)
 
         assert result is False
         assert not (repo_path / ".github" / "skills").exists()
