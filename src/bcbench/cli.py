@@ -2,7 +2,7 @@
 
 import io
 import sys
-from importlib.util import find_spec
+from importlib import import_module
 from typing import Annotated
 
 import typer
@@ -41,11 +41,11 @@ app.add_typer(contamination_app, name="contamination")
 
 
 def _redteam_group_installed() -> bool:
-    # find_spec raises (rather than returning None) when a parent package is missing entirely.
     try:
-        return find_spec("azure.ai.evaluation") is not None
-    except ModuleNotFoundError:
+        import_module("azure.ai.evaluation.red_team")
+    except ImportError:
         return False
+    return True
 
 
 def _add_redteam_app() -> None:
