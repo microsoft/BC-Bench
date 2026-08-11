@@ -4,7 +4,7 @@ from pathlib import Path
 
 from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment
 from bcbench.evaluate.base import EvaluationPipeline
-from bcbench.evaluate.codereview_judge import judge_comment_matches
+from bcbench.evaluate.codereview_judge import judge_expected_and_ignored
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
@@ -68,12 +68,23 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             logger.warning(f"Invalid review output for {context.entry.instance_id}")
             result = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
         else:
-            structural_matches = match_comments(
+            expected_structural = match_comments(
                 context.entry.expected_comments,
                 generated_comments,
             )
-            validated_matches = judge_comment_matches(
-                structural_matches,
+            # Ignored comments are neutral. Match them against ALL generated comments (not only the
+            # ones left over after expected structural matching) so a finding whose expected pair
+            # the judge later rejects can still be neutralized as ignored rather than counting as a
+            # false positive. Both buckets are judged in a SINGLE pass with expected taking
+            # precedence on any overlap: one judge call per evaluation avoids a second LLM round
+            # (less nondeterminism, one calibration target) and cannot reuse a stale verdict file.
+            ignored_structural = match_comments(
+                context.entry.ignored_comments,
+                generated_comments,
+            )
+            validated_matches, ignored_matches = judge_expected_and_ignored(
+                expected_structural,
+                ignored_structural,
                 work_dir=context.repo_path,
             )
             result = CodeReviewResult.create(
@@ -82,11 +93,14 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
                 expected_comments=context.entry.expected_comments,
                 generated_comments=generated_comments,
                 matched_pairs=validated_matches,
+                ignored_comments=context.entry.ignored_comments,
+                ignored_matched_pairs=ignored_matches,
             )
         logger.info(f"Parsed {len(result.generated_comments)} comments from {REVIEW_OUTPUT_FILE}")
         logger.info(
             f"Code review metrics: matched={result.matched_comment_count}, "
             f"incorrect={result.incorrect_comment_count}, missed={result.missed_comment_count}, "
+            f"ignored={result.ignored_matched_comment_count}, "
             f"precision={result.precision:.3f}, recall={result.recall:.3f}, f1={result.f1:.3f}"
         )
 

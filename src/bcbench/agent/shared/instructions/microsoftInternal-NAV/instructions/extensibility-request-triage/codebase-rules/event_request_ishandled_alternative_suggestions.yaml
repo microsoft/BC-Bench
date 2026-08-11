@@ -1,0 +1,132 @@
+event_request_ishandled_alternative_suggestions:
+  description: "Alternative suggestion rules specific to event-request/ishandled subtype - check if existing functionality can satisfy the request"
+
+  rules:
+    - id: ishandled_replaceable_with_regular_event
+      applies_to: ["event-request-ishandled"]
+      severity: "suggestion"
+      description: "IsHandled event may be replaceable with a regular event when the skipped logic is simple"
+      action: "suggest_alternative"
+      requires_author_confirmation: true
+      guidance: |
+        When an IsHandled event is requested and the logic inside the `if not IsHandled then` block is
+        simple (light assignments, a few calculations, no branching complexity), consider suggesting a
+        regular event placed **after** the existing logic instead of wrapping it in an IsHandled pattern.
+
+        **Rationale:**
+        - IsHandled events allow subscribers to completely skip the base logic, which is a strong override
+        - For simple logic, it is better to let the base code run and allow subscribers to adjust the result afterward
+        - Regular after-events are simpler to subscribe to and less prone to misuse
+        - Avoids unnecessary complexity for extension developers
+
+        **Detection — when this suggestion applies:**
+        - The `if not IsHandled then` block contains only a few lines of light logic (assignments, simple calculations)
+        - There are no complex branches, database operations, or error handling inside the IsHandled block
+        - The result/output variables are accessible after the block and can be passed to a regular event
+
+        **Example 1 — IsHandled requested:**
+        ```al
+        local procedure GetFromBinContentQty(LocCode: Code[10]; FromBinCode: Code[20]; ItemNo: Code[20];
+            Variant: Code[20]; UoMCode: Code[10]; WhseItemTrackingLine: Record "Whse. Item Tracking Line"): Decimal
+        var
+            BinContent: Record "Bin Content";
+            Result: Decimal;
+            IsHandled: Boolean;
+        begin
+            IsHandled := false;
+            OnBeforeGetFromBinContentQty(LocCode, FromBinCode, ItemNo, Variant, UoMCode, WhseItemTrackingLine, Result, IsHandled);
+            if not IsHandled then begin
+                BinContent.Get(LocCode, FromBinCode, ItemNo, Variant, UoMCode);
+                BinContent.SetTrackingFilterFromWhseItemTrackingLine(WhseItemTrackingLine);
+                BinContent.CalcFields("Quantity (Base)");
+                Result := BinContent."Quantity (Base)";
+            end;
+            exit(Result);
+        end;
+        ```
+
+        **Suggested alternative — regular after-event:**
+        ```al
+        local procedure GetFromBinContentQty(LocCode: Code[10]; FromBinCode: Code[20]; ItemNo: Code[20];
+            Variant: Code[20]; UoMCode: Code[10]; WhseItemTrackingLine: Record "Whse. Item Tracking Line"): Decimal
+        var
+            BinContent: Record "Bin Content";
+            Result: Decimal;
+        begin
+            BinContent.Get(LocCode, FromBinCode, ItemNo, Variant, UoMCode);
+            BinContent.SetTrackingFilterFromWhseItemTrackingLine(WhseItemTrackingLine);
+            BinContent.CalcFields("Quantity (Base)");
+            Result := BinContent."Quantity (Base)";
+            OnAfterGetFromBinContentQty(LocCode, FromBinCode, ItemNo, Variant, UoMCode, WhseItemTrackingLine, Result);
+            exit(Result);
+        end;
+        ```
+
+        **Example 2 — IsHandled requested:**
+        ```al
+        local procedure UpdateToQtyToPick(QtyAvailableBase: Decimal; ToQtyPerUOM: Decimal;
+            var ToQtyToPick: Decimal; var ToQtyToPickBase: Decimal;
+            TotalQtyToPick: Decimal; TotalQtyToPickBase: Decimal)
+        var
+            IsHandled: Boolean;
+        begin
+            IsHandled := false;
+            OnUpdateToQtyToPickOnBeforeSetToQtyToPickBase(QtyAvailableBase, ToQtyPerUOM, ToQtyToPick,
+                ToQtyToPickBase, TotalQtyToPick, TotalQtyToPickBase, IsHandled);
+            if not IsHandled then begin
+                ToQtyToPickBase := QtyAvailableBase;
+                if ToQtyToPickBase > TotalQtyToPickBase then
+                    ToQtyToPickBase := TotalQtyToPickBase;
+            end;
+            ToQtyToPick := Round(ToQtyToPickBase / ToQtyPerUOM, UnitOfMeasureManagement.QtyRndPrecision());
+        end;
+        ```
+
+        **Suggested alternative — regular after-event:**
+        ```al
+        local procedure UpdateToQtyToPick(QtyAvailableBase: Decimal; ToQtyPerUOM: Decimal;
+            var ToQtyToPick: Decimal; var ToQtyToPickBase: Decimal;
+            TotalQtyToPick: Decimal; TotalQtyToPickBase: Decimal)
+        begin
+            ToQtyToPickBase := QtyAvailableBase;
+            if ToQtyToPickBase > TotalQtyToPickBase then
+                ToQtyToPickBase := TotalQtyToPickBase;
+
+            OnUpdateToQtyToPickOnAfterCalculateToQtyToPickBase(QtyAvailableBase, ToQtyPerUOM,
+                ToQtyToPick, ToQtyToPickBase, TotalQtyToPick, TotalQtyToPickBase);
+
+            ToQtyToPick := Round(ToQtyToPickBase / ToQtyPerUOM, UnitOfMeasureManagement.QtyRndPrecision());
+        end;
+        ```
+
+        **Example 3 — IsHandled requested before exit:**
+        ```al
+        WarehouseActivityLine.SetTrackingFilterFromWhseItemTrackingSetupIfNotBlank(WhseItemTrackingSetup);
+        OnCalcQtyAssignedToPickOnAfterSetFilters(WarehouseActivityLine, WhseItemTrackingSetup);
+        WarehouseActivityLine.CalcSums(WarehouseActivityLine."Qty. Outstanding (Base)");
+
+        IsHandled := false;
+        OnCalcQtyAssignedToPickOnBeforeExit(WarehouseActivityLine, WhseItemTrackingSetup, QtyAssignedToPick, IsHandled);
+        if IsHandled then
+            exit(QtyAssignedToPick);
+
+        exit(WarehouseActivityLine."Qty. Outstanding (Base)" + CalcBreakbulkOutstdQty(WarehouseActivityLine, WhseItemTrackingSetup));
+        ```
+
+        **Suggested alternative — regular after-event on the result:**
+        ```al
+        OnCalcQtyAssignedToPickOnAfterSetFilters(WarehouseActivityLine, WhseItemTrackingSetup);
+        WarehouseActivityLine.CalcSums(WarehouseActivityLine."Qty. Outstanding (Base)");
+
+        Result := WarehouseActivityLine."Qty. Outstanding (Base)" + CalcBreakbulkOutstdQty(WarehouseActivityLine, WhseItemTrackingSetup);
+        OnAfterCalcQtyAssignedToPick(WarehouseActivityLine, WhseItemTrackingSetup, Result);
+        exit(Result);
+        ```
+
+        **Key principle:** Let the base logic run, then allow subscribers to adjust the result via a
+        regular event — rather than letting subscribers skip the base logic entirely.
+
+        **Author confirmation required:**
+        Before implementing as a regular event, confirm with the author:
+        - Is being able to completely skip the base logic a requirement?
+        - Or is adjusting/overriding the result after the base logic sufficient?

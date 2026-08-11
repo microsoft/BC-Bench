@@ -5,26 +5,26 @@ from pathlib import Path
 
 from bcbench.config import get_config
 from bcbench.logger import get_logger
-from bcbench.types import AgentType
+from bcbench.types import AgentHarness
 
 logger = get_logger(__name__)
 _config = get_config()
 
 
-def setup_hooks(repo_path: Path, agent_type: AgentType, output_dir: Path) -> Path:
+def setup_hooks(repo_path: Path, harness: AgentHarness, output_dir: Path) -> Path:
     tool_log_path = output_dir / _config.file_patterns.tool_usage_log
     tool_log_path.unlink(missing_ok=True)
     script_path = str(_config.paths.hook_script_path.resolve())
 
-    match agent_type:
-        case AgentType.COPILOT:
+    match harness:
+        case AgentHarness.COPILOT:
             _setup_copilot_hooks(repo_path, script_path, tool_log_path)
-        case AgentType.CLAUDE:
+        case AgentHarness.CLAUDE:
             _setup_claude_hooks(repo_path, script_path, tool_log_path)
         case _:
-            raise ValueError(f"Unknown AgentType: {agent_type}")
+            raise ValueError(f"{harness.value} does not support hooks")
 
-    logger.info(f"Hooks configured for {agent_type.value}, tool log: {tool_log_path}")
+    logger.info(f"Hooks configured for {harness.value}, tool log: {tool_log_path}")
     return tool_log_path
 
 

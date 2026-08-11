@@ -3,7 +3,7 @@ import shlex
 from pathlib import Path
 
 from bcbench.operations.hooks_operations import setup_hooks
-from bcbench.types import AgentType
+from bcbench.types import AgentHarness
 
 
 class TestSetupHooks:
@@ -13,7 +13,7 @@ class TestSetupHooks:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        tool_log_path = setup_hooks(repo_path, AgentType.COPILOT, output_dir)
+        tool_log_path = setup_hooks(repo_path, AgentHarness.COPILOT, output_dir)
 
         hooks_file = repo_path / ".github" / "hooks" / "bcbench-hooks.json"
         assert hooks_file.exists()
@@ -37,7 +37,7 @@ class TestSetupHooks:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        tool_log_path = setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
+        tool_log_path = setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir)
 
         settings_file = repo_path / ".claude" / "settings.local.json"
         assert settings_file.exists()
@@ -68,7 +68,7 @@ class TestSetupHooks:
         existing = {"allowedTools": ["bash", "edit"]}
         (claude_dir / "settings.local.json").write_text(json.dumps(existing), encoding="utf-8")
 
-        setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
+        setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir)
 
         settings = json.loads((claude_dir / "settings.local.json").read_text(encoding="utf-8"))
         assert settings["allowedTools"] == ["bash", "edit"]
@@ -80,7 +80,7 @@ class TestSetupHooks:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        setup_hooks(repo_path, AgentType.COPILOT, output_dir)
+        setup_hooks(repo_path, AgentHarness.COPILOT, output_dir)
 
         hooks_file = repo_path / ".github" / "hooks" / "bcbench-hooks.json"
         hooks_config = json.loads(hooks_file.read_text(encoding="utf-8"))
@@ -96,7 +96,7 @@ class TestSetupHooks:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        setup_hooks(repo_path, AgentType.COPILOT, output_dir)
+        setup_hooks(repo_path, AgentHarness.COPILOT, output_dir)
 
         hooks_file = repo_path / ".github" / "hooks" / "bcbench-hooks.json"
         hooks_config = json.loads(hooks_file.read_text(encoding="utf-8"))
@@ -110,7 +110,7 @@ class TestSetupHooks:
         output_dir = tmp_path / "results$(id)`whoami`"
         output_dir.mkdir()
 
-        setup_hooks(repo_path, AgentType.CLAUDE, output_dir)
+        setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir)
 
         settings = json.loads((repo_path / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
         command = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]

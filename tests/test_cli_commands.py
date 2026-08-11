@@ -6,7 +6,7 @@ from unittest.mock import PropertyMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from bcbench.cli import app
+from bcbench.cli import _redteam_group_installed, app
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.types import AgentMetrics, BCalLLMBackend, EvaluationCategory
@@ -19,6 +19,18 @@ from tests.conftest import (
 )
 
 runner = CliRunner()
+
+
+@patch("bcbench.cli.import_module")
+def test_redteam_group_installed_when_sdk_module_imports(import_module):
+    assert _redteam_group_installed()
+    import_module.assert_called_once_with("azure.ai.evaluation.red_team")
+
+
+@patch("bcbench.cli.import_module", side_effect=ImportError)
+def test_redteam_group_not_installed_when_sdk_module_import_fails(import_module):
+    assert not _redteam_group_installed()
+    import_module.assert_called_once_with("azure.ai.evaluation.red_team")
 
 
 @pytest.fixture(autouse=True)

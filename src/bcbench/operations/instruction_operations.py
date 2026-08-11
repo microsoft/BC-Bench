@@ -3,15 +3,15 @@ from shutil import copytree, rmtree
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import RepoGroundedEntry
 from bcbench.logger import get_logger
-from bcbench.types import AgentType
+from bcbench.types import AgentHarness
 
 logger = get_logger(__name__)
 _config = get_config()
 
 
-def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType) -> bool:
+def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> bool:
     """
     Setup custom instructions from config if enabled.
 
@@ -19,7 +19,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
         agent_config: Agent configuration dictionary
         entry: Dataset entry naming the customization profile to apply
         repo_path: Path to repository where instructions will be copied
-        agent_type: Type of agent (Copilot or Claude)
+        harness: Agent harness (Copilot or Claude)
 
     Returns:
         True if instructions are enabled, False otherwise
@@ -29,7 +29,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
 
     if instructions_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
-        target_dir: Path = agent_type.get_target_dir(repo_path)
+        target_dir: Path = harness.get_target_dir(repo_path)
 
         logger.info(f"Setting up custom instructions for profile: {entry.customization_profile}")
         if target_dir.exists():
@@ -38,7 +38,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
 
         # Rename canonical instruction file to agent-specific name
         canonical = target_dir / _config.file_patterns.instruction_source_naming
-        expected = target_dir / agent_type.instruction_filename
+        expected = target_dir / harness.instruction_filename
         if canonical.exists() and canonical != expected:
             canonical.rename(expected)
             logger.info(f"Renamed {canonical.name} -> {expected.name}")
@@ -48,7 +48,7 @@ def setup_instructions_from_config(agent_config: dict, entry: BaseDatasetEntry, 
     return instructions_enabled
 
 
-def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, agent_type: AgentType) -> str | None:
+def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: Path, harness: AgentHarness) -> str | None:
     """
     Setup custom agents in the repository if available.
     """
@@ -57,7 +57,7 @@ def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: P
 
     if custom_agent_enabled:
         source_instructions: Path = _get_source_instructions_path(entry.customization_profile)
-        target_dir: Path = agent_type.get_target_dir(repo_path)
+        target_dir: Path = harness.get_target_dir(repo_path)
         copytree(source_instructions / "agents", target_dir / "agents", dirs_exist_ok=True)
 
         logger.info(f"Custom agents are set up from {source_instructions / 'agents'}")
@@ -83,7 +83,7 @@ def _get_source_instructions_path(profile: str) -> Path:
     return instructions_path
 
 
-def copy_problem_statement_folder(entry: _BugFixTestGenBase, repo_path: Path) -> None:
+def copy_problem_statement_folder(entry: RepoGroundedEntry, repo_path: Path) -> None:
     """
     Copy problem statement folder to the testbed repository root.
 
