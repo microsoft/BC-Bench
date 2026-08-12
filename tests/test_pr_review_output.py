@@ -1,6 +1,6 @@
 import json
 
-from bcbench.agent.engine.review_output import engine_report_to_review_comments, load_engine_report
+from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.evaluate.review_parsing import parse_review_output
 
 

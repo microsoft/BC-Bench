@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.agent.engine.agent import _write_review_json
+from bcbench.agent.pr_review.agent import _write_review_json
 from bcbench.exceptions import AgentError
 
 

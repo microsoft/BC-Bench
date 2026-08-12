@@ -8,7 +8,7 @@ import typer
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.engine import run_engine_review
+from bcbench.agent.pr_review import run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -28,7 +28,7 @@ _config = get_config()
 run_app = typer.Typer(help="Run agents on single dataset entry")
 
 
-def _run_engine(
+def _run_pr_review(
     entry_id: str,
     model: str,
     repo_path: Path,
@@ -40,7 +40,7 @@ def _run_engine(
 ) -> None:
     """Generate review.json for a code-review entry via the BC-ALAgents review engine.
 
-    Shared by 'run engine' and the code-review path of 'run copilot': code-review always
+    Shared by 'run pr-review' and the code-review path of 'run copilot': code-review always
     runs the engine's real generate half, never a bespoke prompt. BCQuality source and
     severity default to the engine config when not overridden.
     """
@@ -48,7 +48,7 @@ def _run_engine(
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
-    run_engine_review(
+    run_pr_review_agent(
         entry=entry,
         repo_path=repo_path,
         model=model,
@@ -81,7 +81,7 @@ def run_copilot(
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        _run_engine(entry_id, model=model, repo_path=repo_path, output_dir=output_dir)
+        _run_pr_review(entry_id, model=model, repo_path=repo_path, output_dir=output_dir)
         return
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
@@ -118,7 +118,7 @@ def run_claude(
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter("code-review runs through the BC Review Engine; use 'bcbench run copilot --category code-review' or 'bcbench run engine'.")
+        raise typer.BadParameter("code-review runs through the BC Review Engine; use 'bcbench run copilot --category code-review' or 'bcbench run pr-review'.")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -134,8 +134,8 @@ def run_claude(
     )
 
 
-@run_app.command("engine")
-def run_engine(
+@run_app.command("pr-review")
+def run_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     model: CopilotModel = "claude-sonnet-5",
     repo_path: RepoPath = _config.paths.testbed_path,
@@ -149,13 +149,13 @@ def run_engine(
     Run the BC-ALAgents review engine (generate half) on a single code-review entry.
 
     Writes review.json in the repo root without scoring. For full evaluation, use
-    'bcbench evaluate engine' instead. Requires a local BC-ALAgents checkout
+    'bcbench evaluate pr-review' instead. Requires a local BC-ALAgents checkout
     (engine.path in config.yaml or BC_REVIEW_ENGINE_ROOT), PowerShell 7+, and GH_TOKEN.
 
     Example:
-        uv run bcbench run engine synthetic__style-018 --repo-path /path/to/testbed
+        uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
-    _run_engine(
+    _run_pr_review(
         entry_id,
         model=model,
         repo_path=repo_path,

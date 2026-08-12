@@ -20,7 +20,7 @@ from typing import Any
 
 import yaml
 
-from bcbench.agent.engine.review_output import engine_report_to_review_comments, load_engine_report
+from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
@@ -165,7 +165,7 @@ def _write_review_json(output_dir: Path, repo_path: Path) -> int:
     return len(comments)
 
 
-def run_engine_review(
+def run_pr_review_agent(
     entry: BaseDatasetEntry,
     model: str,
     category: EvaluationCategory,
