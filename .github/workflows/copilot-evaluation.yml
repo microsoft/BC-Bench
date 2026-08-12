@@ -142,13 +142,29 @@ jobs:
           path: bc-alagents-engine
           token: ${{ github.token }}
 
-      - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+      - name: Run code-review engine for entry ${{ matrix.entry }}
+        if: ${{ inputs.category == 'code-review' }}
         timeout-minutes: 120
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           BC_PR_REVIEW_ROOT: ${{ github.workspace }}/bc-alagents-engine
+        run: |
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
+
+          uv run bcbench evaluate code-review "${{ matrix.entry }}" `
+            --model "${{ inputs.model }}" `
+            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+
+      - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+        if: ${{ inputs.category != 'code-review' }}
+        timeout-minutes: 120
+        shell: pwsh
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
