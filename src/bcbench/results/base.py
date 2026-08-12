@@ -21,7 +21,7 @@ class BaseEvaluationResult(BaseModel):
     model: str
     agent_name: str
     category: EvaluationCategory
-    judge_model: str | None = None
+    judge_model: str | None
 
     timeout: bool = False
 

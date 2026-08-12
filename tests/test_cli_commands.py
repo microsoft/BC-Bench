@@ -410,6 +410,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "instance_results": copilot_instance_results,
                 "date": "2025-01-10",
                 "model": "gpt-4o",
+                "judge_model": None,
                 "category": "bug-fix",
                 "agent_name": "copilot",
                 "average_duration": 120.5,
@@ -433,6 +434,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "instance_results": mini_instance_results,
                 "date": "2025-01-12",
                 "model": "gpt-4o",
+                "judge_model": None,
                 "category": "bug-fix",
                 "agent_name": "mini",
                 "average_duration": 95.0,
@@ -451,6 +453,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "aggregate": [
             {
                 "model": "gpt-4o",
+                "judge_model": None,
                 "agent_name": "copilot",
                 "category": "bug-fix",
                 "experiment": {
@@ -469,6 +472,7 @@ def sample_leaderboard_and_summary(tmp_path):
             },
             {
                 "model": "gpt-4o",
+                "judge_model": None,
                 "agent_name": "mini",
                 "category": "bug-fix",
                 "experiment": None,
@@ -498,6 +502,7 @@ def sample_leaderboard_and_summary(tmp_path):
                 "instance_results": testgen_instance_results,
                 "date": "2025-01-11",
                 "model": "gpt-4-turbo",
+                "judge_model": None,
                 "category": "test-generation",
                 "agent_name": "copilot",
                 "average_duration": 110.0,
@@ -516,6 +521,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "aggregate": [
             {
                 "model": "gpt-4-turbo",
+                "judge_model": None,
                 "agent_name": "copilot",
                 "category": "test-generation",
                 "experiment": None,
@@ -549,6 +555,7 @@ def sample_leaderboard_and_summary(tmp_path):
         "instance_results": new_summary_instance_results,
         "date": "2025-01-15",
         "model": "gpt-4o",
+        "judge_model": None,
         "category": "bug-fix",
         "agent_name": "copilot",
         "average_duration": 130.0,
@@ -629,6 +636,7 @@ def test_result_update_adds_new_entry(sample_leaderboard_and_summary):
         "instance_results": new_agent_instance_results,
         "date": "2025-01-16",
         "model": "gpt-4o",
+        "judge_model": None,
         "category": "test-generation",
         "agent_name": "new-agent",
         "average_duration": 100.0,
@@ -697,6 +705,7 @@ def test_result_update_distinguishes_by_mcp_servers(sample_leaderboard_and_summa
         "instance_results": diff_mcp_instance_results,
         "date": "2025-01-17",
         "model": "gpt-4o",
+        "judge_model": None,
         "category": "bug-fix",
         "agent_name": "copilot",
         "average_duration": 115.0,
@@ -840,6 +849,7 @@ def test_result_update_stores_multiple_results_with_default_n(sample_leaderboard
         "instance_results": multi_results_instance,
         "date": "2025-01-15",
         "model": "gpt-4o",
+        "judge_model": None,
         "category": "bug-fix",
         "agent_name": "copilot",
         "average_duration": 130.0,
@@ -892,6 +902,7 @@ def test_result_update_replaces_oldest_when_exceeding_n(sample_leaderboard_and_s
         "percentage": 70.0,
         "instance_results": oldest_instance_results,
         "model": "gpt-4o",
+        "judge_model": None,
         "category": "bug-fix",
         "agent_name": "copilot",
         "average_duration": 120.0,
@@ -1011,6 +1022,7 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
                 "total": 10,
                 "date": "2025-01-10",
                 "model": "gpt-4o",
+                "judge_model": None,
                 "category": "bug-fix",
                 "agent_name": "legacy-agent",
                 "average_duration": 100.0,
@@ -1029,6 +1041,7 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
         "aggregate": [
             {
                 "model": "gpt-4o",
+                "judge_model": None,
                 "agent_name": "legacy-agent",
                 "category": "bug-fix",
                 "experiment": None,
@@ -1073,6 +1086,7 @@ def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
                 "instance_results": {f"test__inst_{i}": (i < 6) for i in range(10)},
                 "date": "2025-01-10",
                 "model": "gpt-4o",
+                "judge_model": None,
                 "category": "bug-fix",
                 "agent_name": "copilot",
                 "average_duration": 100.0,
@@ -1092,6 +1106,7 @@ def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
                 "instance_results": {f"test__inst_{i}": (i < 8) for i in range(10)},
                 "date": "2025-01-15",
                 "model": "gpt-4o",
+                "judge_model": None,
                 "category": "bug-fix",
                 "agent_name": "copilot",
                 "average_duration": 95.0,
@@ -1147,6 +1162,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
                 "instance_results": {f"test__inst_{i}": (i < 5) for i in range(10)},
                 "date": "2025-01-10",
                 "model": "gpt-4o",
+                "judge_model": None,
                 "category": "bug-fix",
                 "agent_name": "copilot",
                 "average_duration": 100.0,
@@ -1161,6 +1177,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
         "aggregate": [
             {
                 "model": "gpt-4o",
+                "judge_model": None,
                 "agent_name": "copilot",
                 "category": "bug-fix",
                 "experiment": None,
@@ -1190,6 +1207,7 @@ def test_result_update_groups_by_benchmark_version(tmp_path):
         "instance_results": {f"test__inst_{i}": (i < 7) for i in range(10)},
         "date": "2025-01-15",
         "model": "gpt-4o",
+        "judge_model": None,
         "category": "bug-fix",
         "agent_name": "copilot",
         "average_duration": 95.0,

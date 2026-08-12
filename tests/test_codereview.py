@@ -208,6 +208,7 @@ class TestCodeReviewResult:
             "instance_id": "test__instance",
             "project": "app",
             "model": "gpt-4o",
+            "judge_model": None,
             "agent_name": "copilot-cli",
             "category": "code-review",
             "output": "",

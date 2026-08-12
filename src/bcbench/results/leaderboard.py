@@ -24,7 +24,7 @@ class LeaderboardAggregate(BaseModel, ABC):
     """
 
     model: str
-    judge_model: str | None = None
+    judge_model: str | None
     agent_name: str
     category: EvaluationCategory
     experiment: ExperimentConfiguration | None = None

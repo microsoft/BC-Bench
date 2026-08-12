@@ -43,7 +43,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     date: date
 
     model: str
-    judge_model: str | None = None
+    judge_model: str | None
     agent_name: str
     category: EvaluationCategory
 
