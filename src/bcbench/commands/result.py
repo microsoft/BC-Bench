@@ -84,7 +84,7 @@ def result_summarize(
 
 
 def _rebuild_aggregates(runs: list[EvaluationResultSummary]) -> list[LeaderboardAggregate]:
-    grouped: defaultdict[tuple[str, str, str | None, str], list[EvaluationResultSummary]] = defaultdict(list)
+    grouped: defaultdict[tuple[str, str, str | None, str | None, str], list[EvaluationResultSummary]] = defaultdict(list)
     for run in runs:
         grouped[run.combination_key()].append(run)
     return [group[0].category.aggregate_class.from_runs(group) for group in grouped.values()]

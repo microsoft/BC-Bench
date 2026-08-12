@@ -6,7 +6,9 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
+import yaml
 from dotenv import load_dotenv
 
 from bcbench.cli_options import CopilotModel
@@ -141,15 +143,19 @@ class FilePatternConfig:
 
 @dataclass(frozen=True)
 class JudgeConfig:
-    """Configuration for the code-review LLM semantic judge."""
+    """Configuration for LLM judges."""
 
     code_review_model: CopilotModel
+    lm_checklist_model: str
     result_file: str
 
     @classmethod
-    def default(cls) -> JudgeConfig:
+    def from_file(cls, path: Path) -> JudgeConfig:
+        shared_config = yaml.safe_load(path.read_text(encoding="utf-8"))
+        judges = shared_config["judges"]
         return cls(
-            code_review_model="gpt-5.3-codex",
+            code_review_model=cast(CopilotModel, judges["code-review"]["model"]),
+            lm_checklist_model=judges["lm-checklist"]["model"],
             result_file="judge_results.json",
         )
 
@@ -195,7 +201,7 @@ class Config:
             env=EnvironmentConfig.from_environment(),
             timeout=TimeoutConfig.default(),
             file_patterns=FilePatternConfig.default(),
-            judge=JudgeConfig.default(),
+            judge=JudgeConfig.from_file(path_config.agent_share_dir / "config.yaml"),
         )
 
 

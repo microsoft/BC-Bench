@@ -774,6 +774,18 @@ class TestLeaderboard:
         with pytest.raises(ValueError, match="different combinations"):
             LeaderboardAggregate.from_runs([run1, run2])
 
+    def test_aggregate_rejects_runs_with_different_judge_models(self):
+        from bcbench.results.leaderboard import LeaderboardAggregate
+
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__1")],
+            run_id="run_1",
+        )
+        run2 = run1.model_copy(update={"judge_model": "different-judge"})
+
+        with pytest.raises(ValueError, match="different combinations"):
+            LeaderboardAggregate.from_runs([run1, run2])
+
     def test_aggregate_rejects_runs_with_different_totals(self):
         from bcbench.results.leaderboard import LeaderboardAggregate
 

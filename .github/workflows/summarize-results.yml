@@ -88,6 +88,7 @@ jobs:
         env:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+          JUDGE_MODEL: ${{ steps.bceval.outputs.judge_model }}
         run: |
           # Get Azure DevOps access token from Azure CLI (uses the OIDC token from azure/login)
           ADO_TOKEN=$(az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)

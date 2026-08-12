@@ -24,6 +24,7 @@ class LeaderboardAggregate(BaseModel, ABC):
     """
 
     model: str
+    judge_model: str | None = None
     agent_name: str
     category: EvaluationCategory
     experiment: ExperimentConfiguration | None = None
@@ -52,6 +53,7 @@ class LeaderboardAggregate(BaseModel, ABC):
 
         return {
             "model": first_run.model,
+            "judge_model": first_run.judge_model,
             "agent_name": first_run.agent_name,
             "category": first_run.category,
             "experiment": first_run.experiment,

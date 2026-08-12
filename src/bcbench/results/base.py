@@ -6,6 +6,7 @@ from typing import Any, Self
 
 from pydantic import BaseModel
 
+from bcbench.config import get_config
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
@@ -20,6 +21,7 @@ class BaseEvaluationResult(BaseModel):
     model: str
     agent_name: str
     category: EvaluationCategory
+    judge_model: str | None = None
 
     timeout: bool = False
 
@@ -36,12 +38,20 @@ class BaseEvaluationResult(BaseModel):
         elif missing_metrics := sorted(name for name in context.agent_name.expected_metrics if getattr(context.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
+        judge_model: str | None = None
+        judge_config = get_config().judge
+        if context.category == EvaluationCategory.CODE_REVIEW:
+            judge_model = judge_config.code_review_model
+        elif "lm_checklist" in context.category.evaluators:
+            judge_model = judge_config.lm_checklist_model
+
         return {
             "instance_id": context.entry.instance_id,
             "project": context.entry.extract_project_name(),
             "model": context.model.replace(".", "-"),
             "category": context.category,
             "agent_name": context.agent_name,
+            "judge_model": judge_model,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }

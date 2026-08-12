@@ -1,7 +1,11 @@
+from bcbench.config import get_config
+from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
+from bcbench.results.leaderboard import LeaderboardAggregate
+from bcbench.results.summary import EvaluationResultSummary
 from bcbench.results.testgeneration import TestGenerationResult
-from bcbench.types import AgentHarness
-from tests.conftest import create_dataset_entry, create_evaluation_context
+from bcbench.types import AgentHarness, EvaluationCategory
+from tests.conftest import create_codereview_result, create_dataset_entry, create_evaluation_context
 
 
 class TestEvaluationResultFactories:
@@ -87,3 +91,17 @@ class TestEvaluationResultFactories:
         assert result.pre_patch_failed is True
         assert result.post_patch_passed is False
         assert result.error_message == "Failed post-patch"
+
+    def test_judge_models_are_populated_from_shared_config(self, tmp_path):
+        config = get_config().judge
+        context = create_evaluation_context(tmp_path, category=EvaluationCategory.NL2AL)
+
+        lm_checklist_result = JudgeBasedEvaluationResult.create_raw(context, "output")
+        code_review_result = create_codereview_result()
+        summary = EvaluationResultSummary.from_results([code_review_result], "run")
+        aggregate = LeaderboardAggregate.from_runs([summary])
+
+        assert lm_checklist_result.judge_model == config.lm_checklist_model == "gpt-41-2025-04-14"
+        assert code_review_result.judge_model == config.code_review_model == "gpt-5.3-codex"
+        assert summary.judge_model == code_review_result.judge_model
+        assert aggregate.judge_model == code_review_result.judge_model

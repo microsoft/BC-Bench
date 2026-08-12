@@ -1,3 +1,9 @@
+judges:
+  code-review:
+    model: "gpt-5.3-codex"
+  lm-checklist:
+    model: "gpt-41-2025-04-14"
+
 prompt:
   include_project_paths: false
 

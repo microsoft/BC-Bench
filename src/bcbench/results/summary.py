@@ -43,6 +43,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     date: date
 
     model: str
+    judge_model: str | None = None
     agent_name: str
     category: EvaluationCategory
 
@@ -96,6 +97,7 @@ class EvaluationResultSummary(BaseModel, ABC):
             date=datetime.now(UTC).date(),
             category=first_result.category,
             model=first_result.model,
+            judge_model=first_result.judge_model,
             agent_name=first_result.agent_name,
             average_duration=sum(durations) / len(durations) if durations else 0.0,
             average_prompt_tokens=sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
@@ -127,12 +129,12 @@ class EvaluationResultSummary(BaseModel, ABC):
 
         logger.info(f"Saved evaluation summary to {output_file}")
 
-    def combination_key(self) -> tuple[str, str, str | None, str]:
-        """Key for identifying runs of the same agent+model+experiment+benchmark_version combination."""
+    def combination_key(self) -> tuple[str, str, str | None, str | None, str]:
+        """Key for identifying runs of the same agent, model, experiment, judge, and benchmark version."""
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
-        return (self.agent_name, self.model, experiment_key, self.benchmark_version)
+        return (self.agent_name, self.model, experiment_key, self.judge_model, self.benchmark_version)
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
