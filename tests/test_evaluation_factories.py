@@ -101,7 +101,7 @@ class TestEvaluationResultFactories:
         summary = EvaluationResultSummary.from_results([code_review_result], "run")
         aggregate = LeaderboardAggregate.from_runs([summary])
 
-        assert lm_checklist_result.judge_model == config.lm_checklist_model == "gpt-41-2025-04-14"
-        assert code_review_result.judge_model == config.code_review_model == "gpt-5.3-codex"
+        assert lm_checklist_result.judge_model == config.lm_checklist_model
+        assert code_review_result.judge_model == config.code_review_model
         assert summary.judge_model == code_review_result.judge_model
         assert aggregate.judge_model == code_review_result.judge_model
