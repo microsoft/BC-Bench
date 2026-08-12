@@ -77,44 +77,6 @@ prompt:
     Extensibility request:
     {{task}}
 
-  code-review-template: |
-    /review
-
-    Review only the uncommitted working-tree changes (git diff HEAD); do not compare commits such as HEAD~1..HEAD or origin/main.
-
-    Your only deliverable is a file named review.json in the repository root. You MUST write it before finishing; if you do not, your review is lost and counts as no output.
-
-    review.json must contain a single JSON array. Each finding is an object with these fields:
-      - file: repo-relative path of the file the finding refers to (string, required)
-      - line_start: 1-based line number where the issue starts (integer, required)
-      - line_end: line number where the issue ends (integer, optional)
-      - severity: one of critical, high, medium, or low (optional, defaults to medium)
-      - body: concise description of the issue (string, required)
-
-    If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
-
-# BC-ALAgents review engine (the `engine` code-review agent). Runs the engine's own
-# generate half (Invoke-PRReviewShell.ps1 -GenerateOnly) in local mode instead of the
-# code-review-template above, so BC-Bench measures the real PROD engine. This path is
-# ADDITIVE - the copilot/claude agents are unaffected.
-#   path:          absolute path to a local microsoft/BC-ALAgents checkout (override with
-#                  the BC_REVIEW_ENGINE_ROOT env var). Required to run the `engine` agent.
-#   agent_version: value for COPILOT_REVIEW_AGENT_VERSION; "0.0.0" avoids the engine's
-#                  git-tag version lookup (BC-Bench is not a tagged engine release).
-#   min_severity:  AGENT_MINIMUM_SEVERITY floor (Low is strictest / emits the most).
-engine:
-  path: "C:/depot/BC-ALReviewAgent"
-  agent_version: "0.0.0"
-  min_severity: "Low"
-  # BCQuality content source for the engine run. All optional; null = use the
-  # engine's pinned repo/ref. Set bcquality.local_path to iterate on a local
-  # BCQuality checkout without pushing (it is copied and filtered; the original is
-  # never modified). CLI flags (--bcquality-repo/-ref/-local-path) override these.
-  bcquality:
-    repo: null        # BCQUALITY_REPO override (e.g. a private fork)
-    ref: null         # BCQUALITY_REF override (e.g. your private branch/tag/sha)
-    local_path: null  # local BCQuality checkout to copy+filter instead of fetching
-
 # controls:
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
 #    - Claude: copies to repo/.claude/ and renames AGENTS.md to CLAUDE.md

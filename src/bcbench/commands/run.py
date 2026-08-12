@@ -46,6 +46,8 @@ def run_copilot(
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
+    if category is EvaluationCategory.CODE_REVIEW:
+        raise typer.BadParameter("code-review is run by the BC Review Engine; use 'bcbench run engine' instead.")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -80,6 +82,8 @@ def run_claude(
     Example:
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
+    if category is EvaluationCategory.CODE_REVIEW:
+        raise typer.BadParameter("code-review is run by the BC Review Engine; use 'bcbench run engine' instead.")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
