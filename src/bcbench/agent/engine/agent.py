@@ -178,6 +178,11 @@ def run_engine_review(
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run the engine's generate half on a code-review entry and write review.json.
 
+    Separate from run_copilot_agent by design: this spawns the PROD BC-ALAgents
+    PowerShell orchestrator (Copilot is spawned inside the engine, not here), so it
+    owns none of the copilot-harness prompt/MCP/LSP wiring and takes engine-specific
+    inputs (BCQuality source, min severity) for the code-review category only.
+
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration).
     """
