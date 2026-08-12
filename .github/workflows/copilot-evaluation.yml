@@ -273,7 +273,7 @@ jobs:
             echo "| Operation | HTTP status | Interpretation |"
             echo "| --- | --- | --- |"
             echo "| Authenticated repository read | \`${REQUEUE_PROBE_REPO_READ_STATUS}\` | Verifies that the workflow token can read this repository. |"
-            echo "| Unreachable Git blob creation | \`${REQUEUE_PROBE_BLOB_STATUS}\` | Tests effective Git contents write without modifying a ref. |"
+            echo "| Unreferenced Git blob creation | \`${REQUEUE_PROBE_BLOB_STATUS}\` | Tests effective Git contents write without modifying a ref. |"
             echo "| Generic temporary tag | \`${REQUEUE_PROBE_GENERIC_TAG_STATUS}\` | Tests general tag-ref creation. |"
             echo "| Production-like \`eval-run-*\` tag | \`${REQUEUE_PROBE_EVAL_TAG_STATUS}\` | Tests the namespace used by requeue. |"
             echo "| Temporary diagnostic branch | \`${REQUEUE_PROBE_BRANCH_STATUS}\` | Distinguishes tag-only restrictions from broad ref restrictions. |"
