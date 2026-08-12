@@ -38,18 +38,19 @@ _PREPARE_BCQUALITY_SCRIPT = Path(__file__).parent / "scripts" / "Prepare-BCQuali
 
 
 def _load_engine_settings() -> dict[str, Any]:
-    config_file = Path(__file__).parent / "config.yaml"
-    return yaml.safe_load(config_file.read_text()) or {}
+    config_file = _config.paths.agent_share_dir / "config.yaml"
+    data = yaml.safe_load(config_file.read_text()) or {}
+    return data.get("engine") or {}
 
 
 def _resolve_engine_root(settings: dict[str, Any]) -> Path:
     raw = os.environ.get("BC_REVIEW_ENGINE_ROOT") or settings.get("path")
     if not raw:
-        raise AgentError("Engine root not configured. Set 'path' in the engine config.yaml or the BC_REVIEW_ENGINE_ROOT environment variable.")
+        raise AgentError("Engine root not configured. Set 'engine.path' in the shared agent config.yaml or the BC_REVIEW_ENGINE_ROOT environment variable.")
     root = Path(raw).expanduser()
     shell = root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-PRReviewShell.ps1"
     if not shell.exists():
-        raise AgentError(f"Engine review shell not found at {shell}. Check 'path' points at a BC-ALAgents checkout.")
+        raise AgentError(f"Engine review shell not found at {shell}. Check 'engine.path' points at a BC-ALAgents checkout.")
     return root
 
 

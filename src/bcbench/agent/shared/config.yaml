@@ -158,3 +158,25 @@ mcp:
     #   type: "stdio"
     #   command: "npx"
     #   args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
+
+# BC-ALAgents review engine settings. The code-review category runs the engine's own
+# generate half (Invoke-PRReviewShell.ps1 -GenerateOnly) in local mode instead of a
+# bespoke review prompt, so it measures the real PROD engine + BCQuality. These knobs
+# live here in the shared config so they are easy to tweak on a private branch.
+#   path:          absolute path to a local microsoft/BC-ALAgents checkout (override with
+#                  the BC_REVIEW_ENGINE_ROOT env var; CI sets it to the checked-out engine).
+#   agent_version: value for COPILOT_REVIEW_AGENT_VERSION; "0.0.0" avoids the engine's
+#                  git-tag version lookup (BC-Bench is not a tagged engine release).
+#   min_severity:  AGENT_MINIMUM_SEVERITY floor (Low is strictest / emits the most).
+#   bcquality:     content source for the engine run; all optional (null = engine's pinned
+#                  repo/ref). Set local_path to iterate on a local BCQuality checkout without
+#                  pushing (it is copied and filtered; the original is never modified).
+#                  CLI flags (--bcquality-repo/-ref/-local-path) override these.
+engine:
+  path: "C:/depot/BC-ALReviewAgent"
+  agent_version: "0.0.0"
+  min_severity: "Low"
+  bcquality:
+    repo: null
+    ref: null
+    local_path: null

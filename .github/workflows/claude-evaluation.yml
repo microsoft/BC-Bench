@@ -23,6 +23,7 @@ on:
         options:
           - "bug-fix"
           - "test-generation"
+          - "code-review"
           - "extensibility-request-implement"
           - "extensibility-request-triage"
       test-run:
