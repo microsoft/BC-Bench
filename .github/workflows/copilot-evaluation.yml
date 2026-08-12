@@ -72,27 +72,13 @@ env:
 
 jobs:
   pin-commit:
-    runs-on: ubuntu-latest
-    # Create the ephemeral requeue tag as early as possible (rather than after the
-    # evaluation finishes) so there's minimal time for `main`'s workflow files to
-    # diverge from the pinned commit, which would otherwise make the later tag
-    # creation fail with a 403 (workflow-scope changes require `workflows: write`,
-    # which GITHUB_TOKEN cannot be granted).
-    if: ${{ !inputs.test-run && inputs.repeat != '1' && !startsWith(github.ref, 'refs/tags/eval-run-') }}
-    outputs:
-      tag-name: ${{ steps.create-tag.outputs.tag-name }}
-    steps:
-      - name: Create ephemeral tag pinning this commit
-        id: create-tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG_NAME="eval-run-copilot-${{ github.run_id }}"
-          gh api repos/${{ github.repository }}/git/refs \
-            --method POST \
-            -f ref="refs/tags/${TAG_NAME}" \
-            -f sha="${{ github.sha }}"
-          echo "tag-name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+    uses: $/.github/workflows/pin-evaluation-commit.yml
+    permissions:
+      contents: write
+    with:
+      agent: copilot
+      test-run: ${{ inputs.test-run }}
+      repeat: ${{ inputs.repeat }}
 
   get-entries:
     uses: $/.github/workflows/get-entries.yml
