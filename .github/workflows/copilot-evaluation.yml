@@ -72,6 +72,11 @@ on:
         required: false
         default: ""
         type: string
+      troubleshoot-target-shas:
+        description: "Optional comma-separated commit SHAs for a single-token comparison."
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.category }}
@@ -207,3 +212,4 @@ jobs:
       workflow-inputs: "{}"
       troubleshoot-only: true
       troubleshoot-target-sha: ${{ inputs.troubleshoot-target-sha }}
+      troubleshoot-target-shas: ${{ inputs.troubleshoot-target-shas }}

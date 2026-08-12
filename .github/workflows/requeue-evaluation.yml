@@ -25,6 +25,11 @@ on:
         required: false
         default: ""
         type: string
+      troubleshoot-target-shas:
+        description: "Optional comma-separated commit SHAs for a single-token comparison"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -107,6 +112,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       TARGET_SHA: ${{ inputs.troubleshoot-target-sha || github.sha }}
+      TARGET_SHAS: ${{ inputs.troubleshoot-target-shas }}
     steps:
       - name: Probe token permissions and ref creation
         shell: bash
@@ -168,6 +174,59 @@ jobs:
             [[ "${status[eval-tag]}" == "201" ]] && echo "REQUEUE_PROBE_EVAL_TAG=${eval_tag}"
             [[ "${status[branch]}" == "201" ]] && echo "REQUEUE_PROBE_BRANCH=${branch}"
           } >> "${GITHUB_ENV}"
+
+      - name: Compare tag creation across target SHAs
+        if: ${{ inputs.troubleshoot-target-shas != '' }}
+        shell: bash
+        run: |
+          set +e
+
+          {
+            echo
+            echo "### Single-token target comparison"
+            echo
+            echo "| Target SHA | HTTP status | Accepted permissions | Response |"
+            echo "| --- | --- | --- | --- |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          IFS=',' read -ra target_shas <<< "${TARGET_SHAS}"
+          for index in "${!target_shas[@]}"; do
+            target_sha="${target_shas[$index]}"
+            tag="actions-target-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${index}"
+            headers="${RUNNER_TEMP}/target-probe-${index}.headers"
+            body="${RUNNER_TEMP}/target-probe-${index}.json"
+            response_status="$(
+              curl --silent --show-error \
+                --dump-header "${headers}" \
+                --output "${body}" \
+                --write-out "%{http_code}" \
+                --request POST \
+                --header "Accept: application/vnd.github+json" \
+                --oauth2-bearer "${GH_TOKEN}" \
+                --header "X-GitHub-Api-Version: 2022-11-28" \
+                --header "Content-Type: application/json" \
+                --data "$(jq -nc --arg ref "refs/tags/${tag}" --arg sha "${target_sha}" '{ref: $ref, sha: $sha}')" \
+                "https://api.github.com/repos/${REPOSITORY}/git/refs"
+            )"
+            accepted_permissions="$(
+              tr -d '\r' < "${headers}" |
+                awk -F': ' 'tolower($1) == "x-accepted-github-permissions" { print $2 }' |
+                tail -1
+            )"
+            response_message="$(jq -r '.message // "created"' "${body}")"
+
+            echo "${target_sha}: HTTP ${response_status}; accepted=${accepted_permissions}; response=${response_message}"
+            echo "| \`${target_sha}\` | \`${response_status}\` | \`${accepted_permissions}\` | ${response_message} |" >> "${GITHUB_STEP_SUMMARY}"
+
+            if [[ "${response_status}" == "201" ]]; then
+              curl --silent --show-error --output /dev/null \
+                --request DELETE \
+                --header "Accept: application/vnd.github+json" \
+                --oauth2-bearer "${GH_TOKEN}" \
+                --header "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/${REPOSITORY}/git/refs/tags/${tag}"
+            fi
+          done
 
       - name: Write diagnostic summary
         if: always()
