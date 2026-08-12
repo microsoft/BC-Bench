@@ -40,6 +40,59 @@ def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
     return run_dir
 
 
+def _run_engine_evaluation(
+    entry_id: str,
+    model: str,
+    repo_path: Path,
+    output_dir: Path,
+    run_id: str,
+    bcquality_ref: str | None = None,
+    bcquality_repo: str | None = None,
+    bcquality_local_path: str | None = None,
+    min_severity: str | None = None,
+) -> None:
+    """Evaluate a code-review entry through the BC-ALAgents review engine.
+
+    Shared by 'evaluate engine' and the code-review path of 'evaluate copilot': the
+    code-review category always runs the engine's own generate half (the real PROD
+    path), so callers never drive a bespoke review prompt. BCQuality source and
+    severity default to the engine config when not overridden.
+    """
+    category = EvaluationCategory.CODE_REVIEW
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    run_dir = _prepare_run_dir(output_dir, run_id)
+
+    logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
+
+    context = EvaluationContext(
+        entry=entry,
+        repo_path=repo_path,
+        result_dir=run_dir,
+        container=None,
+        model=model,
+        agent_name=AgentHarness.ENGINE,
+        category=category,
+    )
+
+    category.pipeline.execute(
+        context,
+        lambda ctx: run_engine_review(
+            entry=ctx.entry,
+            repo_path=ctx.repo_path,
+            category=category,
+            model=ctx.model,
+            output_dir=ctx.result_dir,
+            bcquality_ref=bcquality_ref,
+            bcquality_repo=bcquality_repo,
+            bcquality_local_path=bcquality_local_path,
+            min_severity=min_severity,
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
+
+
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
@@ -60,7 +113,9 @@ def evaluate_copilot(
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter("code-review is evaluated by the BC Review Engine; use 'bcbench evaluate engine' instead.")
+        # code-review always runs the engine's real generate half; --model threads into the Copilot it spawns.
+        _run_engine_evaluation(entry_id, model=model, repo_path=repo_path, output_dir=output_dir, run_id=run_id)
+        return
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
@@ -117,7 +172,7 @@ def evaluate_claude_code(
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter("code-review is evaluated by the BC Review Engine; use 'bcbench evaluate engine' instead.")
+        raise typer.BadParameter("code-review runs through the BC Review Engine; use 'bcbench evaluate copilot --category code-review' or 'bcbench evaluate engine'.")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
@@ -176,39 +231,17 @@ def evaluate_engine(
 
     To only generate review.json without scoring, use 'bcbench run engine' instead.
     """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=None,
+    _run_engine_evaluation(
+        entry_id,
         model=model,
-        agent_name=AgentHarness.ENGINE,
-        category=category,
+        repo_path=repo_path,
+        output_dir=output_dir,
+        run_id=run_id,
+        bcquality_ref=bcquality_ref,
+        bcquality_repo=bcquality_repo,
+        bcquality_local_path=bcquality_local_path,
+        min_severity=min_severity,
     )
-
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_engine_review(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            bcquality_ref=bcquality_ref,
-            bcquality_repo=bcquality_repo,
-            bcquality_local_path=bcquality_local_path,
-            min_severity=min_severity,
-        ),
-    )
-
-    logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
 
 
 @evaluate_app.command("bcal")

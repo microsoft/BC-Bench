@@ -28,6 +28,7 @@ on:
         options:
           - "bug-fix"
           - "test-generation"
+          - "code-review"
           - "extensibility-request-implement"
           - "extensibility-request-triage"
       test-run:
@@ -129,12 +130,25 @@ jobs:
       - name: Install evaluation CLIs
         uses: $/.github/actions/install-eval-clis
 
+      # code-review is evaluated through the BC-ALAgents review engine (the real PROD
+      # generate half + BCQuality). Check it out only for that category. To evaluate the
+      # engine at a different ref, change `ref` below on your private branch.
+      - name: Checkout BC-ALAgents review engine
+        if: ${{ inputs.category == 'code-review' }}
+        uses: actions/checkout@v5
+        with:
+          repository: microsoft/BC-ALAgents
+          ref: main
+          path: bc-alagents-engine
+          token: ${{ github.token }}
+
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          BC_REVIEW_ENGINE_ROOT: ${{ github.workspace }}/bc-alagents-engine  # used only for code-review (engine path)
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -163,7 +177,7 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: "GitHub Copilot CLI"
+      agent: ${{ inputs.category == 'code-review' && 'BC Review Engine' || 'GitHub Copilot CLI' }}
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
       git-ref: ${{ inputs.git-ref || github.ref_name }}

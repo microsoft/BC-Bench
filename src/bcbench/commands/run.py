@@ -1,5 +1,6 @@
 """CLI commands for running agents."""
 
+from pathlib import Path
 from typing import Annotated, cast
 
 import typer
@@ -27,6 +28,39 @@ _config = get_config()
 run_app = typer.Typer(help="Run agents on single dataset entry")
 
 
+def _run_engine(
+    entry_id: str,
+    model: str,
+    repo_path: Path,
+    output_dir: Path,
+    bcquality_ref: str | None = None,
+    bcquality_repo: str | None = None,
+    bcquality_local_path: str | None = None,
+    min_severity: str | None = None,
+) -> None:
+    """Generate review.json for a code-review entry via the BC-ALAgents review engine.
+
+    Shared by 'run engine' and the code-review path of 'run copilot': code-review always
+    runs the engine's real generate half, never a bespoke prompt. BCQuality source and
+    severity default to the engine config when not overridden.
+    """
+    category = EvaluationCategory.CODE_REVIEW
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    category.pipeline.setup_workspace(entry, repo_path)
+
+    run_engine_review(
+        entry=entry,
+        repo_path=repo_path,
+        model=model,
+        category=category,
+        output_dir=output_dir,
+        bcquality_ref=bcquality_ref,
+        bcquality_repo=bcquality_repo,
+        bcquality_local_path=bcquality_local_path,
+        min_severity=min_severity,
+    )
+
+
 @run_app.command("copilot")
 def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
@@ -47,7 +81,9 @@ def run_copilot(
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter("code-review is run by the BC Review Engine; use 'bcbench run engine' instead.")
+        # code-review always runs the engine's real generate half; --model threads into the Copilot it spawns.
+        _run_engine(entry_id, model=model, repo_path=repo_path, output_dir=output_dir)
+        return
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -83,7 +119,7 @@ def run_claude(
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter("code-review is run by the BC Review Engine; use 'bcbench run engine' instead.")
+        raise typer.BadParameter("code-review runs through the BC Review Engine; use 'bcbench run copilot --category code-review' or 'bcbench run engine'.")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -120,15 +156,10 @@ def run_engine(
     Example:
         uv run bcbench run engine synthetic__style-018 --repo-path /path/to/testbed
     """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
-
-    run_engine_review(
-        entry=entry,
-        repo_path=repo_path,
+    _run_engine(
+        entry_id,
         model=model,
-        category=category,
+        repo_path=repo_path,
         output_dir=output_dir,
         bcquality_ref=bcquality_ref,
         bcquality_repo=bcquality_repo,
