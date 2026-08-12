@@ -55,10 +55,10 @@ def _run_pr_review_evaluation(
 ) -> None:
     """Evaluate a code-review entry through the BC-ALAgents review engine.
 
-    Shared by 'evaluate pr-review' and the code-review path of 'evaluate copilot': the
-    code-review category always runs the engine's own generate half (the real PROD
-    path), so callers never drive a bespoke review prompt. BCQuality source and
-    severity default to the engine config when not overridden.
+    Backs the dedicated 'evaluate code-review' command: the code-review category always
+    runs the engine's own generate half (the real PROD path), so callers never drive a
+    bespoke review prompt. BCQuality source and severity default to the engine config when
+    not overridden.
     """
     category = EvaluationCategory.CODE_REVIEW
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]

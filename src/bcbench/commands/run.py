@@ -41,9 +41,9 @@ def _run_pr_review(
 ) -> None:
     """Generate review.json for a code-review entry via the BC-ALAgents review engine.
 
-    Shared by 'run pr-review' and the code-review path of 'run copilot': code-review always
-    runs the engine's real generate half, never a bespoke prompt. BCQuality source and
-    severity default to the engine config when not overridden.
+    Backs the dedicated 'run code-review' command: code-review always runs the engine's
+    real generate half, never a bespoke prompt. BCQuality source and severity default to
+    the engine config when not overridden.
     """
     category = EvaluationCategory.CODE_REVIEW
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
