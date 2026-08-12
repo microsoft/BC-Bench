@@ -148,7 +148,7 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-          BC_REVIEW_ENGINE_ROOT: ${{ github.workspace }}/bc-alagents-engine  # used only for code-review (engine path)
+          BC_REVIEW_ENGINE_ROOT: ${{ github.workspace }}/bc-alagents-engine
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 

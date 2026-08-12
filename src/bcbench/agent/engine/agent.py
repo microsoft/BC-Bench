@@ -1,11 +1,10 @@
 """Run the BC-ALAgents review engine (generate half) as a BC-Bench agent.
 
-This is the 2b integration: instead of driving a bespoke ``/review`` prompt through
-an inner Copilot session, the code-review category runs the *engine's own* generate
-shell (``Invoke-PRReviewShell.ps1 -GenerateOnly``) in local mode against the entry's
-changes. That is the exact generate half PROD uses, so BC-Bench measures the real
-engine rather than a divergent re-implementation. The BC-Bench ``--model`` threads
-straight through to the single Copilot the engine spawns (``COPILOT_MODEL``).
+The code-review category runs the engine's own generate shell
+(``Invoke-PRReviewShell.ps1 -GenerateOnly``) in local mode against the entry's changes,
+so BC-Bench measures the real PROD engine + BCQuality rather than a divergent
+re-implementation. The BC-Bench ``--model`` threads straight through to the single
+Copilot the engine spawns (``COPILOT_MODEL``).
 
 The engine writes ``agent-output.txt`` (the harvested findings report); we map it to
 ``review.json`` in the repo root so the existing code-review scorer runs unchanged.

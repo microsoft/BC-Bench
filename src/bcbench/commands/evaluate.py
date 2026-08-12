@@ -113,7 +113,6 @@ def evaluate_copilot(
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        # code-review always runs the engine's real generate half; --model threads into the Copilot it spawns.
         _run_engine_evaluation(entry_id, model=model, repo_path=repo_path, output_dir=output_dir, run_id=run_id)
         return
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
