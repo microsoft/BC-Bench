@@ -156,7 +156,11 @@ def _write_review_json(output_dir: Path, repo_path: Path) -> int:
     if not agent_output.exists():
         raise AgentError(f"Engine did not produce {_AGENT_OUTPUT_FILE} in {output_dir}.")
     report = load_engine_report(agent_output.read_text(encoding="utf-8"))
-    comments = engine_report_to_review_comments(report) if report is not None else []
+    if report is None:
+        raise AgentError(f"Engine {_AGENT_OUTPUT_FILE} was empty or not a valid findings report; refusing to score it as a clean review.")
+    if not isinstance(report.get("findings"), list):
+        raise AgentError(f"Engine report in {_AGENT_OUTPUT_FILE} has no findings list (got {type(report.get('findings')).__name__}); refusing to score it as a clean review.")
+    comments = engine_report_to_review_comments(report)
     (repo_path / _REVIEW_OUTPUT_FILE).write_text(json.dumps(comments, indent=2), encoding="utf-8")
     return len(comments)
 
