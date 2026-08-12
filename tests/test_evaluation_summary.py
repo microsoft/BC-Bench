@@ -6,7 +6,7 @@ import pytest
 from bcbench.config import get_config
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import create_bugfix_result, create_testgen_result
+from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 _config = get_config()
 
@@ -21,7 +21,6 @@ class TestEvaluationResultSummary:
             percentage=80.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
-            judge_model=None,
             category=EvaluationCategory.BUG_FIX,
             agent_name="copilot-cli",
             average_duration=120.5,
@@ -61,7 +60,6 @@ class TestEvaluationResultSummary:
             percentage=80.0,
             date=date(2025, 1, 20),
             model="gpt-4",
-            judge_model=None,
             category=EvaluationCategory.TEST_GENERATION,
             agent_name="GitHub Copilot",
             average_duration=90.0,
@@ -268,7 +266,6 @@ class TestExperimentConfiguration:
             percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
-            judge_model=None,
             category=EvaluationCategory.BUG_FIX,
             agent_name="copilot-cli",
             average_duration=100.0,
@@ -293,7 +290,6 @@ class TestExperimentConfiguration:
             percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
-            judge_model=None,
             category=EvaluationCategory.BUG_FIX,
             agent_name="copilot-cli",
             average_duration=100.0,
@@ -318,7 +314,6 @@ class TestExperimentConfiguration:
             percentage=80.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
-            judge_model=None,
             category=EvaluationCategory.BUG_FIX,
             agent_name="copilot-cli",
             average_duration=120.5,
@@ -348,7 +343,6 @@ class TestExperimentConfiguration:
             percentage=60.0,
             date=date(2025, 1, 15),
             model="gpt-4o",
-            judge_model=None,
             category=EvaluationCategory.BUG_FIX,
             agent_name="copilot-cli",
             average_duration=100.0,
@@ -669,7 +663,6 @@ class TestLeaderboard:
             percentage=60.0,
             date=datetime.now(UTC).date(),
             model="gpt-4",
-            judge_model=None,
             agent_name="test-agent",
             category=EvaluationCategory.BUG_FIX,
             average_duration=100.0,
@@ -714,7 +707,6 @@ class TestLeaderboard:
             instance_results={"test__1": True, "test__2": True, "test__3": False},
             date=datetime.now(UTC).date(),
             model="gpt-4o",
-            judge_model=None,
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=100.0,
@@ -731,7 +723,6 @@ class TestLeaderboard:
             instance_results={"test__1": False, "test__2": True, "test__3": False},
             date=datetime.now(UTC).date(),
             model="gpt-4o",
-            judge_model=None,
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=100.0,
@@ -756,7 +747,6 @@ class TestLeaderboard:
             instance_results={"test__1": True, "test__2": True, "test__3": False},
             date=datetime.now(UTC).date(),
             model="gpt-4o",
-            judge_model=None,
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=100.0,
@@ -773,7 +763,6 @@ class TestLeaderboard:
             instance_results={"test__1": False, "test__2": True, "test__3": False},
             date=datetime.now(UTC).date(),
             model="claude-3",  # Different model
-            judge_model=None,
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=100.0,
@@ -787,11 +776,9 @@ class TestLeaderboard:
 
     def test_aggregate_rejects_runs_with_different_judge_models(self):
         from bcbench.results.leaderboard import LeaderboardAggregate
+        from bcbench.results.summary import EvaluationResultSummary
 
-        run1 = ExecutionBasedEvaluationResultSummary.from_results(
-            [create_bugfix_result(instance_id="test__1")],
-            run_id="run_1",
-        )
+        run1 = EvaluationResultSummary.from_results([create_codereview_result()], run_id="run_1")
         run2 = run1.model_copy(update={"judge_model": "different-judge"})
 
         with pytest.raises(ValueError, match="different combinations"):
@@ -809,7 +796,6 @@ class TestLeaderboard:
             instance_results={"test__1": True, "test__2": True, "test__3": False},
             date=datetime.now(UTC).date(),
             model="gpt-4o",
-            judge_model=None,
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=100.0,
@@ -826,7 +812,6 @@ class TestLeaderboard:
             instance_results={"test__1": False, "test__2": True},
             date=datetime.now(UTC).date(),
             model="gpt-4o",
-            judge_model=None,
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=100.0,

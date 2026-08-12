@@ -1,7 +1,8 @@
 from bcbench.config import get_config
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
-from bcbench.results.leaderboard import LeaderboardAggregate
+from bcbench.results.codereview import CodeReviewResultSummary
+from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, LeaderboardAggregate
 from bcbench.results.summary import EvaluationResultSummary
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentHarness, EvaluationCategory
@@ -100,6 +101,8 @@ class TestEvaluationResultFactories:
         code_review_result = create_codereview_result()
         summary = EvaluationResultSummary.from_results([code_review_result], "run")
         aggregate = LeaderboardAggregate.from_runs([summary])
+        assert isinstance(summary, CodeReviewResultSummary)
+        assert isinstance(aggregate, CodeReviewLeaderboardAggregate)
 
         assert lm_checklist_result.judge_model == config.lm_checklist_model
         assert code_review_result.judge_model == config.code_review_model

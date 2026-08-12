@@ -6,7 +6,6 @@ from typing import Any, Self
 
 from pydantic import BaseModel
 
-from bcbench.config import get_config
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
@@ -21,7 +20,6 @@ class BaseEvaluationResult(BaseModel):
     model: str
     agent_name: str
     category: EvaluationCategory
-    judge_model: str | None
 
     timeout: bool = False
 
@@ -38,20 +36,12 @@ class BaseEvaluationResult(BaseModel):
         elif missing_metrics := sorted(name for name in context.agent_name.expected_metrics if getattr(context.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
-        judge_model: str | None = None
-        judge_config = get_config().judge
-        if context.category == EvaluationCategory.CODE_REVIEW:
-            judge_model = judge_config.code_review_model
-        elif "lm_checklist" in context.category.evaluators:
-            judge_model = judge_config.lm_checklist_model
-
         return {
             "instance_id": context.entry.instance_id,
             "project": context.entry.extract_project_name(),
             "model": context.model.replace(".", "-"),
             "category": context.category,
             "agent_name": context.agent_name,
-            "judge_model": judge_model,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }
@@ -85,6 +75,14 @@ class BaseEvaluationResult(BaseModel):
 
         Keys become metadata fields; values must be JSON-serializable scalars.
         Subclasses override to add metrics like 'resolved', 'build', etc.
+        """
+        return {}
+
+    @property
+    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
+        """Extra metadata fields for the bceval export beyond the shared ones.
+
+        Subclasses override to record category-specific provenance such as the judge model.
         """
         return {}
 
@@ -128,7 +126,21 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
         return {"resolved": self.resolved, "build": self.build}
 
 
-class JudgeBasedEvaluationResult(BaseEvaluationResult):
+class JudgeScoredEvaluationResult(BaseEvaluationResult):
+    """Result for categories whose scoring involves an LLM judge, recording which judge model was pinned for the run."""
+
+    judge_model: str
+
+    @classmethod
+    def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+        return {**super()._base_fields(context), "judge_model": context.category.judge_model}
+
+    @property
+    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
+        return {"judge_model": self.judge_model}
+
+
+class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):
     """Result for categories scored by LLM-as-judge (e.g. lm_checklist).
 
     The local pipeline only persists the agent's raw output; actual scoring is performed downstream by bceval

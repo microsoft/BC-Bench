@@ -44,6 +44,17 @@ def test_bceval_config_emits_pinned_lm_checklist_model(tmp_path, monkeypatch):
     assert "judge_model=gpt-41-2025-04-14" in output_file.read_text(encoding="utf-8")
 
 
+def test_bceval_config_emits_empty_judge_model_for_unjudged_category(tmp_path, monkeypatch):
+    output_file = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    result = runner.invoke(app, ["category", "bceval-config", "--category", "bug-fix"])
+
+    assert result.exit_code == 0
+    assert "judge_model=\n" in output_file.read_text(encoding="utf-8")
+
+
 def test_bceval_config_supports_every_category(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
 

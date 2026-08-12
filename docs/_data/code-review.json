@@ -22,11 +22,13 @@
       "github_run_id": "28174327267",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 240,
       "expected_comment_count": 216,
       "matched_comment_count": 45,
       "incorrect_comment_count": 195,
       "missed_comment_count": 171,
+      "ignored_matched_comment_count": 0,
       "precision": 0.188,
       "recall": 0.208,
       "f1": 0.197,
@@ -121,8 +123,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -147,11 +148,13 @@
       "github_run_id": "28175241803",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 240,
       "expected_comment_count": 216,
       "matched_comment_count": 51,
       "incorrect_comment_count": 189,
       "missed_comment_count": 165,
+      "ignored_matched_comment_count": 0,
       "precision": 0.212,
       "recall": 0.236,
       "f1": 0.224,
@@ -246,8 +249,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.142857,
         "synthetic__privacy-011": 0.857143
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -271,11 +273,13 @@
       "github_run_id": "28175724527",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 233,
       "expected_comment_count": 216,
       "matched_comment_count": 45,
       "incorrect_comment_count": 188,
       "missed_comment_count": 171,
+      "ignored_matched_comment_count": 0,
       "precision": 0.193,
       "recall": 0.208,
       "f1": 0.2,
@@ -370,8 +374,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -396,11 +399,13 @@
       "github_run_id": "28176175643",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 226,
       "expected_comment_count": 216,
       "matched_comment_count": 43,
       "incorrect_comment_count": 183,
       "missed_comment_count": 173,
+      "ignored_matched_comment_count": 0,
       "precision": 0.19,
       "recall": 0.199,
       "f1": 0.195,
@@ -495,8 +500,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -520,11 +524,13 @@
       "github_run_id": "28176650093",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 246,
       "expected_comment_count": 216,
       "matched_comment_count": 39,
       "incorrect_comment_count": 207,
       "missed_comment_count": 177,
+      "ignored_matched_comment_count": 0,
       "precision": 0.159,
       "recall": 0.181,
       "f1": 0.169,
@@ -619,8 +625,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.142857,
         "synthetic__privacy-011": 0.857143
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -646,11 +651,13 @@
       "github_run_id": "28178867686",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 273,
       "expected_comment_count": 216,
       "matched_comment_count": 82,
       "incorrect_comment_count": 191,
       "missed_comment_count": 134,
+      "ignored_matched_comment_count": 0,
       "precision": 0.3,
       "recall": 0.38,
       "f1": 0.335,
@@ -745,8 +752,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.142857,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -773,11 +779,13 @@
       "github_run_id": "28179323754",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 267,
       "expected_comment_count": 216,
       "matched_comment_count": 80,
       "incorrect_comment_count": 187,
       "missed_comment_count": 136,
+      "ignored_matched_comment_count": 0,
       "precision": 0.3,
       "recall": 0.37,
       "f1": 0.331,
@@ -872,8 +880,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.375,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -902,11 +909,13 @@
       "github_run_id": "28179839163",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 281,
       "expected_comment_count": 216,
       "matched_comment_count": 77,
       "incorrect_comment_count": 204,
       "missed_comment_count": 139,
+      "ignored_matched_comment_count": 0,
       "precision": 0.274,
       "recall": 0.356,
       "f1": 0.31,
@@ -1001,8 +1010,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.133333,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1030,11 +1038,13 @@
       "github_run_id": "28180345345",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 286,
       "expected_comment_count": 216,
       "matched_comment_count": 75,
       "incorrect_comment_count": 211,
       "missed_comment_count": 141,
+      "ignored_matched_comment_count": 0,
       "precision": 0.262,
       "recall": 0.347,
       "f1": 0.299,
@@ -1129,8 +1139,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.125,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1156,11 +1165,13 @@
       "github_run_id": "28180827666",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 270,
       "expected_comment_count": 216,
       "matched_comment_count": 81,
       "incorrect_comment_count": 189,
       "missed_comment_count": 135,
+      "ignored_matched_comment_count": 0,
       "precision": 0.3,
       "recall": 0.375,
       "f1": 0.333,
@@ -1255,8 +1266,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.25,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1282,11 +1292,13 @@
       "github_run_id": "28190619615",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 405,
       "expected_comment_count": 216,
       "matched_comment_count": 85,
       "incorrect_comment_count": 320,
       "missed_comment_count": 131,
+      "ignored_matched_comment_count": 0,
       "precision": 0.21,
       "recall": 0.394,
       "f1": 0.274,
@@ -1381,8 +1393,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.117647,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1406,11 +1417,13 @@
       "github_run_id": "28196217763",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 403,
       "expected_comment_count": 216,
       "matched_comment_count": 92,
       "incorrect_comment_count": 311,
       "missed_comment_count": 124,
+      "ignored_matched_comment_count": 0,
       "precision": 0.228,
       "recall": 0.426,
       "f1": 0.297,
@@ -1505,8 +1518,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.526316,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1530,11 +1542,13 @@
       "github_run_id": "28196677427",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 408,
       "expected_comment_count": 216,
       "matched_comment_count": 77,
       "incorrect_comment_count": 331,
       "missed_comment_count": 139,
+      "ignored_matched_comment_count": 0,
       "precision": 0.189,
       "recall": 0.356,
       "f1": 0.247,
@@ -1629,8 +1643,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.117647,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1654,11 +1667,13 @@
       "github_run_id": "28220210321",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 418,
       "expected_comment_count": 216,
       "matched_comment_count": 89,
       "incorrect_comment_count": 329,
       "missed_comment_count": 127,
+      "ignored_matched_comment_count": 0,
       "precision": 0.213,
       "recall": 0.412,
       "f1": 0.281,
@@ -1753,8 +1768,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.105263,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1778,11 +1792,13 @@
       "github_run_id": "28220537785",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 405,
       "expected_comment_count": 216,
       "matched_comment_count": 83,
       "incorrect_comment_count": 322,
       "missed_comment_count": 133,
+      "ignored_matched_comment_count": 0,
       "precision": 0.205,
       "recall": 0.384,
       "f1": 0.267,
@@ -1877,8 +1893,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.25,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -1902,11 +1917,13 @@
       "github_run_id": "28222007818",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 536,
       "expected_comment_count": 216,
       "matched_comment_count": 82,
       "incorrect_comment_count": 454,
       "missed_comment_count": 134,
+      "ignored_matched_comment_count": 0,
       "precision": 0.153,
       "recall": 0.38,
       "f1": 0.218,
@@ -2001,8 +2018,7 @@
         "synthetic__style-003": 0.285714,
         "synthetic__upgrade-006": 0.173913,
         "synthetic__privacy-011": 0.615385
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2026,11 +2042,13 @@
       "github_run_id": "28223072444",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 529,
       "expected_comment_count": 216,
       "matched_comment_count": 89,
       "incorrect_comment_count": 440,
       "missed_comment_count": 127,
+      "ignored_matched_comment_count": 0,
       "precision": 0.168,
       "recall": 0.412,
       "f1": 0.239,
@@ -2125,8 +2143,7 @@
         "synthetic__style-003": 0.222222,
         "synthetic__upgrade-006": 0.181818,
         "synthetic__privacy-011": 0.727273
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2150,11 +2167,13 @@
       "github_run_id": "28223369870",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 529,
       "expected_comment_count": 216,
       "matched_comment_count": 80,
       "incorrect_comment_count": 449,
       "missed_comment_count": 136,
+      "ignored_matched_comment_count": 0,
       "precision": 0.151,
       "recall": 0.37,
       "f1": 0.215,
@@ -2249,8 +2268,7 @@
         "synthetic__style-003": 0.2,
         "synthetic__upgrade-006": 0.090909,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2275,11 +2293,13 @@
       "github_run_id": "28223682690",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 539,
       "expected_comment_count": 216,
       "matched_comment_count": 81,
       "incorrect_comment_count": 458,
       "missed_comment_count": 135,
+      "ignored_matched_comment_count": 0,
       "precision": 0.15,
       "recall": 0.375,
       "f1": 0.215,
@@ -2374,8 +2394,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.26087,
         "synthetic__privacy-011": 0.666667
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2400,11 +2419,13 @@
       "github_run_id": "28223966858",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 530,
       "expected_comment_count": 216,
       "matched_comment_count": 82,
       "incorrect_comment_count": 448,
       "missed_comment_count": 134,
+      "ignored_matched_comment_count": 0,
       "precision": 0.155,
       "recall": 0.38,
       "f1": 0.22,
@@ -2499,8 +2520,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.095238,
         "synthetic__privacy-011": 0.8
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2524,11 +2544,13 @@
       "github_run_id": "28226707189",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 168,
       "expected_comment_count": 216,
       "matched_comment_count": 42,
       "incorrect_comment_count": 126,
       "missed_comment_count": 174,
+      "ignored_matched_comment_count": 0,
       "precision": 0.25,
       "recall": 0.194,
       "f1": 0.219,
@@ -2623,8 +2645,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 0.222222
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2649,11 +2670,13 @@
       "github_run_id": "28228535526",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 157,
       "expected_comment_count": 216,
       "matched_comment_count": 36,
       "incorrect_comment_count": 121,
       "missed_comment_count": 180,
+      "ignored_matched_comment_count": 0,
       "precision": 0.229,
       "recall": 0.167,
       "f1": 0.193,
@@ -2748,8 +2771,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2774,11 +2796,13 @@
       "github_run_id": "28228891637",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 171,
       "expected_comment_count": 216,
       "matched_comment_count": 38,
       "incorrect_comment_count": 133,
       "missed_comment_count": 178,
+      "ignored_matched_comment_count": 0,
       "precision": 0.222,
       "recall": 0.176,
       "f1": 0.196,
@@ -2873,8 +2897,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 0.222222
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -2899,11 +2922,13 @@
       "github_run_id": "28229357243",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 164,
       "expected_comment_count": 216,
       "matched_comment_count": 37,
       "incorrect_comment_count": 127,
       "missed_comment_count": 179,
+      "ignored_matched_comment_count": 0,
       "precision": 0.226,
       "recall": 0.171,
       "f1": 0.195,
@@ -2998,8 +3023,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 0.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3024,11 +3048,13 @@
       "github_run_id": "28229769076",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 159,
       "expected_comment_count": 216,
       "matched_comment_count": 34,
       "incorrect_comment_count": 125,
       "missed_comment_count": 182,
+      "ignored_matched_comment_count": 0,
       "precision": 0.214,
       "recall": 0.157,
       "f1": 0.181,
@@ -3123,8 +3149,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 0.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3147,11 +3172,13 @@
       "github_run_id": "28233006770",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 306,
       "expected_comment_count": 216,
       "matched_comment_count": 78,
       "incorrect_comment_count": 228,
       "missed_comment_count": 138,
+      "ignored_matched_comment_count": 0,
       "precision": 0.255,
       "recall": 0.361,
       "f1": 0.299,
@@ -3246,8 +3273,7 @@
         "synthetic__style-003": 0.222222,
         "synthetic__upgrade-006": 0.133333,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3271,11 +3297,13 @@
       "github_run_id": "28233959466",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 305,
       "expected_comment_count": 216,
       "matched_comment_count": 83,
       "incorrect_comment_count": 222,
       "missed_comment_count": 133,
+      "ignored_matched_comment_count": 0,
       "precision": 0.272,
       "recall": 0.384,
       "f1": 0.319,
@@ -3370,8 +3398,7 @@
         "synthetic__style-003": 0.25,
         "synthetic__upgrade-006": 0.266667,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3395,11 +3422,13 @@
       "github_run_id": "28234982430",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 310,
       "expected_comment_count": 216,
       "matched_comment_count": 89,
       "incorrect_comment_count": 221,
       "missed_comment_count": 127,
+      "ignored_matched_comment_count": 0,
       "precision": 0.287,
       "recall": 0.412,
       "f1": 0.338,
@@ -3494,8 +3523,7 @@
         "synthetic__style-003": 0.222222,
         "synthetic__upgrade-006": 0.125,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3517,11 +3545,13 @@
       "github_run_id": "28235940363",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 299,
       "expected_comment_count": 216,
       "matched_comment_count": 85,
       "incorrect_comment_count": 214,
       "missed_comment_count": 131,
+      "ignored_matched_comment_count": 0,
       "precision": 0.284,
       "recall": 0.394,
       "f1": 0.33,
@@ -3616,8 +3646,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.125,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3642,11 +3671,13 @@
       "github_run_id": "28237448350",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 336,
       "expected_comment_count": 216,
       "matched_comment_count": 78,
       "incorrect_comment_count": 258,
       "missed_comment_count": 138,
+      "ignored_matched_comment_count": 0,
       "precision": 0.232,
       "recall": 0.361,
       "f1": 0.283,
@@ -3741,8 +3772,7 @@
         "synthetic__style-003": 0.285714,
         "synthetic__upgrade-006": 0.133333,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3763,11 +3793,13 @@
       "github_run_id": "28240911816",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 518,
       "expected_comment_count": 216,
       "matched_comment_count": 88,
       "incorrect_comment_count": 430,
       "missed_comment_count": 128,
+      "ignored_matched_comment_count": 0,
       "precision": 0.17,
       "recall": 0.407,
       "f1": 0.24,
@@ -3862,8 +3894,7 @@
         "synthetic__style-003": 0.285714,
         "synthetic__upgrade-006": 0.181818,
         "synthetic__privacy-011": 0.666667
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -3883,11 +3914,13 @@
       "github_run_id": "28242115307",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 526,
       "expected_comment_count": 216,
       "matched_comment_count": 91,
       "incorrect_comment_count": 435,
       "missed_comment_count": 125,
+      "ignored_matched_comment_count": 0,
       "precision": 0.173,
       "recall": 0.421,
       "f1": 0.245,
@@ -3982,8 +4015,7 @@
         "synthetic__style-003": 0.25,
         "synthetic__upgrade-006": 0.210526,
         "synthetic__privacy-011": 0.461538
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4006,11 +4038,13 @@
       "github_run_id": "28243306907",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 546,
       "expected_comment_count": 216,
       "matched_comment_count": 87,
       "incorrect_comment_count": 459,
       "missed_comment_count": 129,
+      "ignored_matched_comment_count": 0,
       "precision": 0.159,
       "recall": 0.403,
       "f1": 0.228,
@@ -4105,8 +4139,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.363636,
         "synthetic__privacy-011": 0.666667
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4127,11 +4160,13 @@
       "github_run_id": "28244487769",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 517,
       "expected_comment_count": 216,
       "matched_comment_count": 85,
       "incorrect_comment_count": 432,
       "missed_comment_count": 131,
+      "ignored_matched_comment_count": 0,
       "precision": 0.164,
       "recall": 0.394,
       "f1": 0.232,
@@ -4226,8 +4261,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.454545,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4250,11 +4284,13 @@
       "github_run_id": "28265285082",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 549,
       "expected_comment_count": 216,
       "matched_comment_count": 95,
       "incorrect_comment_count": 454,
       "missed_comment_count": 121,
+      "ignored_matched_comment_count": 0,
       "precision": 0.173,
       "recall": 0.44,
       "f1": 0.248,
@@ -4349,8 +4385,7 @@
         "synthetic__style-003": 0.0,
         "synthetic__upgrade-006": 0.086957,
         "synthetic__privacy-011": 0.727273
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4372,11 +4407,13 @@
       "github_run_id": "28335308394",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 398,
       "expected_comment_count": 216,
       "matched_comment_count": 97,
       "incorrect_comment_count": 301,
       "missed_comment_count": 119,
+      "ignored_matched_comment_count": 0,
       "precision": 0.244,
       "recall": 0.449,
       "f1": 0.316,
@@ -4471,8 +4508,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.25,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4494,11 +4530,13 @@
       "github_run_id": "28335600702",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 404,
       "expected_comment_count": 216,
       "matched_comment_count": 87,
       "incorrect_comment_count": 317,
       "missed_comment_count": 129,
+      "ignored_matched_comment_count": 0,
       "precision": 0.215,
       "recall": 0.403,
       "f1": 0.281,
@@ -4593,8 +4631,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.1,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4616,11 +4653,13 @@
       "github_run_id": "28335891901",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 397,
       "expected_comment_count": 216,
       "matched_comment_count": 88,
       "incorrect_comment_count": 309,
       "missed_comment_count": 128,
+      "ignored_matched_comment_count": 0,
       "precision": 0.222,
       "recall": 0.407,
       "f1": 0.287,
@@ -4715,8 +4754,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.111111,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4738,11 +4776,13 @@
       "github_run_id": "28336178843",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 408,
       "expected_comment_count": 216,
       "matched_comment_count": 94,
       "incorrect_comment_count": 314,
       "missed_comment_count": 122,
+      "ignored_matched_comment_count": 0,
       "precision": 0.23,
       "recall": 0.435,
       "f1": 0.301,
@@ -4837,8 +4877,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.117647,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4861,11 +4900,13 @@
       "github_run_id": "28336487319",
       "experiment": null,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "generated_comment_count": 389,
       "expected_comment_count": 216,
       "matched_comment_count": 85,
       "incorrect_comment_count": 304,
       "missed_comment_count": 131,
+      "ignored_matched_comment_count": 0,
       "precision": 0.219,
       "recall": 0.394,
       "f1": 0.281,
@@ -4960,8 +5001,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.117647,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -4991,14 +5031,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 299,
       "expected_comment_count": 216,
       "matched_comment_count": 133,
       "incorrect_comment_count": 166,
       "missed_comment_count": 83,
+      "ignored_matched_comment_count": 0,
       "precision": 0.445,
       "recall": 0.616,
       "f1": 0.517,
@@ -5093,8 +5136,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.210526,
         "synthetic__privacy-011": 0.727273
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -5127,14 +5169,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 334,
       "expected_comment_count": 216,
       "matched_comment_count": 134,
       "incorrect_comment_count": 200,
       "missed_comment_count": 82,
+      "ignored_matched_comment_count": 0,
       "precision": 0.401,
       "recall": 0.62,
       "f1": 0.487,
@@ -5229,8 +5274,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.454545,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -5263,14 +5307,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 334,
       "expected_comment_count": 216,
       "matched_comment_count": 135,
       "incorrect_comment_count": 199,
       "missed_comment_count": 81,
+      "ignored_matched_comment_count": 0,
       "precision": 0.404,
       "recall": 0.625,
       "f1": 0.491,
@@ -5365,8 +5412,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.333333,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -5398,14 +5444,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 342,
       "expected_comment_count": 216,
       "matched_comment_count": 136,
       "incorrect_comment_count": 206,
       "missed_comment_count": 80,
+      "ignored_matched_comment_count": 0,
       "precision": 0.398,
       "recall": 0.63,
       "f1": 0.487,
@@ -5500,8 +5549,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.380952,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -5534,14 +5582,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 323,
       "expected_comment_count": 216,
       "matched_comment_count": 145,
       "incorrect_comment_count": 178,
       "missed_comment_count": 71,
+      "ignored_matched_comment_count": 0,
       "precision": 0.449,
       "recall": 0.671,
       "f1": 0.538,
@@ -5636,8 +5687,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.363636,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -5667,14 +5717,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 291,
       "expected_comment_count": 216,
       "matched_comment_count": 108,
       "incorrect_comment_count": 183,
       "missed_comment_count": 108,
+      "ignored_matched_comment_count": 0,
       "precision": 0.371,
       "recall": 0.5,
       "f1": 0.426,
@@ -5769,8 +5822,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.4,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -5801,14 +5853,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 302,
       "expected_comment_count": 216,
       "matched_comment_count": 118,
       "incorrect_comment_count": 184,
       "missed_comment_count": 98,
+      "ignored_matched_comment_count": 0,
       "precision": 0.391,
       "recall": 0.546,
       "f1": 0.456,
@@ -5903,8 +5958,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.533333,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -5936,14 +5990,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 295,
       "expected_comment_count": 216,
       "matched_comment_count": 107,
       "incorrect_comment_count": 188,
       "missed_comment_count": 109,
+      "ignored_matched_comment_count": 0,
       "precision": 0.363,
       "recall": 0.495,
       "f1": 0.419,
@@ -6038,8 +6095,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.235294,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6070,14 +6126,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 283,
       "expected_comment_count": 216,
       "matched_comment_count": 108,
       "incorrect_comment_count": 175,
       "missed_comment_count": 108,
+      "ignored_matched_comment_count": 0,
       "precision": 0.382,
       "recall": 0.5,
       "f1": 0.433,
@@ -6172,8 +6231,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.315789,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6205,14 +6263,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 301,
       "expected_comment_count": 216,
       "matched_comment_count": 122,
       "incorrect_comment_count": 179,
       "missed_comment_count": 94,
+      "ignored_matched_comment_count": 0,
       "precision": 0.405,
       "recall": 0.565,
       "f1": 0.472,
@@ -6307,8 +6368,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.625,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6335,14 +6395,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 246,
       "expected_comment_count": 216,
       "matched_comment_count": 128,
       "incorrect_comment_count": 118,
       "missed_comment_count": 88,
+      "ignored_matched_comment_count": 0,
       "precision": 0.52,
       "recall": 0.593,
       "f1": 0.554,
@@ -6437,8 +6500,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.625,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6465,14 +6527,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 228,
       "expected_comment_count": 216,
       "matched_comment_count": 123,
       "incorrect_comment_count": 105,
       "missed_comment_count": 93,
+      "ignored_matched_comment_count": 0,
       "precision": 0.539,
       "recall": 0.569,
       "f1": 0.554,
@@ -6567,8 +6632,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.285714,
         "synthetic__privacy-011": 0.222222
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6595,14 +6659,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 221,
       "expected_comment_count": 216,
       "matched_comment_count": 119,
       "incorrect_comment_count": 102,
       "missed_comment_count": 97,
+      "ignored_matched_comment_count": 0,
       "precision": 0.538,
       "recall": 0.551,
       "f1": 0.545,
@@ -6697,8 +6764,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.588235,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6725,14 +6791,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 213,
       "expected_comment_count": 216,
       "matched_comment_count": 112,
       "incorrect_comment_count": 101,
       "missed_comment_count": 104,
+      "ignored_matched_comment_count": 0,
       "precision": 0.526,
       "recall": 0.519,
       "f1": 0.522,
@@ -6827,8 +6896,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.117647,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6855,14 +6923,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 223,
       "expected_comment_count": 216,
       "matched_comment_count": 106,
       "incorrect_comment_count": 117,
       "missed_comment_count": 110,
+      "ignored_matched_comment_count": 0,
       "precision": 0.475,
       "recall": 0.491,
       "f1": 0.483,
@@ -6957,8 +7028,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.266667,
         "synthetic__privacy-011": 0.222222
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -6985,14 +7055,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 335,
       "expected_comment_count": 216,
       "matched_comment_count": 140,
       "incorrect_comment_count": 195,
       "missed_comment_count": 76,
+      "ignored_matched_comment_count": 0,
       "precision": 0.418,
       "recall": 0.648,
       "f1": 0.508,
@@ -7087,8 +7160,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.533333,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -7115,14 +7187,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 326,
       "expected_comment_count": 216,
       "matched_comment_count": 145,
       "incorrect_comment_count": 181,
       "missed_comment_count": 71,
+      "ignored_matched_comment_count": 0,
       "precision": 0.445,
       "recall": 0.671,
       "f1": 0.535,
@@ -7217,8 +7292,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.222222,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -7245,14 +7319,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 327,
       "expected_comment_count": 216,
       "matched_comment_count": 145,
       "incorrect_comment_count": 182,
       "missed_comment_count": 71,
+      "ignored_matched_comment_count": 0,
       "precision": 0.443,
       "recall": 0.671,
       "f1": 0.534,
@@ -7347,8 +7424,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.75,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -7375,14 +7451,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 301,
       "expected_comment_count": 216,
       "matched_comment_count": 139,
       "incorrect_comment_count": 162,
       "missed_comment_count": 77,
+      "ignored_matched_comment_count": 0,
       "precision": 0.462,
       "recall": 0.644,
       "f1": 0.538,
@@ -7477,8 +7556,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.625,
         "synthetic__privacy-011": 0.888889
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 81,
@@ -7503,14 +7581,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "generated_comment_count": 318,
       "expected_comment_count": 216,
       "matched_comment_count": 138,
       "incorrect_comment_count": 180,
       "missed_comment_count": 78,
+      "ignored_matched_comment_count": 0,
       "precision": 0.434,
       "recall": 0.639,
       "f1": 0.517,
@@ -7605,8 +7686,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.421053,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -7630,11 +7710,13 @@
       "github_run_id": "28576893110",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 374,
       "expected_comment_count": 207,
       "matched_comment_count": 84,
       "incorrect_comment_count": 290,
       "missed_comment_count": 123,
+      "ignored_matched_comment_count": 0,
       "precision": 0.225,
       "recall": 0.406,
       "f1": 0.289,
@@ -7748,8 +7830,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.166667,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -7774,11 +7855,13 @@
       "github_run_id": "28577322622",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 356,
       "expected_comment_count": 207,
       "matched_comment_count": 87,
       "incorrect_comment_count": 269,
       "missed_comment_count": 120,
+      "ignored_matched_comment_count": 0,
       "precision": 0.244,
       "recall": 0.42,
       "f1": 0.309,
@@ -7892,8 +7975,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.615385,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -7917,11 +7999,13 @@
       "github_run_id": "28577957903",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 363,
       "expected_comment_count": 207,
       "matched_comment_count": 77,
       "incorrect_comment_count": 286,
       "missed_comment_count": 130,
+      "ignored_matched_comment_count": 0,
       "precision": 0.212,
       "recall": 0.372,
       "f1": 0.27,
@@ -8035,8 +8119,7 @@
         "synthetic__style-003": 0.222222,
         "synthetic__upgrade-006": 0.0,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -8061,11 +8144,13 @@
       "github_run_id": "28578454864",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 351,
       "expected_comment_count": 207,
       "matched_comment_count": 78,
       "incorrect_comment_count": 273,
       "missed_comment_count": 129,
+      "ignored_matched_comment_count": 0,
       "precision": 0.222,
       "recall": 0.377,
       "f1": 0.28,
@@ -8179,8 +8264,7 @@
         "synthetic__style-003": 0.25,
         "synthetic__upgrade-006": 0.153846,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -8206,11 +8290,13 @@
       "github_run_id": "28578959574",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 370,
       "expected_comment_count": 207,
       "matched_comment_count": 82,
       "incorrect_comment_count": 288,
       "missed_comment_count": 125,
+      "ignored_matched_comment_count": 0,
       "precision": 0.222,
       "recall": 0.396,
       "f1": 0.284,
@@ -8324,8 +8410,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.133333,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -8351,11 +8436,13 @@
       "github_run_id": "28589410334",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 305,
       "expected_comment_count": 207,
       "matched_comment_count": 72,
       "incorrect_comment_count": 233,
       "missed_comment_count": 135,
+      "ignored_matched_comment_count": 0,
       "precision": 0.236,
       "recall": 0.348,
       "f1": 0.281,
@@ -8469,8 +8556,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.333333,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -8495,11 +8581,13 @@
       "github_run_id": "28589824050",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 319,
       "expected_comment_count": 207,
       "matched_comment_count": 84,
       "incorrect_comment_count": 235,
       "missed_comment_count": 123,
+      "ignored_matched_comment_count": 0,
       "precision": 0.263,
       "recall": 0.406,
       "f1": 0.319,
@@ -8613,8 +8701,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.181818,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -8639,11 +8726,13 @@
       "github_run_id": "28590276106",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 308,
       "expected_comment_count": 207,
       "matched_comment_count": 86,
       "incorrect_comment_count": 222,
       "missed_comment_count": 121,
+      "ignored_matched_comment_count": 0,
       "precision": 0.279,
       "recall": 0.415,
       "f1": 0.334,
@@ -8757,8 +8846,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.181818,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -8783,11 +8871,13 @@
       "github_run_id": "28590685332",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 319,
       "expected_comment_count": 207,
       "matched_comment_count": 87,
       "incorrect_comment_count": 232,
       "missed_comment_count": 120,
+      "ignored_matched_comment_count": 0,
       "precision": 0.273,
       "recall": 0.42,
       "f1": 0.331,
@@ -8901,8 +8991,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.333333,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -8928,11 +9017,13 @@
       "github_run_id": "28591139502",
       "experiment": null,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "generated_comment_count": 315,
       "expected_comment_count": 207,
       "matched_comment_count": 85,
       "incorrect_comment_count": 230,
       "missed_comment_count": 122,
+      "ignored_matched_comment_count": 0,
       "precision": 0.27,
       "recall": 0.411,
       "f1": 0.326,
@@ -9046,8 +9137,7 @@
         "synthetic__style-003": 1.0,
         "synthetic__upgrade-006": 0.181818,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -9074,11 +9164,13 @@
       "github_run_id": "28776296316",
       "experiment": null,
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 361,
       "expected_comment_count": 208,
       "matched_comment_count": 85,
       "incorrect_comment_count": 276,
       "missed_comment_count": 123,
+      "ignored_matched_comment_count": 0,
       "precision": 0.235,
       "recall": 0.409,
       "f1": 0.299,
@@ -9192,8 +9284,7 @@
         "synthetic__style-003": 0.285714,
         "synthetic__upgrade-006": 0.307692,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -9219,11 +9310,13 @@
       "github_run_id": "28776933913",
       "experiment": null,
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 354,
       "expected_comment_count": 208,
       "matched_comment_count": 79,
       "incorrect_comment_count": 275,
       "missed_comment_count": 129,
+      "ignored_matched_comment_count": 0,
       "precision": 0.223,
       "recall": 0.38,
       "f1": 0.281,
@@ -9337,8 +9430,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.111111,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -9361,11 +9453,13 @@
       "github_run_id": "28777432418",
       "experiment": null,
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 337,
       "expected_comment_count": 208,
       "matched_comment_count": 83,
       "incorrect_comment_count": 254,
       "missed_comment_count": 125,
+      "ignored_matched_comment_count": 0,
       "precision": 0.246,
       "recall": 0.399,
       "f1": 0.305,
@@ -9479,8 +9573,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.153846,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -9505,11 +9598,13 @@
       "github_run_id": "28777830004",
       "experiment": null,
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 347,
       "expected_comment_count": 208,
       "matched_comment_count": 85,
       "incorrect_comment_count": 262,
       "missed_comment_count": 123,
+      "ignored_matched_comment_count": 0,
       "precision": 0.245,
       "recall": 0.409,
       "f1": 0.306,
@@ -9623,8 +9718,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.166667,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -9649,11 +9743,13 @@
       "github_run_id": "28778279306",
       "experiment": null,
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 346,
       "expected_comment_count": 208,
       "matched_comment_count": 94,
       "incorrect_comment_count": 252,
       "missed_comment_count": 114,
+      "ignored_matched_comment_count": 0,
       "precision": 0.272,
       "recall": 0.452,
       "f1": 0.339,
@@ -9767,8 +9863,7 @@
         "synthetic__style-003": 0.333333,
         "synthetic__upgrade-006": 0.5,
         "synthetic__privacy-011": 1.0
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -9800,14 +9895,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 334,
       "expected_comment_count": 208,
       "matched_comment_count": 149,
       "incorrect_comment_count": 185,
       "missed_comment_count": 59,
+      "ignored_matched_comment_count": 0,
       "precision": 0.446,
       "recall": 0.716,
       "f1": 0.55,
@@ -9921,8 +10019,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.526316,
         "synthetic__privacy-011": 0.333333
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -9953,14 +10050,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 358,
       "expected_comment_count": 208,
       "matched_comment_count": 151,
       "incorrect_comment_count": 207,
       "missed_comment_count": 57,
+      "ignored_matched_comment_count": 0,
       "precision": 0.422,
       "recall": 0.726,
       "f1": 0.534,
@@ -10074,8 +10174,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.769231,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -10107,14 +10206,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 315,
       "expected_comment_count": 208,
       "matched_comment_count": 138,
       "incorrect_comment_count": 177,
       "missed_comment_count": 70,
+      "ignored_matched_comment_count": 0,
       "precision": 0.438,
       "recall": 0.663,
       "f1": 0.528,
@@ -10228,8 +10330,7 @@
         "synthetic__style-003": 0.4,
         "synthetic__upgrade-006": 0.666667,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -10261,14 +10362,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 367,
       "expected_comment_count": 208,
       "matched_comment_count": 134,
       "incorrect_comment_count": 233,
       "missed_comment_count": 74,
+      "ignored_matched_comment_count": 0,
       "precision": 0.365,
       "recall": 0.644,
       "f1": 0.466,
@@ -10382,8 +10486,7 @@
         "synthetic__style-003": 0.5,
         "synthetic__upgrade-006": 0.714286,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 100,
@@ -10416,14 +10519,17 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "generated_comment_count": 327,
       "expected_comment_count": 208,
       "matched_comment_count": 155,
       "incorrect_comment_count": 172,
       "missed_comment_count": 53,
+      "ignored_matched_comment_count": 0,
       "precision": 0.474,
       "recall": 0.745,
       "f1": 0.579,
@@ -10537,8 +10643,7 @@
         "synthetic__style-003": 0.666667,
         "synthetic__upgrade-006": 0.769231,
         "synthetic__privacy-011": 0.4
-      },
-      "judge_model": null
+      }
     }
   ],
   "aggregate": [
@@ -10551,6 +10656,7 @@
       "num_runs": 5,
       "average_duration": 51.54,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.197,
       "f1_ci_low": 0.18,
       "f1_ci_high": 0.213,
@@ -10564,8 +10670,7 @@
       "macro_f_beta_05": 0.21000000000000002,
       "macro_f_beta_2": 0.251,
       "macro_precision": 0.2152,
-      "macro_recall": 0.2882,
-      "judge_model": null
+      "macro_recall": 0.2882
     },
     {
       "model": "claude-opus-4-6",
@@ -10576,6 +10681,7 @@
       "num_runs": 5,
       "average_duration": 67.1,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.322,
       "f1_ci_low": 0.306,
       "f1_ci_high": 0.333,
@@ -10589,8 +10695,7 @@
       "macro_f_beta_05": 0.3346,
       "macro_f_beta_2": 0.41319999999999996,
       "macro_precision": 0.3264,
-      "macro_recall": 0.481,
-      "judge_model": null
+      "macro_recall": 0.481
     },
     {
       "model": "claude-sonnet-4-6",
@@ -10601,6 +10706,7 @@
       "num_runs": 5,
       "average_duration": 83.24,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.273,
       "f1_ci_low": 0.258,
       "f1_ci_high": 0.286,
@@ -10614,8 +10720,7 @@
       "macro_f_beta_05": 0.2446,
       "macro_f_beta_2": 0.37679999999999997,
       "macro_precision": 0.223,
-      "macro_recall": 0.49779999999999996,
-      "judge_model": null
+      "macro_recall": 0.49779999999999996
     },
     {
       "model": "claude-opus-4-7",
@@ -10626,6 +10731,7 @@
       "num_runs": 5,
       "average_duration": 49.519999999999996,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.221,
       "f1_ci_low": 0.216,
       "f1_ci_high": 0.234,
@@ -10639,8 +10745,7 @@
       "macro_f_beta_05": 0.227,
       "macro_f_beta_2": 0.35059999999999997,
       "macro_precision": 0.2082,
-      "macro_recall": 0.48279999999999995,
-      "judge_model": null
+      "macro_recall": 0.48279999999999995
     },
     {
       "model": "gpt-5-5",
@@ -10651,6 +10756,7 @@
       "num_runs": 5,
       "average_duration": 50.04,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.197,
       "f1_ci_low": 0.189,
       "f1_ci_high": 0.21,
@@ -10664,8 +10770,7 @@
       "macro_f_beta_05": 0.2686,
       "macro_f_beta_2": 0.2774,
       "macro_precision": 0.2836,
-      "macro_recall": 0.2928,
-      "judge_model": null
+      "macro_recall": 0.2928
     },
     {
       "model": "claude-opus-4-8",
@@ -10676,6 +10781,7 @@
       "num_runs": 5,
       "average_duration": 60.67999999999999,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.314,
       "f1_ci_low": 0.293,
       "f1_ci_high": 0.329,
@@ -10689,8 +10795,7 @@
       "macro_f_beta_05": 0.3498,
       "macro_f_beta_2": 0.4354,
       "macro_precision": 0.3412,
-      "macro_recall": 0.5126000000000001,
-      "judge_model": null
+      "macro_recall": 0.5126000000000001
     },
     {
       "model": "claude-sonnet-4-6",
@@ -10701,6 +10806,7 @@
       "num_runs": 5,
       "average_duration": 75.72,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.239,
       "f1_ci_low": 0.232,
       "f1_ci_high": 0.245,
@@ -10714,8 +10820,7 @@
       "macro_f_beta_05": 0.1964,
       "macro_f_beta_2": 0.34500000000000003,
       "macro_precision": 0.1746,
-      "macro_recall": 0.5156000000000001,
-      "judge_model": null
+      "macro_recall": 0.5156000000000001
     },
     {
       "model": "claude-opus-4-8",
@@ -10726,6 +10831,7 @@
       "num_runs": 5,
       "average_duration": 57.17999999999999,
       "benchmark_version": "0.6.0",
+      "judge_model": null,
       "f1": 0.293,
       "f1_ci_low": 0.282,
       "f1_ci_high": 0.307,
@@ -10739,8 +10845,7 @@
       "macro_f_beta_05": 0.29379999999999995,
       "macro_f_beta_2": 0.41859999999999997,
       "macro_precision": 0.27480000000000004,
-      "macro_recall": 0.5378000000000001,
-      "judge_model": null
+      "macro_recall": 0.5378000000000001
     },
     {
       "model": "claude-opus-4-8",
@@ -10751,12 +10856,14 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "total": 81,
       "num_runs": 5,
       "average_duration": 138.04,
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "f1": 0.504,
       "f1_ci_low": 0.489,
       "f1_ci_high": 0.528,
@@ -10770,8 +10877,7 @@
       "macro_f_beta_05": 0.5598,
       "macro_f_beta_2": 0.6724,
       "macro_precision": 0.5528000000000001,
-      "macro_recall": 0.771,
-      "judge_model": null
+      "macro_recall": 0.771
     },
     {
       "model": "claude-opus-4-6",
@@ -10782,12 +10888,14 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "total": 81,
       "num_runs": 5,
       "average_duration": 119.46,
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "f1": 0.441,
       "f1_ci_low": 0.426,
       "f1_ci_high": 0.461,
@@ -10801,8 +10909,7 @@
       "macro_f_beta_05": 0.465,
       "macro_f_beta_2": 0.5676,
       "macro_precision": 0.4544,
-      "macro_recall": 0.6552,
-      "judge_model": null
+      "macro_recall": 0.6552
     },
     {
       "model": "gpt-5-5",
@@ -10813,12 +10920,14 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "total": 81,
       "num_runs": 5,
       "average_duration": 72.56,
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "f1": 0.532,
       "f1_ci_low": 0.497,
       "f1_ci_high": 0.548,
@@ -10832,8 +10941,7 @@
       "macro_f_beta_05": 0.6292,
       "macro_f_beta_2": 0.6766,
       "macro_precision": 0.6468,
-      "macro_recall": 0.7230000000000001,
-      "judge_model": null
+      "macro_recall": 0.7230000000000001
     },
     {
       "model": "claude-opus-4-8",
@@ -10844,12 +10952,14 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "total": 81,
       "num_runs": 5,
       "average_duration": 104.08,
       "benchmark_version": "0.6.1",
+      "judge_model": null,
       "f1": 0.526,
       "f1_ci_low": 0.515,
       "f1_ci_high": 0.536,
@@ -10863,8 +10973,7 @@
       "macro_f_beta_05": 0.5868,
       "macro_f_beta_2": 0.699,
       "macro_precision": 0.585,
-      "macro_recall": 0.7946000000000001,
-      "judge_model": null
+      "macro_recall": 0.7946000000000001
     },
     {
       "model": "claude-opus-4-8",
@@ -10875,6 +10984,7 @@
       "num_runs": 5,
       "average_duration": 62.44,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "f1": 0.286,
       "f1_ci_low": 0.278,
       "f1_ci_high": 0.301,
@@ -10888,8 +10998,7 @@
       "macro_f_beta_05": 0.29219999999999996,
       "macro_f_beta_2": 0.36719999999999997,
       "macro_precision": 0.2822,
-      "macro_recall": 0.5216000000000001,
-      "judge_model": null
+      "macro_recall": 0.5216000000000001
     },
     {
       "model": "claude-opus-4-6",
@@ -10900,6 +11009,7 @@
       "num_runs": 5,
       "average_duration": 51.019999999999996,
       "benchmark_version": "0.7.0",
+      "judge_model": null,
       "f1": 0.318,
       "f1_ci_low": 0.292,
       "f1_ci_high": 0.33,
@@ -10913,8 +11023,7 @@
       "macro_f_beta_05": 0.3014,
       "macro_f_beta_2": 0.363,
       "macro_precision": 0.29419999999999996,
-      "macro_recall": 0.51,
-      "judge_model": null
+      "macro_recall": 0.51
     },
     {
       "model": "claude-opus-4-8",
@@ -10925,6 +11034,7 @@
       "num_runs": 5,
       "average_duration": 62.52,
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "f1": 0.306,
       "f1_ci_low": 0.293,
       "f1_ci_high": 0.326,
@@ -10938,8 +11048,7 @@
       "macro_f_beta_05": 0.3068,
       "macro_f_beta_2": 0.379,
       "macro_precision": 0.2988,
-      "macro_recall": 0.5354,
-      "judge_model": null
+      "macro_recall": 0.5354
     },
     {
       "model": "claude-opus-4-8",
@@ -10950,12 +11059,14 @@
         "al_lsp_enabled": false,
         "custom_instructions": true,
         "skills_enabled": false,
-        "custom_agent": null
+        "custom_agent": null,
+        "plugins": null
       },
       "total": 100,
       "num_runs": 5,
       "average_duration": 138.78,
       "benchmark_version": "0.7.1",
+      "judge_model": null,
       "f1": 0.531,
       "f1_ci_low": 0.492,
       "f1_ci_high": 0.558,
@@ -10969,8 +11080,7 @@
       "macro_f_beta_05": 0.5538000000000001,
       "macro_f_beta_2": 0.6464000000000001,
       "macro_precision": 0.5468,
-      "macro_recall": 0.8097999999999999,
-      "judge_model": null
+      "macro_recall": 0.8097999999999999
     }
   ]
 }

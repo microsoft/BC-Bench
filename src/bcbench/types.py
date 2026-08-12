@@ -358,6 +358,22 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
+    def judge_model(self) -> str | None:
+        """Pinned LLM judge model for this category, or None for categories scored without a judge."""
+        from bcbench.config import get_config
+
+        judge = get_config().judge
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return None
+            case EvaluationCategory.CODE_REVIEW:
+                return judge.code_review_model
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return judge.lm_checklist_model
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
     def evaluators(self) -> list[str]:
         """
         Names of bc-eval evaluators (from evaluator/scores.py) to run for this category.

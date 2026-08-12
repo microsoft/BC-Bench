@@ -11,7 +11,6 @@ class TestWriteBcevalResults:
     def test_writes_bceval_results_with_all_fields(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        sample_bugfix_result_with_metrics.judge_model = "test-judge"
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
@@ -34,7 +33,8 @@ class TestWriteBcevalResults:
 
         assert data["id"] == VALID_INSTANCE_ID
         assert data["metadata"]["model"] == "gpt-4o"
-        assert data["metadata"]["judge_model"] == "test-judge"
+        # bug-fix is not judge-scored, so no judge model is exported
+        assert "judge_model" not in data["metadata"]
         assert data["metadata"]["prompt_tokens"] == 5000
         assert data["metadata"]["completion_tokens"] == 1200
         assert data["metadata"]["latency"] == 120.5

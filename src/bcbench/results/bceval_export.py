@@ -58,7 +58,7 @@ def write_bceval_results(
 
             metadata: dict[str, Any] = {
                 "model": result.model,
-                "judge_model": result.judge_model,
+                **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
                 "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
                 "llm_duration": (result.metrics.llm_duration if result.metrics else None) or 0,

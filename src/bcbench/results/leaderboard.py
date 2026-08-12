@@ -24,7 +24,6 @@ class LeaderboardAggregate(BaseModel, ABC):
     """
 
     model: str
-    judge_model: str | None
     agent_name: str
     category: EvaluationCategory
     experiment: ExperimentConfiguration | None = None
@@ -53,7 +52,6 @@ class LeaderboardAggregate(BaseModel, ABC):
 
         return {
             "model": first_run.model,
-            "judge_model": first_run.judge_model,
             "agent_name": first_run.agent_name,
             "category": first_run.category,
             "experiment": first_run.experiment,
@@ -79,6 +77,23 @@ class LeaderboardAggregate(BaseModel, ABC):
     def from_json(cls, payload: dict[str, Any]) -> "LeaderboardAggregate":
         category = EvaluationCategory(payload["category"])
         return category.aggregate_class.model_validate(payload)
+
+
+class JudgeScoredLeaderboardAggregate(LeaderboardAggregate, ABC):
+    """Aggregate for categories whose scoring involves an LLM judge, carrying the judge model shared by the aggregated runs.
+
+    Nullable because leaderboard runs recorded before the judge model was pinned carry none.
+    """
+
+    judge_model: str | None
+
+    @classmethod
+    def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:
+        from bcbench.results.summary import JudgeScoredEvaluationResultSummary
+
+        first_run = runs[0]
+        assert isinstance(first_run, JudgeScoredEvaluationResultSummary)
+        return {**super()._base_fields(runs), "judge_model": first_run.judge_model}
 
 
 class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
@@ -116,7 +131,7 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
         )
 
 
-class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
+class CodeReviewLeaderboardAggregate(JudgeScoredLeaderboardAggregate):
     """Aggregate for the code-review category: mean F1 across runs with bootstrap CI."""
 
     f1: float = 0.0
@@ -176,7 +191,7 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
         )
 
 
-class JudgeBasedLeaderboardAggregate(LeaderboardAggregate):
+class JudgeBasedLeaderboardAggregate(JudgeScoredLeaderboardAggregate):
     """Aggregate for judge-scored categories.
 
     Headline scoring is performed externally (bceval -> Braintrust/Kusto), so only the

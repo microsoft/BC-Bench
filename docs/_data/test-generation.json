@@ -130,8 +130,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -263,8 +262,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -396,8 +394,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": true,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -529,8 +526,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -662,8 +658,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -796,8 +791,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -930,8 +924,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1066,8 +1059,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1199,8 +1191,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1333,8 +1324,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1464,8 +1454,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1594,8 +1583,7 @@
         "microsoftInternal__NAV-177493": true,
         "microsoftInternal__NAV-206527": false,
         "microsoftInternal__NAV-227153": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1727,8 +1715,7 @@
         "microsoftInternal__NAV-193853": true,
         "microsoftInternal__NAV-215645": true,
         "microsoftInternal__NAV-218253": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1858,8 +1845,7 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": false,
         "microsoftInternal__NAV-218253": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -1990,8 +1976,7 @@
         "microsoftInternal__NAV-193853": false,
         "microsoftInternal__NAV-215645": true,
         "microsoftInternal__NAV-218253": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -2123,8 +2108,7 @@
         "microsoftInternal__NAV-217797": false,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -2256,8 +2240,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -2387,8 +2370,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -2518,8 +2500,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -2649,8 +2630,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -2780,8 +2760,7 @@
         "microsoftInternal__NAV-217797": false,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -2910,8 +2889,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3041,8 +3019,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3174,8 +3151,7 @@
         "microsoftInternal__NAV-217797": false,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3304,8 +3280,7 @@
         "microsoftInternal__NAV-217797": false,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3340,7 +3315,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "plugins": null
       },
       "benchmark_version": "0.5.1",
       "resolved": 65,
@@ -3449,8 +3425,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3483,7 +3458,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "plugins": null
       },
       "benchmark_version": "0.5.1",
       "resolved": 63,
@@ -3592,8 +3568,7 @@
         "microsoftInternal__NAV-217797": false,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3627,7 +3602,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "plugins": null
       },
       "benchmark_version": "0.5.1",
       "resolved": 64,
@@ -3736,8 +3712,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3771,7 +3746,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "plugins": null
       },
       "benchmark_version": "0.5.1",
       "resolved": 61,
@@ -3880,8 +3856,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -3913,7 +3888,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "plugins": null
       },
       "benchmark_version": "0.5.1",
       "resolved": 62,
@@ -4022,8 +3998,7 @@
         "microsoftInternal__NAV-209737": true,
         "microsoftInternal__NAV-211548": true,
         "microsoftInternal__NAV-222488": false
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -4158,8 +4133,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -4294,8 +4268,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -4430,8 +4403,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -4566,8 +4538,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": true,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -4702,8 +4673,7 @@
         "microsoftInternal__NAV-217797": true,
         "microsoftInternal__NAV-215972": false,
         "microsoft__BCApps-5633": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -4836,8 +4806,7 @@
         "microsoftInternal__NAV-195193": true,
         "microsoftInternal__NAV-180484": false,
         "microsoftInternal__NAV-176082": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -4970,8 +4939,7 @@
         "microsoftInternal__NAV-195193": true,
         "microsoftInternal__NAV-180484": false,
         "microsoftInternal__NAV-176082": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -5103,8 +5071,7 @@
         "microsoftInternal__NAV-195193": false,
         "microsoftInternal__NAV-180484": false,
         "microsoftInternal__NAV-176082": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -5237,8 +5204,7 @@
         "microsoftInternal__NAV-195193": true,
         "microsoftInternal__NAV-180484": false,
         "microsoftInternal__NAV-176082": true
-      },
-      "judge_model": null
+      }
     },
     {
       "total": 101,
@@ -5371,8 +5337,7 @@
         "microsoftInternal__NAV-195193": true,
         "microsoftInternal__NAV-180484": false,
         "microsoftInternal__NAV-176082": false
-      },
-      "judge_model": null
+      }
     }
   ],
   "aggregate": [
@@ -5388,8 +5353,7 @@
       "average": 0.455,
       "ci_low": 0.434,
       "ci_high": 0.489,
-      "pass_hat_5": 0.208,
-      "judge_model": null
+      "pass_hat_5": 0.208
     },
     {
       "model": "gpt-5-3-codex",
@@ -5403,8 +5367,7 @@
       "average": 0.453,
       "ci_low": 0.426,
       "ci_high": 0.481,
-      "pass_hat_5": 0.208,
-      "judge_model": null
+      "pass_hat_5": 0.208
     },
     {
       "model": "gpt-5-2-codex",
@@ -5418,8 +5381,7 @@
       "average": 0.44,
       "ci_low": 0.408,
       "ci_high": 0.485,
-      "pass_hat_5": 0.168,
-      "judge_model": null
+      "pass_hat_5": 0.168
     },
     {
       "model": "claude-opus-4-7",
@@ -5433,8 +5395,7 @@
       "average": 0.543,
       "ci_low": 0.517,
       "ci_high": 0.568,
-      "pass_hat_5": 0.218,
-      "judge_model": null
+      "pass_hat_5": 0.218
     },
     {
       "model": "gpt-5-4",
@@ -5448,8 +5409,7 @@
       "average": 0.406,
       "ci_low": 0.384,
       "ci_high": 0.448,
-      "pass_hat_5": 0.109,
-      "judge_model": null
+      "pass_hat_5": 0.109
     },
     {
       "model": "claude-opus-4-6",
@@ -5460,7 +5420,8 @@
         "al_lsp_enabled": false,
         "custom_instructions": false,
         "skills_enabled": false,
-        "custom_agent": "ALTest"
+        "custom_agent": "ALTest",
+        "plugins": null
       },
       "total": 101,
       "num_runs": 5,
@@ -5469,8 +5430,7 @@
       "average": 0.624,
       "ci_low": 0.612,
       "ci_high": 0.636,
-      "pass_hat_5": 0.396,
-      "judge_model": null
+      "pass_hat_5": 0.396
     },
     {
       "model": "claude-opus-4-6",
@@ -5484,8 +5444,7 @@
       "average": 0.517,
       "ci_low": 0.475,
       "ci_high": 0.588,
-      "pass_hat_5": 0.228,
-      "judge_model": null
+      "pass_hat_5": 0.228
     },
     {
       "model": "claude-opus-4-8",
@@ -5499,8 +5458,7 @@
       "average": 0.608,
       "ci_low": 0.576,
       "ci_high": 0.64,
-      "pass_hat_5": 0.317,
-      "judge_model": null
+      "pass_hat_5": 0.317
     }
   ]
 }
