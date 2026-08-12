@@ -118,7 +118,7 @@ def run_claude(
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter("code-review runs through the BC Review Engine; use 'bcbench run copilot --category code-review' or 'bcbench run pr-review'.")
+        raise typer.BadParameter("code-review runs through BC PR Review; use 'bcbench run copilot --category code-review' or 'bcbench run pr-review'.")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -150,7 +150,7 @@ def run_pr_review(
 
     Writes review.json in the repo root without scoring. For full evaluation, use
     'bcbench evaluate pr-review' instead. Requires a local BC-ALAgents checkout
-    (engine.path in config.yaml or BC_REVIEW_ENGINE_ROOT), PowerShell 7+, and GH_TOKEN.
+    (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT), PowerShell 7+, and GH_TOKEN.
 
     Example:
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed

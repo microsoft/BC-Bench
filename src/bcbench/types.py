@@ -167,7 +167,7 @@ class AgentHarness(StrEnum):
     CLAUDE = "Claude Code"
     BCAL = "BCal"
     MOCK = "mock-agent"
-    PR_REVIEW = "BC Review Engine"
+    PR_REVIEW = "BC PR Review"
 
     @property
     def expected_metrics(self) -> frozenset[str]:

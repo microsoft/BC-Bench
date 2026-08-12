@@ -148,7 +148,7 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-          BC_REVIEW_ENGINE_ROOT: ${{ github.workspace }}/bc-alagents-engine
+          BC_PR_REVIEW_ROOT: ${{ github.workspace }}/bc-alagents-engine
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -177,7 +177,7 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: ${{ inputs.category == 'code-review' && 'BC Review Engine' || 'GitHub Copilot CLI' }}
+      agent: ${{ inputs.category == 'code-review' && 'BC PR Review' || 'GitHub Copilot CLI' }}
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
       git-ref: ${{ inputs.git-ref || github.ref_name }}

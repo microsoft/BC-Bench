@@ -171,7 +171,7 @@ def evaluate_claude_code(
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
     if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter("code-review runs through the BC Review Engine; use 'bcbench evaluate copilot --category code-review' or 'bcbench evaluate engine'.")
+        raise typer.BadParameter("code-review runs through BC PR Review; use 'bcbench evaluate copilot --category code-review' or 'bcbench evaluate pr-review'.")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
@@ -225,7 +225,7 @@ def evaluate_pr_review(
 
     Runs the engine's own generate shell in local mode - the real PROD generate path -
     then scores the resulting review.json with the standard code-review judge. Requires a
-    local BC-ALAgents checkout (engine.path in config.yaml or BC_REVIEW_ENGINE_ROOT),
+    local BC-ALAgents checkout (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT),
     PowerShell 7+, and GH_TOKEN.
 
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.

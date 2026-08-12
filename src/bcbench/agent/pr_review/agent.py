@@ -36,20 +36,20 @@ _REVIEW_OUTPUT_FILE = "review.json"
 _PREPARE_BCQUALITY_SCRIPT = Path(__file__).parent / "scripts" / "Prepare-BCQualityRoot.ps1"
 
 
-def _load_engine_settings() -> dict[str, Any]:
+def _load_pr_review_settings() -> dict[str, Any]:
     config_file = _config.paths.agent_share_dir / "config.yaml"
     data = yaml.safe_load(config_file.read_text()) or {}
-    return data.get("engine") or {}
+    return data.get("pr_review") or {}
 
 
-def _resolve_engine_root(settings: dict[str, Any]) -> Path:
-    raw = os.environ.get("BC_REVIEW_ENGINE_ROOT") or settings.get("path")
+def _resolve_pr_review_root(settings: dict[str, Any]) -> Path:
+    raw = os.environ.get("BC_PR_REVIEW_ROOT") or settings.get("path")
     if not raw:
-        raise AgentError("Engine root not configured. Set 'engine.path' in the shared agent config.yaml or the BC_REVIEW_ENGINE_ROOT environment variable.")
+        raise AgentError("Engine root not configured. Set 'pr_review.path' in the shared agent config.yaml or the BC_PR_REVIEW_ROOT environment variable.")
     root = Path(raw).expanduser()
     shell = root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-PRReviewShell.ps1"
     if not shell.exists():
-        raise AgentError(f"Engine review shell not found at {shell}. Check 'engine.path' points at a BC-ALAgents checkout.")
+        raise AgentError(f"Engine review shell not found at {shell}. Check 'pr_review.path' points at a BC-ALAgents checkout.")
     return root
 
 
@@ -191,8 +191,8 @@ def run_pr_review_agent(
     if not isinstance(entry, CodeReviewEntry):
         raise AgentError(f"The engine agent requires a CodeReviewEntry, got {type(entry).__name__}.")
 
-    settings = _load_engine_settings()
-    engine_root = _resolve_engine_root(settings)
+    settings = _load_pr_review_settings()
+    engine_root = _resolve_pr_review_root(settings)
     pwsh = _resolve_pwsh()
     gh_token = _resolve_gh_token()
     agent_version = str(settings.get("agent_version", "0.0.0"))
