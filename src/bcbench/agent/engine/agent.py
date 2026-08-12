@@ -53,8 +53,20 @@ def _resolve_engine_root(settings: dict[str, Any]) -> Path:
     return root
 
 
+def _resolve_engine_revision(engine_root: Path) -> str:
+    """Resolve the engine checkout's git revision (with a dirty marker) for provenance."""
+    head = subprocess.run(["git", "-C", str(engine_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
+    if head.returncode != 0 or not head.stdout.strip():
+        return "unknown"
+    sha = head.stdout.strip()
+    dirty = subprocess.run(["git", "-C", str(engine_root), "status", "--porcelain"], capture_output=True, text=True, check=False)
+    if dirty.returncode == 0 and dirty.stdout.strip():
+        return f"{sha}-dirty"
+    return sha
+
+
 def _resolve_pwsh() -> str:
-    pwsh = shutil.which("pwsh") or shutil.which("powershell")
+    pwsh = shutil.which("pwsh")
     if not pwsh:
         raise AgentError("PowerShell (pwsh) not found in PATH. The BC-ALAgents engine requires PowerShell 7+.")
     return pwsh
@@ -210,9 +222,12 @@ def run_engine_review(
         "GH_TOKEN": gh_token,
     }
 
+    plugins = [f"bc-review-engine@{_resolve_engine_revision(engine_root)}"]
+    if bcquality_sha:
+        plugins.append(f"BCQuality@{bcquality_sha}")
     config = ExperimentConfiguration(
         custom_agent="bc-review-engine",
-        plugins=[f"BCQuality@{bcquality_sha}"] if bcquality_sha else None,
+        plugins=plugins,
     )
 
     start = time.monotonic()

@@ -66,6 +66,7 @@ else {
     $ref = $cfg.bcquality.ref
 
     Write-Host "Fetching BCQuality from $repo@$ref into $Root"
+    if (Test-Path -LiteralPath $Root) { Remove-Item -LiteralPath $Root -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $Root | Out-Null
     git -C $Root init -q
     git -C $Root remote add origin $repo
