@@ -123,7 +123,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install Agent Harnesses
-        uses: $/.github/actions/install-eval-clis
+        uses: $/.github/actions/install-agent-harnesses
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
         timeout-minutes: 120

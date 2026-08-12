@@ -128,7 +128,7 @@ jobs:
           echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
 
       - name: Install evaluation CLIs
-        uses: $/.github/actions/install-eval-clis
+        uses: $/.github/actions/install-agent-harnesses
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         timeout-minutes: 120

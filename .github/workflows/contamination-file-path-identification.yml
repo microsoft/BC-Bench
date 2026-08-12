@@ -94,7 +94,7 @@ jobs:
           node-version: 24
 
       - name: Install evaluation CLIs
-        uses: $/.github/actions/install-eval-clis
+        uses: $/.github/actions/install-agent-harnesses
 
       - name: Run file-path identification for entry ${{ matrix.entry }}
         timeout-minutes: 20
