@@ -62,21 +62,6 @@ on:
         required: false
         default: ""
         type: string
-      troubleshoot-requeue:
-        description: "Fast requeue permissions/ref-creation diagnostic that skips evaluation. To run the PR version, dispatch this existing workflow on the PR branch/ref with this enabled."
-        required: false
-        default: false
-        type: boolean
-      troubleshoot-target-sha:
-        description: "Optional commit SHA for the requeue diagnostic to target."
-        required: false
-        default: ""
-        type: string
-      troubleshoot-target-shas:
-        description: "Optional comma-separated commit SHAs for a single-token comparison."
-        required: false
-        default: ""
-        type: string
 
 concurrency:
   group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.category }}
@@ -86,8 +71,30 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  pin-commit:
+    runs-on: ubuntu-latest
+    # Create the ephemeral requeue tag as early as possible (rather than after the
+    # evaluation finishes) so there's minimal time for `main`'s workflow files to
+    # diverge from the pinned commit, which would otherwise make the later tag
+    # creation fail with a 403 (workflow-scope changes require `workflows: write`,
+    # which GITHUB_TOKEN cannot be granted).
+    if: ${{ !inputs.test-run && inputs.repeat != '1' && !startsWith(github.ref, 'refs/tags/eval-run-') }}
+    outputs:
+      tag-name: ${{ steps.create-tag.outputs.tag-name }}
+    steps:
+      - name: Create ephemeral tag pinning this commit
+        id: create-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="eval-run-copilot-${{ github.run_id }}"
+          gh api repos/${{ github.repository }}/git/refs \
+            --method POST \
+            -f ref="refs/tags/${TAG_NAME}" \
+            -f sha="${{ github.sha }}"
+          echo "tag-name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
   get-entries:
-    if: ${{ !inputs.troubleshoot-requeue }}
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run }}
@@ -98,7 +105,7 @@ jobs:
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    if: ${{ !inputs.troubleshoot-requeue && needs.get-entries.outputs.entries != '[]' }}
+    if: needs.get-entries.outputs.entries != '[]'
     environment:
       name: ado-read
       deployment: false
@@ -173,7 +180,6 @@ jobs:
 
   summarize-results:
     needs: evaluate-with-copilot-cli
-    if: ${{ !inputs.troubleshoot-requeue }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
@@ -188,8 +194,8 @@ jobs:
     secrets: inherit
 
   requeue:
-    needs: summarize-results
-    if: ${{ !inputs.troubleshoot-requeue && !inputs.test-run }}
+    needs: [summarize-results, pin-commit]
+    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
@@ -197,19 +203,6 @@ jobs:
     with:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
+      existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
         {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
-
-  troubleshoot-requeue:
-    if: ${{ inputs.troubleshoot-requeue }}
-    uses: ./.github/workflows/requeue-evaluation.yml
-    permissions:
-      contents: write
-      actions: write
-    with:
-      workflow-file: copilot-evaluation.yml
-      repeat: "1"
-      workflow-inputs: "{}"
-      troubleshoot-only: true
-      troubleshoot-target-sha: ${{ inputs.troubleshoot-target-sha }}
-      troubleshoot-target-shas: ${{ inputs.troubleshoot-target-shas }}
