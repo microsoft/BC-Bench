@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.repeat != '1' }}
     steps:
-      - name: Create or reuse tag for requeue
+      - name: Reuse tag for requeue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -45,17 +45,8 @@ jobs:
             TAG_NAME="${{ inputs.existing-tag }}"
             echo "Using previously created ephemeral tag: ${TAG_NAME}"
           else
-            # First run in the chain and no tag was pre-created: create one now
-            COMMIT_SHA="${{ github.sha }}"
-            WORKFLOW_FILE="${{ inputs.workflow-file }}"
-            AGENT_NAME="${WORKFLOW_FILE%%-evaluation.yml}"
-
-            TAG_NAME="eval-run-${AGENT_NAME}-${{ github.run_id }}"
-            echo "Creating ephemeral tag: ${TAG_NAME}"
-            gh api repos/${{ github.repository }}/git/refs \
-              --method POST \
-              -f ref="refs/tags/${TAG_NAME}" \
-              -f sha="${COMMIT_SHA}"
+            echo "No ephemeral tag is available for requeue."
+            exit 1
           fi
 
           # Build the workflow dispatch command with inputs from JSON
