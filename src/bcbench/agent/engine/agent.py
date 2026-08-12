@@ -102,12 +102,24 @@ def _init_trusted_workspace(path: Path) -> Path:
     return path
 
 
-def _prepare_bcquality_root(engine_root: Path, pwsh: str, dest: Path, bcquality_ref: str | None) -> tuple[Path, str | None]:
+def _prepare_bcquality_root(
+    engine_root: Path,
+    pwsh: str,
+    dest: Path,
+    bcquality_ref: str | None,
+    bcquality_repo: str | None = None,
+    bcquality_local_path: str | None = None,
+) -> tuple[Path, str | None]:
     env = {**os.environ}
+    if bcquality_repo:
+        env["BCQUALITY_REPO"] = bcquality_repo
     if bcquality_ref:
         env["BCQUALITY_REF"] = bcquality_ref
+    args = [pwsh, "-NoProfile", "-File", str(_PREPARE_BCQUALITY_SCRIPT), "-EngineRoot", str(engine_root), "-Root", str(dest)]
+    if bcquality_local_path:
+        args += ["-LocalPath", bcquality_local_path]
     result = subprocess.run(
-        [pwsh, "-NoProfile", "-File", str(_PREPARE_BCQUALITY_SCRIPT), "-EngineRoot", str(engine_root), "-Root", str(dest)],
+        args,
         capture_output=True,
         text=True,
         env=env,
@@ -145,6 +157,8 @@ def run_engine_review(
     repo_path: Path,
     output_dir: Path,
     bcquality_ref: str | None = None,
+    bcquality_repo: str | None = None,
+    bcquality_local_path: str | None = None,
     min_severity: str | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run the engine's generate half on a code-review entry and write review.json.
@@ -163,13 +177,24 @@ def run_engine_review(
     gh_token = _resolve_gh_token()
     agent_version = str(settings.get("agent_version", "0.0.0"))
     severity = min_severity or settings.get("min_severity") or "Low"
+    bcquality_cfg = settings.get("bcquality") or {}
+    bcquality_repo = bcquality_repo or bcquality_cfg.get("repo")
+    bcquality_ref = bcquality_ref or bcquality_cfg.get("ref")
+    bcquality_local_path = bcquality_local_path or bcquality_cfg.get("local_path")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Running BC-ALAgents review engine on: {entry.instance_id}")
 
     _commit_patch_as_head(repo_path)
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
-    bcquality_root, bcquality_sha = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality", bcquality_ref)
+    bcquality_root, bcquality_sha = _prepare_bcquality_root(
+        engine_root,
+        pwsh,
+        output_dir / "bcquality",
+        bcquality_ref,
+        bcquality_repo,
+        bcquality_local_path,
+    )
 
     shell = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-PRReviewShell.ps1"
     env = {

@@ -106,6 +106,14 @@ engine:
   path: "C:/depot/BC-ALReviewAgent"
   agent_version: "0.0.0"
   min_severity: "Low"
+  # BCQuality content source for the engine run. All optional; null = use the
+  # engine's pinned repo/ref. Set bcquality.local_path to iterate on a local
+  # BCQuality checkout without pushing (it is copied and filtered; the original is
+  # never modified). CLI flags (--bcquality-repo/-ref/-local-path) override these.
+  bcquality:
+    repo: null        # BCQUALITY_REPO override (e.g. a private fork)
+    ref: null         # BCQUALITY_REF override (e.g. your private branch/tag/sha)
+    local_path: null  # local BCQuality checkout to copy+filter instead of fetching
 
 # controls:
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

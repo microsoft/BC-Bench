@@ -158,6 +158,8 @@ def evaluate_engine(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "engine_test_run",
     bcquality_ref: Annotated[str | None, typer.Option(help="Override the BCQuality ref (defaults to the engine's pinned ref)")] = None,
+    bcquality_repo: Annotated[str | None, typer.Option(help="Override the BCQuality repo, e.g. a private fork (defaults to config/engine)")] = None,
+    bcquality_local_path: Annotated[str | None, typer.Option(help="Use a local BCQuality checkout (copied + filtered, never modified) instead of fetching")] = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
     """
@@ -195,6 +197,8 @@ def evaluate_engine(
             model=ctx.model,
             output_dir=ctx.result_dir,
             bcquality_ref=bcquality_ref,
+            bcquality_repo=bcquality_repo,
+            bcquality_local_path=bcquality_local_path,
             min_severity=min_severity,
         ),
     )
