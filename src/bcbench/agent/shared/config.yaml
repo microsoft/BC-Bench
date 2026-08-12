@@ -78,6 +78,7 @@ prompt:
     {{task}}
 
 # controls:
+# 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
 #    - Claude: copies to repo/.claude/ and renames AGENTS.md to CLAUDE.md
 # 2. whether to pass --disable-custom-instructions to copilot
