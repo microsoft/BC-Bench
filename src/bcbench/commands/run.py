@@ -8,7 +8,7 @@ import typer
 from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
 from bcbench.agent.claude import run_claude_code
 from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.pr_review import run_pr_review_agent
+from bcbench.agent.copilot.pr_review import run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,

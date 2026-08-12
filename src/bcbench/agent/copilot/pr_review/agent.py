@@ -20,7 +20,7 @@ from typing import Any
 
 import yaml
 
-from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
+from bcbench.agent.copilot.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
