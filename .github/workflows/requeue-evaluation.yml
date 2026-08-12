@@ -15,18 +15,8 @@ on:
         description: "JSON string of workflow inputs to pass (excluding repeat)"
         required: true
         type: string
-      troubleshoot-only:
-        description: "Run only the ref-creation diagnostic"
-        required: false
-        default: false
-        type: boolean
-      troubleshoot-target-sha:
-        description: "Optional commit SHA for the diagnostic to target"
-        required: false
-        default: ""
-        type: string
-      troubleshoot-target-shas:
-        description: "Optional comma-separated commit SHAs for a single-token comparison"
+      existing-tag:
+        description: "Ephemeral tag already created earlier in the run (avoids re-creating it at requeue time)"
         required: false
         default: ""
         type: string
@@ -38,7 +28,7 @@ permissions:
 jobs:
   requeue-if-needed:
     runs-on: ubuntu-latest
-    if: ${{ !inputs.troubleshoot-only && inputs.repeat != '1' }}
+    if: ${{ inputs.repeat != '1' }}
     steps:
       - name: Create or reuse tag for requeue
         env:
@@ -46,12 +36,16 @@ jobs:
         run: |
           REF="${{ github.ref }}"
 
-          # If already running from an eval-run tag, reuse it
           if [[ "${REF}" == refs/tags/eval-run-* ]]; then
+            # Already running from an ephemeral tag: reuse it
             TAG_NAME="${{ github.ref_name }}"
             echo "Reusing existing ephemeral tag: ${TAG_NAME}"
+          elif [[ -n "${{ inputs.existing-tag }}" ]]; then
+            # A tag was already created earlier in this run (see the pin-commit job)
+            TAG_NAME="${{ inputs.existing-tag }}"
+            echo "Using previously created ephemeral tag: ${TAG_NAME}"
           else
-            # First run in the chain: create a new tag
+            # First run in the chain and no tag was pre-created: create one now
             COMMIT_SHA="${{ github.sha }}"
             WORKFLOW_FILE="${{ inputs.workflow-file }}"
             AGENT_NAME="${WORKFLOW_FILE%%-evaluation.yml}"
@@ -85,7 +79,7 @@ jobs:
 
   cleanup-ephemeral-tag:
     runs-on: ubuntu-latest
-    if: ${{ !inputs.troubleshoot-only && inputs.repeat == '1' }}
+    if: ${{ inputs.repeat == '1' }}
     steps:
       - name: Delete ephemeral tag if running from one
         env:
@@ -99,193 +93,4 @@ jobs:
               --method DELETE || echo "Tag deletion failed or already deleted"
           else
             echo "Not running from an ephemeral tag (ref: ${REF}), skipping cleanup"
-          fi
-
-  troubleshoot-requeue:
-    if: ${{ inputs.troubleshoot-only }}
-    name: Troubleshoot requeue permissions
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      REPOSITORY: ${{ github.repository }}
-      TARGET_SHA: ${{ inputs.troubleshoot-target-sha || github.sha }}
-      TARGET_SHAS: ${{ inputs.troubleshoot-target-shas }}
-    steps:
-      - name: Probe token permissions and ref creation
-        shell: bash
-        run: |
-          set +e
-
-          api_url="https://api.github.com"
-          generic_tag="actions-permission-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          eval_tag="eval-run-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          branch="actions-permission-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          declare -A status
-
-          request() {
-            local name="$1"
-            local method="$2"
-            local path="$3"
-            local body="${RUNNER_TEMP}/requeue-probe-${name}.json"
-            local response_status
-            local -a args=(
-              --silent
-              --show-error
-              --output "${body}"
-              --write-out "%{http_code}"
-              --request "${method}"
-              --header "Accept: application/vnd.github+json"
-              --oauth2-bearer "${GH_TOKEN}"
-              --header "X-GitHub-Api-Version: 2022-11-28"
-            )
-
-            if [[ $# -eq 4 ]]; then
-              args+=(--header "Content-Type: application/json" --data "$4")
-            fi
-
-            response_status="$(curl "${args[@]}" "${api_url}/${path}")"
-            status["${name}"]="${response_status:-000}"
-          }
-
-          request repo-read GET "repos/${REPOSITORY}"
-          request blob-create POST "repos/${REPOSITORY}/git/blobs" \
-            "$(jq -nc --arg content "requeue probe ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" '{content: $content, encoding: "utf-8"}')"
-          request generic-tag POST "repos/${REPOSITORY}/git/refs" \
-            "$(jq -nc --arg ref "refs/tags/${generic_tag}" --arg sha "${TARGET_SHA}" '{ref: $ref, sha: $sha}')"
-          request eval-tag POST "repos/${REPOSITORY}/git/refs" \
-            "$(jq -nc --arg ref "refs/tags/${eval_tag}" --arg sha "${TARGET_SHA}" '{ref: $ref, sha: $sha}')"
-          request branch POST "repos/${REPOSITORY}/git/refs" \
-            "$(jq -nc --arg ref "refs/heads/${branch}" --arg sha "${TARGET_SHA}" '{ref: $ref, sha: $sha}')"
-          request rulesets GET "repos/${REPOSITORY}/rulesets"
-          request actions-permissions GET "repos/${REPOSITORY}/actions/permissions/workflow"
-
-          {
-            echo "REQUEUE_PROBE_REPO_READ_STATUS=${status[repo-read]}"
-            echo "REQUEUE_PROBE_BLOB_STATUS=${status[blob-create]}"
-            echo "REQUEUE_PROBE_GENERIC_TAG_STATUS=${status[generic-tag]}"
-            echo "REQUEUE_PROBE_EVAL_TAG_STATUS=${status[eval-tag]}"
-            echo "REQUEUE_PROBE_BRANCH_STATUS=${status[branch]}"
-            echo "REQUEUE_PROBE_RULESETS_STATUS=${status[rulesets]}"
-            echo "REQUEUE_PROBE_ACTIONS_PERMISSIONS_STATUS=${status[actions-permissions]}"
-            [[ "${status[generic-tag]}" == "201" ]] && echo "REQUEUE_PROBE_GENERIC_TAG=${generic_tag}"
-            [[ "${status[eval-tag]}" == "201" ]] && echo "REQUEUE_PROBE_EVAL_TAG=${eval_tag}"
-            [[ "${status[branch]}" == "201" ]] && echo "REQUEUE_PROBE_BRANCH=${branch}"
-          } >> "${GITHUB_ENV}"
-
-      - name: Compare tag creation across target SHAs
-        if: ${{ inputs.troubleshoot-target-shas != '' }}
-        shell: bash
-        run: |
-          set +e
-
-          {
-            echo
-            echo "### Single-token target comparison"
-            echo
-            echo "| Target SHA | HTTP status | Accepted permissions | Response |"
-            echo "| --- | --- | --- | --- |"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-          IFS=',' read -ra target_shas <<< "${TARGET_SHAS}"
-          for index in "${!target_shas[@]}"; do
-            target_sha="${target_shas[$index]}"
-            tag="actions-target-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${index}"
-            headers="${RUNNER_TEMP}/target-probe-${index}.headers"
-            body="${RUNNER_TEMP}/target-probe-${index}.json"
-            response_status="$(
-              curl --silent --show-error \
-                --dump-header "${headers}" \
-                --output "${body}" \
-                --write-out "%{http_code}" \
-                --request POST \
-                --header "Accept: application/vnd.github+json" \
-                --oauth2-bearer "${GH_TOKEN}" \
-                --header "X-GitHub-Api-Version: 2022-11-28" \
-                --header "Content-Type: application/json" \
-                --data "$(jq -nc --arg ref "refs/tags/${tag}" --arg sha "${target_sha}" '{ref: $ref, sha: $sha}')" \
-                "https://api.github.com/repos/${REPOSITORY}/git/refs"
-            )"
-            accepted_permissions="$(
-              tr -d '\r' < "${headers}" |
-                awk -F': ' 'tolower($1) == "x-accepted-github-permissions" { print $2 }' |
-                tail -1
-            )"
-            response_message="$(jq -r '.message // "created"' "${body}")"
-
-            echo "${target_sha}: HTTP ${response_status}; accepted=${accepted_permissions}; response=${response_message}"
-            echo "| \`${target_sha}\` | \`${response_status}\` | \`${accepted_permissions}\` | ${response_message} |" >> "${GITHUB_STEP_SUMMARY}"
-
-            if [[ "${response_status}" == "201" ]]; then
-              curl --silent --show-error --output /dev/null \
-                --request DELETE \
-                --header "Accept: application/vnd.github+json" \
-                --oauth2-bearer "${GH_TOKEN}" \
-                --header "X-GitHub-Api-Version: 2022-11-28" \
-                "https://api.github.com/repos/${REPOSITORY}/git/refs/tags/${tag}"
-            fi
-          done
-
-      - name: Write diagnostic summary
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "## Requeue permissions diagnostic"
-            echo
-            echo "| Operation | HTTP status | Interpretation |"
-            echo "| --- | --- | --- |"
-            echo "| Authenticated repository read | \`${REQUEUE_PROBE_REPO_READ_STATUS}\` | Verifies that the workflow token can read this repository. |"
-            echo "| Unreferenced Git blob creation | \`${REQUEUE_PROBE_BLOB_STATUS}\` | Tests effective Git contents write without modifying a ref. |"
-            echo "| Generic temporary tag | \`${REQUEUE_PROBE_GENERIC_TAG_STATUS}\` | Tests general tag-ref creation. |"
-            echo "| Production-like \`eval-run-*\` tag | \`${REQUEUE_PROBE_EVAL_TAG_STATUS}\` | Tests the namespace used by requeue. |"
-            echo "| Temporary diagnostic branch | \`${REQUEUE_PROBE_BRANCH_STATUS}\` | Distinguishes tag-only restrictions from broad ref restrictions. |"
-            echo "| Repository rulesets (best effort) | \`${REQUEUE_PROBE_RULESETS_STATUS}\` | Access may require additional privileges. |"
-            echo "| Actions permission metadata (best effort) | \`${REQUEUE_PROBE_ACTIONS_PERMISSIONS_STATUS}\` | Access may require additional privileges. |"
-            echo
-
-            if [[ "${REQUEUE_PROBE_BLOB_STATUS}" == "403" ]]; then
-              echo "- Blob creation returned 403: the token lacks effective contents write, or an organization/enterprise policy restricts it."
-            fi
-            if [[ "${REQUEUE_PROBE_BLOB_STATUS}" == "201" && "${REQUEUE_PROBE_GENERIC_TAG_STATUS}" != "201" && "${REQUEUE_PROBE_EVAL_TAG_STATUS}" != "201" && "${REQUEUE_PROBE_BRANCH_STATUS}" != "201" ]]; then
-              echo "- Blob creation succeeded but all ref creation failed: repository rules or rulesets likely restrict ref creation."
-            fi
-            if [[ "${REQUEUE_PROBE_GENERIC_TAG_STATUS}" == "201" && "${REQUEUE_PROBE_EVAL_TAG_STATUS}" != "201" ]]; then
-              echo "- The generic tag succeeded but the eval-run tag failed: a namespace-specific tag ruleset likely applies."
-            fi
-            if [[ "${REQUEUE_PROBE_GENERIC_TAG_STATUS}" != "201" && "${REQUEUE_PROBE_EVAL_TAG_STATUS}" != "201" && "${REQUEUE_PROBE_BRANCH_STATUS}" == "201" ]]; then
-              echo "- Tag refs failed but the branch ref succeeded: a tag-specific restriction likely applies."
-            fi
-            if [[ "${REQUEUE_PROBE_EVAL_TAG_STATUS}" == "201" ]]; then
-              echo "- Production-like ref creation succeeded: the original failure may have been transient or context-specific."
-            fi
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Delete temporary refs
-        if: always()
-        shell: bash
-        run: |
-          delete_ref() {
-            local ref="$1"
-            curl --silent --show-error --output /dev/null --write-out "Deleted ${ref}: HTTP %{http_code}\n" \
-              --request DELETE \
-              --header "Accept: application/vnd.github+json" \
-              --oauth2-bearer "${GH_TOKEN}" \
-              --header "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${REPOSITORY}/git/refs/${ref}" || true
-          }
-
-          [[ -n "${REQUEUE_PROBE_GENERIC_TAG:-}" ]] && delete_ref "tags/${REQUEUE_PROBE_GENERIC_TAG}"
-          [[ -n "${REQUEUE_PROBE_EVAL_TAG:-}" ]] && delete_ref "tags/${REQUEUE_PROBE_EVAL_TAG}"
-          [[ -n "${REQUEUE_PROBE_BRANCH:-}" ]] && delete_ref "heads/${REQUEUE_PROBE_BRANCH}"
-
-      - name: Fail when production-like tag creation failed
-        if: always()
-        shell: bash
-        run: |
-          if [[ "${REQUEUE_PROBE_EVAL_TAG_STATUS}" != "201" ]]; then
-            echo "Production-like eval-run tag creation failed; see the diagnostic summary."
-            exit 1
           fi

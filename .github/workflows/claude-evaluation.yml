@@ -66,6 +66,29 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  pin-commit:
+    runs-on: ubuntu-latest
+    # Create the ephemeral requeue tag as early as possible (rather than after the
+    # evaluation finishes) so there's minimal time for `main`'s workflow files to
+    # diverge from the pinned commit, which would otherwise make the later tag
+    # creation fail with a 403 (workflow-scope changes require `workflows: write`,
+    # which GITHUB_TOKEN cannot be granted).
+    if: ${{ !inputs.test-run && inputs.repeat != '1' && !startsWith(github.ref, 'refs/tags/eval-run-') }}
+    outputs:
+      tag-name: ${{ steps.create-tag.outputs.tag-name }}
+    steps:
+      - name: Create ephemeral tag pinning this commit
+        id: create-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="eval-run-claude-${{ github.run_id }}"
+          gh api repos/${{ github.repository }}/git/refs \
+            --method POST \
+            -f ref="refs/tags/${TAG_NAME}" \
+            -f sha="${{ github.sha }}"
+          echo "tag-name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
@@ -168,8 +191,8 @@ jobs:
     secrets: inherit
 
   requeue:
-    needs: summarize-results
-    if: ${{ !inputs.test-run }}
+    needs: [summarize-results, pin-commit]
+    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
@@ -177,5 +200,6 @@ jobs:
     with:
       workflow-file: claude-evaluation.yml
       repeat: ${{ inputs.repeat }}
+      existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
         {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
