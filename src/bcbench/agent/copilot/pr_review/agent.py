@@ -15,17 +15,21 @@ import os
 import shutil
 import subprocess
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from bcbench.agent.copilot.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.copilot.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
+from bcbench.operations.git_operations import clone_repo_at_revision, remove_tree
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -42,15 +46,48 @@ def _load_pr_review_settings() -> dict[str, Any]:
     return data.get("pr_review") or {}
 
 
-def _resolve_pr_review_root(settings: dict[str, Any]) -> Path:
-    raw = os.environ.get("BC_PR_REVIEW_ROOT") or settings.get("path")
-    if not raw:
-        raise AgentError("Engine root not configured. Set 'pr_review.path' in the shared agent config.yaml or the BC_PR_REVIEW_ROOT environment variable.")
+def _validate_engine_root(raw: str | Path) -> Path:
     root = Path(raw).expanduser()
     shell = root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-PRReviewShell.ps1"
     if not shell.exists():
-        raise AgentError(f"Engine review shell not found at {shell}. Check 'pr_review.path' points at a BC-ALAgents checkout.")
+        raise AgentError(f"Engine review shell not found at {shell}. Check the configured BC-ALAgents source.")
     return root
+
+
+@contextmanager
+def _prepare_engine_root(
+    settings: dict[str, Any],
+    destination: Path,
+    engine_ref: str | None = None,
+    engine_repo: str | None = None,
+    engine_local_path: str | None = None,
+) -> Generator[Path]:
+    engine_cfg = settings.get("engine") or {}
+    environment_root = os.environ.get("BC_PR_REVIEW_ROOT")
+    if environment_root:
+        yield _validate_engine_root(environment_root)
+        return
+
+    if engine_local_path and (engine_repo or engine_ref):
+        raise AgentError("--engine-local-path cannot be combined with --engine-repo or --engine-ref.")
+
+    cli_remote_source = engine_repo is not None or engine_ref is not None
+    local_path = engine_local_path if engine_local_path is not None else None if cli_remote_source else engine_cfg.get("local_path")
+    if local_path:
+        yield _validate_engine_root(local_path)
+        return
+
+    repo = engine_repo or engine_cfg.get("repo")
+    ref = engine_ref or engine_cfg.get("ref")
+    if not repo or not ref:
+        raise AgentError("Engine source not configured. Set pr_review.engine.repo/ref, use --engine-repo/--engine-ref, or provide BC_PR_REVIEW_ROOT.")
+
+    try:
+        clone_repo_at_revision(str(repo), str(ref), destination)
+        yield _validate_engine_root(destination)
+    finally:
+        if destination.exists():
+            remove_tree(destination)
 
 
 def _resolve_engine_revision(engine_root: Path) -> str:
@@ -151,6 +188,25 @@ def _prepare_bcquality_root(
     return root, sha
 
 
+def _resolve_bcquality_source(
+    settings: dict[str, Any],
+    bcquality_ref: str | None,
+    bcquality_repo: str | None,
+    bcquality_local_path: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    bcquality_cfg = settings.get("bcquality") or {}
+    if bcquality_local_path and (bcquality_repo or bcquality_ref):
+        raise AgentError("--bcquality-local-path cannot be combined with --bcquality-repo or --bcquality-ref.")
+
+    remote_override = bcquality_repo is not None or bcquality_ref is not None
+    resolved_repo = bcquality_repo or bcquality_cfg.get("repo")
+    resolved_ref = bcquality_ref or bcquality_cfg.get("ref")
+    resolved_local_path = bcquality_local_path
+    if resolved_local_path is None and not remote_override:
+        resolved_local_path = bcquality_cfg.get("local_path")
+    return resolved_ref, resolved_repo, resolved_local_path
+
+
 def _write_review_json(output_dir: Path, repo_path: Path) -> int:
     agent_output = output_dir / _AGENT_OUTPUT_FILE
     if not agent_output.exists():
@@ -174,6 +230,9 @@ def run_pr_review_agent(
     bcquality_ref: str | None = None,
     bcquality_repo: str | None = None,
     bcquality_local_path: str | None = None,
+    engine_ref: str | None = None,
+    engine_repo: str | None = None,
+    engine_local_path: str | None = None,
     min_severity: str | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run the engine's generate half on a code-review entry and write review.json.
@@ -190,80 +249,88 @@ def run_pr_review_agent(
         raise AgentError(f"The engine agent only supports the code-review category, got {category.value}.")
     if not isinstance(entry, CodeReviewEntry):
         raise AgentError(f"The engine agent requires a CodeReviewEntry, got {type(entry).__name__}.")
-
     settings = _load_pr_review_settings()
-    engine_root = _resolve_pr_review_root(settings)
     pwsh = _resolve_pwsh()
     gh_token = _resolve_gh_token()
     agent_version = str(settings.get("agent_version", "0.0.0"))
     severity = min_severity or settings.get("min_severity") or "Low"
-    bcquality_cfg = settings.get("bcquality") or {}
-    bcquality_repo = bcquality_repo or bcquality_cfg.get("repo")
-    bcquality_ref = bcquality_ref or bcquality_cfg.get("ref")
-    bcquality_local_path = bcquality_local_path or bcquality_cfg.get("local_path")
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Running BC-ALAgents review engine on: {entry.instance_id}")
-
-    _commit_patch_as_head(repo_path)
-    trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
-    bcquality_root, bcquality_sha = _prepare_bcquality_root(
-        engine_root,
-        pwsh,
-        output_dir / "bcquality",
+    bcquality_ref, bcquality_repo, bcquality_local_path = _resolve_bcquality_source(
+        settings,
         bcquality_ref,
         bcquality_repo,
         bcquality_local_path,
     )
 
-    shell = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-PRReviewShell.ps1"
-    env = {
-        **os.environ,
-        "REVIEW_SOURCE": "local",
-        "BASE_REF": entry.base_commit,
-        "REVIEW_TARGET_WORKSPACE": str(repo_path),
-        "REVIEW_WORKSPACE": str(trusted_workspace),
-        "REVIEW_OUTPUT_DIR": str(output_dir),
-        "BCQUALITY_ROOT": str(bcquality_root),
-        "COPILOT_MODEL": model,
-        "COPILOT_REVIEW_AGENT_VERSION": agent_version,
-        "AGENT_MINIMUM_SEVERITY": severity,
-        "GH_TOKEN": gh_token,
-    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Running BC-ALAgents review engine on: {entry.instance_id}")
 
-    plugins = [f"bc-review-engine@{_resolve_engine_revision(engine_root)}"]
-    if bcquality_sha:
-        plugins.append(f"BCQuality@{bcquality_sha}")
-    config = ExperimentConfiguration(
-        custom_agent="bc-review-engine",
-        plugins=plugins,
-    )
-
-    start = time.monotonic()
-    try:
-        result = subprocess.run(
-            [pwsh, "-NoProfile", "-File", str(shell), "-GenerateOnly", "-OutputDir", str(output_dir)],
-            cwd=str(repo_path),
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=_config.timeout.agent_execution,
-            check=True,
+    with _prepare_engine_root(
+        settings,
+        output_dir / "engine",
+        engine_ref=engine_ref,
+        engine_repo=engine_repo,
+        engine_local_path=engine_local_path,
+    ) as engine_root:
+        _commit_patch_as_head(repo_path)
+        trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
+        bcquality_root, bcquality_sha = _prepare_bcquality_root(
+            engine_root,
+            pwsh,
+            output_dir / "bcquality",
+            bcquality_ref,
+            bcquality_repo,
+            bcquality_local_path,
         )
-        logger.debug(f"Engine stdout:\n{result.stdout}")
-        if result.stderr:
-            logger.debug(f"Engine stderr:\n{result.stderr}")
-        count = _write_review_json(output_dir, repo_path)
-        logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Engine review timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
-    except subprocess.CalledProcessError as e:
-        logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")
-        raise AgentError(f"Engine review execution failed: {e}") from None
-    except Exception:
-        logger.exception("Unexpected error running engine review")
-        raise
-    else:
-        return AgentMetrics(execution_time=time.monotonic() - start), config
+
+        shell = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-PRReviewShell.ps1"
+        env = {
+            **os.environ,
+            "REVIEW_SOURCE": "local",
+            "BASE_REF": entry.base_commit,
+            "REVIEW_TARGET_WORKSPACE": str(repo_path),
+            "REVIEW_WORKSPACE": str(trusted_workspace),
+            "REVIEW_OUTPUT_DIR": str(output_dir),
+            "BCQUALITY_ROOT": str(bcquality_root),
+            "COPILOT_MODEL": model,
+            "COPILOT_REVIEW_AGENT_VERSION": agent_version,
+            "COPILOT_REVIEW_LOG_LEVEL": "debug",
+            "AGENT_MINIMUM_SEVERITY": severity,
+            "GH_TOKEN": gh_token,
+        }
+
+        plugins = [f"bc-review-engine@{_resolve_engine_revision(engine_root)}"]
+        if bcquality_sha:
+            plugins.append(f"BCQuality@{bcquality_sha}")
+        config = ExperimentConfiguration(
+            custom_agent="bc-review-engine",
+            plugins=plugins,
+        )
+
+        start = time.monotonic()
+        try:
+            result = subprocess.run(
+                [pwsh, "-NoProfile", "-File", str(shell), "-GenerateOnly", "-OutputDir", str(output_dir)],
+                cwd=str(repo_path),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=_config.timeout.agent_execution,
+                check=True,
+            )
+            logger.debug(f"Engine stdout:\n{result.stdout}")
+            if result.stderr:
+                logger.debug(f"Engine stderr:\n{result.stderr}")
+            count = _write_review_json(output_dir, repo_path)
+            logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
+        except subprocess.TimeoutExpired:
+            logger.exception(f"Engine review timed out after {_config.timeout.agent_execution} seconds")
+            metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+            raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
+        except subprocess.CalledProcessError as e:
+            logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")
+            raise AgentError(f"Engine review execution failed: {e}") from None
+        except Exception:
+            logger.exception("Unexpected error running engine review")
+            raise
+        else:
+            return build_pr_review_metrics(output_dir, bcquality_root, time.monotonic() - start), config

@@ -139,18 +139,6 @@ jobs:
       - name: Install evaluation CLIs
         uses: $/.github/actions/install-agent-harnesses
 
-      # code-review is evaluated through the BC-ALAgents review engine (the real PROD
-      # generate half + BCQuality). Check it out only for that category. To evaluate the
-      # engine at a different ref, change `ref` below on your private branch.
-      - name: Checkout BC-ALAgents review engine
-        if: ${{ inputs.category == 'code-review' }}
-        uses: actions/checkout@v5
-        with:
-          repository: microsoft/BC-ALAgents
-          ref: main
-          path: bc-alagents-engine
-          token: ${{ github.token }}
-
       - name: Run code-review engine for entry ${{ matrix.entry }}
         if: ${{ inputs.category == 'code-review' }}
         timeout-minutes: 120
@@ -158,7 +146,6 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-          BC_PR_REVIEW_ROOT: ${{ github.workspace }}/bc-alagents-engine
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 

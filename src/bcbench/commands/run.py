@@ -34,6 +34,9 @@ def _run_pr_review(
     model: str,
     repo_path: Path,
     output_dir: Path,
+    engine_ref: str | None = None,
+    engine_repo: str | None = None,
+    engine_local_path: str | None = None,
     bcquality_ref: str | None = None,
     bcquality_repo: str | None = None,
     bcquality_local_path: str | None = None,
@@ -55,6 +58,9 @@ def _run_pr_review(
         model=model,
         category=category,
         output_dir=output_dir,
+        engine_ref=engine_ref,
+        engine_repo=engine_repo,
+        engine_local_path=engine_local_path,
         bcquality_ref=bcquality_ref,
         bcquality_repo=bcquality_repo,
         bcquality_local_path=bcquality_local_path,
@@ -138,8 +144,11 @@ def run_code_review(
     model: CopilotModel = "claude-sonnet-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
+    engine_ref: Annotated[str | None, typer.Option(help="Override the BC-ALAgents ref (defaults to pr_review.engine.ref)")] = None,
+    engine_repo: Annotated[str | None, typer.Option(help="Override the BC-ALAgents repo (defaults to pr_review.engine.repo)")] = None,
+    engine_local_path: Annotated[str | None, typer.Option(help="Use a local BC-ALAgents checkout instead of fetching")] = None,
     bcquality_ref: Annotated[str | None, typer.Option(help="Override the BCQuality ref (defaults to the engine's pinned ref)")] = None,
-    bcquality_repo: Annotated[str | None, typer.Option(help="Override the BCQuality repo, e.g. a private fork (defaults to config/engine)")] = None,
+    bcquality_repo: Annotated[str | None, typer.Option(help="Override the BCQuality repo, e.g. a private fork (defaults to pr_review.bcquality.repo or the engine pin)")] = None,
     bcquality_local_path: Annotated[str | None, typer.Option(help="Use a local BCQuality checkout (copied + filtered, never modified) instead of fetching")] = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
@@ -149,8 +158,8 @@ def run_code_review(
     code-review is not a general harness choice: it always runs the engine's real generate
     half (never a bespoke prompt), so it has its own command instead of a copilot/claude
     sub-command. Writes review.json in the repo root without scoring; for full evaluation
-    use 'bcbench evaluate code-review'. Requires a local BC-ALAgents checkout
-    (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT), PowerShell 7+, and GH_TOKEN.
+    use 'bcbench evaluate code-review'. BC-ALAgents and BCQuality sources can be
+    configured in config.yaml or overridden with command options.
 
     Example:
         uv run bcbench run code-review synthetic__style-018 --repo-path /path/to/testbed
@@ -160,6 +169,9 @@ def run_code_review(
         model=model,
         repo_path=repo_path,
         output_dir=output_dir,
+        engine_ref=engine_ref,
+        engine_repo=engine_repo,
+        engine_local_path=engine_local_path,
         bcquality_ref=bcquality_ref,
         bcquality_repo=bcquality_repo,
         bcquality_local_path=bcquality_local_path,

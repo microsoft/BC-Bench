@@ -170,16 +170,18 @@ mcp:
 # generate half (Invoke-PRReviewShell.ps1 -GenerateOnly) in local mode instead of a
 # bespoke review prompt, so it measures the real PROD engine + BCQuality. These knobs
 # live here in the shared config so they are easy to tweak on a private branch.
-#   path:          local microsoft/BC-ALAgents checkout, e.g. "C:/depot/BC-ALAgents". Left
-#                  null in the repo; CI sets BC_PR_REVIEW_ROOT (which takes precedence).
-#                  For a local run, set that env var or put your checkout path here on your
-#                  own branch (do not commit a machine-specific path).
+#   engine:        BC-ALAgents source. repo/ref are fetched for reproducible CI runs.
+#                  Set local_path for local development without pushing. BC_PR_REVIEW_ROOT
+#                  remains an environment override and takes precedence over these values.
 #   bcquality:     content source for the engine run; all optional (null = engine's pinned
 #                  repo/ref). Set local_path to iterate on a local BCQuality checkout without
 #                  pushing (it is copied and filtered; the original is never modified).
-#                  CLI flags (--bcquality-repo/-ref/-local-path) override these.
+#   CLI flags for either source override these values.
 pr_review:
-  path: null
+  engine:
+    repo: microsoft/BC-ALAgents
+    ref: main
+    local_path: null
   bcquality:
     repo: null
     ref: null

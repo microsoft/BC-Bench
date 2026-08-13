@@ -48,6 +48,9 @@ def _run_pr_review_evaluation(
     repo_path: Path,
     output_dir: Path,
     run_id: str,
+    engine_ref: str | None = None,
+    engine_repo: str | None = None,
+    engine_local_path: str | None = None,
     bcquality_ref: str | None = None,
     bcquality_repo: str | None = None,
     bcquality_local_path: str | None = None,
@@ -84,6 +87,9 @@ def _run_pr_review_evaluation(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
+            engine_ref=engine_ref,
+            engine_repo=engine_repo,
+            engine_local_path=engine_local_path,
             bcquality_ref=bcquality_ref,
             bcquality_repo=bcquality_repo,
             bcquality_local_path=bcquality_local_path,
@@ -214,8 +220,11 @@ def evaluate_code_review(
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "pr_review_test_run",
+    engine_ref: Annotated[str | None, typer.Option(help="Override the BC-ALAgents ref (defaults to pr_review.engine.ref)")] = None,
+    engine_repo: Annotated[str | None, typer.Option(help="Override the BC-ALAgents repo (defaults to pr_review.engine.repo)")] = None,
+    engine_local_path: Annotated[str | None, typer.Option(help="Use a local BC-ALAgents checkout instead of fetching")] = None,
     bcquality_ref: Annotated[str | None, typer.Option(help="Override the BCQuality ref (defaults to the engine's pinned ref)")] = None,
-    bcquality_repo: Annotated[str | None, typer.Option(help="Override the BCQuality repo, e.g. a private fork (defaults to config/engine)")] = None,
+    bcquality_repo: Annotated[str | None, typer.Option(help="Override the BCQuality repo, e.g. a private fork (defaults to pr_review.bcquality.repo or the engine pin)")] = None,
     bcquality_local_path: Annotated[str | None, typer.Option(help="Use a local BCQuality checkout (copied + filtered, never modified) instead of fetching")] = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
@@ -224,8 +233,8 @@ def evaluate_code_review(
 
     code-review is not a general harness choice: it always runs the engine's own generate
     shell in local mode - the real PROD generate path - then scores the resulting
-    review.json with the standard code-review judge. Requires a local BC-ALAgents checkout
-    (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT), PowerShell 7+, and GH_TOKEN.
+    review.json with the standard code-review judge. BC-ALAgents and BCQuality sources can
+    be configured in config.yaml or overridden with command options.
 
     To only generate review.json without scoring, use 'bcbench run code-review' instead.
     """
@@ -235,6 +244,9 @@ def evaluate_code_review(
         repo_path=repo_path,
         output_dir=output_dir,
         run_id=run_id,
+        engine_ref=engine_ref,
+        engine_repo=engine_repo,
+        engine_local_path=engine_local_path,
         bcquality_ref=bcquality_ref,
         bcquality_repo=bcquality_repo,
         bcquality_local_path=bcquality_local_path,

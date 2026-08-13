@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import NamedTuple, Self
+from typing import Any, NamedTuple, Self
 
 import numpy as np
 from pydantic import Field
@@ -310,9 +310,41 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    average_total_tokens: float | None = None
+    average_api_calls: float | None = None
+    average_estimated_credits: float | None = None
+    average_knowledge_used: float | None = None
+    average_knowledge_pruned: float | None = None
+
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
+
+    def _perf_markdown(self) -> str:
+        if all(
+            value is None
+            for value in (
+                self.average_total_tokens,
+                self.average_api_calls,
+                self.average_estimated_credits,
+                self.average_knowledge_used,
+                self.average_knowledge_pruned,
+            )
+        ):
+            return ""
+        tokens = f"{self.average_total_tokens:.0f}" if self.average_total_tokens is not None else "n/a"
+        api_calls = f"{self.average_api_calls:.1f}" if self.average_api_calls is not None else "n/a"
+        credits = f"{self.average_estimated_credits:.4f}" if self.average_estimated_credits is not None else "n/a"
+        used = f"{self.average_knowledge_used:.1f}" if self.average_knowledge_used is not None else "n/a"
+        pruned = f"{self.average_knowledge_pruned:.1f}" if self.average_knowledge_pruned is not None else "n/a"
+        return (
+            "## Performance\n"
+            "\n"
+            "| Avg duration (s) | Avg total tokens | Avg API calls | Avg est. credits | Avg knowledge used | Avg knowledge pruned |\n"
+            "|-----------------:|-----------------:|--------------:|-----------------:|-------------------:|---------------------:|\n"
+            f"| {self.average_duration:.1f} | {tokens} | {api_calls} | {credits} | {used} | {pruned} |\n"
+            "\n"
+        )
 
     def render_github_metrics_markdown(self) -> str:
         micro_p = self.precision * 100
@@ -351,8 +383,34 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             "|-------------:|-------------------------:|\n"
             f"| {self.severity_mae:.3f} | {valid_rate:.1f}% |\n"
             "\n"
+            f"{self._perf_markdown()}"
             f"{_METRIC_EXPLANATIONS}"
         )
+
+    def _perf_console_tables(self) -> list[RenderableType]:
+        if all(
+            value is None
+            for value in (
+                self.average_total_tokens,
+                self.average_api_calls,
+                self.average_estimated_credits,
+                self.average_knowledge_used,
+                self.average_knowledge_pruned,
+            )
+        ):
+            return []
+        tokens = f"{self.average_total_tokens:.0f}" if self.average_total_tokens is not None else "n/a"
+        api_calls = f"{self.average_api_calls:.1f}" if self.average_api_calls is not None else "n/a"
+        credits = f"{self.average_estimated_credits:.4f}" if self.average_estimated_credits is not None else "n/a"
+        used = f"{self.average_knowledge_used:.1f}" if self.average_knowledge_used is not None else "n/a"
+        pruned = f"{self.average_knowledge_pruned:.1f}" if self.average_knowledge_pruned is not None else "n/a"
+        return [
+            _build_console_table(
+                "Performance",
+                ["Avg duration (s)", "Avg total tokens", "Avg API calls", "Avg est. credits", "Avg knowledge used", "Avg knowledge pruned"],
+                [f"{self.average_duration:.1f}", tokens, api_calls, credits, used, pruned],
+            )
+        ]
 
     def render_console_metrics(self) -> RenderableType:
         metric_columns = ["Precision", "Recall", "F1", "Fβ (β=0.5)", "Fβ (β=2)"]
@@ -397,6 +455,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 ["Severity MAE", "Valid review output rate"],
                 [f"{self.severity_mae:.3f}", f"{self.valid_review_output_rate * 100:.1f}%"],
             ),
+            *self._perf_console_tables(),
             Panel(
                 _CONSOLE_METRIC_EXPLANATIONS,
                 title="📖 How to read these metrics",
@@ -453,6 +512,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
         valid_output_count: int = sum(1 for r in code_review_results if r.valid_review_output)
         valid_output_rate: float = valid_output_count / total_results
 
+        def average_metric(name: str) -> float | None:
+            values = [value for result in code_review_results if result.metrics and (value := getattr(result.metrics, name)) is not None]
+            return sum(values) / len(values) if values else None
+
         return summary.model_copy(
             update={
                 "generated_comment_count": generated_total,
@@ -474,5 +537,23 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
+                "average_total_tokens": average_metric("total_tokens"),
+                "average_api_calls": average_metric("api_calls"),
+                "average_estimated_credits": average_metric("estimated_credits"),
+                "average_knowledge_used": average_metric("knowledge_used"),
+                "average_knowledge_pruned": average_metric("knowledge_pruned"),
             }
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        data = super().to_dict()
+        for key, digits in (
+            ("average_total_tokens", 1),
+            ("average_api_calls", 2),
+            ("average_estimated_credits", 4),
+            ("average_knowledge_used", 2),
+            ("average_knowledge_pruned", 2),
+        ):
+            if data[key] is not None:
+                data[key] = round(float(data[key]), digits)
+        return data
