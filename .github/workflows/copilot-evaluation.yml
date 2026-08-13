@@ -71,6 +71,15 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  pin-commit:
+    uses: $/.github/workflows/pin-evaluation-commit.yml
+    permissions:
+      contents: write
+    with:
+      agent: copilot
+      test-run: ${{ inputs.test-run }}
+      repeat: ${{ inputs.repeat }}
+
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
@@ -200,8 +209,8 @@ jobs:
     secrets: inherit
 
   requeue:
-    needs: summarize-results
-    if: ${{ !inputs.test-run }}
+    needs: [summarize-results, pin-commit]
+    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
@@ -209,5 +218,6 @@ jobs:
     with:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
+      existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
         {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
