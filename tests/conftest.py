@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
+from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
@@ -183,7 +183,7 @@ def create_codereview_entry(
         project_paths=project_paths,
         patch=patch,
         created_at=created_at,
-        metadata=EntryMetadata(area=domain),
+        metadata=CodeReviewEntryMetadata(area=domain),
         expected_comments=expected_comments,
         ignored_comments=ignored_comments or [],
     )

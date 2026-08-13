@@ -30,10 +30,6 @@ class EntryMetadata(BaseModel):
     area: str | None = None
     image_count: Annotated[int, Field(ge=0)] | None = None
     persona: str | None = None
-    # BCQuality knowledge articles this entry exercises as `<domain>/<slug>`. Primarily
-    # for false-positive-guard entries (expected_comments=[]) that test an article by
-    # omission and thus have no per-comment `article` to carry the association.
-    articles: list[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$")]] = Field(default_factory=list)
 
 
 class BaseDatasetEntry(BaseModel):

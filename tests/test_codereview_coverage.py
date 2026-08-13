@@ -10,13 +10,13 @@ from bcbench.dataset import (
     enumerate_inventory,
     resolve_bcquality_root,
 )
-from bcbench.dataset.dataset_entry import EntryMetadata
+from bcbench.dataset.codereview import CodeReviewEntryMetadata
 
 _BASE_COMMIT = "70fd0246a0a4dbc72cb183ca719106722c03be4d"
 
 
 def _entry(instance_id: str, *, comments: list[ReviewComment] | None = None, articles: list[str] | None = None) -> CodeReviewEntry:
-    metadata = EntryMetadata(area="security", articles=articles or [])
+    metadata = CodeReviewEntryMetadata(area="security", articles=articles or [])
     return CodeReviewEntry(
         instance_id=instance_id,
         created_at="2026-01-01",

@@ -1,6 +1,6 @@
 """Dataset module for querying, validating and analyze dataset entries."""
 
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
+from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.coverage import (
     ArticleCoverage,
     CoverageReport,
@@ -17,6 +17,7 @@ __all__ = [
     "BaseDatasetEntry",
     "BugFixEntry",
     "CodeReviewEntry",
+    "CodeReviewEntryMetadata",
     "CoverageReport",
     "ExtRequestImplementEntry",
     "ExtRequestTriageEntry",

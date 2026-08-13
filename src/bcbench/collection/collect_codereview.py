@@ -33,8 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from bcbench.collection.gh_client import GHClient
-from bcbench.dataset import CodeReviewEntry, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import EntryMetadata
+from bcbench.dataset import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.exceptions import CollectionError
 from bcbench.logger import get_logger
 
@@ -215,7 +214,7 @@ def _make_entry(
         created_at=created_at,
         environment_setup_version=environment_setup_version,
         patch=patch,
-        metadata=EntryMetadata(area=area),
+        metadata=CodeReviewEntryMetadata(area=area),
         expected_comments=expected_comments,
     )
 

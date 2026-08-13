@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from bcbench.dataset.dataset_entry import RepoGroundedEntry
+from bcbench.dataset.dataset_entry import EntryMetadata, RepoGroundedEntry
+
+# BCQuality knowledge article id, formatted as `<domain>/<slug>` (e.g. `security/hardcoded-secret`).
+ArticleId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$")]
 
 
 class Severity(StrEnum):
@@ -61,7 +64,7 @@ class ReviewComment(BaseModel):
     # BCQuality knowledge article this finding derives from, as `<domain>/<slug>`
     # (e.g. `security/hardcoded-secret`). Optional and backward-compatible; drives
     # per-article coverage tracking. Older entries leave it unset (counted as unannotated).
-    article: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$")] | None = None
+    article: ArticleId | None = None
 
     @field_validator("severity", mode="before")
     @classmethod
@@ -81,8 +84,19 @@ class ReviewComment(BaseModel):
         return f"[{self.severity_label}] {loc}: {self.body}"
 
 
+class CodeReviewEntryMetadata(EntryMetadata):
+    """Code-review-specific entry metadata."""
+
+    # BCQuality knowledge articles this entry exercises as `<domain>/<slug>`. Primarily
+    # for false-positive-guard entries (expected_comments=[]) that test an article by
+    # omission and thus have no per-comment `article` to carry the association.
+    articles: list[ArticleId] = Field(default_factory=list)
+
+
 class CodeReviewEntry(RepoGroundedEntry):
     """Dataset entry for the code-review category."""
+
+    metadata: CodeReviewEntryMetadata = Field(default_factory=CodeReviewEntryMetadata)
 
     expected_comments: list[ReviewComment] = Field(default_factory=list)
     # Comments that are acceptable but not required. If the agent raises a matching
@@ -91,6 +105,25 @@ class CodeReviewEntry(RepoGroundedEntry):
     # not force recall yet must not count as false positives. Expected comments take
     # precedence, so a generated comment is only ever neutralized after expected matching.
     ignored_comments: list[ReviewComment] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_article_annotations(self) -> Self:
+        """Keep per-comment and entry-level article annotations complementary.
+
+        `metadata.articles` carries the article association for findings no expected
+        comment covers (e.g. false-positive-guard entries whose `expected_comments` is
+        empty). An article already declared on a comment must not be repeated at entry
+        level, so the two annotation sources cannot silently drift apart.
+        """
+        comment_articles = {c.article for c in self.expected_comments if c.article}
+        overlap = comment_articles & set(self.metadata.articles)
+        if overlap:
+            raise ValueError(
+                f"{self.instance_id}: article(s) {sorted(overlap)} declared both per-comment "
+                "and in metadata.articles; entry-level metadata.articles is only for articles "
+                "no expected comment already carries"
+            )
+        return self
 
     def get_task(self) -> str:
         return self.patch
