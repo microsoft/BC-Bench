@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from bcbench.dataset import (
     CodeReviewEntry,
     ReviewComment,
@@ -47,6 +50,15 @@ class TestDeclaredArticles:
     def test_unannotated_entry_declares_nothing(self):
         entry = _entry("synthetic__security-002", comments=[_comment("finding")])
         assert entry.declared_articles() == set()
+
+    def test_article_declared_both_places_is_rejected(self):
+        shared = "security/secrettext-for-credentials"
+        with pytest.raises(ValidationError, match="declared both per-comment"):
+            _entry(
+                "synthetic__security-003",
+                comments=[_comment("finding", article=shared)],
+                articles=[shared],
+            )
 
     def test_collect_maps_article_to_sorted_entry_ids(self):
         shared = "security/validate-user-configurable-urls"
