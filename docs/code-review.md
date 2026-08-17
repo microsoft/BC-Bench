@@ -27,6 +27,18 @@ Unlike the pass/fail categories, code review is scored with **Precision / Recall
 
 A gold entry may also declare **`ignored_comments`** — legitimate-but-optional observations (out-of-scope nitpicks, maintainer-judgment calls) that should be neither required nor penalized. Ignored comments are structurally paired against the generated comments and validated by the same LLM judge, in a single judge pass alongside the expected comments. Any generated comment the judge confirms as an ignored match is dropped from scoring entirely: it earns no recall and does not count against precision. Expected always takes precedence, so a comment that could match both is credited as a real find; a comment that does not hold up as an expected match can still be neutralized as ignored rather than counting as a false positive. Most entries leave `ignored_comments` empty, which scores identically to before.
 
+## Category and runners
+
+`code-review` is the evaluation contract: it owns the dataset, structured `review.json` output, scorer, result schema, and leaderboard schema. A runner is the system under test. The same entries can be evaluated through the generic GitHub Copilot CLI and Claude Code runners, allowing direct cross-system comparisons under one scorer.
+
+BC PR Review is a separate production-fidelity runner, analogous to BCal for `nl2al`. It runs the BC-ALAgents review engine with BCQuality while remaining fixed to the `code-review` category:
+
+```text
+bcbench evaluate copilot <entry> --category code-review
+bcbench evaluate claude <entry> --category code-review
+bcbench evaluate pr-review <entry>
+```
+
 ## Baseline Leaderboard
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}

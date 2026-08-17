@@ -6,8 +6,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
-from bcbench.agent.copilot.pr_review import run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -18,7 +17,6 @@ from bcbench.cli_options import (
     OutputDir,
     RepoPath,
     RunId,
-    reject_code_review,
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
@@ -53,12 +51,11 @@ def _run_pr_review_evaluation(
     bcquality_local_path: str | None = None,
     min_severity: str | None = None,
 ) -> None:
-    """Evaluate a code-review entry through the BC-ALAgents review engine.
+    """Evaluate a code-review entry through BC PR Review.
 
-    Backs the dedicated 'evaluate code-review' command: the code-review category always
-    runs the engine's own generate half (the real PROD path), so callers never drive a
-    bespoke review prompt. BCQuality source and severity default to the engine config when
-    not overridden.
+    Backs the dedicated 'evaluate pr-review' runner. It is fixed to the code-review
+    category and uses the production BC-ALAgents generate path. BCQuality source and
+    severity default to the engine config when not overridden.
     """
     category = EvaluationCategory.CODE_REVIEW
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
@@ -114,7 +111,6 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    reject_code_review(category, "evaluate")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
@@ -170,7 +166,6 @@ def evaluate_claude_code(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
-    reject_code_review(category, "evaluate")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
@@ -207,8 +202,8 @@ def evaluate_claude_code(
     logger.info(f"Results saved to: {run_dir}")
 
 
-@evaluate_app.command("code-review")
-def evaluate_code_review(
+@evaluate_app.command("pr-review")
+def evaluate_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     model: CopilotModel = "claude-sonnet-5",
     repo_path: RepoPath = _config.paths.testbed_path,
@@ -220,14 +215,15 @@ def evaluate_code_review(
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
     """
-    Evaluate the code-review category on a single entry via the BC-ALAgents review engine.
+    Evaluate BC PR Review on a single code-review entry.
 
-    code-review is not a general harness choice: it always runs the engine's own generate
-    shell in local mode - the real PROD generate path - then scores the resulting
-    review.json with the standard code-review judge. Requires a local BC-ALAgents checkout
+    This production-fidelity runner is fixed to the code-review category, while the same
+    category can also run through the generic copilot and claude commands for cross-system
+    comparison. The resulting review.json is scored by the shared code-review pipeline.
+    Requires a local BC-ALAgents checkout
     (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT), PowerShell 7+, and GH_TOKEN.
 
-    To only generate review.json without scoring, use 'bcbench run code-review' instead.
+    To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
     _run_pr_review_evaluation(
         entry_id,
@@ -240,6 +236,11 @@ def evaluate_code_review(
         bcquality_local_path=bcquality_local_path,
         min_severity=min_severity,
     )
+
+
+# Compatibility for the command name introduced in v0.8.0. Keep it out of public help
+# because "code-review" names the category, not this specific runner.
+evaluate_app.command("code-review", hidden=True, deprecated=True)(evaluate_pr_review)
 
 
 @evaluate_app.command("bcal")

@@ -5,10 +5,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent.bcal import BCalBackendConfig, run_bcal_agent
-from bcbench.agent.claude import run_claude_code
-from bcbench.agent.copilot import run_copilot_agent
-from bcbench.agent.copilot.pr_review import run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerName,
@@ -16,7 +13,6 @@ from bcbench.cli_options import (
     EvaluationCategoryOption,
     OutputDir,
     RepoPath,
-    reject_code_review,
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
@@ -39,11 +35,11 @@ def _run_pr_review(
     bcquality_local_path: str | None = None,
     min_severity: str | None = None,
 ) -> None:
-    """Generate review.json for a code-review entry via the BC-ALAgents review engine.
+    """Generate review.json for a code-review entry via BC PR Review.
 
-    Backs the dedicated 'run code-review' command: code-review always runs the engine's
-    real generate half, never a bespoke prompt. BCQuality source and severity default to
-    the engine config when not overridden.
+    Backs the dedicated 'run pr-review' runner. The runner is fixed to the code-review
+    category and uses the production BC-ALAgents generate path. BCQuality source and
+    severity default to the engine config when not overridden.
     """
     category = EvaluationCategory.CODE_REVIEW
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
@@ -74,14 +70,13 @@ def run_copilot(
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
 ) -> None:
     """
-    Run GitHub Copilot CLI on a single entry to generate a patch (without building/testing).
+    Run GitHub Copilot CLI on a single entry to generate the category output.
 
     For full evaluation including building and running tests, use 'bcbench evaluate' instead.
 
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    reject_code_review(category, "run")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -109,14 +104,13 @@ def run_claude(
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
 ) -> None:
     """
-    Run Claude Code on a single entry to generate a patch (without building/testing).
+    Run Claude Code on a single entry to generate the category output.
 
     For full evaluation including building and running tests, use 'bcbench evaluate' instead.
 
     Example:
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    reject_code_review(category, "run")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
@@ -132,8 +126,8 @@ def run_claude(
     )
 
 
-@run_app.command("code-review")
-def run_code_review(
+@run_app.command("pr-review")
+def run_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     model: CopilotModel = "claude-sonnet-5",
     repo_path: RepoPath = _config.paths.testbed_path,
@@ -144,16 +138,16 @@ def run_code_review(
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
     """
-    Run the code-review category on a single entry via the BC-ALAgents review engine.
+    Run BC PR Review on a single code-review entry.
 
-    code-review is not a general harness choice: it always runs the engine's real generate
-    half (never a bespoke prompt), so it has its own command instead of a copilot/claude
-    sub-command. Writes review.json in the repo root without scoring; for full evaluation
-    use 'bcbench evaluate code-review'. Requires a local BC-ALAgents checkout
+    This production-fidelity runner is fixed to the code-review category, while the same
+    category can also run through the generic copilot and claude commands for cross-system
+    comparison. Writes review.json without scoring; for full evaluation use
+    'bcbench evaluate pr-review'. Requires a local BC-ALAgents checkout
     (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT), PowerShell 7+, and GH_TOKEN.
 
     Example:
-        uv run bcbench run code-review synthetic__style-018 --repo-path /path/to/testbed
+        uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
     _run_pr_review(
         entry_id,
@@ -165,6 +159,11 @@ def run_code_review(
         bcquality_local_path=bcquality_local_path,
         min_severity=min_severity,
     )
+
+
+# Compatibility for the command name introduced in v0.8.0. Keep it out of public help
+# because "code-review" names the category, not this specific runner.
+run_app.command("code-review", hidden=True, deprecated=True)(run_pr_review)
 
 
 @run_app.command("bcal")

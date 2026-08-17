@@ -40,7 +40,7 @@ default = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-bcbench = ["agent/*.yaml"]
+bcbench = ["agent/*.yaml", "agent/pr_review/scripts/*.ps1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
