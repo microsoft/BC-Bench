@@ -9,36 +9,5 @@ runs:
       shell: pwsh
 
     - name: Install GitHub Copilot CLI
-      run: |
-        $version = "1.0.80"
-        $platform = node --print "process.platform"
-        $architecture = node --print "process.arch"
-        if ($platform -eq "linux" -and (node --print "process.report.getReport().header.glibcVersionRuntime ? 'glibc' : 'musl'") -eq "musl") {
-          $platform = "linuxmusl"
-        }
-
-        $extension = if ($platform -eq "win32") { "zip" } else { "tar.gz" }
-        $asset = "copilot-$platform-$architecture.$extension"
-        $archive = Join-Path $env:RUNNER_TEMP $asset
-        $installDir = Join-Path $env:RUNNER_TEMP "copilot-cli-$version"
-        Invoke-WebRequest "https://github.com/github/copilot-cli/releases/download/v$version/$asset" -OutFile $archive
-        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-
-        if ($extension -eq "zip") {
-          Expand-Archive -Path $archive -DestinationPath $installDir -Force
-        } else {
-          tar -xzf $archive -C $installDir
-        }
-
-        $executableName = if ($platform -eq "win32") { "copilot.exe" } else { "copilot" }
-        $executable = Get-ChildItem -Path $installDir -Recurse -File -Filter $executableName | Select-Object -First 1
-        if (-not $executable) {
-          throw "GitHub Copilot CLI executable not found in $asset"
-        }
-        $versionOutput = (& $executable.FullName --version 2>&1) -join [Environment]::NewLine
-        if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch [regex]::Escape($version)) {
-          throw "Expected GitHub Copilot CLI $version, got: $versionOutput"
-        }
-        Write-Output $versionOutput
-        $executable.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      run: npm install -g @github/copilot@1.0.80
       shell: pwsh
