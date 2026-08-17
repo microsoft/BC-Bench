@@ -83,6 +83,22 @@ prompt:
     Extensibility request:
     {{task}}
 
+  code-review-template: |
+    /review
+
+    Review only the uncommitted working-tree changes (git diff HEAD); do not compare commits such as HEAD~1..HEAD or origin/main.
+
+    Your only deliverable is a file named review.json in the repository root. You MUST write it before finishing; if you do not, your review is lost and counts as no output.
+
+    review.json must contain a single JSON array. Each finding is an object with these fields:
+      - file: repo-relative path of the file the finding refers to (string, required)
+      - line_start: 1-based line number where the issue starts (integer, required)
+      - line_end: line number where the issue ends (integer, optional)
+      - severity: one of critical, high, medium, or low (optional, defaults to medium)
+      - body: concise description of the issue (string, required)
+
+    If there are no findings, write an empty array. Write only valid JSON to review.json, with no surrounding markdown or commentary.
+
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md
@@ -165,22 +181,3 @@ mcp:
     #   type: "stdio"
     #   command: "npx"
     #   args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
-
-# BC-ALAgents review engine settings. The code-review category runs the engine's own
-# generate half (Invoke-PRReviewShell.ps1 -GenerateOnly) in local mode instead of a
-# bespoke review prompt, so it measures the real PROD engine + BCQuality. These knobs
-# live here in the shared config so they are easy to tweak on a private branch.
-#   path:          local microsoft/BC-ALAgents checkout, e.g. "C:/depot/BC-ALAgents". Left
-#                  null in the repo; CI sets BC_PR_REVIEW_ROOT (which takes precedence).
-#                  For a local run, set that env var or put your checkout path here on your
-#                  own branch (do not commit a machine-specific path).
-#   bcquality:     content source for the engine run; all optional (null = engine's pinned
-#                  repo/ref). Set local_path to iterate on a local BCQuality checkout without
-#                  pushing (it is copied and filtered; the original is never modified).
-#                  CLI flags (--bcquality-repo/-ref/-local-path) override these.
-pr_review:
-  path: null
-  bcquality:
-    repo: null
-    ref: null
-    local_path: null
