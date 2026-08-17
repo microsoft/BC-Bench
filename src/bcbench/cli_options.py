@@ -32,7 +32,7 @@ CopilotModel = Annotated[
         "gpt-5.6-terra",
         "gpt-5.6-luna",
         "gpt-5.3-codex",
-        "mai-code-1-flash-picker",
+        "mai-code-1.1-flash",
         "gemini-3.6-flash",
     ],
     typer.Option(help="Copilot model to use"),
