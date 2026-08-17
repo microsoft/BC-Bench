@@ -71,6 +71,15 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  pin-commit:
+    uses: $/.github/workflows/pin-evaluation-commit.yml
+    permissions:
+      contents: write
+    with:
+      agent: copilot
+      test-run: ${{ inputs.test-run }}
+      repeat: ${{ inputs.repeat }}
+
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
@@ -130,7 +139,36 @@ jobs:
       - name: Install evaluation CLIs
         uses: $/.github/actions/install-agent-harnesses
 
+      # code-review is evaluated through the BC-ALAgents review engine (the real PROD
+      # generate half + BCQuality). Check it out only for that category. To evaluate the
+      # engine at a different ref, change `ref` below on your private branch.
+      - name: Checkout BC-ALAgents review engine
+        if: ${{ inputs.category == 'code-review' }}
+        uses: actions/checkout@v5
+        with:
+          repository: microsoft/BC-ALAgents
+          ref: main
+          path: bc-alagents-engine
+          token: ${{ github.token }}
+
+      - name: Run code-review engine for entry ${{ matrix.entry }}
+        if: ${{ inputs.category == 'code-review' }}
+        timeout-minutes: 120
+        shell: pwsh
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          BC_PR_REVIEW_ROOT: ${{ github.workspace }}/bc-alagents-engine
+        run: |
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
+
+          uv run bcbench evaluate code-review "${{ matrix.entry }}" `
+            --model "${{ inputs.model }}" `
+            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+        if: ${{ inputs.category != 'code-review' }}
         timeout-minutes: 120
         shell: pwsh
         env:
@@ -164,15 +202,15 @@ jobs:
     with:
       results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: "GitHub Copilot CLI"
+      agent: ${{ inputs.category == 'code-review' && 'BC PR Review' || 'GitHub Copilot CLI' }}
       mock: ${{ inputs.test-run }}
       category: ${{ inputs.category }}
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
 
   requeue:
-    needs: summarize-results
-    if: ${{ !inputs.test-run }}
+    needs: [summarize-results, pin-commit]
+    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
@@ -180,5 +218,6 @@ jobs:
     with:
       workflow-file: copilot-evaluation.yml
       repeat: ${{ inputs.repeat }}
+      existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
         {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
