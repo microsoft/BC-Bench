@@ -37,5 +37,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "repository: microsoft/BC-ALAgents" in workflow
     assert "copilot-requests: write" in workflow
     assert 'agent: "BC PR Review"' in workflow
+    assert '"mai-code-1.1-flash"' in workflow
+    assert "mai-code-1-flash-picker" not in workflow
     for input_name in ("model:", "test-run:", "repeat:", "git-ref:"):
         assert input_name in workflow
