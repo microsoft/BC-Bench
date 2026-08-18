@@ -7,6 +7,7 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.red_green import run_red_green_check
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
@@ -20,7 +21,6 @@ from bcbench.operations import (
     setup_repo_prebuild,
     stage_and_get_diff,
 )
-from bcbench.operations.bc_operations import run_test_suite
 from bcbench.operations.setup_operations import set_runtime_version
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationContext
@@ -104,23 +104,14 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         try:
             generated_tests: list[TestEntry] = extract_tests_from_patch(generated_patch, file_contents)
 
-            build_and_publish_projects(
-                context.repo_path,
-                test_projects,
-                container,
-                context.entry.environment_setup_version,
+            run_red_green_check(
+                repo_path=context.repo_path,
+                entry=context.entry,
+                container=container,
+                generated_tests=generated_tests,
+                initial_build_projects=test_projects,
+                app_projects=app_projects,
             )
-            run_test_suite(generated_tests, "Fail", container)
-
-            apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
-
-            build_and_publish_projects(
-                context.repo_path,
-                app_projects,
-                container,
-                context.entry.environment_setup_version,
-            )
-            run_test_suite(generated_tests, "Pass", container)
 
             result = TestGenerationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
