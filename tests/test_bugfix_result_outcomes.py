@@ -1,3 +1,5 @@
+from itertools import product
+
 import pytest
 
 from bcbench.results.bugfix import BugFixResult, FixCheckOutcome, TestCheckOutcome
@@ -104,3 +106,28 @@ class TestFromOutcomes:
         )
 
         assert result.display_row == {"Test Correct": "Yes", "Fix Correct": "No"}
+
+
+class TestCorrectnessFormulasStayInSync:
+    # BugFixResult must re-derive correctness from persisted flat booleans alone, so these
+    # formulas guard against silent drift from TestCheckOutcome/FixCheckOutcome.correct.
+
+    @pytest.mark.parametrize(("build", "pre_patch_failed", "post_patch_passed"), list(product([False, True], repeat=3)))
+    def test_test_correct_matches_test_outcome_correct(self, sample_evaluation_context, build, pre_patch_failed, post_patch_passed):
+        test_outcome = TestCheckOutcome(build=build, pre_patch_failed=pre_patch_failed, post_patch_passed=post_patch_passed)
+        fix_outcome = passing_fix_outcome()
+
+        result = BugFixResult.from_outcomes(sample_evaluation_context, "patch", test_outcome, fix_outcome)
+
+        assert result.test_correct == test_outcome.correct
+        assert result.resolved == (test_outcome.correct and fix_outcome.correct)
+
+    @pytest.mark.parametrize(("build", "passed"), list(product([False, True], repeat=2)))
+    def test_fix_correct_matches_fix_outcome_correct(self, sample_evaluation_context, build, passed):
+        test_outcome = passing_test_outcome()
+        fix_outcome = FixCheckOutcome(build=build, passed=passed)
+
+        result = BugFixResult.from_outcomes(sample_evaluation_context, "patch", test_outcome, fix_outcome)
+
+        assert result.fix_correct == fix_outcome.correct
+        assert result.resolved == (test_outcome.correct and fix_outcome.correct)

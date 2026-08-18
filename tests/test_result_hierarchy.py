@@ -107,9 +107,17 @@ class TestCategoryMetrics:
 
     def test_bugfix_failed_category_metrics(self):
         result = create_bugfix_result(resolved=False, build=False)
-        assert result.category_metrics["resolved"] is False
-        assert result.category_metrics["test_correct"] is False
-        assert result.category_metrics["fix_correct"] is False
+        assert result.category_metrics == {
+            "resolved": False,
+            "build": False,
+            "test_build": False,
+            "pre_patch_failed": False,
+            "post_patch_passed": False,
+            "fix_build": False,
+            "fix_passed": False,
+            "test_correct": False,
+            "fix_correct": False,
+        }
 
     def test_testgen_category_metrics_includes_extra_fields(self):
         result = create_testgen_result(resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
