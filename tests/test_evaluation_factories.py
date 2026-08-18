@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from bcbench.config import get_config
 from bcbench.results.base import JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
@@ -108,3 +111,7 @@ class TestEvaluationResultFactories:
         assert code_review_result.judge_model == config.code_review_model
         assert summary.judge_model == code_review_result.judge_model
         assert aggregate.judge_model == code_review_result.judge_model
+
+        for artifact in (summary, aggregate):
+            with pytest.raises(ValidationError):
+                artifact.__class__.model_validate({**artifact.model_dump(), "judge_model": None})

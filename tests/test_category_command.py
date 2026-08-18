@@ -30,7 +30,7 @@ def test_bceval_config_appends_to_github_output_file_when_set(tmp_path, monkeypa
     assert "pre_existing=keep" in contents
     assert "evaluators=resolution_rate,build_rate,pre_patch_failed_rate,post_patch_passed_rate" in contents
     assert "core_score=ResolutionRate" in contents
-    assert "judge_model=" in contents
+    assert "judge_model=" not in contents
 
 
 def test_bceval_config_emits_pinned_lm_checklist_model(tmp_path, monkeypatch):
@@ -44,7 +44,7 @@ def test_bceval_config_emits_pinned_lm_checklist_model(tmp_path, monkeypatch):
     assert "judge_model=gpt-41-2025-04-14" in output_file.read_text(encoding="utf-8")
 
 
-def test_bceval_config_emits_empty_judge_model_for_unjudged_category(tmp_path, monkeypatch):
+def test_bceval_config_omits_judge_model_for_unjudged_category(tmp_path, monkeypatch):
     output_file = tmp_path / "gh_output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
@@ -52,7 +52,7 @@ def test_bceval_config_emits_empty_judge_model_for_unjudged_category(tmp_path, m
     result = runner.invoke(app, ["category", "bceval-config", "--category", "bug-fix"])
 
     assert result.exit_code == 0
-    assert "judge_model=\n" in output_file.read_text(encoding="utf-8")
+    assert "judge_model=" not in output_file.read_text(encoding="utf-8")
 
 
 def test_bceval_config_supports_every_category(tmp_path, monkeypatch):

@@ -23,13 +23,13 @@ def bceval_config(category: EvaluationCategoryOption) -> None:
 
     The lines are appended to $GITHUB_OUTPUT so they become GitHub Actions step outputs. Outside of Actions nothing is written.
     """
-    write_step_outputs(
-        {
-            "evaluators": ",".join(category.evaluators),
-            "core_score": category.core_score,
-            "judge_model": category.judge_model or "",
-        }
-    )
+    outputs: dict[str, str] = {
+        "evaluators": ",".join(category.evaluators),
+        "core_score": category.core_score,
+    }
+    if category.judge_model is not None:
+        outputs["judge_model"] = category.judge_model
+    write_step_outputs(outputs)
 
 
 @category_app.command("runtime-config")
