@@ -182,7 +182,7 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
         )
 
 
-class JudgeScoredEvaluationResultSummary(EvaluationResultSummary, ABC):
+class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
     """Summary for categories whose scoring involves an LLM judge, carrying the judge model of the summarized run."""
 
     judge_model: str
@@ -198,14 +198,6 @@ class JudgeScoredEvaluationResultSummary(EvaluationResultSummary, ABC):
     def combination_key(self) -> tuple[str | None, ...]:
         """Runs judged by different models are aggregated separately."""
         return (*super().combination_key(), self.judge_model)
-
-
-class JudgeBasedEvaluationResultSummary(JudgeScoredEvaluationResultSummary):
-    """Summary for judge-scored categories.
-
-    Scoring is performed externally (bceval -> Braintrust/Kusto) and not reflected here;
-    this summary only carries the agent-execution aggregates from the base class.
-    """
 
     def render_github_metrics_markdown(self) -> str:
         """Judge scoring happens externally, so there are no in-run metrics to surface."""

@@ -11,7 +11,7 @@ from scipy.optimize import linear_sum_assignment
 from bcbench.dataset import ReviewComment
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
 from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
-from bcbench.results.summary import JudgeScoredEvaluationResultSummary
+from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
 
 _METRIC_EXPLANATIONS = """\
@@ -280,7 +280,7 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
         }
 
 
-class CodeReviewResultSummary(JudgeScoredEvaluationResultSummary):
+class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     """
     Summary for the code-review category.
 

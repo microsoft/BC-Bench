@@ -79,20 +79,6 @@ class LeaderboardAggregate(BaseModel, ABC):
         return category.aggregate_class.model_validate(payload)
 
 
-class JudgeScoredLeaderboardAggregate(LeaderboardAggregate, ABC):
-    """Aggregate for categories whose scoring involves an LLM judge, carrying the judge model shared by the aggregated runs."""
-
-    judge_model: str
-
-    @classmethod
-    def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:
-        from bcbench.results.summary import JudgeScoredEvaluationResultSummary
-
-        first_run = runs[0]
-        assert isinstance(first_run, JudgeScoredEvaluationResultSummary)
-        return {**super()._base_fields(runs), "judge_model": first_run.judge_model}
-
-
 class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
     """Aggregate for execution-based categories: resolution-rate average with bootstrap CI and pass^5."""
 
@@ -128,7 +114,21 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
         )
 
 
-class CodeReviewLeaderboardAggregate(JudgeScoredLeaderboardAggregate):
+class JudgeBasedLeaderboardAggregate(LeaderboardAggregate):
+    """Aggregate for judge-scored categories."""
+
+    judge_model: str
+
+    @classmethod
+    def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:
+        from bcbench.results.summary import JudgeBasedEvaluationResultSummary
+
+        first_run = runs[0]
+        assert isinstance(first_run, JudgeBasedEvaluationResultSummary)
+        return {**super()._base_fields(runs), "judge_model": first_run.judge_model}
+
+
+class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     """Aggregate for the code-review category: mean F1 across runs with bootstrap CI."""
 
     f1: float = 0.0
@@ -186,14 +186,6 @@ class CodeReviewLeaderboardAggregate(JudgeScoredLeaderboardAggregate):
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
             }
         )
-
-
-class JudgeBasedLeaderboardAggregate(JudgeScoredLeaderboardAggregate):
-    """Aggregate for judge-scored categories.
-
-    Headline scoring is performed externally (bceval -> Braintrust/Kusto), so only the
-    identity and run-shape fields from the base class are aggregated here.
-    """
 
 
 class Leaderboard(BaseModel):
