@@ -152,10 +152,13 @@ class JudgeConfig:
     @classmethod
     def from_file(cls, path: Path) -> JudgeConfig:
         shared_config = yaml.safe_load(path.read_text(encoding="utf-8"))
-        judges = shared_config["judges"]
+        code_review_model = shared_config["judges"]["code-review"]["model"]
+        lm_checklist_model = shared_config["judges"]["lm-checklist"]["model"]
+        if not all(isinstance(model, str) and model.strip() for model in (code_review_model, lm_checklist_model)):
+            raise ValueError("Judge models must be non-empty strings")
         return cls(
-            code_review_model=cast(CopilotModel, judges["code-review"]["model"]),
-            lm_checklist_model=judges["lm-checklist"]["model"],
+            code_review_model=cast(CopilotModel, code_review_model),
+            lm_checklist_model=lm_checklist_model,
             result_file="judge_results.json",
         )
 
