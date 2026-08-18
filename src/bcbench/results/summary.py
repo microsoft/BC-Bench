@@ -146,10 +146,11 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     build: int = 0
     percentage: float = 0.0
 
-    # Populated only for categories whose results emit 'test_correct'/'fix_correct' via
-    # category_metrics (currently bug-fix). Categories that don't emit these keys count 0.
-    test_correct: int = 0
-    fix_correct: int = 0
+    # None for categories whose results never emit 'test_correct'/'fix_correct' via
+    # category_metrics (currently test-generation). Populated with a count (possibly 0) for
+    # categories that do emit the key (currently bug-fix).
+    test_correct: int | None = None
+    fix_correct: int | None = None
 
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
@@ -167,8 +168,8 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
         resolved = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.resolved)
         build = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.build)
-        test_correct = sum(1 for r in results if r.category_metrics.get("test_correct"))
-        fix_correct = sum(1 for r in results if r.category_metrics.get("fix_correct"))
+        test_correct = sum(1 for r in results if r.category_metrics.get("test_correct")) if any("test_correct" in r.category_metrics for r in results) else None
+        fix_correct = sum(1 for r in results if r.category_metrics.get("fix_correct")) if any("fix_correct" in r.category_metrics for r in results) else None
         instance_results = {r.instance_id: (isinstance(r, ExecutionBasedEvaluationResult) and r.resolved) for r in results}
 
         return summary.model_copy(

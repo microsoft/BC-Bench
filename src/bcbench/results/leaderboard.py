@@ -99,8 +99,8 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
         execution_runs: list[ExecutionBasedEvaluationResultSummary] = [r for r in runs if isinstance(r, ExecutionBasedEvaluationResultSummary)]
 
         per_run_resolution_rates: list[float] = [run.resolved / run.total for run in execution_runs if run.total > 0]
-        per_run_test_correct_rates: list[float] = [run.test_correct / run.total for run in execution_runs if run.total > 0]
-        per_run_fix_correct_rates: list[float] = [run.fix_correct / run.total for run in execution_runs if run.total > 0]
+        per_run_test_correct_rates: list[float] = [run.test_correct / run.total for run in execution_runs if run.test_correct is not None and run.total > 0]
+        per_run_fix_correct_rates: list[float] = [run.fix_correct / run.total for run in execution_runs if run.fix_correct is not None and run.total > 0]
 
         instance_resolved: dict[str, list[bool]] = defaultdict(list)
         for run in execution_runs:
@@ -116,8 +116,8 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
                 "ci_low": round(ci["ci_low"], 3) if ci["ci_low"] is not None else None,
                 "ci_high": round(ci["ci_high"], 3) if ci["ci_high"] is not None else None,
                 "pass_hat_5": pass_hat_5,
-                "test_correct_rate": round(sum(per_run_test_correct_rates) / len(per_run_test_correct_rates), 3) if any(rate > 0 for rate in per_run_test_correct_rates) else None,
-                "fix_correct_rate": round(sum(per_run_fix_correct_rates) / len(per_run_fix_correct_rates), 3) if any(rate > 0 for rate in per_run_fix_correct_rates) else None,
+                "test_correct_rate": round(sum(per_run_test_correct_rates) / len(per_run_test_correct_rates), 3) if per_run_test_correct_rates else None,
+                "fix_correct_rate": round(sum(per_run_fix_correct_rates) / len(per_run_fix_correct_rates), 3) if per_run_fix_correct_rates else None,
             }
         )
 

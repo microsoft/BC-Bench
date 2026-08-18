@@ -294,10 +294,21 @@ class TestSummaryFromResults:
         assert summary.test_correct == 2
         assert summary.fix_correct == 2
 
-    def test_testgen_summary_reports_zero_test_and_fix_correct(self):
+    def test_testgen_summary_reports_none_test_and_fix_correct(self):
         results = [
             create_testgen_result(instance_id="test__1", resolved=True),
             create_testgen_result(instance_id="test__2", resolved=False),
+        ]
+        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+
+        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        assert summary.test_correct is None
+        assert summary.fix_correct is None
+
+    def test_bugfix_summary_reports_zero_when_all_incorrect(self):
+        results = [
+            create_bugfix_result(instance_id="test__1"),
+            create_bugfix_result(instance_id="test__2"),
         ]
         summary = EvaluationResultSummary.from_results(results, run_id="run1")
 
@@ -333,6 +344,23 @@ class TestLeaderboardAggregateTestFixRates:
 
         assert aggregate.test_correct_rate == pytest.approx(0.75)
         assert aggregate.fix_correct_rate == pytest.approx(0.5)
+
+    def test_reports_genuine_zero_rate_not_none(self):
+        # Regression test: an all-zero bug-fix result must report 0.0, not None,
+        # since the keys are present and the metric genuinely applies.
+        run1 = EvaluationResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__1"), create_bugfix_result(instance_id="test__2")],
+            run_id="run1",
+        )
+        run2 = EvaluationResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__1"), create_bugfix_result(instance_id="test__2")],
+            run_id="run2",
+        )
+
+        aggregate = ExecutionBasedLeaderboardAggregate.from_runs([run1, run2])
+
+        assert aggregate.test_correct_rate == 0.0
+        assert aggregate.fix_correct_rate == 0.0
 
     def test_testgen_aggregate_leaves_rates_none(self):
         run1 = EvaluationResultSummary.from_results(
