@@ -36,6 +36,8 @@ def _read_patched_files(repo_path: Path, patch: str) -> dict[str, str]:
 def _run_test_check(context: EvaluationContext[BugFixEntry], test_patch: str, app_projects: list[str]) -> TestCheckOutcome:
     """Validate the agent's test gold-anchored: it must fail on base code and pass with the gold patch."""
     clean_project_paths(context.repo_path, app_projects)
+    # clean_project_paths reverts the unstaged app.json runtime edits on app_projects, so re-apply them before building.
+    set_runtime_version(context.repo_path, context.entry.project_paths)
 
     try:
         generated_tests = extract_tests_from_patch(test_patch, _read_patched_files(context.repo_path, test_patch))

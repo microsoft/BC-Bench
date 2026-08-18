@@ -22,6 +22,7 @@ class TestRunTestCheck:
     def test_no_tests_extracted_yields_incorrect_outcome(self, context):
         with (
             patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.set_runtime_version"),
             patch("bcbench.evaluate.bugfix.extract_tests_from_patch", side_effect=NoTestsExtractedError),
         ):
             outcome = _run_test_check(context, TEST_PATCH, APP_PROJECTS)
@@ -33,6 +34,7 @@ class TestRunTestCheck:
     def test_gold_patch_application_failure_yields_no_build(self, context):
         with (
             patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.set_runtime_version"),
             patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
             patch("bcbench.evaluate.bugfix.run_red_green_check", side_effect=PatchApplicationError("gold patch", "does not apply")),
         ):
@@ -45,6 +47,7 @@ class TestRunTestCheck:
     def test_build_failure_yields_no_build(self, context):
         with (
             patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.set_runtime_version"),
             patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
             patch("bcbench.evaluate.bugfix.run_red_green_check", side_effect=BuildError("App", "error AL0118: boom")),
         ):
@@ -56,6 +59,7 @@ class TestRunTestCheck:
     def test_test_passing_pre_patch_is_recorded(self, context):
         with (
             patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.set_runtime_version"),
             patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
             patch("bcbench.evaluate.bugfix.run_red_green_check", side_effect=TestExecutionError("Fail")),
         ):
@@ -68,6 +72,7 @@ class TestRunTestCheck:
     def test_test_failing_post_patch_is_recorded(self, context):
         with (
             patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.set_runtime_version"),
             patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
             patch("bcbench.evaluate.bugfix.run_red_green_check", side_effect=TestExecutionError("Pass")),
         ):
@@ -80,6 +85,7 @@ class TestRunTestCheck:
     def test_clean_red_green_is_correct(self, context):
         with (
             patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.set_runtime_version"),
             patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
             patch("bcbench.evaluate.bugfix.run_red_green_check"),
         ):
@@ -90,12 +96,28 @@ class TestRunTestCheck:
     def test_stage_a_rebuilds_every_project_to_undo_agent_publish(self, context):
         with (
             patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.set_runtime_version"),
             patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
             patch("bcbench.evaluate.bugfix.run_red_green_check") as red_green,
         ):
             _run_test_check(context, TEST_PATCH, APP_PROJECTS)
 
         assert red_green.call_args.kwargs["initial_build_projects"] == context.entry.project_paths
+
+    def test_runtime_version_is_reapplied_after_clean(self, context):
+        manager = MagicMock()
+        with (
+            patch("bcbench.evaluate.bugfix.clean_project_paths") as clean_project_paths,
+            patch("bcbench.evaluate.bugfix.set_runtime_version") as set_runtime_version,
+            patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
+            patch("bcbench.evaluate.bugfix.run_red_green_check"),
+        ):
+            manager.attach_mock(clean_project_paths, "clean_project_paths")
+            manager.attach_mock(set_runtime_version, "set_runtime_version")
+
+            _run_test_check(context, TEST_PATCH, APP_PROJECTS)
+
+        assert [call[0] for call in manager.mock_calls] == ["clean_project_paths", "set_runtime_version"]
 
 
 class TestRunFixCheck:

@@ -88,10 +88,11 @@ Because `instructions` is recorded on the result (`custom_instructions=True`), "
 ### The `bc-fix-bug` arm (bug-fix)
 
 `src/bcbench/agent/shared/instructions/microsoft-BCApps/skills/bc-fix-bug/` is a trimmed vendored
-copy of the skill from `microsoft/BCAppsBugFix`, keeping only its TDD core: Phase 2 (create a test
-and establish a failing baseline) and Phase 3 (the self-correcting fix loop). The work-item fetch,
-Miapp propagation, critique, AL review and pull-request phases are removed - none of them can run
-in an offline benchmark.
+copy of the skill from `microsoft/BCAppsBugFix`, renumbered down to four phases: Phase 1 (assess
+the bug and plan the fix), Phase 2 (create a test and establish a failing baseline), Phase 3 (the
+self-correcting fix loop), and Phase 4 (summary). The work-item fetch, Miapp propagation, critique,
+AL review and pull-request phases from the upstream skill are removed - none of them can run in an
+offline benchmark.
 
 Enable it with `skills.enabled: true`. Two things to know:
 

@@ -72,3 +72,9 @@ def test_prompt_warns_that_extra_tests_break_the_run(tmp_path):
 
     assert "exactly ONE" in prompt
     assert "run together" in prompt
+
+
+def test_prompt_names_new_test_codeunit_files_correctly(tmp_path):
+    prompt = render(tmp_path)
+
+    assert ".Codeunit.al" in prompt

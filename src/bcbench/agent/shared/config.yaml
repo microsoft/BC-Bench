@@ -16,8 +16,8 @@ prompt:
        unless no suitable test suite exists. The test MUST live in the repository's existing
        AL test project - the project that already contains test codeunits (declaring
        `Subtype = Test;`) - never in an application project. If you must create a new test
-       codeunit, it still belongs inside that existing test project. It must fail against the
-       current, unfixed code.
+       codeunit, it still belongs inside that existing test project, and its file must be
+       named `<Name>.Codeunit.al`. It must fail against the current, unfixed code.
     2. Then implement the minimal fix that makes that test pass.
 
     Important constraints:
