@@ -1,9 +1,10 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bcbench.evaluate.bugfix import _run_fix_check, _run_test_check
-from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
+from bcbench.evaluate.bugfix import BugFixPipeline, _run_fix_check, _run_test_check
+from bcbench.exceptions import BuildError, NoTestsExtractedError, PatchApplicationError, TestExecutionError
+from bcbench.results.bugfix import FixCheckOutcome, TestCheckOutcome
 from tests.conftest import create_evaluation_context
 
 APP_PROJECTS = ["App\\Apps\\W1\\Shopify\\app"]
@@ -28,6 +29,18 @@ class TestRunTestCheck:
         assert outcome.correct is False
         assert outcome.build is False
         assert "No tests extracted" in outcome.error_message
+
+    def test_gold_patch_application_failure_yields_no_build(self, context):
+        with (
+            patch("bcbench.evaluate.bugfix.clean_project_paths"),
+            patch("bcbench.evaluate.bugfix.extract_tests_from_patch", return_value=["t"]),
+            patch("bcbench.evaluate.bugfix.run_red_green_check", side_effect=PatchApplicationError("gold patch", "does not apply")),
+        ):
+            outcome = _run_test_check(context, TEST_PATCH, APP_PROJECTS)
+
+        assert outcome.build is False
+        assert outcome.correct is False
+        assert "Test check patch application failed" in outcome.error_message
 
     def test_build_failure_yields_no_build(self, context):
         with (
@@ -135,3 +148,49 @@ class TestRunFixCheck:
 
         assert prebuild.called
         assert runtime.called
+
+
+class TestEvaluate:
+    def test_test_check_runs_before_fix_check(self, context):
+        manager = MagicMock()
+        with (
+            patch("bcbench.evaluate.bugfix.stage_and_get_diff", return_value="diff") as stage_and_get_diff,
+            patch("bcbench.evaluate.bugfix.split_patch_by_projects", return_value=("app", "test")),
+            patch("bcbench.evaluate.bugfix._run_test_check", return_value=TestCheckOutcome()) as run_test_check,
+            patch("bcbench.evaluate.bugfix._run_fix_check", return_value=FixCheckOutcome()) as run_fix_check,
+            patch.object(BugFixPipeline, "save_result"),
+        ):
+            manager.attach_mock(stage_and_get_diff, "stage_and_get_diff")
+            manager.attach_mock(run_test_check, "run_test_check")
+            manager.attach_mock(run_fix_check, "run_fix_check")
+
+            BugFixPipeline().evaluate(context)
+
+        assert [call[0] for call in manager.mock_calls] == ["stage_and_get_diff", "run_test_check", "run_fix_check"]
+
+    def test_both_stages_run_even_when_test_check_fails(self, context):
+        with (
+            patch("bcbench.evaluate.bugfix.stage_and_get_diff", return_value="diff"),
+            patch("bcbench.evaluate.bugfix.split_patch_by_projects", return_value=("app", "test")),
+            patch("bcbench.evaluate.bugfix._run_test_check", return_value=TestCheckOutcome()),
+            patch("bcbench.evaluate.bugfix._run_fix_check", return_value=FixCheckOutcome()) as run_fix_check,
+            patch.object(BugFixPipeline, "save_result"),
+        ):
+            BugFixPipeline().evaluate(context)
+
+        assert run_fix_check.called
+
+    def test_saved_result_reflects_both_outcomes(self, context):
+        with (
+            patch("bcbench.evaluate.bugfix.stage_and_get_diff", return_value="diff"),
+            patch("bcbench.evaluate.bugfix.split_patch_by_projects", return_value=("app", "test")),
+            patch("bcbench.evaluate.bugfix._run_test_check", return_value=TestCheckOutcome()),
+            patch("bcbench.evaluate.bugfix._run_fix_check", return_value=FixCheckOutcome(build=True, passed=True)),
+            patch.object(BugFixPipeline, "save_result") as save_result,
+        ):
+            BugFixPipeline().evaluate(context)
+
+        result = save_result.call_args.args[1]
+        assert result.resolved is False
+        assert result.fix_correct is True
+        assert result.test_correct is False

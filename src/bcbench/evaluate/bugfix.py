@@ -54,6 +54,9 @@ def _run_test_check(context: EvaluationContext[BugFixEntry], test_patch: str, ap
             initial_build_projects=context.entry.project_paths,
             app_projects=app_projects,
         )
+    except PatchApplicationError as e:
+        logger.exception(f"Test check patch application failed for {context.entry.instance_id}")
+        return TestCheckOutcome(error_message=f"Test check patch application failed\n{e}")
     except BuildError as e:
         logger.exception(f"Test check build failed for {context.entry.instance_id}")
         return TestCheckOutcome(error_message=f"Test check build failed\n{e}")
@@ -67,6 +70,8 @@ def _run_test_check(context: EvaluationContext[BugFixEntry], test_patch: str, ap
 
 def _run_fix_check(context: EvaluationContext[BugFixEntry], app_patch: str) -> FixCheckOutcome:
     """Validate the agent's fix against the gold test patch, from a workspace reset to base."""
+    # Resets the working tree (git reset --hard + clean -fd): must run after any stage that
+    # still needs to read the agent's changes from disk.
     entry = context.entry
     container = context.get_container()
 
