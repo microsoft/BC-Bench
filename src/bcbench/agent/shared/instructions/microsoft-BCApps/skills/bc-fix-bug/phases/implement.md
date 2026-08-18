@@ -2,8 +2,8 @@
 
 # Fix Implement
 
-Implements and validates the bug fix. Test-required plans use a self-correcting loop until all tests
-pass; no-test plans build and publish without creating or executing tests (Phase 3).
+Implements and validates the bug fix with a self-correcting loop until all tests pass (Phase 3). A
+reproducing test is always required in this benchmark.
 
 ## Input (from orchestrator prompt)
 
@@ -12,9 +12,6 @@ pass; no-test plans build and publish without creating or executing tests (Phase
 - `plan_content` - full plan body (root cause, fix, affected files, acceptance criteria)
 - `progress_file` - absolute path to progress.md
 - `temp_dir` - the state folder (`<os-temp>/bc-fix-bug/`), wiped at the start of each run
-- `skip_tests` - `true` or `false` (default: `false`). The orchestrator derives it from the approved
-  plan's `tests-required` value. When `true`, implement, build, and publish but skip all test creation
-  and execution.
 
 ## Rules & Output Guidelines
 
@@ -22,11 +19,9 @@ Read and follow `shared-rules.md` before proceeding.
 
 ## Phase 3: Implement Fix
 
-### Step 0: Verify TDD Baseline Precondition (normal mode only)
+### Step 0: Verify TDD Baseline Precondition
 
 > **🚨 HARD GATE (shared-rules Rule 10). Do this BEFORE editing any product/source code. 🚨**
-
-**If `skip_tests == false`:**
 
 1. Read the baseline state file: `<temp-dir>/bc-test-baseline-state-<plan_bug_id>.json`.
 2. The fix may proceed **only if** that file exists and reports `"baselineEstablished": true`.
@@ -38,44 +33,7 @@ Read and follow `shared-rules.md` before proceeding.
      begin until Phase 2 has produced a failing (red) baseline test.
 4. If the gate is satisfied, display `✅ TDD baseline gate satisfied (baseline is red)` and proceed.
 
-**If `skip_tests == true`**: the approved plan states that tests are not applicable. The TDD barrier
-does not apply; skip this step and proceed to the No-Test Validation Path below.
-
-### No-Test Validation Path
-
-**If `skip_tests == true`**, implement, build, and publish but skip all test creation and execution:
-
-1. Implement the fix based on `plan_content` - make the targeted code changes to the identified files.
-2. Follow AL best practices (proper error handling, clear naming, respect existing code style). Keep changes minimal and focused.
-3. **Compile every modified project** with the AL build capability resolved through `compatibility.md` (all-project scope when available) - see shared-rules Rules 2 and 6. If compilation fails, inspect details with the AL diagnostics capability, or parse build output if that capability is not advertised; fix errors and retry.
-4. **Publish the modified app** with the AL publish capability resolved through `compatibility.md` (non-debug publish when supported) - see shared-rules Rule 2. If publish fails, fix errors and retry.
-5. Read the plan's `## Test Strategy` and write
-   `<temp-dir>/bc-swe-iteration-state-<plan_bug_id>.json`:
-
-   ```json
-   {
-    "bugId": "<plan_bug_id>",
-    "testsRequired": false,
-    "validationComplete": true,
-    "buildStatus": "success",
-    "publishStatus": "success",
-    "validationApproach": "<the plan-specific manual or external validation approach>"
-   }
-   ```
-
-   Write this state only after the build and publish both succeed. If the Test Strategy or its
-   validation approach is missing, write `progress_file` with Status=`failed`, report the invalid
-   plan to the orchestrator, and STOP.
-6. Leave the fix uncommitted in the working tree - do not stage, commit, branch, or push
-   (SKILL.md: "Do not commit, branch, or push").
-7. **Write progress.md - Milestone (validation-complete):**
-   Append to activity_log:
-   `- [<now>] **validation-complete**: Tests not required by plan; build and publish succeeded; validation approach recorded`
-   Write `progress_file` with Status=`in-progress`.
-8. Report exactly: `NO-TEST VALIDATION COMPLETE`.
-9. **Return to the orchestrator.** It proceeds to Phase 4 (Summary).
-
-### Normal Mode Path (Self-Correcting Loop - Max 5 Iterations)
+### Fix Loop (Self-Correcting Loop - Max 5 Iterations)
 
 **Self-correcting iterations (up to 5):** repeat until tests pass. See Rules 1-2.
 

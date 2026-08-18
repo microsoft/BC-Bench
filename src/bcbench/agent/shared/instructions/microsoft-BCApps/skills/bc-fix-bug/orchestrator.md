@@ -39,8 +39,9 @@ directly because they are available in both supported hosts.
 2. Investigate the AL sources under the repository to identify the root cause. Use `grep`/`glob`
    to locate the objects named or implied by the report.
 3. Write a plan using `templates/plan-template.md` into `<temp_dir>/plan.md`. Use the literal
-   string `BENCH` wherever the template expects a bug ID. Fill in Root Cause Analysis, Proposed
-   Fix, Affected Files, Test Strategy, and Acceptance Criteria.
+   string `BENCH` wherever the template expects a bug ID, and the problem statement's title
+   wherever it expects a bug title. Fill in Root Cause Analysis, Proposed Fix, Affected Files,
+   Test Strategy, and Acceptance Criteria.
 4. Do not ask for approval; proceed straight to Phase 2. This run is unattended.
 
 Downstream phases take `plan_bug_id` = `BENCH`, `plan_bug_title` = the problem statement title,
@@ -49,13 +50,9 @@ and `temp_dir` = `<os-temp>/bc-fix-bug/`.
 
 ## Phase 2: Create Tests and Establish Baseline
 
-When `skip_tests == true`, do not dispatch a baseline agent and do not create, compile, publish, or
-run test code. Display `Baseline skipped: the approved plan records tests-required: false` and
-continue directly to Phase 3.
-
-When `skip_tests == false`, execute the rest of this phase. It writes test code only and must not
-edit product/source code (shared-rules Rule 10). Work on the current checkout; do not create, reset,
-or switch branches. Ignore any pre-existing uncommitted changes (do not discard them).
+A reproducing test is always required in this benchmark. This phase writes test code only and must
+not edit product/source code (shared-rules Rule 10). Work on the current checkout; do not create,
+reset, or switch branches. Ignore any pre-existing uncommitted changes (do not discard them).
 
 Dispatch the baseline phase to a sub-agent via the ladder in `compatibility.md` → "Phase sub-agent
 dispatch". Emit the `Dispatch:` line first, then dispatch with these parameters:
@@ -88,8 +85,8 @@ baseline that reproduces the bug.
 
 ## Phase 3: Implement Fix
 
-When `skip_tests == false`, the implement phase re-checks the TDD barrier (shared-rules Rule 10) at
-its Step 0 and STOPs if the baseline is not confirmed red.
+The implement phase re-checks the TDD barrier (shared-rules Rule 10) at its Step 0 and STOPs if the
+baseline is not confirmed red.
 
 Dispatch the implement phase to a sub-agent via the ladder in `compatibility.md` → "Phase sub-agent
 dispatch". Emit the `Dispatch:` line first, then dispatch with these parameters:
@@ -111,16 +108,14 @@ dispatch". Emit the `Dispatch:` line first, then dispatch with these parameters:
   plan_bug_title: <plan_bug_title>
   progress_file: <progress_file>
   temp_dir: <temp_dir>
-  skip_tests: <skip_tests>
 
   ## Plan Content
   <plan_content>
   """
 
 Wait for the task to complete (sync mode). Read its result. If it failed (or progress.md reports
-Status=failed), STOP and report the failure. For a test-required plan it
-runs the self-correcting fix loop (edit, build, publish, run tests) until tests pass. For a no-test
-plan it builds and publishes without creating or running tests and persists the validation evidence.
+Status=failed), STOP and report the failure. It runs the self-correcting fix loop (edit, build,
+publish, run tests) until tests pass.
 
 ## Phase 4: Summary
 

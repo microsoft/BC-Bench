@@ -116,14 +116,12 @@ These rules apply to all phases of the bug fix workflow. Resolve every tool thro
      reaches `completed` is indistinguishable from a failed one.
 9. No ticket-reference comments in code. There is no bug ID, commit, or pull request to link the
    change to - the fix is judged by its diff and the passing test alone.
-10. **TDD barrier (test-first invariant).** In normal mode (`skip_tests = false`), product/source
-    application code MUST NOT be created or edited until the Phase 2 baseline is confirmed red:
-    the baseline state file `<temp-dir>/bc-test-baseline-state-<bug_id>.json` must exist and report
-    `"baselineEstablished": true` before any fix edit. Phase 2 writes test code only; Phase 3 verifies
-    this gate at its Step 0 and STOPs if it is not satisfied. The barrier does not apply when the
-    orchestrator has normalized `plan_tests_required = false` and passes `skip_tests = true`,
-    whether that value was explicit or inferred from a legacy plan. A no-test plan still requires
-    build, publish, and persisted validation evidence.
+10. **TDD barrier (test-first invariant).** A reproducing test is always required in this
+    benchmark - there is no no-test path. Product/source application code MUST NOT be created or
+    edited until the Phase 2 baseline is confirmed red: the baseline state file
+    `<temp-dir>/bc-test-baseline-state-<bug_id>.json` must exist and report
+    `"baselineEstablished": true` before any fix edit. Phase 2 writes test code only; Phase 3
+    verifies this gate at its Step 0 and STOPs if it is not satisfied.
 
 ## Output Guidelines
 

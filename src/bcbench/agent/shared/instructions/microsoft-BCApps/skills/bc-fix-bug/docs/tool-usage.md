@@ -10,12 +10,13 @@ Detailed command syntax and best practices for `bc-fix-bug` operations.
   the literal bug ID `BENCH`. There is no work item to post it to, and no `--plan-file` entry point:
   every run starts from `problem/README.md`.
 - It carries a markdown body with a mandatory Test Strategy; downstream phases receive it as
-  `plan_content`, and it reaches test-implementor only when tests are required.
+  `plan_content`, and it reaches test-implementor to drive the required reproducing test.
 
 ## Code Changes
 
 - **Edit**: Make targeted fixes using exact string replacement
-- **Write**: Create new test files when the approved plan records `tests-required: true`
+- **Write**: Create the new test file that reproduces the bug - a reproducing test is always
+  required in this benchmark
 - Keep changes minimal and focused
 - Do not add ticket-reference comments in code - there is no bug ID or PR to link the change to
 
@@ -43,11 +44,11 @@ The BC container and AL MCP server are provisioned before this skill runs. Resol
 
 ## Test Execution
 
-**IMPORTANT: When tests are required, follow the test-implementor phase document for initial test
-creation. A plan with `tests-required: false` skips this entire section.**
+**IMPORTANT: A reproducing test is always required in this benchmark. Follow the test-implementor
+phase document for initial test creation.**
 
 - **test-implementor** (`phases/test-implementor.md`): **REQUIRED** for
-  initial test creation when the plan requires tests
+  initial test creation
   - **Phase 2 (Baseline Loop - Iteration 1)**: Create new tests
     - The phase implements tests based on bug scenarios
     - Tests are created but not run by the phase document
@@ -94,9 +95,8 @@ Use task management to track your progress:
 
 ### Testing
 
-- Add regression tests when the approved plan records `tests-required: true`
-- When tests are not required, record why they cannot meaningfully validate the scenario and retain
-  the required build, publish, and manual/external validation evidence
+- Add the regression test that reproduces the bug - a reproducing test is always required in
+  this benchmark
 - Cover edge cases discovered during investigation
 - Follow BC testing patterns and conventions
 - Ensure tests are clear and maintainable
