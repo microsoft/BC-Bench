@@ -5,6 +5,10 @@ title: Bug Fixing - BC-Bench
 
 # Bug Fixing
 
+Scoring is test-first: an entry counts as resolved only when the agent's own test reproduces the
+bug (fails on the unfixed code, passes with the reference fix) **and** its fix makes the reference
+tests pass. Results published before this change measured the fix alone and are not comparable.
+
 This category follows the [SWE-Bench](https://www.swebench.com/) methodology. The system is tasked with fixing a bug in the Business Central (AL) codebase given an issue description.
 
 ## Baseline Leaderboard
@@ -16,6 +20,8 @@ This category follows the [SWE-Bench](https://www.swebench.com/) methodology. Th
       <th>Model</th>
       <th>mean (95% CI)</th>
       <th>pass^5</th>
+      <th>test</th>
+      <th>fix</th>
       <th>Avg Time</th>
       <th>Ver</th>
     </tr>
@@ -29,6 +35,8 @@ This category follows the [SWE-Bench](https://www.swebench.com/) methodology. Th
       <td>{{ agg.model }}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.test_correct_rate %}{{ agg.test_correct_rate | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{% if agg.fix_correct_rate %}{{ agg.fix_correct_rate | times: 100.0 | round: 1 }}%{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>

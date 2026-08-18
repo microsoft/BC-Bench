@@ -1,8 +1,14 @@
 # Adding a New Category
 
-BC-Bench is **category-based**. A category is a distinct evaluation scenario: `bug-fix` asks an agent to patch buggy code, `test-generation` asks it to write reproduction tests, `code-review` asks it to flag issues in a diff, `nl2al` asks it to turn a natural-language spec into AL code, `extensibility-request-implement` asks it to implement an approved extensibility request (e.g. add an integration event) in an existing repo, and `extensibility-request-triage` asks it to triage an extensibility request (emit managed labels, an advisory comment, and an open/closed decision).
+BC-Bench is **category-based**. A category is a distinct evaluation scenario: `bug-fix` asks an agent to fix buggy code test-first, and scores both the reproducing test it writes and the fix itself, `test-generation` asks it to write reproduction tests, `code-review` asks it to flag issues in a diff, `nl2al` asks it to turn a natural-language spec into AL code, `extensibility-request-implement` asks it to implement an approved extensibility request (e.g. add an integration event) in an existing repo, and `extensibility-request-triage` asks it to triage an extensibility request (emit managed labels, an advisory comment, and an open/closed decision).
 
 Categories also differ in how they're scored and run. `bug-fix` and `test-generation` are execution-based: they build and run AL code, so they need a BC container. `code-review`, `nl2al`, `extensibility-request-implement`, and `extensibility-request-triage` all leverage LLM-as-a-judge: `code-review` scores precision/recall/F1 of flagged issues against expected findings (an LLM judge only matches comments), and `nl2al`, `extensibility-request-implement`, and `extensibility-request-triage` have an LLM grade the agent output against an LMChecklist (for triage, the checklist encodes the expected managed labels, open/closed state, and the substance of the advisory comment). `extensibility-request-implement` and `extensibility-request-triage` are the first of a planned family of extensibility categories (a further sibling such as `ext-advisor` is not yet implemented). The `EvaluationCategory` properties (`requires_container`, `runner`, `evaluators`, `core_score`) capture these differences for the workflows.
+
+`bug-fix` is gold-anchored on both halves. The agent's diff is split into an application half and a
+test half. The test half must fail against the base code and pass once the dataset's gold `patch`
+is applied; the application half must make the dataset's gold `test_patch` pass. `resolved` is the
+conjunction of the two, and the halves are also reported separately as `test_correct_rate` and
+`fix_correct_rate`. Both checks always run, so a bad test never hides a good fix.
 
 Categories may share a dataset (`bug-fix` and `test-generation` do today), but a new category should generally have its own: dataset schema, entry type, result type, pipeline, etc.
 

@@ -17,6 +17,7 @@ import pytest
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.display import create_console_summary, create_github_job_summary
+from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
 from bcbench.results.summary import (
     EvaluationResultSummary,
     ExecutionBasedEvaluationResultSummary,
@@ -275,6 +276,78 @@ class TestSummaryFromResults:
 
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
         assert summary.instance_results == {"test__a": True, "test__b": False}
+
+    def test_bugfix_test_and_fix_correct_counted_independently(self):
+        results = [
+            # test correct, fix incorrect
+            create_bugfix_result(instance_id="test__1", test_build=True, pre_patch_failed=True, post_patch_passed=True, fix_build=True, fix_passed=False),
+            # test incorrect, fix correct
+            create_bugfix_result(instance_id="test__2", test_build=True, pre_patch_failed=False, post_patch_passed=True, fix_build=True, fix_passed=True),
+            # both correct
+            create_bugfix_result(instance_id="test__3", test_build=True, pre_patch_failed=True, post_patch_passed=True, fix_build=True, fix_passed=True),
+            # neither correct
+            create_bugfix_result(instance_id="test__4"),
+        ]
+        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+
+        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        assert summary.test_correct == 2
+        assert summary.fix_correct == 2
+
+    def test_testgen_summary_reports_zero_test_and_fix_correct(self):
+        results = [
+            create_testgen_result(instance_id="test__1", resolved=True),
+            create_testgen_result(instance_id="test__2", resolved=False),
+        ]
+        summary = EvaluationResultSummary.from_results(results, run_id="run1")
+
+        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        assert summary.test_correct == 0
+        assert summary.fix_correct == 0
+
+
+# ---------------------------------------------------------------------------
+# ExecutionBasedLeaderboardAggregate — test_correct_rate / fix_correct_rate
+# ---------------------------------------------------------------------------
+
+
+class TestLeaderboardAggregateTestFixRates:
+    def test_averages_test_and_fix_correct_rate_across_runs(self):
+        run1 = EvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__1", test_build=True, pre_patch_failed=True, post_patch_passed=True, fix_build=True, fix_passed=True),
+                create_bugfix_result(instance_id="test__2", test_build=True, fix_build=True, fix_passed=True),
+            ],
+            run_id="run1",
+        )
+        run2 = EvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__1", test_build=True, pre_patch_failed=True, post_patch_passed=True),
+                create_bugfix_result(instance_id="test__2", test_build=True, pre_patch_failed=True, post_patch_passed=True),
+            ],
+            run_id="run2",
+        )
+        # run1: test_correct=1/2, fix_correct=2/2 -> rates 0.5, 1.0
+        # run2: test_correct=2/2, fix_correct=0/2 -> rates 1.0, 0.0
+        aggregate = ExecutionBasedLeaderboardAggregate.from_runs([run1, run2])
+
+        assert aggregate.test_correct_rate == pytest.approx(0.75)
+        assert aggregate.fix_correct_rate == pytest.approx(0.5)
+
+    def test_testgen_aggregate_leaves_rates_none(self):
+        run1 = EvaluationResultSummary.from_results(
+            [create_testgen_result(instance_id="test__1", resolved=True), create_testgen_result(instance_id="test__2", resolved=False)],
+            run_id="run1",
+        )
+        run2 = EvaluationResultSummary.from_results(
+            [create_testgen_result(instance_id="test__1", resolved=False), create_testgen_result(instance_id="test__2", resolved=True)],
+            run_id="run2",
+        )
+
+        aggregate = ExecutionBasedLeaderboardAggregate.from_runs([run1, run2])
+
+        assert aggregate.test_correct_rate is None
+        assert aggregate.fix_correct_rate is None
 
 
 # ---------------------------------------------------------------------------

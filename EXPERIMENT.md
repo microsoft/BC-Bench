@@ -85,6 +85,27 @@ You have optional skills available through the `skill` tool. When you start a ta
 
 Because `instructions` is recorded on the result (`custom_instructions=True`), "plugin + nudge" is a clean, attributable experiment arm — keep the nudge subtle so you can separate the plugin's effect from the nudge's.
 
+### The `bc-fix-bug` arm (bug-fix)
+
+`src/bcbench/agent/shared/instructions/microsoft-BCApps/skills/bc-fix-bug/` is a trimmed vendored
+copy of the skill from `microsoft/BCAppsBugFix`, keeping only its TDD core: Phase 2 (create a test
+and establish a failing baseline) and Phase 3 (the self-correcting fix loop). The work-item fetch,
+Miapp propagation, critique, AL review and pull-request phases are removed - none of them can run
+in an offline benchmark.
+
+Enable it with `skills.enabled: true`. Two things to know:
+
+- The prompt nudges the agent to use the skill whenever `skills.enabled` is true. Without a nudge,
+  agents typically just do the work directly and invoke nothing.
+- `skills.enabled` copies the **whole** skills folder, so `al-test-generation` loads too. That is
+  intentional: `bc-fix-bug` delegates AAA structure, UI handler signatures and TableRelation rules
+  to `al-test-generation` rather than duplicating them, so the two compose instead of competing.
+
+Run this arm with `--al-mcp`. The skill's Phase 2 and Phase 3 are build/publish/run loops, and
+without `al_build` / `al_publish` / `al_run_tests` the agent cannot establish a red baseline. The
+category still scores without AL MCP - the agent writes the test blind and the pipeline judges it
+the same way - which makes `--al-mcp` on/off a measurable dimension in its own right.
+
 ## Before You Start
 
 Articulate what you expect to see before triggering anything. A short hypothesis — *"enabling custom instructions should improve resolution rate by ~X% because…"* — makes it much easier to interpret results and decide whether a follow-up run is worth the cost.

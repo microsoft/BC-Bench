@@ -146,6 +146,11 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     build: int = 0
     percentage: float = 0.0
 
+    # Populated only for categories whose results emit 'test_correct'/'fix_correct' via
+    # category_metrics (currently bug-fix). Categories that don't emit these keys count 0.
+    test_correct: int = 0
+    fix_correct: int = 0
+
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
 
@@ -162,6 +167,8 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
         resolved = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.resolved)
         build = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.build)
+        test_correct = sum(1 for r in results if r.category_metrics.get("test_correct"))
+        fix_correct = sum(1 for r in results if r.category_metrics.get("fix_correct"))
         instance_results = {r.instance_id: (isinstance(r, ExecutionBasedEvaluationResult) and r.resolved) for r in results}
 
         return summary.model_copy(
@@ -170,6 +177,8 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
                 "failed": total - resolved,
                 "build": build,
                 "percentage": round(resolved / total * 100, 1) if total else 0.0,
+                "test_correct": test_correct,
+                "fix_correct": fix_correct,
                 "instance_results": instance_results,
             }
         )
