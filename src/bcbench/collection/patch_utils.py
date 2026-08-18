@@ -1,5 +1,6 @@
 """Utilities for working with git patches and project paths."""
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
 _config = get_config()
+
+_DIFF_HEADER = re.compile(r"^diff --git a/(?P<path>.+?) b/", re.MULTILINE)
 
 
 def separate_patches(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
@@ -160,3 +163,36 @@ def extract_file_paths_from_patch(patch: str) -> list[str]:
     patch_set = PatchSet(patch)
 
     return [patched_file.path for patched_file in patch_set if patched_file.path]
+
+
+def split_patch_by_projects(patch: str, test_projects: list[str]) -> tuple[str, str]:
+    """Split a unified diff into its application and test halves.
+
+    Splits textually on ``diff --git`` boundaries so both halves keep those headers:
+    ``git apply`` tolerates their absence but ``extract_tests_from_patch`` requires them.
+
+    Args:
+        patch: Full unified diff produced by the agent.
+        test_projects: Project paths that count as test projects.
+
+    Returns:
+        Tuple of (app_patch, test_patch); either half may be an empty string.
+    """
+    if not patch.strip():
+        return "", ""
+
+    prefixes = tuple(f"{project.replace('\\', '/').strip('/').lower()}/" for project in test_projects)
+
+    headers = list(_DIFF_HEADER.finditer(patch))
+    boundaries = [match.start() for match in headers] + [len(patch)]
+
+    app_parts: list[str] = []
+    test_parts: list[str] = []
+
+    for index, header in enumerate(headers):
+        block = patch[boundaries[index] : boundaries[index + 1]]
+        file_path = header.group("path").replace("\\", "/").lower()
+        target = test_parts if file_path.startswith(prefixes) else app_parts
+        target.append(block)
+
+    return "".join(app_parts), "".join(test_parts)
