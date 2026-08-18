@@ -92,12 +92,24 @@ class TestStatusLabel:
 
 class TestCategoryMetrics:
     def test_bugfix_category_metrics(self):
-        result = create_bugfix_result(resolved=True, build=True)
-        assert result.category_metrics == {"resolved": True, "build": True}
+        result = create_bugfix_result(resolved=True, build=True, test_build=True, pre_patch_failed=True, post_patch_passed=True, fix_build=True, fix_passed=True)
+        assert result.category_metrics == {
+            "resolved": True,
+            "build": True,
+            "test_build": True,
+            "pre_patch_failed": True,
+            "post_patch_passed": True,
+            "fix_build": True,
+            "fix_passed": True,
+            "test_correct": True,
+            "fix_correct": True,
+        }
 
     def test_bugfix_failed_category_metrics(self):
         result = create_bugfix_result(resolved=False, build=False)
-        assert result.category_metrics == {"resolved": False, "build": False}
+        assert result.category_metrics["resolved"] is False
+        assert result.category_metrics["test_correct"] is False
+        assert result.category_metrics["fix_correct"] is False
 
     def test_testgen_category_metrics_includes_extra_fields(self):
         result = create_testgen_result(resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
@@ -120,9 +132,9 @@ class TestCategoryMetrics:
 
 
 class TestDisplayRow:
-    def test_bugfix_display_row_is_empty(self):
+    def test_bugfix_display_row_shows_test_and_fix(self):
         result = create_bugfix_result()
-        assert result.display_row == {}
+        assert result.display_row == {"Test Correct": "No", "Fix Correct": "No"}
 
     def test_testgen_display_row_has_columns(self):
         result = create_testgen_result(pre_patch_failed=True, post_patch_passed=False)
