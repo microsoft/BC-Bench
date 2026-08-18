@@ -135,9 +135,7 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 
 ### Create a new release
 
-After you bump the version in [`pyproject.toml`](pyproject.toml) following the Versioning Policy, [create a new release](https://github.com/microsoft/BC-Bench/releases/new) after the changes are merged.
-
-The process is straightforward, when you are not sure, check the previous releases for reference.
+After you bump the version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy, use the repository's [`create-release` skill](.github/skills/create-release/SKILL.md) to prepare release notes after pushing your changes. The skill screens merged PRs since the previous version tag and returns Markdown covering only changes that may affect evaluation results, without creating the tag or release.
 
 1. Create a new tag following the version in `pyproject.toml` (e.g. v1.1.2)
 2. Title can simply be the same as the newly created tag
