@@ -35,6 +35,8 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "category: code-review" in workflow
     assert "bcbench evaluate pr-review" in workflow
     assert "repository: microsoft/BC-ALAgents" in workflow
+    assert "f2ac8704bf8d39000f8002bcf2d287f1f5b5e9ba" in workflow
+    assert "ref: main" not in workflow
     assert "copilot-requests: write" in workflow
     assert 'agent: "BC PR Review"' in workflow
     assert '"mai-code-1.1-flash"' in workflow

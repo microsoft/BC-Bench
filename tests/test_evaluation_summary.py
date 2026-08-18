@@ -5,7 +5,7 @@ import pytest
 
 from bcbench.config import get_config
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, ExecutionProvenance, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 _config = get_config()
@@ -101,13 +101,13 @@ class TestFromResults:
                 instance_id="test__1",
                 project="app",
                 resolved=True,
-                metrics=AgentMetrics(execution_time=100.0, prompt_tokens=5000, completion_tokens=1000),
+                metrics=AgentMetrics(execution_time=100.0, prompt_tokens=5000, completion_tokens=1000, ai_credits=10),
             ),
             create_bugfix_result(
                 instance_id="test__2",
                 project="app",
                 resolved=True,
-                metrics=AgentMetrics(execution_time=150.0, prompt_tokens=6000, completion_tokens=1500),
+                metrics=AgentMetrics(execution_time=150.0, prompt_tokens=6000, completion_tokens=1500, ai_credits=20),
             ),
             create_bugfix_result(
                 instance_id="test__3",
@@ -115,7 +115,7 @@ class TestFromResults:
                 resolved=False,
                 build=False,
                 error_message="Build failed",
-                metrics=AgentMetrics(execution_time=80.0, prompt_tokens=4000, completion_tokens=800),
+                metrics=AgentMetrics(execution_time=80.0, prompt_tokens=4000, completion_tokens=800, ai_credits=30),
             ),
         ]
 
@@ -140,6 +140,15 @@ class TestFromResults:
         assert summary.average_prompt_tokens == pytest.approx(5000.0)
         # Average completion tokens: (1000 + 1500 + 800) / 3 = 1100
         assert summary.average_completion_tokens == pytest.approx(1100.0)
+        assert summary.average_ai_credits == pytest.approx(20.0)
+
+    def test_from_results_keeps_provenance_without_marking_experiment(self, sample_results):
+        sample_results[0].experiment = ExperimentConfiguration(provenance=ExecutionProvenance(agent_harness="BC-ALAgents@abc", knowledge_base="BCQuality@def"))
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run")
+
+        assert summary.experiment is None
+        assert summary.provenance == ExecutionProvenance(agent_harness="BC-ALAgents@abc", knowledge_base="BCQuality@def")
 
     def test_from_results_handles_none_values_in_metrics(self):
         results = [

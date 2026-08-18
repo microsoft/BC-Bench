@@ -22,13 +22,14 @@ def test_load_engine_report_rejects_empty_or_invalid() -> None:
     assert load_engine_report("[]") is None
 
 
-def test_maps_nested_location_and_message() -> None:
+def test_maps_production_normalized_finding() -> None:
     report = _report(
         [
             {
                 "severity": "High",
-                "location": {"file": "src/Foo.al", "line": 42},
-                "message": "Missing ToolTip on field.",
+                "filePath": "src/Foo.al",
+                "lineNumber": 42,
+                "issue": "Missing ToolTip on field.",
                 "domain": "ui",
             }
         ]
@@ -51,8 +52,9 @@ def test_normalizes_path_and_lowercases_severity() -> None:
         [
             {
                 "severity": "CRITICAL",
-                "location": {"file": ".\\src\\Bar.al", "line": 7},
-                "message": "Unchecked Get.",
+                "filePath": ".\\src\\Bar.al",
+                "lineNumber": 7,
+                "issue": "Unchecked Get.",
                 "domain": "error-handling",
             }
         ]
@@ -62,25 +64,25 @@ def test_normalizes_path_and_lowercases_severity() -> None:
     assert comment["severity"] == "critical"
 
 
-def test_falls_back_to_issue_then_recommendation_for_body() -> None:
+def test_includes_issue_and_recommendation_in_body() -> None:
     report = _report(
         [
-            {"location": {"file": "a.al", "line": 1}, "issue": "issue text"},
-            {"location": {"file": "b.al", "line": 2}, "recommendation": "rec text"},
+            {"filePath": "a.al", "lineNumber": 1, "issue": "issue text", "recommendation": "rec text"},
+            {"filePath": "b.al", "lineNumber": 2, "recommendation": "rec only"},
         ]
     )
     comments = engine_report_to_review_comments(report)
-    assert [c["body"] for c in comments] == ["issue text", "rec text"]
+    assert [c["body"] for c in comments] == ["issue text\n\nRecommendation: rec text", "rec only"]
 
 
 def test_drops_findings_missing_file_line_or_body() -> None:
     report = _report(
         [
-            {"location": {"line": 5}, "message": "no file"},
-            {"location": {"file": "c.al"}, "message": "no line"},
-            {"location": {"file": "d.al", "line": 0}, "message": "non-positive line"},
-            {"location": {"file": "e.al", "line": 3}, "message": "   "},
-            {"location": {"file": "f.al", "line": 3}},
+            {"lineNumber": 5, "issue": "no file"},
+            {"filePath": "c.al", "issue": "no line"},
+            {"filePath": "d.al", "lineNumber": 0, "issue": "non-positive line"},
+            {"filePath": "e.al", "lineNumber": 3, "issue": "   "},
+            {"filePath": "f.al", "lineNumber": 3},
         ]
     )
     assert engine_report_to_review_comments(report) == []
@@ -97,8 +99,9 @@ def test_output_is_consumable_by_review_parser() -> None:
         [
             {
                 "severity": "Medium",
-                "location": {"file": "src/Baz.al", "line": 10},
-                "message": "Some finding.",
+                "filePath": "src/Baz.al",
+                "lineNumber": 10,
+                "issue": "Some finding.",
                 "domain": "performance",
             }
         ]

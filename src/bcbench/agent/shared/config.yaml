@@ -56,26 +56,6 @@ prompt:
     {{task}}
     {% endif %}
 
-  code-review-template: |
-    You are reviewing a Business Central (AL) code repository at {{repo_path}}.
-
-    Review only the staged and unstaged dataset changes in the working tree (`git diff HEAD`). Do not compare commits such as HEAD~1..HEAD or origin/main.
-
-    Important constraints:
-    - Do NOT modify source code, tests, configuration, or any other repository content.
-    - The only file you may create or update is `{{repo_path}}/review.json`.
-    - You MUST write `review.json` before finishing; otherwise the review counts as missing output.
-
-    `review.json` must contain one JSON array. Each finding must be an object with these fields:
-      - `file`: repository-relative `.al` or `.json` path (string, required)
-      - `line_start`: 1-based line where the issue starts (positive integer, required)
-      - `line_end`: 1-based line where the issue ends (positive integer, optional)
-      - `domain`: review domain (string, optional)
-      - `body`: concise description of the issue (non-empty string, required)
-      - `severity`: one of `critical`, `high`, `medium`, or `low` (optional)
-
-    If there are no findings, write an empty array. Write only valid JSON to `review.json`, with no surrounding object, Markdown fence, or commentary.
-
   extensibility-request-implement-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
@@ -102,6 +82,26 @@ prompt:
 
     Extensibility request:
     {{task}}
+
+  code-review-template: |
+    You are reviewing a Business Central (AL) code repository at {{repo_path}}.
+
+    Review only the staged and unstaged dataset changes in the working tree (`git diff HEAD`). Do not compare commits such as HEAD~1..HEAD or origin/main.
+
+    Important constraints:
+    - Do NOT modify source code, tests, configuration, or any other repository content.
+    - The only file you may create or update is `{{repo_path}}/review.json`.
+    - You MUST write `review.json` before finishing; otherwise the review counts as missing output.
+
+    `review.json` must contain one JSON array. Each finding must be an object with these fields:
+      - `file`: repository-relative `.al` or `.json` path (string, required)
+      - `line_start`: 1-based line where the issue starts (positive integer, required)
+      - `line_end`: 1-based line where the issue ends (positive integer, optional)
+      - `domain`: review domain (string, optional)
+      - `body`: concise description of the issue (non-empty string, required)
+      - `severity`: one of `critical`, `high`, `medium`, or `low` (optional)
+
+    If there are no findings, write an empty array. Write only valid JSON to `review.json`, with no surrounding object, Markdown fence, or commentary.
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
@@ -187,8 +187,8 @@ mcp:
     #   args: ["-y", "@modelcontextprotocol/server-filesystem", "{{repo_path}}"]
 
 # BC-ALAgents review engine settings for the dedicated pr-review runner. This runner uses
-# the engine's generate half (Invoke-PRReviewShell.ps1 -GenerateOnly) in local mode to
-# measure the production BC PR Review + BCQuality system on the code-review category.
+# the production orchestrator's complete local, non-posting path to measure BC PR Review
+# + BCQuality on the code-review category, including production parsing and filtering.
 # Generic Copilot and Claude runners use code-review-template above on the same category.
 #   path:          local microsoft/BC-ALAgents checkout, e.g. "C:/depot/BC-ALAgents". Left
 #                  null in the repo; CI sets BC_PR_REVIEW_ROOT (which takes precedence).
@@ -200,6 +200,7 @@ mcp:
 #                  CLI flags (--bcquality-repo/-ref/-local-path) override these.
 pr_review:
   path: null
+  min_severity: Low
   bcquality:
     repo: null
     ref: null

@@ -31,13 +31,15 @@ A gold entry may also declare **`ignored_comments`** — legitimate-but-optional
 
 `code-review` is the evaluation contract: it owns the dataset, structured `review.json` output, scorer, result schema, and leaderboard schema. A runner is the system under test. The same entries can be evaluated through the generic GitHub Copilot CLI and Claude Code runners, allowing direct cross-system comparisons under one scorer.
 
-BC PR Review is a separate production-fidelity runner, analogous to BCal for `nl2al`. It runs the BC-ALAgents review engine with BCQuality while remaining fixed to the `code-review` category:
+BC PR Review is a separate agent harness fixed to the `code-review` category. It runs the production BC-ALAgents review engine with BCQuality, while generic Copilot and Claude runners continue to use their own prompts and configuration:
 
 ```text
 bcbench evaluate copilot <entry> --category code-review
 bcbench evaluate claude <entry> --category code-review
 bcbench evaluate pr-review <entry>
 ```
+
+The evaluation workflow pins BC-ALAgents to a commit SHA, and each result records the exact engine revision and filtered BCQuality content. Engine updates require a new BC-Bench version and must record that SHA in the release notes.
 
 ## Baseline Leaderboard
 

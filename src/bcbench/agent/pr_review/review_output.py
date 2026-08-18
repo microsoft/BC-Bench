@@ -1,21 +1,23 @@
-"""Map the engine's findings report onto BC-Bench's review.json schema.
+"""Map production-normalized engine findings onto BC-Bench's review.json schema.
 
-The BC-ALAgents engine writes ``agent-output.txt`` (the harvested
-``_review-report.json``) in its output directory. Each finding is shaped like::
+The BC-ALAgents engine writes ``al-code-review-findings.json`` after its production
+parsing and filtering stages. Each finding is shaped like::
 
     {
+      "filePath": "<repo-relative path>",
+      "lineNumber": <int>,
       "severity": "Critical|High|Medium|Low",
-      "location": { "file": "<repo-relative path>", "line": <int> },
-      "message": "<human-readable finding>",
       "domain": "<domain>",
+      "issue": "<human-readable finding>",
+      "recommendation": "<optional guidance>",
       ...
     }
 
 BC-Bench's code-review scorer instead reads ``review.json`` from the repo root as
 a flat list of ``{file, line_start, line_end, severity, body}`` objects (see
 ``bcbench.evaluate.review_parsing.parse_review_output``). This module performs the
-one transform between the two so the engine's generate half plugs into the
-existing scoring pipeline unchanged.
+one transform between the two so the production engine plugs into the existing
+scoring pipeline unchanged.
 """
 
 import json
@@ -30,7 +32,7 @@ __all__ = ["engine_report_to_review_comments", "load_engine_report"]
 
 
 def load_engine_report(raw_output: str) -> dict[str, Any] | None:
-    """Parse the engine's ``agent-output.txt`` text into a report dict.
+    """Parse the engine's normalized findings artifact into a report dict.
 
     Returns ``None`` when the text is empty or not a JSON object.
     """
@@ -39,7 +41,7 @@ def load_engine_report(raw_output: str) -> dict[str, Any] | None:
     try:
         report = json.loads(raw_output)
     except json.JSONDecodeError:
-        logger.warning("Engine agent-output.txt is not valid JSON")
+        logger.warning("Engine findings artifact is not valid JSON")
         return None
     if not isinstance(report, dict):
         logger.warning(f"Engine report is not a JSON object (got {type(report).__name__})")
@@ -67,14 +69,12 @@ def engine_report_to_review_comments(report: dict[str, Any]) -> list[dict[str, A
         if not isinstance(finding, dict):
             continue
 
-        location = finding.get("location")
-        location = location if isinstance(location, dict) else {}
-        file_value = location.get("file")
-        line_value = location.get("line")
-
-        # The finding's human text: prefer the rendered message, then the
-        # structured issue/recommendation the signature is built from.
-        body = finding.get("message") or finding.get("issue") or finding.get("recommendation")
+        file_value = finding.get("filePath")
+        line_value = finding.get("lineNumber")
+        issue = finding.get("issue")
+        recommendation = finding.get("recommendation")
+        body_parts = [value.strip() for value in (issue, recommendation) if isinstance(value, str) and value.strip()]
+        body = "\n\nRecommendation: ".join(body_parts)
 
         if not isinstance(file_value, str) or not file_value.strip():
             continue

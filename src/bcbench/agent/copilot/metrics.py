@@ -34,7 +34,12 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
         output_lines: Lines from Copilot CLI stderr output
         session_log_path: Optional path to session log file for tool usage parsing
 
-    Expected output format (v1.0.57):
+    Expected output format (v1.0.81):
+        Changes    +30 -0
+        AI Credits 281 (21m 6s)
+        Tokens     ↑ 17.7m (16.5m cached, 1.1m written) • ↓ 171.2k (37.0k reasoning)
+
+    Previous output format:
         Changes    +67 -0
         Requests   15 Premium (6m 47s)
         Tokens     ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)
@@ -58,6 +63,8 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
     llm_duration: float | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    premium_requests: float | None = None
+    ai_credits: float | None = None
     turn_count: int | None = None
 
     # Parse turn count from session log if provided
@@ -83,12 +90,12 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
             seconds = float(duration_match.group(2))
             execution_time = minutes * 60 + seconds
 
-        # New format: "Requests  0.33 Premium (1m 45s)" — extract session time from parenthesized duration
+        # Current formats include the session time after either cost unit.
         if execution_time is None:
-            requests_match = re.search(r"Requests\s+[\d.]+\s+Premium\s+\((?:(\d+)m\s*)?(\d+(?:\.\d+)?)s\)", output_text)
-            if requests_match:
-                minutes = int(requests_match.group(1)) if requests_match.group(1) else 0
-                seconds = float(requests_match.group(2))
+            cost_match = re.search(r"(?:Requests\s+[\d.]+\s+Premium|AI Credits\s+[\d.]+)\s+\((?:(\d+)m\s*)?(\d+(?:\.\d+)?)s\)", output_text)
+            if cost_match:
+                minutes = int(cost_match.group(1)) if cost_match.group(1) else 0
+                seconds = float(cost_match.group(2))
                 execution_time = minutes * 60 + seconds
 
         # Token usage — legacy format: "1.3m in, 11.6k out"
@@ -105,13 +112,34 @@ def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = N
                 prompt_tokens = _parse_token_count(tokens_match.group(1))
                 completion_tokens = _parse_token_count(tokens_match.group(2))
 
-        if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None or turn_count is not None:
+        premium_match = re.search(
+            r"(?:Total usage est:\s*(\d+(?:\.\d+)?)\s+Premium requests?|Requests\s+(\d+(?:\.\d+)?)\s+Premium)",
+            output_text,
+        )
+        if premium_match:
+            premium_requests = float(premium_match.group(1) or premium_match.group(2))
+
+        ai_credits_match = re.search(r"AI Credits\s+(\d+(?:\.\d+)?)", output_text)
+        if ai_credits_match:
+            ai_credits = float(ai_credits_match.group(1))
+
+        if (
+            execution_time is not None
+            or llm_duration is not None
+            or prompt_tokens is not None
+            or completion_tokens is not None
+            or premium_requests is not None
+            or ai_credits is not None
+            or turn_count is not None
+        ):
             return AgentMetrics(
                 execution_time=execution_time,
                 llm_duration=llm_duration,
                 turn_count=turn_count,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
+                premium_requests=premium_requests,
+                ai_credits=ai_credits,
             )
 
     except Exception:

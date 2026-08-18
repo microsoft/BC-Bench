@@ -24,7 +24,8 @@ def _experiment_metadata(experiment: ExperimentConfiguration | None, git_ref: st
     is_experiment: bool = experiment is not None and not experiment.is_empty()
     return {
         "EvalRunType": "experiment" if is_experiment else "baseline",
-        "experiment": experiment.model_dump(mode="json") if (is_experiment and experiment) else None,
+        "experiment": experiment.model_dump(mode="json", exclude={"provenance"}) if (is_experiment and experiment) else None,
+        "provenance": experiment.provenance.model_dump(mode="json") if experiment and experiment.provenance else None,
         "git_branch": git_ref,
         "benchmark_version": benchmark_version,
     }
@@ -61,6 +62,8 @@ def write_bceval_results(
                 **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
                 "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
+                "premium_requests": (result.metrics.premium_requests if result.metrics else None) or 0,
+                "ai_credits": (result.metrics.ai_credits if result.metrics else None) or 0,
                 "llm_duration": (result.metrics.llm_duration if result.metrics else None) or 0,
                 "latency": (result.metrics.execution_time if result.metrics else None) or 0,
                 "turn_count": (result.metrics.turn_count if result.metrics else None) or 0,

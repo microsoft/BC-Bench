@@ -1,5 +1,7 @@
 """Git repository operations."""
 
+import hashlib
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -79,11 +81,62 @@ def fetch_commit_if_missing(repo_path: Path, commit: str) -> None:
     logger.info(f"Commit {commit} fetched")
 
 
-def commit_changes(repo_path: Path, message: str) -> None:
+def init_repo(repo_path: Path) -> None:
+    repo_path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+
+
+def has_changes(repo_path: Path) -> bool:
+    result = subprocess.run(["git", "status", "--porcelain"], cwd=repo_path, capture_output=True, encoding="utf-8", text=True, check=True)
+    return bool(result.stdout.strip())
+
+
+def get_repository_revision(repo_path: Path) -> str:
+    """Return HEAD plus a deterministic fingerprint when the worktree is dirty."""
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        text=True,
+        check=True,
+    ).stdout.strip()
+    diff = subprocess.run(
+        ["git", "diff", "--binary", "--no-ext-diff", "HEAD", "--"],
+        cwd=repo_path,
+        capture_output=True,
+        check=True,
+    ).stdout
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        cwd=repo_path,
+        capture_output=True,
+        check=True,
+    ).stdout
+    untracked_paths = sorted(path for path in untracked.split(b"\0") if path)
+    if not diff and not untracked_paths:
+        return head
+
+    digest = hashlib.sha256(diff)
+    for raw_path in untracked_paths:
+        digest.update(b"\0")
+        digest.update(raw_path)
+        digest.update(b"\0")
+        digest.update((repo_path / os.fsdecode(raw_path)).read_bytes())
+    return f"{head}+dirty.{digest.hexdigest()[:12]}"
+
+
+def commit_changes(repo_path: Path, message: str, *, allow_empty: bool = False, no_verify: bool = False) -> None:
     logger.info(f"Committing changes: {message}")
     subprocess.run(["git", "add", "-A"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    commit_args = ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit"]
+    if allow_empty:
+        commit_args.append("--allow-empty")
+    if no_verify:
+        commit_args.append("--no-verify")
+    commit_args.extend(["-m", message])
     subprocess.run(
-        ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit", "--allow-empty", "-m", message],
+        commit_args,
         cwd=repo_path,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

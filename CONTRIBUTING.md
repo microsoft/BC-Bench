@@ -133,6 +133,13 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 4. Run focused tests for the integration, then perform a test evaluation for tools exposed to the agent.
 5. Bump the benchmark version according to the Versioning Policy. Tool changes that may affect evaluation results normally require a minor bump.
 
+### Bump the BC PR Review engine
+
+1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/workflows/pr-review-evaluation.yml`
+2. Run a test evaluation through the `pr-review` workflow
+3. Bump the BC-Bench version following the Versioning Policy
+4. Include the exact BC-ALAgents commit SHA in the BC-Bench release notes
+
 ### Create a new release
 
 After you bump the version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy, use the repository's [`create-release` skill](.github/skills/create-release/SKILL.md) to prepare release notes after pushing your changes. The skill screens merged PRs since the previous version tag and returns Markdown covering only changes that may affect evaluation results, without creating the tag or release.

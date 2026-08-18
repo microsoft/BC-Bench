@@ -1,6 +1,5 @@
 """CLI commands for running agents."""
 
-from pathlib import Path
 from typing import Annotated, cast
 
 import typer
@@ -23,39 +22,6 @@ logger = get_logger(__name__)
 _config = get_config()
 
 run_app = typer.Typer(help="Run agents on single dataset entry")
-
-
-def _run_pr_review(
-    entry_id: str,
-    model: str,
-    repo_path: Path,
-    output_dir: Path,
-    bcquality_ref: str | None = None,
-    bcquality_repo: str | None = None,
-    bcquality_local_path: str | None = None,
-    min_severity: str | None = None,
-) -> None:
-    """Generate review.json for a code-review entry via BC PR Review.
-
-    Backs the dedicated 'run pr-review' runner. The runner is fixed to the code-review
-    category and uses the production BC-ALAgents generate path. BCQuality source and
-    severity default to the engine config when not overridden.
-    """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    category.pipeline.setup_workspace(entry, repo_path)
-
-    run_pr_review_agent(
-        entry=entry,
-        repo_path=repo_path,
-        model=model,
-        category=category,
-        output_dir=output_dir,
-        bcquality_ref=bcquality_ref,
-        bcquality_repo=bcquality_repo,
-        bcquality_local_path=bcquality_local_path,
-        min_severity=min_severity,
-    )
 
 
 @run_app.command("copilot")
@@ -129,7 +95,7 @@ def run_claude(
 @run_app.command("pr-review")
 def run_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    model: CopilotModel = "claude-sonnet-5",
+    model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     bcquality_ref: Annotated[str | None, typer.Option(help="Override the BCQuality ref (defaults to the engine's pinned ref)")] = None,
@@ -144,26 +110,27 @@ def run_pr_review(
     category can also run through the generic copilot and claude commands for cross-system
     comparison. Writes review.json without scoring; for full evaluation use
     'bcbench evaluate pr-review'. Requires a local BC-ALAgents checkout
-    (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT), PowerShell 7+, and GH_TOKEN.
+    (pr_review.path in config.yaml or BC_PR_REVIEW_ROOT), PowerShell 7+, and an
+    authenticated Copilot CLI.
 
     Example:
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
     """
-    _run_pr_review(
-        entry_id,
+    category = EvaluationCategory.CODE_REVIEW
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    category.pipeline.setup_workspace(entry, repo_path)
+
+    run_pr_review_agent(
+        entry=entry,
         model=model,
         repo_path=repo_path,
+        category=category,
         output_dir=output_dir,
         bcquality_ref=bcquality_ref,
         bcquality_repo=bcquality_repo,
         bcquality_local_path=bcquality_local_path,
         min_severity=min_severity,
     )
-
-
-# Compatibility for the command name introduced in v0.8.0. Keep it out of public help
-# because "code-review" names the category, not this specific runner.
-run_app.command("code-review", hidden=True, deprecated=True)(run_pr_review)
 
 
 @run_app.command("bcal")

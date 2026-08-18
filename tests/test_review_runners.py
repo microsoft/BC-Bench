@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -65,17 +64,26 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
         patch.object(CodeReviewEntry, "load", return_value=[object()]),
         patch.object(CodeReviewPipeline, "execute", side_effect=lambda context, runner: contexts.append(context)),
     ):
-        evaluate_commands._run_pr_review_evaluation(
-            "synthetic__style-018",
-            model="gpt-5.6-luna",
-            repo_path=tmp_path,
-            output_dir=tmp_path / "out",
-            run_id="pr-review",
+        result = CliRunner().invoke(
+            app,
+            [
+                "evaluate",
+                "pr-review",
+                "synthetic__style-018",
+                "--repo-path",
+                str(tmp_path),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--run-id",
+                "pr-review",
+            ],
         )
 
+    assert result.exit_code == 0, result.exception
     assert len(contexts) == 1
     assert contexts[0].agent_name is AgentHarness.PR_REVIEW
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
+    assert contexts[0].model == "gpt-5.6-luna"
 
 
 def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
@@ -85,18 +93,26 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
         patch.object(CodeReviewPipeline, "setup_workspace"),
         patch.object(run_commands, "run_pr_review_agent") as agent_runner,
     ):
-        run_commands._run_pr_review(
-            "synthetic__style-018",
-            model="gpt-5.6-luna",
-            repo_path=tmp_path,
-            output_dir=tmp_path / "out",
+        result = CliRunner().invoke(
+            app,
+            [
+                "run",
+                "pr-review",
+                "synthetic__style-018",
+                "--repo-path",
+                str(tmp_path),
+                "--output-dir",
+                str(tmp_path / "out"),
+            ],
         )
 
+    assert result.exit_code == 0, result.exception
     assert agent_runner.call_args.kwargs["entry"] is entry
     assert agent_runner.call_args.kwargs["category"] is EvaluationCategory.CODE_REVIEW
+    assert agent_runner.call_args.kwargs["model"] == "gpt-5.6-luna"
 
 
-def test_pr_review_is_public_command_and_code_review_alias_is_hidden() -> None:
+def test_pr_review_is_public_command() -> None:
     runner = CliRunner()
 
     run_help = runner.invoke(app, ["run", "--help"])
@@ -106,28 +122,3 @@ def test_pr_review_is_public_command_and_code_review_alias_is_hidden() -> None:
     assert evaluate_help.exit_code == 0
     assert "pr-review" in run_help.stdout
     assert "pr-review" in evaluate_help.stdout
-    assert re.search(r"^\s*│\s+code-review\s", run_help.stdout, re.MULTILINE) is None
-    assert re.search(r"^\s*│\s+code-review\s", evaluate_help.stdout, re.MULTILINE) is None
-
-
-def test_hidden_code_review_aliases_remain_compatible(tmp_path: Path) -> None:
-    runner = CliRunner()
-    with (
-        patch.object(CodeReviewEntry, "load", return_value=[object()]),
-        patch.object(CodeReviewPipeline, "setup_workspace"),
-        patch.object(CodeReviewPipeline, "execute"),
-        patch.object(run_commands, "run_pr_review_agent"),
-    ):
-        run_result = runner.invoke(
-            app,
-            ["run", "code-review", "synthetic__style-018", "--repo-path", str(tmp_path), "--output-dir", str(tmp_path / "run")],
-        )
-        evaluate_result = runner.invoke(
-            app,
-            ["evaluate", "code-review", "synthetic__style-018", "--repo-path", str(tmp_path), "--output-dir", str(tmp_path / "evaluate")],
-        )
-
-    assert run_result.exit_code == 0
-    assert evaluate_result.exit_code == 0
-    assert "deprecated" in run_result.stderr.lower()
-    assert "deprecated" in evaluate_result.stderr.lower()

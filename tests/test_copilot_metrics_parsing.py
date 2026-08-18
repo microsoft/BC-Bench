@@ -22,6 +22,7 @@ def test_parse_metrics_full_output_gpt5():
     assert result.llm_duration == 34.5
     assert result.prompt_tokens == 125500
     assert result.completion_tokens == 3600
+    assert result.premium_requests == 1.0
 
 
 def test_parse_metrics_full_output_haiku45():
@@ -42,6 +43,7 @@ def test_parse_metrics_full_output_haiku45():
     assert result.llm_duration == 97.1
     assert result.prompt_tokens == 1100000
     assert result.completion_tokens == 6600
+    assert result.premium_requests == 0.33
 
 
 def test_parse_metrics_llm_duration_seconds_only():
@@ -211,6 +213,23 @@ def test_parse_metrics_new_format_full():
     assert result.execution_time == 407.0
     assert result.prompt_tokens == 1600000
     assert result.completion_tokens == 20700
+    assert result.premium_requests == 15.0
+
+
+def test_parse_metrics_ai_credits_format():
+    output_lines = [
+        "Changes    +30 -0\n",
+        "AI Credits 281 (21m 6s)\n",
+        "Tokens     ↑ 17.7m (16.5m cached, 1.1m written) • ↓ 171.2k (37.0k reasoning)\n",
+    ]
+
+    result = parse_metrics(output_lines)
+
+    assert result is not None
+    assert result.execution_time == 1266.0
+    assert result.prompt_tokens == 17700000
+    assert result.completion_tokens == 171200
+    assert result.ai_credits == 281.0
 
 
 def test_parse_metrics_new_format_seconds_only():
