@@ -110,34 +110,32 @@ This ensures the leaderboard always compares apples-to-apples. When bumping vers
 
 > Routine tasks for maintainers working on `microsoft/BC-Bench` directly. Fork users will rarely need these unless mirroring upstream changes.
 
-### Bump Coding Agent/Tool versions
+### Update an agent harness or model list
 
-Below are the steps you can follow to update coding agents' version, usually needed in scenarios like new model release.
+Use the repository's [`update-agent-harness` skill](.github/skills/update-agent-harness/SKILL.md) for the complete procedure. Invoke it when updating GitHub Copilot CLI, Claude Code, or their curated model choices.
 
-Similar process to bump AL MCP's version, search for "Microsoft.Dynamics.BusinessCentral.Development.Tools" to identify files to modify.
+The short maintainer checklist is:
 
-1. Find the corresponding workflow file `.github/workflows/<agent-name>-evaluation.yml`
-2. In the file, find the step that installs the coding agent (e.g. Install GitHub Copilot)
-3. Manually change the hardcoded version (it's by design that version is hardcoded)
-4. When you are done, bump BC-Bench's version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy
-5. Commit your changes, and merge into `main` branch
-6. [Create a new release](https://github.com/microsoft/BC-Bench/releases/new)
+1. Find the current hardcoded CLI pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml).
+2. Review first-party release notes for every version between the current and target pins. Check BC-Bench's flags, authentication, non-interactive behavior, logs, and metrics parsing for breaking changes.
+3. Curate models for benchmark value. Do not add every available model: prefer models that represent a new frontier, provider, capability, or cost tier, and skip older or redundant models that add little comparative value.
+4. Keep model choices and defaults synchronized across `src/bcbench/cli_options.py`, evaluation workflows, command defaults, and judge configuration.
+5. Bump the benchmark version in [`pyproject.toml`](pyproject.toml) according to the Versioning Policy. Harness and model-list changes normally require a minor bump.
+6. Run focused compatibility tests, pre-commit, and a test evaluation with the evaluation identity before merging.
 
-### Add new models
+### Update a tool
 
-You usually need to bump the coding agents' version first to be able to use the newly released model.
+Keep evaluation tools pinned so benchmark runs remain reproducible. For example, the AL MCP and LSP tooling is installed from `Microsoft.Dynamics.BusinessCentral.Development.Tools`.
 
-1. Find the corresponding workflow file `.github/workflows/<agent-name>-evaluation.yml`
-2. Add the model as a new input option in the `workflow_dispatch` trigger
-3. Add the model into the corresponding list in [cli_options.py](https://github.com/microsoft/BC-Bench/blob/main/src/bcbench/cli_options.py)
-4. Commit your changes, and merge into `main` branch
-5. Do a test run before a full one
+1. Search for the package or executable name and identify every hardcoded pin.
+2. Review first-party release notes for every intervening version, including protocol, command-line, runtime, and output changes that could affect the agent or evaluator.
+3. Update all applicable pins consistently and make any required compatibility changes.
+4. Run focused tests for the integration, then perform a test evaluation for tools exposed to the agent.
+5. Bump the benchmark version according to the Versioning Policy. Tool changes that may affect evaluation results normally require a minor bump.
 
 ### Create a new release
 
-After you bump the version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy, you should then [Create a new release](https://github.com/microsoft/BC-Bench/releases/new) after pushing your changes.
-
-The process is straightforward, when you are not sure, check the previous releases for reference.
+After you bump the version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy, use the repository's [`create-release` skill](.github/skills/create-release/SKILL.md) to prepare release notes after pushing your changes. The skill screens merged PRs since the previous version tag and returns Markdown covering only changes that may affect evaluation results, without creating the tag or release.
 
 1. Create a new tag following the version in `pyproject.toml` (e.g. v1.1.2)
 2. Title can simply be the same as the newly created tag

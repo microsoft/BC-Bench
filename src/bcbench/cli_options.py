@@ -23,6 +23,17 @@ ContainerPassword = Annotated[str, typer.Option(envvar="BC_SERVER_PASSWORD", hel
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
 
+
+def reject_code_review(category: EvaluationCategory, verb: str) -> None:
+    """Guard general harness commands (copilot/claude) against the code-review category.
+
+    code-review is not a harness choice: it is always served by the dedicated engine
+    command, so a general harness must refuse it rather than run a divergent review.
+    """
+    if category is EvaluationCategory.CODE_REVIEW:
+        raise typer.BadParameter(f"code-review is not available under a general harness; use 'bcbench {verb} code-review' instead.")
+
+
 CopilotModel = Annotated[
     Literal[
         "claude-sonnet-5",
@@ -31,7 +42,7 @@ CopilotModel = Annotated[
         "gpt-5.6-terra",
         "gpt-5.6-luna",
         "gpt-5.3-codex",
-        "mai-code-1-flash-picker",
+        "mai-code-1.1-flash",
         "gemini-3.6-flash",
     ],
     typer.Option(help="Copilot model to use"),

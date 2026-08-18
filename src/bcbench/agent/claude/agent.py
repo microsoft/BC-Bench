@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -68,6 +69,7 @@ def run_claude_code(
             claude_cmd,
             "--output-format=json",
             "--strict-mcp-config",  # Only use MCP servers from --mcp-config, ignoring all other MCP configurations
+            "--setting-sources=project,local",
             f"--model={model}",
             "--permission-mode=bypassPermissions",  # bypassPermissions is needed to use tools and mcp servers
             "--disallowedTools",
@@ -99,6 +101,10 @@ def run_claude_code(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
+            env={
+                **os.environ,
+                "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+            },
             timeout=_config.timeout.agent_execution,
             check=True,
             capture_output=True,

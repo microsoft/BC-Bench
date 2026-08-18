@@ -25,7 +25,7 @@ on:
           - "gpt-5.6-terra"
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
-          - "mai-code-1-flash-picker"
+          - "mai-code-1.1-flash"
           - "gemini-3.6-flash"
       category:
         description: "Dataset category (must be patch-based)"
@@ -94,7 +94,7 @@ jobs:
           node-version: 24
 
       - name: Install evaluation CLIs
-        uses: $/.github/actions/install-eval-clis
+        uses: $/.github/actions/install-agent-harnesses
 
       - name: Run file-path identification for entry ${{ matrix.entry }}
         timeout-minutes: 20
