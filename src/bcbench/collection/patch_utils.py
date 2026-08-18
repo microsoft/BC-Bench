@@ -14,7 +14,7 @@ from bcbench.logger import get_logger
 logger = get_logger(__name__)
 _config = get_config()
 
-_DIFF_HEADER = re.compile(r"^diff --git a/(?P<path>.+?) b/", re.MULTILINE)
+_DIFF_HEADER = re.compile(r"^diff --git a/.+? b/(?P<path>.+)$", re.MULTILINE)
 
 
 def separate_patches(diff: str, test_identifiers: tuple[str, ...]) -> tuple[str, str, str]:
@@ -184,6 +184,13 @@ def split_patch_by_projects(patch: str, test_projects: list[str]) -> tuple[str, 
     prefixes = tuple(f"{project.replace('\\', '/').strip('/').lower()}/" for project in test_projects)
 
     headers = list(_DIFF_HEADER.finditer(patch))
+    if not headers:
+        logger.warning("No 'diff --git' header found in patch; discarding entire patch content.")
+        return "", ""
+
+    if patch[: headers[0].start()].strip():
+        logger.warning("Discarding non-whitespace content preceding the first 'diff --git' header in patch.")
+
     boundaries = [match.start() for match in headers] + [len(patch)]
 
     app_parts: list[str] = []
