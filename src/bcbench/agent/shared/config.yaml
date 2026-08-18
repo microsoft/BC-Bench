@@ -13,11 +13,18 @@ prompt:
     Task: Fix the issue described below test-first {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
 
     1. Write ONE new test that reproduces the issue. Add it to an EXISTING test codeunit
-       unless no suitable test suite exists. It must fail against the current, unfixed code.
+       unless no suitable test suite exists. The test MUST live in the repository's existing
+       AL test project - the project that already contains test codeunits (declaring
+       `Subtype = Test;`) - never in an application project. If you must create a new test
+       codeunit, it still belongs inside that existing test project. It must fail against the
+       current, unfixed code.
     2. Then implement the minimal fix that makes that test pass.
 
     Important constraints:
     - Do NOT modify existing tests
+    - Add exactly ONE new `[Test]` procedure and no extras: every `[Test]` procedure you add
+      is run together as a single batch, and ALL of them must fail before the fix and pass
+      after it, so a stray extra test can fail the whole run even if your fix is correct
     {% if al_mcp %}
     - Build, publish and run your test to confirm it fails before the fix and passes after
     {% else %}

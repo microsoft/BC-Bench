@@ -57,3 +57,18 @@ def test_prompt_forbids_building_when_al_mcp_is_off(tmp_path):
 def test_prompt_nudges_the_skill_only_when_skills_are_enabled(tmp_path):
     assert "bc-fix-bug" in render(tmp_path, skills_enabled=True)
     assert "bc-fix-bug" not in render(tmp_path, skills_enabled=False)
+
+
+def test_prompt_places_the_test_in_the_existing_test_project(tmp_path):
+    prompt = render(tmp_path)
+
+    assert "existing" in prompt.lower()
+    assert "test project" in prompt.lower()
+    assert "never in an application project" in prompt.lower()
+
+
+def test_prompt_warns_that_extra_tests_break_the_run(tmp_path):
+    prompt = render(tmp_path)
+
+    assert "exactly ONE" in prompt
+    assert "run together" in prompt
