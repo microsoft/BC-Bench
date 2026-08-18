@@ -80,12 +80,9 @@ class LeaderboardAggregate(BaseModel, ABC):
 
 
 class JudgeScoredLeaderboardAggregate(LeaderboardAggregate, ABC):
-    """Aggregate for categories whose scoring involves an LLM judge, carrying the judge model shared by the aggregated runs.
+    """Aggregate for categories whose scoring involves an LLM judge, carrying the judge model shared by the aggregated runs."""
 
-    Nullable because leaderboard runs recorded before the judge model was pinned carry none.
-    """
-
-    judge_model: str | None
+    judge_model: str
 
     @classmethod
     def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:

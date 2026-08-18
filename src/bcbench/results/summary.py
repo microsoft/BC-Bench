@@ -183,12 +183,9 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
 
 class JudgeScoredEvaluationResultSummary(EvaluationResultSummary, ABC):
-    """Summary for categories whose scoring involves an LLM judge, carrying the judge model of the summarized run.
+    """Summary for categories whose scoring involves an LLM judge, carrying the judge model of the summarized run."""
 
-    Nullable because leaderboard runs recorded before the judge model was pinned carry none.
-    """
-
-    judge_model: str | None
+    judge_model: str
 
     @classmethod
     def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
