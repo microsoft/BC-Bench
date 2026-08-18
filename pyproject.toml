@@ -87,6 +87,13 @@ extend-select = [
     "PERF",  # perflint: avoid needless per-iteration overhead (prefer extend/comprehensions)
     "RSE",   # flake8-raise: drop redundant parentheses on bare exception raises
     "PGH",   # pygrep-hooks: require codes on noqa/type-ignore comments (PGH003/PGH004)
+    "BLE",   # flake8-blind-except: require specific exception handling
+    "DTZ",   # flake8-datetimez: require timezone-aware datetimes
+    "T10",   # flake8-debugger: prevent committed debugger calls
+    "EXE",   # flake8-executable: validate shebangs and executable permissions
+    "FA",    # flake8-future-annotations: modern annotation compatibility
+    "FLY",   # flynt: prefer readable f-strings over static joins
+    "PIE",   # flake8-pie: miscellaneous correctness and simplification checks
     "S307",  # flake8-bandit: ban eval (was PGH001, which ruff removed in favour of this rule)
 ]
 

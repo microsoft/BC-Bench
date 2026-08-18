@@ -62,7 +62,7 @@ def _patch_credential_from_local_file(cert_file: Path) -> None:
         raise RuntimeError(f"{_CERT_FILE_ENV}={cert_file} requires {_CERT_TENANT_ENV} and {_CERT_CLIENT_ENV} to also be set.")
 
     from azure.identity import CertificateCredential
-    from bc_eval.capi import capi_auth
+    from bc_eval.capi import capi_auth  # ty: ignore[unresolved-import] - bc-eval is installed only in the external bridge environment
 
     def _credential_from_file() -> CertificateCredential:
         # send_certificate_chain=True switches azure-identity from thumbprint-based
@@ -116,7 +116,7 @@ def main() -> int:
         raise TypeError("External AI request requires a messages array.")
 
     try:
-        from bc_eval.capi.capi_model import CapiModel
+        from bc_eval.capi.capi_model import CapiModel  # ty: ignore[unresolved-import] - bc-eval is installed only in the external bridge environment
     except ImportError as exc:
         raise RuntimeError("bc-eval[capi] is required for the bcal CAPI bridge.") from exc
     _maybe_install_local_cert_credential()

@@ -61,8 +61,8 @@ uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path
 # Run tests
 uv run pytest --cov=src/bcbench --cov-report=term-missing
 
-# Lint and format
-uv run pre-commit run --all-files
+# Run the canonical local validation
+uv run pre-commit run --all-files && uv run pytest
 ```
 
 ## After Forking
