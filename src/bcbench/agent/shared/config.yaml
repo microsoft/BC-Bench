@@ -23,8 +23,8 @@ prompt:
     Important constraints:
     - Do NOT modify existing tests
     - Add exactly ONE new `[Test]` procedure and no extras: every `[Test]` procedure you add
-      is run together as a single batch, and ALL of them must fail before the fix and pass
-      after it, so a stray extra test can fail the whole run even if your fix is correct
+      is run together as a single batch, and ALL of them must pass after the fix, so a stray
+      extra test can fail the whole run even if your fix is correct
     {% if al_mcp %}
     - Build, publish and run your test to confirm it fails before the fix and passes after
     {% else %}
