@@ -29,6 +29,7 @@ Look for these patterns in the code under test:
 | Report request page                   | `[RequestPageHandler]`      |
 | `Hyperlink()`                         | `[HyperlinkHandler]`        |
 | `Notification.Send()`                 | `[SendNotificationHandler]` |
+| Notification recall                   | `[RecallNotificationHandler]` |
 
 ## 3. Analyze TableRelation Constraints
 
@@ -80,6 +81,47 @@ end;
 procedure ModalPageHandler(var TestPage: TestPage "Page Name")
 begin
     TestPage.OK().Invoke();
+end;
+
+[StrMenuHandler]
+procedure StrMenuHandler(Options: Text[1024]; var Choice: Integer; Instruction: Text[1024])
+begin
+    Choice := 1;
+end;
+
+[PageHandler]
+procedure PageHandler(var TestPage: TestPage "Page Name")
+begin
+    TestPage.Close();
+end;
+
+[ReportHandler]
+procedure ReportHandler(var TestReport: Report "Report Name")
+begin
+end;
+
+[RequestPageHandler]
+procedure RequestPageHandler(var RequestPage: TestRequestPage)
+begin
+    RequestPage.OK().Invoke();
+end;
+
+[HyperlinkHandler]
+procedure HyperlinkHandler(Hyperlink: Text[1024])
+begin
+    // Empty - suppresses hyperlink navigation
+end;
+
+[SendNotificationHandler]
+procedure SendNotificationHandler(TheNotification: Notification): Boolean
+begin
+    exit(true);
+end;
+
+[RecallNotificationHandler]
+procedure RecallNotificationHandler(TheNotification: Notification): Boolean
+begin
+    exit(true);
 end;
 ```
 
