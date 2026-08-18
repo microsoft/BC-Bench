@@ -11,6 +11,16 @@ class BuildRate:
         return metadata.get("build", False)
 
 
+class TestCorrectRate:
+    def __call__(self, *, metadata: dict, **kwargs: object) -> bool:
+        return metadata.get("test_correct", False)
+
+
+class FixCorrectRate:
+    def __call__(self, *, metadata: dict, **kwargs: object) -> bool:
+        return metadata.get("fix_correct", False)
+
+
 class PrePatchFailedRate:
     def __call__(self, *, metadata: dict, **kwargs: object) -> bool:
         return metadata.get("pre_patch_failed", False)

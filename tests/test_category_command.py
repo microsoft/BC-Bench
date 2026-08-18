@@ -94,3 +94,16 @@ def test_runtime_config_marks_nl2al_as_repoless(tmp_path, monkeypatch):
     assert result.exit_code == 0
     contents = output_file.read_text(encoding="utf-8")
     assert "requires-repo=false" in contents
+
+
+def test_bceval_config_emits_bug_fix_tdd_evaluators(tmp_path, monkeypatch):
+    output_file = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    result = runner.invoke(app, ["category", "bceval-config", "--category", "bug-fix"])
+
+    assert result.exit_code == 0
+    contents = output_file.read_text(encoding="utf-8")
+    assert "evaluators=resolution_rate,build_rate,test_correct_rate,fix_correct_rate,pre_patch_failed_rate,post_patch_passed_rate" in contents
+    assert "core_score=ResolutionRate" in contents

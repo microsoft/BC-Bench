@@ -367,7 +367,7 @@ class EvaluationCategory(StrEnum):
         """
         match self:
             case EvaluationCategory.BUG_FIX:
-                return ["resolution_rate", "build_rate"]
+                return ["resolution_rate", "build_rate", "test_correct_rate", "fix_correct_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
             case EvaluationCategory.TEST_GENERATION:
                 return ["resolution_rate", "build_rate", "pre_patch_failed_rate", "post_patch_passed_rate"]
             case EvaluationCategory.CODE_REVIEW:
