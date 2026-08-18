@@ -30,12 +30,12 @@ Suggest a list of comprehensive tests covering positive, negative, and edge case
 **Exception for subagent invocations:** If the caller already specified exact tests to implement (e.g., dispatched by the bc-fix-bug orchestrator with specific test names and scenarios), skip this approval step and proceed directly to implementation. The intent is clear when the prompt contains specific test names, scenarios, and expected behaviors rather than a general request.
 
 ## STEP 3: Locate the target test codeunit, then implement the approved tests
-Before your first Edit/Create call, complete <test_placement> and output its one-line placement decision. Then write the tests following <test_structure>, <ui_handlers>, <page_driven_validation>, <table_relations>, and <coding_rules>.
+Before your first Edit/Create call, complete <test_placement> and output its one-line placement decision. Then write the tests using the `al-test-generation` skill's AAA structure, handler methods, and TableRelation conventions (see "Test authoring conventions" below), following <page_driven_validation> and <coding_rules>.
 
 ## STEP 4: Review and refactor
 Apply the following improvements to the implemented tests:
 
-1. **Fix structure**: Ensure all tests follow <test_structure> rules - comments, Initialize(), naming.
+1. **Fix structure**: Ensure all tests follow the `al-test-generation` AAA structure and this document's Test Comments and Tags rules - comments, Initialize(), naming.
 2. **Fix procedure order**: Tests → Initialize → Helpers → Handlers.
 3. **Fix coding**: Apply <coding_rules> - no conditionals, proper assertions, correct handler usage.
 
@@ -89,6 +89,19 @@ End with a brief summary: test placement decision (extended vs new, with the fil
 - If the caller provided a work item ID, use it in the SCENARIO tag: `// [SCENARIO 624745] Brief description`
 - If no work item ID was provided, omit the number: `// [SCENARIO] Brief description`
 - Only add work item numbers to SCENARIO tags when the caller explicitly provides a work item ID
+- `// [FEATURE] [AI test 0.3]` must be the first line after `begin`, followed by `// [SCENARIO]` on the next line
+- Call `Initialize();` immediately after the `[SCENARIO]` comment, before the first `[GIVEN]`
+- Precede each `[GIVEN]`/`[WHEN]`/`[THEN]` comment with a blank line, interleaved with the code it describes
+- In comments, refer to entities with 1-2 letters (e.g. `// [GIVEN] Customer "C" with Sales Invoice "SI"`); variable names must stay FULL words (`CustomerNo`, not `C`)
+- Use rounded amounts without decimals
+
+### Test authoring conventions
+
+The AAA test structure, the UI handler method table and signatures, and the TableRelation rules
+for test data live in the `al-test-generation` skill. Use that skill for those conventions instead
+of duplicating them here. This document covers only what is specific to fixing a bug test-first:
+where the test belongs, the library and coding standards it must follow, and the build, publish
+and run loop.
 
 <test_placement>
 ### Test Placement (reuse before create)
@@ -116,119 +129,6 @@ Test placement: NEW <path> (id <id>) - <which exception> - rejected: <file: reas
 A `NEW` line with no rejected candidates means the search was skipped. Go back and perform it.
 </test_placement>
 
-<test_structure>
-### Test Structure
-
-**Required format:**
-```al
-[Test]
-procedure DescriptiveProcedureName()
-begin
-    // [FEATURE] [AI test 0.3]
-    // [SCENARIO] Brief one-line description
-    Initialize();
-
-    // [GIVEN] Setup preconditions
-    LibrarySales.CreateCustomer(Customer);
-    LibrarySales.CreateSalesInvoice(SalesInvoice, Customer);
-
-    // [GIVEN] More setup preconditions
-    LibraryPurchase.CreateVendor(Vendor);
-    LibraryPurchase.CreatePurchaseInvoice(PurchaseInvoice, Vendor);
-
-    // [WHEN] Execute the action
-    Customer.Validate(Name, 'Test');
-
-    // [THEN] Verify expected outcome
-    Assert.AreEqual('Test', Customer.Name, 'Name should be updated');
-end;
-```
-
-**Rules:**
-
-- `// [FEATURE] [AI test 0.3]` must be first line after `begin`
-- `// [SCENARIO] Description` on next line - include work item ID only when the caller explicitly provides one
-- `Initialize();` immediately after [SCENARIO]
-- Each [GIVEN]/[WHEN]/[THEN] comment must be preceded by an empty line
-- Interleave [GIVEN]/[WHEN]/[THEN] comments with code
-- In COMMENTS, refer to entities with 1-2 letters: "C", "V", "C1" (e.g., `// [GIVEN] Customer "C" with Sales Invoice "SI"`)
-- Variable names must be FULL names, not abbreviated: `CustomerNo`, `VendorNo`, `ItemNo` (NOT `C`, `V`, `CustNo`, `VendNo`)
-- Use rounded amounts without decimals
-</test_structure>
-
-<ui_handlers>
-### UI Handler Methods
-**CRITICAL: Analyze code under test for UI interactions and add required handler methods.**
-
-Tests fail with "Unhandled UI" errors when handlers are missing.
-
-#### When Handlers Are Required
-Handler methods are required when the code under test triggers any UI interaction:
-
-- **ConfirmHandler**: When code calls `Confirm()` (e.g., reversal confirmations, deletion confirmations)
-- **MessageHandler**: When code calls `Message()` to display information
-- **StrMenuHandler**: When code calls `StrMenu()` for user selection
-- **PageHandler**: When code opens a non-modal page (e.g., `Page.Run()`)
-- **ModalPageHandler**: When code opens a modal page (e.g., lookup pages, dialogs)
-- **ReportHandler**: When code runs a report
-- **RequestPageHandler**: When code shows a report request page
-- **HyperlinkHandler**: When code opens a hyperlink
-- **SendNotificationHandler**: When code sends a notification
-- **RecallNotificationHandler**: When code recalls a notification
-
-#### Handler Analysis
-**Before implementing test code, analyze the code path for UI interactions:**
-
-1. Read the procedure being tested and all procedures it calls.
-2. Look for: `Confirm()`, `Message()`, `StrMenu()`, `Page.Run()`, `Page.RunModal()`, `Report.Run()`, `Report.RunModal()`, `Hyperlink()`, `Send()` on Notification.
-3. For each UI interaction found, create the corresponding handler method.
-4. Add handler names to [HandlerFunctions] attribute on the test procedure.
-
-#### Handler Signatures
-| Handler Type | Signature |
-|--------------|-----------|
-| ConfirmHandler | `[ConfirmHandler] procedure <Name>(Question: Text[1024]; var Reply: Boolean)` |
-| MessageHandler | `[MessageHandler] procedure <Name>(Message: Text[1024])` |
-| StrMenuHandler | `[StrMenuHandler] procedure <Name>(Options: Text[1024]; var Choice: Integer; Instruction: Text[1024])` |
-| PageHandler | `[PageHandler] procedure <Name>(var <Page>: TestPage "<Page Name>")` |
-| ModalPageHandler | `[ModalPageHandler] procedure <Name>(var <Page>: TestPage "<Page Name>")` |
-| ReportHandler | `[ReportHandler] procedure <Name>(var <Report>: Report "<Report Name>")` |
-| RequestPageHandler | `[RequestPageHandler] procedure <Name>(var RequestPage: TestRequestPage)` |
-| HyperlinkHandler | `[HyperlinkHandler] procedure <Name>(Hyperlink: Text[1024])` |
-| SendNotificationHandler | `[SendNotificationHandler] procedure <Name>(TheNotification: Notification): Boolean` |
-| RecallNotificationHandler | `[RecallNotificationHandler] procedure <Name>(TheNotification: Notification): Boolean` |
-
-#### Handler Rules
-
-- Every handler listed in [HandlerFunctions] MUST be called during test execution.
-- Handler procedures must be placed after local procedures in the codeunit.
-- Do NOT verify values inside handler procedures - use Library Variable Storage to pass data back to test.
-- For simple confirmations, set `Reply := true` to confirm or `Reply := false` to cancel.
-- Handler names should be descriptive (e.g., `ConfirmHandlerYes`, `ConfirmHandlerNo`, `PostingMessageHandler`).
-
-#### Handler Examples
-```AL
-[Test]
-[HandlerFunctions('ConfirmHandlerYes')]
-procedure ReversedEntryHasOppositeAmount()
-begin
-    // Test code that triggers a confirmation dialog
-end;
-
-[ConfirmHandler]
-procedure ConfirmHandlerYes(Question: Text[1024]; var Reply: Boolean)
-begin
-    Reply := true; // Always confirm
-end;
-
-[MessageHandler]
-procedure MessageHandler(Message: Text[1024])
-begin
-    // Empty handler to suppress message display
-end;
-```
-</ui_handlers>
-
 <page_driven_validation>
 ### Page-Driven Field Validation (CurrFieldNo-gated logic)
 
@@ -251,88 +151,6 @@ Many `OnValidate` triggers (and procedures they call) branch on the global `Curr
 
 **When this matters:** availability/stockout checks, status-open checks, "field can only be changed on the page" guards, and any subscriber to an `OnBeforeValidate`/`OnAfter...` event that itself inspects `CurrFieldNo`.
 </page_driven_validation>
-
-<table_relations>
-### Table Relations
-**CRITICAL: Analyze TableRelation properties before inserting test data.**
-
-Tests fail with validation errors when inserting data that violates TableRelation constraints.
-
-#### Why Table Relation Matters
-The `TableRelation` property establishes lookups into other tables and validates entries. When a field has a `TableRelation`, the value assigned MUST exist in the related table and satisfy any filter conditions.
-
-#### Table Relation Analysis
-**Before inserting test data, analyze the table definition for TableRelation properties:**
-
-1. Read the table definition for all fields that will receive values.
-2. For each field with a `TableRelation` property, identify:
-
-   - The related table and field (e.g., `TableRelation = Customer."No."`)
-   - Any `WHERE` filter conditions (e.g., `WHERE("Balance (LCY)" = FILTER(>= 10000))`)
-   - Any conditional relations using `IF` (e.g., `IF (Type = CONST(Customer)) Customer ELSE IF (Type = CONST(Item)) Item`)
-
-3. Ensure related records exist before assigning values to fields with TableRelation.
-4. Ensure all filter conditions in `WHERE` clauses are satisfied by the related record.
-5. For conditional relations, set the condition field BEFORE assigning the relation field.
-
-#### Table Relation Syntax
-TableRelation can have multiple forms:
-
-- **Simple**: `TableRelation = <TableName>[.<FieldName>]`
-- **Filtered**: `TableRelation = <TableName> WHERE(<Field> = CONST(<Value>))`
-- **Conditional**: `TableRelation = IF (<Condition>) <TableName> ELSE <AnotherTable>`
-- **Field-based filter**: `TableRelation = <TableName> WHERE(<Field> = FIELD(<SourceField>))`
-
-#### Table Relation Rules
-
-- **ALWAYS** read the field definition to check for `TableRelation` before assigning values.
-- **ALWAYS** ensure the related record exists in the referenced table before assignment.
-- **ALWAYS** set condition fields (used in `IF` clauses) BEFORE setting the relation field.
-- **ALWAYS** verify that related records satisfy any `WHERE` filter conditions.
-- **PREFER** using Library* codeunits (e.g., `LibrarySales`, `LibraryPurchase`, `LibraryInventory`) that automatically handle table relations.
-- **NEVER** assign arbitrary values to fields with TableRelation without verifying the related record exists.
-
-#### Table Relation Examples
-```AL
-// BAD: Inserting data without checking TableRelation - will fail validation
-SalesLine."Sell-to Customer No." := 'INVALID-CUSTOMER';  // Customer may not exist!
-SalesLine.Insert();
-
-// GOOD: Create or find related record first, then assign
-Customer.Init();
-Customer."No." := LibraryUtility.GenerateGUID();
-Customer.Insert(true);
-SalesLine."Sell-to Customer No." := Customer."No.";  // Now valid
-SalesLine.Insert();
-
-// GOOD: Use library functions that handle relations automatically
-LibrarySales.CreateCustomer(Customer);
-LibrarySales.CreateSalesLine(SalesLine, SalesHeader, SalesLine.Type::Item, ItemNo, Quantity);
-```
-
-```AL
-// For conditional TableRelation: IF (Type = CONST(Customer)) Customer ELSE IF (Type = CONST(Item)) Item
-// BAD: Setting relation field before condition field
-MyRecord.Relation := Customer."No.";  // Type not set yet - validation uses wrong table!
-MyRecord.Type := TypeEnum::Customer;
-
-// GOOD: Set condition field FIRST, then relation field
-MyRecord.Type := TypeEnum::Customer;  // Set condition first
-MyRecord.Relation := Customer."No.";  // Now validates against Customer table
-```
-
-```AL
-// For filtered TableRelation: TableRelation = Vendor WHERE("Balance (LCY)" = FILTER(>= 10000))
-// BAD: Using vendor that doesn't meet filter criteria
-Vendor."Balance (LCY)" := 5000;  // Below 10000 threshold
-MyRecord."Vendor No." := Vendor."No.";  // Validation may fail!
-
-// GOOD: Ensure related record meets filter conditions
-Vendor."Balance (LCY)" := 15000;  // Meets >= 10000 condition
-Vendor.Modify();
-MyRecord."Vendor No." := Vendor."No.";  // Now valid
-```
-</table_relations>
 
 <library_rules>
 ### Test Library Usage Requirements
@@ -540,5 +358,22 @@ MyRecord."Vendor No." := Vendor."No.";  // Now valid
 
    // AFTER (correct):
    Assert.AreEqual(NewPeriodNo, GenJnlLine."IRS 1099 Reporting Period", 'Reporting period is incorrect');
+   ```
+
+9. **TableRelation order and filters ignored**
+
+   For a conditional `TableRelation` (e.g. `IF (Type = CONST(Customer)) Customer ELSE IF (Type = CONST(Item)) Item`),
+   the condition field must be set BEFORE the relation field, or validation runs against the wrong table. For a
+   filtered `TableRelation` (e.g. `TableRelation = Vendor WHERE("Balance (LCY)" = FILTER(>= 10000))`), the related
+   record must already satisfy the filter before you assign it.
+
+   ```al
+   // BEFORE (wrong): relation field set before the condition field
+   MyRecord.Relation := Customer."No.";  // Type not set yet - validates against the wrong table!
+   MyRecord.Type := TypeEnum::Customer;
+
+   // AFTER (correct): condition field first, then relation field
+   MyRecord.Type := TypeEnum::Customer;
+   MyRecord.Relation := Customer."No.";
    ```
 </common_fixes>
