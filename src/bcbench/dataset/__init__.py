@@ -1,24 +1,15 @@
-"""Dataset module for querying, validating and analyze dataset entries."""
+"""Dataset module for querying, validating and analyzing dataset entries."""
 
-from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
-from bcbench.dataset.coverage import (
-    ArticleCoverage,
-    CoverageReport,
-    build_coverage_report,
-    collect_declared_articles,
-    enumerate_inventory,
-    resolve_bcquality_root,
-)
+from bcbench.dataset.codereview import ArticleId, CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, NL2ALEntry, RepoGroundedEntry, TestEntry, TestGenEntry
 from bcbench.dataset.extensibility_request import ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel
 
 __all__ = [
-    "ArticleCoverage",
+    "ArticleId",
     "BaseDatasetEntry",
     "BugFixEntry",
     "CodeReviewEntry",
     "CodeReviewEntryMetadata",
-    "CoverageReport",
     "ExtRequestImplementEntry",
     "ExtRequestTriageEntry",
     "ManagedLabel",
@@ -28,8 +19,4 @@ __all__ = [
     "Severity",
     "TestEntry",
     "TestGenEntry",
-    "build_coverage_report",
-    "collect_declared_articles",
-    "enumerate_inventory",
-    "resolve_bcquality_root",
 ]

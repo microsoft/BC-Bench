@@ -5,20 +5,24 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from bcbench.dataset import (
-    CodeReviewEntry,
-    ReviewComment,
+from bcbench.analysis.bcquality_article_coverage import (
     build_coverage_report,
     collect_declared_articles,
     enumerate_inventory,
     resolve_bcquality_root,
 )
-from bcbench.dataset.codereview import CodeReviewEntryMetadata
+from bcbench.dataset import CodeReviewEntry, ReviewComment
+from bcbench.dataset.codereview import ArticleId, CodeReviewEntryMetadata
 
 _BASE_COMMIT = "70fd0246a0a4dbc72cb183ca719106722c03be4d"
 
 
-def _entry(instance_id: str, *, comments: list[ReviewComment] | None = None, articles: list[str] | None = None) -> CodeReviewEntry:
+def _entry(
+    instance_id: str,
+    *,
+    comments: list[ReviewComment] | None = None,
+    articles: list[ArticleId] | None = None,
+) -> CodeReviewEntry:
     metadata = CodeReviewEntryMetadata(area="security", articles=articles or [])
     return CodeReviewEntry(
         instance_id=instance_id,
@@ -31,7 +35,7 @@ def _entry(instance_id: str, *, comments: list[ReviewComment] | None = None, art
     )
 
 
-def _comment(body: str, *, article: str | None = None) -> ReviewComment:
+def _comment(body: str, *, article: ArticleId | None = None) -> ReviewComment:
     return ReviewComment(file="src/A.al", line_start=1, body=body, article=article)
 
 

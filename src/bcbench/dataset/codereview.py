@@ -131,7 +131,7 @@ class CodeReviewEntry(RepoGroundedEntry):
     def get_expected_output(self) -> str:
         return "\n".join(str(c) for c in self.expected_comments)
 
-    def declared_articles(self) -> set[str]:
+    def declared_articles(self) -> set[ArticleId]:
         """BCQuality articles this entry is annotated against.
 
         Union of every expected comment's `article` and the entry-level
