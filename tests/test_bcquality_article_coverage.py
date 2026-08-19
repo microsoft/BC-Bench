@@ -13,8 +13,10 @@ from bcbench.analysis.bcquality_article_coverage import (
 )
 from bcbench.dataset import CodeReviewEntry, ReviewComment
 from bcbench.dataset.codereview import ArticleId, CodeReviewEntryMetadata
+from bcbench.types import EvaluationCategory
 
 _BASE_COMMIT = "70fd0246a0a4dbc72cb183ca719106722c03be4d"
+_BCQUALITY_ROOT = resolve_bcquality_root()
 
 
 def _entry(
@@ -130,3 +132,14 @@ class TestInventoryEnumeration:
     def test_resolve_returns_none_without_source(self, monkeypatch):
         monkeypatch.delenv("BCQUALITY_ROOT", raising=False)
         assert resolve_bcquality_root(None) is None
+
+
+@pytest.mark.skipif(_BCQUALITY_ROOT is None, reason="set BCQUALITY_ROOT to a BCQuality checkout to validate article slugs")
+class TestDatasetArticleSlugs:
+    def test_declared_slugs_exist_in_bcquality(self):
+        assert _BCQUALITY_ROOT is not None
+        entries = CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path)
+        declared = collect_declared_articles(entries)
+        report = build_coverage_report(entries, inventory=enumerate_inventory(_BCQUALITY_ROOT))
+        unknown = {article: declared[article] for article in report.unknown_articles}
+        assert not unknown, f"article slugs not found in {_BCQUALITY_ROOT}: {unknown}"
