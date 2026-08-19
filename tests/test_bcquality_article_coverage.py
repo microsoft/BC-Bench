@@ -35,21 +35,41 @@ def _entry(
     )
 
 
-def _comment(body: str, *, article: ArticleId | None = None) -> ReviewComment:
-    return ReviewComment(file="src/A.al", line_start=1, body=body, article=article)
+def _comment(body: str, *articles: ArticleId) -> ReviewComment:
+    return ReviewComment(file="src/A.al", line_start=1, body=body, articles=list(articles))
 
 
 class TestDeclaredArticles:
     def test_declared_from_comment_and_metadata(self):
         entry = _entry(
             "synthetic__security-001",
-            comments=[_comment("finding", article="security/secrettext-for-credentials")],
+            comments=[_comment("finding", "security/secrettext-for-credentials")],
             articles=["security/permission-set-avoid-wildcard-grants"],
         )
         assert entry.declared_articles() == {
             "security/secrettext-for-credentials",
             "security/permission-set-avoid-wildcard-grants",
         }
+
+    def test_comment_may_declare_several_articles(self):
+        entry = _entry(
+            "synthetic__error-handling-errorinfo-actionable-boundary-01",
+            comments=[
+                _comment(
+                    "raise ErrorInfo with a navigation action; do not require a Fix-it here",
+                    "error-handling/prefer-errorinfo-for-actionable-errors",
+                    "error-handling/fielderror-vs-testfield",
+                )
+            ],
+        )
+        assert entry.declared_articles() == {
+            "error-handling/prefer-errorinfo-for-actionable-errors",
+            "error-handling/fielderror-vs-testfield",
+        }
+
+    def test_superseded_singular_article_key_is_rejected(self):
+        with pytest.raises(ValidationError, match="article"):
+            ReviewComment(file="src/A.al", line_start=1, body="x", article="security/secrettext-for-credentials")  # ty: ignore[unknown-argument]
 
     def test_unannotated_entry_declares_nothing(self):
         entry = _entry("synthetic__security-002", comments=[_comment("finding")])
@@ -60,15 +80,15 @@ class TestDeclaredArticles:
         with pytest.raises(ValidationError, match="declared both per-comment"):
             _entry(
                 "synthetic__security-003",
-                comments=[_comment("finding", article=shared)],
+                comments=[_comment("finding", shared)],
                 articles=[shared],
             )
 
     def test_collect_maps_article_to_sorted_entry_ids(self):
         shared = "security/validate-user-configurable-urls"
         entries = [
-            _entry("synthetic__security-015", comments=[_comment("ssrf", article=shared)]),
-            _entry("synthetic__security-011", comments=[_comment("ssrf", article=shared)]),
+            _entry("synthetic__security-015", comments=[_comment("ssrf", shared)]),
+            _entry("synthetic__security-011", comments=[_comment("ssrf", shared)]),
         ]
         declared = collect_declared_articles(entries)
         assert declared[shared] == ["synthetic__security-011", "synthetic__security-015"]
@@ -77,7 +97,7 @@ class TestDeclaredArticles:
 class TestCoverageReport:
     def test_without_inventory_reports_declared_only(self):
         entries = [
-            _entry("synthetic__security-001", comments=[_comment("x", article="security/secrettext-for-credentials")]),
+            _entry("synthetic__security-001", comments=[_comment("x", "security/secrettext-for-credentials")]),
             _entry("synthetic__security-002", comments=[_comment("y")]),
         ]
         report = build_coverage_report(entries, inventory=None)
@@ -93,8 +113,8 @@ class TestCoverageReport:
             "security/permission-set-avoid-wildcard-grants",
         }
         entries = [
-            _entry("synthetic__security-001", comments=[_comment("x", article="security/secrettext-for-credentials")]),
-            _entry("synthetic__security-009", comments=[_comment("z", article="security/made-up-slug")]),
+            _entry("synthetic__security-001", comments=[_comment("x", "security/secrettext-for-credentials")]),
+            _entry("synthetic__security-009", comments=[_comment("z", "security/made-up-slug")]),
         ]
         report = build_coverage_report(entries, inventory=inventory)
         assert report.inventory_available is True
@@ -106,7 +126,7 @@ class TestCoverageReport:
     def test_covered_entry_ids_deduplicated_across_entries(self):
         article = "security/inherent-permissions-minimal-grant"
         entries = [
-            _entry("synthetic__security-013", comments=[_comment("a", article=article), _comment("b", article=article)]),
+            _entry("synthetic__security-013", comments=[_comment("a", article), _comment("b", article)]),
         ]
         report = build_coverage_report(entries, inventory={article})
         assert len(report.covered) == 1
