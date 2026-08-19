@@ -44,11 +44,14 @@ def _to_int(value: object) -> int | None:
 
 
 def _normalize_comment(item: dict[Any, Any]) -> ReviewComment | None:
-    file_path = item.get("file") or item.get("filePath") or item.get("path")
+    # Two producers are in play: the pr_review agent emits file/line_start/line_end/body,
+    # while the BCApps review instructions ask for filePath/lineNumber/issue. BCQuality
+    # reports name the line "line", so that spelling is kept for a flattened report.
+    file_path = item.get("file") or item.get("filePath")
     line_start = _to_int(item.get("line_start") or item.get("lineNumber") or item.get("line"))
-    line_end = _to_int(item.get("line_end") or item.get("lineEnd") or item.get("endLine"))
+    line_end = _to_int(item.get("line_end"))
     domain = item.get("domain")
-    body = item.get("body") or item.get("issue") or item.get("comment")
+    body = item.get("body") or item.get("issue")
 
     if not isinstance(file_path, str) or not file_path.strip():
         return None
@@ -107,7 +110,7 @@ def parse_review_output(raw_output: str) -> list[ReviewComment] | None:
         raw_items = raw
     elif isinstance(raw, dict) and isinstance(raw.get("findings"), list):
         raw_items = raw["findings"]
-    elif isinstance(raw, dict) and any(key in raw for key in ("file", "filePath", "path")):
+    elif isinstance(raw, dict) and any(key in raw for key in ("file", "filePath")):
         raw_items = [raw]
     else:
         logger.warning(f"Expected JSON array or object with findings[], got {type(raw).__name__}")
