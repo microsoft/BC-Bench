@@ -30,17 +30,18 @@ class TestFromOutcomes:
         ("test_outcome", "fix_outcome", "expected_resolved"),
         [
             (passing_test_outcome(), passing_fix_outcome(), True),
-            (TestCheckOutcome(build=True), passing_fix_outcome(), False),
+            (TestCheckOutcome(build=True), passing_fix_outcome(), True),
             (passing_test_outcome(), FixCheckOutcome(build=True), False),
             (TestCheckOutcome(), FixCheckOutcome(), False),
         ],
     )
-    def test_resolved_requires_both_halves(self, sample_evaluation_context, test_outcome, fix_outcome, expected_resolved):
+    def test_resolved_tracks_the_fix_half_only(self, sample_evaluation_context, test_outcome, fix_outcome, expected_resolved):
+        # resolved must keep its pre-TDD meaning so resolution_rate stays comparable across runs.
         result = BugFixResult.from_outcomes(sample_evaluation_context, "patch", test_outcome, fix_outcome)
 
         assert result.resolved is expected_resolved
 
-    def test_build_requires_both_halves_to_build(self, sample_evaluation_context):
+    def test_build_tracks_the_fix_half_only(self, sample_evaluation_context):
         result = BugFixResult.from_outcomes(
             sample_evaluation_context,
             "patch",
@@ -120,7 +121,7 @@ class TestCorrectnessFormulasStayInSync:
         result = BugFixResult.from_outcomes(sample_evaluation_context, "patch", test_outcome, fix_outcome)
 
         assert result.test_correct == test_outcome.correct
-        assert result.resolved == (test_outcome.correct and fix_outcome.correct)
+        assert result.resolved == fix_outcome.correct
 
     @pytest.mark.parametrize(("build", "passed"), list(product([False, True], repeat=2)))
     def test_fix_correct_matches_fix_outcome_correct(self, sample_evaluation_context, build, passed):
@@ -130,4 +131,4 @@ class TestCorrectnessFormulasStayInSync:
         result = BugFixResult.from_outcomes(sample_evaluation_context, "patch", test_outcome, fix_outcome)
 
         assert result.fix_correct == fix_outcome.correct
-        assert result.resolved == (test_outcome.correct and fix_outcome.correct)
+        assert result.resolved == fix_outcome.correct

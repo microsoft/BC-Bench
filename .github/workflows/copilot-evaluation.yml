@@ -169,7 +169,9 @@ jobs:
 
       - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
         if: ${{ inputs.category != 'code-review' }}
-        timeout-minutes: 120
+        # 180 not 120: bug-fix evaluation now builds up to three times per entry (red, green, fix
+        # check) on top of the 60 minute agent budget, which BaseApp entries cannot fit into 120.
+        timeout-minutes: 180
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}

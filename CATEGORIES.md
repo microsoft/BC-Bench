@@ -6,8 +6,9 @@ Categories also differ in how they're scored and run. `bug-fix` and `test-genera
 
 `bug-fix` is gold-anchored on both halves. The agent's diff is split into an application half and a
 test half. The test half must fail against the base code and pass once the dataset's gold `patch`
-is applied; the application half must make the dataset's gold `test_patch` pass. `resolved` is the
-conjunction of the two, and the halves are also reported separately as `test_correct_rate` and
+is applied; the application half must make the dataset's gold `test_patch` pass. `resolved` tracks
+the application half alone, keeping `resolution_rate` comparable with results published before the
+category became test-first; the halves are also reported separately as `test_correct_rate` and
 `fix_correct_rate`. Both checks always run, so a bad test never hides a good fix.
 
 Categories may share a dataset (`bug-fix` and `test-generation` do today), but a new category should generally have its own: dataset schema, entry type, result type, pipeline, etc.

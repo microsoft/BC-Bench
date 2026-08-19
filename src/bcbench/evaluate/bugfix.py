@@ -35,9 +35,11 @@ def _read_patched_files(repo_path: Path, patch: str) -> dict[str, str]:
 
 def _run_test_check(context: EvaluationContext[BugFixEntry], test_patch: str, app_projects: list[str]) -> TestCheckOutcome:
     """Validate the agent's test gold-anchored: it must fail on base code and pass with the gold patch."""
+    # No set_runtime_version here: it derives the runtime from app.json's platform, which a build
+    # normalises down to the container version. Re-deriving it from the freshly reverted (repo-native)
+    # platform pins a runtime the container's compiler may not support. Container builds use the
+    # container's own compiler, which already defaults to a runtime it supports.
     clean_project_paths(context.repo_path, app_projects)
-    # clean_project_paths reverts the unstaged app.json runtime edits on app_projects, so re-apply them before building.
-    set_runtime_version(context.repo_path, context.entry.project_paths)
 
     try:
         generated_tests = extract_tests_from_patch(test_patch, _read_patched_files(context.repo_path, test_patch))
@@ -77,9 +79,8 @@ def _run_fix_check(context: EvaluationContext[BugFixEntry], app_patch: str) -> F
     entry = context.entry
     container = context.get_container()
 
+    # See _run_test_check: the runtime must not be re-pinned from the reverted app.json before a container build.
     setup_repo_prebuild(entry, context.repo_path)
-    # setup_repo_prebuild discards the app.json runtime edits, so re-apply them before building.
-    set_runtime_version(context.repo_path, entry.project_paths)
 
     try:
         if app_patch.strip():

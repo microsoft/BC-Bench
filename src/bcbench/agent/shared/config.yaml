@@ -26,7 +26,10 @@ prompt:
       is run together as a single batch, and ALL of them must pass after the fix, so a stray
       extra test can fail the whole run even if your fix is correct
     {% if al_mcp %}
-    - Build, publish and run your test to confirm it fails before the fix and passes after
+    - Compile your changes with the AL tool to check they build
+    - Do NOT publish to, install into, or otherwise modify the Business Central container, and do
+      NOT invoke BcContainerHelper cmdlets (e.g. Publish-BcContainerApp, Run-TestsInBcContainer).
+      The container is shared with the grader: publishing into it invalidates your own evaluation.
     {% else %}
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}

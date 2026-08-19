@@ -76,8 +76,10 @@ class BugFixResult(ExecutionBasedEvaluationResult):
             **cls._base_fields(context),
             output=output,
             error_message="\n\n".join(errors) or None,
-            resolved=test_outcome.correct and fix_outcome.correct,
-            build=test_outcome.build and fix_outcome.build,
+            # resolved keeps its historical meaning - the gold tests pass against the agent's fix - so
+            # resolution_rate stays comparable across runs. The agent's own test is scored by test_correct.
+            resolved=fix_outcome.correct,
+            build=fix_outcome.build,
             test_build=test_outcome.build,
             pre_patch_failed=test_outcome.pre_patch_failed,
             post_patch_passed=test_outcome.post_patch_passed,

@@ -5,9 +5,11 @@ title: Bug Fixing - BC-Bench
 
 # Bug Fixing
 
-Scoring is test-first: an entry counts as resolved only when the agent's own test reproduces the
-bug (fails on the unfixed code, passes with the reference fix) **and** its fix makes the reference
-tests pass. Results published before this change measured the fix alone and are not comparable.
+The task is test-first: the agent writes a test that reproduces the bug, then fixes it. Two
+independent scores are reported. **fix** is the headline `resolved` metric and keeps its original
+meaning - the reference tests pass against the agent's fix - so it stays comparable with results
+published before the test-first change. **test** is scored separately: the agent's own test must
+fail on the unfixed code and pass with the reference fix.
 
 This category follows the [SWE-Bench](https://www.swebench.com/) methodology. The system is tasked with fixing a bug in the Business Central (AL) codebase given an issue description.
 

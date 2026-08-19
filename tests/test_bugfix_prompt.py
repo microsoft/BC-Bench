@@ -41,10 +41,11 @@ def test_prompt_no_longer_forbids_touching_tests(tmp_path):
     assert "Do NOT modify any testing logic" not in prompt
 
 
-def test_prompt_asks_for_red_green_when_al_mcp_is_on(tmp_path):
+def test_prompt_allows_compiling_but_forbids_container_writes_when_al_mcp_is_on(tmp_path):
     prompt = render(tmp_path, al_mcp=True)
 
-    assert "confirm it fails before the fix and passes after" in prompt
+    assert "Compile your changes with the AL tool" in prompt
+    assert "Do NOT publish to, install into, or otherwise modify the Business Central container" in prompt
     assert "Do NOT try to build or run tests" not in prompt
 
 

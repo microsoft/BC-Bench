@@ -135,7 +135,9 @@ jobs:
         uses: $/.github/actions/install-agent-harnesses
 
       - name: Run Claude Code for entry ${{ matrix.entry }}
-        timeout-minutes: 120
+        # 180 not 120: matches copilot-evaluation.yml - bug-fix evaluation builds up to three times
+        # per entry on top of the 60 minute agent budget.
+        timeout-minutes: 180
         shell: pwsh
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
