@@ -34,19 +34,18 @@ def reject_code_review(category: EvaluationCategory, verb: str) -> None:
         raise typer.BadParameter(f"code-review is not available under a general harness; use 'bcbench {verb} code-review' instead.")
 
 
-CopilotModel = Annotated[
-    Literal[
-        "claude-sonnet-5",
-        "claude-opus-5",
-        "gpt-5.6-sol",
-        "gpt-5.6-terra",
-        "gpt-5.6-luna",
-        "gpt-5.3-codex",
-        "mai-code-1.1-flash",
-        "gemini-3.6-flash",
-    ],
-    typer.Option(help="Copilot model to use"),
+CopilotModelName = Literal[
+    "claude-sonnet-5",
+    "claude-opus-5",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.3-codex",
+    "mai-code-1.1-flash",
+    "gemini-3.6-flash",
 ]
+
+CopilotModel = Annotated[CopilotModelName, typer.Option(help="Copilot model to use")]
 
 ClaudeCodeModel = Annotated[
     Literal[
