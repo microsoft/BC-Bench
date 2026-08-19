@@ -27,7 +27,7 @@ def bceval_config(category: EvaluationCategoryOption) -> None:
         "evaluators": ",".join(category.evaluators),
         "core_score": category.core_score,
     }
-    if category.judge_model is not None:
+    if ("lm_checklist" in category.evaluators) and (category.judge_model is not None):
         outputs["judge_model"] = category.judge_model
     write_step_outputs(outputs)
 
