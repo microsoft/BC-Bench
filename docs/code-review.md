@@ -91,6 +91,7 @@ BC PR Review records wall-clock duration and two structural BCQuality counts: Ma
       <th>Avg Total Tokens</th>
       <th>Avg API Calls</th>
       <th>Avg AI Credits</th>
+      <th>Avg Premium Requests</th>
       <th>Complete Usage</th>
       <th>Avg Knowledge Files</th>
       <th>Avg Knowledge Pruned</th>
@@ -107,6 +108,7 @@ BC PR Review records wall-clock duration and two structural BCQuality counts: Ma
       <td>{% if agg.average_total_tokens != null %}{{ agg.average_total_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_api_calls != null %}{{ agg.average_api_calls | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_premium_requests != null %}{{ agg.average_premium_requests | round: 4 }}{% else %}—{% endif %}</td>
       <td>{% if agg.structured_usage_complete_rate != null %}{{ agg.structured_usage_complete_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_files != null %}{{ agg.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_pruned != null %}{{ agg.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>

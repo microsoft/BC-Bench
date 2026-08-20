@@ -108,13 +108,13 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
                 "cached_tokens": 20,
                 "cache_creation_tokens": 5,
                 "completion_tokens": 10,
-                "reasoning_tokens": None,
+                "reasoning_tokens": 4,
                 "total_tokens": 110,
                 "api_calls": 2,
                 "failed_api_calls": 0,
                 "usage_api_calls": 2,
                 "ai_credits": 0.25,
-                "premium_requests": None,
+                "premium_requests": 0.5,
                 "models": ["gpt-5.6-luna"],
                 "usage_complete": True,
                 "malformed_records": 0,
@@ -148,6 +148,8 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert metrics.total_tokens == 110
     assert metrics.api_calls == 2
     assert metrics.ai_credits == 0.25
+    assert metrics.reasoning_tokens == 4
+    assert metrics.premium_requests == 0.5
     assert metrics.knowledge_files == 1
     assert metrics.knowledge_pruned == 0
     assert config.is_empty()

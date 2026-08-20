@@ -21,13 +21,13 @@ def _run_metrics(**overrides: object) -> dict[str, object]:
         "cached_tokens": 60,
         "cache_creation_tokens": 10,
         "completion_tokens": 28,
-        "reasoning_tokens": None,
+        "reasoning_tokens": 7,
         "total_tokens": 178,
         "api_calls": 2,
         "failed_api_calls": 1,
         "usage_api_calls": 2,
         "ai_credits": 1.75,
-        "premium_requests": None,
+        "premium_requests": 1.75,
         "models": ["gpt-5.4-mini", "gpt-5.6-sol"],
         "usage_complete": True,
         "malformed_records": 0,
@@ -63,11 +63,13 @@ def test_build_metrics_reads_structured_usage_and_filtered_knowledge(tmp_path: P
     assert metrics.cached_tokens == 60
     assert metrics.cache_creation_tokens == 10
     assert metrics.completion_tokens == 28
+    assert metrics.reasoning_tokens == 7
     assert metrics.total_tokens == 178
     assert metrics.api_calls == 2
     assert metrics.failed_api_calls == 1
     assert metrics.usage_api_calls == 2
     assert metrics.ai_credits == 1.75
+    assert metrics.premium_requests == 1.75
     assert metrics.usage_complete is True
     assert metrics.malformed_records == 0
     assert metrics.knowledge_files == 2
@@ -93,6 +95,8 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
     assert metrics.cached_tokens is None
     assert metrics.cache_creation_tokens is None
     assert metrics.ai_credits is None
+    assert metrics.reasoning_tokens is None
+    assert metrics.premium_requests is None
     assert metrics.total_tokens == 178
 
 
@@ -109,6 +113,8 @@ def test_partial_usage_preserves_exact_counts_and_completeness_metadata(tmp_path
         failed_api_calls=1,
         usage_api_calls=1,
         ai_credits=0.1,
+        reasoning_tokens=None,
+        premium_requests=None,
         usage_complete=False,
         malformed_records=3,
     )
@@ -120,6 +126,8 @@ def test_partial_usage_preserves_exact_counts_and_completeness_metadata(tmp_path
     assert metrics.api_calls == 2
     assert metrics.usage_api_calls == 1
     assert metrics.ai_credits == 0.1
+    assert metrics.reasoning_tokens is None
+    assert metrics.premium_requests is None
     assert metrics.usage_complete is False
     assert metrics.malformed_records == 3
 
@@ -146,7 +154,10 @@ def test_invalid_run_metrics_json_raises(tmp_path: Path) -> None:
         {"metrics_source": "console-transcript"},
         {"api_calls": "2"},
         {"usage_complete": 1},
-        {"reasoning_tokens": 5},
+        {"reasoning_tokens": "5"},
+        {"premium_requests": "1.0"},
+        {"cli_version": 79},
+        {"models": ["gpt-5.6-sol", 5]},
         {"unexpected": "field"},
     ],
 )
@@ -162,6 +173,89 @@ def test_missing_filter_report_raises(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path)
 
     with pytest.raises(AgentError, match="not found"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
+    _write_filter_report(tmp_path, [])
+    payload = _run_metrics()
+    del payload["models"]
+    (tmp_path / RUN_METRICS_FILE_NAME).write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(AgentError, match="does not satisfy schema version 1"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+def test_not_applicable_zero_shape_is_accepted(tmp_path: Path) -> None:
+    _write_filter_report(tmp_path, [])
+    _write_run_metrics(
+        tmp_path,
+        metrics_source="not-applicable",
+        cli_version=None,
+        wall_time_seconds=0,
+        prompt_tokens=0,
+        cached_tokens=0,
+        cache_creation_tokens=0,
+        completion_tokens=0,
+        reasoning_tokens=None,
+        total_tokens=0,
+        api_calls=0,
+        failed_api_calls=0,
+        usage_api_calls=0,
+        ai_credits=0.0,
+        premium_requests=None,
+        models=[],
+        usage_complete=True,
+        malformed_records=0,
+    )
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=0.25)
+
+    assert metrics.execution_time == 0.25
+    assert metrics.prompt_tokens == 0
+    assert metrics.api_calls == 0
+    assert metrics.ai_credits == 0.0
+    assert metrics.usage_complete is True
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("cli_version", "1.0.79"),
+        ("wall_time_seconds", 1.0),
+        ("prompt_tokens", None),
+        ("reasoning_tokens", 0),
+        ("premium_requests", 0.0),
+        ("models", ["gpt-5.6-sol"]),
+        ("usage_complete", False),
+        ("malformed_records", 1),
+    ],
+)
+def test_not_applicable_rejects_noncanonical_shape(tmp_path: Path, field: str, value: object) -> None:
+    _write_filter_report(tmp_path, [])
+    not_applicable = {
+        "metrics_source": "not-applicable",
+        "cli_version": None,
+        "wall_time_seconds": 0,
+        "prompt_tokens": 0,
+        "cached_tokens": 0,
+        "cache_creation_tokens": 0,
+        "completion_tokens": 0,
+        "reasoning_tokens": None,
+        "total_tokens": 0,
+        "api_calls": 0,
+        "failed_api_calls": 0,
+        "usage_api_calls": 0,
+        "ai_credits": 0.0,
+        "premium_requests": None,
+        "models": [],
+        "usage_complete": True,
+        "malformed_records": 0,
+        field: value,
+    }
+    _write_run_metrics(tmp_path, **not_applicable)
+
+    with pytest.raises(AgentError, match="not-applicable metrics have invalid fields"):
         build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 

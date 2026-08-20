@@ -79,11 +79,13 @@ class AgentMetrics(BaseModel):
     # Structured usage metrics emitted by agent harnesses
     cached_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     cache_creation_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    reasoning_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     total_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     api_calls: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     failed_api_calls: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     usage_api_calls: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     ai_credits: float | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    premium_requests: float | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     usage_complete: bool | None = Field(default=None, exclude_if=lambda value: value is None)
     malformed_records: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
 

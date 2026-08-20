@@ -115,7 +115,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: microsoft/BC-ALAgents
-          ref: 2f1059b3f12032f3b8f57fefc221ff8bfad85c4c
+          ref: 533dd39dfe29218c09e5e31c39c78bb72fa20aa2
           path: bc-alagents-engine
           token: ${{ github.token }}
 
