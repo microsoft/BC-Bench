@@ -147,10 +147,7 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     macro_precision: float = 0.0
     macro_recall: float = 0.0
 
-    average_total_tokens: float | None = None
-    average_api_calls: float | None = None
-    average_estimated_credits: float | None = None
-    average_knowledge_used: float | None = None
+    average_knowledge_files: float | None = None
     average_knowledge_pruned: float | None = None
 
     @classmethod
@@ -194,10 +191,7 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "macro_f_beta_2": sum(r.macro_f_beta_2 for r in cr_runs) / n,
                 "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
-                "average_total_tokens": mean_metric("average_total_tokens"),
-                "average_api_calls": mean_metric("average_api_calls"),
-                "average_estimated_credits": mean_metric("average_estimated_credits"),
-                "average_knowledge_used": mean_metric("average_knowledge_used"),
+                "average_knowledge_files": mean_metric("average_knowledge_files"),
                 "average_knowledge_pruned": mean_metric("average_knowledge_pruned"),
             }
         )

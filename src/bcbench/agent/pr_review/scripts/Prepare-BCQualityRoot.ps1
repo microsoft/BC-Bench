@@ -17,8 +17,7 @@
     original working tree is never modified (the filter deletes files). This is the
     fast inner loop for optimizing BCQuality structure and re-scoring in BC-Bench.
 
-    Emits the resolved root and SHA as `root=<path>` / `sha=<sha>` lines on
-    stdout for the Python caller to parse.
+    Emits the resolved root as `root=<path>` on stdout for the Python caller.
 #>
 [CmdletBinding()]
 param(
@@ -55,11 +54,6 @@ if ($LocalPath) {
         Copy-Item -LiteralPath $_.FullName -Destination $Root -Recurse -Force
     }
 
-    # Provenance: use the source checkout's HEAD sha when it is a git repo.
-    $resolvedSha = 'local'
-    $headSha = (& git -C $src rev-parse HEAD 2>$null)
-    if ($LASTEXITCODE -eq 0 -and $headSha) { $resolvedSha = "local:$($headSha.Trim())" }
-    Write-Host "BCQuality local source SHA: $resolvedSha"
 }
 else {
     $repo = $cfg.bcquality.repo
@@ -67,26 +61,16 @@ else {
 
     Write-Host "Fetching BCQuality from $repo@$ref into $Root"
     if (Test-Path -LiteralPath $Root) { Remove-Item -LiteralPath $Root -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Root) | Out-Null
-    if ($repo -match '^[^/\\]+/[^/\\]+$') {
-        gh repo clone $repo $Root -- --depth=1 "--revision=$ref" --quiet
-        if ($LASTEXITCODE -ne 0) { throw "gh clone of BCQuality ref '$repo@$ref' failed (exit $LASTEXITCODE)" }
-    }
-    else {
-        New-Item -ItemType Directory -Force -Path $Root | Out-Null
-        git -C $Root init -q
-        git -C $Root remote add origin $repo
-        git -C $Root fetch --depth=1 origin "$ref"
-        if ($LASTEXITCODE -ne 0) { throw "git fetch of BCQuality ref '$ref' failed (exit $LASTEXITCODE)" }
-        git -C $Root checkout -q FETCH_HEAD
-        if ($LASTEXITCODE -ne 0) { throw "git checkout of BCQuality ref '$ref' failed (exit $LASTEXITCODE)" }
-    }
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    git -C $Root init -q
+    git -C $Root remote add origin $repo
+    git -C $Root fetch --depth=1 origin "$ref"
+    if ($LASTEXITCODE -ne 0) { throw "git fetch of BCQuality ref '$ref' failed (exit $LASTEXITCODE)" }
+    git -C $Root checkout -q FETCH_HEAD
+    if ($LASTEXITCODE -ne 0) { throw "git checkout of BCQuality ref '$ref' failed (exit $LASTEXITCODE)" }
 
-    $resolvedSha = (& git -C $Root rev-parse HEAD).Trim()
-    Write-Host "BCQuality resolved SHA: $resolvedSha"
 }
 
 & $filter -BCQualityRoot $Root -Config $cfg | Out-Null
 
 "root=$Root"
-"sha=$resolvedSha"

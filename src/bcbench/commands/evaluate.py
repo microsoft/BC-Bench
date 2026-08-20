@@ -6,9 +6,9 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent
-from bcbench.agent.copilot.pr_review import run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
+    BCQualityLocalPath,
     ClaudeCodeModel,
     ContainerName,
     ContainerPassword,
@@ -16,9 +16,9 @@ from bcbench.cli_options import (
     CopilotModel,
     EvaluationCategoryOption,
     OutputDir,
+    PRReviewEnginePath,
     RepoPath,
     RunId,
-    reject_code_review,
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
@@ -42,65 +42,6 @@ def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
     return run_dir
 
 
-def _run_pr_review_evaluation(
-    entry_id: str,
-    model: str,
-    repo_path: Path,
-    output_dir: Path,
-    run_id: str,
-    engine_ref: str | None = None,
-    engine_repo: str | None = None,
-    engine_local_path: str | None = None,
-    bcquality_ref: str | None = None,
-    bcquality_repo: str | None = None,
-    bcquality_local_path: str | None = None,
-    min_severity: str | None = None,
-) -> None:
-    """Evaluate a code-review entry through the BC-ALAgents review engine.
-
-    Backs the dedicated 'evaluate code-review' command: the code-review category always
-    runs the engine's own generate half (the real PROD path), so callers never drive a
-    bespoke review prompt. BCQuality source and severity default to the engine config when
-    not overridden.
-    """
-    category = EvaluationCategory.CODE_REVIEW
-    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
-
-    logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
-
-    context = EvaluationContext(
-        entry=entry,
-        repo_path=repo_path,
-        result_dir=run_dir,
-        container=None,
-        model=model,
-        agent_name=AgentHarness.PR_REVIEW,
-        category=category,
-    )
-
-    category.pipeline.execute(
-        context,
-        lambda ctx: run_pr_review_agent(
-            entry=ctx.entry,
-            repo_path=ctx.repo_path,
-            category=category,
-            model=ctx.model,
-            output_dir=ctx.result_dir,
-            engine_ref=engine_ref,
-            engine_repo=engine_repo,
-            engine_local_path=engine_local_path,
-            bcquality_ref=bcquality_ref,
-            bcquality_repo=bcquality_repo,
-            bcquality_local_path=bcquality_local_path,
-            min_severity=min_severity,
-        ),
-    )
-
-    logger.info("Evaluation complete!")
-    logger.info(f"Results saved to: {run_dir}")
-
-
 @evaluate_app.command("copilot")
 def evaluate_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
@@ -120,7 +61,6 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    reject_code_review(category, "evaluate")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
@@ -176,7 +116,6 @@ def evaluate_claude_code(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
-    reject_code_review(category, "evaluate")
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = _prepare_run_dir(output_dir, run_id)
 
@@ -213,45 +152,65 @@ def evaluate_claude_code(
     logger.info(f"Results saved to: {run_dir}")
 
 
-@evaluate_app.command("code-review")
-def evaluate_code_review(
+@evaluate_app.command("pr-review")
+def evaluate_pr_review(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
-    model: CopilotModel = "claude-sonnet-5",
+    model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "pr_review_test_run",
-    engine_ref: Annotated[str | None, typer.Option(help="Override the BC-ALAgents ref (defaults to pr_review.engine.ref)")] = None,
-    engine_repo: Annotated[str | None, typer.Option(help="Override the BC-ALAgents repo (defaults to pr_review.engine.repo)")] = None,
-    engine_local_path: Annotated[str | None, typer.Option(help="Use a local BC-ALAgents checkout instead of fetching")] = None,
+    engine_path: PRReviewEnginePath = None,
     bcquality_ref: Annotated[str | None, typer.Option(help="Override the BCQuality ref (defaults to the engine's pinned ref)")] = None,
-    bcquality_repo: Annotated[str | None, typer.Option(help="Override the BCQuality repo, e.g. a private fork (defaults to pr_review.bcquality.repo or the engine pin)")] = None,
-    bcquality_local_path: Annotated[str | None, typer.Option(help="Use a local BCQuality checkout (copied + filtered, never modified) instead of fetching")] = None,
+    bcquality_repo: Annotated[str | None, typer.Option(help="Override the BCQuality repo, e.g. a private fork (defaults to config/engine)")] = None,
+    bcquality_local_path: BCQualityLocalPath = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
     """
-    Evaluate the code-review category on a single entry via the BC-ALAgents review engine.
+    Evaluate BC PR Review on a single code-review entry.
 
-    code-review is not a general harness choice: it always runs the engine's own generate
-    shell in local mode - the real PROD generate path - then scores the resulting
-    review.json with the standard code-review judge. BC-ALAgents and BCQuality sources can
-    be configured in config.yaml or overridden with command options.
+    This production-fidelity runner is fixed to the code-review category, while the same
+    category can also run through the generic copilot and claude commands for cross-system
+    comparison. The resulting review.json is scored by the shared code-review pipeline.
+    Requires a local BC-ALAgents checkout
+    (--engine-path or BC_PR_REVIEW_ROOT), PowerShell 7+, and an authenticated
+    Copilot CLI.
 
-    To only generate review.json without scoring, use 'bcbench run code-review' instead.
+    To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
-    _run_pr_review_evaluation(
-        entry_id,
-        model=model,
+    category = EvaluationCategory.CODE_REVIEW
+    entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
+    run_dir = _prepare_run_dir(output_dir, run_id)
+
+    logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
+
+    context = EvaluationContext(
+        entry=entry,
         repo_path=repo_path,
-        output_dir=output_dir,
-        run_id=run_id,
-        engine_ref=engine_ref,
-        engine_repo=engine_repo,
-        engine_local_path=engine_local_path,
-        bcquality_ref=bcquality_ref,
-        bcquality_repo=bcquality_repo,
-        bcquality_local_path=bcquality_local_path,
-        min_severity=min_severity,
+        result_dir=run_dir,
+        container=None,
+        model=model,
+        agent_name=AgentHarness.PR_REVIEW,
+        category=category,
     )
+
+    category.pipeline.execute(
+        context,
+        lambda ctx: run_pr_review_agent(
+            entry=ctx.entry,
+            repo_path=ctx.repo_path,
+            category=category,
+            model=ctx.model,
+            output_dir=ctx.result_dir,
+            engine_path=engine_path,
+            bcquality_ref=bcquality_ref,
+            bcquality_repo=bcquality_repo,
+            bcquality_local_path=bcquality_local_path,
+            min_severity=min_severity,
+        ),
+    )
+
+    logger.info("Evaluation complete!")
+    logger.info(f"Results saved to: {run_dir}")
 
 
 @evaluate_app.command("bcal")

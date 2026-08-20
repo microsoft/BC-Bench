@@ -11,6 +11,31 @@ from bcbench.types import EvaluationCategory
 # Note: Defaults are provided in function signatures, not here
 RepoPath = Annotated[Path, typer.Option(help="Path to repository")]
 
+PRReviewEnginePath = Annotated[
+    Path | None,
+    typer.Option(
+        "--engine-path",
+        envvar="BC_PR_REVIEW_ROOT",
+        help="Path to a local BC-ALAgents checkout",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+]
+
+BCQualityLocalPath = Annotated[
+    Path | None,
+    typer.Option(
+        "--bcquality-local-path",
+        help="Path to a local BCQuality checkout (copied and filtered; never modified)",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+]
+
 OutputDir = Annotated[Path, typer.Option(help="Directory to save evaluation results", file_okay=False, dir_okay=True)]
 
 RunId = Annotated[str, typer.Option(envvar="GITHUB_RUN_ID", help="Unique identifier for this evaluation run")]
@@ -22,17 +47,6 @@ ContainerUsername = Annotated[str, typer.Option(envvar="BC_SERVER_USERNAME", hel
 ContainerPassword = Annotated[str, typer.Option(envvar="BC_SERVER_PASSWORD", help="Password for BC container")]
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
-
-
-def reject_code_review(category: EvaluationCategory, verb: str) -> None:
-    """Guard general harness commands (copilot/claude) against the code-review category.
-
-    code-review is not a harness choice: it is always served by the dedicated engine
-    command, so a general harness must refuse it rather than run a divergent review.
-    """
-    if category is EvaluationCategory.CODE_REVIEW:
-        raise typer.BadParameter(f"code-review is not available under a general harness; use 'bcbench {verb} code-review' instead.")
-
 
 CopilotModelName = Literal[
     "claude-sonnet-5",

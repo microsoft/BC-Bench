@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -76,14 +76,12 @@ class AgentMetrics(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 
-    total_tokens: int | None = None
-    api_calls: int | None = None
-    estimated_credits: float | None = None
-    knowledge_used: int | None = None
-    knowledge_pruned: int | None = None
-
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+    # BC PR Review's structural BCQuality filter metrics
+    knowledge_files: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    knowledge_pruned: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
 
 
 class ExperimentConfiguration(BaseModel):
@@ -203,16 +201,7 @@ class AgentHarness(StrEnum):
             case AgentHarness.BCAL:
                 expected = AgentMetrics(execution_time=None)
             case AgentHarness.PR_REVIEW:
-                expected = AgentMetrics(
-                    execution_time=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
-                    total_tokens=None,
-                    api_calls=None,
-                    estimated_credits=None,
-                    knowledge_used=None,
-                    knowledge_pruned=None,
-                )
+                expected = AgentMetrics(execution_time=None, knowledge_files=None, knowledge_pruned=None)
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
 
