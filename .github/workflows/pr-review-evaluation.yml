@@ -1,4 +1,4 @@
-name: Evaluation with GitHub Copilot
+name: Evaluation with BC PR Review
 permissions:
   contents: read
   actions: write
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: "Copilot model to use for evaluation"
+        description: "Copilot model used internally by BC PR Review"
         required: false
         default: "gpt-5.6-luna"
         type: choice
@@ -20,31 +20,10 @@ on:
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
           - "gemini-3.6-flash"
-      category:
-        description: "Evaluation category to run"
-        required: false
-        default: "bug-fix"
-        type: choice
-        options:
-          - "bug-fix"
-          - "test-generation"
-          - "code-review"
-          - "extensibility-request-implement"
-          - "extensibility-request-triage"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
         default: true
-        type: boolean
-      al-mcp:
-        description: "Enable AL MCP server"
-        required: false
-        default: false
-        type: boolean
-      al-lsp:
-        description: "Enable AL LSP server"
-        required: false
-        default: false
         type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
@@ -64,7 +43,7 @@ on:
         type: string
 
 concurrency:
-  group: copilot-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.category }}
+  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -76,7 +55,7 @@ jobs:
     permissions:
       contents: write
     with:
-      agent: copilot
+      agent: pr-review
       test-run: ${{ inputs.test-run }}
       repeat: ${{ inputs.repeat }}
 
@@ -84,9 +63,9 @@ jobs:
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run }}
-      category: ${{ inputs.category }}
+      category: code-review
 
-  evaluate-with-copilot-cli:
+  evaluate-with-pr-review:
     runs-on: ${{ needs.get-entries.outputs.runner }}
     needs: get-entries
     outputs:
@@ -109,18 +88,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup BC Container and Repository
+      - name: Setup Repository
         id: setup-env
         timeout-minutes: 40
         uses: $/.github/actions/setup-bc-container-repo
         with:
           instance-id: ${{ matrix.entry }}
-          category: ${{ inputs.category }}
+          category: code-review
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
-          skip-repo: ${{ needs.get-entries.outputs.requires-repo != 'true' }}
+          skip-container: true
+          skip-repo: false
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -129,32 +108,30 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install AL Tool
-        if: ${{ inputs.al-mcp || inputs.al-lsp }}
-        shell: pwsh
-        run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta
-          echo "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
-
       - name: Install evaluation CLIs
         uses: $/.github/actions/install-agent-harnesses
 
-      - name: Run GitHub Copilot CLI for entry ${{ matrix.entry }}
+      - name: Checkout BC-ALAgents review engine
+        uses: actions/checkout@v5
+        with:
+          repository: microsoft/BC-ALAgents
+          ref: 533dd39dfe29218c09e5e31c39c78bb72fa20aa2
+          path: bc-alagents-engine
+          token: ${{ github.token }}
+
+      - name: Run BC PR Review for entry ${{ matrix.entry }}
         timeout-minutes: 120
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
-          uv run bcbench evaluate copilot "${{ matrix.entry }}" `
+          uv run bcbench evaluate pr-review "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
-            --category "${{ inputs.category }}" `
+            --engine-path "${{ github.workspace }}/bc-alagents-engine" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
-            ${{ inputs.al-mcp && '--al-mcp' || '' }} `
-            ${{ inputs.al-lsp && '--al-lsp' || '' }}
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -165,17 +142,17 @@ jobs:
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:
-    needs: evaluate-with-copilot-cli
+    needs: evaluate-with-pr-review
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
       id-token: write
     with:
-      results-dir: ${{ needs.evaluate-with-copilot-cli.outputs.results-dir }}
+      results-dir: ${{ needs.evaluate-with-pr-review.outputs.results-dir }}
       model: ${{ inputs.model }}
-      agent: "GitHub Copilot CLI"
+      agent: "BC PR Review"
       mock: ${{ inputs.test-run }}
-      category: ${{ inputs.category }}
+      category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
 
@@ -187,8 +164,8 @@ jobs:
       contents: write
       actions: write
     with:
-      workflow-file: copilot-evaluation.yml
+      workflow-file: pr-review-evaluation.yml
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

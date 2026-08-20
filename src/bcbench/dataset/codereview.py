@@ -53,7 +53,9 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
 
 
 class ReviewComment(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    # Reject unknown keys so a superseded annotation (e.g. the singular `article` this
+    # model used before) fails loudly instead of being dropped into invisible coverage loss.
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./_-]*\.(al|json)$")]
     line_start: Annotated[int, Field(ge=1)]
@@ -61,10 +63,12 @@ class ReviewComment(BaseModel):
     domain: str | None = None
     body: Annotated[str, Field(min_length=1)]
     severity: Severity | None = None
-    # BCQuality knowledge article this finding derives from, as `<domain>/<slug>`
-    # (e.g. `security/hardcoded-secret`). Optional and backward-compatible; drives
-    # per-article coverage tracking. Older entries leave it unset (counted as unannotated).
-    article: ArticleId | None = None
+    # BCQuality knowledge articles this finding derives from, as `<domain>/<slug>`
+    # (e.g. `security/hardcoded-secret`). A single finding can exercise several articles,
+    # most commonly when it pairs a positive requirement with an explicit false-positive
+    # boundary. Optional; drives per-article coverage tracking. Entries that leave it
+    # empty are counted as unannotated.
+    articles: list[ArticleId] = Field(default_factory=list)
 
     @field_validator("severity", mode="before")
     @classmethod
@@ -89,7 +93,7 @@ class CodeReviewEntryMetadata(EntryMetadata):
 
     # BCQuality knowledge articles this entry exercises as `<domain>/<slug>`. Primarily
     # for false-positive-guard entries (expected_comments=[]) that test an article by
-    # omission and thus have no per-comment `article` to carry the association.
+    # omission and thus have no per-comment `articles` to carry the association.
     articles: list[ArticleId] = Field(default_factory=list)
 
 
@@ -115,7 +119,7 @@ class CodeReviewEntry(RepoGroundedEntry):
         empty). An article already declared on a comment must not be repeated at entry
         level, so the two annotation sources cannot silently drift apart.
         """
-        comment_articles = {c.article for c in self.expected_comments if c.article}
+        comment_articles = {article for c in self.expected_comments for article in c.articles}
         overlap = comment_articles & set(self.metadata.articles)
         if overlap:
             raise ValueError(
@@ -134,10 +138,10 @@ class CodeReviewEntry(RepoGroundedEntry):
     def declared_articles(self) -> set[ArticleId]:
         """BCQuality articles this entry is annotated against.
 
-        Union of every expected comment's `article` and the entry-level
+        Union of every expected comment's `articles` and the entry-level
         `metadata.articles` (which carries the association for false-positive-guard
         entries whose `expected_comments` is empty).
         """
-        articles = {c.article for c in self.expected_comments if c.article}
+        articles = {article for c in self.expected_comments for article in c.articles}
         articles.update(self.metadata.articles)
         return articles

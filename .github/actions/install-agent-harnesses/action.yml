@@ -9,5 +9,5 @@ runs:
       shell: pwsh
 
     - name: Install GitHub Copilot CLI
-      run: npm install -g @github/copilot@1.0.80
+      run: npm install -g @github/copilot@1.0.79
       shell: pwsh

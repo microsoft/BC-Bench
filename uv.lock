@@ -245,7 +245,7 @@ wheels = [
 
 [[package]]
 name = "bcbench"
-version = "0.8.1"
+version = "0.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "jinja2" },
@@ -286,7 +286,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "numpy", specifier = ">=2.3.5" },
-    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pydantic", specifier = ">=2.12" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.0" },

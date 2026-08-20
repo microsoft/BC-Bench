@@ -11,14 +11,6 @@ from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, E
 
 logger = get_logger(__name__)
 
-_CODE_REVIEW_METRIC_FIELDS = (
-    "total_tokens",
-    "api_calls",
-    "estimated_credits",
-    "knowledge_used",
-    "knowledge_pruned",
-)
-
 
 class BaseEvaluationResult(BaseModel):
     """Base class for all evaluation results with shared metrics across categories."""
@@ -63,9 +55,6 @@ class BaseEvaluationResult(BaseModel):
         output_dir.mkdir(parents=True, exist_ok=True)
         with output_file.open("a", encoding="utf-8") as f:
             result_dict = self.model_dump(mode="json")
-            if self.category is not EvaluationCategory.CODE_REVIEW and result_dict["metrics"]:
-                for field in _CODE_REVIEW_METRIC_FIELDS:
-                    result_dict["metrics"].pop(field, None)
             # Per-instance JSONL result files are uploaded as workflow artifacts and are the only inputs required by the summarize-results workflow.
             f.write(json.dumps(result_dict) + "\n")
 

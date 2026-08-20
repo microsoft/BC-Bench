@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -76,14 +76,25 @@ class AgentMetrics(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 
-    total_tokens: int | None = None
-    api_calls: int | None = None
-    estimated_credits: float | None = None
-    knowledge_used: int | None = None
-    knowledge_pruned: int | None = None
+    # Structured usage metrics emitted by agent harnesses
+    cached_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    cache_creation_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    reasoning_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    total_tokens: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    api_calls: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    failed_api_calls: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    usage_api_calls: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    ai_credits: float | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    premium_requests: float | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    usage_complete: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    malformed_records: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+    # BC PR Review's structural BCQuality filter metrics
+    knowledge_files: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    knowledge_pruned: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
 
 
 class ExperimentConfiguration(BaseModel):
@@ -203,16 +214,7 @@ class AgentHarness(StrEnum):
             case AgentHarness.BCAL:
                 expected = AgentMetrics(execution_time=None)
             case AgentHarness.PR_REVIEW:
-                expected = AgentMetrics(
-                    execution_time=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
-                    total_tokens=None,
-                    api_calls=None,
-                    estimated_credits=None,
-                    knowledge_used=None,
-                    knowledge_pruned=None,
-                )
+                expected = AgentMetrics(execution_time=None, knowledge_files=None, knowledge_pruned=None)
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
 
