@@ -310,9 +310,24 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    average_knowledge_files: float | None = None
+    average_knowledge_pruned: float | None = None
+
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
+
+    def _performance_markdown(self) -> str:
+        available = f"{self.average_knowledge_files:.1f}" if self.average_knowledge_files is not None else "n/a"
+        pruned = f"{self.average_knowledge_pruned:.1f}" if self.average_knowledge_pruned is not None else "n/a"
+        return (
+            "## Performance\n"
+            "\n"
+            "| Avg duration (s) | Avg knowledge files | Avg knowledge pruned |\n"
+            "|-----------------:|--------------------:|---------------------:|\n"
+            f"| {self.average_duration:.1f} | {available} | {pruned} |\n"
+            "\n"
+        )
 
     def render_github_metrics_markdown(self) -> str:
         micro_p = self.precision * 100
@@ -351,6 +366,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             "|-------------:|-------------------------:|\n"
             f"| {self.severity_mae:.3f} | {valid_rate:.1f}% |\n"
             "\n"
+            f"{self._performance_markdown()}"
             f"{_METRIC_EXPLANATIONS}"
         )
 
@@ -396,6 +412,15 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "Quality",
                 ["Severity MAE", "Valid review output rate"],
                 [f"{self.severity_mae:.3f}", f"{self.valid_review_output_rate * 100:.1f}%"],
+            ),
+            _build_console_table(
+                "Performance",
+                ["Avg duration (s)", "Avg knowledge files", "Avg knowledge pruned"],
+                [
+                    f"{self.average_duration:.1f}",
+                    f"{self.average_knowledge_files:.1f}" if self.average_knowledge_files is not None else "n/a",
+                    f"{self.average_knowledge_pruned:.1f}" if self.average_knowledge_pruned is not None else "n/a",
+                ],
             ),
             Panel(
                 _CONSOLE_METRIC_EXPLANATIONS,
@@ -453,6 +478,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
         valid_output_count: int = sum(1 for r in code_review_results if r.valid_review_output)
         valid_output_rate: float = valid_output_count / total_results
 
+        def average_metric(name: str) -> float | None:
+            values = [value for result in code_review_results if result.metrics and (value := getattr(result.metrics, name)) is not None]
+            return sum(values) / len(values) if values else None
+
         return summary.model_copy(
             update={
                 "generated_comment_count": generated_total,
@@ -474,5 +503,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
+                "average_knowledge_files": average_metric("knowledge_files"),
+                "average_knowledge_pruned": average_metric("knowledge_pruned"),
             }
         )

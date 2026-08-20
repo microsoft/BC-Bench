@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -78,6 +78,10 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+    # BC PR Review's structural BCQuality filter metrics
+    knowledge_files: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    knowledge_pruned: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
 
 
 class ExperimentConfiguration(BaseModel):
@@ -194,8 +198,10 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL | AgentHarness.PR_REVIEW:
+            case AgentHarness.BCAL:
                 expected = AgentMetrics(execution_time=None)
+            case AgentHarness.PR_REVIEW:
+                expected = AgentMetrics(execution_time=None, knowledge_files=None, knowledge_pruned=None)
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
 

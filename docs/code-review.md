@@ -39,7 +39,9 @@ bcbench evaluate claude <entry> --category code-review
 bcbench evaluate pr-review <entry>
 ```
 
-The evaluation workflow pins BC-ALAgents to a commit SHA, and each result records the exact engine revision and filtered BCQuality content. Engine updates require a new BC-Bench version and must record that SHA in the release notes.
+The evaluation workflow pins BC-ALAgents to a commit SHA. Engine updates require a new BC-Bench version and must record that SHA in the release notes.
+
+BC PR Review records wall-clock duration and two structural BCQuality counts: Markdown knowledge files available after filtering and knowledge files removed by the filter. The counts come from the filtered checkout and its validated `_filter-report.json`. The production `all` pipeline does not currently expose a stable structured API-call, token, or credit contract, so BC-Bench intentionally does not infer those values from console transcripts.
 
 ## Baseline Leaderboard
 
@@ -75,6 +77,38 @@ The evaluation workflow pins BC-ALAgents to a commit SHA, and each result record
 </table>
 {% else %}
 <p><em>No results available yet. Check back soon!</em></p>
+{% endif %}
+
+## Performance Leaderboard
+
+{% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
+<table>
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Model</th>
+      <th>Avg Time</th>
+      <th>Avg Knowledge Files</th>
+      <th>Avg Knowledge Pruned</th>
+      <th>Ver</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% assign performance_results = site.data.code-review.aggregate | sort: "average_duration" %}
+    {% for agg in performance_results %}
+    <tr>
+      <td>{{ agg.agent_name }}</td>
+      <td>{{ agg.model }}</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td>{% if agg.average_knowledge_files != null %}{{ agg.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_knowledge_pruned != null %}{{ agg.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p><em>No performance results available yet. Check back soon!</em></p>
 {% endif %}
 
 ## Experiment Leaderboard
