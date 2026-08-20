@@ -110,8 +110,10 @@ instructions:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
+# NOTE: skills load independently of `instructions.enabled` - Copilot still discovers
+#       .github/skills/ when --no-custom-instructions is passed, so this is a clean arm on its own.
 skills:
-  enabled: false
+  enabled: true
 
 # controls:
 # 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`

@@ -87,25 +87,46 @@ Because `instructions` is recorded on the result (`custom_instructions=True`), "
 
 ### The `bc-fix-bug` arm (bug-fix)
 
-`src/bcbench/agent/shared/instructions/microsoft-BCApps/skills/bc-fix-bug/` is a trimmed vendored
-copy of the skill from `microsoft/BCAppsBugFix`, renumbered down to four phases: Phase 1 (assess
-the bug and plan the fix), Phase 2 (create a test and establish a failing baseline), Phase 3 (the
-self-correcting fix loop), and Phase 4 (summary). The work-item fetch, Miapp propagation, critique,
-AL review and pull-request phases from the upstream skill are removed - none of them can run in an
-offline benchmark.
+`skills/bc-fix-bug/` is a trimmed vendored copy of the skill from `microsoft/BCAppsBugFix`,
+renumbered down to four phases: Phase 1 (assess the bug and plan the fix), Phase 2 (create a test
+and establish a baseline that reproduces the bug), Phase 3 (the fix loop), and Phase 4 (summary).
+The work-item fetch, Miapp propagation, critique, AL review and pull-request phases from the
+upstream skill are removed - none of them can run in an offline benchmark.
 
-Enable it with `skills.enabled: true`. Two things to know:
+It is vendored **per customization profile**, and the copies are kept byte-identical:
+
+- `src/bcbench/agent/shared/instructions/microsoftInternal-NAV/skills/bc-fix-bug/` - 97 of the 101
+  bug-fix entries.
+- `src/bcbench/agent/shared/instructions/microsoft-BCApps/skills/bc-fix-bug/` - the other 4.
+
+`customization_profile` is the entry's repo (`repo.replace("/", "-")`), so a skill vendored under
+only one profile is silently invisible to every entry from the other - while the prompt still tells
+the agent the skill exists. If you edit one copy, copy it over the other in the same change.
+
+Enable it with `skills.enabled: true`. Three things to know:
 
 - The prompt nudges the agent to use the skill whenever `skills.enabled` is true. Without a nudge,
   agents typically just do the work directly and invoke nothing.
 - `skills.enabled` copies the **whole** skills folder, so `al-test-generation` loads too. That is
   intentional: `bc-fix-bug` delegates AAA structure, UI handler signatures and TableRelation rules
   to `al-test-generation` rather than duplicating them, so the two compose instead of competing.
+- `skills.enabled` is independent of `instructions.enabled`. Copilot discovers `.github/skills/`
+  even when the harness passes `--no-custom-instructions`, so you can run a skills-only arm without
+  dragging `AGENTS.md` and the `*.instructions.md` files in as a confound.
 
-Run this arm with `--al-mcp`. The skill's Phase 2 and Phase 3 are build/publish/run loops, and
-without `al_build` / `al_publish` / `al_run_tests` the agent cannot establish a red baseline. The
-category still scores without AL MCP - the agent writes the test blind and the pipeline judges it
-the same way - which makes `--al-mcp` on/off a measurable dimension in its own right.
+`--al-mcp` on/off is a measurable dimension in its own right, and the skill supports both:
+
+- **With `--al-mcp` (executed mode)** the skill's Phase 2 and Phase 3 are real build/publish/run
+  loops - the agent establishes a red baseline and iterates to green itself.
+- **Without it (static mode)** no `al_build` / `al_publish` / `al_run_tests` tool is advertised, and
+  the harness prompt tells the agent not to build or run tests. The skill detects this, skips every
+  execution step, and substitutes static verification: a written red argument naming the offending
+  `file:line` and the assertion it violates, then a green argument over the edited code. The agent
+  writes the test blind and the pipeline judges it the same way, so the run is scored identically.
+
+Static mode is a supported configuration, not a degraded run to be reported as a failure - but it
+does move the red/green evidence from the container to the agent's reasoning, so expect
+`test_correct` to be the metric that moves when you flip this dimension.
 
 ## Before You Start
 
