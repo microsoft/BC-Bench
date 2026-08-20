@@ -230,4 +230,4 @@ def run_pr_review_agent(
         logger.exception("Unexpected error running engine review")
         raise
     else:
-        return build_pr_review_metrics(bcquality_root, time.monotonic() - start), config
+        return build_pr_review_metrics(output_dir, bcquality_root, time.monotonic() - start), config

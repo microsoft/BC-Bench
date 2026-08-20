@@ -119,8 +119,8 @@ class EvaluationResultSummary(BaseModel, ABC):
     def to_dict(self) -> dict[str, Any]:
         data = self.model_dump(mode="json")
         data["average_duration"] = round(data["average_duration"], 1)
-        data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)
-        data["average_completion_tokens"] = round(data["average_completion_tokens"], 1)
+        data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1) if data["average_prompt_tokens"] is not None else None
+        data["average_completion_tokens"] = round(data["average_completion_tokens"], 1) if data["average_completion_tokens"] is not None else None
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
         return data
 

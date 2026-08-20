@@ -88,6 +88,10 @@ BC PR Review records wall-clock duration and two structural BCQuality counts: Ma
       <th>Agent</th>
       <th>Model</th>
       <th>Avg Time</th>
+      <th>Avg Total Tokens</th>
+      <th>Avg API Calls</th>
+      <th>Avg AI Credits</th>
+      <th>Complete Usage</th>
       <th>Avg Knowledge Files</th>
       <th>Avg Knowledge Pruned</th>
       <th>Ver</th>
@@ -100,6 +104,10 @@ BC PR Review records wall-clock duration and two structural BCQuality counts: Ma
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td>{% if agg.average_total_tokens != null %}{{ agg.average_total_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_api_calls != null %}{{ agg.average_api_calls | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.structured_usage_complete_rate != null %}{{ agg.structured_usage_complete_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_files != null %}{{ agg.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_pruned != null %}{{ agg.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>

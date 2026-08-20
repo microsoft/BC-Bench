@@ -288,6 +288,9 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     Macro metrics average per-task scores (each task weighted equally).
     """
 
+    average_prompt_tokens: float | None = None
+    average_completion_tokens: float | None = None
+
     generated_comment_count: int = Field(default=0, ge=0)
     expected_comment_count: int = Field(default=0, ge=0)
     matched_comment_count: int = Field(default=0, ge=0)
@@ -310,6 +313,15 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     severity_mae: float = 0.0
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    average_cached_tokens: float | None = None
+    average_cache_creation_tokens: float | None = None
+    average_total_tokens: float | None = None
+    average_api_calls: float | None = None
+    average_failed_api_calls: float | None = None
+    average_usage_api_calls: float | None = None
+    average_ai_credits: float | None = None
+    structured_usage_complete_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    average_malformed_records: float | None = None
     average_knowledge_files: float | None = None
     average_knowledge_pruned: float | None = None
 
@@ -318,14 +330,28 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     instance_results: dict[str, float] = Field(default_factory=dict)
 
     def _performance_markdown(self) -> str:
-        available = f"{self.average_knowledge_files:.1f}" if self.average_knowledge_files is not None else "n/a"
+        def metric(value: float | None, digits: int = 1) -> str:
+            return f"{value:.{digits}f}" if value is not None else "n/a"
+
+        usage_complete = f"{self.structured_usage_complete_rate * 100:.1f}%" if self.structured_usage_complete_rate is not None else "n/a"
+        available = metric(self.average_knowledge_files)
         pruned = f"{self.average_knowledge_pruned:.1f}" if self.average_knowledge_pruned is not None else "n/a"
         return (
             "## Performance\n"
             "\n"
-            "| Avg duration (s) | Avg knowledge files | Avg knowledge pruned |\n"
-            "|-----------------:|--------------------:|---------------------:|\n"
-            f"| {self.average_duration:.1f} | {available} | {pruned} |\n"
+            "| Avg duration (s) | Avg prompt tokens | Avg cached tokens | Avg cache-creation tokens | Avg completion tokens | Avg total tokens |\n"
+            "|-----------------:|------------------:|------------------:|-------------------------:|----------------------:|-----------------:|\n"
+            f"| {self.average_duration:.1f} | {metric(self.average_prompt_tokens)} | {metric(self.average_cached_tokens)} | "
+            f"{metric(self.average_cache_creation_tokens)} | {metric(self.average_completion_tokens)} | {metric(self.average_total_tokens)} |\n"
+            "\n"
+            "| Avg API calls | Avg failed API calls | Avg calls with usage | Avg AI credits | Complete structured usage | Avg malformed records |\n"
+            "|--------------:|---------------------:|---------------------:|---------------:|--------------------------:|----------------------:|\n"
+            f"| {metric(self.average_api_calls)} | {metric(self.average_failed_api_calls)} | {metric(self.average_usage_api_calls)} | "
+            f"{metric(self.average_ai_credits, 4)} | {usage_complete} | {metric(self.average_malformed_records)} |\n"
+            "\n"
+            "| Avg knowledge files | Avg knowledge pruned |\n"
+            "|--------------------:|---------------------:|\n"
+            f"| {available} | {pruned} |\n"
             "\n"
         )
 
@@ -414,10 +440,33 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 [f"{self.severity_mae:.3f}", f"{self.valid_review_output_rate * 100:.1f}%"],
             ),
             _build_console_table(
-                "Performance",
-                ["Avg duration (s)", "Avg knowledge files", "Avg knowledge pruned"],
+                "Performance: tokens",
+                ["Avg duration (s)", "Prompt", "Cached", "Cache creation", "Completion", "Total"],
                 [
                     f"{self.average_duration:.1f}",
+                    f"{self.average_prompt_tokens:.1f}" if self.average_prompt_tokens is not None else "n/a",
+                    f"{self.average_cached_tokens:.1f}" if self.average_cached_tokens is not None else "n/a",
+                    f"{self.average_cache_creation_tokens:.1f}" if self.average_cache_creation_tokens is not None else "n/a",
+                    f"{self.average_completion_tokens:.1f}" if self.average_completion_tokens is not None else "n/a",
+                    f"{self.average_total_tokens:.1f}" if self.average_total_tokens is not None else "n/a",
+                ],
+            ),
+            _build_console_table(
+                "Performance: requests",
+                ["API calls", "Failed", "With usage", "AI credits", "Complete usage", "Malformed"],
+                [
+                    f"{self.average_api_calls:.1f}" if self.average_api_calls is not None else "n/a",
+                    f"{self.average_failed_api_calls:.1f}" if self.average_failed_api_calls is not None else "n/a",
+                    f"{self.average_usage_api_calls:.1f}" if self.average_usage_api_calls is not None else "n/a",
+                    f"{self.average_ai_credits:.4f}" if self.average_ai_credits is not None else "n/a",
+                    f"{self.structured_usage_complete_rate * 100:.1f}%" if self.structured_usage_complete_rate is not None else "n/a",
+                    f"{self.average_malformed_records:.1f}" if self.average_malformed_records is not None else "n/a",
+                ],
+            ),
+            _build_console_table(
+                "Performance: knowledge",
+                ["Avg knowledge files", "Avg knowledge pruned"],
+                [
                     f"{self.average_knowledge_files:.1f}" if self.average_knowledge_files is not None else "n/a",
                     f"{self.average_knowledge_pruned:.1f}" if self.average_knowledge_pruned is not None else "n/a",
                 ],
@@ -482,6 +531,12 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             values = [value for result in code_review_results if result.metrics and (value := getattr(result.metrics, name)) is not None]
             return sum(values) / len(values) if values else None
 
+        usage_completeness = [
+            result.metrics.usage_complete and result.metrics.malformed_records == 0
+            for result in code_review_results
+            if result.metrics and result.metrics.usage_complete is not None and result.metrics.malformed_records is not None
+        ]
+
         return summary.model_copy(
             update={
                 "generated_comment_count": generated_total,
@@ -503,6 +558,17 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
+                "average_prompt_tokens": average_metric("prompt_tokens"),
+                "average_completion_tokens": average_metric("completion_tokens"),
+                "average_cached_tokens": average_metric("cached_tokens"),
+                "average_cache_creation_tokens": average_metric("cache_creation_tokens"),
+                "average_total_tokens": average_metric("total_tokens"),
+                "average_api_calls": average_metric("api_calls"),
+                "average_failed_api_calls": average_metric("failed_api_calls"),
+                "average_usage_api_calls": average_metric("usage_api_calls"),
+                "average_ai_credits": average_metric("ai_credits"),
+                "structured_usage_complete_rate": sum(usage_completeness) / len(usage_completeness) if usage_completeness else None,
+                "average_malformed_records": average_metric("malformed_records"),
                 "average_knowledge_files": average_metric("knowledge_files"),
                 "average_knowledge_pruned": average_metric("knowledge_pruned"),
             }
