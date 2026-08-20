@@ -30,7 +30,7 @@ class TestExpectedMetricsWarning:
 
     def test_warns_when_expected_metric_is_missing(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=AgentHarness.COPILOT)
-        context.metrics = AgentMetrics(execution_time=12.0, llm_duration=5.0, prompt_tokens=100, completion_tokens=10, tool_usage={"bash": 1})
+        context.metrics = AgentMetrics(execution_time=12.0, llm_duration=5.0, ai_credits=1.25, tool_usage={"bash": 1})
 
         with caplog.at_level(logging.WARNING):
             BugFixResult.create_success(context, "patch")

@@ -24,11 +24,11 @@ def test_copilot_does_not_enable_memory_or_unrestricted_urls(tmp_path: Path):
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.copilot.agent.setup_hooks", return_value=tool_log_path),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
-        patch("bcbench.agent.copilot.agent.parse_metrics", return_value=None),
+        patch("bcbench.agent.copilot.agent.parse_output", return_value=(None, None)) as mock_parse_output,
         patch("bcbench.agent.copilot.agent.parse_tool_usage_from_hooks", return_value=None),
         patch(
             "bcbench.agent.copilot.agent.subprocess.run",
-            return_value=subprocess.CompletedProcess(args=[], returncode=0, stderr=b""),
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=b'{"type":"result"}\n', stderr=b""),
         ) as mock_run,
     ):
         run_copilot_agent(
@@ -41,6 +41,7 @@ def test_copilot_does_not_enable_memory_or_unrestricted_urls(tmp_path: Path):
 
     assert mock_run.call_args.args[0] == [
         "copilot",
+        "--output-format=json",
         "--allow-all-tools",
         "--disable-builtin-mcps",
         "--model=copilot-test-model",
@@ -49,3 +50,5 @@ def test_copilot_does_not_enable_memory_or_unrestricted_urls(tmp_path: Path):
         "--prompt=line one line two",
         "--no-custom-instructions",
     ]
+    assert mock_run.call_args.kwargs["capture_output"] is True
+    mock_parse_output.assert_called_once_with(['{"type":"result"}'])

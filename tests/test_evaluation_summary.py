@@ -184,6 +184,48 @@ class TestFromResults:
         assert summary.average_prompt_tokens == 0.0
         assert summary.average_completion_tokens == 0.0
 
+    def test_from_results_averages_ai_credits_over_reporting_results_only(self):
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(execution_time=100.0, ai_credits=10.0),
+            ),
+            create_bugfix_result(
+                instance_id="test__2",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(execution_time=100.0, ai_credits=20.0),
+            ),
+            create_bugfix_result(
+                instance_id="test__3",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(execution_time=100.0),
+            ),
+        ]
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
+
+        assert summary.average_ai_credits == pytest.approx(15.0)
+
+    def test_from_results_leaves_ai_credits_none_when_harness_reports_none(self):
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(execution_time=100.0, prompt_tokens=5000),
+            ),
+        ]
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
+
+        # None, not 0.0, so a harness that never reports credits is not shown as free
+        assert summary.average_ai_credits is None
+        assert summary.to_dict()["average_ai_credits"] is None
+
     def test_from_results_calculates_average_tool_usage(self):
         results = [
             create_bugfix_result(
