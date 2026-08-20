@@ -1,6 +1,6 @@
 """Test ExperimentConfiguration dataclass."""
 
-from bcbench.types import ExecutionProvenance, ExperimentConfiguration
+from bcbench.types import ExperimentConfiguration
 
 
 class TestExperimentConfiguration:
@@ -12,8 +12,6 @@ class TestExperimentConfiguration:
         assert config.custom_instructions is False
         assert config.skills_enabled is False
         assert config.custom_agent is None
-        assert config.provenance is None
-        assert config.knowledge_base is None
 
     def test_with_mcp_servers(self):
         mcp_servers = ["mcp-server-1", "mcp-server-2"]
@@ -104,16 +102,3 @@ class TestExperimentConfiguration:
 
         assert config.plugins == []
         assert not config.is_empty()
-
-    def test_with_knowledge_base_override(self):
-        config = ExperimentConfiguration(knowledge_base="BCQuality@abc123")
-
-        assert config.knowledge_base == "BCQuality@abc123"
-        assert not config.is_empty()
-
-    def test_provenance_does_not_turn_baseline_into_experiment(self):
-        config = ExperimentConfiguration(provenance=ExecutionProvenance(agent_harness="BC-ALAgents@abc123", knowledge_base="BCQuality@def456"))
-
-        assert config.provenance is not None
-        assert config.provenance.agent_harness == "BC-ALAgents@abc123"
-        assert config.is_empty()

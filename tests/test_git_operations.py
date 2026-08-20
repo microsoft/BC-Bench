@@ -12,7 +12,6 @@ from bcbench.operations.git_operations import (
     clone_repo_at_revision,
     commit_changes,
     fetch_commit_if_missing,
-    get_repository_revision,
     has_changes,
     init_repo,
     stage_and_get_diff,
@@ -64,30 +63,6 @@ class TestCommitChanges:
         assert not has_changes(repo_path)
         result = subprocess.run(["git", "log", "--format=%s", "-1"], cwd=repo_path, capture_output=True, text=True, check=True)
         assert result.stdout.strip() == "empty"
-
-    def test_repository_revision_fingerprints_dirty_content(self, temp_git_repo):
-        clean_revision = get_repository_revision(temp_git_repo)
-        assert (
-            clean_revision
-            == subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=temp_git_repo,
-                capture_output=True,
-                encoding="utf-8",
-                text=True,
-                check=True,
-            ).stdout.strip()
-        )
-
-        (temp_git_repo / "file.al").write_text("first dirty value")
-        first_dirty_revision = get_repository_revision(temp_git_repo)
-        assert first_dirty_revision.startswith(f"{clean_revision}+dirty.")
-
-        (temp_git_repo / "file.al").write_text("second dirty value")
-        assert get_repository_revision(temp_git_repo) != first_dirty_revision
-
-        (temp_git_repo / "untracked.al").write_text("untracked")
-        assert get_repository_revision(temp_git_repo) != first_dirty_revision
 
 
 class TestStageAndGetDiff:

@@ -10,7 +10,7 @@ from pydantic import BaseModel, field_validator
 from bcbench.logger import get_logger
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
-from bcbench.types import EvaluationCategory, ExecutionProvenance, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,6 @@ class LeaderboardAggregate(BaseModel, ABC):
     agent_name: str
     category: EvaluationCategory
     experiment: ExperimentConfiguration | None = None
-    provenance: ExecutionProvenance | None = None
 
     total: int
     num_runs: int
@@ -56,7 +55,6 @@ class LeaderboardAggregate(BaseModel, ABC):
             "agent_name": first_run.agent_name,
             "category": first_run.category,
             "experiment": first_run.experiment,
-            "provenance": first_run.provenance,
             "total": first_run.total,
             "num_runs": len(runs),
             "average_duration": sum(durations) / len(durations) if durations else 0.0,

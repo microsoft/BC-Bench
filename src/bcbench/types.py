@@ -76,21 +76,8 @@ class AgentMetrics(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 
-    # Copilot billing unit reported by the CLI
-    premium_requests: float | None = None
-    ai_credits: float | None = None
-
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
-
-
-class ExecutionProvenance(BaseModel):
-    """Resolved agent and knowledge content used for a run."""
-
-    model_config = ConfigDict(frozen=True)
-
-    agent_harness: str | None = None
-    knowledge_base: str | None = None
 
 
 class ExperimentConfiguration(BaseModel):
@@ -120,26 +107,13 @@ class ExperimentConfiguration(BaseModel):
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
-    # Knowledge base override used by an agent harness, including its resolved revision
-    knowledge_base: str | None = None
-
-    # Resolved execution inputs. Provenance identifies a baseline but does not make it an experiment.
-    provenance: ExecutionProvenance | None = None
-
     def is_empty(self) -> bool:
-        """Check if this configuration has no experiment-specific values.
+        """Check if this configuration has all default/empty values.
 
-        Execution provenance identifies the resolved baseline inputs and is intentionally ignored.
+        An empty configuration means no special experiment settings were used.
+        This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return (
-            self.mcp_servers is None
-            and self.al_lsp_enabled is False
-            and self.custom_instructions is False
-            and self.skills_enabled is False
-            and self.custom_agent is None
-            and self.plugins is None
-            and self.knowledge_base is None
-        )
+        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
@@ -220,15 +194,8 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL:
+            case AgentHarness.BCAL | AgentHarness.PR_REVIEW:
                 expected = AgentMetrics(execution_time=None)
-            case AgentHarness.PR_REVIEW:
-                expected = AgentMetrics(
-                    execution_time=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
-                    ai_credits=None,
-                )
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
 

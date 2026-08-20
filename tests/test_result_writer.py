@@ -3,7 +3,7 @@ from unittest.mock import PropertyMock, patch
 
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentMetrics, EvaluationCategory, ExecutionProvenance, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
 
 
@@ -42,8 +42,6 @@ class TestWriteBcevalResults:
         assert data["metadata"]["run_id"] == "test_run_123"
         assert data["metadata"]["project"] == "Shopify"
         assert data["metadata"]["llm_duration"] == 100.0
-        assert data["metadata"]["premium_requests"] == 0
-        assert data["metadata"]["ai_credits"] == 0
         assert data["metadata"]["tool_usage"] == {"view_code": 2, "run_tests": 1}
 
     def test_handles_none_prompt_tokens(self, tmp_path, sample_dataset_file, sample_testgen_result, problem_statement_dir):
@@ -265,34 +263,6 @@ class TestWriteBcevalResults:
 
         assert data["metadata"]["EvalRunType"] == "baseline"
         assert data["metadata"]["experiment"] is None
-
-    def test_exports_baseline_provenance(self, tmp_path, sample_dataset_file, problem_statement_dir):
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-        provenance = ExecutionProvenance(agent_harness="BC-ALAgents@abc123", knowledge_base="BCQuality@def456")
-        result = create_bugfix_result(metrics=AgentMetrics(execution_time=1.0), experiment=ExperimentConfiguration(provenance=provenance))
-
-        with (
-            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
-        ):
-            write_bceval_results(
-                results=[result],
-                out_dir=output_dir,
-                run_id="run_provenance",
-                output_filename="results.jsonl",
-                category=EvaluationCategory.BUG_FIX,
-            )
-
-        with (output_dir / "results.jsonl").open() as f:
-            data = json.loads(f.readline())
-
-        assert data["metadata"]["EvalRunType"] == "baseline"
-        assert data["metadata"]["experiment"] is None
-        assert data["metadata"]["provenance"] == {
-            "agent_harness": "BC-ALAgents@abc123",
-            "knowledge_base": "BCQuality@def456",
-        }
 
     def test_marks_run_as_experiment_with_config(self, tmp_path, sample_dataset_file, problem_statement_dir):
         output_dir = tmp_path / "output"

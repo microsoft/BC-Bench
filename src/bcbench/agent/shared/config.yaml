@@ -190,18 +190,11 @@ mcp:
 # the production orchestrator's complete local, non-posting path to measure BC PR Review
 # + BCQuality on the code-review category, including production parsing and filtering.
 # Generic Copilot and Claude runners use code-review-template above on the same category.
-#   path:          local microsoft/BC-ALAgents checkout, e.g. "C:/depot/BC-ALAgents". Left
-#                  null in the repo; CI sets BC_PR_REVIEW_ROOT (which takes precedence).
-#                  For a local run, set that env var or put your checkout path here on your
-#                  own branch (do not commit a machine-specific path).
-#   bcquality:     content source for the engine run; all optional (null = engine's pinned
-#                  repo/ref). Set local_path to iterate on a local BCQuality checkout without
-#                  pushing (it is copied and filtered; the original is never modified).
-#                  CLI flags (--bcquality-repo/-ref/-local-path) override these.
+# Engine and local BCQuality checkout paths are machine inputs supplied through CLI flags.
+# BCQuality repo/ref remain experiment settings; repo supports testing forks while null values
+# use the engine's pinned content source. CLI flags override these values.
 pr_review:
-  path: null
-  min_severity: Low
+  min_severity: Medium
   bcquality:
     repo: null
     ref: null
-    local_path: null

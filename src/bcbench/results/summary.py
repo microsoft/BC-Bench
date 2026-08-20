@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.types import EvaluationCategory, ExecutionProvenance, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -49,14 +49,11 @@ class EvaluationResultSummary(BaseModel, ABC):
     average_duration: float
     average_prompt_tokens: float
     average_completion_tokens: float
-    average_premium_requests: float = 0.0
-    average_ai_credits: float = 0.0
     average_llm_duration: float | None = None
     average_tool_usage: dict[str, float] | None = None
 
     github_run_id: str | None = None
     experiment: ExperimentConfiguration | None = None
-    provenance: ExecutionProvenance | None = None
 
     benchmark_version: str
 
@@ -79,15 +76,11 @@ class EvaluationResultSummary(BaseModel, ABC):
         durations: list[float] = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
         prompt_tokens: list[int] = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
         completion_tokens: list[int] = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
-        premium_requests: list[float] = [r.metrics.premium_requests for r in results if r.metrics and r.metrics.premium_requests is not None]
-        ai_credits: list[float] = [r.metrics.ai_credits for r in results if r.metrics and r.metrics.ai_credits is not None]
         llm_durations: list[float] = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
         tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
 
         first_result = results[0]
-        configuration = first_result.experiment
-        experiment = configuration.model_copy(update={"provenance": None}) if configuration and not configuration.is_empty() else None
-        provenance = configuration.provenance if configuration else None
+        experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
 
         return {
             "total": len(results),
@@ -98,13 +91,10 @@ class EvaluationResultSummary(BaseModel, ABC):
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
             "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
-            "average_premium_requests": sum(premium_requests) / len(premium_requests) if premium_requests else 0.0,
-            "average_ai_credits": sum(ai_credits) / len(ai_credits) if ai_credits else 0.0,
             "average_llm_duration": sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
             "average_tool_usage": calculate_average_tool_usage(tool_usages) if tool_usages else None,
             "github_run_id": run_id,
             "experiment": experiment,
-            "provenance": provenance,
             "benchmark_version": get_benchmark_version(),
         }
 
@@ -131,8 +121,6 @@ class EvaluationResultSummary(BaseModel, ABC):
         data["average_duration"] = round(data["average_duration"], 1)
         data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)
         data["average_completion_tokens"] = round(data["average_completion_tokens"], 1)
-        data["average_premium_requests"] = round(data["average_premium_requests"], 2)
-        data["average_ai_credits"] = round(data["average_ai_credits"], 2)
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
         return data
 
@@ -144,15 +132,14 @@ class EvaluationResultSummary(BaseModel, ABC):
         logger.info(f"Saved evaluation summary to {output_file}")
 
     def combination_key(self) -> tuple[str | None, ...]:
-        """Key for identifying runs of the same agent, configuration, provenance, and benchmark version.
+        """Key for identifying runs of the same agent, model, experiment, and benchmark version.
 
         Judge-scored categories extend the key with their judge model, so runs judged by different models stay separate.
         """
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
-        provenance_key = json.dumps(self.provenance.model_dump(mode="json"), sort_keys=True) if self.provenance else None
-        return (self.agent_name, self.model, experiment_key, provenance_key, self.benchmark_version)
+        return (self.agent_name, self.model, experiment_key, self.benchmark_version)
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):

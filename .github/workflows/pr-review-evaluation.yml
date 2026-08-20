@@ -109,7 +109,7 @@ jobs:
           node-version: 24
 
       - name: Install evaluation CLIs
-        uses: $/.github/actions/install-eval-clis
+        uses: $/.github/actions/install-agent-harnesses
 
       - name: Checkout BC-ALAgents review engine
         uses: actions/checkout@v5
@@ -124,12 +124,12 @@ jobs:
         shell: pwsh
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
-          BC_PR_REVIEW_ROOT: ${{ github.workspace }}/bc-alagents-engine
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
           uv run bcbench evaluate pr-review "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
+            --engine-path "${{ github.workspace }}/bc-alagents-engine" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
