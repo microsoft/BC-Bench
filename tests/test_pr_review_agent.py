@@ -90,6 +90,38 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     }
     completed = subprocess.CompletedProcess(args=["pwsh"], returncode=0, stdout="✓", stderr="")
     entry = create_codereview_entry(repo="microsoft/BCApps")
+    bcquality_root = tmp_path / "bcquality"
+    knowledge_root = bcquality_root / "microsoft" / "knowledge" / "performance"
+    knowledge_root.mkdir(parents=True)
+    (knowledge_root / "one.md").write_text("# One", encoding="utf-8")
+    (bcquality_root / "_filter-report.json").write_text('{"removed": []}', encoding="utf-8")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    (output_dir / "_run-metrics.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "metrics_source": "copilot-cli-otel",
+                "cli_version": "1.0.81-0",
+                "wall_time_seconds": 2.4,
+                "prompt_tokens": 100,
+                "cached_tokens": 20,
+                "cache_creation_tokens": 5,
+                "completion_tokens": 10,
+                "reasoning_tokens": 4,
+                "total_tokens": 110,
+                "api_calls": 2,
+                "failed_api_calls": 0,
+                "usage_api_calls": 2,
+                "ai_credits": 0.25,
+                "premium_requests": 0.5,
+                "models": ["gpt-5.6-luna"],
+                "usage_complete": True,
+                "malformed_records": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
 
     with (
         patch("bcbench.agent.pr_review.agent._load_pr_review_settings", return_value=settings),
@@ -97,7 +129,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent._resolve_pwsh", return_value="pwsh"),
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
-        patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=tmp_path / "bcquality"),
+        patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
@@ -113,6 +145,13 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
 
     assert metrics is not None
     assert metrics.execution_time == 2.5
+    assert metrics.prompt_tokens == 100
+    assert metrics.completion_tokens == 10
+    assert metrics.total_tokens == 110
+    assert metrics.api_calls == 2
+    assert metrics.ai_credits == 0.25
+    assert metrics.knowledge_files == 1
+    assert metrics.knowledge_pruned == 0
     assert config.is_empty()
     assert run_process.call_args.kwargs["encoding"] == "utf-8"
     assert run_process.call_args.kwargs["cwd"] == str((tmp_path / "repo").resolve())

@@ -20,6 +20,7 @@ from typing import Any
 
 import yaml
 
+from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -229,4 +230,4 @@ def run_pr_review_agent(
         logger.exception("Unexpected error running engine review")
         raise
     else:
-        return AgentMetrics(execution_time=time.monotonic() - start), config
+        return build_pr_review_metrics(output_dir, bcquality_root, time.monotonic() - start), config

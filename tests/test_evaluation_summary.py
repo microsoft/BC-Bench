@@ -226,6 +226,18 @@ class TestFromResults:
         assert summary.average_ai_credits is None
         assert summary.to_dict()["average_ai_credits"] is None
 
+    def test_to_dict_preserves_exact_ai_credit_precision(self):
+        result = create_bugfix_result(
+            instance_id="test__1",
+            project="app",
+            resolved=True,
+            metrics=AgentMetrics(execution_time=100.0, ai_credits=0.123456),
+        )
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results([result], run_id="test_run_123")
+
+        assert summary.to_dict()["average_ai_credits"] == pytest.approx(0.123456)
+
     def test_from_results_calculates_average_tool_usage(self):
         results = [
             create_bugfix_result(

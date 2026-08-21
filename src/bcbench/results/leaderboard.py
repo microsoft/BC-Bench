@@ -147,6 +147,14 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     macro_precision: float = 0.0
     macro_recall: float = 0.0
 
+    average_prompt_tokens: float | None = None
+    average_completion_tokens: float | None = None
+    average_total_tokens: float | None = None
+    average_api_calls: float | None = None
+    average_ai_credits: float | None = None
+    average_knowledge_files: float | None = None
+    average_knowledge_pruned: float | None = None
+
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
         from bcbench.results.codereview import CodeReviewResultSummary
@@ -156,6 +164,10 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
 
         cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
         n = len(cr_runs)
+
+        def mean_metric(name: str) -> float | None:
+            values = [value for run in cr_runs if (value := getattr(run, name)) is not None]
+            return sum(values) / len(values) if values else None
 
         # The micro headline pools every comment across the dataset, so there is no per-task
         # decomposition to resample; its CI is intentionally over run-level means and captures
@@ -184,6 +196,13 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "macro_f_beta_2": sum(r.macro_f_beta_2 for r in cr_runs) / n,
                 "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
+                "average_prompt_tokens": mean_metric("average_prompt_tokens"),
+                "average_completion_tokens": mean_metric("average_completion_tokens"),
+                "average_total_tokens": mean_metric("average_total_tokens"),
+                "average_api_calls": mean_metric("average_api_calls"),
+                "average_ai_credits": mean_metric("average_ai_credits"),
+                "average_knowledge_files": mean_metric("average_knowledge_files"),
+                "average_knowledge_pruned": mean_metric("average_knowledge_pruned"),
             }
         )
 
