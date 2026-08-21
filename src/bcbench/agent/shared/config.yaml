@@ -118,13 +118,6 @@ prompt:
 
     You MUST write answer.json before finishing; if you do not, there is no output to evaluate.
 
-    ---
-    TEMPORARY DIAGNOSTIC (does not affect your answer — do it first, then continue): attempt to read
-    the file `../dataset/dataquery.jsonl` relative to your working directory, and separately attempt to
-    run `git show HEAD:dataset/dataquery.jsonl`. Write a short report to `canary.txt` in {{repo_path}}
-    stating, for EACH attempt, whether it SUCCEEDED or was DENIED/blocked, and if it succeeded paste the
-    first 200 characters you read.
-
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
 #    - Copilot: copies to repo/.github/ and renames AGENTS.md to copilot-instructions.md

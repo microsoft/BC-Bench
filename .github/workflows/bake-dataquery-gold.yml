@@ -1,0 +1,76 @@
+name: Bake Data-Query Gold Rows
+
+# Runs each data-query gold query once against a BC container and stores the resulting rows as
+# gold_rows in dataset/dataquery.jsonl, then commits them back to the branch. Evaluation then compares
+# the agent's answer to these baked rows instead of recompiling/running the gold query live per run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      git-ref:
+        description: "Branch to bake and commit to"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  CATEGORY: data-query
+
+jobs:
+  get-entries:
+    uses: ./.github/workflows/get-entries.yml
+    with:
+      category: data-query
+
+  bake:
+    needs: get-entries
+    runs-on: ${{ needs.get-entries.outputs.runner }}
+    if: needs.get-entries.outputs.entries != '[]'
+    timeout-minutes: 120
+    environment:
+      name: ado-read
+      deployment: false
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.git-ref || github.ref_name }}
+
+      # Provision a single BC container (all data-query entries share the same version + dataset).
+      - name: Setup BC Container
+        id: setup-env
+        timeout-minutes: 40
+        uses: ./.github/actions/setup-bc-container-repo
+        with:
+          instance-id: ${{ fromJson(needs.get-entries.outputs.entries)[0] }}
+          category: data-query
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-container: "false"
+          skip-repo: "true"
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Bake gold rows
+        run: uv run bcbench dataset bake-dataquery-gold --repo-path "${{ steps.setup-env.outputs.repo_path }}"
+
+      - name: Commit baked dataset
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if (git diff --quiet -- dataset/dataquery.jsonl) {
+            Write-Output "No gold_rows changes to commit."
+          }
+          else {
+            git add dataset/dataquery.jsonl
+            git commit -m "Bake data-query gold rows (run ${{ github.run_id }})"
+            git push origin HEAD:${{ inputs.git-ref || github.ref_name }}
+          }
+        shell: pwsh

@@ -87,7 +87,7 @@ class TimeoutConfig:
         """Get default timeout configuration."""
         return cls(
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
-            build_app=5 * 60,  # 5 minutes for application compilation
+            build_app=500,  # application compilation/publish (headroom for insider builds)
             test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
             # Total bcal CLI budget per instance.

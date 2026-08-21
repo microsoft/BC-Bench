@@ -104,20 +104,12 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
             context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[DataQueryEntry]) -> None:
-        from bcbench.operations import execute_al_query
-
         query_file = context.repo_path / GENERATED_QUERY_FILE
         # query.al is only an inspection artifact now; scoring is on the data the agent retrieved.
         generated_query = query_file.read_text(encoding="utf-8").strip() if query_file.exists() else ""
         answer_file = context.repo_path / ANSWER_FILE
 
-        container = context.get_container()
-        version = context.entry.environment_setup_version
-
-        # Compute the expected data by running the gold query, and deliberately do NOT catch its failure:
-        # a gold that doesn't compile/run is a harness or dataset bug, not the agent's fault, so it must
-        # fail the run loudly and get fixed rather than being silently scored.
-        gold_rows = execute_al_query(context.entry.gold_query, container, version, context.repo_path, "gold")
+        gold_rows = self._gold_rows(context)
 
         if not answer_file.exists():
             logger.warning(f"Agent produced no {ANSWER_FILE} for {context.entry.instance_id}")
@@ -136,3 +128,17 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         result = ExecutionBasedEvaluationResult.create_result(context, output=generated_query, build=True, resolved=resolved, error_message=error_message)
         logger.info(f"{context.entry.instance_id}: build=True resolved={resolved}")
         self.save_result(context, result)
+
+    def _gold_rows(self, context: EvaluationContext[DataQueryEntry]) -> Sequence[Mapping[str, object]]:
+        """The expected rows: use the baked gold_rows if present, else compute them live (fail loud).
+
+        A gold query that doesn't compile/run is a harness/dataset bug, not the agent's fault, so the
+        live fallback deliberately does NOT catch its failure — it must fail the run loudly.
+        """
+        if context.entry.gold_rows:
+            return list(context.entry.gold_rows)
+
+        from bcbench.operations import execute_al_query
+
+        logger.info(f"No baked gold_rows for {context.entry.instance_id}; running gold query live")
+        return execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold")
