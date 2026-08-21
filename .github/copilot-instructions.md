@@ -28,6 +28,17 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 - Prefer high-order functions like map, filter, reduce over loops
 - Prefer immutable data structures where possible
 
+### Architecture boundaries
+
+Keep these boundaries free of both direct and indirect dependencies:
+
+- `bcbench.dataset` must not depend on runtime packages: `agent`, `collection`, `commands`, `contamination`, `evaluate`, `operations`, or `results`.
+- Implementation packages (`agent`, `collection`, `contamination`, `dataset`, `evaluate`, `operations`, and `results`) must not depend on `bcbench.cli` or `bcbench.commands`.
+- `bcbench.evaluate` must not select or depend on agent implementations in `bcbench.agent`; agent implementations are injected through `AgentRunner`.
+- `bcbench.results` must not depend on execution packages: `agent`, `evaluate`, or `operations`.
+
+`bcbench.types` is the temporary exception because `EvaluationCategory` is still the central category registry. During review, trace newly introduced import paths transitively and flag boundary violations even when no direct forbidden import appears in the changed file.
+
 ### Readable code over documentation or comments
 Function names should be self-explanatory. Do NOT add docstrings to functions unless absolutely necessary.
 When a docstring is necessary, keep it short and use Google style. Include only useful sections such as `Args:` and `Returns:`; skip details that are obvious from names and type hints.

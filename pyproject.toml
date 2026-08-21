@@ -42,53 +42,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 bcbench = ["agent/*.yaml"]
 
-[tool.importlinter]
-root_packages = ["bcbench"]
-
-[[tool.importlinter.contracts]]
-name = "Dataset models stay independent of runtime packages"
-type = "forbidden"
-source_modules = ["bcbench.dataset"]
-allow_indirect_imports = true
-forbidden_modules = [
-    "bcbench.agent",
-    "bcbench.collection",
-    "bcbench.commands",
-    "bcbench.contamination",
-    "bcbench.evaluate",
-    "bcbench.operations",
-    "bcbench.results",
-]
-
-[[tool.importlinter.contracts]]
-name = "Implementation packages do not depend on the CLI"
-type = "forbidden"
-source_modules = [
-    "bcbench.agent",
-    "bcbench.collection",
-    "bcbench.contamination",
-    "bcbench.dataset",
-    "bcbench.evaluate",
-    "bcbench.operations",
-    "bcbench.results",
-]
-allow_indirect_imports = true
-forbidden_modules = ["bcbench.cli", "bcbench.commands"]
-
-[[tool.importlinter.contracts]]
-name = "Evaluation pipelines do not select agent implementations"
-type = "forbidden"
-source_modules = ["bcbench.evaluate"]
-allow_indirect_imports = true
-forbidden_modules = ["bcbench.agent"]
-
-[[tool.importlinter.contracts]]
-name = "Result models stay independent of execution"
-type = "forbidden"
-source_modules = ["bcbench.results"]
-allow_indirect_imports = true
-forbidden_modules = ["bcbench.agent", "bcbench.evaluate", "bcbench.operations"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-v", "--strict-markers"]
@@ -135,6 +88,9 @@ extend-select = [
     "RSE",   # flake8-raise: drop redundant parentheses on bare exception raises
     "PGH",   # pygrep-hooks: require codes on noqa/type-ignore comments (PGH003/PGH004)
     "S307",  # flake8-bandit: ban eval (was PGH001, which ruff removed in favour of this rule)
+    "DTZ",   # flake8-datetimez: require timezone-aware datetime usage
+    "NPY",   # NumPy-specific correctness and modernization checks
+    "PIE",   # flake8-pie: miscellaneous correctness and simplification checks
 ]
 
 ignore = [
@@ -143,6 +99,9 @@ ignore = [
     "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible (143 sites)
     "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message (96 sites)
 ]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # Force sandboxed rendering:
@@ -163,7 +122,6 @@ analysis = [
     "plotly>=6.5.0",
 ]
 dev = [
-    "import-linter>=2.13",
     "pytest>=9.0.3",
     "pytest-cov>=7.0",
     "ruff>=0.16.0",
