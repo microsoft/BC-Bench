@@ -29,6 +29,11 @@ repos:
 
   - repo: local
     hooks:
+      - id: import-linter
+        name: architecture check
+        entry: uv run lint-imports
+        language: python
+        pass_filenames: false
       - id: ty
         name: ty check
         entry: uv run ty check . --ignore=unresolved-import --exclude "notebooks/"

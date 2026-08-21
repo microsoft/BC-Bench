@@ -33,7 +33,7 @@ bcbench = "bcbench.cli:app"
 
 [[tool.uv.index]]
 name = "microsoft-cfs"
-url = "https://packagefeedproxy.microsoft.io/pypi/simple"
+url = "https://pypi.org/simple"
 default = true
 
 [tool.setuptools.packages.find]
@@ -41,6 +41,53 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 bcbench = ["agent/*.yaml", "agent/pr_review/scripts/*.ps1"]
+
+[tool.importlinter]
+root_packages = ["bcbench"]
+
+[[tool.importlinter.contracts]]
+name = "Dataset models stay independent of runtime packages"
+type = "forbidden"
+source_modules = ["bcbench.dataset"]
+allow_indirect_imports = true
+forbidden_modules = [
+    "bcbench.agent",
+    "bcbench.collection",
+    "bcbench.commands",
+    "bcbench.contamination",
+    "bcbench.evaluate",
+    "bcbench.operations",
+    "bcbench.results",
+]
+
+[[tool.importlinter.contracts]]
+name = "Implementation packages do not depend on the CLI"
+type = "forbidden"
+source_modules = [
+    "bcbench.agent",
+    "bcbench.collection",
+    "bcbench.contamination",
+    "bcbench.dataset",
+    "bcbench.evaluate",
+    "bcbench.operations",
+    "bcbench.results",
+]
+allow_indirect_imports = true
+forbidden_modules = ["bcbench.cli", "bcbench.commands"]
+
+[[tool.importlinter.contracts]]
+name = "Evaluation pipelines do not select agent implementations"
+type = "forbidden"
+source_modules = ["bcbench.evaluate"]
+allow_indirect_imports = true
+forbidden_modules = ["bcbench.agent"]
+
+[[tool.importlinter.contracts]]
+name = "Result models stay independent of execution"
+type = "forbidden"
+source_modules = ["bcbench.results"]
+allow_indirect_imports = true
+forbidden_modules = ["bcbench.agent", "bcbench.evaluate", "bcbench.operations"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -117,11 +164,13 @@ analysis = [
     "plotly>=6.5.0",
 ]
 dev = [
+    "import-linter>=2.13",
     "pytest>=9.0.3",
     "pytest-cov>=7.0",
     "ruff>=0.16.0",
     "pre-commit>=4.3.0",
     "ty>=0.0.33",
+    "import-linter>=2.13",
 ]
 # `bcbench redteam` only, and not in default-groups: azure-ai-evaluation[redteam] pulls in ~76
 # packages (pyrit, transformers, datasets, ...) that no other command needs.
