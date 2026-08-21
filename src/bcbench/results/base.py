@@ -79,6 +79,14 @@ class BaseEvaluationResult(BaseModel):
         return {}
 
     @property
+    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
+        """Extra metadata fields for the bceval export beyond the shared ones.
+
+        Subclasses override to record category-specific provenance such as the judge model.
+        """
+        return {}
+
+    @property
     def display_row(self) -> dict[str, str]:
         """Extra columns for per-instance detail tables.
 
@@ -118,7 +126,21 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
         return {"resolved": self.resolved, "build": self.build}
 
 
-class JudgeBasedEvaluationResult(BaseEvaluationResult):
+class JudgeScoredEvaluationResult(BaseEvaluationResult):
+    """Result for categories whose scoring involves an LLM judge, recording which judge model was pinned for the run."""
+
+    judge_model: str
+
+    @classmethod
+    def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+        return {**super()._base_fields(context), "judge_model": context.category.judge_model}
+
+    @property
+    def export_metadata(self) -> dict[str, str | int | float | bool | None]:
+        return {"judge_model": self.judge_model}
+
+
+class JudgeBasedEvaluationResult(JudgeScoredEvaluationResult):
     """Result for categories scored by LLM-as-judge (e.g. lm_checklist).
 
     The local pipeline only persists the agent's raw output; actual scoring is performed downstream by bceval

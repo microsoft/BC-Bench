@@ -9,9 +9,9 @@ from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
 from bcbench.dataset import ReviewComment
-from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
 from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
-from bcbench.results.summary import EvaluationResultSummary
+from bcbench.results.summary import JudgeBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
 
 _METRIC_EXPLANATIONS = """\
@@ -170,7 +170,7 @@ def _score_counts(matched_count: int, generated_count: int, expected_count: int,
     )
 
 
-class CodeReviewResult(BaseEvaluationResult):
+class CodeReviewResult(JudgeScoredEvaluationResult):
     """Result for the code-review category."""
 
     generated_comments: list[ReviewComment] = Field(default_factory=list)
@@ -280,7 +280,7 @@ class CodeReviewResult(BaseEvaluationResult):
         }
 
 
-class CodeReviewResultSummary(EvaluationResultSummary):
+class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     """
     Summary for the code-review category.
 

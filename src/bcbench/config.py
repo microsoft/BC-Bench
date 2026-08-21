@@ -6,10 +6,12 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast, get_args
 
+import yaml
 from dotenv import load_dotenv
 
-from bcbench.cli_options import CopilotModel
+from bcbench.cli_options import CopilotModelName
 
 __all__ = ["Config", "get_config"]
 
@@ -141,15 +143,27 @@ class FilePatternConfig:
 
 @dataclass(frozen=True)
 class JudgeConfig:
-    """Configuration for the code-review LLM semantic judge."""
+    """Configuration for LLM judges."""
 
-    code_review_model: CopilotModel
+    code_review_model: CopilotModelName
+    lm_checklist_model: str
     result_file: str
 
     @classmethod
-    def default(cls) -> JudgeConfig:
+    def from_file(cls, path: Path) -> JudgeConfig:
+        shared_config = yaml.safe_load(path.read_text(encoding="utf-8"))
+        code_review_model: str = shared_config["judges"]["code-review"]["model"]
+        lm_checklist_model: str = shared_config["judges"]["lm-checklist"]["model"]
+
+        if not all(model.strip() for model in (code_review_model, lm_checklist_model)):
+            raise ValueError("Judge models must be non-empty strings")
+
+        if code_review_model not in get_args(CopilotModelName):
+            raise ValueError(f"Unknown code-review judge model {code_review_model!r} in {path}")
+
         return cls(
-            code_review_model="gpt-5.3-codex",
+            code_review_model=cast(CopilotModelName, code_review_model),
+            lm_checklist_model=lm_checklist_model,
             result_file="judge_results.json",
         )
 
@@ -195,7 +209,7 @@ class Config:
             env=EnvironmentConfig.from_environment(),
             timeout=TimeoutConfig.default(),
             file_patterns=FilePatternConfig.default(),
-            judge=JudgeConfig.default(),
+            judge=JudgeConfig.from_file(path_config.agent_share_dir / "config.yaml"),
         )
 
 

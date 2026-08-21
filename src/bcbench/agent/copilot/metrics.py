@@ -1,122 +1,96 @@
-import re
+import json
 from collections.abc import Sequence
-from pathlib import Path
 
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
 logger = get_logger(__name__)
 
-# Regex to count LLM requests (turns) in the log
-# Each "--- Start of group: Sending request to the AI model ---" indicates a new LLM call
-TURN_COUNT_PATTERN = re.compile(r"--- Start of group: Sending request to the AI model ---")
+# Verified against the CLI's own "AI Credits" footer: 9613375000 nano-AIU renders as "AI Credits 9.61".
+NANO_AIU_PER_AI_CREDIT = 1_000_000_000
 
 
-def _parse_token_count(s: str) -> int:
-    if s.endswith("m"):
-        return int(float(s[:-1]) * 1000000)
-    if s.endswith("k"):
-        return int(float(s[:-1]) * 1000)
-    return int(float(s))
-
-
-def parse_turn_count_from_log(log_path: Path) -> int:
-    content = log_path.read_text(encoding="utf-8")
-    return len(TURN_COUNT_PATTERN.findall(content))
-
-
-def parse_metrics(output_lines: Sequence[str], session_log_path: Path | None = None) -> AgentMetrics | None:
-    """Parse metrics from Copilot CLI output and session logs.
-
-    This is highly delicate and depends on the exact formatting of the CLI output.
-
-    Args:
-        output_lines: Lines from Copilot CLI stderr output
-        session_log_path: Optional path to session log file for tool usage parsing
-
-    Expected output format (v1.0.57):
-        Changes    +67 -0
-        Requests   15 Premium (6m 47s)
-        Tokens     ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)
-
-    Legacy output format:
-        Total usage est:        0.33 Premium requests
-        API time spent:         2m 10.145s
-        Total session time:     2m 41.651s
-        Total code changes:     +42 -1
-        Breakdown by AI model:
-         claude-haiku-4.5        1.3m in, 11.6k out, 1.2m cached (Est. 0.33 Premium requests)
-    """
-    if not output_lines:
-        logger.warning("No output lines to parse metrics from")
+def _as_float(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):  # bool is an int subclass
         return None
+    return float(value)
 
-    output_text = "".join(output_lines)
-    logger.debug(f"Parsing metrics from output:\n{output_text}")
 
+def _milliseconds_to_seconds(value: object) -> float | None:
+    milliseconds = _as_float(value)
+    return None if milliseconds is None else milliseconds / 1000.0
+
+
+def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str | None]:
+    """Parse metrics and the agent's final response from `copilot --output-format=json` (JSONL) stdout.
+
+    Relevant events (CLI 1.0.80):
+        model.call_start: one per request sent to the model, so counting them yields the turn count.
+        session.usage_checkpoint: `data.totalNanoAiu` is cumulative for the session, so the last one wins.
+        result: terminal event whose `usage` sits at the event root rather than under `data`.
+
+    Returns:
+        The parsed metrics (None when the stream carried none) and the agent's final response.
+    """
     execution_time: float | None = None
     llm_duration: float | None = None
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-    turn_count: int | None = None
+    ai_credits: float | None = None
+    turn_count = 0
+    response: str | None = None
+    final_response: str | None = None
 
-    # Parse turn count from session log if provided
-    if session_log_path:
+    for line_number, line in enumerate(output_lines, start=1):
+        if not line.strip():
+            continue
+
         try:
-            turn_count = parse_turn_count_from_log(session_log_path) or None
-        except Exception as e:  # noqa: BLE001 - metrics are best-effort; never fail a run over them
-            logger.warning(f"Failed to parse turn count from {session_log_path}: {e}")
-            turn_count = None
+            event = json.loads(line)
+        except json.JSONDecodeError as error:
+            logger.warning(f"Skipping invalid JSON from Copilot CLI output at line {line_number}: {error}")
+            continue
 
-    try:
-        # Parse LLM duration (API time) — legacy format
-        llm_duration_match = re.search(r"API time spent:\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
-        if llm_duration_match:
-            minutes = int(llm_duration_match.group(1)) if llm_duration_match.group(1) else 0
-            seconds = float(llm_duration_match.group(2))
-            llm_duration = minutes * 60 + seconds
+        if not isinstance(event, dict):
+            logger.warning(f"Skipping non-object JSON from Copilot CLI output at line {line_number}")
+            continue
 
-        # Parse wall clock duration — legacy format
-        duration_match = re.search(r"Total session time:\s*(?:(\d+)m\s*)?(\d+(?:\.\d+)?)s", output_text)
-        if duration_match:
-            minutes = int(duration_match.group(1)) if duration_match.group(1) else 0
-            seconds = float(duration_match.group(2))
-            execution_time = minutes * 60 + seconds
+        match event.get("type"):
+            case "model.call_start":
+                turn_count += 1
+            case "assistant.message":
+                data = event.get("data")
+                if not isinstance(data, dict):
+                    continue
 
-        # New format: "Requests  0.33 Premium (1m 45s)" — extract session time from parenthesized duration
-        if execution_time is None:
-            requests_match = re.search(r"Requests\s+[\d.]+\s+Premium\s+\((?:(\d+)m\s*)?(\d+(?:\.\d+)?)s\)", output_text)
-            if requests_match:
-                minutes = int(requests_match.group(1)) if requests_match.group(1) else 0
-                seconds = float(requests_match.group(2))
-                execution_time = minutes * 60 + seconds
+                content = data.get("content")
+                if isinstance(content, str) and content:
+                    response = content
+                    if data.get("phase") == "final_answer":
+                        final_response = content
+            case "session.usage_checkpoint":
+                data = event.get("data")
+                if not isinstance(data, dict):
+                    continue
 
-        # Token usage — legacy format: "1.3m in, 11.6k out"
-        usage_match = re.search(r"(\d+(?:\.\d+)?[km]?)\s+in,\s*(\d+(?:\.\d+)?[km]?)\s+out", output_text)
-        if usage_match:
-            prompt_tokens = _parse_token_count(usage_match.group(1))
-            completion_tokens = _parse_token_count(usage_match.group(2))
+                total_nano_aiu = _as_float(data.get("totalNanoAiu"))
+                if total_nano_aiu is not None:
+                    ai_credits = total_nano_aiu / NANO_AIU_PER_AI_CREDIT
+            case "result":
+                usage = event.get("usage")
+                if not isinstance(usage, dict):
+                    continue
 
-        # New format: "Tokens    ↑ 1.6m (1.6m cached) • ↓ 20.7k (3.2k reasoning)"
-        # Anchor on the ↑/↓ arrows so parenthesized annotations between the numbers don't break parsing.
-        if prompt_tokens is None:
-            tokens_match = re.search(r"Tokens\s+.*?↑\s*(\d+(?:\.\d+)?[km]?).*?↓\s*(\d+(?:\.\d+)?[km]?)", output_text)
-            if tokens_match:
-                prompt_tokens = _parse_token_count(tokens_match.group(1))
-                completion_tokens = _parse_token_count(tokens_match.group(2))
+                execution_time = _milliseconds_to_seconds(usage.get("sessionDurationMs"))
+                llm_duration = _milliseconds_to_seconds(usage.get("totalApiDurationMs"))
 
-        if execution_time is not None or llm_duration is not None or prompt_tokens is not None or completion_tokens is not None or turn_count is not None:
-            return AgentMetrics(
-                execution_time=execution_time,
-                llm_duration=llm_duration,
-                turn_count=turn_count,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-            )
-
-    except Exception:
-        logger.exception("Failed to parse metrics from output")
-        return None
+    metrics = None
+    if execution_time is not None or llm_duration is not None or ai_credits is not None or turn_count:
+        metrics = AgentMetrics(
+            execution_time=execution_time,
+            llm_duration=llm_duration,
+            ai_credits=ai_credits,
+            turn_count=turn_count or None,
+        )
     else:
-        logger.warning("No metrics found in output")
-        return None
+        logger.warning("No metrics found in Copilot JSON output")
+
+    return metrics, final_response or response

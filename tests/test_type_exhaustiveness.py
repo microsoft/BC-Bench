@@ -49,6 +49,15 @@ def test_all_categories_have_entry_classes():
         assert entry_cls is not None
 
 
+def test_all_categories_resolve_a_judge_model():
+    from bcbench.config import get_config
+
+    judged_models = {get_config().judge.code_review_model, get_config().judge.lm_checklist_model}
+    for category in EvaluationCategory:
+        judge_model = category.judge_model
+        assert judge_model is None or judge_model in judged_models
+
+
 def test_all_categories_have_aggregate_classes():
     from bcbench.results.leaderboard import LeaderboardAggregate
 

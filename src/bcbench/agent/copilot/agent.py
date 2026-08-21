@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from bcbench.agent.copilot.metrics import parse_metrics
+from bcbench.agent.copilot.metrics import parse_output
 from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.copilot_cli import find_copilot
@@ -71,6 +71,7 @@ def run_copilot_agent(
     try:
         cmd_args = [
             copilot_cmd,
+            "--output-format=json",
             "--allow-all-tools",  # required for non-interactive mode
             "--disable-builtin-mcps",
             f"--model={model}",
@@ -103,24 +104,20 @@ def run_copilot_agent(
                 "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
                 "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
             },
-            stderr=subprocess.PIPE,  # only capture stderr where metrics are printed
+            capture_output=True,
             timeout=_config.timeout.agent_execution,
             check=True,
         )
 
         if result.stderr:
-            sys.stdout.buffer.write(result.stderr)
-            sys.stdout.buffer.flush()
+            sys.stderr.buffer.write(result.stderr)
+            sys.stderr.buffer.flush()
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
-        stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
-        stderr_lines = stderr.splitlines()
-
-        # Find the most recent session log for turn count parsing
-        session_logs = list(output_dir.glob("process-*.log"))
-        session_log_path = max(session_logs, key=lambda p: p.stat().st_mtime) if session_logs else None
-
-        metrics = parse_metrics(stderr_lines, session_log_path=session_log_path)
+        stdout = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+        metrics, final_response = parse_output(stdout.splitlines())
+        if final_response:
+            logger.info(final_response)
 
         tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
         if metrics and tool_usage:
