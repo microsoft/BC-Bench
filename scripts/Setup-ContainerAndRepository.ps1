@@ -108,7 +108,7 @@ if (-not $SkipContainer) {
     # app that provisions and activates the 'BCBench' MCP configuration, then expose the endpoint and
     # company to the agent step so it can point its MCP client at the container.
     if ($Category -eq 'data-query') {
-        Publish-MCPConfigApp -ContainerName $ContainerName -Version $Version -Credential $credential
+        Publish-MCPConfigApp -ContainerName $ContainerName -Version $Version -Credential $credential -BuildRoot $RepoPath
 
         $mcpInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName
         Write-Log "BC MCP base URL: $($mcpInfo.BaseUrl) (company '$($mcpInfo.Company)')" -Level Info

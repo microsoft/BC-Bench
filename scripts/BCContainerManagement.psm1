@@ -361,14 +361,20 @@ function Publish-MCPConfigApp {
         [string]$Version,
 
         [Parameter(Mandatory = $true)]
-        [PSCredential]$Credential
+        [PSCredential]$Credential,
+
+        [Parameter(Mandatory = $true)]
+        [string]$BuildRoot
     )
 
     Import-Module "$PSScriptRoot\AppUtils.psm1" -Force -DisableNameChecking
 
     [int]$major = ([System.Version]$Version).Major
     [string]$sourceFolder = Join-Path $PSScriptRoot "al\mcp-config-setup"
-    [string]$buildFolder = Join-Path ([System.IO.Path]::GetTempPath()) "bcbench-mcp-config-app"
+    # Build inside BuildRoot: Compile-AppInBcContainer only accepts a project folder that is shared with
+    # the container, and BuildRoot ($RepoPath) is the folder mounted into it. Cleaned up after publish so
+    # nothing leaks into the agent's workspace.
+    [string]$buildFolder = Join-Path $BuildRoot ".bcbench-mcp-config-app"
 
     if (Test-Path $buildFolder) {
         Remove-Item -Path $buildFolder -Recurse -Force
@@ -380,9 +386,14 @@ function Publish-MCPConfigApp {
     [string]$appJsonPath = Join-Path $buildFolder "app.json"
     (Get-Content -Path $appJsonPath -Raw).Replace("__APP_VERSION__", "$major.0.0.0") | Set-Content -Path $appJsonPath -Encoding UTF8
 
-    Write-Log "Publishing BC-Bench MCP config app to provision the MCP configuration..." -Level Info
-    Invoke-AppBuildAndPublish -containerName $ContainerName -appProjectFolder $buildFolder -credential $Credential -skipVerification -useDevEndpoint
-    Write-Log "BC MCP configuration 'BCBench' provisioned and activated." -Level Success
+    try {
+        Write-Log "Publishing BC-Bench MCP config app to provision the MCP configuration..." -Level Info
+        Invoke-AppBuildAndPublish -containerName $ContainerName -appProjectFolder $buildFolder -credential $Credential -skipVerification -useDevEndpoint
+        Write-Log "BC MCP configuration 'BCBench' provisioned and activated." -Level Success
+    }
+    finally {
+        Remove-Item -Path $buildFolder -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-BCMCPConnectionInfo {
