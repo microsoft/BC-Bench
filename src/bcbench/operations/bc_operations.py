@@ -50,6 +50,24 @@ def copy_symbol_apps(project_dir: Path, version: str) -> None:
     logger.info(f"Copied {len(app_files)} *.app files from {version_root} to {alpackages_dir}")
 
 
+def ensure_package_cache(package_cache_path: Path, version: str) -> None:
+    """Guarantee bcal has BC symbols on disk before running, populating them once if missing.
+
+    Mirrors the nl2al pipeline's setup_workspace -> copy_symbol_apps (copying from the
+    BCContainerHelper artifacts cache that scripts/Download-BCSymbols.ps1 populates). Callers with no
+    nl2al entry (red teaming, harms testing) use this to build the same .alpackages once. A
+    pre-populated cache is reused as-is.
+
+    Assumption: package_cache_path is named '.alpackages' (so copy_symbol_apps, which always writes
+    into '<dir>/.alpackages', lands exactly here).
+    """
+    if package_cache_path.exists() and any(package_cache_path.glob("*.app")):
+        return
+
+    logger.info(f"Populating bcal package cache at {package_cache_path} (BC {version})")
+    copy_symbol_apps(package_cache_path.parent, version)
+
+
 def _escape_ps_string(value: str) -> str:
     """Escape single quotes for PowerShell strings.
 

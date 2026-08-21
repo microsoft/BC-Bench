@@ -48,6 +48,7 @@ class PathConfig:
     bc_artifacts_cache: Path
     redteam_scorecard: Path
     plugin_root: Path
+    harms_results: Path
 
     @classmethod
     def from_root(cls, root: Path) -> PathConfig:
@@ -68,6 +69,7 @@ class PathConfig:
             redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
             # `.bcbench` avoids colliding with agent-reserved dirs (`.claude/`, `.github/`)
             plugin_root=root / ".bcbench",
+            harms_results=evaluation_results_path / "harms",
         )
 
 
