@@ -27,6 +27,8 @@ def run_claude_code(
     output_dir: Path,
     al_mcp: bool = False,
     al_lsp: bool = False,
+    bc_mcp: bool = False,
+    ms_learn_mcp: bool = False,
     skills: bool = False,
     container_name: str = "bcbench",
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -45,7 +47,7 @@ def run_claude_code(
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
+    mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp, bc_mcp=bc_mcp, ms_learn_mcp=ms_learn_mcp, container_name=container_name)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.CLAUDE, al_lsp=al_lsp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, skills_enabled_override=skills)

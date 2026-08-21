@@ -102,6 +102,21 @@ if (-not $SkipContainer) {
     New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
+
+    # data-query benchmarks the agent WITH the BC MCP server as a feedback loop. Publish the install
+    # app that provisions and activates the 'BCBench' MCP configuration, then expose the endpoint and
+    # company to the agent step so it can point its MCP client at the container.
+    if ($Category -eq 'data-query') {
+        Publish-MCPConfigApp -ContainerName $ContainerName -Version $Version -Credential $credential
+
+        $mcpInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName
+        Write-Log "BC MCP base URL: $($mcpInfo.BaseUrl) (company '$($mcpInfo.Company)')" -Level Info
+
+        if ($env:GITHUB_ENV) {
+            "BC_MCP_URL=$($mcpInfo.BaseUrl)" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "BC_MCP_COMPANY=$($mcpInfo.Company)" | Out-File -FilePath $env:GITHUB_ENV -Append
+        }
+    }
 }
 else {
     Write-Log "Skipping BC container setup (SkipContainer flag set)" -Level Info

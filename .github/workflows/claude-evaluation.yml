@@ -42,6 +42,16 @@ on:
         required: false
         default: false
         type: boolean
+      bc-mcp:
+        description: "Enable the Business Central MCP server"
+        required: false
+        default: false
+        type: boolean
+      ms-learn-mcp:
+        description: "Enable the Microsoft Learn MCP server"
+        required: false
+        default: false
+        type: boolean
       skills:
         description: "Enable agent skills"
         required: false
@@ -158,6 +168,8 @@ jobs:
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             ${{ inputs.al-mcp && '--al-mcp' || '' }} `
             ${{ inputs.al-lsp && '--al-lsp' || '' }} `
+            ${{ inputs.bc-mcp && '--bc-mcp' || '' }} `
+            ${{ inputs.ms-learn-mcp && '--ms-learn-mcp' || '' }} `
             ${{ inputs.skills && '--skills' || '' }}
 
       - name: Upload evaluation results
@@ -195,4 +207,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "skills": "${{ inputs.skills }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "bc-mcp": "${{ inputs.bc-mcp }}", "ms-learn-mcp": "${{ inputs.ms-learn-mcp }}", "skills": "${{ inputs.skills }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
