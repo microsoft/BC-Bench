@@ -50,6 +50,8 @@ class EvaluationResultSummary(BaseModel, ABC):
     average_prompt_tokens: float
     average_completion_tokens: float
     average_llm_duration: float | None = None
+    # None rather than 0.0 when unavailable: only Copilot reports credits, and 0.0 would read as "free"
+    average_ai_credits: float | None = None
     average_tool_usage: dict[str, float] | None = None
 
     github_run_id: str | None = None
@@ -77,6 +79,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         prompt_tokens: list[int] = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
         completion_tokens: list[int] = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
         llm_durations: list[float] = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
+        ai_credits: list[float] = [r.metrics.ai_credits for r in results if r.metrics and r.metrics.ai_credits is not None]
         tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
 
         first_result = results[0]
@@ -92,6 +95,7 @@ class EvaluationResultSummary(BaseModel, ABC):
             "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
             "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
             "average_llm_duration": sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
+            "average_ai_credits": sum(ai_credits) / len(ai_credits) if ai_credits else None,
             "average_tool_usage": calculate_average_tool_usage(tool_usages) if tool_usages else None,
             "github_run_id": run_id,
             "experiment": experiment,
@@ -122,6 +126,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1) if data["average_prompt_tokens"] is not None else None
         data["average_completion_tokens"] = round(data["average_completion_tokens"], 1) if data["average_completion_tokens"] is not None else None
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
+        data["average_ai_credits"] = round(data["average_ai_credits"], 2) if data["average_ai_credits"] is not None else None
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:

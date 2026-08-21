@@ -70,6 +70,9 @@ class AgentMetrics(BaseModel):
     execution_time: float | None = None
     llm_duration: float | None = None
 
+    # Session cost in AI Credits (GitHub Copilot only)
+    ai_credits: float | None = None
+
     turn_count: int | None = None
 
     # Token usage from LLM calls
@@ -197,9 +200,9 @@ class AgentHarness(StrEnum):
             case AgentHarness.COPILOT:
                 expected = AgentMetrics(
                     execution_time=None,
+                    llm_duration=None,
+                    ai_credits=None,
                     turn_count=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
                     tool_usage=None,
                 )
             case AgentHarness.CLAUDE | AgentHarness.MOCK:
