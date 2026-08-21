@@ -33,7 +33,7 @@ bcbench = "bcbench.cli:app"
 
 [[tool.uv.index]]
 name = "microsoft-cfs"
-url = "https://pypi.org/simple"
+url = "https://packagefeedproxy.microsoft.io/pypi/simple"
 default = true
 
 [tool.setuptools.packages.find]
@@ -169,7 +169,6 @@ dev = [
     "ruff>=0.16.0",
     "pre-commit>=4.3.0",
     "ty>=0.0.33",
-    "import-linter>=2.13",
 ]
 # `bcbench redteam` only, and not in default-groups: azure-ai-evaluation[redteam] pulls in ~76
 # packages (pyrit, transformers, datasets, ...) that no other command needs.
