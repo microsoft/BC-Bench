@@ -37,10 +37,14 @@ jobs:
           RUFF_OUTPUT_FORMAT: github
 
       - name: Run tests with coverage
-        run: uv run pytest -m "not e2e" --cov=src/bcbench --cov-report=term-missing
+        run: uv run pytest --cov=src/bcbench --cov-report=term-missing
 
   e2e:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
