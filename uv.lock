@@ -270,7 +270,6 @@ analysis = [
     { name = "plotly" },
 ]
 dev = [
-    { name = "import-linter" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -306,7 +305,6 @@ analysis = [
     { name = "plotly", specifier = ">=6.5.0" },
 ]
 dev = [
-    { name = "import-linter", specifier = ">=2.13" },
     { name = "pre-commit", specifier = ">=4.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.0" },
@@ -888,22 +886,6 @@ sdist = { url = "https://ms-feed-17.pkgs.visualstudio.com/02a0e93b-9e7a-46f6-885
 wheels = [
     { url = "https://ms-feed-17.pkgs.visualstudio.com/02a0e93b-9e7a-46f6-8851-5a56920f8f7e/_packaging/2aa351dc-4441-4d20-a430-25f505f2a55a/pypi/download/idna/3.15/idna-3.15-py3-none-any.whl", hash = "sha256:048adeaf8c2d788c40fee287673ccaa74c24ffd8dcf09ffa555a2fbb59f10ac8" },
 ]
-
-[[package]]
-name = "import-linter"
-version = "2.13"
-source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "grimp" },
-    { name = "rich" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/97/c6/42962eb043df4d6984c1540220735b20442572fe37dab5e65ac807c939b9/import_linter-2.13.tar.gz", hash = "sha256:13af4a1d6b06044c58ea784e8732fd7fe48eec821a75feb4d6a1a2de36dd5c27", size = 1279761, upload-time = "2026-07-03T14:00:31.285Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/13/e7725e6eb32607fd4af51ccf3edfe835826e5cdf783b4d7fdc8f459196ae/import_linter-2.13-py3-none-any.whl", hash = "sha256:c0372e7ee5e15657bc06a8e841445e13237afd738a672d26863dc927af9f0bf5", size = 638185, upload-time = "2026-07-03T14:00:29.676Z" },
-]
-
 
 [[package]]
 name = "iniconfig"
