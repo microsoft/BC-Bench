@@ -91,8 +91,9 @@ if (-not $SkipContainer) {
 
     Write-Log "Creating container $ContainerName for version $Version..." -Level Info
 
-    # Get BC artifact URL
-    [string] $url = Get-BCArtifactUrl -version $Version -Country $Country
+    # TEMPORARY (remove before merge): Data Query tools only exist in BC 29, which is not GA on the
+    # public feed yet, so pull the sandbox artifact from the insider feed.
+    [string] $url = Get-BCArtifactUrl -version $Version -Country $Country -select Latest -storageAccount bcinsider -accept_insiderEula
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
     # Create container synchronously with NAV folder shared
