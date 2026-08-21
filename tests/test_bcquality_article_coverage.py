@@ -158,6 +158,7 @@ class TestInventoryEnumeration:
 
 
 class TestDatasetArticleSlugs:
+    @pytest.mark.e2e
     def test_declared_slugs_exist_in_bcquality(self):
         bcquality_root = _require_bcquality_root()
         entries = CodeReviewEntry.load(EvaluationCategory.CODE_REVIEW.dataset_path)

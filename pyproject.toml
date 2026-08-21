@@ -46,7 +46,8 @@ bcbench = ["agent/*.yaml"]
 testpaths = ["tests"]
 addopts = ["-v", "--strict-markers"]
 markers = [
-    "integration"
+    "integration",
+    "e2e",
 ]
 collect_imported_tests = false
 

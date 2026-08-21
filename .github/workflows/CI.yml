@@ -36,15 +36,27 @@ jobs:
           # Render ruff lint findings as inline PR annotations (CI-only; local runs stay human-readable)
           RUFF_OUTPUT_FORMAT: github
 
+      - name: Run tests with coverage
+        run: uv run pytest -m "not e2e" --cov=src/bcbench --cov-report=term-missing
+
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: $/.github/actions/setup-python-uv
+
       - name: Checkout BCQuality
         uses: actions/checkout@v5
         with:
           repository: microsoft/BCQuality
-          ref: 841b4e7cab84756b680b66328c2f1ceaae3ec892
           path: bcquality
 
-      - name: Run tests with coverage
-        run: uv run pytest --cov=src/bcbench --cov-report=term-missing
+      - name: Run E2E tests
+        run: uv run pytest -m e2e
         env:
           BCQUALITY_ROOT: ${{ github.workspace }}/bcquality
 
