@@ -70,6 +70,9 @@ class AgentMetrics(BaseModel):
     execution_time: float | None = None
     llm_duration: float | None = None
 
+    # Session cost in AI Credits (GitHub Copilot only)
+    ai_credits: float | None = None
+
     turn_count: int | None = None
 
     # Token usage from LLM calls
@@ -167,6 +170,7 @@ class AgentHarness(StrEnum):
     CLAUDE = "Claude Code"
     BCAL = "BCal"
     MOCK = "mock-agent"
+    PR_REVIEW = "BC PR Review"
 
     @property
     def expected_metrics(self) -> frozenset[str]:
@@ -179,9 +183,9 @@ class AgentHarness(StrEnum):
             case AgentHarness.COPILOT:
                 expected = AgentMetrics(
                     execution_time=None,
+                    llm_duration=None,
+                    ai_credits=None,
                     turn_count=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
                     tool_usage=None,
                 )
             case AgentHarness.CLAUDE | AgentHarness.MOCK:
@@ -193,7 +197,7 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL:
+            case AgentHarness.BCAL | AgentHarness.PR_REVIEW:
                 expected = AgentMetrics(execution_time=None)
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
@@ -367,6 +371,22 @@ class EvaluationCategory(StrEnum):
                 return ExtRequestImplementPipeline()
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return ExtRequestTriagePipeline()
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def judge_model(self) -> str | None:
+        """Pinned LLM judge model for this category, or None for categories scored without a judge."""
+        from bcbench.config import get_config
+
+        judge = get_config().judge
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION | EvaluationCategory.DATA_QUERY:
+                return None
+            case EvaluationCategory.CODE_REVIEW:
+                return judge.code_review_model
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return judge.lm_checklist_model
 
         raise ValueError(f"Unknown evaluation category: {self}")
 

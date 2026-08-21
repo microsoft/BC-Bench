@@ -197,6 +197,24 @@ class TestGHClient:
             call_args = mock_run.call_args[0][0]
             assert "diff" in call_args
 
+    def test_get_compare_diff_success(self):
+        client = GHClient("microsoft/bcapps")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="diff --git a/test.al b/test.al\n+test",
+            )
+
+            result = client.get_compare_diff("a" * 40, "b" * 40)
+
+            assert result == "diff --git a/test.al b/test.al\n+test"
+            call_args = mock_run.call_args[0][0]
+            assert call_args[:2] == ["gh", "api"]
+            assert f"/repos/microsoft/bcapps/compare/{'a' * 40}...{'b' * 40}" in call_args
+            accept_idx = call_args.index("-H") + 1
+            assert call_args[accept_idx] == "Accept: application/vnd.github.diff"
+
     def test_get_file_content_success(self):
         client = GHClient("microsoft/bcapps")
 

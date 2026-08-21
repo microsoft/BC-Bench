@@ -9,10 +9,10 @@ from bcbench.config import get_config
 from bcbench.dataset import CodeReviewEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
-from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_comment_matches
+from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, match_comments
+from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, match_comments, unmatched_generated
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
@@ -166,6 +166,19 @@ class TestCodeReviewEntry:
         assert entry.expected_comments == []
         assert entry.get_expected_output() == ""
 
+    def test_ignored_comments_default_empty_and_round_trip(self):
+        default_entry = create_codereview_entry(expected_comments=[])
+        assert default_entry.ignored_comments == []
+
+        entry = create_codereview_entry(
+            expected_comments=[],
+            ignored_comments=[ReviewComment(file="src/app.al", line_start=5, body="acceptable", severity=Severity.LOW)],
+        )
+        assert len(entry.ignored_comments) == 1
+        reloaded = CodeReviewEntry.model_validate_json(entry.model_dump_json())
+        assert len(reloaded.ignored_comments) == 1
+        assert reloaded.ignored_comments[0].body == "acceptable"
+
 
 class TestCodeReviewResult:
     def test_create_result(self):
@@ -195,6 +208,7 @@ class TestCodeReviewResult:
             "instance_id": "test__instance",
             "project": "app",
             "model": "gpt-4o",
+            "judge_model": "gpt-5.3-codex",
             "agent_name": "copilot-cli",
             "category": "code-review",
             "output": "",
@@ -278,6 +292,101 @@ class TestCodeReviewResult:
         assert result.recall == 0.5
         assert result.f1 == 0.5
         assert result.severity_mae == 0.0
+
+    def test_ignored_comment_is_neutral(self):
+        # A generated comment that matches an entry's ignored comment is dropped from scoring:
+        # it earns no recall and costs no precision.
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        ignored_comments = [
+            ReviewComment(file="src/app.al", line_start=40, body="Debatable style nit", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps(
+            [
+                {"file": "src/app.al", "line_start": 11, "body": "Potential null reference", "severity": "warning"},
+                {"file": "src/app.al", "line_start": 41, "body": "Style nit here", "severity": "low"},
+            ]
+        )
+
+        result = create_codereview_result(
+            output=generated_output,
+            expected_comments=expected_comments,
+            ignored_comments=ignored_comments,
+        )
+
+        assert result.matched_comment_count == 1
+        assert result.ignored_matched_comment_count == 1
+        assert result.incorrect_comment_count == 0
+        assert result.missed_comment_count == 0
+        assert result.precision == 1.0
+        assert result.recall == 1.0
+
+    def test_ignored_comment_does_not_grant_recall(self):
+        # An ignored match must never be credited as finding an expected issue. The expected bug
+        # lives in a file the agent never commented on, so structural matching can't pair them.
+        expected_comments = [
+            ReviewComment(file="src/real.al", line_start=10, body="Real bug to find", severity=Severity.HIGH),
+        ]
+        ignored_comments = [
+            ReviewComment(file="src/other.al", line_start=40, body="Acceptable extra note", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps([{"file": "src/other.al", "line_start": 41, "body": "Acceptable extra note", "severity": "low"}])
+
+        result = create_codereview_result(
+            output=generated_output,
+            expected_comments=expected_comments,
+            ignored_comments=ignored_comments,
+        )
+
+        assert result.matched_comment_count == 0
+        assert result.ignored_matched_comment_count == 1
+        assert result.incorrect_comment_count == 0
+        assert result.missed_comment_count == 1
+        # The only generated comment was neutralized, so there is nothing scorable to be wrong about.
+        assert result.precision == 1.0
+        assert result.recall == 0.0
+
+    def test_expected_takes_precedence_over_ignored(self):
+        # When a generated comment could match both an expected and an ignored comment at the same
+        # location, expected wins so the agent is credited for finding the real issue.
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Must find this", severity=Severity.HIGH),
+        ]
+        ignored_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Also acceptable here", severity=Severity.LOW),
+        ]
+        generated_output = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Found the issue", "severity": "high"}])
+
+        result = create_codereview_result(
+            output=generated_output,
+            expected_comments=expected_comments,
+            ignored_comments=ignored_comments,
+        )
+
+        assert result.matched_comment_count == 1
+        assert result.ignored_matched_comment_count == 0
+        assert result.precision == 1.0
+        assert result.recall == 1.0
+
+    def test_ignored_empty_preserves_baseline_scoring(self):
+        # No ignored comments -> identical behavior to before the feature.
+        expected_comments = [
+            ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
+        ]
+        generated_output = json.dumps(
+            [
+                {"file": "src/app.al", "line_start": 12, "body": "Potential null reference", "severity": "warning"},
+                {"file": "src/other.al", "line_start": 99, "body": "Unrelated finding", "severity": "low"},
+            ]
+        )
+
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+
+        assert result.ignored_matched_comment_count == 0
+        assert result.matched_comment_count == 1
+        assert result.incorrect_comment_count == 1
+        assert result.precision == 0.5
 
     def test_severity_mae_skips_pairs_with_unspecified_severity(self):
         expected_comments = [
@@ -408,6 +517,57 @@ class TestCodeReviewSummary:
         assert summary.precision == 0.5
         assert summary.recall == 0.25
         assert summary.f1 == 0.333
+
+    def test_summary_excludes_ignored_from_micro_precision(self):
+        # Two tasks each match their expected comment; the second also emits one ignored comment.
+        # Micro precision must exclude the ignored comment (2 matched / 2 scored = 1.0, not 2/3).
+        expected = [ReviewComment(file="src/app.al", line_start=10, body="expected", severity=Severity.MEDIUM)]
+        matched = create_codereview_result(
+            instance_id="test__ign-1",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"}]),
+            expected_comments=expected,
+        )
+        with_ignored = create_codereview_result(
+            instance_id="test__ign-2",
+            output=json.dumps(
+                [
+                    {"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"},
+                    {"file": "src/app.al", "line_start": 40, "body": "neutral note", "severity": "low"},
+                ]
+            ),
+            expected_comments=expected,
+            ignored_comments=[ReviewComment(file="src/app.al", line_start=40, body="neutral note", severity=Severity.LOW)],
+        )
+
+        summary = CodeReviewResultSummary.from_results([matched, with_ignored], run_id="run-ignored")
+
+        assert summary.generated_comment_count == 3
+        assert summary.ignored_matched_comment_count == 1
+        assert summary.matched_comment_count == 2
+        assert summary.incorrect_comment_count == 0
+        assert summary.precision == 1.0
+
+    def test_positive_task_with_only_ignored_is_silent_for_macro_precision(self):
+        # A positive task whose sole output is neutralized as ignored must be treated like a silent
+        # positive task: excluded from macro precision (not rewarded 1.0), still penalized on recall.
+        clean = create_codereview_result(
+            instance_id="test__ign-3",
+            output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"}]),
+            expected_comments=[ReviewComment(file="src/app.al", line_start=10, body="expected", severity=Severity.MEDIUM)],
+        )
+        only_ignored = create_codereview_result(
+            instance_id="test__ign-4",
+            output=json.dumps([{"file": "src/other.al", "line_start": 40, "body": "neutral note", "severity": "low"}]),
+            expected_comments=[ReviewComment(file="src/real.al", line_start=10, body="missed bug", severity=Severity.HIGH)],
+            ignored_comments=[ReviewComment(file="src/other.al", line_start=40, body="neutral note", severity=Severity.LOW)],
+        )
+
+        summary = CodeReviewResultSummary.from_results([clean, only_ignored], run_id="run-only-ignored")
+
+        # Macro precision averages only the clean task (1.0); the only-ignored task is silent, not 1.0.
+        assert summary.macro_precision == 1.0
+        # Recall still averages over both positive tasks: (1.0 + 0.0) / 2.
+        assert summary.macro_recall == 0.5
 
     def test_macro_precision_excludes_silent_tasks(self):
         expected_comments = [ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM)]
@@ -768,11 +928,11 @@ class TestJudge:
         assert _parse_judge_results(result_path, num_pairs=1, stdout='```json\n[{"pair": 1, "match": true}]\n```') == [True]
 
     def test_empty_pairs_skips_judge(self):
-        assert judge_comment_matches([], work_dir=Path()) == []
+        assert judge_verdicts([], work_dir=Path()) == []
 
     def test_raises_when_copilot_not_found(self, tmp_path):
         with patch("bcbench.evaluate.codereview_judge._find_copilot", return_value=None), pytest.raises(LLMJudgeError, match="Copilot CLI not found"):
-            judge_comment_matches([self._pair(10)], work_dir=tmp_path)
+            judge_verdicts([self._pair(10)], work_dir=tmp_path)
 
     def test_raises_when_subprocess_fails(self, tmp_path):
         with (
@@ -783,7 +943,7 @@ class TestJudge:
             ),
             pytest.raises(LLMJudgeError, match="Judge subprocess failed"),
         ):
-            judge_comment_matches([self._pair(10)], work_dir=tmp_path)
+            judge_verdicts([self._pair(10)], work_dir=tmp_path)
 
     def test_subprocess_failure_surfaces_copilot_output(self, tmp_path):
         error = subprocess.CalledProcessError(1, "copilot", output="partial stdout", stderr="model gpt-5.3-codex is not available")
@@ -792,9 +952,9 @@ class TestJudge:
             patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=error),
             pytest.raises(LLMJudgeError, match="model gpt-5\\.3-codex is not available"),
         ):
-            judge_comment_matches([self._pair(10)], work_dir=tmp_path)
+            judge_verdicts([self._pair(10)], work_dir=tmp_path)
 
-    def test_filters_to_confirmed_pairs(self, tmp_path):
+    def test_returns_verdicts_from_result_file(self, tmp_path):
         pairs = [self._pair(10), self._pair(20)]
 
         def fake_run(*args, **kwargs):
@@ -805,11 +965,11 @@ class TestJudge:
             patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
             patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=fake_run),
         ):
-            result = judge_comment_matches(pairs, work_dir=tmp_path)
+            result = judge_verdicts(pairs, work_dir=tmp_path)
 
-        assert result == [pairs[0]]
+        assert result == [True, False]
 
-    def test_filters_using_stdout_when_file_not_written(self, tmp_path):
+    def test_reads_verdicts_from_stdout_when_file_not_written(self, tmp_path):
         pairs = [self._pair(10), self._pair(20)]
 
         def fake_run(*args, **kwargs):
@@ -819,6 +979,136 @@ class TestJudge:
             patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
             patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=fake_run),
         ):
-            result = judge_comment_matches(pairs, work_dir=tmp_path)
+            result = judge_verdicts(pairs, work_dir=tmp_path)
 
-        assert result == [pairs[1]]
+        assert result == [False, True]
+
+
+class TestJudgeExpectedAndIgnored:
+    @staticmethod
+    def _pair(line: int, body: str) -> tuple[ReviewComment, ReviewComment]:
+        expected = ReviewComment(file="src/app.al", line_start=line, body=body, severity=Severity.MEDIUM)
+        generated = ReviewComment(file="src/app.al", line_start=line, body=f"gen {body}", severity=Severity.MEDIUM)
+        return expected, generated
+
+    def test_single_pass_splits_expected_and_ignored(self, tmp_path):
+        expected_pairs = [self._pair(10, "exp-a"), self._pair(20, "exp-b")]
+        ignored_pairs = [self._pair(30, "ign-a"), self._pair(40, "ign-b")]
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True, False, False, True]) as mock_verdicts:
+            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+
+        # A single judge pass over the concatenation — no second call, so no stale-verdict risk.
+        mock_verdicts.assert_called_once()
+        assert mock_verdicts.call_args.args[0] == expected_pairs + ignored_pairs
+        assert validated_expected == [expected_pairs[0]]
+        assert validated_ignored == [ignored_pairs[1]]
+
+    def test_empty_buckets_return_empty(self, tmp_path):
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[]):
+            assert judge_expected_and_ignored([], [], work_dir=tmp_path) == ([], [])
+
+    def test_only_ignored_bucket(self, tmp_path):
+        ignored_pairs = [self._pair(30, "ign-a")]
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True]):
+            validated_expected, validated_ignored = judge_expected_and_ignored([], ignored_pairs, work_dir=tmp_path)
+
+        assert validated_expected == []
+        assert validated_ignored == ignored_pairs
+
+    def test_expected_takes_precedence_when_both_confirmed(self, tmp_path):
+        # The SAME generated instance is structurally paired to both an expected and an ignored
+        # comment. Even when the judge confirms both, expected wins so the finding is credited as a
+        # match and NOT also neutralized as ignored (which would drop it from the scored set twice).
+        generated = ReviewComment(file="src/app.al", line_start=10, body="the finding", severity=Severity.HIGH)
+        expected = ReviewComment(file="src/app.al", line_start=10, body="real issue", severity=Severity.HIGH)
+        ignored = ReviewComment(file="src/app.al", line_start=10, body="also acceptable", severity=Severity.LOW)
+        expected_pairs = [(expected, generated)]
+        ignored_pairs = [(ignored, generated)]
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True, True]):
+            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+
+        assert validated_expected == expected_pairs
+        assert validated_ignored == []
+
+    def test_rejected_expected_can_still_be_neutralized_as_ignored(self, tmp_path):
+        # A generated finding structurally paired to an expected comment that the judge REJECTS can
+        # still be neutralized as ignored (ignored is matched against all generated, not just the
+        # leftovers), instead of being counted as a false positive.
+        generated = ReviewComment(file="src/app.al", line_start=10, body="the finding", severity=Severity.LOW)
+        expected = ReviewComment(file="src/app.al", line_start=10, body="different real issue", severity=Severity.HIGH)
+        ignored = ReviewComment(file="src/app.al", line_start=10, body="acceptable note", severity=Severity.LOW)
+        expected_pairs = [(expected, generated)]
+        ignored_pairs = [(ignored, generated)]
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[False, True]):
+            validated_expected, validated_ignored = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+
+        assert validated_expected == []
+        assert validated_ignored == ignored_pairs
+
+
+class TestUnmatchedGenerated:
+    @staticmethod
+    def _comment(line: int, body: str = "finding") -> ReviewComment:
+        return ReviewComment(file="src/app.al", line_start=line, body=body, severity=Severity.LOW)
+
+    def test_no_pairs_returns_all_in_order(self):
+        generated = [self._comment(1), self._comment(2), self._comment(3)]
+        assert unmatched_generated(generated, []) == generated
+
+    def test_excludes_matched_and_preserves_order(self):
+        g0, g1, g2 = self._comment(1), self._comment(2), self._comment(3)
+        expected = self._comment(2, "expected")
+        assert unmatched_generated([g0, g1, g2], [(expected, g1)]) == [g0, g2]
+
+    def test_all_matched_returns_empty(self):
+        g0, g1 = self._comment(1), self._comment(2)
+        expected = self._comment(1, "expected")
+        assert unmatched_generated([g0, g1], [(expected, g0), (expected, g1)]) == []
+
+    def test_uses_identity_not_value_equality(self):
+        # Two value-equal but DISTINCT instances: matching one must leave the other in the leftovers.
+        first = self._comment(1, "same body")
+        second = self._comment(1, "same body")
+        assert first == second  # pydantic value-equality holds
+        expected = self._comment(1, "expected")
+
+        leftovers = unmatched_generated([first, second], [(expected, first)])
+
+        assert len(leftovers) == 1
+        assert leftovers[0] is second
+
+
+class TestScoreCounts:
+    def test_basic_precision_recall(self):
+        scores = _score_counts(matched_count=1, generated_count=2, expected_count=2, ignored_count=0)
+        assert (scores.matched, scores.incorrect, scores.missed, scores.ignored) == (1, 1, 1, 0)
+        assert scores.precision == 0.5
+        assert scores.recall == 0.5
+
+    def test_ignored_shrinks_scored_denominator(self):
+        # One of two findings is neutralized as ignored, so the scored generated set is 1; the single
+        # match then earns perfect precision instead of 0.5.
+        scores = _score_counts(matched_count=1, generated_count=2, expected_count=1, ignored_count=1)
+        assert scores.ignored == 1
+        assert scores.incorrect == 0
+        assert scores.precision == 1.0
+        assert scores.recall == 1.0
+
+    def test_all_output_ignored_is_correct_silence(self):
+        # A positive task whose only finding is neutralized: scored generated is 0, so precision is a
+        # vacuous 1.0 (silence is not punished), recall stays 0, and the expected issue is missed.
+        scores = _score_counts(matched_count=0, generated_count=1, expected_count=1, ignored_count=1)
+        assert scores.incorrect == 0
+        assert scores.missed == 1
+        assert scores.precision == 1.0
+        assert scores.recall == 0.0
+
+    def test_empty_everything_is_perfect(self):
+        scores = _score_counts(matched_count=0, generated_count=0, expected_count=0, ignored_count=0)
+        assert (scores.incorrect, scores.missed) == (0, 0)
+        assert scores.precision == 1.0
+        assert scores.recall == 1.0

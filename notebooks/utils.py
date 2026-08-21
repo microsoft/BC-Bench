@@ -64,6 +64,7 @@ def load_results_df(setup_folder: Path) -> pd.DataFrame:
                     # Metrics
                     "execution_time": metrics.get("duration") or metrics.get("execution_time"),
                     "llm_duration": metrics.get("llm_duration"),
+                    "ai_credits": metrics.get("ai_credits"),
                     "turn_count": metrics.get("TurnCount") or metrics.get("turn_count"),
                     "total_tokens": metrics.get("total_tokens"),
                     "tool_calls": metrics.get("tool_calls"),

@@ -79,11 +79,27 @@ def fetch_commit_if_missing(repo_path: Path, commit: str) -> None:
     logger.info(f"Commit {commit} fetched")
 
 
-def commit_changes(repo_path: Path, message: str) -> None:
+def init_repo(repo_path: Path) -> None:
+    repo_path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+
+
+def has_changes(repo_path: Path) -> bool:
+    result = subprocess.run(["git", "status", "--porcelain"], cwd=repo_path, capture_output=True, encoding="utf-8", text=True, check=True)
+    return bool(result.stdout.strip())
+
+
+def commit_changes(repo_path: Path, message: str, *, allow_empty: bool = False, no_verify: bool = False) -> None:
     logger.info(f"Committing changes: {message}")
     subprocess.run(["git", "add", "-A"], cwd=repo_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    commit_args = ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit"]
+    if allow_empty:
+        commit_args.append("--allow-empty")
+    if no_verify:
+        commit_args.append("--no-verify")
+    commit_args.extend(["-m", message])
     subprocess.run(
-        ["git", "-c", "user.name=bcbench", "-c", "user.email=bcbench@noreply", "commit", "--allow-empty", "-m", message],
+        commit_args,
         cwd=repo_path,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

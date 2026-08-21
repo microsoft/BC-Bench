@@ -25,6 +25,22 @@ This category evaluates an agent's ability to **review** a Business Central (AL)
 
 Unlike the pass/fail categories, code review is scored with **Precision / Recall / F1** over the matched comments. Expected and generated comments are paired by a globally optimal (one-to-one) assignment on file and line proximity (within a configured line tolerance), and a pair is only counted as *matched* when an LLM judge confirms the two describe the same underlying issue. Matched comments are additionally scored on how closely the agent's **severity** classification tracks the expected severity.
 
+A gold entry may also declare **`ignored_comments`** — legitimate-but-optional observations (out-of-scope nitpicks, maintainer-judgment calls) that should be neither required nor penalized. Ignored comments are structurally paired against the generated comments and validated by the same LLM judge, in a single judge pass alongside the expected comments. Any generated comment the judge confirms as an ignored match is dropped from scoring entirely: it earns no recall and does not count against precision. Expected always takes precedence, so a comment that could match both is credited as a real find; a comment that does not hold up as an expected match can still be neutralized as ignored rather than counting as a false positive. Most entries leave `ignored_comments` empty, which scores identically to before.
+
+## Category and runners
+
+`code-review` is the evaluation contract: it owns the dataset, structured `review.json` output, scorer, result schema, and leaderboard schema. A runner is the system under test. The same entries can be evaluated through the generic GitHub Copilot CLI and Claude Code runners, allowing direct cross-system comparisons under one scorer.
+
+BC PR Review is a separate agent harness fixed to the `code-review` category. It runs the production BC-ALAgents review engine with BCQuality, while generic Copilot and Claude runners continue to use their own prompts and configuration:
+
+```text
+bcbench evaluate copilot <entry> --category code-review
+bcbench evaluate claude <entry> --category code-review
+bcbench evaluate pr-review <entry>
+```
+
+The evaluation workflow pins BC-ALAgents to a commit SHA, and each result records the exact engine revision and filtered BCQuality content. Engine updates require a new BC-Bench version and must record that SHA in the release notes.
+
 ## Baseline Leaderboard
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
@@ -109,14 +125,15 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
 
 ## How metrics are computed
 
-- **Precision** — of the comments the agent generated, the fraction that matched an expected finding. Penalizes noisy reviews.
+- **Precision** — of the scorable comments the agent generated (generated minus ignored), the fraction that matched an expected finding. Penalizes noisy reviews.
 - **Recall** — of the expected findings, the fraction the agent caught. Penalizes missed issues.
 - **F1** — harmonic mean of precision and recall; balances both equally (the β=1 case of Fβ).
 - **Fβ (β=0.5)** — precision-leaning F-score; use when false positives are costly (noisy reviews waste reviewer time).
 - **Fβ (β=2)** — recall-leaning F-score; weights catching issues more than avoiding noise.
 - **Severity MAE** — mean absolute error between the agent's and the expected severity levels, over matched comments only. Lower is better; `0` means every matched comment got the severity exactly right.
+- **Ignored** — generated comments that matched an entry's `ignored_comments` set. These are excluded from precision (they are neither correct nor incorrect); the count is surfaced for transparency only.
 - **Valid output rate** — fraction of tasks whose output parsed into a structured review. Failures score zero on every other metric. (Reported per run.)
-- **Micro vs. Macro** — *Micro* sums matched/generated/expected across all tasks (tasks with many comments dominate); *Macro* averages per-task scores (every task counts equally).
+- **Micro vs. Macro** — *Micro* sums matched, scorable generated (generated minus ignored), and expected across all tasks (tasks with many comments dominate); *Macro* averages per-task scores (every task counts equally).
 - **95% CI** — confidence interval bootstrapped over the per-task F1 scores, so the leaderboard reports sampling uncertainty even for a single run. The micro `F1` CI resamples runs; the `Macro F1` CI resamples tasks.
 
 [← Back to Home](index.md)

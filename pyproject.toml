@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bcbench"
-version = "0.8.0"
+version = "0.9.0"
 description = "Benchmarking tool for Business Central (AL) ecosystem, inspired by SWE-Bench"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
@@ -40,13 +40,14 @@ default = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-bcbench = ["agent/*.yaml"]
+bcbench = ["agent/*.yaml", "agent/pr_review/scripts/*.ps1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["-v", "--strict-markers"]
+addopts = ["-v", "--strict-markers", "-m", "not e2e"]
 markers = [
-    "integration"
+    "integration",
+    "e2e",
 ]
 collect_imported_tests = false
 

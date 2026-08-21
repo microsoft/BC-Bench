@@ -114,7 +114,21 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
         )
 
 
-class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
+class JudgeBasedLeaderboardAggregate(LeaderboardAggregate):
+    """Aggregate for judge-scored categories."""
+
+    judge_model: str
+
+    @classmethod
+    def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:
+        from bcbench.results.summary import JudgeBasedEvaluationResultSummary
+
+        first_run = runs[0]
+        assert isinstance(first_run, JudgeBasedEvaluationResultSummary)
+        return {**super()._base_fields(runs), "judge_model": first_run.judge_model}
+
+
+class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     """Aggregate for the code-review category: mean F1 across runs with bootstrap CI."""
 
     f1: float = 0.0
@@ -172,14 +186,6 @@ class CodeReviewLeaderboardAggregate(LeaderboardAggregate):
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
             }
         )
-
-
-class JudgeBasedLeaderboardAggregate(LeaderboardAggregate):
-    """Aggregate for judge-scored categories.
-
-    Headline scoring is performed externally (bceval -> Braintrust/Kusto), so only the
-    identity and run-shape fields from the base class are aggregated here.
-    """
 
 
 class Leaderboard(BaseModel):

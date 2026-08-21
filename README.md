@@ -31,6 +31,10 @@ The [GitHub Copilot CLI](https://github.com/github/copilot-cli) supports MCP ser
 
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) is Anthropic's agentic coding tool. It supports MCP servers, custom system prompts, and agent mode. BC-Bench integrates with Claude Code using the same shared configuration as Copilot.
 
+### BC PR Review
+
+BC PR Review is the production-fidelity BC-ALAgents + BCQuality runner for the `code-review` category. It remains separate from the category contract so its results can be compared with GitHub Copilot CLI and Claude Code on the same dataset and scorer.
+
 ## Getting Started
 
 BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time. You can run evaluations locally and replace the dataset under `dataset/` with tasks from your own codebase.

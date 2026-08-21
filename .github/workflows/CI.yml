@@ -39,6 +39,31 @@ jobs:
       - name: Run tests with coverage
         run: uv run pytest --cov=src/bcbench --cov-report=term-missing
 
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python with UV
+        uses: $/.github/actions/setup-python-uv
+
+      - name: Checkout BCQuality
+        uses: actions/checkout@v5
+        with:
+          repository: microsoft/BCQuality
+          path: bcquality
+
+      - name: Run E2E tests
+        run: uv run pytest -m e2e
+        env:
+          BCQUALITY_ROOT: ${{ github.workspace }}/bcquality
+
   select-category:
     runs-on: ubuntu-latest
     outputs:

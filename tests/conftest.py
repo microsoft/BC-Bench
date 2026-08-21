@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
+from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
@@ -165,6 +165,7 @@ def create_codereview_entry(
     created_at: str = VALID_CREATED_AT,
     domain: str | None = None,
     expected_comments: list[ReviewComment] | None = None,
+    ignored_comments: list[ReviewComment] | None = None,
 ) -> CodeReviewEntry:
     if project_paths is None:
         project_paths = VALID_PROJECT_PATHS.copy()
@@ -182,8 +183,9 @@ def create_codereview_entry(
         project_paths=project_paths,
         patch=patch,
         created_at=created_at,
-        metadata=EntryMetadata(area=domain),
+        metadata=CodeReviewEntryMetadata(area=domain),
         expected_comments=expected_comments,
+        ignored_comments=ignored_comments or [],
     )
 
 
@@ -195,10 +197,16 @@ def create_codereview_result(
     expected_comments: list[ReviewComment] | None = None,
     metrics: AgentMetrics | None = None,
     domain: str | None = None,
+    ignored_comments: list[ReviewComment] | None = None,
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
-    entry = create_codereview_entry(instance_id=instance_id, expected_comments=expected_comments, domain=domain)
+    entry = create_codereview_entry(
+        instance_id=instance_id,
+        expected_comments=expected_comments,
+        ignored_comments=ignored_comments,
+        domain=domain,
+    )
     context = EvaluationContext[CodeReviewEntry](
         entry=entry,
         repo_path=Path(),
@@ -218,6 +226,7 @@ def create_codereview_result(
         output=output,
         expected_comments=expected_comments,
         generated_comments=generated_comments,
+        ignored_comments=entry.ignored_comments,
     )
 
 
@@ -303,7 +312,7 @@ def sample_testgen_result() -> TestGenerationResult:
 @pytest.fixture
 def sample_bugfix_result_with_metrics() -> BugFixResult:
     return create_bugfix_result(
-        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200, llm_duration=100.0, tool_usage={"view_code": 2, "run_tests": 1}),
+        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200, llm_duration=100.0, ai_credits=2.5, tool_usage={"view_code": 2, "run_tests": 1}),
     )
 
 
