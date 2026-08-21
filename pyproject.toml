@@ -89,6 +89,9 @@ extend-select = [
     "RSE",   # flake8-raise: drop redundant parentheses on bare exception raises
     "PGH",   # pygrep-hooks: require codes on noqa/type-ignore comments (PGH003/PGH004)
     "S307",  # flake8-bandit: ban eval (was PGH001, which ruff removed in favour of this rule)
+    "DTZ",   # flake8-datetimez: require timezone-aware datetime usage
+    "NPY",   # NumPy-specific correctness and modernization checks
+    "PIE",   # flake8-pie: miscellaneous correctness and simplification checks
 ]
 
 ignore = [
@@ -97,6 +100,9 @@ ignore = [
     "G004",    # logging-f-string: f-strings are more readable; perf cost is negligible (143 sites)
     "TRY003",  # raise-vanilla-args: forces a custom exception class for every error message (96 sites)
 ]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # Force sandboxed rendering:
