@@ -122,9 +122,11 @@ def run_copilot_agent(
         if final_response:
             logger.info(final_response)
 
-        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
+        # Tool usage now comes from the JSON event stream (tool.execution_start), which — unlike the
+        # pre-tool-use hook — also captures sub-agent and MCP tool calls. Fall back to the hook only if
+        # the stream carried none.
+        if metrics and not metrics.tool_usage and (hook_tool_usage := parse_tool_usage_from_hooks(tool_log_path)):
+            metrics = metrics.model_copy(update={"tool_usage": hook_tool_usage})
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
