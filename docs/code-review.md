@@ -39,9 +39,9 @@ bcbench evaluate claude <entry> --category code-review
 bcbench evaluate pr-review <entry>
 ```
 
-The evaluation workflow pins BC-ALAgents to a commit SHA. Engine updates require a new BC-Bench version and must record that SHA in the release notes.
+The evaluation workflow pins BC-ALAgents to a commit SHA. Engine updates require a new BC-Bench version and must record that SHA in the release notes. GitHub Copilot CLI stays pinned to `1.0.79` because `1.0.80` is not published to npm and `1.0.79` is the version whose structured telemetry contract was validated.
 
-BC PR Review records wall-clock duration and two structural BCQuality counts: Markdown knowledge files available after filtering and knowledge files removed by the filter. The counts come from the filtered checkout and its validated `_filter-report.json`. The production `all` pipeline does not currently expose a stable structured API-call, token, or credit contract, so BC-Bench intentionally does not infer those values from console transcripts.
+BC PR Review records wall-clock duration, prompt/completion/total tokens, actual model API calls, exact AI credits, and two structural BCQuality counts: Markdown knowledge files available after filtering and knowledge files removed by the filter. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. Additional producer diagnostics remain in that raw artifact rather than being promoted into BC-Bench result and leaderboard schemas.
 
 ## Baseline Leaderboard
 
@@ -88,11 +88,11 @@ BC PR Review records wall-clock duration and two structural BCQuality counts: Ma
       <th>Agent</th>
       <th>Model</th>
       <th>Avg Time</th>
+      <th>Avg Prompt Tokens</th>
+      <th>Avg Completion Tokens</th>
       <th>Avg Total Tokens</th>
       <th>Avg API Calls</th>
       <th>Avg AI Credits</th>
-      <th>Avg Premium Requests</th>
-      <th>Complete Usage</th>
       <th>Avg Knowledge Files</th>
       <th>Avg Knowledge Pruned</th>
       <th>Ver</th>
@@ -105,11 +105,11 @@ BC PR Review records wall-clock duration and two structural BCQuality counts: Ma
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td>{% if agg.average_prompt_tokens != null %}{{ agg.average_prompt_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_completion_tokens != null %}{{ agg.average_completion_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_total_tokens != null %}{{ agg.average_total_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_api_calls != null %}{{ agg.average_api_calls | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
-      <td>{% if agg.average_premium_requests != null %}{{ agg.average_premium_requests | round: 4 }}{% else %}—{% endif %}</td>
-      <td>{% if agg.structured_usage_complete_rate != null %}{{ agg.structured_usage_complete_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_files != null %}{{ agg.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_pruned != null %}{{ agg.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>

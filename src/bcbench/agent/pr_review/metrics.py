@@ -113,21 +113,15 @@ def _count_available_knowledge(bcquality_root: Path) -> int:
 def build_pr_review_metrics(output_dir: Path, bcquality_root: Path, execution_time: float) -> AgentMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     report = _load_filter_report(bcquality_root / FILTER_REPORT_FILE_NAME)
+    usage_values_available = run.malformed_records == 0
+    token_values_available = usage_values_available and run.usage_complete
     return AgentMetrics(
         execution_time=execution_time,
-        prompt_tokens=run.prompt_tokens,
-        completion_tokens=run.completion_tokens,
-        cached_tokens=run.cached_tokens,
-        cache_creation_tokens=run.cache_creation_tokens,
-        reasoning_tokens=run.reasoning_tokens,
-        total_tokens=run.total_tokens,
-        api_calls=run.api_calls,
-        failed_api_calls=run.failed_api_calls,
-        usage_api_calls=run.usage_api_calls,
-        ai_credits=run.ai_credits,
-        premium_requests=run.premium_requests,
-        usage_complete=run.usage_complete,
-        malformed_records=run.malformed_records,
+        prompt_tokens=run.prompt_tokens if token_values_available else None,
+        completion_tokens=run.completion_tokens if token_values_available else None,
+        total_tokens=run.total_tokens if token_values_available else None,
+        api_calls=run.api_calls if usage_values_available else None,
+        ai_credits=run.ai_credits if usage_values_available else None,
         knowledge_files=_count_available_knowledge(bcquality_root),
         knowledge_pruned=sum(1 for item in report.removed if item.kind == "knowledge"),
     )

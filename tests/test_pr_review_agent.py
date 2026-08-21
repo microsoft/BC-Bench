@@ -145,11 +145,11 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
 
     assert metrics is not None
     assert metrics.execution_time == 2.5
+    assert metrics.prompt_tokens == 100
+    assert metrics.completion_tokens == 10
     assert metrics.total_tokens == 110
     assert metrics.api_calls == 2
     assert metrics.ai_credits == 0.25
-    assert metrics.reasoning_tokens == 4
-    assert metrics.premium_requests == 0.5
     assert metrics.knowledge_files == 1
     assert metrics.knowledge_pruned == 0
     assert config.is_empty()

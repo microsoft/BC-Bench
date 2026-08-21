@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, field_validator
 
 from bcbench.logger import get_logger
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
@@ -149,17 +149,9 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
 
     average_prompt_tokens: float | None = None
     average_completion_tokens: float | None = None
-    average_cached_tokens: float | None = None
-    average_cache_creation_tokens: float | None = None
-    average_reasoning_tokens: float | None = None
     average_total_tokens: float | None = None
     average_api_calls: float | None = None
-    average_failed_api_calls: float | None = None
-    average_usage_api_calls: float | None = None
     average_ai_credits: float | None = None
-    average_premium_requests: float | None = None
-    structured_usage_complete_rate: float | None = Field(default=None, ge=0.0, le=1.0)
-    average_malformed_records: float | None = None
     average_knowledge_files: float | None = None
     average_knowledge_pruned: float | None = None
 
@@ -206,17 +198,9 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
                 "average_prompt_tokens": mean_metric("average_prompt_tokens"),
                 "average_completion_tokens": mean_metric("average_completion_tokens"),
-                "average_cached_tokens": mean_metric("average_cached_tokens"),
-                "average_cache_creation_tokens": mean_metric("average_cache_creation_tokens"),
-                "average_reasoning_tokens": mean_metric("average_reasoning_tokens"),
                 "average_total_tokens": mean_metric("average_total_tokens"),
                 "average_api_calls": mean_metric("average_api_calls"),
-                "average_failed_api_calls": mean_metric("average_failed_api_calls"),
-                "average_usage_api_calls": mean_metric("average_usage_api_calls"),
                 "average_ai_credits": mean_metric("average_ai_credits"),
-                "average_premium_requests": mean_metric("average_premium_requests"),
-                "structured_usage_complete_rate": mean_metric("structured_usage_complete_rate"),
-                "average_malformed_records": mean_metric("average_malformed_records"),
                 "average_knowledge_files": mean_metric("average_knowledge_files"),
                 "average_knowledge_pruned": mean_metric("average_knowledge_pruned"),
             }

@@ -39,7 +39,7 @@ def _write_run_metrics(root: Path, **overrides: object) -> None:
     (root / RUN_METRICS_FILE_NAME).write_text(json.dumps(_run_metrics(**overrides)), encoding="utf-8")
 
 
-def test_build_metrics_reads_structured_usage_and_filtered_knowledge(tmp_path: Path) -> None:
+def test_build_metrics_promotes_public_usage_and_filtered_knowledge(tmp_path: Path) -> None:
     knowledge = tmp_path / "microsoft" / "knowledge" / "performance"
     knowledge.mkdir(parents=True)
     (knowledge / "one.md").write_text("# One", encoding="utf-8")
@@ -60,18 +60,10 @@ def test_build_metrics_reads_structured_usage_and_filtered_knowledge(tmp_path: P
 
     assert metrics.execution_time == 12.5
     assert metrics.prompt_tokens == 150
-    assert metrics.cached_tokens == 60
-    assert metrics.cache_creation_tokens == 10
     assert metrics.completion_tokens == 28
-    assert metrics.reasoning_tokens == 7
     assert metrics.total_tokens == 178
     assert metrics.api_calls == 2
-    assert metrics.failed_api_calls == 1
-    assert metrics.usage_api_calls == 2
     assert metrics.ai_credits == 1.75
-    assert metrics.premium_requests == 1.75
-    assert metrics.usage_complete is True
-    assert metrics.malformed_records == 0
     assert metrics.knowledge_files == 2
     assert metrics.knowledge_pruned == 1
 
@@ -92,15 +84,11 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
 
     metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
 
-    assert metrics.cached_tokens is None
-    assert metrics.cache_creation_tokens is None
     assert metrics.ai_credits is None
-    assert metrics.reasoning_tokens is None
-    assert metrics.premium_requests is None
     assert metrics.total_tokens == 178
 
 
-def test_partial_usage_preserves_exact_counts_and_completeness_metadata(tmp_path: Path) -> None:
+def test_malformed_records_suppress_all_usage_metrics(tmp_path: Path) -> None:
     _write_filter_report(tmp_path, [])
     _write_run_metrics(
         tmp_path,
@@ -121,15 +109,33 @@ def test_partial_usage_preserves_exact_counts_and_completeness_metadata(tmp_path
 
     metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
 
-    assert metrics.prompt_tokens == 25
-    assert metrics.total_tokens == 30
+    assert metrics.prompt_tokens is None
+    assert metrics.completion_tokens is None
+    assert metrics.total_tokens is None
+    assert metrics.api_calls is None
+    assert metrics.ai_credits is None
+
+
+def test_incomplete_usage_suppresses_tokens_but_preserves_exact_calls_and_credits(tmp_path: Path) -> None:
+    _write_filter_report(tmp_path, [])
+    _write_run_metrics(
+        tmp_path,
+        prompt_tokens=25,
+        completion_tokens=5,
+        total_tokens=30,
+        api_calls=2,
+        ai_credits=0.1,
+        usage_complete=False,
+        malformed_records=0,
+    )
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
+
+    assert metrics.prompt_tokens is None
+    assert metrics.completion_tokens is None
+    assert metrics.total_tokens is None
     assert metrics.api_calls == 2
-    assert metrics.usage_api_calls == 1
     assert metrics.ai_credits == 0.1
-    assert metrics.reasoning_tokens is None
-    assert metrics.premium_requests is None
-    assert metrics.usage_complete is False
-    assert metrics.malformed_records == 3
 
 
 def test_missing_run_metrics_raises(tmp_path: Path) -> None:
@@ -213,9 +219,10 @@ def test_not_applicable_zero_shape_is_accepted(tmp_path: Path) -> None:
 
     assert metrics.execution_time == 0.25
     assert metrics.prompt_tokens == 0
+    assert metrics.completion_tokens == 0
+    assert metrics.total_tokens == 0
     assert metrics.api_calls == 0
     assert metrics.ai_credits == 0.0
-    assert metrics.usage_complete is True
 
 
 @pytest.mark.parametrize(
