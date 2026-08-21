@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -14,7 +14,11 @@ from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfigurati
 logger = get_logger(__name__)
 _config = get_config()
 
-__all__ = ["EvaluationPipeline"]
+__all__ = ["AgentRunner", "EvaluationPipeline"]
+
+
+class AgentRunner[E: BaseDatasetEntry](Protocol):
+    def __call__(self, context: EvaluationContext[E], /) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]: ...
 
 
 class EvaluationPipeline[E: BaseDatasetEntry](ABC):
@@ -45,7 +49,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def run_agent(self, context: EvaluationContext[E], agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[E], agent_runner: AgentRunner[E]) -> None:
         """Run the agent and capture metrics.
 
         Args:
@@ -74,7 +78,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
     def execute(
         self,
         context: EvaluationContext[E],
-        agent_runner: Callable[[EvaluationContext[E]], tuple[AgentMetrics | None, ExperimentConfiguration | None]],
+        agent_runner: AgentRunner[E],
     ) -> None:
         """Template method orchestrating the evaluation flow.
 

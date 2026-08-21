@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from pathlib import Path
 
 import yaml
@@ -6,7 +5,7 @@ import yaml
 from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry, TestGenEntry
-from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
@@ -78,7 +77,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         self._apply_input_postbuild(context.entry, context.repo_path)
         set_runtime_version(context.repo_path, context.entry.project_paths)
 
-    def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[TestGenEntry], agent_runner: AgentRunner[TestGenEntry]) -> None:
         with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
             context.metrics, context.experiment = agent_runner(context)
 
