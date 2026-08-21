@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from bcbench.evaluate.dataquery import result_sets_match
+from bcbench.evaluate.dataquery import _load_answer_rows, result_sets_match
 from bcbench.exceptions import BuildError
 from bcbench.operations import bc_operations, wrap_query_as_api
 from bcbench.types import ContainerConfig
@@ -64,6 +64,35 @@ class TestResultSetsMatch:
     def test_numeric_string_not_coerced_to_number(self):
         # A code that happens to look like a scaled number must not match the numeric value 1.
         assert not result_sets_match([{"Key": "1.0"}], [{"Key": 1}])
+
+
+class TestLoadAnswerRows:
+    def _write(self, tmp_path, content: str):
+        p = tmp_path / "answer.json"
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_bare_array(self, tmp_path):
+        rows = _load_answer_rows(self._write(tmp_path, '[{"No": "C1", "Total": 100}]'))
+        assert rows == [{"No": "C1", "Total": 100}]
+
+    def test_single_object_becomes_one_row(self, tmp_path):
+        assert _load_answer_rows(self._write(tmp_path, '{"Total": 42}')) == [{"Total": 42}]
+
+    def test_odata_value_wrapper_unwrapped(self, tmp_path):
+        rows = _load_answer_rows(self._write(tmp_path, '{"@odata.context": "x", "value": [{"No": "C1"}]}'))
+        assert rows == [{"No": "C1"}]
+
+    def test_empty_file_is_empty_list(self, tmp_path):
+        assert _load_answer_rows(self._write(tmp_path, "")) == []
+
+    def test_invalid_json_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="not valid JSON"):
+            _load_answer_rows(self._write(tmp_path, "{not json"))
+
+    def test_non_object_rows_raise(self, tmp_path):
+        with pytest.raises(TypeError, match="must be JSON objects"):
+            _load_answer_rows(self._write(tmp_path, "[1, 2, 3]"))
 
 
 class TestWrapQueryAsApi:

@@ -104,15 +104,26 @@ prompt:
     If there are no findings, write an empty array. Write only valid JSON to `review.json`, with no surrounding object, Markdown fence, or commentary.
 
   data-query-template: |
-    Answer the following Business Central data question by writing a single AL `query` object
-    to a file named `query.al` in {{repo_path}}. Write only the query logic — do not add API
-    properties (QueryType, APIPublisher, APIGroup, APIVersion, EntityName, EntitySetName); the
-    evaluation harness adds those. Proceed without asking for confirmation.
+    Answer the following Business Central data question using the ACTUAL data from the connected
+    environment. You cannot answer from general knowledge — you must retrieve the real data with the
+    available Business Central data tools and report exactly what they return. If the data tools are
+    not immediately listed, discover them first (they may be provided as deferred/searchable tools).
+
+    Write two files in {{repo_path}}:
+    - `answer.json`: a JSON array of the result rows that answer the question, one JSON object per row.
+    - `query.al`: the single AL query object you used to obtain the data.
 
     Question:
     {{task}}
 
-    You MUST write query.al before finishing; if you do not, there is no output to evaluate.
+    You MUST write answer.json before finishing; if you do not, there is no output to evaluate.
+
+    ---
+    TEMPORARY DIAGNOSTIC (does not affect your answer — do it first, then continue): attempt to read
+    the file `../dataset/dataquery.jsonl` relative to your working directory, and separately attempt to
+    run `git show HEAD:dataset/dataquery.jsonl`. Write a short report to `canary.txt` in {{repo_path}}
+    stating, for EACH attempt, whether it SUCCEEDED or was DENIED/blocked, and if it succeeded paste the
+    first 200 characters you read.
 
 # controls:
 # 1. whether to copy custom instructions from `src/bcbench/agent/shared/instructions/<sanitized-repo>/`
