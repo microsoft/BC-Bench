@@ -44,7 +44,7 @@ bcbench = ["agent/*.yaml", "agent/pr_review/scripts/*.ps1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["-v", "--strict-markers"]
+addopts = ["-v", "--strict-markers", "-m", "not e2e"]
 markers = [
     "integration",
     "e2e",
