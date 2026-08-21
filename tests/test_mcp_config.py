@@ -169,6 +169,17 @@ class TestBcMcp:
         with pytest.raises(AgentError):
             build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
 
+    def test_redaction_masks_authorization_header(self):
+        from bcbench.agent.shared.mcp import _redact_mcp_config
+
+        config = {"mcpServers": {"bcmcp": {"type": "http", "url": "u", "headers": {"Authorization": "Basic sekret", "Company": "Contoso"}}}}
+        redacted = _redact_mcp_config(config)
+
+        assert redacted["mcpServers"]["bcmcp"]["headers"]["Authorization"] == "Basic ***REDACTED***"
+        assert redacted["mcpServers"]["bcmcp"]["headers"]["Company"] == "Contoso"
+        # Original is untouched (deep copy).
+        assert config["mcpServers"]["bcmcp"]["headers"]["Authorization"] == "Basic sekret"
+
 
 class TestAltoolEnvForwarding:
     _MANAGED_VARS = (

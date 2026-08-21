@@ -419,4 +419,75 @@ function Get-BCMCPConnectionInfo {
     }
 }
 
-Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync, New-BCCompilerFolderSync, Publish-MCPConfigApp, Get-BCMCPConnectionInfo
+function Write-BCMCPDiagnostics {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaseUrl,
+
+        [Parameter(Mandatory = $false)]
+        [string]$Company,
+
+        [Parameter(Mandatory = $true)]
+        [PSCredential]$Credential,
+
+        [Parameter(Mandatory = $false)]
+        [string]$ConfigurationName = 'BCBench'
+    )
+
+    # TEMPORARY diagnostics (remove before merge): probe the BC MCP endpoint from the HOST exactly as
+    # the evaluated agent will, so runner-only failures (reachability / auth / MCP config / tools) show
+    # up in the setup log instead of being guessed from the agent's discarded logs. Never throws.
+    $pair = "$($Credential.UserName):$($Credential.GetNetworkCredential().Password)"
+    $basic = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
+
+    Write-Log "===== BC MCP DIAGNOSTICS =====" -Level Info
+    Write-Log "BaseUrl=$BaseUrl  Company='$Company'  ConfigurationName=$ConfigurationName" -Level Info
+
+    # 1) API listener reachability + Basic auth sanity against a known-good endpoint.
+    try {
+        $companiesUri = "$BaseUrl/api/v2.0/companies"
+        $resp = Invoke-WebRequest -Uri $companiesUri -Headers @{ Authorization = $basic } -SkipHttpErrorCheck -UseBasicParsing -TimeoutSec 60
+        Write-Log "[probe:companies] GET $companiesUri -> HTTP $($resp.StatusCode)" -Level Info
+        Write-Log "[probe:companies] body: $($resp.Content.Substring(0, [Math]::Min(600, $resp.Content.Length)))" -Level Info
+    }
+    catch {
+        Write-Log "[probe:companies] EXCEPTION: $($_.Exception.Message)" -Level Warning
+    }
+
+    # 2) MCP endpoint: initialize, then tools/list if a session is granted.
+    $mcpUri = "$BaseUrl/mcp"
+    $headers = @{
+        Authorization     = $basic
+        ConfigurationName = $ConfigurationName
+        Accept            = 'application/json, text/event-stream'
+    }
+    if ($Company) { $headers['Company'] = $Company }
+
+    $initBody = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"bcbench-diag","version":"1.0"}}}'
+    try {
+        $resp = Invoke-WebRequest -Uri $mcpUri -Method Post -Headers $headers -Body $initBody -ContentType 'application/json' -SkipHttpErrorCheck -UseBasicParsing -TimeoutSec 60
+        Write-Log "[probe:mcp-initialize] POST $mcpUri -> HTTP $($resp.StatusCode)" -Level Info
+
+        $sessionId = $resp.Headers['Mcp-Session-Id']
+        if ($sessionId -is [array]) { $sessionId = $sessionId[0] }
+        Write-Log "[probe:mcp-initialize] Mcp-Session-Id=$sessionId" -Level Info
+        Write-Log "[probe:mcp-initialize] body: $($resp.Content.Substring(0, [Math]::Min(1200, $resp.Content.Length)))" -Level Info
+
+        if ($sessionId) {
+            $sessionHeaders = $headers.Clone()
+            $sessionHeaders['Mcp-Session-Id'] = $sessionId
+            Invoke-WebRequest -Uri $mcpUri -Method Post -Headers $sessionHeaders -Body '{"jsonrpc":"2.0","method":"notifications/initialized"}' -ContentType 'application/json' -SkipHttpErrorCheck -UseBasicParsing -TimeoutSec 60 | Out-Null
+            $toolsResp = Invoke-WebRequest -Uri $mcpUri -Method Post -Headers $sessionHeaders -Body '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' -ContentType 'application/json' -SkipHttpErrorCheck -UseBasicParsing -TimeoutSec 60
+            Write-Log "[probe:mcp-tools] tools/list -> HTTP $($toolsResp.StatusCode)" -Level Info
+            Write-Log "[probe:mcp-tools] body: $($toolsResp.Content.Substring(0, [Math]::Min(2000, $toolsResp.Content.Length)))" -Level Info
+        }
+    }
+    catch {
+        Write-Log "[probe:mcp] EXCEPTION: $($_.Exception.Message)" -Level Warning
+    }
+
+    Write-Log "===== END BC MCP DIAGNOSTICS =====" -Level Info
+}
+
+Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync, New-BCCompilerFolderSync, Publish-MCPConfigApp, Get-BCMCPConnectionInfo, Write-BCMCPDiagnostics

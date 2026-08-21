@@ -85,6 +85,8 @@ concurrency:
 
 env:
   EVALUATION_RESULTS_DIR: evaluation_results
+  # TEMPORARY (remove before merge): force verbose Python + PowerShell logging for the BC MCP shakeout.
+  RUNNER_DEBUG: "1"
 
 jobs:
   pin-commit:
@@ -180,7 +182,9 @@ jobs:
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.log
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:

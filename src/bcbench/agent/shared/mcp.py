@@ -23,6 +23,18 @@ _MS_LEARN_MCP_SERVER_NAME = "mslearn"
 _BC_MCP_CONFIGURATION_NAME = "BCBench"
 
 
+def _redact_mcp_config(mcp_config: dict[str, Any]) -> dict[str, Any]:
+    """Deep copy with any Authorization header masked, so DEBUG logs never leak container credentials."""
+    import copy
+
+    redacted = copy.deepcopy(mcp_config)
+    for server in redacted.get("mcpServers", {}).values():
+        headers = server.get("headers")
+        if isinstance(headers, dict) and "Authorization" in headers:
+            headers["Authorization"] = "Basic ***REDACTED***"
+    return redacted
+
+
 def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     server_type: str = server["type"]
     server_name: str = server["name"]
@@ -139,6 +151,6 @@ def build_mcp_config(
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
-    logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
+    logger.debug(f"MCP configuration: {json.dumps(_redact_mcp_config(mcp_config), indent=2)}")
 
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names

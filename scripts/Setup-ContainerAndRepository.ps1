@@ -112,6 +112,9 @@ if (-not $SkipContainer) {
         $mcpInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName
         Write-Log "BC MCP base URL: $($mcpInfo.BaseUrl) (company '$($mcpInfo.Company)')" -Level Info
 
+        # TEMPORARY: probe the endpoint from the host before the agent runs (remove before merge).
+        Write-BCMCPDiagnostics -BaseUrl $mcpInfo.BaseUrl -Company $mcpInfo.Company -Credential $credential
+
         if ($env:GITHUB_ENV) {
             "BC_MCP_URL=$($mcpInfo.BaseUrl)" | Out-File -FilePath $env:GITHUB_ENV -Append
             "BC_MCP_COMPANY=$($mcpInfo.Company)" | Out-File -FilePath $env:GITHUB_ENV -Append
