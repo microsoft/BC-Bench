@@ -4,7 +4,7 @@ import json
 import re
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -14,7 +14,7 @@ from bcbench.types import Checklist, ChecklistAssertion, CommitSha, ExpectedOutp
 
 _config = get_config()
 
-__all__ = ["BaseDatasetEntry", "BugFixEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
+__all__ = ["BaseDatasetEntry", "BugFixEntry", "DataQueryEntry", "NL2ALEntry", "RepoGroundedEntry", "TestEntry", "TestGenEntry"]
 
 
 class TestEntry(BaseModel):
@@ -192,3 +192,34 @@ class NL2ALEntry(BaseDatasetEntry):
 
     def get_expected_output(self) -> Checklist:
         return {"assertions": self.expected}
+
+
+class DataQueryEntry(BaseDatasetEntry):
+    """Dataset entry for the data-query category — answer a BC data question using the data tools.
+
+    Execution-based: the agent retrieves the actual data (writing the rows to answer.json, plus the
+    query it used to query.al); evaluation compares those rows to the entry's expected rows. The
+    expected rows are the baked ``gold_rows`` (or, if not baked, computed by running ``gold_query``
+    against the fixed Contoso container). The workspace is scaffolded by the pipeline, so there is no
+    repo or commit.
+    """
+
+    nl_prompt: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+    gold_query: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$")]
+    # Precomputed expected result rows for gold_query, "baked" once against the fixed container dataset
+    # so evaluation compares the agent's data to these without recompiling/running the gold query live.
+    # Empty means not yet baked; evaluation then falls back to running the gold query.
+    gold_rows: list[dict[str, Any]] = Field(default_factory=list)
+    # Whether row order is significant when comparing result sets (e.g. the question asks for a
+    # specific ranking). Defaults to False: result sets are compared order-insensitively.
+    ordered: bool = False
+
+    @property
+    def customization_profile(self) -> str:
+        return "dataquery"
+
+    def get_task(self) -> str:
+        return self.nl_prompt
+
+    def get_expected_output(self) -> str:
+        return self.gold_query

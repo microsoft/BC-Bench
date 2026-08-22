@@ -1,9 +1,10 @@
 """Shared code for CLI-based agents (Claude, Copilot)."""
 
+from bcbench.agent.shared.env import agent_subprocess_env
 from bcbench.agent.shared.hooks_parser import parse_tool_usage_from_hooks
 from bcbench.agent.shared.lsp import build_al_lsp_plugin
 from bcbench.agent.shared.mcp import build_mcp_config
 from bcbench.agent.shared.plugin import resolve_config_plugins
 from bcbench.agent.shared.prompt import build_prompt
 
-__all__ = ["build_al_lsp_plugin", "build_mcp_config", "build_prompt", "parse_tool_usage_from_hooks", "resolve_config_plugins"]
+__all__ = ["agent_subprocess_env", "build_al_lsp_plugin", "build_mcp_config", "build_prompt", "parse_tool_usage_from_hooks", "resolve_config_plugins"]

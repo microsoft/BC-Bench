@@ -1,6 +1,5 @@
 """GitHub Copilot CLI Agent implementation."""
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -8,7 +7,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_output
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
+from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.copilot_cli import find_copilot
 from bcbench.dataset import BaseDatasetEntry
@@ -29,6 +28,9 @@ def run_copilot_agent(
     output_dir: Path,
     al_mcp: bool = False,
     al_lsp: bool = False,
+    bc_mcp: bool = False,
+    ms_learn_mcp: bool = False,
+    skills: bool = False,
     container_name: str = "bcbench",
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
@@ -48,10 +50,10 @@ def run_copilot_agent(
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
+    mcp_config_json, mcp_server_names = build_mcp_config(copilot_config, entry, repo_path, al_mcp=al_mcp, bc_mcp=bc_mcp, ms_learn_mcp=ms_learn_mcp, container_name=container_name)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.COPILOT, al_lsp=al_lsp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
+    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT, skills_enabled_override=skills)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     tool_log_path: Path = setup_hooks(repo_path, AgentHarness.COPILOT, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
@@ -99,11 +101,12 @@ def run_copilot_agent(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            env={
-                **os.environ,
-                "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
-                "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
-            },
+            env=agent_subprocess_env(
+                {
+                    "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
+                    "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
+                }
+            ),
             capture_output=True,
             timeout=_config.timeout.agent_execution,
             check=True,
@@ -119,9 +122,11 @@ def run_copilot_agent(
         if final_response:
             logger.info(final_response)
 
-        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
+        # Tool usage now comes from the JSON event stream (tool.execution_start), which — unlike the
+        # pre-tool-use hook — also captures sub-agent and MCP tool calls. Fall back to the hook only if
+        # the stream carried none.
+        if metrics and not metrics.tool_usage and (hook_tool_usage := parse_tool_usage_from_hooks(tool_log_path)):
+            metrics = metrics.model_copy(update={"tool_usage": hook_tool_usage})
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

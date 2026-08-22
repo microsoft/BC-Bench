@@ -490,7 +490,7 @@ function Get-BCBenchDatasetPath {
     param(
         [Parameter(Mandatory = $true)]
         # Category validation lives only here: every caller resolves the dataset path through this function, so there's no need to duplicate ValidateSet on each caller.
-        [ValidateSet("bug-fix", "test-generation", "code-review", "nl2al", "extensibility-request-implement", "extensibility-request-triage")]
+        [ValidateSet("bug-fix", "test-generation", "code-review", "nl2al", "data-query", "extensibility-request-implement", "extensibility-request-triage")]
         [string] $Category
     )
 
@@ -499,6 +499,7 @@ function Get-BCBenchDatasetPath {
         "test-generation" { $DatasetName = "bcbench.jsonl" }
         "code-review" { $DatasetName = "codereview.jsonl" }
         "nl2al" { $DatasetName = "nl2al.jsonl" }
+        "data-query" { $DatasetName = "dataquery.jsonl" }
         "extensibility-request-implement" { $DatasetName = "extensibility_request_implement.jsonl" }
         "extensibility-request-triage" { $DatasetName = "extensibility_request_triage.jsonl" }
     }

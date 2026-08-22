@@ -1,0 +1,19 @@
+{
+  "id": "9f3d6b6e-4c2a-4d3f-9b7a-2f1e8c5a7d10",
+  "name": "BC-Bench MCP Config Setup",
+  "publisher": "BC-Bench",
+  "version": "1.0.0.0",
+  "brief": "Provisions the BC MCP configuration for BC-Bench evaluation.",
+  "description": "Installed at container-setup time to provision and activate the 'BCBench' Business Central MCP configuration the evaluated agent connects to.",
+  "application": "__APP_VERSION__",
+  "platform": "__APP_VERSION__",
+  "idRanges": [
+    {
+      "from": 50150,
+      "to": 50159
+    }
+  ],
+  "runtime": "13.0",
+  "target": "OnPrem",
+  "dependencies": []
+}

@@ -302,6 +302,8 @@ function New-BCContainerSync {
         shortcuts                = 'None'
         memoryLimit              = "16G"
         isolation                = "hyperv"
+        # TEMPORARY (remove before merge): required to build a container from an insider (BC 29) artifact.
+        accept_insiderEula       = $true
     }
 
     if ($AcceptEula) {
@@ -349,4 +351,85 @@ function New-BCCompilerFolderSync {
     Write-Log "Compiler folder created at: $compilerFolder" -Level Success
 }
 
-Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync, New-BCCompilerFolderSync
+function Publish-MCPConfigApp {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ContainerName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+
+        [Parameter(Mandatory = $true)]
+        [PSCredential]$Credential,
+
+        [Parameter(Mandatory = $true)]
+        [string]$BuildRoot
+    )
+
+    Import-Module "$PSScriptRoot\AppUtils.psm1" -Force -DisableNameChecking
+
+    [int]$major = ([System.Version]$Version).Major
+    [string]$sourceFolder = Join-Path $PSScriptRoot "al\mcp-config-setup"
+    # Build inside BuildRoot: Compile-AppInBcContainer only accepts a project folder that is shared with
+    # the container, and BuildRoot ($RepoPath) is the folder mounted into it. Cleaned up after publish so
+    # nothing leaks into the agent's workspace.
+    [string]$buildFolder = Join-Path $BuildRoot ".bcbench-mcp-config-app"
+
+    if (Test-Path $buildFolder) {
+        Remove-Item -Path $buildFolder -Recurse -Force
+    }
+    Copy-Item -Path $sourceFolder -Destination $buildFolder -Recurse -Force
+
+    # The source keeps a placeholder so the same app builds against any evaluated BC version;
+    # pin the app/platform dependency to the container's major version at publish time.
+    [string]$appJsonPath = Join-Path $buildFolder "app.json"
+    (Get-Content -Path $appJsonPath -Raw).Replace("__APP_VERSION__", "$major.0.0.0") | Set-Content -Path $appJsonPath -Encoding UTF8
+
+    try {
+        Write-Log "Publishing BC-Bench MCP config app to provision the MCP configuration..." -Level Info
+        Invoke-AppBuildAndPublish -containerName $ContainerName -appProjectFolder $buildFolder -credential $Credential -skipVerification -useDevEndpoint
+        Write-Log "BC MCP configuration 'BCBench' provisioned and activated." -Level Success
+    }
+    finally {
+        Remove-Item -Path $buildFolder -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-BCMCPConnectionInfo {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ContainerName
+    )
+
+    # The evaluated agent runs on the host, not inside the container, and the runner does not update
+    # its hosts file -- so reach the BC web listener by the container's IP address.
+    [string]$ip = Get-BcContainerIpAddress -containerName $ContainerName
+    if (-not $ip) {
+        throw "Could not resolve IP address for container $ContainerName; BC MCP endpoint is unreachable from the host."
+    }
+
+    # BcContainerHelper containers always serve the 'BC' instance on port 7048; the MCP endpoint hangs
+    # off the same base as the API endpoint the query harness already uses (base + '/mcp').
+    [string]$baseUrl = "http://${ip}:7048/BC"
+
+    $companies = @(Get-CompanyInBcContainer -containerName $ContainerName)
+    $evaluationCompany = $companies | Where-Object { $_.EvaluationCompany } | Select-Object -First 1
+    if (-not $evaluationCompany) {
+        $evaluationCompany = $companies | Select-Object -First 1
+    }
+
+    # BcContainerHelper has exposed the company name as either CompanyName or Name across versions.
+    [string]$company = $evaluationCompany.CompanyName
+    if (-not $company) {
+        $company = $evaluationCompany.Name
+    }
+
+    return [PSCustomObject]@{
+        BaseUrl = $baseUrl
+        Company = $company
+    }
+}
+
+Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync, New-BCCompilerFolderSync, Publish-MCPConfigApp, Get-BCMCPConnectionInfo

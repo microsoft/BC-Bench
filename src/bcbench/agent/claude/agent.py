@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,7 +6,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.claude.metrics import parse_metrics
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
+from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -27,6 +26,9 @@ def run_claude_code(
     output_dir: Path,
     al_mcp: bool = False,
     al_lsp: bool = False,
+    bc_mcp: bool = False,
+    ms_learn_mcp: bool = False,
+    skills: bool = False,
     container_name: str = "bcbench",
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
@@ -44,10 +46,10 @@ def run_claude_code(
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=al_mcp)
-    mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp, container_name=container_name)
+    mcp_config_json, mcp_server_names = build_mcp_config(claude_config, entry, repo_path, al_mcp=al_mcp, bc_mcp=bc_mcp, ms_learn_mcp=ms_learn_mcp, container_name=container_name)
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.CLAUDE, al_lsp=al_lsp, container_name=container_name)
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
+    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, skills_enabled_override=skills)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     tool_log_path: Path = setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
@@ -101,10 +103,7 @@ def run_claude_code(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            env={
-                **os.environ,
-                "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-            },
+            env=agent_subprocess_env({"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}),
             timeout=_config.timeout.agent_execution,
             check=True,
             capture_output=True,

@@ -1,3 +1,4 @@
+import base64
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -6,6 +7,7 @@ import pytest
 
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
 from bcbench.agent.shared.mcp import build_mcp_config
+from bcbench.exceptions import AgentError
 from tests.conftest import create_dataset_entry
 
 
@@ -24,6 +26,20 @@ MSLEARN_SERVER = {
     "name": "mslearn",
     "type": "http",
     "url": "https://learn.microsoft.com/api/mcp",
+}
+
+BCMCP_SERVER = {
+    "name": "bcmcp",
+    "type": "http",
+    "url": "",
+    "headers": {},
+}
+
+# A server not gated by any flag, used to assert generic pass-through behavior.
+OTHER_HTTP_SERVER = {
+    "name": "docs",
+    "type": "http",
+    "url": "https://example.com/mcp",
 }
 
 
@@ -68,7 +84,7 @@ class TestAlMcpProjectPaths:
         assert result == (None, None)
 
     def test_altool_excluded_but_other_servers_kept(self, entry, repo_path):
-        config = _make_config(ALTOOL_SERVER, MSLEARN_SERVER)
+        config = _make_config(ALTOOL_SERVER, OTHER_HTTP_SERVER)
 
         config_json, names = build_mcp_config(config, entry, repo_path, al_mcp=False)
         assert config_json is not None
@@ -76,16 +92,93 @@ class TestAlMcpProjectPaths:
 
         parsed = json.loads(config_json)
         assert "altool" not in parsed["mcpServers"]
-        assert "mslearn" in parsed["mcpServers"]
-        assert names == ["mslearn"]
+        assert "docs" in parsed["mcpServers"]
+        assert names == ["docs"]
 
     def test_returns_server_names(self, entry, repo_path):
-        config = _make_config(ALTOOL_SERVER, MSLEARN_SERVER)
+        config = _make_config(ALTOOL_SERVER, OTHER_HTTP_SERVER)
 
         _, names = build_mcp_config(config, entry, repo_path, al_mcp=True)
         assert names is not None
 
-        assert set(names) == {"altool", "mslearn"}
+        assert set(names) == {"altool", "docs"}
+
+
+class TestBcMcp:
+    _VARS = ("BC_MCP_URL", "BC_MCP_COMPANY", "BC_SERVER_USERNAME", "BC_SERVER_PASSWORD")
+
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch):
+        for var in self._VARS:
+            monkeypatch.delenv(var, raising=False)
+
+    def test_bcmcp_excluded_when_disabled(self, entry, repo_path):
+        assert build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=False) == (None, None)
+
+    def test_mslearn_excluded_when_disabled(self, entry, repo_path):
+        assert build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path, ms_learn_mcp=False) == (None, None)
+
+    def test_flags_are_independent(self, entry, repo_path, monkeypatch):
+        monkeypatch.setenv("BC_MCP_URL", "http://172.17.0.2:7048/BC")
+        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
+        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+        config = _make_config(BCMCP_SERVER, MSLEARN_SERVER)
+
+        # bc-mcp only -> no mslearn
+        _, bc_only = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=False)
+        assert bc_only == ["bcmcp"]
+
+        # ms-learn only -> no bcmcp (and no BC connection env needed)
+        _, learn_only = build_mcp_config(config, entry, repo_path, bc_mcp=False, ms_learn_mcp=True)
+        assert learn_only == ["mslearn"]
+
+        # both -> both
+        _, both = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=True)
+        assert set(both) == {"bcmcp", "mslearn"}
+
+    def test_mslearn_url_passthrough(self, entry, repo_path):
+        config_json, _ = build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path, ms_learn_mcp=True)
+        assert json.loads(config_json)["mcpServers"]["mslearn"]["url"] == "https://learn.microsoft.com/api/mcp"
+
+    def test_bcmcp_endpoint_and_auth_headers(self, entry, repo_path, monkeypatch):
+        monkeypatch.setenv("BC_MCP_URL", "http://172.17.0.2:7048/BC")
+        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
+        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+        monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS International Ltd.")
+
+        config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
+        bcmcp = json.loads(config_json)["mcpServers"]["bcmcp"]
+
+        assert bcmcp["url"] == "http://172.17.0.2:7048/BC/mcp"
+        expected_auth = "Basic " + base64.b64encode(b"admin:secret").decode()
+        assert bcmcp["headers"]["Authorization"] == expected_auth
+        assert bcmcp["headers"]["ConfigurationName"] == "BCBench"
+        assert bcmcp["headers"]["Company"] == "CRONUS International Ltd."
+
+    def test_company_header_omitted_when_unset(self, entry, repo_path, monkeypatch):
+        monkeypatch.setenv("BC_MCP_URL", "http://172.17.0.2:7048/BC")
+        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
+        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+
+        config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
+        headers = json.loads(config_json)["mcpServers"]["bcmcp"]["headers"]
+
+        assert "Company" not in headers
+
+    def test_raises_when_bc_mcp_url_missing(self, entry, repo_path):
+        with pytest.raises(AgentError):
+            build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
+
+    def test_redaction_masks_authorization_header(self):
+        from bcbench.agent.shared.mcp import _redact_mcp_config
+
+        config = {"mcpServers": {"bcmcp": {"type": "http", "url": "u", "headers": {"Authorization": "Basic sekret", "Company": "Contoso"}}}}
+        redacted = _redact_mcp_config(config)
+
+        assert redacted["mcpServers"]["bcmcp"]["headers"]["Authorization"] == "Basic ***REDACTED***"
+        assert redacted["mcpServers"]["bcmcp"]["headers"]["Company"] == "Contoso"
+        # Original is untouched (deep copy).
+        assert config["mcpServers"]["bcmcp"]["headers"]["Authorization"] == "Basic sekret"
 
 
 class TestAltoolEnvForwarding:

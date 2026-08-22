@@ -72,7 +72,10 @@ if (-not $SkipRepo) {
     Invoke-GitCloneWithRetry -RepoUrl $cloneInfo.Url -Token $cloneInfo.Token -ClonePath $RepoPath -CommitSha $commitSha -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
 }
 else {
-    Write-Log "Skipping repository clone (SkipRepo flag set)" -Level Info
+    # Categories that scaffold their own workspace still need the folder to exist: it is shared into
+    # the container below, and Compile-AppInBcContainer throws for any path not shared with it.
+    Write-Log "Skipping repository clone (SkipRepo flag set); creating empty workspace at $RepoPath" -Level Info
+    New-Item -ItemType Directory -Path $RepoPath -Force | Out-Null
 }
 
 if (-not $SkipContainer) {
@@ -88,8 +91,9 @@ if (-not $SkipContainer) {
 
     Write-Log "Creating container $ContainerName for version $Version..." -Level Info
 
-    # Get BC artifact URL
-    [string] $url = Get-BCArtifactUrl -version $Version -Country $Country
+    # TEMPORARY (remove before merge): Data Query tools only exist in BC 29, which is not GA on the
+    # public feed yet, so pull the sandbox artifact from the insider feed.
+    [string] $url = Get-BCArtifactUrl -version $Version -Country $Country -select Latest -storageAccount bcinsider -accept_insiderEula
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
     # Create container synchronously with NAV folder shared
@@ -99,6 +103,21 @@ if (-not $SkipContainer) {
     New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
+
+    # data-query benchmarks the agent WITH the BC MCP server as a feedback loop. Publish the install
+    # app that provisions and activates the 'BCBench' MCP configuration, then expose the endpoint and
+    # company to the agent step so it can point its MCP client at the container.
+    if ($Category -eq 'data-query') {
+        Publish-MCPConfigApp -ContainerName $ContainerName -Version $Version -Credential $credential -BuildRoot $RepoPath
+
+        $mcpInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName
+        Write-Log "BC MCP base URL: $($mcpInfo.BaseUrl) (company '$($mcpInfo.Company)')" -Level Info
+
+        if ($env:GITHUB_ENV) {
+            "BC_MCP_URL=$($mcpInfo.BaseUrl)" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "BC_MCP_COMPANY=$($mcpInfo.Company)" | Out-File -FilePath $env:GITHUB_ENV -Append
+        }
+    }
 }
 else {
     Write-Log "Skipping BC container setup (SkipContainer flag set)" -Level Info

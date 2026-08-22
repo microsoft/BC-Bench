@@ -115,6 +115,11 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
     def create_build_failure(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)
 
+    @classmethod
+    def create_result(cls, context: "EvaluationContext", output: str, *, build: bool, resolved: bool, error_message: str | None = None) -> Self:
+        """General factory for execution outcomes, e.g. compiled+ran but produced the wrong result (build=True, resolved=False)."""
+        return cls(**cls._base_fields(context), output=output, build=build, resolved=resolved, error_message=error_message)
+
     @property
     def status_label(self) -> str:
         if self.timeout:
