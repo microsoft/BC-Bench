@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,7 +6,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.claude.metrics import parse_metrics
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
+from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -104,10 +103,7 @@ def run_claude_code(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            env={
-                **os.environ,
-                "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-            },
+            env=agent_subprocess_env({"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}),
             timeout=_config.timeout.agent_execution,
             check=True,
             capture_output=True,

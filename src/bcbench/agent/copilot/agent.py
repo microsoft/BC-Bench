@@ -1,6 +1,5 @@
 """GitHub Copilot CLI Agent implementation."""
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -8,7 +7,7 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_output
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
+from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.copilot_cli import find_copilot
 from bcbench.dataset import BaseDatasetEntry
@@ -102,11 +101,12 @@ def run_copilot_agent(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            env={
-                **os.environ,
-                "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
-                "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
-            },
+            env=agent_subprocess_env(
+                {
+                    "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
+                    "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
+                }
+            ),
             capture_output=True,
             timeout=_config.timeout.agent_execution,
             check=True,
