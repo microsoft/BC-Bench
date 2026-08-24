@@ -138,18 +138,15 @@ class BcMcpGateway:
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
 
-    def _probe_rpc(self, method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict, str]:
-        if self.base_url is None:
-            return None, {}, "no gateway"
-        split = urlsplit(self.base_url)
-        connection = HTTPConnection(split.hostname or "127.0.0.1", split.port or 80, timeout=_PROBE_TIMEOUT_SECONDS)
+    def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict, str]:
+        connection = HTTPConnection(host, port, timeout=_PROBE_TIMEOUT_SECONDS)
         try:
             payload: dict[str, object] = {"jsonrpc": "2.0", "method": method}
             if request_id is not None:
                 payload["id"] = request_id
             if params is not None:
                 payload["params"] = params
-            headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+            headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", **extra_headers}
             if session_id:
                 headers["Mcp-Session-Id"] = session_id
             connection.request("POST", self._mcp_path, body=json.dumps(payload).encode(), headers=headers)
@@ -160,31 +157,45 @@ class BcMcpGateway:
         finally:
             connection.close()
 
-    def probe_tools(self) -> list[str]:
-        """Run the MCP handshake through the gateway to warm up BC MCP and log its exposed tools.
+    def _handshake_tools(self, host: str, port: int, extra_headers: dict[str, str]) -> tuple[list[str], float, str]:
+        """initialize -> notifications/initialized -> tools/list against one target; returns (tools, tools_list_seconds, diag)."""
+        session_id, _, _ = self._rpc(host, port, extra_headers, "initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
+        if session_id:
+            self._rpc(host, port, extra_headers, "notifications/initialized", None, session_id=session_id)
+        before_list = time.monotonic()
+        _, listed, diag = self._rpc(host, port, extra_headers, "tools/list", {}, request_id=2, session_id=session_id)
+        tools = [t.get("name") for t in (listed.get("result") or {}).get("tools", []) if isinstance(t, dict)]
+        return tools, time.monotonic() - before_list, diag
 
-        Best-effort: a cold BC MCP endpoint can be slow to answer the first ``tools/list``, which makes
-        the agent's own handshake occasionally register zero tools; warming it here reduces that, and
-        logging the tool names + timing turns a silent registration failure into an observable signal.
-        Never raises -- diagnostics must not break a run.
+    def probe_tools(self) -> list[str]:
+        """Warm up BC MCP and log its exposed tools, probing BOTH through the gateway and directly.
+
+        Best-effort (never raises): warms the cold endpoint before the agent connects, and comparing the
+        via-gateway result against a direct-to-BC result isolates a gateway relay problem from a genuine
+        server-side one. The direct probe carries the injected auth/Company/ConfigurationName headers.
         """
+        gateway_tools: list[str] = []
+        # Via the gateway (credential-free; the gateway injects auth upstream) - the agent's exact path.
+        if self.base_url is not None:
+            split = urlsplit(self.base_url)
+            try:
+                gateway_tools, secs, diag = self._handshake_tools(split.hostname or "127.0.0.1", split.port or 80, {})
+                logger.info(f"BC MCP warm-up (via gateway): exposes {len(gateway_tools)} tool(s): {gateway_tools} (tools/list {secs:.1f}s)")
+                if not gateway_tools:
+                    logger.info(f"BC MCP warm-up (via gateway) empty tools/list -> {diag}")
+            except Exception as exc:  # noqa: BLE001 - a warm-up diagnostic must never break a run
+                logger.warning(f"BC MCP warm-up (via gateway) failed (non-fatal): {exc}")
+
+        # Directly to BC (bypassing the gateway) with the real headers - isolates gateway vs server.
         try:
-            start = time.monotonic()
-            session_id, _, _ = self._probe_rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
-            after_init = time.monotonic()
-            if session_id:
-                self._probe_rpc("notifications/initialized", None, session_id=session_id)
-            _, listed, list_diag = self._probe_rpc("tools/list", {}, request_id=2, session_id=session_id)
-            after_list = time.monotonic()
-            tools = [t.get("name") for t in (listed.get("result") or {}).get("tools", []) if isinstance(t, dict)]
+            direct_tools, secs, diag = self._handshake_tools(self._origin_host, self._origin_port, self._injected_headers)
+            logger.info(f"BC MCP warm-up (direct to BC): exposes {len(direct_tools)} tool(s): {direct_tools} (tools/list {secs:.1f}s)")
+            if not direct_tools:
+                logger.info(f"BC MCP warm-up (direct to BC) empty tools/list -> {diag}")
         except Exception as exc:  # noqa: BLE001 - a warm-up diagnostic must never break a run
-            logger.warning(f"BC MCP warm-up probe failed (non-fatal): {exc}")
-            return []
-        else:
-            logger.info(f"BC MCP warm-up: endpoint exposes {len(tools)} tool(s): {tools} (initialize {after_init - start:.1f}s, tools/list {after_list - after_init:.1f}s)")
-            if not tools:
-                logger.info(f"BC MCP warm-up empty tools/list -> {list_diag}")
-            return tools
+            logger.warning(f"BC MCP warm-up (direct to BC) failed (non-fatal): {exc}")
+
+        return gateway_tools
 
 
 def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
