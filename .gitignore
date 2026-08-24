@@ -283,3 +283,6 @@ docs/Gemfile
 docs/Gemfile.lock
 
 *.orig
+
+# Local diagnostic artifact download folders (temp, leading underscore)
+_*/
