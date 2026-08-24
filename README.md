@@ -44,3 +44,20 @@ BC-Bench is open source, and you're welcome to fork and adapt it for your own us
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — fork setup, repo layout, versioning, day-to-day maintainer ops
 - **[EXPERIMENT.md](EXPERIMENT.md)** — run an experiment (toggle instructions / skills / agents / MCP / model) against an existing category
 - **[CATEGORIES.md](CATEGORIES.md)** — add a new evaluation category alongside the existing `bug-fix` / `test-generation` / `code-review` / `nl2al`
+
+## Citation
+
+The [paper](https://arxiv.org/abs/2608.20851) and its [LaTeX source](paper/) describe BC-Bench's design and evaluation. If you use BC-Bench in your research, please cite:
+
+```bibtex
+@misc{sun2026bcbench,
+	title={{BC-Bench}: Evaluating Agentic Engineering in a Domain-Specific Language for ERP},
+	author={Sun, Haoran and Hansen, Klaus Marius},
+	year={2026},
+	eprint={2608.20851},
+	archivePrefix={arXiv},
+	primaryClass={cs.SE},
+	doi={10.48550/arXiv.2608.20851},
+	url={https://arxiv.org/abs/2608.20851}
+}
+```
