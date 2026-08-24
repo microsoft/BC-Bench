@@ -1,11 +1,10 @@
-import json
 import shutil
 import subprocess
 from pathlib import Path
 
 import yaml
 
-from bcbench.agent.claude.metrics import parse_metrics
+from bcbench.agent.claude.metrics import parse_stream_output
 from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins, start_bc_mcp_gateway
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -79,7 +78,8 @@ def run_claude_code(
     try:
         cmd_args = [
             claude_cmd,
-            "--output-format=json",
+            "--output-format=stream-json",  # emit every event (incl. tool_use, session init) as JSONL
+            "--verbose",  # required for stream-json in --print mode
             "--strict-mcp-config",  # Only use MCP servers from --mcp-config, ignoring all other MCP configurations
             "--setting-sources=project,local",
             f"--model={model}",
@@ -122,21 +122,18 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        metrics = None
-        for line in stdout.splitlines():
-            striped_line: str = line.strip()
-            if striped_line:
-                try:
-                    data = json.loads(striped_line)
-                    if "result" in data:
-                        logger.info(data["result"])
-                        metrics = parse_metrics(data)
-                except json.JSONDecodeError:
-                    logger.warning(f"Skipping non-JSON line: {striped_line}")
+        # Persist the full event stream for transcript analysis (the workflow uploads *.log artifacts).
+        transcript_path = output_dir / f"claude-transcript-{entry.instance_id}.log"
+        transcript_path.write_text(stdout, encoding="utf-8")
 
-        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
+        metrics, final_response = parse_stream_output(stdout.splitlines())
+        if final_response:
+            logger.info(final_response)
+
+        # The stream's tool_use events capture sub-agent and MCP tool calls; fall back to the pre-tool-use
+        # hook only when the stream carried none.
+        if metrics and not metrics.tool_usage and (hook_tool_usage := parse_tool_usage_from_hooks(tool_log_path)):
+            metrics = metrics.model_copy(update={"tool_usage": hook_tool_usage})
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

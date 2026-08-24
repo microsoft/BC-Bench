@@ -43,7 +43,8 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
 
     assert mock_run.call_args.args[0] == [
         "claude",
-        "--output-format=json",
+        "--output-format=stream-json",
+        "--verbose",
         "--strict-mcp-config",
         "--setting-sources=project,local",
         "--model=claude-test-model",

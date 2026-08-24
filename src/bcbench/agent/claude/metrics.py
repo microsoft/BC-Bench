@@ -1,3 +1,7 @@
+import json
+from collections import Counter
+from collections.abc import Sequence
+
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
@@ -41,3 +45,60 @@ def parse_metrics(data: dict) -> AgentMetrics | None:
 
     logger.warning("No metrics found in Claude Code output")
     return None
+
+
+def parse_stream_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str | None]:
+    """Parse metrics + final response from `claude --output-format=stream-json --verbose` (JSONL) stdout.
+
+    Event shapes (Claude Code):
+        system/init: lists the `tools` and `mcp_servers` registered for the session; logged so a run
+            shows whether the BC MCP tools actually connected in-session.
+        assistant: ``message.content`` holds ``tool_use`` blocks whose ``name`` (e.g.
+            ``mcp__bcmcp__bc_data_query``) captures sub-agent and MCP tool calls the pre-tool-use hook
+            never sees.
+        result: terminal event carrying duration/turns/usage and the final ``result`` text.
+
+    Returns:
+        The parsed metrics (with tool usage from the stream) and the agent's final response text.
+    """
+    tool_usage: Counter[str] = Counter()
+    final_response: str | None = None
+    metrics: AgentMetrics | None = None
+
+    for line_number, line in enumerate(output_lines, start=1):
+        if not line.strip():
+            continue
+
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as error:
+            logger.warning(f"Skipping invalid JSON from Claude Code output at line {line_number}: {error}")
+            continue
+
+        if not isinstance(event, dict):
+            continue
+
+        match event.get("type"):
+            case "system" if event.get("subtype") == "init":
+                servers = event.get("mcp_servers")
+                tools = event.get("tools")
+                tool_count = len(tools) if isinstance(tools, list) else "?"
+                logger.info(f"Claude session init: mcp_servers={servers}, {tool_count} tools registered")
+            case "assistant":
+                message = event.get("message")
+                if isinstance(message, dict):
+                    for block in message.get("content", []):
+                        if isinstance(block, dict) and block.get("type") == "tool_use":
+                            name = block.get("name")
+                            if isinstance(name, str) and name:
+                                tool_usage[name] += 1
+            case "result":
+                metrics = parse_metrics(event)
+                result_text = event.get("result")
+                if isinstance(result_text, str) and result_text:
+                    final_response = result_text
+
+    if tool_usage:
+        metrics = (metrics or AgentMetrics()).model_copy(update={"tool_usage": dict(tool_usage)})
+
+    return metrics, final_response
