@@ -29,6 +29,7 @@ on:
           - "bug-fix"
           - "test-generation"
           - "code-review"
+          - "extensibility-request-advisor"
           - "extensibility-request-implement"
           - "extensibility-request-triage"
       test-run:

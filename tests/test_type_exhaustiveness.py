@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.dataset import BugFixEntry, CodeReviewEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
+from bcbench.dataset import BugFixEntry, CodeReviewEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory
 
@@ -67,7 +67,11 @@ def test_all_categories_have_aggregate_classes():
 
 
 def test_all_categories_handled_in_get_expected_output(
-    sample_dataset_entry_with_problem_statement: BugFixEntry, sample_nl2al_entry: NL2ALEntry, sample_ext_implement_entry: "ExtRequestImplementEntry", sample_ext_triage_entry: "ExtRequestTriageEntry"
+    sample_dataset_entry_with_problem_statement: BugFixEntry,
+    sample_nl2al_entry: NL2ALEntry,
+    sample_ext_advisor_entry: ExtRequestAdvisorEntry,
+    sample_ext_implement_entry: ExtRequestImplementEntry,
+    sample_ext_triage_entry: ExtRequestTriageEntry,
 ):
     for category in EvaluationCategory:
         entry_cls = category.entry_class
@@ -84,6 +88,8 @@ def test_all_categories_handled_in_get_expected_output(
             )
         elif entry_cls is NL2ALEntry:
             entry = sample_nl2al_entry
+        elif entry_cls is ExtRequestAdvisorEntry:
+            entry = sample_ext_advisor_entry
         elif entry_cls is ExtRequestImplementEntry:
             entry = sample_ext_implement_entry
         elif entry_cls is ExtRequestTriageEntry:

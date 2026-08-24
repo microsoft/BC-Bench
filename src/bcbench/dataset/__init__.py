@@ -2,7 +2,7 @@
 
 from bcbench.dataset.codereview import ArticleId, CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, NL2ALEntry, RepoGroundedEntry, TestEntry, TestGenEntry
-from bcbench.dataset.extensibility_request import ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel
+from bcbench.dataset.extensibility_request import ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel
 
 __all__ = [
     "ArticleId",
@@ -10,6 +10,7 @@ __all__ = [
     "BugFixEntry",
     "CodeReviewEntry",
     "CodeReviewEntryMetadata",
+    "ExtRequestAdvisorEntry",
     "ExtRequestImplementEntry",
     "ExtRequestTriageEntry",
     "ManagedLabel",

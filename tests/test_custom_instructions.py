@@ -13,6 +13,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry, RepoGroundedEntry
 from bcbench.operations.instruction_operations import (
     _get_source_instructions_path,
+    setup_custom_agent,
     setup_instructions_from_config,
 )
 from bcbench.types import AgentHarness, EvaluationCategory
@@ -82,6 +83,53 @@ def test_every_category_entry_class_names_a_customization_profile():
 def test_nonexistent_instructions():
     with pytest.raises(FileNotFoundError, match="nonexistent-repo"):
         _get_source_instructions_path("nonexistent-repo")
+
+
+def test_setup_custom_agent():
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
+        config = {
+            "agents": {
+                "enabled": True,
+                "name": "extensibility-request-advisor",
+            }
+        }
+
+        result = setup_custom_agent(
+            config,
+            entry,
+            repo_path,
+            harness=AgentHarness.COPILOT,
+        )
+
+        agents_dir = repo_path / ".github" / "agents"
+        assert result == "extensibility-request-advisor"
+        assert (agents_dir / "extensibility-request-advisor.agent.md").exists()
+
+
+def test_custom_agent_disabled():
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
+        config = {
+            "agents": {
+                "enabled": False,
+                "name": "extensibility-request-advisor",
+            }
+        }
+
+        result = setup_custom_agent(
+            config,
+            entry,
+            repo_path,
+            harness=AgentHarness.COPILOT,
+        )
+
+        assert result is None
+        assert not (repo_path / ".github" / "agents").exists()
 
 
 def test_overwrite_existing_instructions():
