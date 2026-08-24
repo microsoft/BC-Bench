@@ -1,4 +1,3 @@
-import base64
 import json
 import os
 import shutil
@@ -19,8 +18,6 @@ _jinja = SandboxedEnvironment(autoescape=False)
 # Server names for the independently-toggled MCP servers.
 _BC_MCP_SERVER_NAME = "bcmcp"
 _MS_LEARN_MCP_SERVER_NAME = "mslearn"
-# Must match the configuration name the setup-time AL app creates (scripts/al/mcp-config-setup).
-_BC_MCP_CONFIGURATION_NAME = "BCBench"
 
 
 def _redact_mcp_config(mcp_config: dict[str, Any]) -> dict[str, Any]:
@@ -67,33 +64,19 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
-def _configure_bc_mcp_server(server: dict[str, Any]) -> None:
-    """Fill the BC MCP server's endpoint + auth/company headers from the container connection env vars.
+def _configure_bc_mcp_server(server: dict[str, Any], gateway_base_url: str | None) -> None:
+    """Point the BC MCP server at the local credential-free gateway.
 
-    ``BC_MCP_URL``/``BC_MCP_COMPANY`` are exported by ``Setup-ContainerAndRepository.ps1``. Auth is
-    Basic over the reused ``BC_SERVER_*`` credentials (validated against NAV's MCP client). Omitting the
-    Company header would switch the server into cross-company dynamic mode, so it is only sent when a
-    company is known. Which tools the server exposes is decided server-side by the MCP configuration
-    the setup-time AL app provisions, not here.
+    The gateway (``mcp_gateway.py``) fronts the real BC MCP endpoint: it injects the Basic auth /
+    Company / ConfigurationName headers upstream and rejects any non-``/mcp`` path. So the agent's MCP
+    config carries only a ``http://127.0.0.1:<port>/.../mcp`` URL with no credentials -- nothing the
+    agent can replay against BC's ``/api`` or scrape from the launched process command line.
     """
-    base_url = os.environ.get("BC_MCP_URL")
-    if not base_url:
-        raise AgentError("BC MCP requested but BC_MCP_URL is not set; container setup must export it.")
+    if not gateway_base_url:
+        raise AgentError("BC MCP requested but the local MCP gateway URL is unavailable.")
 
-    username = os.environ.get("BC_SERVER_USERNAME", "")
-    password = os.environ.get("BC_SERVER_PASSWORD", "")
-    basic_auth = base64.b64encode(f"{username}:{password}".encode()).decode()
-
-    headers: dict[str, str] = {
-        "Authorization": f"Basic {basic_auth}",
-        "ConfigurationName": _BC_MCP_CONFIGURATION_NAME,
-    }
-    company = os.environ.get("BC_MCP_COMPANY")
-    if company:
-        headers["Company"] = company
-
-    server["url"] = base_url.rstrip("/") + "/mcp"
-    server["headers"] = headers
+    server["url"] = gateway_base_url.rstrip("/") + "/mcp"
+    server.pop("headers", None)
 
 
 def build_mcp_config(
@@ -104,6 +87,7 @@ def build_mcp_config(
     bc_mcp: bool = False,
     ms_learn_mcp: bool = False,
     container_name: str = "bcbench",
+    bc_mcp_gateway_url: str | None = None,
 ) -> tuple[str | None, list[str] | None]:
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
@@ -122,7 +106,7 @@ def build_mcp_config(
     template_context: dict[str, str | Path] = {"repo_path": repo_path}
 
     if bc_mcp:
-        _configure_bc_mcp_server(next(s for s in mcp_servers if s["name"] == _BC_MCP_SERVER_NAME))
+        _configure_bc_mcp_server(next(s for s in mcp_servers if s["name"] == _BC_MCP_SERVER_NAME), bc_mcp_gateway_url)
 
     if al_mcp:
         compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container_name)

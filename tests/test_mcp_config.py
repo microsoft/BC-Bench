@@ -1,4 +1,3 @@
-import base64
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -105,12 +104,7 @@ class TestAlMcpProjectPaths:
 
 
 class TestBcMcp:
-    _VARS = ("BC_MCP_URL", "BC_MCP_COMPANY", "BC_SERVER_USERNAME", "BC_SERVER_PASSWORD")
-
-    @pytest.fixture(autouse=True)
-    def _clean_env(self, monkeypatch):
-        for var in self._VARS:
-            monkeypatch.delenv(var, raising=False)
+    _GATEWAY_URL = "http://127.0.0.1:54321/BC"
 
     def test_bcmcp_excluded_when_disabled(self, entry, repo_path):
         assert build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=False) == (None, None)
@@ -118,54 +112,36 @@ class TestBcMcp:
     def test_mslearn_excluded_when_disabled(self, entry, repo_path):
         assert build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path, ms_learn_mcp=False) == (None, None)
 
-    def test_flags_are_independent(self, entry, repo_path, monkeypatch):
-        monkeypatch.setenv("BC_MCP_URL", "http://172.17.0.2:7048/BC")
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+    def test_flags_are_independent(self, entry, repo_path):
         config = _make_config(BCMCP_SERVER, MSLEARN_SERVER)
 
         # bc-mcp only -> no mslearn
-        _, bc_only = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=False)
+        _, bc_only = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=False, bc_mcp_gateway_url=self._GATEWAY_URL)
         assert bc_only == ["bcmcp"]
 
-        # ms-learn only -> no bcmcp (and no BC connection env needed)
+        # ms-learn only -> no bcmcp (and no gateway needed)
         _, learn_only = build_mcp_config(config, entry, repo_path, bc_mcp=False, ms_learn_mcp=True)
         assert learn_only == ["mslearn"]
 
         # both -> both
-        _, both = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=True)
+        _, both = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
         assert set(both) == {"bcmcp", "mslearn"}
 
     def test_mslearn_url_passthrough(self, entry, repo_path):
         config_json, _ = build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path, ms_learn_mcp=True)
         assert json.loads(config_json)["mcpServers"]["mslearn"]["url"] == "https://learn.microsoft.com/api/mcp"
 
-    def test_bcmcp_endpoint_and_auth_headers(self, entry, repo_path, monkeypatch):
-        monkeypatch.setenv("BC_MCP_URL", "http://172.17.0.2:7048/BC")
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
-        monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS International Ltd.")
-
-        config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
+    def test_bcmcp_points_at_gateway_without_credentials(self, entry, repo_path):
+        config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
         bcmcp = json.loads(config_json)["mcpServers"]["bcmcp"]
 
-        assert bcmcp["url"] == "http://172.17.0.2:7048/BC/mcp"
-        expected_auth = "Basic " + base64.b64encode(b"admin:secret").decode()
-        assert bcmcp["headers"]["Authorization"] == expected_auth
-        assert bcmcp["headers"]["ConfigurationName"] == "BCBench"
-        assert bcmcp["headers"]["Company"] == "CRONUS International Ltd."
+        assert bcmcp["url"] == "http://127.0.0.1:54321/BC/mcp"
+        # The gateway injects auth upstream, so the agent config carries no credentials or headers.
+        assert "headers" not in bcmcp
+        assert "Authorization" not in config_json
+        assert "Basic" not in config_json
 
-    def test_company_header_omitted_when_unset(self, entry, repo_path, monkeypatch):
-        monkeypatch.setenv("BC_MCP_URL", "http://172.17.0.2:7048/BC")
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
-
-        config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
-        headers = json.loads(config_json)["mcpServers"]["bcmcp"]["headers"]
-
-        assert "Company" not in headers
-
-    def test_raises_when_bc_mcp_url_missing(self, entry, repo_path):
+    def test_raises_when_gateway_url_missing(self, entry, repo_path):
         with pytest.raises(AgentError):
             build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
 

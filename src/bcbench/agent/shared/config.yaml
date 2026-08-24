@@ -192,13 +192,13 @@ mcp:
           "{{package_cache_path}}",
         ]
 
-    # Business Central MCP server (toggled via --bc-mcp CLI flag). url + auth/company headers are
-    # filled in programmatically by mcp.py from the container connection env vars. Which tools the
-    # server exposes is decided server-side by the MCP configuration the setup-time AL app provisions.
+    # Business Central MCP server (toggled via --bc-mcp CLI flag). The url is filled in
+    # programmatically by mcp.py to point at a localhost gateway (mcp_gateway.py) that injects auth
+    # upstream, so no credentials appear here. Which tools the server exposes is decided server-side by
+    # the MCP configuration the setup-time AL app provisions.
     - name: "bcmcp"
       type: "http"
       url: ""
-      headers: {}
 
     # Microsoft Learn MCP (toggled via --ms-learn-mcp CLI flag): official AL docs + code samples the
     # bc-al-query-mcp skill grounds its AL syntax in. Public server, no auth.
