@@ -178,6 +178,8 @@ class BcMcpGateway:
             return []
         else:
             logger.info(f"BC MCP warm-up: endpoint exposes {len(tools)} tool(s): {tools} (initialize {after_init - start:.1f}s, tools/list {after_list - after_init:.1f}s)")
+            if not tools:
+                logger.info(f"BC MCP warm-up raw tools/list result: {json.dumps(listed)[:1000]}")
             return tools
 
 
