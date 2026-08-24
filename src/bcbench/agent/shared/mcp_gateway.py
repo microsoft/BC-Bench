@@ -51,8 +51,8 @@ _STREAM_CHUNK_BYTES = 8192
 _PROBE_TIMEOUT_SECONDS = 180
 
 
-def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
-    """Parse a JSON-RPC result from an MCP response body (application/json or SSE).
+def _read_jsonrpc(response, deadline: float) -> tuple[dict, str]:  # noqa: ANN001 - http.client.HTTPResponse
+    """Parse a JSON-RPC result and return it plus a raw snippet of the response for diagnostics.
 
     For SSE, read line by line and return as soon as a JSON-RPC result/error arrives: the BC MCP
     endpoint keeps the event stream open for later messages, so reading to EOF would block until the
@@ -60,24 +60,27 @@ def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.cli
     """
     content_type = response.getheader("Content-Type", "") or ""
     if "text/event-stream" in content_type:
+        seen: list[str] = []
         while time.monotonic() < deadline:
             raw_line = response.readline()
             if not raw_line:
                 break
             line = raw_line.decode("utf-8", errors="replace").strip()
+            if line:
+                seen.append(line)
             if line.startswith("data:"):
                 try:
                     obj = json.loads(line[5:].strip())
                 except json.JSONDecodeError:
                     continue
                 if isinstance(obj, dict) and ("result" in obj or "error" in obj):
-                    return obj
-        return {}
+                    return obj, line[:800]
+        return {}, " | ".join(seen)[:800]
     text = response.read().decode("utf-8", errors="replace")
     try:
-        return json.loads(text) if text.strip() else {}
+        return (json.loads(text) if text.strip() else {}), text[:800]
     except json.JSONDecodeError:
-        return {}
+        return {}, text[:800]
 
 
 class BcMcpGateway:
@@ -135,9 +138,9 @@ class BcMcpGateway:
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
 
-    def _probe_rpc(self, method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
+    def _probe_rpc(self, method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict, str]:
         if self.base_url is None:
-            return None, {}
+            return None, {}, "no gateway"
         split = urlsplit(self.base_url)
         connection = HTTPConnection(split.hostname or "127.0.0.1", split.port or 80, timeout=_PROBE_TIMEOUT_SECONDS)
         try:
@@ -152,7 +155,8 @@ class BcMcpGateway:
             connection.request("POST", self._mcp_path, body=json.dumps(payload).encode(), headers=headers)
             response = connection.getresponse()
             returned_session = response.getheader("Mcp-Session-Id")
-            return returned_session, _read_jsonrpc(response, deadline=time.monotonic() + _PROBE_TIMEOUT_SECONDS)
+            result, raw = _read_jsonrpc(response, deadline=time.monotonic() + _PROBE_TIMEOUT_SECONDS)
+            return returned_session, result, f"HTTP {response.status}, Content-Type={response.getheader('Content-Type', '')!r}, body={raw!r}"
         finally:
             connection.close()
 
@@ -166,11 +170,11 @@ class BcMcpGateway:
         """
         try:
             start = time.monotonic()
-            session_id, _ = self._probe_rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
+            session_id, _, _ = self._probe_rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
             after_init = time.monotonic()
             if session_id:
                 self._probe_rpc("notifications/initialized", None, session_id=session_id)
-            _, listed = self._probe_rpc("tools/list", {}, request_id=2, session_id=session_id)
+            _, listed, list_diag = self._probe_rpc("tools/list", {}, request_id=2, session_id=session_id)
             after_list = time.monotonic()
             tools = [t.get("name") for t in (listed.get("result") or {}).get("tools", []) if isinstance(t, dict)]
         except Exception as exc:  # noqa: BLE001 - a warm-up diagnostic must never break a run
@@ -179,7 +183,7 @@ class BcMcpGateway:
         else:
             logger.info(f"BC MCP warm-up: endpoint exposes {len(tools)} tool(s): {tools} (initialize {after_init - start:.1f}s, tools/list {after_list - after_init:.1f}s)")
             if not tools:
-                logger.info(f"BC MCP warm-up raw tools/list result: {json.dumps(listed)[:1000]}")
+                logger.info(f"BC MCP warm-up empty tools/list -> {list_diag}")
             return tools
 
 
