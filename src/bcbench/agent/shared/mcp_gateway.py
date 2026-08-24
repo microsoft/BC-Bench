@@ -17,6 +17,7 @@ import base64
 import json
 import os
 import threading
+import time
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -47,16 +48,23 @@ _STRIPPED_REQUEST_HEADERS = _HOP_BY_HOP | {"host", "content-length", "accept-enc
 
 _UPSTREAM_TIMEOUT_SECONDS = 600
 _STREAM_CHUNK_BYTES = 8192
-_PROBE_TIMEOUT_SECONDS = 60
+_PROBE_TIMEOUT_SECONDS = 180
 
 
-def _read_jsonrpc(response) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
-    """Parse a JSON-RPC object from an MCP response body (application/json or SSE)."""
+def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
+    """Parse a JSON-RPC result from an MCP response body (application/json or SSE).
+
+    For SSE, read line by line and return as soon as a JSON-RPC result/error arrives: the BC MCP
+    endpoint keeps the event stream open for later messages, so reading to EOF would block until the
+    socket times out even though the answer already arrived.
+    """
     content_type = response.getheader("Content-Type", "") or ""
-    text = response.read().decode("utf-8", errors="replace")
     if "text/event-stream" in content_type:
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
+        while time.monotonic() < deadline:
+            raw_line = response.readline()
+            if not raw_line:
+                break
+            line = raw_line.decode("utf-8", errors="replace").strip()
             if line.startswith("data:"):
                 try:
                     obj = json.loads(line[5:].strip())
@@ -65,6 +73,7 @@ def _read_jsonrpc(response) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
                 if isinstance(obj, dict) and ("result" in obj or "error" in obj):
                     return obj
         return {}
+    text = response.read().decode("utf-8", errors="replace")
     try:
         return json.loads(text) if text.strip() else {}
     except json.JSONDecodeError:
@@ -143,7 +152,7 @@ class BcMcpGateway:
             connection.request("POST", self._mcp_path, body=json.dumps(payload).encode(), headers=headers)
             response = connection.getresponse()
             returned_session = response.getheader("Mcp-Session-Id")
-            return returned_session, _read_jsonrpc(response)
+            return returned_session, _read_jsonrpc(response, deadline=time.monotonic() + _PROBE_TIMEOUT_SECONDS)
         finally:
             connection.close()
 
@@ -152,20 +161,23 @@ class BcMcpGateway:
 
         Best-effort: a cold BC MCP endpoint can be slow to answer the first ``tools/list``, which makes
         the agent's own handshake occasionally register zero tools; warming it here reduces that, and
-        logging the tool names turns a silent registration failure into an observable signal. Never
-        raises -- diagnostics must not break a run.
+        logging the tool names + timing turns a silent registration failure into an observable signal.
+        Never raises -- diagnostics must not break a run.
         """
         try:
+            start = time.monotonic()
             session_id, _ = self._probe_rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
+            after_init = time.monotonic()
             if session_id:
                 self._probe_rpc("notifications/initialized", None, session_id=session_id)
             _, listed = self._probe_rpc("tools/list", {}, request_id=2, session_id=session_id)
+            after_list = time.monotonic()
             tools = [t.get("name") for t in (listed.get("result") or {}).get("tools", []) if isinstance(t, dict)]
         except Exception as exc:  # noqa: BLE001 - a warm-up diagnostic must never break a run
             logger.warning(f"BC MCP warm-up probe failed (non-fatal): {exc}")
             return []
         else:
-            logger.info(f"BC MCP warm-up: endpoint exposes {len(tools)} tool(s): {tools}")
+            logger.info(f"BC MCP warm-up: endpoint exposes {len(tools)} tool(s): {tools} (initialize {after_init - start:.1f}s, tools/list {after_list - after_init:.1f}s)")
             return tools
 
 
