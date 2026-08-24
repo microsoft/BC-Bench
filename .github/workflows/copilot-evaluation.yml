@@ -159,7 +159,12 @@ jobs:
         timeout-minutes: 120
         shell: pwsh
         env:
-          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          # Copilot CLI must authenticate MCP with a USER token: the Actions github.token (a ghs_
+          # installation token) gets 403 from GET /copilot/mcp_registry and fails closed, blocking ALL
+          # custom MCP servers (github/copilot-cli#4346). The org policy is already allow_all, so a
+          # Copilot-licensed user PAT lets the registry fetch succeed and the BC/MS-Learn MCP load.
+          # Falls back to github.token when the secret is absent (MCP off, but completions still work).
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN || github.token }}
           GH_TOKEN: ${{ github.token }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
