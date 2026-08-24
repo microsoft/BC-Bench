@@ -1,13 +1,14 @@
 import base64
 import json
 import threading
+import time
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 import pytest
 
-from bcbench.agent.shared.mcp_gateway import start_bc_mcp_gateway
+from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
 from bcbench.exceptions import AgentError
 
 
@@ -214,3 +215,50 @@ class TestBcMcpProbe:
             assert gw.probe_tools() == []
         finally:
             gw.stop()
+
+
+class _HeldOpenSseHandler(BaseHTTPRequestHandler):
+    """Sends one small SSE event, flushes, then holds the stream open before closing."""
+
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
+        pass
+
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(b"event: message\ndata: early\n\n")
+        self.wfile.flush()
+        time.sleep(3.0)  # keep the stream open after the event, as the BC MCP endpoint does
+
+
+def test_gateway_relays_held_open_sse_event_promptly():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _HeldOpenSseHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    gateway = BcMcpGateway(f"http://127.0.0.1:{port}/BC", "admin", "secret", None).start()
+    split = urlsplit(gateway.base_url)
+    connection = HTTPConnection(split.hostname, split.port, timeout=10)
+    try:
+        connection.request("GET", "/BC/mcp")
+        response = connection.getresponse()
+        start = time.monotonic()
+        line = b""
+        while b"data:" not in line:
+            line = response.readline()
+            if not line:
+                break
+        elapsed = time.monotonic() - start
+        assert b"data: early" in line
+        # read1() flushes the event immediately; the old read() would stall until the upstream closes (~3s).
+        assert elapsed < 2.0
+    finally:
+        connection.close()
+        gateway.stop()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

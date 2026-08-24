@@ -257,11 +257,13 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                     remaining -= len(chunk)
             else:
                 # No content length -> stream (e.g. SSE) with our own chunked framing, flushing each
-                # block so server-sent events reach the agent as they arrive.
+                # block so server-sent events reach the agent as they arrive. Use read1(): plain read()
+                # blocks trying to fill the whole buffer, which stalls an SSE stream the server holds
+                # open after a small event (that stall is what made tools/list time out through here).
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
                 while True:
-                    chunk = response.read(_STREAM_CHUNK_BYTES)
+                    chunk = response.read1(_STREAM_CHUNK_BYTES)
                     if not chunk:
                         break
                     self.wfile.write(b"%X\r\n" % len(chunk))
