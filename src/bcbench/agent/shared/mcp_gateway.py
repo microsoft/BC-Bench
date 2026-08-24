@@ -14,6 +14,7 @@ scrubbed for the harness itself.
 """
 
 import base64
+import json
 import os
 import threading
 from http.client import HTTPConnection
@@ -46,6 +47,28 @@ _STRIPPED_REQUEST_HEADERS = _HOP_BY_HOP | {"host", "content-length", "accept-enc
 
 _UPSTREAM_TIMEOUT_SECONDS = 600
 _STREAM_CHUNK_BYTES = 8192
+_PROBE_TIMEOUT_SECONDS = 60
+
+
+def _read_jsonrpc(response) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
+    """Parse a JSON-RPC object from an MCP response body (application/json or SSE)."""
+    content_type = response.getheader("Content-Type", "") or ""
+    text = response.read().decode("utf-8", errors="replace")
+    if "text/event-stream" in content_type:
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if line.startswith("data:"):
+                try:
+                    obj = json.loads(line[5:].strip())
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(obj, dict) and ("result" in obj or "error" in obj):
+                    return obj
+        return {}
+    try:
+        return json.loads(text) if text.strip() else {}
+    except json.JSONDecodeError:
+        return {}
 
 
 class BcMcpGateway:
@@ -102,6 +125,48 @@ class BcMcpGateway:
             self._thread.join(timeout=5)
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
+
+    def _probe_rpc(self, method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
+        if self.base_url is None:
+            return None, {}
+        split = urlsplit(self.base_url)
+        connection = HTTPConnection(split.hostname or "127.0.0.1", split.port or 80, timeout=_PROBE_TIMEOUT_SECONDS)
+        try:
+            payload: dict[str, object] = {"jsonrpc": "2.0", "method": method}
+            if request_id is not None:
+                payload["id"] = request_id
+            if params is not None:
+                payload["params"] = params
+            headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+            if session_id:
+                headers["Mcp-Session-Id"] = session_id
+            connection.request("POST", self._mcp_path, body=json.dumps(payload).encode(), headers=headers)
+            response = connection.getresponse()
+            returned_session = response.getheader("Mcp-Session-Id")
+            return returned_session, _read_jsonrpc(response)
+        finally:
+            connection.close()
+
+    def probe_tools(self) -> list[str]:
+        """Run the MCP handshake through the gateway to warm up BC MCP and log its exposed tools.
+
+        Best-effort: a cold BC MCP endpoint can be slow to answer the first ``tools/list``, which makes
+        the agent's own handshake occasionally register zero tools; warming it here reduces that, and
+        logging the tool names turns a silent registration failure into an observable signal. Never
+        raises -- diagnostics must not break a run.
+        """
+        try:
+            session_id, _ = self._probe_rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
+            if session_id:
+                self._probe_rpc("notifications/initialized", None, session_id=session_id)
+            _, listed = self._probe_rpc("tools/list", {}, request_id=2, session_id=session_id)
+            tools = [t.get("name") for t in (listed.get("result") or {}).get("tools", []) if isinstance(t, dict)]
+        except Exception as exc:  # noqa: BLE001 - a warm-up diagnostic must never break a run
+            logger.warning(f"BC MCP warm-up probe failed (non-fatal): {exc}")
+            return []
+        else:
+            logger.info(f"BC MCP warm-up: endpoint exposes {len(tools)} tool(s): {tools}")
+            return tools
 
 
 def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
@@ -200,4 +265,5 @@ def start_bc_mcp_gateway(enabled: bool) -> BcMcpGateway | None:
         company=os.environ.get("BC_MCP_COMPANY"),
     ).start()
     logger.info(f"BC MCP gateway listening at {gateway.base_url}/mcp (credential-free; path-restricted to /mcp)")
+    gateway.probe_tools()
     return gateway
