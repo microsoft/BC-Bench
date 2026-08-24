@@ -73,10 +73,13 @@ try {
 
     $rows = Invoke-ScriptInBcContainer -containerName $ContainerName -scriptblock {
         param($sqlServer, $database)
-        $table = (sqlcmd -S $sqlServer -d $database -h -1 -W -Q "SET NOCOUNT ON; SELECT TOP 1 name FROM sys.tables WHERE name LIKE '%MCP Configuration%'" 2>&1 | Where-Object { $_ -and $_ -notmatch 'rows affected' } | Select-Object -First 1)
+        $table = (sqlcmd -S $sqlServer -d $database -h -1 -W -Q "SET NOCOUNT ON; SELECT TOP 1 name FROM sys.tables WHERE name LIKE '%MCP Configuration%'" 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ -and $_ -notmatch 'rows affected' } | Select-Object -First 1)
         if ($table) {
             "Table: $table"
-            sqlcmd -S $sqlServer -d $database -Y 60 -W -Q "SELECT * FROM [dbo].[$table]" 2>&1
+            '--- columns ---'
+            sqlcmd -S $sqlServer -d $database -h -1 -Q "SET NOCOUNT ON; SELECT c.name FROM sys.columns c JOIN sys.tables t ON c.object_id = t.object_id WHERE t.name = '$table' ORDER BY c.column_id" 2>&1
+            '--- row(s) (pipe-separated) ---'
+            sqlcmd -S $sqlServer -d $database -s "|" -W -Q "SELECT * FROM [dbo].[$table]" 2>&1
         }
         else {
             'No table matching %MCP Configuration% found in the tenant database.'
@@ -86,6 +89,17 @@ try {
 }
 catch {
     Write-Diag "MCP Configuration query failed: $_"
+}
+
+# 5. Install status of the MCP Config Setup app (published != installed; OnInstall must have run).
+try {
+    Write-Diag 'Checking MCP Config Setup app install status...'
+    $apps = Get-BcContainerAppInfo -containerName $ContainerName -tenant default -tenantSpecificProperties |
+        Where-Object { $_.Name -match 'MCP' }
+    ($apps | Format-List Name, Publisher, Version, IsInstalled, IsPublished, SyncState | Out-String) | Out-File -FilePath (Join-Path $OutputDir 'mcp-app-status.log') -Encoding utf8
+}
+catch {
+    Write-Diag "App install status check failed: $_"
 }
 
 Write-Diag 'NST diagnostics capture complete.'

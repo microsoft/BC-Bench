@@ -1,0 +1,42 @@
+{
+    "total": 4,
+    "date": "2026-08-24",
+    "model": "claude-sonnet-5",
+    "agent_name": "Claude Code",
+    "category": "data-query",
+    "average_duration": 52.4,
+    "average_prompt_tokens": 455060.8,
+    "average_completion_tokens": 3433.8,
+    "average_llm_duration": 45.7,
+    "average_ai_credits": null,
+    "average_tool_usage": {
+        "Skill": 1.0,
+        "ToolSearch": 7.75,
+        "Bash": 2.5,
+        "ListMcpResourcesTool": 1.25,
+        "Read": 0.25
+    },
+    "github_run_id": "32749236726",
+    "experiment": {
+        "mcp_servers": [
+            "bcmcp",
+            "mslearn"
+        ],
+        "al_lsp_enabled": false,
+        "custom_instructions": false,
+        "skills_enabled": true,
+        "custom_agent": null,
+        "plugins": null
+    },
+    "benchmark_version": "0.9.0",
+    "resolved": 0,
+    "failed": 4,
+    "build": 0,
+    "percentage": 0.0,
+    "instance_results": {
+        "dataquery__open-sales-order-count-by-customer-1": false,
+        "dataquery__opportunity-count-by-status-1": false,
+        "dataquery__total-purchased-quantity-by-item-1": false,
+        "dataquery__outstanding-purchase-value-by-vendor-1": false
+    }
+}
