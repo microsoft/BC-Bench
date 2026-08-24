@@ -19,6 +19,8 @@ The environment should expose these MCP tool groups:
 
 If tools are deferred, load them with tool search before use. Do not assume a tool is available until it has been loaded or returned by discovery.
 
+The MCP tool names may appear with a server-name prefix that differs by host — for example `bcmcp-bc_data_query` (Copilot CLI) or `mcp__bcmcp__bc_data_query` (Claude Code). The bare names used below (`bc_data_find_tables`, `bc_data_get_table_schema`, `bc_data_get_table_relations`, `bc_data_query`) refer to these tools regardless of prefix; always invoke the exact name shown in your available tool list or returned by tool search.
+
 ## Core Rule
 
 Microsoft Learn provides general AL query authoring knowledge. The BC data MCP tools provide live tenant-specific metadata and execution. Use both. Never write a tenant query from memory alone.
