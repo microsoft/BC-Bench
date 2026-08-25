@@ -109,6 +109,11 @@ prompt:
     available Business Central data tools and report exactly what they return. If the data tools are
     not immediately listed, discover them first (they may be provided as deferred/searchable tools).
 
+    The BC data tools have exactly these names — call them exactly, do not invent or abbreviate them
+    (there is no find_tables, search_tables, list_tables, get_schema, query, or run_query):
+    bc_data_find_tables, bc_data_get_table_schema, bc_data_get_table_relations, bc_data_query. They may
+    appear with a host prefix such as mcp__bcmcp__ or bcmcp-; use the exact name from your tool list.
+
     Write two files in {{repo_path}}:
     - `answer.json`: a JSON array of the result rows that answer the question, one JSON object per row.
     - `query.al`: the single AL query object you used to obtain the data.

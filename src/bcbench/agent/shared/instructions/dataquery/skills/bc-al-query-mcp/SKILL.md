@@ -19,7 +19,18 @@ The environment should expose these MCP tool groups:
 
 If tools are deferred, load them with tool search before use. Do not assume a tool is available until it has been loaded or returned by discovery.
 
-The MCP tool names may appear with a server-name prefix that differs by host — for example `bcmcp-bc_data_query` (Copilot CLI) or `mcp__bcmcp__bc_data_query` (Claude Code). The bare names used below (`bc_data_find_tables`, `bc_data_get_table_schema`, `bc_data_get_table_relations`, `bc_data_query`) refer to these tools regardless of prefix; always invoke the exact name shown in your available tool list or returned by tool search.
+## Available BC data tools — use these EXACT names only
+
+The Business Central data MCP exposes exactly these four tools. Call them by these exact names. Do NOT invent, abbreviate, or rename them (there is no `find_tables`, `search_tables`, `list_tables`, `get_schema`, `query`, or `run_query`).
+
+| Tool | Purpose | Key parameters |
+| --- | --- | --- |
+| `bc_data_find_tables` | Discover tables by name/concept | `searchText` (string), `searchMode` (`keyword` or `semantic`) |
+| `bc_data_get_table_schema` | Fields of a table | `tableId` (int), `nameContains` (optional string[] to narrow) |
+| `bc_data_get_table_relations` | Relations/joins of a table | `tableId` (int), `relatedToTableIds` (optional int[]) |
+| `bc_data_query` | Compile and/or run an AL query | `queryText` (string, the full AL query object), `returnData` (bool) |
+
+The tools may appear with a host-specific server prefix — `mcp__bcmcp__bc_data_query` (Claude Code) or `bcmcp-bc_data_query` (Copilot CLI). Invoke the exact name shown in your available tool list or returned by tool search; never guess a name that is not in that list. If a call fails with "no such tool", re-list your tools and use the exact registered name rather than trying a variant.
 
 ## Core Rule
 
@@ -29,8 +40,8 @@ Microsoft Learn provides general AL query authoring knowledge. The BC data MCP t
 
 - Always use `bc_data_get_table_schema` for every table before writing the query.
 - Always verify joins with `bc_data_get_table_relations` before writing a multi-table query.
-- Prefer `bc_data_find_tables` with `searchMode: keyword` for known BC entity names. Use semantic search only as a supplement and verify results.
-- Compile with `bc_data_query` and `returnData: false` before running with `returnData: true`.
+- Prefer `bc_data_find_tables` with `searchMode: keyword` (pass the entity name in `searchText`) for known BC entity names. Use `searchMode: semantic` only as a supplement and verify results.
+- Compile with `bc_data_query` (put the AL query object in `queryText`) and `returnData: false` before running with `returnData: true`.
 - Keep queries read-only, narrow, and paged. Use only the columns needed for the user's question.
 - Do not dump sensitive raw business data unless the user explicitly asks for rows. Prefer summaries, counts, and representative samples.
 - If a compile or execution error occurs, use the diagnostic location plus schema/relations to repair the same query. Do not blindly rewrite from scratch.
