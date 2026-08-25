@@ -12,6 +12,13 @@ from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
 from bcbench.exceptions import AgentError
 
 
+class _RecordingServer(ThreadingHTTPServer):
+    last_headers: dict[str, str] = {}  # noqa: RUF012 - reassigned per instance by the fixture
+    last_path: str | None = None
+    last_method: str | None = None
+    last_body: bytes = b""
+
+
 class _UpstreamHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -19,6 +26,7 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
         pass
 
     def _record(self) -> None:
+        assert isinstance(self.server, _RecordingServer)
         self.server.last_headers = dict(self.headers.items())
         self.server.last_path = self.path
         self.server.last_method = self.command
@@ -50,7 +58,7 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def upstream():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _UpstreamHandler)
+    server = _RecordingServer(("127.0.0.1", 0), _UpstreamHandler)
     server.last_headers = {}
     server.last_path = None
     server.last_method = None
@@ -71,13 +79,14 @@ def gateway(upstream, monkeypatch):
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
     monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS International Ltd.")
     gw = start_bc_mcp_gateway(enabled=True)
+    assert gw is not None
     yield gw
     gw.stop()
 
 
 def _request(base_url: str, method: str, path: str, body: bytes | None = None):
     split = urlsplit(base_url)
-    conn = HTTPConnection(split.hostname, split.port, timeout=10)
+    conn = HTTPConnection(split.hostname or "127.0.0.1", split.port, timeout=10)
     try:
         conn.request(method, path, body=body)
         response = conn.getresponse()
@@ -197,6 +206,7 @@ class TestBcMcpProbe:
         monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
         monkeypatch.delenv("BC_MCP_COMPANY", raising=False)
         gw = start_bc_mcp_gateway(enabled=True)
+        assert gw is not None
         yield gw
         gw.stop()
         server.shutdown()
@@ -210,6 +220,7 @@ class TestBcMcpProbe:
         # start_bc_mcp_gateway already ran warm-up, populating the tools/list cache.
         import json as _json
 
+        assert mcp_gateway.base_url is not None
         status, headers, body = _request(mcp_gateway.base_url, "POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":7,"method":"tools/list"}')
         assert status == 200
         # Served as a single-event SSE stream, mirroring BC's tools/list framing.
@@ -224,6 +235,7 @@ class TestBcMcpProbe:
         monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
         monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
         gw = start_bc_mcp_gateway(enabled=True)
+        assert gw is not None
         try:
             assert gw.warm_up() == []
         finally:
@@ -275,8 +287,8 @@ def test_gateway_relays_post_sse_event_promptly_without_waiting_for_close():
     thread.start()
     port = server.server_address[1]
     gateway = BcMcpGateway(f"http://127.0.0.1:{port}/BC", "admin", "secret", None).start()
-    split = urlsplit(gateway.base_url)
-    connection = HTTPConnection(split.hostname, split.port, timeout=10)
+    split = urlsplit(gateway.base_url or "")
+    connection = HTTPConnection(split.hostname or "127.0.0.1", split.port, timeout=10)
     try:
         start = time.monotonic()
         connection.request("POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":1,"method":"initialize"}')
@@ -332,8 +344,8 @@ def test_gateway_strips_experimental_from_initialize():
     thread.start()
     port = server.server_address[1]
     gateway = BcMcpGateway(f"http://127.0.0.1:{port}/BC", "admin", "secret", None).start()
-    split = urlsplit(gateway.base_url)
-    connection = HTTPConnection(split.hostname, split.port, timeout=10)
+    split = urlsplit(gateway.base_url or "")
+    connection = HTTPConnection(split.hostname or "127.0.0.1", split.port, timeout=10)
     try:
         connection.request("POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":1,"method":"initialize"}')
         response = connection.getresponse()
@@ -362,8 +374,8 @@ def test_gateway_relays_held_open_sse_event_promptly():
     thread.start()
     port = server.server_address[1]
     gateway = BcMcpGateway(f"http://127.0.0.1:{port}/BC", "admin", "secret", None).start()
-    split = urlsplit(gateway.base_url)
-    connection = HTTPConnection(split.hostname, split.port, timeout=10)
+    split = urlsplit(gateway.base_url or "")
+    connection = HTTPConnection(split.hostname or "127.0.0.1", split.port, timeout=10)
     try:
         connection.request("GET", "/BC/mcp")
         response = connection.getresponse()

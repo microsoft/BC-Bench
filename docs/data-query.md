@@ -50,24 +50,16 @@ gives it Microsoft Learn docs for AL query syntax.
 ## Isolation: the MCP server is the agent's only route to the data
 
 Because the category measures whether the agent can answer *through the MCP tools*, the harness goes to
-some length to make sure it cannot reach the data any other way. This turned out to be the hard part —
-denied one route, the agent kept finding another. Three write-ups capture what happened and how it was
-addressed:
-
-- [Custom MCP servers don't load in GitHub Copilot CLI (in Actions)](data-query/mcp-in-github-copilot-cli.md)
-  — a `403` on the MCP registry policy blocks all custom MCP servers when the CLI uses the Actions
-  `GITHUB_TOKEN`; the fix and why the Claude path is used first.
-- [The agent bypassed MCP by calling BC's API directly](data-query/agent-bypass-via-api.md) — how BC
-  credentials leaked (environment **and** process command line) and the credential-free, path-restricted
-  MCP gateway that closes it.
-- [The agent bypassed MCP (and the API) with direct SQL](data-query/agent-bypass-via-sql.md) — the
-  `docker exec ... sqlcmd` side-door, what we did about it, and the network-isolation end-state.
+some length to make sure it cannot reach the data any other way — denied one route, an agent will look
+for another (reading leaked connection credentials to hit BC's OData `/api`, or `docker exec … sqlcmd`
+against the container's database).
 
 The mechanics: a localhost **MCP gateway** (`src/bcbench/agent/shared/mcp_gateway.py`) fronts the BC
-MCP endpoint — it injects the auth headers upstream (so the agent's MCP config is credential-free),
-path-restricts to `/mcp`, and warms/caches the tool catalog. `agent_subprocess_env()`
-(`src/bcbench/agent/shared/env.py`) scrubs the BC connection variables from the launched agent's
-environment.
+MCP endpoint — it injects the auth headers upstream (so the agent's MCP config is credential-free and
+nothing is recoverable from the process command line), path-restricts to `/mcp` (so `/api` is
+unreachable through it), and warms/caches the tool catalog. `agent_subprocess_env()`
+(`src/bcbench/agent/shared/env.py`) scrubs the BC connection variables — every `BC_SERVER_*` /
+`BC_MCP_*` and `BC_CONTAINER_NAME` — from the launched agent's environment.
 
 ## Dataset
 

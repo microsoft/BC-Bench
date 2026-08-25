@@ -125,14 +125,17 @@ class TestBcMcp:
 
         # both -> both
         _, both = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
+        assert both is not None
         assert set(both) == {"bcmcp", "mslearn"}
 
     def test_mslearn_url_passthrough(self, entry, repo_path):
         config_json, _ = build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path, ms_learn_mcp=True)
+        assert config_json is not None
         assert json.loads(config_json)["mcpServers"]["mslearn"]["url"] == "https://learn.microsoft.com/api/mcp"
 
     def test_bcmcp_points_at_gateway_without_credentials(self, entry, repo_path):
         config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
+        assert config_json is not None
         bcmcp = json.loads(config_json)["mcpServers"]["bcmcp"]
 
         assert bcmcp["url"] == "http://127.0.0.1:54321/BC/mcp"

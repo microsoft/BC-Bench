@@ -178,7 +178,14 @@ class BcMcpGateway:
 
     def _handshake_tools(self) -> list[str]:
         """initialize -> notifications/initialized -> tools/list against BC; caches the tools/list result."""
-        session_id, _ = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
+        session_id, _ = self._rpc(
+            self._origin_host,
+            self._origin_port,
+            self._injected_headers,
+            "initialize",
+            {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}},
+            request_id=1,
+        )
         if session_id:
             self._rpc(self._origin_host, self._origin_port, self._injected_headers, "notifications/initialized", None, session_id=session_id)
         _, listed = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "tools/list", {}, request_id=2, session_id=session_id)
