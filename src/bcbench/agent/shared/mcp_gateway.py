@@ -51,6 +51,11 @@ _STREAM_CHUNK_BYTES = 8192
 _PROBE_TIMEOUT_SECONDS = 180
 
 
+def _header_safe(key: str, value: str) -> bool:
+    """A header is safe to relay only if neither key nor value contains CR/LF (HTTP response splitting)."""
+    return not any(c in key or c in value for c in ("\r", "\n"))
+
+
 def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
     if not body:
         return None, None
@@ -290,7 +295,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             behaves exactly like BC's for everything else.
             """
             self._response_started = True
-            forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type")]
+            forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type") and _header_safe(k, v)]
             self.send_response_only(200)
             for key, value in forwarded_headers:
                 self.send_header(key, value)
@@ -335,6 +340,8 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                     content_length = value
                     continue
                 if lowered in _HOP_BY_HOP:
+                    continue
+                if not _header_safe(key, value):
                     continue
                 self.send_header(key, value)
 
