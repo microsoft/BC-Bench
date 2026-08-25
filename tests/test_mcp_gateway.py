@@ -203,8 +203,8 @@ class TestBcMcpProbe:
         server.server_close()
         thread.join(timeout=5)
 
-    def test_probe_returns_exposed_tool_names(self, mcp_gateway):
-        assert mcp_gateway.probe_tools() == ["bc_data_find_tables", "bc_data_query"]
+    def test_warm_up_returns_exposed_tool_names(self, mcp_gateway):
+        assert mcp_gateway.warm_up() == ["bc_data_find_tables", "bc_data_query"]
 
     def test_tools_list_served_from_cache_after_warmup(self, mcp_gateway):
         # start_bc_mcp_gateway already ran warm-up, populating the tools/list cache.
@@ -219,13 +219,13 @@ class TestBcMcpProbe:
         assert payload["id"] == 7
         assert [t["name"] for t in payload["result"]["tools"]] == ["bc_data_find_tables", "bc_data_query"]
 
-    def test_probe_never_raises_on_bad_upstream(self, monkeypatch):
+    def test_warm_up_never_raises_on_bad_upstream(self, monkeypatch):
         monkeypatch.setenv("BC_MCP_URL", "http://127.0.0.1:1/BC")  # nothing listening
         monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
         monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
         gw = start_bc_mcp_gateway(enabled=True)
         try:
-            assert gw.probe_tools() == []
+            assert gw.warm_up() == []
         finally:
             gw.stop()
 

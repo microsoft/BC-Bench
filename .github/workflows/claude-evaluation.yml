@@ -172,23 +172,12 @@ jobs:
             ${{ inputs.ms-learn-mcp && '--ms-learn-mcp' || '' }} `
             ${{ inputs.skills && '--skills' || '' }}
 
-      - name: Capture BC NST logs
-        if: ${{ always() && inputs.bc-mcp }}
-        shell: pwsh
-        run: |
-          # TEMPORARY (diagnostic): pull NST event log + server config + MCP Configuration row to
-          # investigate why the BC MCP endpoint exposes zero Data Query tools.
-          .\scripts\Capture-NstLogs.ps1 -ContainerName "$env:BC_CONTAINER_NAME" -OutputDir "${{ env.EVALUATION_RESULTS_DIR }}"
-
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          # TEMPORARY (remove before merge): include agent *.log to diagnose BC MCP tool use.
-          path: |
-            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
-            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.log
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
           retention-days: ${{ inputs.test-run && 1 || 30 }}
 
   summarize-results:

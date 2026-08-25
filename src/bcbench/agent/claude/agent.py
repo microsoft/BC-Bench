@@ -132,10 +132,6 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        # Persist the full event stream for transcript analysis (the workflow uploads *.log artifacts).
-        transcript_path = output_dir / f"claude-transcript-{entry.instance_id}.log"
-        transcript_path.write_text(stdout, encoding="utf-8")
-
         metrics, final_response = parse_stream_output(stdout.splitlines())
         if final_response:
             logger.info(final_response)

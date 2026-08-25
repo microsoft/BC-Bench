@@ -51,8 +51,6 @@ def parse_stream_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | Non
     """Parse metrics + final response from `claude --output-format=stream-json --verbose` (JSONL) stdout.
 
     Event shapes (Claude Code):
-        system/init: lists the `tools` and `mcp_servers` registered for the session; logged so a run
-            shows whether the BC MCP tools actually connected in-session.
         assistant: ``message.content`` holds ``tool_use`` blocks whose ``name`` (e.g.
             ``mcp__bcmcp__bc_data_query``) captures sub-agent and MCP tool calls the pre-tool-use hook
             never sees.
@@ -79,11 +77,6 @@ def parse_stream_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | Non
             continue
 
         match event.get("type"):
-            case "system" if event.get("subtype") == "init":
-                servers = event.get("mcp_servers")
-                tools = event.get("tools")
-                tool_count = len(tools) if isinstance(tools, list) else "?"
-                logger.info(f"Claude session init: mcp_servers={servers}, {tool_count} tools registered")
             case "assistant":
                 message = event.get("message")
                 if isinstance(message, dict):

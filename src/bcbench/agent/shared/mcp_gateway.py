@@ -63,8 +63,8 @@ def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
     return obj.get("method"), obj.get("id")
 
 
-def _read_jsonrpc(response, deadline: float) -> tuple[dict, str]:  # noqa: ANN001 - http.client.HTTPResponse
-    """Parse a JSON-RPC result and return it plus a raw snippet of the response for diagnostics.
+def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.client.HTTPResponse
+    """Parse a JSON-RPC result from an MCP response body (application/json or SSE).
 
     For SSE, read line by line and return as soon as a JSON-RPC result/error arrives: the BC MCP
     endpoint keeps the event stream open for later messages, so reading to EOF would block until the
@@ -72,27 +72,24 @@ def _read_jsonrpc(response, deadline: float) -> tuple[dict, str]:  # noqa: ANN00
     """
     content_type = response.getheader("Content-Type", "") or ""
     if "text/event-stream" in content_type:
-        seen: list[str] = []
         while time.monotonic() < deadline:
             raw_line = response.readline()
             if not raw_line:
                 break
             line = raw_line.decode("utf-8", errors="replace").strip()
-            if line:
-                seen.append(line)
             if line.startswith("data:"):
                 try:
                     obj = json.loads(line[5:].strip())
                 except json.JSONDecodeError:
                     continue
                 if isinstance(obj, dict) and ("result" in obj or "error" in obj):
-                    return obj, line[:800]
-        return {}, " | ".join(seen)[:800]
+                    return obj
+        return {}
     text = response.read().decode("utf-8", errors="replace")
     try:
-        return (json.loads(text) if text.strip() else {}), text[:800]
+        return json.loads(text) if text.strip() else {}
     except json.JSONDecodeError:
-        return {}, text[:800]
+        return {}
 
 
 class BcMcpGateway:
@@ -156,7 +153,7 @@ class BcMcpGateway:
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
 
-    def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict, str]:
+    def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
         connection = HTTPConnection(host, port, timeout=_PROBE_TIMEOUT_SECONDS)
         try:
             payload: dict[str, object] = {"jsonrpc": "2.0", "method": method}
@@ -170,55 +167,39 @@ class BcMcpGateway:
             connection.request("POST", self._mcp_path, body=json.dumps(payload).encode(), headers=headers)
             response = connection.getresponse()
             returned_session = response.getheader("Mcp-Session-Id")
-            result, raw = _read_jsonrpc(response, deadline=time.monotonic() + _PROBE_TIMEOUT_SECONDS)
-            return returned_session, result, f"HTTP {response.status}, Content-Type={response.getheader('Content-Type', '')!r}, body={raw!r}"
+            return returned_session, _read_jsonrpc(response, deadline=time.monotonic() + _PROBE_TIMEOUT_SECONDS)
         finally:
             connection.close()
 
-    def _handshake_tools(self, host: str, port: int, extra_headers: dict[str, str]) -> tuple[list[str], float, str]:
-        """initialize -> notifications/initialized -> tools/list against one target; returns (tools, tools_list_seconds, diag)."""
-        session_id, init_result, init_diag = self._rpc(host, port, extra_headers, "initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
-        logger.info(f"BC MCP initialize result: session={session_id!r} result={json.dumps(init_result)[:400]} diag={init_diag[:200]}")
+    def _handshake_tools(self) -> list[str]:
+        """initialize -> notifications/initialized -> tools/list against BC; caches the tools/list result."""
+        session_id, _ = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
         if session_id:
-            self._rpc(host, port, extra_headers, "notifications/initialized", None, session_id=session_id)
-        before_list = time.monotonic()
-        _, listed, diag = self._rpc(host, port, extra_headers, "tools/list", {}, request_id=2, session_id=session_id)
+            self._rpc(self._origin_host, self._origin_port, self._injected_headers, "notifications/initialized", None, session_id=session_id)
+        _, listed = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "tools/list", {}, request_id=2, session_id=session_id)
         result = listed.get("result")
         tools = [t.get("name") for t in (result or {}).get("tools", []) if isinstance(t, dict)]
         if tools and isinstance(result, dict):
             with self._lock:
                 self._cached_tools_result = result
-        return tools, time.monotonic() - before_list, diag
+        return tools
 
-    def probe_tools(self) -> list[str]:
-        """Warm up BC MCP and log its exposed tools, probing BOTH through the gateway and directly.
+    def warm_up(self) -> list[str]:
+        """Prime BC's tool catalog and cache the tools/list result before the agent connects.
 
-        Best-effort (never raises): warms the cold endpoint before the agent connects, and comparing the
-        via-gateway result against a direct-to-BC result isolates a gateway relay problem from a genuine
-        server-side one. The direct probe carries the injected auth/Company/ConfigurationName headers.
+        BC composes the tool catalog on the first tools/list of a session (slow, ~45s, sometimes dropped
+        by the server), which can blow past the agent's MCP startup timeout so it registers zero tools.
+        Fetching it once here warms BC and lets the gateway serve the agent's tools/list from cache.
+        Best-effort: never raises -- a failed warm-up must not break a run.
         """
-        gateway_tools: list[str] = []
-        # Via the gateway (credential-free; the gateway injects auth upstream) - the agent's exact path.
-        if self.base_url is not None:
-            split = urlsplit(self.base_url)
-            try:
-                gateway_tools, secs, diag = self._handshake_tools(split.hostname or "127.0.0.1", split.port or 80, {})
-                logger.info(f"BC MCP warm-up (via gateway): exposes {len(gateway_tools)} tool(s): {gateway_tools} (tools/list {secs:.1f}s)")
-                if not gateway_tools:
-                    logger.info(f"BC MCP warm-up (via gateway) empty tools/list -> {diag}")
-            except Exception as exc:  # noqa: BLE001 - a warm-up diagnostic must never break a run
-                logger.warning(f"BC MCP warm-up (via gateway) failed (non-fatal): {exc}")
-
-        # Directly to BC (bypassing the gateway) with the real headers - isolates gateway vs server.
         try:
-            direct_tools, secs, diag = self._handshake_tools(self._origin_host, self._origin_port, self._injected_headers)
-            logger.info(f"BC MCP warm-up (direct to BC): exposes {len(direct_tools)} tool(s): {direct_tools} (tools/list {secs:.1f}s)")
-            if not direct_tools:
-                logger.info(f"BC MCP warm-up (direct to BC) empty tools/list -> {diag}")
-        except Exception as exc:  # noqa: BLE001 - a warm-up diagnostic must never break a run
-            logger.warning(f"BC MCP warm-up (direct to BC) failed (non-fatal): {exc}")
-
-        return gateway_tools
+            tools = self._handshake_tools()
+        except Exception as exc:  # noqa: BLE001 - warm-up must never break a run
+            logger.warning(f"BC MCP warm-up failed (non-fatal): {exc}")
+            return []
+        else:
+            logger.info(f"BC MCP warm-up: cached {len(tools)} tool(s): {tools}")
+            return tools
 
 
 def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
@@ -234,7 +215,6 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
 
         def _handle(self) -> None:
             if not self._path_allowed():
-                logger.info(f"BC MCP gateway BLOCKED {self.command} {self.path} -> 403")
                 self.send_error(403, "Forbidden")
                 return
 
@@ -251,17 +231,15 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             request_headers.update(gateway._injected_headers)
 
             connection = HTTPConnection(gateway._origin_host, gateway._origin_port, timeout=_UPSTREAM_TIMEOUT_SECONDS)
-            started = time.monotonic()
             try:
                 connection.request(self.command, self.path, body=body, headers=request_headers)
                 response = connection.getresponse()
                 gateway._note_forwarded()
-                logger.info(f"BC MCP gateway {self.command} {rpc_method or self.path} -> HTTP {response.status} {response.getheader('Content-Type', '')} ({time.monotonic() - started:.1f}s)")
                 # Relay faithfully, byte-for-byte, holding streams open exactly as BC does (its MCP
                 # server keeps SSE streams open as the client's event channel). The one exception is the
                 # initialize reply: BC advertises capabilities.experimental = {"x-ms-headerless": true},
-                # which makes Claude's MCP client fail the connection; strip it so the client sees a
-                # standard server (BC still works over the normal header-based session the probe uses).
+                # which makes some MCP clients fail the connection; strip it so the client sees a standard
+                # server (BC still works over the normal header-based session the warm-up uses).
                 if rpc_method == "initialize" and response.status == 200 and "text/event-stream" in (response.getheader("Content-Type", "") or ""):
                     self._relay_initialize(response)
                 else:
@@ -273,10 +251,10 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                     logger.debug(f"BC MCP gateway client disconnected during {self.command} {rpc_method or self.path}: {error}")
                     self.close_connection = True
                 else:
-                    logger.exception(f"BC MCP gateway failed to reach upstream for {self.command} {rpc_method or self.path} after {time.monotonic() - started:.1f}s")
+                    logger.exception(f"BC MCP gateway failed to reach upstream for {self.command} {rpc_method or self.path}")
                     self.send_error(502, "Bad Gateway")
             except Exception:
-                logger.exception(f"BC MCP gateway error handling {self.command} {rpc_method or self.path} after {time.monotonic() - started:.1f}s")
+                logger.exception(f"BC MCP gateway error handling {self.command} {rpc_method or self.path}")
                 if not self._response_started:
                     self.send_error(502, "Bad Gateway")
             finally:
@@ -301,9 +279,6 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(event)
             self.wfile.flush()
-            tools = cached.get("tools") if isinstance(cached, dict) else None
-            tool_count = len(tools) if isinstance(tools, list) else "?"
-            logger.info(f"BC MCP gateway tools/list -> served {tool_count} tool(s) from warm-up cache")
             return True
 
         def _relay_initialize(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
@@ -338,10 +313,10 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                         obj = None
                     if isinstance(obj, dict) and isinstance(obj.get("result"), dict):
                         capabilities = obj["result"].get("capabilities")
-                        removed = isinstance(capabilities, dict) and capabilities.pop("experimental", None) is not None
+                        if isinstance(capabilities, dict):
+                            capabilities.pop("experimental", None)
                         out_line = ("data: " + json.dumps(obj) + "\n").encode()
                         rewritten = True
-                        logger.info(f"BC MCP gateway rewrote initialize result (experimental stripped={removed})")
                 self.wfile.write(b"%X\r\n" % len(out_line))
                 self.wfile.write(out_line)
                 self.wfile.write(b"\r\n")
@@ -414,5 +389,5 @@ def start_bc_mcp_gateway(enabled: bool) -> BcMcpGateway | None:
         company=os.environ.get("BC_MCP_COMPANY"),
     ).start()
     logger.info(f"BC MCP gateway listening at {gateway.base_url}/mcp (credential-free; path-restricted to /mcp)")
-    gateway.probe_tools()
+    gateway.warm_up()
     return gateway
