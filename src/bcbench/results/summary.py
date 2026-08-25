@@ -178,7 +178,6 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
         return summary.model_copy(
             update={
-                "total": total,
                 "resolved": resolved,
                 "failed": total - resolved,
                 "build": build,

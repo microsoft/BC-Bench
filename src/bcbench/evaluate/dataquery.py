@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -141,4 +142,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         from bcbench.operations import execute_al_query
 
         logger.info(f"No baked gold_rows for {context.entry.instance_id}; running gold query live")
-        return execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold")
+        # Pin the gold query to the same company the agent queried via MCP (BC_MCP_COMPANY), so the
+        # comparison is against the same data rather than an arbitrary first company.
+        company = os.environ.get("BC_MCP_COMPANY")
+        return execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)

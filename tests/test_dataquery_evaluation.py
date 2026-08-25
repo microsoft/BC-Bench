@@ -192,6 +192,7 @@ class TestQueryRunTemplate:
             version=bc_operations._QUERY_API_VERSION,
             entity_set=bc_operations._entity_set_name(50100),
             result_file="r",
+            company="CRONUS",
         )
 
     def test_uses_proven_build_helper(self):
@@ -219,3 +220,10 @@ class TestQueryRunTemplate:
         script = self._render()
         assert "UnPublish-BcContainerApp" in script
         assert "UnInstall-BcContainerApp" in script
+
+    def test_pins_company_by_name(self):
+        # The gold query runs against the pinned company (passed to the scriptblock), not whatever
+        # company happens to be first in the collection.
+        script = self._render()
+        assert "$_.name -eq $company" in script
+        assert "'CRONUS'" in script

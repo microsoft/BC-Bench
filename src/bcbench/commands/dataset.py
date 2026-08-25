@@ -1,6 +1,7 @@
 """CLI commands for dataset operations."""
 
 import json
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -204,11 +205,12 @@ def bake_dataquery_gold(
     dataset_path = EvaluationCategory.DATA_QUERY.dataset_path
     entries = [json.loads(line) for line in dataset_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     container = ContainerConfig(container_name, username, password)
+    company = os.environ.get("BC_MCP_COMPANY")
 
     for entry in entries:
         entry_version = version or entry["environment_setup_version"]
         logger.info(f"Baking gold rows for {entry['instance_id']} (v{entry_version})")
-        rows = execute_al_query(entry["gold_query"], container, entry_version, repo_path, "gold")
+        rows = execute_al_query(entry["gold_query"], container, entry_version, repo_path, "gold", company=company)
         entry["gold_rows"] = rows
         logger.info(f"  -> {len(rows)} rows")
 

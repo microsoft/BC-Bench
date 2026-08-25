@@ -332,12 +332,17 @@ try {
     # on host->container name resolution or published ports (the runner does not update its hosts file).
     # Basic auth header is built by hand rather than via -Credential: PowerShell 7 (used inside the
     # container) refuses -Credential over plain HTTP, and a manual header works on both 5.1 and 7.
-    $$json = Invoke-ScriptInBcContainer -containerName '$container_name' -argumentList $$credential, '$publisher', '$group', '$version', '$entity_set' -scriptblock {
-        param($$cred, $$pub, $$grp, $$ver, $$eset)
+    $$json = Invoke-ScriptInBcContainer -containerName '$container_name' -argumentList $$credential, '$publisher', '$group', '$version', '$entity_set', '$company' -scriptblock {
+        param($$cred, $$pub, $$grp, $$ver, $$eset, $$company)
         $$pair = "$$($$cred.UserName):$$($$cred.GetNetworkCredential().Password)"
         $$headers = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($$pair)) }
         $$base = 'http://localhost:7048/BC/api'
-        $$companyId = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Headers $$headers).value[0].id
+        # Pin the company so the gold query runs against the same company the agent queried via MCP,
+        # rather than depending on the arbitrary ordering of the companies collection. Fall back to the
+        # first company only when no company was pinned.
+        $$companies = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Headers $$headers).value
+        $$companyId = if ($$company) { ($$companies | Where-Object { $$_.name -eq $$company } | Select-Object -First 1).id } else { $$companies[0].id }
+        if (-not $$companyId) { throw "Company '$$company' not found among $$($$companies.name -join ', ')" }
         # Follow @odata.nextLink so large result sets aren't silently truncated to the first page.
         $$rows = [System.Collections.Generic.List[object]]::new()
         $$uri = "$$base/$$pub/$$grp/$$ver/companies($$companyId)/$$eset"
@@ -359,12 +364,13 @@ finally {
 )
 
 
-def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: str) -> list[dict]:
+def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str | None = None) -> list[dict]:
     """Compile + publish an AL query (wrapped as an API query) to the container and return its rows.
 
     Builds a throwaway app under ``work_root/.bcbench-query-<suffix>``, compiles + publishes it,
-    then reads the query's OData endpoint. Raises :class:`BuildError` if the query does not
-    compile or publish.
+    then reads the query's OData endpoint. ``company`` pins which company the query runs against (so
+    the gold matches the company the agent queried via MCP); when omitted the first company is used.
+    Raises :class:`BuildError` if the query does not compile or publish.
 
     NOTE: the container-side steps (compile/publish/OData fetch) require a running BC container
     and have not been validated locally; the wrapping and comparison logic are unit-tested.
@@ -397,6 +403,7 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
         version=_QUERY_API_VERSION,
         entity_set=_entity_set_name(object_id),
         result_file=_escape_ps_string(str(result_file)),
+        company=_escape_ps_string(company or ""),
     )
 
     try:
