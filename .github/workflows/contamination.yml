@@ -1,11 +1,7 @@
-name: Contamination - File-path Identification
+name: Contamination
 
-# Context-free bug localization task (SWE-Bench Illusion, arXiv:2506.12286):
-# the model sees ONLY the bug report — no repository, no code — and must name the
-# file(s) that contain the bug. Because it needs no BC container or build, this
-# runs cheaply on ubuntu-latest. Interpret the result RELATIVELY: pass a --cutoff
-# so old/public entries are compared against fresh control entries. The delta,
-# not the absolute rate, is the memorization signal.
+# One-shot bug localization probe inspired by The SWE-Bench Illusion (arXiv:2506.12286).
+# The model receives the repository name and bug report, but no repository contents or tools, and predicts one repository-relative path.
 
 permissions:
   contents: read
@@ -28,34 +24,20 @@ on:
           - "mai-code-1.1-flash"
           - "gemini-3.6-flash"
       category:
-        description: "Dataset category (must be patch-based)"
+        description: "Evaluation category"
         required: false
         default: "bug-fix"
         type: choice
         options:
           - "bug-fix"
-          - "test-generation"
-      top-k:
-        description: "Number of candidate file paths to request per entry"
-        required: false
-        default: "3"
-        type: string
-      cutoff:
-        description: "ISO date (YYYY-MM-DD). Entries created before it are treated as potentially-contaminated; on/after as the clean control. Leave blank for an absolute-rate baseline."
-        required: false
-        default: ""
-        type: string
       test-run:
         description: "Quick run over a handful of random entries"
         required: false
         default: true
         type: boolean
-  schedule:
-    # Weekly full run, Mondays 06:00 UTC.
-    - cron: "0 6 * * 1"
 
 concurrency:
-  group: contamination-file-path-identification-${{ inputs.category || 'bug-fix' }}
+  group: contamination-${{ inputs.category || 'bug-fix' }}
   cancel-in-progress: false
 
 env:
@@ -96,7 +78,7 @@ jobs:
       - name: Install evaluation CLIs
         uses: $/.github/actions/install-agent-harnesses
 
-      - name: Run file-path identification for entry ${{ matrix.entry }}
+      - name: Run contamination detection for entry ${{ matrix.entry }}
         timeout-minutes: 20
         shell: pwsh
         env:
@@ -104,10 +86,9 @@ jobs:
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
-          uv run bcbench contamination file-path-identification "${{ matrix.entry }}" `
+          uv run bcbench contamination filepath-identification "${{ matrix.entry }}" `
             --category "${{ inputs.category || 'bug-fix' }}" `
-            --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
-            --top-k ${{ inputs.top-k || '3' }} `
+            --model "${{ inputs.model || 'gpt-5.6-luna' }}" `
             --output-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}"
 
       - name: Upload identification result
@@ -115,14 +96,13 @@ jobs:
         if: always()
         with:
           name: identification-result-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.IDENTIFICATION_RESULTS_DIR }}/**/*.file-path-identification.jsonl
+          path: ${{ env.IDENTIFICATION_RESULTS_DIR }}/**/*.filepath-identification.jsonl
           retention-days: ${{ (inputs.test-run && 1) || 30 }}
 
   summarize:
     name: Summarize
     runs-on: ubuntu-latest
     needs: identify
-    if: always() && needs.identify.result != 'skipped'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -137,14 +117,4 @@ jobs:
           merge-multiple: true
 
       - name: Summarize contamination signal
-        shell: pwsh
-        run: |
-          # Manual runs use the dispatch input; scheduled runs fall back to the
-          # CONTAMINATION_CUTOFF repo variable so the weekly report still shows the delta.
-          $cutoff = "${{ inputs.cutoff || vars.CONTAMINATION_CUTOFF }}"
-          $cutoffArg = if ($cutoff) { "--cutoff", $cutoff } else { @() }
-
-          uv run bcbench contamination summarize `
-            --results-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}" `
-            --model "${{ inputs.model || 'claude-haiku-4.5' }}" `
-            @cutoffArg
+        run: uv run bcbench contamination summarize --results-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}"

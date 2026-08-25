@@ -10,10 +10,10 @@ import re
 import subprocess
 from pathlib import Path
 
+from bcbench.agent.copilot.cli import invoke_copilot
 from bcbench.config import get_config
-from bcbench.copilot_cli import find_copilot as _find_copilot
 from bcbench.dataset.codereview import ReviewComment
-from bcbench.exceptions import LLMJudgeError
+from bcbench.exceptions import AgentError, LLMJudgeError
 
 _config = get_config()
 
@@ -148,32 +148,18 @@ def judge_verdicts(
     if not pairs:
         return []
 
-    copilot_cmd = _find_copilot()
-    if not copilot_cmd:
-        raise LLMJudgeError("Copilot CLI not found; cannot run the semantic judge")
-
     result_path = work_dir / _config.judge.result_file
     prompt = " ".join(_build_judge_prompt(pairs, _config.judge.result_file).split())
 
     try:
-        completed = subprocess.run(
-            [
-                copilot_cmd,
-                "--allow-all-tools",
-                "--disable-builtin-mcps",
-                "--no-custom-instructions",
-                f"--model={model}",
-                f"--prompt={prompt}",
-            ],
-            cwd=str(work_dir),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+        _, stdout = invoke_copilot(
+            prompt=prompt,
+            model=model,
+            work_dir=work_dir,
             timeout=_config.timeout.agent_execution,
-            check=True,
+            allow_all_tools=True,
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, AgentError) as exc:
         raise LLMJudgeError(f"Judge subprocess failed: {exc}{_format_subprocess_output(exc)}") from exc
 
-    return _parse_judge_results(result_path, len(pairs), stdout=completed.stdout or "")
+    return _parse_judge_results(result_path, len(pairs), stdout=stdout)
