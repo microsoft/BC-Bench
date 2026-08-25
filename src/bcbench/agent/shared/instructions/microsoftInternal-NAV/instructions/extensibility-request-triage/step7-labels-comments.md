@@ -20,7 +20,8 @@ JSON only — nothing is posted, labelled, or closed on any server. A human revi
 | `FailureLabel: "agent-not-processable"` | `["agent-not-processable"]` | (none) | open |
 | Auto-reject (blocker) | `[]` | `rejected_request` | closed |
 | Already implemented | `[]` | `already_implemented` | closed |
-| `FailureLabel: "close"` and reason is stale/inactive/withdrawn | `["missing-info"]` | `stale_issue_closure` | closed |
+| `FailureLabel: "close"` and reason is stale/inactive | `["missing-info"]` | `stale_issue_closure` | closed |
+| `FailureLabel: "close"` and requester confirmed no new change is needed (accepted an existing solution or alternative, withdrew, or cancelled) | `[]` | `requester_confirmed_closure` | closed |
 | `FailureLabel: "close"` and any other rejection reason | `[]` | `rejected_request` | closed |
 | `FailureLabel: "do-nothing"` | (none) | (none) | (no change) |
 
