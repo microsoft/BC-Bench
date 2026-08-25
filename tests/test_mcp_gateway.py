@@ -206,6 +206,16 @@ class TestBcMcpProbe:
     def test_probe_returns_exposed_tool_names(self, mcp_gateway):
         assert mcp_gateway.probe_tools() == ["bc_data_find_tables", "bc_data_query"]
 
+    def test_tools_list_served_from_cache_after_warmup(self, mcp_gateway):
+        # start_bc_mcp_gateway already ran warm-up, populating the tools/list cache.
+        import json as _json
+
+        status, _headers, body = _request(mcp_gateway.base_url, "POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":7,"method":"tools/list"}')
+        assert status == 200
+        payload = _json.loads(body)
+        assert payload["id"] == 7
+        assert [t["name"] for t in payload["result"]["tools"]] == ["bc_data_find_tables", "bc_data_query"]
+
     def test_probe_never_raises_on_bad_upstream(self, monkeypatch):
         monkeypatch.setenv("BC_MCP_URL", "http://127.0.0.1:1/BC")  # nothing listening
         monkeypatch.setenv("BC_SERVER_USERNAME", "admin")

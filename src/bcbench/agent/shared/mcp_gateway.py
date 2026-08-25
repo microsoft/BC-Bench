@@ -51,14 +51,16 @@ _STREAM_CHUNK_BYTES = 8192
 _PROBE_TIMEOUT_SECONDS = 180
 
 
-def _jsonrpc_method(body: bytes | None) -> str | None:
+def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
     if not body:
-        return None
+        return None, None
     try:
         obj = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    return obj.get("method") if isinstance(obj, dict) else None
+        return None, None
+    if not isinstance(obj, dict):
+        return None, None
+    return obj.get("method"), obj.get("id")
 
 
 def _read_jsonrpc(response, deadline: float) -> tuple[dict, str]:  # noqa: ANN001 - http.client.HTTPResponse
@@ -118,6 +120,12 @@ class BcMcpGateway:
         self._lock = threading.Lock()
         self._forwarded_count = 0
         self.base_url: str | None = None
+        # tools/list "result" object captured during warm-up. BC composes the tool catalog per MCP
+        # session and the first tools/list is slow (~45s) and sometimes dropped by the server, which
+        # blows past the agent's MCP startup timeout so the server registers zero tools. The catalog is
+        # identical across sessions, so once warm-up has it the gateway answers tools/list from here,
+        # decoupling the agent from BC's cold per-session composition.
+        self._cached_tools_result: dict[str, object] | None = None
 
     @property
     def forwarded_count(self) -> int:
@@ -174,7 +182,11 @@ class BcMcpGateway:
             self._rpc(host, port, extra_headers, "notifications/initialized", None, session_id=session_id)
         before_list = time.monotonic()
         _, listed, diag = self._rpc(host, port, extra_headers, "tools/list", {}, request_id=2, session_id=session_id)
-        tools = [t.get("name") for t in (listed.get("result") or {}).get("tools", []) if isinstance(t, dict)]
+        result = listed.get("result")
+        tools = [t.get("name") for t in (result or {}).get("tools", []) if isinstance(t, dict)]
+        if tools and isinstance(result, dict):
+            with self._lock:
+                self._cached_tools_result = result
         return tools, time.monotonic() - before_list, diag
 
     def probe_tools(self) -> list[str]:
@@ -227,7 +239,10 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
 
             length = self.headers.get("Content-Length")
             body: bytes | None = self.rfile.read(int(length)) if length else None
-            rpc_method = _jsonrpc_method(body)
+            rpc_method, rpc_id = _jsonrpc_method_and_id(body)
+
+            if rpc_method == "tools/list" and self._serve_cached_tools(rpc_id):
+                return
 
             request_headers: dict[str, str] = {k: v for k, v in self.headers.items() if k.lower() not in _STRIPPED_REQUEST_HEADERS}
             request_headers["Host"] = f"{gateway._origin_host}:{gateway._origin_port}"
@@ -246,6 +261,24 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 self.send_error(502, "Bad Gateway")
             finally:
                 connection.close()
+
+        def _serve_cached_tools(self, request_id: object) -> bool:
+            """Answer tools/list from the warm-up cache, bypassing BC's slow per-session composition."""
+            with gateway._lock:
+                cached = gateway._cached_tools_result
+            if cached is None:
+                return False
+            payload = json.dumps({"jsonrpc": "2.0", "id": request_id, "result": cached}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
+            tools = cached.get("tools") if isinstance(cached, dict) else None
+            tool_count = len(tools) if isinstance(tools, list) else "?"
+            logger.info(f"BC MCP gateway tools/list -> served {tool_count} tool(s) from warm-up cache")
+            return True
 
         def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
             self.send_response_only(response.status)
