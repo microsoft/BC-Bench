@@ -255,7 +255,14 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 response = connection.getresponse()
                 gateway._note_forwarded()
                 logger.info(f"BC MCP gateway {self.command} {rpc_method or self.path} -> HTTP {response.status} {response.getheader('Content-Type', '')} ({time.monotonic() - started:.1f}s)")
-                self._relay(response)
+                # A POST is request/response even when BC frames the reply as SSE and then holds the
+                # stream open; mirroring that open stream stalls MCP clients (e.g. Claude) that wait for
+                # it to end before continuing the handshake. De-stream POST SSE replies to a single
+                # application/json response and close. GET (the server->client channel) still streams.
+                if self.command == "POST" and response.status == 200 and "text/event-stream" in (response.getheader("Content-Type", "") or ""):
+                    self._relay_post_sse(response)
+                else:
+                    self._relay(response)
             except Exception:
                 logger.exception(f"BC MCP gateway failed to reach upstream for {self.command} {rpc_method or self.path} after {time.monotonic() - started:.1f}s")
                 self.send_error(502, "Bad Gateway")
@@ -279,6 +286,20 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             tool_count = len(tools) if isinstance(tools, list) else "?"
             logger.info(f"BC MCP gateway tools/list -> served {tool_count} tool(s) from warm-up cache")
             return True
+
+        def _relay_post_sse(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
+            """Collapse a held-open SSE reply to a single application/json response, then close."""
+            session_id = response.getheader("Mcp-Session-Id")
+            result, _raw = _read_jsonrpc(response, deadline=time.monotonic() + _UPSTREAM_TIMEOUT_SECONDS)
+            payload = json.dumps(result).encode() if result else b"{}"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            if session_id:
+                self.send_header("Mcp-Session-Id", session_id)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
 
         def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
             self.send_response_only(response.status)

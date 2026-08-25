@@ -245,6 +245,55 @@ class _HeldOpenSseHandler(BaseHTTPRequestHandler):
         time.sleep(3.0)  # keep the stream open after the event, as the BC MCP endpoint does
 
 
+class _HeldOpenPostSseHandler(BaseHTTPRequestHandler):
+    """Answers a POST with an SSE event carrying a JSON-RPC result, then holds the stream open."""
+
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
+        pass
+
+    def do_POST(self) -> None:
+        n = int(self.headers.get("Content-Length", 0))
+        if n:
+            self.rfile.read(n)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Mcp-Session-Id", "sess-hold")
+        self.end_headers()
+        self.wfile.write(b'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n\n')
+        self.wfile.flush()
+        time.sleep(30)  # hold open like BC; the gateway must not wait for this
+
+
+def test_gateway_destreams_held_open_post_sse_reply():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _HeldOpenPostSseHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    gateway = BcMcpGateway(f"http://127.0.0.1:{port}/BC", "admin", "secret", None).start()
+    split = urlsplit(gateway.base_url)
+    connection = HTTPConnection(split.hostname, split.port, timeout=10)
+    try:
+        start = time.monotonic()
+        connection.request("POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+        response = connection.getresponse()
+        body = response.read()  # completes because the gateway sends Content-Length and closes
+        elapsed = time.monotonic() - start
+        assert response.status == 200
+        assert response.getheader("Content-Type") == "application/json"
+        assert response.getheader("Mcp-Session-Id") == "sess-hold"
+        assert json.loads(body)["result"] == {"ok": True}
+        # De-streamed promptly; the old behavior would hang until the upstream closed (~30s).
+        assert elapsed < 5.0
+    finally:
+        connection.close()
+        gateway.stop()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_gateway_relays_held_open_sse_event_promptly():
     server = ThreadingHTTPServer(("127.0.0.1", 0), _HeldOpenSseHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
