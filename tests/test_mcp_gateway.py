@@ -301,6 +301,61 @@ def test_gateway_relays_post_sse_event_promptly_without_waiting_for_close():
         thread.join(timeout=5)
 
 
+class _InitializeExperimentalHandler(BaseHTTPRequestHandler):
+    """Answers initialize over SSE with a capabilities.experimental block, held open like BC."""
+
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
+        pass
+
+    def do_POST(self) -> None:
+        import json as _json
+
+        n = int(self.headers.get("Content-Length", 0))
+        req = _json.loads(self.rfile.read(n)) if n else {}
+        result = {"protocolVersion": "2024-11-05", "capabilities": {"experimental": {"x-ms-headerless": True}, "tools": {}}, "serverInfo": {"name": "BC"}}
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Mcp-Session-Id", "sess-init")
+        self.end_headers()
+        self.wfile.write(("data: " + _json.dumps({"jsonrpc": "2.0", "id": req.get("id"), "result": result}) + "\n\n").encode())
+        self.wfile.flush()
+        time.sleep(30)  # hold the stream open like BC
+
+
+def test_gateway_strips_experimental_from_initialize():
+    import json as _json
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _InitializeExperimentalHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    gateway = BcMcpGateway(f"http://127.0.0.1:{port}/BC", "admin", "secret", None).start()
+    split = urlsplit(gateway.base_url)
+    connection = HTTPConnection(split.hostname, split.port, timeout=10)
+    try:
+        connection.request("POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+        response = connection.getresponse()
+        assert response.status == 200
+        line = b""
+        while b"data:" not in line:
+            line = response.readline()
+            if not line:
+                break
+        payload = _json.loads(line.decode()[len("data:") :].strip())
+        # The x-ms-headerless experimental capability (which breaks Claude) is stripped; the rest stays.
+        assert "experimental" not in payload["result"]["capabilities"]
+        assert "tools" in payload["result"]["capabilities"]
+        assert payload["result"]["protocolVersion"] == "2024-11-05"
+    finally:
+        connection.close()
+        gateway.stop()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_gateway_relays_held_open_sse_event_promptly():
     server = ThreadingHTTPServer(("127.0.0.1", 0), _HeldOpenSseHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

@@ -257,12 +257,15 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 response = connection.getresponse()
                 gateway._note_forwarded()
                 logger.info(f"BC MCP gateway {self.command} {rpc_method or self.path} -> HTTP {response.status} {response.getheader('Content-Type', '')} ({time.monotonic() - started:.1f}s)")
-                # Relay faithfully, byte-for-byte, holding the stream open exactly as BC does. BC's MCP
-                # server keeps the initialize (and other) SSE streams open as the client's event channel;
-                # collapsing or closing them early breaks streamable-HTTP clients (e.g. Claude). The only
-                # short-circuit is the tools/list cache above, which sidesteps BC's slow/dropping
-                # per-session tool-catalog composition.
-                self._relay(response)
+                # Relay faithfully, byte-for-byte, holding streams open exactly as BC does (its MCP
+                # server keeps SSE streams open as the client's event channel). The one exception is the
+                # initialize reply: BC advertises capabilities.experimental = {"x-ms-headerless": true},
+                # which makes Claude's MCP client fail the connection; strip it so the client sees a
+                # standard server (BC still works over the normal header-based session the probe uses).
+                if rpc_method == "initialize" and response.status == 200 and "text/event-stream" in (response.getheader("Content-Type", "") or ""):
+                    self._relay_initialize(response)
+                else:
+                    self._relay(response)
             except (ConnectionError, OSError) as error:
                 # The client (agent) closing its side mid-stream is normal; don't misreport it as an
                 # upstream failure, and don't try to send an error once the response has begun.
@@ -302,6 +305,50 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             tool_count = len(tools) if isinstance(tools, list) else "?"
             logger.info(f"BC MCP gateway tools/list -> served {tool_count} tool(s) from warm-up cache")
             return True
+
+        def _relay_initialize(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
+            """Relay the initialize SSE reply but strip capabilities.experimental from the result.
+
+            BC advertises ``capabilities.experimental = {"x-ms-headerless": true}``; Claude's MCP client
+            fails the connection when it sees it (bisected against a replica of BC's exact initialize
+            response). Rewrite just that first result event, then keep relaying faithfully so the stream
+            behaves exactly like BC's for everything else.
+            """
+            self._response_started = True
+            forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type")]
+            self.send_response_only(200)
+            for key, value in forwarded_headers:
+                self.send_header(key, value)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+
+            deadline = time.monotonic() + _UPSTREAM_TIMEOUT_SECONDS
+            rewritten = False
+            while time.monotonic() < deadline:
+                raw_line = response.readline()
+                if not raw_line:
+                    break
+                out_line = raw_line
+                stripped = raw_line.decode("utf-8", errors="replace").strip()
+                if not rewritten and stripped.startswith("data:"):
+                    try:
+                        obj = json.loads(stripped[5:].strip())
+                    except json.JSONDecodeError:
+                        obj = None
+                    if isinstance(obj, dict) and isinstance(obj.get("result"), dict):
+                        capabilities = obj["result"].get("capabilities")
+                        removed = isinstance(capabilities, dict) and capabilities.pop("experimental", None) is not None
+                        out_line = ("data: " + json.dumps(obj) + "\n").encode()
+                        rewritten = True
+                        logger.info(f"BC MCP gateway rewrote initialize result (experimental stripped={removed})")
+                self.wfile.write(b"%X\r\n" % len(out_line))
+                self.wfile.write(out_line)
+                self.wfile.write(b"\r\n")
+                self.wfile.flush()
+            # Keep relaying (holding the stream open) exactly like BC until the upstream or client closes.
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
 
         def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
             self._response_started = True
