@@ -51,6 +51,16 @@ _STREAM_CHUNK_BYTES = 8192
 _PROBE_TIMEOUT_SECONDS = 180
 
 
+def _jsonrpc_method(body: bytes | None) -> str | None:
+    if not body:
+        return None
+    try:
+        obj = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return obj.get("method") if isinstance(obj, dict) else None
+
+
 def _read_jsonrpc(response, deadline: float) -> tuple[dict, str]:  # noqa: ANN001 - http.client.HTTPResponse
     """Parse a JSON-RPC result and return it plus a raw snippet of the response for diagnostics.
 
@@ -211,24 +221,28 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
 
         def _handle(self) -> None:
             if not self._path_allowed():
+                logger.info(f"BC MCP gateway BLOCKED {self.command} {self.path} -> 403")
                 self.send_error(403, "Forbidden")
                 return
 
             length = self.headers.get("Content-Length")
             body: bytes | None = self.rfile.read(int(length)) if length else None
+            rpc_method = _jsonrpc_method(body)
 
             request_headers: dict[str, str] = {k: v for k, v in self.headers.items() if k.lower() not in _STRIPPED_REQUEST_HEADERS}
             request_headers["Host"] = f"{gateway._origin_host}:{gateway._origin_port}"
             request_headers.update(gateway._injected_headers)
 
             connection = HTTPConnection(gateway._origin_host, gateway._origin_port, timeout=_UPSTREAM_TIMEOUT_SECONDS)
+            started = time.monotonic()
             try:
                 connection.request(self.command, self.path, body=body, headers=request_headers)
                 response = connection.getresponse()
                 gateway._note_forwarded()
+                logger.info(f"BC MCP gateway {self.command} {rpc_method or self.path} -> HTTP {response.status} {response.getheader('Content-Type', '')} ({time.monotonic() - started:.1f}s)")
                 self._relay(response)
             except Exception:
-                logger.exception("BC MCP gateway failed to reach the upstream endpoint")
+                logger.exception(f"BC MCP gateway failed to reach upstream for {self.command} {rpc_method or self.path} after {time.monotonic() - started:.1f}s")
                 self.send_error(502, "Bad Gateway")
             finally:
                 connection.close()

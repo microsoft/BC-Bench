@@ -113,7 +113,17 @@ def run_claude_code(
         result = subprocess.run(
             cmd_args,
             cwd=str(repo_path),
-            env=agent_subprocess_env({"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}),
+            env=agent_subprocess_env(
+                {
+                    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+                    # BC MCP's first tools/list compiles the tool catalog and can take ~45s on a cold
+                    # container, well past Claude's 30s default MCP startup timeout -> the server is
+                    # marked "failed" and its tools never register. Raise both the connection and tool
+                    # execution timeouts so the slow first response is tolerated.
+                    "MCP_TIMEOUT": "180000",
+                    "MCP_TOOL_TIMEOUT": "180000",
+                }
+            ),
             timeout=_config.timeout.agent_execution,
             check=True,
             capture_output=True,
