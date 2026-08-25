@@ -177,7 +177,8 @@ class BcMcpGateway:
 
     def _handshake_tools(self, host: str, port: int, extra_headers: dict[str, str]) -> tuple[list[str], float, str]:
         """initialize -> notifications/initialized -> tools/list against one target; returns (tools, tools_list_seconds, diag)."""
-        session_id, _, _ = self._rpc(host, port, extra_headers, "initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
+        session_id, init_result, init_diag = self._rpc(host, port, extra_headers, "initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}}, request_id=1)
+        logger.info(f"BC MCP initialize result: session={session_id!r} result={json.dumps(init_result)[:400]} diag={init_diag[:200]}")
         if session_id:
             self._rpc(host, port, extra_headers, "notifications/initialized", None, session_id=session_id)
         before_list = time.monotonic()
@@ -308,11 +309,10 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             the request is answered, so the stream can close.
             """
             self._response_started = True
+            forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type")]
+            logger.info(f"BC MCP gateway relaying {rpc_method} SSE; upstream headers forwarded: {forwarded_headers}")
             self.send_response_only(200)
-            for key, value in response.getheaders():
-                lowered = key.lower()
-                if lowered in _HOP_BY_HOP or lowered in ("content-length", "content-type"):
-                    continue
+            for key, value in forwarded_headers:
                 self.send_header(key, value)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Transfer-Encoding", "chunked")
