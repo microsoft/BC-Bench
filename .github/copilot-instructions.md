@@ -30,14 +30,9 @@ BC-Bench is category-based and designed to grow over time. It currently has two 
 
 ### Architecture design conventions
 
-Follow this dependency direction when evolving the codebase:
+Preserve one-way dependency flow from orchestration toward lower-level abstractions. Keep domain and result models independent of runtime code. CLI commands are composition roots: they select concrete agents and inject them into evaluation pipelines through `AgentRunner`; pipelines must not select agent implementations.
 
-- `bcbench.dataset` provides data models independently of runtime packages such as `agent`, `collection`, `commands`, `contamination`, `evaluate`, `operations`, and `results`.
-- Implementation packages (`agent`, `collection`, `contamination`, `dataset`, `evaluate`, `operations`, and `results`) sit below `bcbench.cli` and `bcbench.commands`.
-- `bcbench.evaluate` receives agent implementations through `AgentRunner` rather than selecting them.
-- `bcbench.results` provides result models independently of execution packages such as `agent`, `evaluate`, and `operations`.
-
-`bcbench.types` currently remains the central category registry through `EvaluationCategory`. Preserve the dependency direction during implementation and review.
+`bcbench.types` is the central category registry. Extend `EvaluationCategory` for category-owned mappings such as datasets, pipelines, results, and scoring behavior instead of duplicating those decisions elsewhere. Keep imports following the existing direction and avoid circular dependencies.
 
 ### Readable code over documentation or comments
 Function names should be self-explanatory. Do NOT add docstrings to functions unless absolutely necessary.
