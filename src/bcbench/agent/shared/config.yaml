@@ -70,6 +70,13 @@ prompt:
     Extensibility request:
     {{task}}
 
+  extensibility-request-advisor-template: |
+    Analyze this complete Business Central extensibility scenario against the AL source at {{repo_path}}.
+    Follow your advisor procedure and write the required offline result to `advisor_result.json`.
+
+    Extensibility scenario:
+    {{task}}
+
   extensibility-request-triage-template: |
     You are triaging a single Business Central extensibility request. The standard AL source is checked out at {{repo_path}}.
 

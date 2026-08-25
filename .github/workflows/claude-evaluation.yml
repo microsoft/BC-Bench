@@ -25,6 +25,7 @@ on:
           - "test-generation"
           - "code-review"
           - "data-query"
+          - "extensibility-request-advisor"
           - "extensibility-request-implement"
           - "extensibility-request-triage"
       test-run:

@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
@@ -385,9 +385,45 @@ def create_data_query_entry(
     )
 
 
+def create_ext_advisor_entry(
+    instance_id: str = "microsoftInternal__NAV-Ext_Request_Advisor-29447",
+    repo: str = "microsoftInternal/NAV",
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    created_at: str = VALID_CREATED_AT,
+    title: str = '[Event Request] Codeunit 5880 "Phys. Invt. Order-Finish"',
+    description: str = "Add an event before modifying the temporary inventory tracking record.",
+    comments: str = "",
+    expected: list[ChecklistAssertion] | None = None,
+) -> ExtRequestAdvisorEntry:
+    return ExtRequestAdvisorEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths if project_paths is not None else ["App/Layers/W1/BaseApp"],
+        created_at=created_at,
+        title=title,
+        description=description,
+        comments=comments,
+        expected=expected
+        if expected is not None
+        else [
+            {"text": "The request is classified as a regular event-request.", "level": "critical"},
+            {"text": "A complete extensibility request is drafted.", "level": "critical"},
+        ],
+    )
+
+
 @pytest.fixture
 def sample_data_query_entry() -> DataQueryEntry:
     return create_data_query_entry()
+
+
+@pytest.fixture
+def sample_ext_advisor_entry() -> ExtRequestAdvisorEntry:
+    return create_ext_advisor_entry()
 
 
 def create_ext_implement_entry(

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
+from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory
 
@@ -70,6 +70,7 @@ def test_all_categories_handled_in_get_expected_output(
     sample_dataset_entry_with_problem_statement: BugFixEntry,
     sample_nl2al_entry: NL2ALEntry,
     sample_data_query_entry: DataQueryEntry,
+    sample_ext_advisor_entry: ExtRequestAdvisorEntry,
     sample_ext_implement_entry: ExtRequestImplementEntry,
     sample_ext_triage_entry: ExtRequestTriageEntry,
 ):
@@ -90,6 +91,8 @@ def test_all_categories_handled_in_get_expected_output(
             entry = sample_nl2al_entry
         elif entry_cls is DataQueryEntry:
             entry = sample_data_query_entry
+        elif entry_cls is ExtRequestAdvisorEntry:
+            entry = sample_ext_advisor_entry
         elif entry_cls is ExtRequestImplementEntry:
             entry = sample_ext_implement_entry
         elif entry_cls is ExtRequestTriageEntry:

@@ -7,7 +7,7 @@ from bcbench.agent.shared import build_prompt
 from bcbench.config import get_config
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.types import EvaluationCategory
-from tests.conftest import create_dataset_entry, create_problem_statement_dir
+from tests.conftest import create_dataset_entry, create_ext_advisor_entry, create_problem_statement_dir
 
 
 def test_build_prompt_without_project_paths(tmp_path: Path):
@@ -151,3 +151,20 @@ def test_build_prompt_code_review_enforces_review_json_contract(tmp_path: Path):
     for field in ("file", "line_start", "line_end", "domain", "body", "severity"):
         assert f"`{field}`" in prompt
     assert "empty array" in prompt
+
+
+def test_build_prompt_ext_advisor_delegates_to_custom_agent(tmp_path: Path):
+    config_path = get_config().paths.agent_share_dir / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    prompt = build_prompt(
+        create_ext_advisor_entry(),
+        tmp_path,
+        config,
+        EvaluationCategory.EXT_REQUEST_ADVISOR,
+    )
+
+    assert "advisor_result.json" in prompt
+    assert "Extensibility scenario:" in prompt
+    assert "Codeunit 5880" in prompt
+    assert len(prompt.splitlines()) < 15

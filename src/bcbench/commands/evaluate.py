@@ -1,6 +1,5 @@
 import random
 import shutil
-from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -22,7 +21,7 @@ from bcbench.cli_options import (
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
-from bcbench.evaluate import EvaluationPipeline
+from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
@@ -347,7 +346,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     def setup(self, context: EvaluationContext[BaseDatasetEntry]) -> None:
         logger.info("Mock pipeline: Skipping setup")
 
-    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[BaseDatasetEntry], agent_runner: AgentRunner[BaseDatasetEntry]) -> None:
         """Generate random agent metrics and experiment configuration."""
         logger.info("Mock pipeline: Generating random metrics and experiment configuration")
 
@@ -387,6 +386,8 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             case EvaluationCategory.CODE_REVIEW:
                 scenarios = ["invalid", "valid"]
             case EvaluationCategory.NL2AL:
+                scenarios = ["raw", "empty"]
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
                 scenarios = ["raw", "empty"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 scenarios = ["raw", "empty"]
