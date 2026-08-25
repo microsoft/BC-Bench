@@ -278,13 +278,14 @@ def test_gateway_destreams_held_open_post_sse_reply():
         start = time.monotonic()
         connection.request("POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":1,"method":"initialize"}')
         response = connection.getresponse()
-        body = response.read()  # completes because the gateway sends Content-Length and closes
+        body = response.read()  # completes because the gateway closes the stream after the response event
         elapsed = time.monotonic() - start
         assert response.status == 200
-        assert response.getheader("Content-Type") == "application/json"
-        assert response.getheader("Mcp-Session-Id") == "sess-hold"
-        assert json.loads(body)["result"] == {"ok": True}
-        # De-streamed promptly; the old behavior would hang until the upstream closed (~30s).
+        # SSE framing is preserved (faithful relay), and the JSON-RPC result is carried in a data: line.
+        assert response.getheader("Content-Type") == "text/event-stream"
+        assert b'"result"' in body
+        assert b'"ok": true' in body or b'"ok":true' in body
+        # Closed promptly; the old behavior would hang until the upstream closed (~30s).
         assert elapsed < 5.0
     finally:
         connection.close()
