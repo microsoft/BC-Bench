@@ -3,9 +3,11 @@ import os
 # BC container connection details/credentials the harness uses to build the MCP config and to reach the
 # container. They must NOT leak into a launched agent's own process environment: otherwise the agent can
 # read the credentials and query BC's API directly from a shell, bypassing the MCP server the benchmark
-# is meant to exercise. MCP servers still receive what they need through the MCP configuration (an
-# embedded env block for altool, an auth header for the BC MCP server), so withholding these from the
-# agent process closes the direct-API side-door without breaking MCP connectivity.
+# is meant to exercise. BC_CONTAINER_NAME is withheld for the same reason (it lets the agent target the
+# container directly, e.g. `docker exec ... sqlcmd`). MCP servers still receive what they need through
+# other channels (an embedded env block for altool; the BC MCP gateway injects the auth header upstream,
+# so the agent's MCP config stays credential-free), so withholding these from the agent process closes
+# the direct-API/direct-DB side-doors without breaking MCP connectivity.
 _WITHHELD_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
 _WITHHELD_ENV_VARS = frozenset({"BC_CONTAINER_NAME"})
 
