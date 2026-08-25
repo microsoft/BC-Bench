@@ -1,10 +1,9 @@
 import os
 import subprocess
-from collections.abc import Callable
 from pathlib import Path
 
 from bcbench.dataset import NL2ALEntry
-from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import EmptyDiffError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
@@ -52,7 +51,7 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
     def setup(self, context: EvaluationContext[NL2ALEntry]) -> None:
         self.setup_workspace(context.entry, context.repo_path)
 
-    def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: AgentRunner[NL2ALEntry]) -> None:
         for attempt in range(1, _EMPTY_DIFF_MAX_ATTEMPTS + 1):
             with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id} (attempt {attempt}/{_EMPTY_DIFF_MAX_ATTEMPTS})"):
                 context.metrics, context.experiment = agent_runner(context)
