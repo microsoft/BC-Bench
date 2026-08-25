@@ -257,14 +257,12 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 response = connection.getresponse()
                 gateway._note_forwarded()
                 logger.info(f"BC MCP gateway {self.command} {rpc_method or self.path} -> HTTP {response.status} {response.getheader('Content-Type', '')} ({time.monotonic() - started:.1f}s)")
-                # A POST is request/response even when BC frames the reply as SSE and then holds the
-                # stream open; mirroring that open stream stalls MCP clients (e.g. Claude) that wait for
-                # it to end before continuing the handshake. Relay the POST SSE reply but close once the
-                # JSON-RPC response event arrives. GET (the server->client channel) still streams.
-                if self.command == "POST" and response.status == 200 and "text/event-stream" in (response.getheader("Content-Type", "") or ""):
-                    self._relay_post_sse(rpc_method, response)
-                else:
-                    self._relay(response)
+                # Relay faithfully, byte-for-byte, holding the stream open exactly as BC does. BC's MCP
+                # server keeps the initialize (and other) SSE streams open as the client's event channel;
+                # collapsing or closing them early breaks streamable-HTTP clients (e.g. Claude). The only
+                # short-circuit is the tools/list cache above, which sidesteps BC's slow/dropping
+                # per-session tool-catalog composition.
+                self._relay(response)
             except (ConnectionError, OSError) as error:
                 # The client (agent) closing its side mid-stream is normal; don't misreport it as an
                 # upstream failure, and don't try to send an error once the response has begun.
@@ -282,66 +280,28 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 connection.close()
 
         def _serve_cached_tools(self, request_id: object) -> bool:
-            """Answer tools/list from the warm-up cache, bypassing BC's slow per-session composition."""
+            """Answer tools/list from the warm-up cache, bypassing BC's slow per-session composition.
+
+            Framed as a single-event SSE stream (then closed) to mirror how BC replies to tools/list, so
+            the client sees the same transport it would from the real endpoint.
+            """
             with gateway._lock:
                 cached = gateway._cached_tools_result
             if cached is None:
                 return False
-            payload = json.dumps({"jsonrpc": "2.0", "id": request_id, "result": cached}).encode()
+            event = ("event: message\ndata: " + json.dumps({"jsonrpc": "2.0", "id": request_id, "result": cached}) + "\n\n").encode()
             self._response_started = True
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Length", str(len(event)))
             self.end_headers()
-            self.wfile.write(payload)
+            self.wfile.write(event)
             self.wfile.flush()
             tools = cached.get("tools") if isinstance(cached, dict) else None
             tool_count = len(tools) if isinstance(tools, list) else "?"
             logger.info(f"BC MCP gateway tools/list -> served {tool_count} tool(s) from warm-up cache")
             return True
-
-        def _relay_post_sse(self, rpc_method: str | None, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
-            """Relay a POST SSE reply faithfully but close once the JSON-RPC response event arrives.
-
-            BC answers a POST with an event stream it then holds open; a client waiting for the stream to
-            end stalls. Forward the upstream bytes unchanged as text/event-stream (so the client sees the
-            exact response), and stop as soon as an SSE ``data:`` line carries a JSON-RPC result/error --
-            the request is answered, so the stream can close.
-            """
-            self._response_started = True
-            forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type")]
-            logger.info(f"BC MCP gateway relaying {rpc_method} SSE; upstream headers forwarded: {forwarded_headers}")
-            self.send_response_only(200)
-            for key, value in forwarded_headers:
-                self.send_header(key, value)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Transfer-Encoding", "chunked")
-            self.end_headers()
-
-            started = time.monotonic()
-            deadline = started + _UPSTREAM_TIMEOUT_SECONDS
-            saw_response = False
-            while time.monotonic() < deadline:
-                raw_line = response.readline()
-                if not raw_line:
-                    break
-                self.wfile.write(b"%X\r\n" % len(raw_line))
-                self.wfile.write(raw_line)
-                self.wfile.write(b"\r\n")
-                self.wfile.flush()
-                stripped = raw_line.decode("utf-8", errors="replace").strip()
-                if stripped.startswith("data:"):
-                    try:
-                        obj = json.loads(stripped[5:].strip())
-                    except json.JSONDecodeError:
-                        obj = None
-                    if isinstance(obj, dict) and ("result" in obj or "error" in obj):
-                        saw_response = True
-                elif not stripped and saw_response:
-                    break  # blank line terminates the event that carried the response
-            self.wfile.write(b"0\r\n\r\n")
-            self.wfile.flush()
-            logger.info(f"BC MCP gateway de-streamed {rpc_method} in {time.monotonic() - started:.1f}s (response_seen={saw_response})")
 
         def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
             self._response_started = True

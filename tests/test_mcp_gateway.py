@@ -210,9 +210,12 @@ class TestBcMcpProbe:
         # start_bc_mcp_gateway already ran warm-up, populating the tools/list cache.
         import json as _json
 
-        status, _headers, body = _request(mcp_gateway.base_url, "POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":7,"method":"tools/list"}')
+        status, headers, body = _request(mcp_gateway.base_url, "POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":7,"method":"tools/list"}')
         assert status == 200
-        payload = _json.loads(body)
+        # Served as a single-event SSE stream, mirroring BC's tools/list framing.
+        assert headers["Content-Type"] == "text/event-stream"
+        data_line = next(line for line in body.decode().splitlines() if line.startswith("data:"))
+        payload = _json.loads(data_line[len("data:") :].strip())
         assert payload["id"] == 7
         assert [t["name"] for t in payload["result"]["tools"]] == ["bc_data_find_tables", "bc_data_query"]
 
@@ -263,10 +266,10 @@ class _HeldOpenPostSseHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n\n')
         self.wfile.flush()
-        time.sleep(30)  # hold open like BC; the gateway must not wait for this
+        time.sleep(30)  # hold open like BC; the gateway relays faithfully without waiting for the end
 
 
-def test_gateway_destreams_held_open_post_sse_reply():
+def test_gateway_relays_post_sse_event_promptly_without_waiting_for_close():
     server = ThreadingHTTPServer(("127.0.0.1", 0), _HeldOpenPostSseHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -278,15 +281,18 @@ def test_gateway_destreams_held_open_post_sse_reply():
         start = time.monotonic()
         connection.request("POST", "/BC/mcp", body=b'{"jsonrpc":"2.0","id":1,"method":"initialize"}')
         response = connection.getresponse()
-        body = response.read()  # completes because the gateway closes the stream after the response event
-        elapsed = time.monotonic() - start
+        # The gateway relays BC's SSE bytes faithfully (holding the stream open); the response event
+        # reaches the client promptly even though the upstream keeps the stream open.
         assert response.status == 200
-        # SSE framing is preserved (faithful relay), and the JSON-RPC result is carried in a data: line.
         assert response.getheader("Content-Type") == "text/event-stream"
-        assert b'"result"' in body
-        assert b'"ok": true' in body or b'"ok":true' in body
-        # Closed promptly; the old behavior would hang until the upstream closed (~30s).
-        assert elapsed < 5.0
+        line = b""
+        while b"data:" not in line:
+            line = response.readline()
+            if not line:
+                break
+        elapsed = time.monotonic() - start
+        assert b'"result"' in line
+        assert elapsed < 3.0
     finally:
         connection.close()
         gateway.stop()
