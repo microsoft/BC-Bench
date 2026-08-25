@@ -1,0 +1,53 @@
+{
+  "runs": [
+    {
+      "total": 30,
+      "date": "2026-08-25",
+      "model": "gpt-5-6-sol",
+      "agent_name": "GitHub Copilot",
+      "category": "extensibility-request-triage",
+      "average_duration": 87.8,
+      "average_prompt_tokens": 0.0,
+      "average_completion_tokens": 0.0,
+      "average_llm_duration": 76.2,
+      "average_ai_credits": 29.69,
+      "average_tool_usage": {
+        "view": 15.93,
+        "bash": 8.07,
+        "task": 0.07,
+        "rg": 0.23
+      },
+      "github_run_id": "32872499930",
+      "experiment": {
+        "mcp_servers": null,
+        "al_lsp_enabled": false,
+        "custom_instructions": true,
+        "skills_enabled": false,
+        "custom_agent": "extensibility-request-triage",
+        "plugins": null
+      },
+      "benchmark_version": "0.9.0",
+      "judge_model": "gpt-41-2025-04-14"
+    }
+  ],
+  "aggregate": [
+    {
+      "model": "gpt-5-6-sol",
+      "agent_name": "GitHub Copilot",
+      "category": "extensibility-request-triage",
+      "experiment": {
+        "mcp_servers": null,
+        "al_lsp_enabled": false,
+        "custom_instructions": true,
+        "skills_enabled": false,
+        "custom_agent": "extensibility-request-triage",
+        "plugins": null
+      },
+      "total": 30,
+      "num_runs": 1,
+      "average_duration": 87.8,
+      "benchmark_version": "0.9.0",
+      "judge_model": "gpt-41-2025-04-14"
+    }
+  ]
+}
