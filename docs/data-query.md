@@ -81,8 +81,10 @@ configuration app, and stands up the gateway:
    agent's rows to the gold answer -> `summarize-results` reports `ResolutionRate` / `BuildRate`.
 
 > **GitHub Copilot CLI note:** custom MCP servers require a Copilot-licensed user PAT in the
-> `COPILOT_CLI_TOKEN` secret; without it, use the **Claude Code** workflow (unaffected). See the
-> [Copilot CLI MCP report](data-query/mcp-in-github-copilot-cli.md).
+> `COPILOT_CLI_TOKEN` secret — otherwise the CLI's MCP registry policy fetch fails on the Actions
+> `GITHUB_TOKEN` and blocks all custom MCP servers
+> ([copilot-cli#4346](https://github.com/github/copilot-cli/issues/4346)). Without it, use the
+> **Claude Code** workflow (unaffected).
 
 `data-query` sets `requires_container = True`; its container setup **skips the repo clone** (there is
 no repo — the agent answers from the live environment) and stands up the sandbox container.
