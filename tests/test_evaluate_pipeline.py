@@ -1,7 +1,6 @@
 """Tests for EvaluationPipeline.execute() template-method orchestration."""
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,7 +9,7 @@ import pytest
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry
-from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -31,7 +30,7 @@ class _StubPipeline(EvaluationPipeline[BugFixEntry]):
     def setup(self, context: EvaluationContext[BugFixEntry]) -> None:
         self.setup_called = True
 
-    def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: AgentRunner[BugFixEntry]) -> None:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
