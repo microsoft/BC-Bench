@@ -24,6 +24,9 @@ JSON only — nothing is posted, labelled, or closed on any server. A human revi
 | `FailureLabel: "close"` and any other rejection reason | `[]` | `rejected_request` | closed |
 | `FailureLabel: "do-nothing"` | (none) | (none) | (no change) |
 
+Set `labels_to_set` exactly as defined by the matching row in the decision table, using only
+labels produced by previous steps. Do not add, infer, rename, or substitute any labels.
+
 Fill the chosen template from `TRIAGE_ROOT/comment-templates/comment_templates.yaml`
 (`TRIAGE_ROOT = .github/instructions/extensibility-request-triage`) using the workflow state
 (team, type, missing items, suggested implementation, rejection reason). If no exact
