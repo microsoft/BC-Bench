@@ -132,6 +132,9 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
+        # TEMPORARY (diagnostic): persist the event stream to inspect the Stop-hook behavior.
+        (output_dir / f"claude-transcript-{entry.instance_id}.log").write_text(stdout, encoding="utf-8")
+
         metrics, final_response = parse_stream_output(stdout.splitlines())
         if final_response:
             logger.info(final_response)
