@@ -45,7 +45,6 @@ class PathConfig:
     leaderboard_dir: Path
     agent_share_dir: Path
     hook_script_path: Path
-    require_answer_hook_script_path: Path
     bc_artifacts_cache: Path
     redteam_scorecard: Path
     plugin_root: Path
@@ -65,7 +64,6 @@ class PathConfig:
             leaderboard_dir=root / "docs" / "_data",
             agent_share_dir=agent_share_dir,
             hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
-            require_answer_hook_script_path=agent_share_dir / "hooks" / "require-answer-file.ps1",
             bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
             redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
             # `.bcbench` avoids colliding with agent-reserved dirs (`.claude/`, `.github/`)

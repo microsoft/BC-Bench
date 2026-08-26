@@ -60,7 +60,7 @@ def run_claude_code(
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, skills_enabled_override=skills)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    tool_log_path: Path = setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir, required_output_file=category.required_agent_output_file)
+    tool_log_path: Path = setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(

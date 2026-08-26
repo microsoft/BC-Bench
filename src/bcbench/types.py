@@ -286,16 +286,6 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
-    def required_agent_output_file(self) -> str | None:
-        match self:
-            case EvaluationCategory.DATA_QUERY:
-                from bcbench.evaluate.dataquery import ANSWER_FILE
-
-                return ANSWER_FILE
-            case _:
-                return None
-
-    @property
     def result_class(self) -> type[BaseEvaluationResult]:
         from bcbench.results.base import ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
         from bcbench.results.bugfix import BugFixResult
