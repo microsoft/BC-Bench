@@ -58,6 +58,23 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
 
 
+class McpServerStatus(BaseModel):
+    """Observed state of a single MCP server, as reported by the agent CLI at runtime.
+
+    This is what actually happened, in contrast to `ExperimentConfiguration.mcp_servers`,
+    which records only which servers the harness asked for.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+
+    # Observed values include "connected", "failed" and "disabled"
+    status: str
+
+    error: str | None = None
+
+
 class AgentMetrics(BaseModel):
     """Metrics collected during agent execution.
 
@@ -81,6 +98,10 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+    # MCP servers the CLI actually loaded, and their final status. Empty/None means the
+    # run produced no MCP status events at all.
+    mcp_servers_observed: list[McpServerStatus] | None = None
 
 
 class ExperimentConfiguration(BaseModel):

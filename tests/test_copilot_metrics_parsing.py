@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.copilot.metrics import parse_mcp_server_status, parse_output
+from bcbench.types import McpServerStatus
 
 
 def _json_line(data: dict[str, object]) -> str:
@@ -78,3 +79,40 @@ def test_parse_output_without_metrics():
 
     assert metrics is None
     assert response == "done"
+
+
+def test_parse_mcp_server_status_prefers_settled_roster_over_transitions():
+    output_lines = [
+        _json_line({"type": "session.mcp_server_status_changed", "data": {"serverName": "altool", "status": "pending"}}),
+        _json_line({"type": "session.mcp_server_status_changed", "data": {"serverName": "altool", "status": "connected"}}),
+        _json_line(
+            {
+                "type": "session.mcp_servers_loaded",
+                "data": {
+                    "servers": [
+                        {"name": "altool", "status": "connected"},
+                        {"name": "github-mcp-server", "status": "disabled", "source": "builtin"},
+                    ]
+                },
+            }
+        ),
+    ]
+
+    assert parse_mcp_server_status(output_lines) == [
+        McpServerStatus(name="altool", status="connected"),
+        McpServerStatus(name="github-mcp-server", status="disabled"),
+    ]
+
+
+def test_parse_mcp_server_status_captures_spawn_failure_error():
+    error = "failed to spawn MCP server process: program not found: program not found"
+    output_lines = [
+        _json_line({"type": "session.mcp_server_status_changed", "data": {"serverName": "altool", "status": "pending"}}),
+        _json_line({"type": "session.mcp_server_status_changed", "data": {"serverName": "altool", "status": "failed", "error": error}}),
+    ]
+
+    assert parse_mcp_server_status(output_lines) == [McpServerStatus(name="altool", status="failed", error=error)]
+
+
+def test_parse_mcp_server_status_without_mcp_events():
+    assert parse_mcp_server_status([_json_line({"type": "assistant.message", "data": {"content": "done"}})]) == []

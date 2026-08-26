@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.copilot.metrics import parse_mcp_server_status, parse_output
 from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.copilot_cli import find_copilot
@@ -15,10 +15,29 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, McpServerStatus, PluginConfig
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def _log_unavailable_mcp_servers(requested: list[str], observed: list[McpServerStatus]) -> None:
+    """Warn when a requested MCP server did not come up.
+
+    The CLI exits 0 and writes nothing to stderr when an MCP server fails, so without this the
+    run silently degrades into one that never had the server, while still being recorded as if it did.
+    """
+    if not observed:
+        logger.warning(f"Copilot CLI reported no MCP server status; cannot confirm {requested} loaded")
+        return
+
+    by_name = {server.name: server for server in observed}
+    for name in requested:
+        server = by_name.get(name)
+        if server is None:
+            logger.warning(f"MCP server '{name}' was requested but never reported by Copilot CLI")
+        elif server.status != "connected":
+            logger.warning(f"MCP server '{name}' was requested but is '{server.status}'{f': {server.error}' if server.error else ''}")
 
 
 def run_copilot_agent(
@@ -115,13 +134,18 @@ def run_copilot_agent(
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
         stdout = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
-        metrics, final_response = parse_output(stdout.splitlines())
+        output_lines = stdout.splitlines()
+        metrics, final_response = parse_output(output_lines)
         if final_response:
             logger.info(final_response)
 
+        mcp_servers_observed = parse_mcp_server_status(output_lines)
+        if mcp_server_names:
+            _log_unavailable_mcp_servers(mcp_server_names, mcp_servers_observed)
+
         tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
+        if metrics:
+            metrics = metrics.model_copy(update={"tool_usage": tool_usage, "mcp_servers_observed": mcp_servers_observed or None})
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
