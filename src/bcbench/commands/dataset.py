@@ -6,7 +6,6 @@ from typing import Annotated
 import typer
 
 from bcbench.cli_options import EvaluationCategoryOption
-from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
 from bcbench.github_actions import write_step_outputs
@@ -14,7 +13,6 @@ from bcbench.logger import get_logger
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
-_config = get_config()
 
 dataset_app = typer.Typer(help="Query and analyze dataset")
 
