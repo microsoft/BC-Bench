@@ -11,6 +11,16 @@ import pytest
 from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
 from bcbench.exceptions import AgentError
 
+_WARMUP_MODULE = "bcbench.agent.shared.mcp_gateway"
+
+
+@pytest.fixture(autouse=True)
+def _fast_warmup(monkeypatch):
+    # Keep warm-up single-shot and delay-free so a mock that returns no tools gives up instantly
+    # instead of retrying for the real budget. Tests that exercise the retry loop override these.
+    monkeypatch.setattr(f"{_WARMUP_MODULE}._WARMUP_BUDGET_SECONDS", 0.0)
+    monkeypatch.setattr(f"{_WARMUP_MODULE}._WARMUP_RETRY_DELAY_SECONDS", 0.0)
+
 
 class _RecordingServer(ThreadingHTTPServer):
     last_headers: dict[str, str] = {}  # noqa: RUF012 - reassigned per instance by the fixture
@@ -240,6 +250,62 @@ class TestBcMcpProbe:
             assert gw.warm_up() == []
         finally:
             gw.stop()
+
+
+class _EmptyThenToolsHandler(BaseHTTPRequestHandler):
+    """Returns an empty tools/list on the first call, then the real tools - to exercise warm-up retries."""
+
+    protocol_version = "HTTP/1.1"
+    tools_list_calls = 0
+
+    def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
+        pass
+
+    def do_POST(self) -> None:
+        n = int(self.headers.get("Content-Length", 0))
+        req = json.loads(self.rfile.read(n)) if n else {}
+        method = req.get("method")
+        if method == "initialize":
+            self._json({"jsonrpc": "2.0", "id": req.get("id"), "result": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}}}, {"Mcp-Session-Id": "s"})
+        elif method and method.startswith("notifications/"):
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif method == "tools/list":
+            type(self).tools_list_calls += 1
+            tools = [] if type(self).tools_list_calls < 2 else [{"name": "bc_data_query"}]
+            self._json({"jsonrpc": "2.0", "id": req.get("id"), "result": {"tools": tools}})
+        else:
+            self._json({"jsonrpc": "2.0", "id": req.get("id"), "result": {}})
+
+    def _json(self, obj, extra=None) -> None:
+        body = json.dumps(obj).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def test_warm_up_retries_until_tools_available(monkeypatch):
+    monkeypatch.setattr(f"{_WARMUP_MODULE}._WARMUP_BUDGET_SECONDS", 30.0)
+    monkeypatch.setattr(f"{_WARMUP_MODULE}._WARMUP_RETRY_DELAY_SECONDS", 0.0)
+    _EmptyThenToolsHandler.tools_list_calls = 0
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _EmptyThenToolsHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    gateway = BcMcpGateway(f"http://127.0.0.1:{port}/BC", "admin", "secret", None).start()
+    try:
+        assert gateway.warm_up() == ["bc_data_query"]
+        assert _EmptyThenToolsHandler.tools_list_calls >= 2  # retried past the first empty result
+    finally:
+        gateway.stop()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 class _HeldOpenSseHandler(BaseHTTPRequestHandler):

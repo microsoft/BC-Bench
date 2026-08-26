@@ -48,7 +48,12 @@ _STRIPPED_REQUEST_HEADERS = _HOP_BY_HOP | {"host", "content-length", "accept-enc
 
 _UPSTREAM_TIMEOUT_SECONDS = 600
 _STREAM_CHUNK_BYTES = 8192
-_PROBE_TIMEOUT_SECONDS = 180
+# BC composes its MCP tool catalog on the first tools/list of a session; on a cold container it is slow
+# (~45s) and sometimes drops the connection, so a single warm-up attempt often fails. Retry each
+# handshake (bounded per attempt) until BC returns the catalog or the total budget is spent.
+_PROBE_TIMEOUT_SECONDS = 120
+_WARMUP_BUDGET_SECONDS = 360
+_WARMUP_RETRY_DELAY_SECONDS = 5
 
 
 def _header_safe(key: str, value: str) -> bool:
@@ -201,17 +206,27 @@ class BcMcpGateway:
 
         BC composes the tool catalog on the first tools/list of a session (slow, ~45s, sometimes dropped
         by the server), which can blow past the agent's MCP startup timeout so it registers zero tools.
-        Fetching it once here warms BC and lets the gateway serve the agent's tools/list from cache.
-        Best-effort: never raises -- a failed warm-up must not break a run.
+        The agent's client only calls tools/list once at session init, so if that first call misses, the
+        tools never register and the agent flails. Retry the handshake until BC returns the catalog (or
+        the budget is spent) so the cache is populated before the agent starts and its tools/list is
+        served instantly. Best-effort: never raises -- a failed warm-up must not break a run.
         """
-        try:
-            tools = self._handshake_tools()
-        except Exception as exc:  # noqa: BLE001 - warm-up must never break a run
-            logger.warning(f"BC MCP warm-up failed (non-fatal): {exc}")
-            return []
-        else:
-            logger.info(f"BC MCP warm-up: cached {len(tools)} tool(s): {tools}")
-            return tools
+        deadline = time.monotonic() + _WARMUP_BUDGET_SECONDS
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                tools = self._handshake_tools()
+            except Exception as exc:  # noqa: BLE001 - warm-up must never break a run
+                logger.warning(f"BC MCP warm-up attempt {attempt} failed (non-fatal): {exc}")
+                tools = []
+            if tools:
+                logger.info(f"BC MCP warm-up: cached {len(tools)} tool(s) on attempt {attempt}: {tools}")
+                return tools
+            if time.monotonic() >= deadline:
+                logger.warning(f"BC MCP warm-up gave up after {attempt} attempt(s); tools/list never returned tools")
+                return []
+            time.sleep(_WARMUP_RETRY_DELAY_SECONDS)
 
 
 def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
