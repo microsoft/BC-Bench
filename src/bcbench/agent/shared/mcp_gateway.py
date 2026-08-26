@@ -50,9 +50,10 @@ _UPSTREAM_TIMEOUT_SECONDS = 600
 _STREAM_CHUNK_BYTES = 8192
 # BC composes its MCP tool catalog on the first tools/list of a session; on a cold container it is slow
 # (~45s) and sometimes drops the connection, so a single warm-up attempt often fails. Retry each
-# handshake (bounded per attempt) until BC returns the catalog or the total budget is spent.
+# handshake (bounded per attempt) until BC returns the catalog or the total budget is spent. The budget
+# is generous because a cold insider-29 container can take several minutes to compose the catalog.
 _PROBE_TIMEOUT_SECONDS = 120
-_WARMUP_BUDGET_SECONDS = 360
+_WARMUP_BUDGET_SECONDS = 600
 _WARMUP_RETRY_DELAY_SECONDS = 5
 
 
