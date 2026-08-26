@@ -5,88 +5,107 @@ title: Data Query - BC-Bench
 
 # Data Query
 
-This category benchmarks an agent's ability to **answer a Business Central data question using the BC
-MCP server's Data Query tools**. Given a natural-language question, the agent must retrieve the real
-data from a live Business Central environment through the `bc_data_*` MCP tools and report exactly what
-they return — it cannot answer from general knowledge.
+This category evaluates an **agent harness and model (or MCP Host)** on its ability to **retrieve data
+from a live Business Central environment** to answer a natural-language data question. It is
+**execution-based** (no LLM judge): the agent reports the rows it retrieved (`answer.json`), and the
+run is **resolved** when those rows match the result set of a hidden gold AL query run against the same
+Cronus/Contoso demo data (values compared normalized; order ignored unless the entry is `ordered`).
 
-The agent writes two files:
+The point of the category is to compare **how the data is retrieved**:
 
-- **`answer.json`** — a JSON array of the result rows that answer the question (one object per row).
-- **`query.al`** — the single AL `query` object it used to obtain the data.
+- **Baseline** — no data tooling. The agent has to reach the answer on its own (e.g. authoring an AL
+  query from knowledge of the schema), which is hard on a low-resource domain language.
+- **BC MCP experiment** — the agent is given Business Central's **Data Query MCP tools**
+  (`bc_data_find_tables`, `bc_data_get_table_schema`, `bc_data_get_table_relations`, `bc_data_query`)
+  so it can discover tables, inspect schemas and relations, and compile/run read-only AL queries
+  against the live environment. The agent is isolated so the MCP endpoint is its only route to the
+  data, which keeps the comparison honest.
 
-> This complements the AI Test Toolkit evals in the BC platform repo: those test the **MCP server**
-> end-to-end, while BC-Bench benchmarks **models/agents** on their ability to use it to answer a
-> question.
+## Baseline Leaderboard
 
-## How it is scored
+{% if site.data.data-query.aggregate %}
+<table>
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Model</th>
+      <th>mean (95% CI)</th>
+      <th>pass^5</th>
+      <th>Avg Time</th>
+      <th>Version</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% assign sorted_results = site.data.data-query.aggregate | sort: "average" | reverse %}
+    {% for agg in sorted_results %}
+      {% if agg.experiment == null %}
+    <tr>
+      <td>{{ agg.agent_name }}</td>
+      <td>{{ agg.model }}</td>
+      <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
+      <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+    </tr>
+      {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p><em>No results available yet. Check back soon!</em></p>
+{% endif %}
 
-Data Query is **execution-based** (like bug-fix), with no LLM judge:
+## BC MCP Experiment
 
-- **build** — the agent produced a parseable `answer.json`.
-- **resolved** (the headline `ResolutionRate`) — the agent's rows **match the gold answer**. Rows are
-  compared by value (numbers normalized, column names/order ignored); row order is ignored unless the
-  entry marks the question as `ordered`.
+Comparing runs that enable the **Business Central Data Query MCP tools** (`bc-mcp`) against the
+matching no-tooling **Default** baseline for the same model.
 
-The gold answer comes from running each entry's `gold_query` live against the container and using its
-result set. Computing it on demand keeps the expected data resilient to demo-data changes. A gold
-query that does not compile/run is treated as a harness/dataset bug and fails the run loudly (it is
-never the agent's fault).
+{% if site.data.data-query.aggregate %}
+{%- assign mcp_models = "" -%}
+{%- for agg in site.data.data-query.aggregate -%}
+  {%- if agg.experiment and agg.experiment.mcp_servers.size > 0 -%}
+    {%- assign mcp_models = mcp_models | append: "|" | append: agg.model | append: "|" -%}
+  {%- endif -%}
+{%- endfor -%}
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>MCP Servers</th>
+      <th>Skills</th>
+      <th>mean (95% CI)</th>
+      <th>pass^5</th>
+      <th>Avg Time</th>
+      <th>Ver</th>
+    </tr>
+  </thead>
+  <tbody>
+    {%- assign sorted_results = site.data.data-query.aggregate | sort: "average" | reverse -%}
+    {%- for agg in sorted_results -%}
+      {%- assign is_mcp = false -%}
+      {%- assign show_row = false -%}
+      {%- if agg.experiment -%}
+        {%- if agg.experiment.mcp_servers.size > 0 %}{% assign is_mcp = true %}{% assign show_row = true %}{% endif -%}
+      {%- else -%}
+        {%- assign model_key = agg.model | prepend: "|" | append: "|" -%}
+        {%- if mcp_models contains model_key %}{% assign show_row = true %}{% endif -%}
+      {%- endif -%}
+      {%- if show_row %}
+    <tr>
+      <td>{{ agg.model }}</td>
+      <td>{% if is_mcp %}{{ agg.experiment.mcp_servers | join: ", " }}{% else %}<em>Default</em>{% endif %}</td>
+      <td>{% if is_mcp and agg.experiment.skills_enabled %}✓{% else %}—{% endif %}</td>
+      <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
+      <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+    </tr>
+      {%- endif -%}
+    {%- endfor %}
+  </tbody>
+</table>
+{% else %}
+<p><em>No results available yet. Check back soon!</em></p>
+{% endif %}
 
-## The BC MCP tools
-
-When `--bc-mcp` is enabled, the agent is given exactly four Business Central Data Query tools:
-
-| Tool | Purpose | Key parameters |
-| --- | --- | --- |
-| `bc_data_find_tables` | Discover tables by name/concept | `searchText`, `searchMode` (`keyword`/`semantic`) |
-| `bc_data_get_table_schema` | Fields of a table | `tableId`, `nameContains` |
-| `bc_data_get_table_relations` | Relations/joins of a table | `tableId`, `relatedToTableIds` |
-| `bc_data_query` | Compile and/or run an AL query | `queryText`, `returnData` |
-
-The `bc-al-query-mcp` skill (`--skills`) grounds the agent in how to use them, and `--ms-learn-mcp`
-gives it Microsoft Learn docs for AL query syntax.
-
-## Isolation: the MCP server is the agent's only route to the data
-
-Because the category measures whether the agent can answer *through the MCP tools*, the harness goes to
-some length to make sure it cannot reach the data any other way — denied one route, an agent will look
-for another (reading leaked connection credentials to hit BC's OData `/api`, or `docker exec … sqlcmd`
-against the container's database).
-
-The mechanics: a localhost **MCP gateway** (`src/bcbench/agent/shared/mcp_gateway.py`) fronts the BC
-MCP endpoint — it injects the auth headers upstream (so the agent's MCP config is credential-free and
-nothing is recoverable from the process command line), path-restricts to `/mcp` (so `/api` is
-unreachable through it), and warms/caches the tool catalog. `agent_subprocess_env()`
-(`src/bcbench/agent/shared/env.py`) scrubs the BC connection variables — every `BC_SERVER_*` /
-`BC_MCP_*` and `BC_CONTAINER_NAME` — from the launched agent's environment.
-
-## Dataset
-
-Each entry has an `nl_prompt` (the question) and a `gold_query` (the reference AL query whose result
-set defines "correct"), plus `environment_setup_version` (the BC artifact) and `ordered`. See
-`dataset/dataquery.jsonl`.
-
-## Running it (no local containers)
-
-Trigger it from the GitHub **Actions** tab — the self-hosted `GitHub-BCBench` runner provisions the BC
-container for you (a stock **sandbox artifact with Cronus/Contoso demo data**), publishes the MCP
-configuration app, and stands up the gateway:
-
-1. Actions -> **Evaluation with Claude Code** (or **Evaluation with GitHub Copilot**) -> **Run workflow**.
-2. Set **category** = `data-query`, pick a **model**, enable **bc-mcp** (and typically **ms-learn-mcp**
-   and **skills**), and leave **test-run** = `true` for a quick run.
-3. The run: provisions the container -> starts the credential-free MCP gateway -> the agent queries BC
-   through the `bc_data_*` tools and writes `answer.json` + `query.al` -> the harness compares the
-   agent's rows to the gold answer -> `summarize-results` reports `ResolutionRate` / `BuildRate`.
-
-> **GitHub Copilot CLI note:** custom MCP servers require a Copilot-licensed user PAT in the
-> `COPILOT_CLI_TOKEN` secret — otherwise the CLI's MCP registry policy fetch fails on the Actions
-> `GITHUB_TOKEN` and blocks all custom MCP servers
-> ([copilot-cli#4346](https://github.com/github/copilot-cli/issues/4346)). Without it, use the
-> **Claude Code** workflow (unaffected).
-
-`data-query` sets `requires_container = True`; its container setup **skips the repo clone** (there is
-no repo — the agent answers from the live environment) and stands up the sandbox container.
-
-[<- Back to Home](index.md)
+[← Back to Home](index.md)
