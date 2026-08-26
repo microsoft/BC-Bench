@@ -181,6 +181,7 @@ class TestQueryRunTemplate:
     def _render(self):
         return bc_operations._QUERY_RUN_TEMPLATE.substitute(
             app_utils_path="AppUtils.psm1",
+            suffix="generated",
             container_name="c",
             username="u",
             password="p",
@@ -227,3 +228,11 @@ class TestQueryRunTemplate:
         script = self._render()
         assert "$_.name -eq $company" in script
         assert "'CRONUS'" in script
+
+    def test_logs_each_phase(self):
+        # Each of the four phases prints a tagged marker so a CI run shows which phase it reached
+        # (and where it failed/timed out) inside the otherwise-opaque single pwsh -Command blob.
+        script = self._render()
+        for phase in ("Phase 1/4", "Phase 2/4", "Phase 3/4", "Phase 4/4"):
+            assert phase in script
+        assert "[query-generated]" in script

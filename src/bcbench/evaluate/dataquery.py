@@ -110,9 +110,16 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         generated_query = query_file.read_text(encoding="utf-8").strip() if query_file.exists() else ""
         answer_file = context.repo_path / ANSWER_FILE
 
+        # Gold rows come first and deliberately fail loudly (see _gold_rows): a gold query that can't
+        # compile/run is a harness/dataset bug and must red the job. Everything below this line is the
+        # AGENT's own outcome, recorded as build=False (not raised) so a model that fails the task shows
+        # up honestly in the results/leaderboard instead of aborting the whole matrix job.
         gold_rows = self._gold_rows(context)
 
         if not answer_file.exists():
+            # The agent finished without writing answer.json = it failed the task. This is a real,
+            # measured benchmark outcome (build=False), not a hidden harness error, so we record it and
+            # keep CI green rather than failing the job.
             logger.warning(f"Agent produced no {ANSWER_FILE} for {context.entry.instance_id}")
             self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=f"No {ANSWER_FILE} produced"))
             return
@@ -120,6 +127,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         try:
             agent_rows = _load_answer_rows(answer_file)
         except (ValueError, TypeError) as e:
+            # Malformed answer.json is likewise the agent's failure, recorded as build=False.
             logger.warning(f"Unusable {ANSWER_FILE} for {context.entry.instance_id}: {e}")
             self.save_result(context, ExecutionBasedEvaluationResult.create_build_failure(context, output=generated_query, error_message=str(e)))
             return

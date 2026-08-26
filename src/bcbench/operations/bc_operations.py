@@ -308,30 +308,44 @@ def wrap_query_as_api(query_text: str, object_id: int) -> str:
     return f"{text[: brace_index + 1]}\n    {_query_api_properties(object_id)}\n{text[brace_index + 1 :]}"
 
 
+# The gold/generated query is compiled, published and read in four clearly-delimited, individually
+# logged phases. This whole script runs as one opaque `pwsh -Command` blob, so without the phase
+# markers a failure or timeout is unattributable; `Write-QueryPhase` prints a timestamped
+# `[query-<suffix>] Phase N/4: ...` line so a CI run shows exactly which phase it reached.
 _QUERY_RUN_TEMPLATE = Template(
     """
 Import-Module BcContainerHelper -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
+function Write-QueryPhase([string]$$phase) {
+    Write-Host "[query-$suffix] $$((Get-Date).ToString('HH:mm:ss')) $$phase"
+}
+
 $$password = ConvertTo-SecureString '$password' -AsPlainText -Force
 $$credential = New-Object System.Management.Automation.PSCredential('$username', $$password)
 
+# --- Phase 1/4: cleanup ---
 # Remove any app left installed by a previous run of the same suffix so re-running against the
 # same container doesn't fail with an object-ID conflict on the fixed 50100/50101 range.
+Write-QueryPhase 'Phase 1/4: removing any app from a prior run'
 UnInstall-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -force -doNotSaveData -ErrorAction SilentlyContinue
 UnPublish-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -ErrorAction SilentlyContinue
 
+# --- Phase 2/4: compile + publish ---
 # Compile + publish the wrapped API query with the same proven helper the other categories use
 # (clears/sets an explicit .alpackages symbol folder, GenerateReportLayout=No, ForceSync,
 # dependencyPublishingOption=ignore) so Base Application symbols resolve reliably.
+Write-QueryPhase 'Phase 2/4: compiling + publishing the wrapped API query'
 Invoke-AppBuildAndPublish -containerName '$container_name' -appProjectFolder '$app_dir' -credential $$credential -skipVerification -useDevEndpoint
 
 try {
+    # --- Phase 3/4: read rows ---
     # Read the query's rows over the OData/API endpoint from *inside* the container, so we don't depend
     # on host->container name resolution or published ports (the runner does not update its hosts file).
     # Basic auth header is built by hand rather than via -Credential: PowerShell 7 (used inside the
     # container) refuses -Credential over plain HTTP, and a manual header works on both 5.1 and 7.
+    Write-QueryPhase 'Phase 3/4: reading rows over the OData endpoint'
     $$json = Invoke-ScriptInBcContainer -containerName '$container_name' -argumentList $$credential, '$publisher', '$group', '$version', '$entity_set', '$company' -scriptblock {
         param($$cred, $$pub, $$grp, $$ver, $$eset, $$company)
         $$pair = "$$($$cred.UserName):$$($$cred.GetNetworkCredential().Password)"
@@ -354,9 +368,12 @@ try {
         $$rows | ConvertTo-Json -Depth 10 -Compress
     }
     $$json | Out-File -FilePath '$result_file' -Encoding utf8
+    Write-QueryPhase 'Phase 3/4: rows written'
 }
 finally {
+    # --- Phase 4/4: teardown ---
     # Best-effort teardown so the container doesn't accumulate throwaway apps between runs.
+    Write-QueryPhase 'Phase 4/4: tearing down the throwaway app'
     UnInstall-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -force -doNotSaveData -ErrorAction SilentlyContinue
     UnPublish-BcContainerApp -containerName '$container_name' -name '$app_name' -publisher '$app_publisher' -ErrorAction SilentlyContinue
 }
@@ -392,6 +409,7 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
     app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
     ps_script = _QUERY_RUN_TEMPLATE.substitute(
         app_utils_path=_escape_ps_string(str(app_utils_path)),
+        suffix=suffix,
         container_name=_escape_ps_string(container.name),
         username=_escape_ps_string(container.username),
         password=_escape_ps_string(container.password),
