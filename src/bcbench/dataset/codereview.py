@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from bcbench.dataset.dataset_entry import RepoGroundedEntry
+from bcbench.dataset.dataset_entry import EntryMetadata, RepoGroundedEntry
+
+# BCQuality knowledge article id, formatted as `<domain>/<slug>` (e.g. `security/hardcoded-secret`).
+ArticleId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$")]
 
 
 class Severity(StrEnum):
@@ -50,7 +53,9 @@ _SEVERITY_ALIASES: dict[str, Severity] = {
 
 
 class ReviewComment(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    # Reject unknown keys so a superseded annotation (e.g. the singular `article` this
+    # model used before) fails loudly instead of being dropped into invisible coverage loss.
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     file: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ./_-]*\.(al|json)$")]
     line_start: Annotated[int, Field(ge=1)]
@@ -58,6 +63,12 @@ class ReviewComment(BaseModel):
     domain: str | None = None
     body: Annotated[str, Field(min_length=1)]
     severity: Severity | None = None
+    # BCQuality knowledge articles this finding derives from, as `<domain>/<slug>`
+    # (e.g. `security/hardcoded-secret`). A single finding can exercise several articles,
+    # most commonly when it pairs a positive requirement with an explicit false-positive
+    # boundary. Optional; drives per-article coverage tracking. Entries that leave it
+    # empty are counted as unannotated.
+    articles: list[ArticleId] = Field(default_factory=list)
 
     @field_validator("severity", mode="before")
     @classmethod
@@ -77,8 +88,19 @@ class ReviewComment(BaseModel):
         return f"[{self.severity_label}] {loc}: {self.body}"
 
 
+class CodeReviewEntryMetadata(EntryMetadata):
+    """Code-review-specific entry metadata."""
+
+    # BCQuality knowledge articles this entry exercises as `<domain>/<slug>`. Primarily
+    # for false-positive-guard entries (expected_comments=[]) that test an article by
+    # omission and thus have no per-comment `articles` to carry the association.
+    articles: list[ArticleId] = Field(default_factory=list)
+
+
 class CodeReviewEntry(RepoGroundedEntry):
     """Dataset entry for the code-review category."""
+
+    metadata: CodeReviewEntryMetadata = Field(default_factory=CodeReviewEntryMetadata)
 
     expected_comments: list[ReviewComment] = Field(default_factory=list)
     # Comments that are acceptable but not required. If the agent raises a matching
@@ -88,8 +110,38 @@ class CodeReviewEntry(RepoGroundedEntry):
     # precedence, so a generated comment is only ever neutralized after expected matching.
     ignored_comments: list[ReviewComment] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def _validate_article_annotations(self) -> Self:
+        """Keep per-comment and entry-level article annotations complementary.
+
+        `metadata.articles` carries the article association for findings no expected
+        comment covers (e.g. false-positive-guard entries whose `expected_comments` is
+        empty). An article already declared on a comment must not be repeated at entry
+        level, so the two annotation sources cannot silently drift apart.
+        """
+        comment_articles = {article for c in self.expected_comments for article in c.articles}
+        overlap = comment_articles & set(self.metadata.articles)
+        if overlap:
+            raise ValueError(
+                f"{self.instance_id}: article(s) {sorted(overlap)} declared both per-comment "
+                "and in metadata.articles; entry-level metadata.articles is only for articles "
+                "no expected comment already carries"
+            )
+        return self
+
     def get_task(self) -> str:
         return self.patch
 
     def get_expected_output(self) -> str:
         return "\n".join(str(c) for c in self.expected_comments)
+
+    def declared_articles(self) -> set[ArticleId]:
+        """BCQuality articles this entry is annotated against.
+
+        Union of every expected comment's `articles` and the entry-level
+        `metadata.articles` (which carries the association for false-positive-guard
+        entries whose `expected_comments` is empty).
+        """
+        articles = {article for c in self.expected_comments for article in c.articles}
+        articles.update(self.metadata.articles)
+        return articles

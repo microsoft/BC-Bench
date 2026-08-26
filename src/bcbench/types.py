@@ -70,6 +70,9 @@ class AgentMetrics(BaseModel):
     execution_time: float | None = None
     llm_duration: float | None = None
 
+    # Session cost in AI Credits (GitHub Copilot only)
+    ai_credits: float | None = None
+
     turn_count: int | None = None
 
     # Token usage from LLM calls
@@ -180,9 +183,9 @@ class AgentHarness(StrEnum):
             case AgentHarness.COPILOT:
                 expected = AgentMetrics(
                     execution_time=None,
+                    llm_duration=None,
+                    ai_credits=None,
                     turn_count=None,
-                    prompt_tokens=None,
-                    completion_tokens=None,
                     tool_usage=None,
                 )
             case AgentHarness.CLAUDE | AgentHarness.MOCK:
@@ -226,8 +229,9 @@ class EvaluationCategory(StrEnum):
     TEST_GENERATION = "test-generation"
     CODE_REVIEW = "code-review"
     NL2AL = "nl2al"
+    # Single-shot proxy for the interactive advisor: classify, assess feasibility, and draft an issue.
+    EXT_REQUEST_ADVISOR = "extensibility-request-advisor"
     # Implement an approved extensibility request (add an event/extension point) as an AL code change.
-    # The sibling ext-advisor category is planned but not yet implemented.
     EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
@@ -245,6 +249,8 @@ class EvaluationCategory(StrEnum):
                 return get_config().paths.dataset_dir / "codereview.jsonl"
             case EvaluationCategory.NL2AL:
                 return get_config().paths.dataset_dir / "nl2al.jsonl"
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
+                return get_config().paths.dataset_dir / "extensibility_request_advisor.jsonl"
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return get_config().paths.dataset_dir / "extensibility_request_implement.jsonl"
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -254,7 +260,7 @@ class EvaluationCategory(StrEnum):
 
     @property
     def entry_class(self) -> type[BaseDatasetEntry]:
-        from bcbench.dataset import BugFixEntry, CodeReviewEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
+        from bcbench.dataset import BugFixEntry, CodeReviewEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry, TestGenEntry
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -265,6 +271,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewEntry
             case EvaluationCategory.NL2AL:
                 return NL2ALEntry
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
+                return ExtRequestAdvisorEntry
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ExtRequestImplementEntry
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -288,6 +296,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResult
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResult
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
+                return JudgeBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedEvaluationResult
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -310,6 +320,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewResultSummary
             case EvaluationCategory.NL2AL:
                 return JudgeBasedEvaluationResultSummary
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
+                return JudgeBasedEvaluationResultSummary
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedEvaluationResultSummary
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -331,6 +343,8 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewLeaderboardAggregate
             case EvaluationCategory.NL2AL:
                 return JudgeBasedLeaderboardAggregate
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
+                return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return JudgeBasedLeaderboardAggregate
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -340,7 +354,7 @@ class EvaluationCategory(StrEnum):
 
     @property
     def pipeline(self) -> EvaluationPipeline:
-        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, ExtRequestImplementPipeline, ExtRequestTriagePipeline, NL2ALPipeline, TestGenerationPipeline
+        from bcbench.evaluate import BugFixPipeline, CodeReviewPipeline, ExtRequestAdvisorPipeline, ExtRequestImplementPipeline, ExtRequestTriagePipeline, NL2ALPipeline, TestGenerationPipeline
 
         match self:
             case EvaluationCategory.BUG_FIX:
@@ -351,10 +365,28 @@ class EvaluationCategory(StrEnum):
                 return CodeReviewPipeline()
             case EvaluationCategory.NL2AL:
                 return NL2ALPipeline()
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
+                return ExtRequestAdvisorPipeline()
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ExtRequestImplementPipeline()
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return ExtRequestTriagePipeline()
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def judge_model(self) -> str | None:
+        """Pinned LLM judge model for this category, or None for categories scored without a judge."""
+        from bcbench.config import get_config
+
+        judge = get_config().judge
+        match self:
+            case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
+                return None
+            case EvaluationCategory.CODE_REVIEW:
+                return judge.code_review_model
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+                return judge.lm_checklist_model
 
         raise ValueError(f"Unknown evaluation category: {self}")
 
@@ -374,6 +406,8 @@ class EvaluationCategory(StrEnum):
                 return ["precision_score", "recall_score", "f1_score", "valid_review_output"]
             case EvaluationCategory.NL2AL:
                 return ["lm_checklist"]
+            case EvaluationCategory.EXT_REQUEST_ADVISOR:
+                return ["lm_checklist"]
             case EvaluationCategory.EXT_REQUEST_IMPLEMENT:
                 return ["lm_checklist"]
             case EvaluationCategory.EXT_REQUEST_TRIAGE:
@@ -389,7 +423,7 @@ class EvaluationCategory(StrEnum):
                 return "ResolutionRate"
             case EvaluationCategory.CODE_REVIEW:
                 return "F1Score"
-            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "test_passed"
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -400,7 +434,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return True
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.NL2AL | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return False
 
         raise ValueError(f"Unknown evaluation category: {self}")
@@ -421,7 +455,7 @@ class EvaluationCategory(StrEnum):
         match self:
             case EvaluationCategory.BUG_FIX | EvaluationCategory.TEST_GENERATION:
                 return "GitHub-BCBench"
-            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
+            case EvaluationCategory.CODE_REVIEW | EvaluationCategory.EXT_REQUEST_ADVISOR | EvaluationCategory.EXT_REQUEST_IMPLEMENT | EvaluationCategory.EXT_REQUEST_TRIAGE:
                 return "ubuntu-latest"
             case EvaluationCategory.NL2AL:
                 return "windows-latest"

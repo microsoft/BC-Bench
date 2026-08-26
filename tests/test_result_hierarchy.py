@@ -415,6 +415,7 @@ class TestMetricsRendering:
             total=3,
             date=datetime.now(UTC).date(),
             model="gpt-4o",
+            judge_model="test-judge",
             agent_name="copilot",
             category=EvaluationCategory.BUG_FIX,
             average_duration=1.0,

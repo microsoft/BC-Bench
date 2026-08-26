@@ -6,7 +6,16 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.exceptions import EmptyDiffError
-from bcbench.operations.git_operations import checkout_commit, clean_project_paths, clone_repo_at_revision, commit_changes, fetch_commit_if_missing, stage_and_get_diff
+from bcbench.operations.git_operations import (
+    checkout_commit,
+    clean_project_paths,
+    clone_repo_at_revision,
+    commit_changes,
+    fetch_commit_if_missing,
+    has_changes,
+    init_repo,
+    stage_and_get_diff,
+)
 
 
 class TestCommitChanges:
@@ -44,6 +53,16 @@ class TestCommitChanges:
 
         result = subprocess.run(["git", "log", "--oneline", "-1"], cwd=temp_git_repo, capture_output=True, text=True, check=True)
         assert "should work without identity" in result.stdout
+
+    def test_init_and_empty_commit(self, tmp_path):
+        repo_path = tmp_path / "repo"
+
+        init_repo(repo_path)
+        commit_changes(repo_path, "empty", allow_empty=True)
+
+        assert not has_changes(repo_path)
+        result = subprocess.run(["git", "log", "--format=%s", "-1"], cwd=repo_path, capture_output=True, text=True, check=True)
+        assert result.stdout.strip() == "empty"
 
 
 class TestStageAndGetDiff:

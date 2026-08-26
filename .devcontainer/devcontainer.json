@@ -9,7 +9,7 @@
 			"version": "3.3"
 		}
 	},
-	"postCreateCommand": "uv sync --all-groups && pre-commit install && cd docs && printf 'source \"https://rubygems.org\"\\ngem \"github-pages\", group: :jekyll_plugins\\ngem \"webrick\"\\n' > Gemfile && bundle install",
+	"postCreateCommand": "uv sync --all-groups && pre-commit install && cd docs && printf 'source \"https://rubygems.org\"\\ngem \"github-pages\", \"~> 232\", group: :jekyll_plugins\\ngem \"webrick\"\\n' > Gemfile && bundle install",
 	"customizations": {
 		"vscode": {
 			"extensions": [

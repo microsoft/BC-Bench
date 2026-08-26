@@ -1,7 +1,6 @@
 """Tests for EvaluationPipeline.execute() template-method orchestration."""
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,11 +9,11 @@ import pytest
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry
-from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
-from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_nl2al_entry
+from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_nl2al_entry
 
 
 class _StubPipeline(EvaluationPipeline[BugFixEntry]):
@@ -31,7 +30,7 @@ class _StubPipeline(EvaluationPipeline[BugFixEntry]):
     def setup(self, context: EvaluationContext[BugFixEntry]) -> None:
         self.setup_called = True
 
-    def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: Callable) -> None:
+    def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: AgentRunner[BugFixEntry]) -> None:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
@@ -99,6 +98,8 @@ def _entry_for_category(category: EvaluationCategory) -> BaseDatasetEntry:
             return create_codereview_entry()
         case EvaluationCategory.NL2AL:
             return create_nl2al_entry()
+        case EvaluationCategory.EXT_REQUEST_ADVISOR:
+            return create_ext_advisor_entry()
         case _:
             return create_dataset_entry()
 

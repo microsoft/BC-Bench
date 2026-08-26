@@ -58,9 +58,11 @@ def write_bceval_results(
 
             metadata: dict[str, Any] = {
                 "model": result.model,
+                **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
                 "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,
                 "llm_duration": (result.metrics.llm_duration if result.metrics else None) or 0,
+                "ai_credits": (result.metrics.ai_credits if result.metrics else None) or 0,
                 "latency": (result.metrics.execution_time if result.metrics else None) or 0,
                 "turn_count": (result.metrics.turn_count if result.metrics else None) or 0,
                 **result.category_metrics,

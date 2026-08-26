@@ -1,9 +1,13 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 from bcbench.agent.shared import build_prompt
+from bcbench.config import get_config
+from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.types import EvaluationCategory
-from tests.conftest import create_dataset_entry, create_problem_statement_dir
+from tests.conftest import create_dataset_entry, create_ext_advisor_entry, create_problem_statement_dir
 
 
 def test_build_prompt_without_project_paths(tmp_path: Path):
@@ -130,3 +134,37 @@ def test_build_prompt_test_generation_both_mode(tmp_path: Path):
     assert "[HAS_PATCH]" in result  # gold patch should be indicated
     assert "[HAS_ISSUE]" in result  # problem statement should be indicated
     assert "Fix payment validation bug" in result  # task should be included in both mode
+
+
+def test_build_prompt_code_review_enforces_review_json_contract(tmp_path: Path):
+    config_path = get_config().paths.agent_share_dir / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    entry = CodeReviewEntry.model_construct(project_paths=[], patch="diff --git a/src/Foo.al b/src/Foo.al")
+
+    prompt = build_prompt(entry, tmp_path, config, EvaluationCategory.CODE_REVIEW)
+
+    assert "staged and unstaged dataset changes" in prompt
+    assert "git diff HEAD" in prompt
+    assert "Do NOT modify source code" in prompt
+    assert f"`{tmp_path}/review.json`" in prompt
+    assert "one JSON array" in prompt
+    for field in ("file", "line_start", "line_end", "domain", "body", "severity"):
+        assert f"`{field}`" in prompt
+    assert "empty array" in prompt
+
+
+def test_build_prompt_ext_advisor_delegates_to_custom_agent(tmp_path: Path):
+    config_path = get_config().paths.agent_share_dir / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    prompt = build_prompt(
+        create_ext_advisor_entry(),
+        tmp_path,
+        config,
+        EvaluationCategory.EXT_REQUEST_ADVISOR,
+    )
+
+    assert "advisor_result.json" in prompt
+    assert "Extensibility scenario:" in prompt
+    assert "Codeunit 5880" in prompt
+    assert len(prompt.splitlines()) < 15

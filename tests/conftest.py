@@ -13,9 +13,9 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
-from bcbench.dataset.codereview import CodeReviewEntry, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
+from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
+from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
@@ -193,7 +193,7 @@ def create_codereview_entry(
         project_paths=project_paths,
         patch=patch,
         created_at=created_at,
-        metadata=EntryMetadata(area=domain),
+        metadata=CodeReviewEntryMetadata(area=domain),
         expected_comments=expected_comments,
         ignored_comments=ignored_comments or [],
     )
@@ -322,7 +322,7 @@ def sample_testgen_result() -> TestGenerationResult:
 @pytest.fixture
 def sample_bugfix_result_with_metrics() -> BugFixResult:
     return create_bugfix_result(
-        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200, llm_duration=100.0, tool_usage={"view_code": 2, "run_tests": 1}),
+        metrics=AgentMetrics(execution_time=120.5, prompt_tokens=5000, completion_tokens=1200, llm_duration=100.0, ai_credits=2.5, tool_usage={"view_code": 2, "run_tests": 1}),
     )
 
 
@@ -369,6 +369,42 @@ def create_nl2al_entry(
 @pytest.fixture
 def sample_nl2al_entry() -> NL2ALEntry:
     return create_nl2al_entry()
+
+
+def create_ext_advisor_entry(
+    instance_id: str = "microsoftInternal__NAV-Ext_Request_Advisor-29447",
+    repo: str = "microsoftInternal/NAV",
+    base_commit: str = VALID_BASE_COMMIT,
+    environment_setup_version: str = VALID_ENVIRONMENT_VERSION,
+    project_paths: list[str] | None = None,
+    created_at: str = VALID_CREATED_AT,
+    title: str = '[Event Request] Codeunit 5880 "Phys. Invt. Order-Finish"',
+    description: str = "Add an event before modifying the temporary inventory tracking record.",
+    comments: str = "",
+    expected: list[ChecklistAssertion] | None = None,
+) -> ExtRequestAdvisorEntry:
+    return ExtRequestAdvisorEntry(
+        instance_id=instance_id,
+        repo=repo,
+        base_commit=base_commit,
+        environment_setup_version=environment_setup_version,
+        project_paths=project_paths if project_paths is not None else ["App/Layers/W1/BaseApp"],
+        created_at=created_at,
+        title=title,
+        description=description,
+        comments=comments,
+        expected=expected
+        if expected is not None
+        else [
+            {"text": "The request is classified as a regular event-request.", "level": "critical"},
+            {"text": "A complete extensibility request is drafted.", "level": "critical"},
+        ],
+    )
+
+
+@pytest.fixture
+def sample_ext_advisor_entry() -> ExtRequestAdvisorEntry:
+    return create_ext_advisor_entry()
 
 
 def create_ext_implement_entry(

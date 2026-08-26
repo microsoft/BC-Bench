@@ -50,6 +50,8 @@ class EvaluationResultSummary(BaseModel, ABC):
     average_prompt_tokens: float
     average_completion_tokens: float
     average_llm_duration: float | None = None
+    # None rather than 0.0 when unavailable: only Copilot reports credits, and 0.0 would read as "free"
+    average_ai_credits: float | None = None
     average_tool_usage: dict[str, float] | None = None
 
     github_run_id: str | None = None
@@ -72,6 +74,35 @@ class EvaluationResultSummary(BaseModel, ABC):
         return None
 
     @classmethod
+    def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
+        durations: list[float] = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
+        prompt_tokens: list[int] = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
+        completion_tokens: list[int] = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
+        llm_durations: list[float] = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
+        ai_credits: list[float] = [r.metrics.ai_credits for r in results if r.metrics and r.metrics.ai_credits is not None]
+        tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
+
+        first_result = results[0]
+        experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
+
+        return {
+            "total": len(results),
+            "date": datetime.now(UTC).date(),
+            "category": first_result.category,
+            "model": first_result.model,
+            "agent_name": first_result.agent_name,
+            "average_duration": sum(durations) / len(durations) if durations else 0.0,
+            "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
+            "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
+            "average_llm_duration": sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
+            "average_ai_credits": sum(ai_credits) / len(ai_credits) if ai_credits else None,
+            "average_tool_usage": calculate_average_tool_usage(tool_usages) if tool_usages else None,
+            "github_run_id": run_id,
+            "experiment": experiment,
+            "benchmark_version": get_benchmark_version(),
+        }
+
+    @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "EvaluationResultSummary":
         """Create a summary from a list of per-instance results.
 
@@ -82,30 +113,7 @@ class EvaluationResultSummary(BaseModel, ABC):
             summary_cls = results[0].category.summary_class
             return summary_cls.from_results(results, run_id)
 
-        durations: list[float] = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
-        prompt_tokens: list[int] = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
-        completion_tokens: list[int] = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
-        llm_durations: list[float] = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
-        tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
-
-        first_result = results[0]
-        experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
-
-        return cls(
-            total=len(results),
-            date=datetime.now(UTC).date(),
-            category=first_result.category,
-            model=first_result.model,
-            agent_name=first_result.agent_name,
-            average_duration=sum(durations) / len(durations) if durations else 0.0,
-            average_prompt_tokens=sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
-            average_completion_tokens=sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
-            average_llm_duration=sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
-            average_tool_usage=calculate_average_tool_usage(tool_usages) if tool_usages else None,
-            github_run_id=run_id,
-            experiment=experiment,
-            benchmark_version=get_benchmark_version(),
-        )
+        return cls(**cls._base_fields(results, run_id))
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "EvaluationResultSummary":
@@ -118,6 +126,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1)
         data["average_completion_tokens"] = round(data["average_completion_tokens"], 1)
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
+        data["average_ai_credits"] = round(data["average_ai_credits"], 2) if data["average_ai_credits"] is not None else None
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:
@@ -127,8 +136,11 @@ class EvaluationResultSummary(BaseModel, ABC):
 
         logger.info(f"Saved evaluation summary to {output_file}")
 
-    def combination_key(self) -> tuple[str, str, str | None, str]:
-        """Key for identifying runs of the same agent+model+experiment+benchmark_version combination."""
+    def combination_key(self) -> tuple[str | None, ...]:
+        """Key for identifying runs of the same agent, model, experiment, and benchmark version.
+
+        Judge-scored categories extend the key with their judge model, so runs judged by different models stay separate.
+        """
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
@@ -186,11 +198,21 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
 
 class JudgeBasedEvaluationResultSummary(EvaluationResultSummary):
-    """Summary for judge-scored categories.
+    """Summary for categories whose scoring involves an LLM judge, carrying the judge model of the summarized run."""
 
-    Scoring is performed externally (bceval -> Braintrust/Kusto) and not reflected here;
-    this summary only carries the agent-execution aggregates from the base class.
-    """
+    judge_model: str
+
+    @classmethod
+    def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
+        from bcbench.results.base import JudgeScoredEvaluationResult
+
+        first_result = results[0]
+        assert isinstance(first_result, JudgeScoredEvaluationResult)
+        return {**super()._base_fields(results, run_id), "judge_model": first_result.judge_model}
+
+    def combination_key(self) -> tuple[str | None, ...]:
+        """Runs judged by different models are aggregated separately."""
+        return (*super().combination_key(), self.judge_model)
 
     def render_github_metrics_markdown(self) -> str:
         """Judge scoring happens externally, so there are no in-run metrics to surface."""
