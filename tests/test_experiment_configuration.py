@@ -1,6 +1,6 @@
 """Test ExperimentConfiguration dataclass."""
 
-from bcbench.types import ExperimentConfiguration
+from bcbench.types import ExperimentConfiguration, RepositoryProvenance
 
 
 class TestExperimentConfiguration:
@@ -102,3 +102,38 @@ class TestExperimentConfiguration:
 
         assert config.plugins == []
         assert not config.is_empty()
+
+    def test_repository_provenance_is_preserved_and_displayable(self):
+        provenance = RepositoryProvenance(
+            repository="https://github.com/microsoft/BC-ALAgents.git",
+            ref="feature",
+            commit_sha="a" * 40,
+            dirty=True,
+            content_hash="c" * 64,
+            is_variant=True,
+        )
+        config = ExperimentConfiguration(pr_review_engine=provenance)
+
+        assert not config.is_empty()
+        assert config.is_experiment
+        assert config.model_dump(mode="json")["pr_review_engine"]["display_name"] == "microsoft/BC-ALAgents@aaaaaaaa+dirty.cccccccc"
+
+    def test_clean_pinned_provenance_remains_a_baseline(self):
+        config = ExperimentConfiguration(
+            pr_review_engine=RepositoryProvenance(
+                repository="microsoft/BC-ALAgents",
+                commit_sha="a" * 40,
+            )
+        )
+
+        assert not config.is_empty()
+        assert not config.is_experiment
+
+    def test_repository_provenance_strips_remote_credentials(self):
+        provenance = RepositoryProvenance(
+            repository="https://user:secret@github.com/microsoft/BCQuality.git?token=secret#fragment",
+            commit_sha="a" * 40,
+        )
+
+        assert provenance.repository == "github.com/microsoft/BCQuality.git"
+        assert provenance.display_name == "microsoft/BCQuality@aaaaaaaa"

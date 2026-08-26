@@ -15,11 +15,13 @@ import os
 import shutil
 import subprocess
 import time
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -27,7 +29,7 @@ from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import commit_changes, has_changes, init_repo
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration, RepositoryProvenance
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -57,6 +59,80 @@ def _resolve_pwsh() -> str:
     if not pwsh:
         raise AgentError("PowerShell (pwsh) not found in PATH. The BC-ALAgents engine requires PowerShell 7+.")
     return pwsh
+
+
+def _git_output(root: Path, *args: str) -> str | None:
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "-C", str(root), *args],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+            ).strip()
+            or None
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def _git_bytes(root: Path, *args: str) -> bytes | None:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(root), *args],
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def _dirty_content_hash(root: Path) -> str:
+    metadata = _git_bytes(root, "diff", "HEAD", "--raw", "-z", "--abbrev=40", "--no-renames", "--no-ext-diff")
+    tracked = _git_bytes(root, "diff", "HEAD", "--name-only", "-z", "--no-renames", "--no-ext-diff")
+    untracked = _git_bytes(root, "ls-files", "--others", "--exclude-standard", "-z")
+    if metadata is None or tracked is None or untracked is None:
+        raise AgentError(f"Could not fingerprint dirty repository at {root}.")
+
+    fingerprint = sha256(metadata)
+    changed_paths = sorted(set(tracked.rstrip(b"\0").split(b"\0")) | set(untracked.rstrip(b"\0").split(b"\0")))
+    for raw_path in filter(None, changed_paths):
+        relative_path = os.fsdecode(raw_path)
+        absolute_path = root / relative_path
+        if not absolute_path.exists():
+            object_hash = "deleted"
+        elif absolute_path.is_dir():
+            object_hash = _git_output(absolute_path, "rev-parse", "HEAD")
+        else:
+            object_hash = _git_output(root, "hash-object", "--no-filters", "--", relative_path)
+        if object_hash is None:
+            raise AgentError(f"Could not fingerprint changed path {relative_path} in {root}.")
+        fingerprint.update(raw_path)
+        fingerprint.update(b"\0")
+        fingerprint.update(object_hash.encode())
+    return fingerprint.hexdigest()
+
+
+def _repository_provenance(
+    root: Path,
+    repository: str | None = None,
+    ref: str | None = None,
+    *,
+    is_variant: bool | None = None,
+) -> RepositoryProvenance | None:
+    commit_sha = _git_output(root, "rev-parse", "HEAD")
+    resolved_repository = repository or _git_output(root, "config", "--get", "remote.origin.url")
+    resolved_ref = ref or _git_output(root, "branch", "--show-current")
+    dirty = bool(_git_output(root, "status", "--porcelain")) if commit_sha else False
+    if not any((resolved_repository, resolved_ref, commit_sha)):
+        return None
+    return RepositoryProvenance(
+        repository=resolved_repository,
+        ref=resolved_ref,
+        commit_sha=commit_sha,
+        dirty=dirty,
+        content_hash=_dirty_content_hash(root) if dirty else None,
+        is_variant=bool(is_variant or dirty or (is_variant is None and resolved_ref)),
+    )
 
 
 def _commit_patch_as_head(repo_path: Path) -> None:
@@ -199,7 +275,15 @@ def run_pr_review_agent(
         "AGENT_MINIMUM_SEVERITY": severity,
     }
 
-    config = ExperimentConfiguration()
+    config = ExperimentConfiguration(
+        pr_review_engine=_repository_provenance(engine_root),
+        bcquality=_repository_provenance(
+            bcquality_local_path or bcquality_root,
+            bcquality_repo,
+            bcquality_ref,
+            is_variant=bool(bcquality_repo or bcquality_ref or bcquality_local_path),
+        ),
+    )
 
     start = time.monotonic()
     try:
@@ -229,4 +313,4 @@ def run_pr_review_agent(
         logger.exception("Unexpected error running engine review")
         raise
     else:
-        return AgentMetrics(execution_time=time.monotonic() - start), config
+        return build_pr_review_metrics(output_dir, time.monotonic() - start), config

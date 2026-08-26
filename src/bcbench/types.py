@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, computed_field, field_validator, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -80,8 +81,62 @@ class AgentMetrics(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 
+    total_tokens: int | None = None
+
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+
+class RepositoryProvenance(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    repository: str | None = None
+    ref: str | None = None
+    commit_sha: CommitSha | None = None
+    dirty: bool = False
+    content_hash: str | None = None
+    is_variant: bool = False
+
+    @field_validator("repository")
+    @classmethod
+    def _sanitize_repository(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        without_metadata = value.split("?", 1)[0].split("#", 1)[0]
+        if "://" in without_metadata:
+            parsed = urlsplit(without_metadata)
+            path = parsed.path.strip("/")
+            if parsed.scheme == "file":
+                return path.replace("\\", "/").rsplit("/", 1)[-1]
+            return f"{parsed.hostname}/{path}" if parsed.hostname and path else parsed.hostname or path or None
+
+        if "@" in without_metadata and ":" in without_metadata.split("@", 1)[1]:
+            host, path = without_metadata.split("@", 1)[1].split(":", 1)
+            return f"{host}/{path.lstrip('/')}"
+
+        normalized = without_metadata.replace("\\", "/")
+        if normalized.startswith("/") or (len(normalized) >= 2 and normalized[1] == ":"):
+            return normalized.rstrip("/").rsplit("/", 1)[-1]
+        return normalized
+
+    @model_validator(mode="after")
+    def _require_dirty_content_hash(self) -> RepositoryProvenance:
+        if self.dirty and self.content_hash is None:
+            raise ValueError("Dirty repository provenance requires a content hash")
+        return self
+
+    @computed_field
+    @property
+    def display_name(self) -> str:
+        repository = self.repository.removesuffix(".git").replace("\\", "/") if self.repository else "local"
+        if repository.startswith("git@") and ":" in repository:
+            repository = repository.split(":", 1)[1]
+        elif "://" in repository or (repository.count("/") >= 2 and "." in repository.split("/", 1)[0]):
+            repository = "/".join(repository.rsplit("/", 2)[-2:])
+        revision = self.commit_sha[:8] if self.commit_sha else self.ref
+        suffix = f"+dirty.{self.content_hash[:8]}" if self.dirty and self.content_hash else "+dirty" if self.dirty else ""
+        return f"{repository}@{revision}{suffix}" if revision else f"{repository}{suffix}"
 
 
 class ExperimentConfiguration(BaseModel):
@@ -111,13 +166,39 @@ class ExperimentConfiguration(BaseModel):
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
+    pr_review_engine: RepositoryProvenance | None = None
+    bcquality: RepositoryProvenance | None = None
+
+    @computed_field
+    @property
+    def is_experiment(self) -> bool:
+        return (
+            self.mcp_servers is not None
+            or self.al_lsp_enabled
+            or self.custom_instructions
+            or self.skills_enabled
+            or self.custom_agent is not None
+            or self.plugins is not None
+            or bool(self.pr_review_engine and (self.pr_review_engine.is_variant or self.pr_review_engine.dirty))
+            or bool(self.bcquality and (self.bcquality.is_variant or self.bcquality.dirty))
+        )
+
     def is_empty(self) -> bool:
         """Check if this configuration has all default/empty values.
 
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.plugins is None
+            and self.pr_review_engine is None
+            and self.bcquality is None
+        )
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
@@ -198,8 +279,16 @@ class AgentHarness(StrEnum):
                     completion_tokens=None,
                     tool_usage=None,
                 )
-            case AgentHarness.BCAL | AgentHarness.PR_REVIEW:
+            case AgentHarness.BCAL:
                 expected = AgentMetrics(execution_time=None)
+            case AgentHarness.PR_REVIEW:
+                expected = AgentMetrics(
+                    execution_time=None,
+                    prompt_tokens=None,
+                    completion_tokens=None,
+                    total_tokens=None,
+                    ai_credits=None,
+                )
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
 

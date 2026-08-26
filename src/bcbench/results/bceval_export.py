@@ -21,10 +21,10 @@ def _experiment_metadata(experiment: ExperimentConfiguration | None, git_ref: st
     bc-eval promotes the ``EvalRunType`` key to the Kusto ``EvalRunType``/``testJobType`` fields
     when ``--eval-run-type`` is left at its default, so no extra CLI flag is needed.
     """
-    is_experiment: bool = experiment is not None and not experiment.is_empty()
+    is_experiment: bool = bool(experiment and experiment.is_experiment)
     return {
         "EvalRunType": "experiment" if is_experiment else "baseline",
-        "experiment": experiment.model_dump(mode="json") if (is_experiment and experiment) else None,
+        "experiment": experiment.model_dump(mode="json") if experiment and not experiment.is_empty() else None,
         "git_branch": git_ref,
         "benchmark_version": benchmark_version,
     }

@@ -3,6 +3,7 @@ from pathlib import Path
 import yaml
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
+ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 
 
 def _workflow(name: str) -> str:
@@ -35,7 +36,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "category: code-review" in workflow
     assert "bcbench evaluate pr-review" in workflow
     assert "repository: microsoft/BC-ALAgents" in workflow
-    assert "f2ac8704bf8d39000f8002bcf2d287f1f5b5e9ba" in workflow
+    assert "533dd39dfe29218c09e5e31c39c78bb72fa20aa2" in workflow
     assert "ref: main" not in workflow
     assert '--engine-path "${{ github.workspace }}/bc-alagents-engine"' in workflow
     assert "BC_PR_REVIEW_ROOT:" not in workflow
@@ -47,3 +48,9 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "mai-code-1-flash-picker" not in workflow
     for input_name in ("model:", "test-run:", "repeat:", "git-ref:"):
         assert input_name in workflow
+
+
+def test_agent_harness_action_pins_published_copilot_version() -> None:
+    action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
+
+    assert "@github/copilot@1.0.80" in action
