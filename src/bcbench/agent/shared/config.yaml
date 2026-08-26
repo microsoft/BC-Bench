@@ -212,11 +212,13 @@ mcp:
       type: "http"
       url: ""
 
-    # Microsoft Learn MCP (toggled via --ms-learn-mcp CLI flag): official AL docs + code samples the
-    # bc-al-query-mcp skill grounds its AL syntax in. Public server, no auth.
-    - name: "mslearn"
-      type: "http"
-      url: "https://learn.microsoft.com/api/mcp"
+    # Microsoft Learn MCP: official AL docs + code samples the bc-al-query-mcp skill can ground its AL
+    # syntax in (public server, no auth). Off by default; there is no dispatch flag. To run a
+    # with-vs-without-MS-Learn experiment, UNCOMMENT this block on a private branch — its mere presence
+    # here enables it (build_mcp_config includes whatever MCP servers are listed).
+    # - name: "mslearn"
+    #   type: "http"
+    #   url: "https://learn.microsoft.com/api/mcp"
 
     # - name: "filesystem"
     #   type: "stdio"

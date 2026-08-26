@@ -87,7 +87,7 @@ class TimeoutConfig:
         """Get default timeout configuration."""
         return cls(
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
-            build_app=900,  # live gold compile/publish is slow on the insider-29 artifact (revert once gold_rows are baked)
+            build_app=900,  # gold query is compiled/published/run live per entry; slow on the insider-29 artifact
             test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
             # Total bcal CLI budget per instance.

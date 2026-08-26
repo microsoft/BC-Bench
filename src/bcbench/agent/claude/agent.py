@@ -26,7 +26,6 @@ def run_claude_code(
     al_mcp: bool = False,
     al_lsp: bool = False,
     bc_mcp: bool = False,
-    ms_learn_mcp: bool = False,
     skills: bool = False,
     container_name: str = "bcbench",
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
@@ -52,7 +51,6 @@ def run_claude_code(
         repo_path,
         al_mcp=al_mcp,
         bc_mcp=bc_mcp,
-        ms_learn_mcp=ms_learn_mcp,
         container_name=container_name,
         bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
     )

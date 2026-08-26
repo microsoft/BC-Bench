@@ -109,27 +109,28 @@ class TestBcMcp:
     def test_bcmcp_excluded_when_disabled(self, entry, repo_path):
         assert build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=False) == (None, None)
 
-    def test_mslearn_excluded_when_disabled(self, entry, repo_path):
-        assert build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path, ms_learn_mcp=False) == (None, None)
+    def test_mslearn_included_when_present_in_config(self, entry, repo_path):
+        # mslearn has no dispatch flag anymore: its presence in config.yaml is what enables it.
+        _, servers = build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path)
+        assert servers == ["mslearn"]
 
-    def test_flags_are_independent(self, entry, repo_path):
+    def test_mslearn_absent_when_not_in_config(self, entry, repo_path):
+        assert build_mcp_config(_make_config(), entry, repo_path) == (None, None)
+
+    def test_bc_mcp_flag_independent_of_mslearn_presence(self, entry, repo_path):
         config = _make_config(BCMCP_SERVER, MSLEARN_SERVER)
 
-        # bc-mcp only -> no mslearn
-        _, bc_only = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=False, bc_mcp_gateway_url=self._GATEWAY_URL)
-        assert bc_only == ["bcmcp"]
+        # bc-mcp off -> bcmcp excluded, but mslearn stays (config-controlled, no gateway needed)
+        _, bc_off = build_mcp_config(config, entry, repo_path, bc_mcp=False)
+        assert bc_off == ["mslearn"]
 
-        # ms-learn only -> no bcmcp (and no gateway needed)
-        _, learn_only = build_mcp_config(config, entry, repo_path, bc_mcp=False, ms_learn_mcp=True)
-        assert learn_only == ["mslearn"]
-
-        # both -> both
-        _, both = build_mcp_config(config, entry, repo_path, bc_mcp=True, ms_learn_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
+        # bc-mcp on -> both present
+        _, both = build_mcp_config(config, entry, repo_path, bc_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
         assert both is not None
         assert set(both) == {"bcmcp", "mslearn"}
 
     def test_mslearn_url_passthrough(self, entry, repo_path):
-        config_json, _ = build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path, ms_learn_mcp=True)
+        config_json, _ = build_mcp_config(_make_config(MSLEARN_SERVER), entry, repo_path)
         assert config_json is not None
         assert json.loads(config_json)["mcpServers"]["mslearn"]["url"] == "https://learn.microsoft.com/api/mcp"
 

@@ -15,9 +15,8 @@ logger = get_logger(__name__)
 
 _jinja = SandboxedEnvironment(autoescape=False)
 
-# Server names for the independently-toggled MCP servers.
+# Server name for the BC MCP server (toggled via --bc-mcp; needs gateway wiring).
 _BC_MCP_SERVER_NAME = "bcmcp"
-_MS_LEARN_MCP_SERVER_NAME = "mslearn"
 
 
 def _redact_mcp_config(mcp_config: dict[str, Any]) -> dict[str, Any]:
@@ -85,7 +84,6 @@ def build_mcp_config(
     repo_path: Path,
     al_mcp: bool = False,
     bc_mcp: bool = False,
-    ms_learn_mcp: bool = False,
     container_name: str = "bcbench",
     bc_mcp_gateway_url: str | None = None,
 ) -> tuple[str | None, list[str] | None]:
@@ -96,9 +94,6 @@ def build_mcp_config(
 
     if not bc_mcp:
         mcp_servers = list(filter(lambda s: s.get("name") != _BC_MCP_SERVER_NAME, mcp_servers))
-
-    if not ms_learn_mcp:
-        mcp_servers = list(filter(lambda s: s.get("name") != _MS_LEARN_MCP_SERVER_NAME, mcp_servers))
 
     if not mcp_servers:
         return None, None

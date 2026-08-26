@@ -131,17 +131,15 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         self.save_result(context, result)
 
     def _gold_rows(self, context: EvaluationContext[DataQueryEntry]) -> Sequence[Mapping[str, object]]:
-        """The expected rows: use the baked gold_rows if present, else compute them live (fail loud).
+        """The expected rows: run the entry's gold query live against the container's fixed dataset.
 
-        A gold query that doesn't compile/run is a harness/dataset bug, not the agent's fault, so the
-        live fallback deliberately does NOT catch its failure — it must fail the run loudly.
+        Computing the gold on demand keeps it resilient to demo-data changes (no stale baked rows). A
+        gold query that doesn't compile/run is a harness/dataset bug, not the agent's fault, so this
+        deliberately does NOT catch its failure — it must fail the run loudly.
         """
-        if context.entry.gold_rows:
-            return list(context.entry.gold_rows)
-
         from bcbench.operations import execute_al_query
 
-        logger.info(f"No baked gold_rows for {context.entry.instance_id}; running gold query live")
+        logger.info(f"Running gold query live for {context.entry.instance_id}")
         # Pin the gold query to the same company the agent queried via MCP (BC_MCP_COMPANY), so the
         # comparison is against the same data rather than an arbitrary first company.
         company = os.environ.get("BC_MCP_COMPANY")

@@ -1,13 +1,11 @@
 """CLI commands for dataset operations."""
 
 import json
-import os
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from bcbench.cli_options import ContainerName, ContainerPassword, ContainerUsername, EvaluationCategoryOption
+from bcbench.cli_options import EvaluationCategoryOption
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, CodeReviewEntry, RepoGroundedEntry
 from bcbench.dataset.dataset_entry import NL2ALEntry, _BugFixTestGenBase
@@ -184,38 +182,6 @@ def version(
     print(entry.environment_setup_version)
     if github_output:
         write_step_outputs({github_output: entry.environment_setup_version})
-
-
-@dataset_app.command("bake-dataquery-gold")
-def bake_dataquery_gold(
-    container_name: ContainerName = "",
-    username: ContainerUsername = "",
-    password: ContainerPassword = "",
-    repo_path: Annotated[Path, typer.Option(help="Container-shared work folder for building the gold query app")] = _config.paths.testbed_path,
-    version: Annotated[str, typer.Option(help="BC version override; defaults to each entry's environment_setup_version")] = "",
-) -> None:
-    """Run each data-query gold query once and store its result rows as gold_rows in the dataset.
-
-    Populates the baked expected data so evaluation no longer compiles/runs the gold query live.
-    Requires a running BC container (repo_path must be shared with it).
-    """
-    from bcbench.operations import execute_al_query
-    from bcbench.types import ContainerConfig
-
-    dataset_path = EvaluationCategory.DATA_QUERY.dataset_path
-    entries = [json.loads(line) for line in dataset_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    container = ContainerConfig(container_name, username, password)
-    company = os.environ.get("BC_MCP_COMPANY")
-
-    for entry in entries:
-        entry_version = version or entry["environment_setup_version"]
-        logger.info(f"Baking gold rows for {entry['instance_id']} (v{entry_version})")
-        rows = execute_al_query(entry["gold_query"], container, entry_version, repo_path, "gold", company=company)
-        entry["gold_rows"] = rows
-        logger.info(f"  -> {len(rows)} rows")
-
-    dataset_path.write_text("\n".join(json.dumps(e, ensure_ascii=False) for e in entries) + "\n", encoding="utf-8")
-    logger.info(f"Baked gold rows for {len(entries)} entries into {dataset_path}")
 
 
 def _modified_instance_ids_from_diff(diff_output: str) -> list[str]:

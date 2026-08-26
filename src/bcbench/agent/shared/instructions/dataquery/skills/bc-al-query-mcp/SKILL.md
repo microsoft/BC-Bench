@@ -1,6 +1,6 @@
 ---
 name: bc-al-query-mcp
-description: "Use when: writing, fixing, validating, or running Business Central AL query objects with bc_data MCP tools and Microsoft Learn MCP docs. Covers AL query syntax, table discovery, schemas, relations, joins, filters, FlowFields, pagination, and read-only data retrieval."
+description: "Use when: writing, fixing, validating, or running Business Central AL query objects with bc_data MCP tools (and, optionally, Microsoft Learn MCP docs). Covers AL query syntax, table discovery, schemas, relations, joins, filters, FlowFields, pagination, and read-only data retrieval."
 argument-hint: "[business question, data need, or AL query to fix]"
 user-invocable: true
 disable-model-invocation: false
@@ -8,14 +8,13 @@ disable-model-invocation: false
 
 # Business Central AL Query MCP
 
-Use this skill when the user asks to query Business Central data, write or fix an AL `query` object, join BC tables, discover BC fields, validate an AL query, or use the `bc_data` MCP tools together with Microsoft Learn.
+Use this skill when the user asks to query Business Central data, write or fix an AL `query` object, join BC tables, discover BC fields, validate an AL query, or use the `bc_data` MCP tools (optionally alongside Microsoft Learn).
 
 ## Required Capabilities
 
-The environment should expose these MCP tool groups:
+The **Business Central data MCP is required** — it provides table search, table schema, table relations, and AL query compile/run. This skill cannot proceed without it.
 
-- Microsoft Learn MCP: docs search, docs fetch, and code sample search for official AL query syntax and examples.
-- Business Central data MCP: table search, table schema, table relations, and AL query compile/run.
+**Microsoft Learn MCP is optional** (docs search, docs fetch, and code sample search for official AL query syntax and examples). Use it to ground AL syntax *when it is available*, but do not depend on it — if it is not in your tool list, proceed with the BC data MCP tools alone.
 
 If tools are deferred, load them with tool search before use. Do not assume a tool is available until it has been loaded or returned by discovery.
 
@@ -34,7 +33,7 @@ The tools may appear with a host-specific server prefix — `mcp__bcmcp__bc_data
 
 ## Core Rule
 
-Microsoft Learn provides general AL query authoring knowledge. The BC data MCP tools provide live tenant-specific metadata and execution. Use both. Never write a tenant query from memory alone.
+The BC data MCP tools provide live tenant-specific metadata and execution — always use them, and never write a tenant query from memory alone. Microsoft Learn, when available, provides general AL query authoring knowledge to ground syntax; use it if present, but it is not required.
 
 ## Non-Negotiables
 
@@ -53,7 +52,7 @@ Microsoft Learn provides general AL query authoring knowledge. The BC data MCP t
    - Determine the business entity, date range, filters, measures, and whether raw rows or an aggregate answer is needed.
    - Ask a concise clarification only if the query cannot be scoped safely.
 
-2. Ground AL syntax in Microsoft Learn when needed.
+2. Ground AL syntax in Microsoft Learn if it is available (skip this step entirely when the Microsoft Learn MCP is not in your tool list).
    - Search/fetch docs for `Business Central AL query object`, `DataItemLink`, `SqlJoinType`, `DataItemTableFilter`, `ColumnFilter`, `Filtering in Query objects`, and `Aggregating data in Query objects`.
    - Use code sample search with `language: al` when examples are useful.
 

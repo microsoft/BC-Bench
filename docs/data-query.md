@@ -28,10 +28,10 @@ Data Query is **execution-based** (like bug-fix), with no LLM judge:
   compared by value (numbers normalized, column names/order ignored); row order is ignored unless the
   entry marks the question as `ordered`.
 
-The gold answer comes from each entry's baked `gold_rows` when present; otherwise the harness runs the
-entry's `gold_query` live against the container and uses its result set. A gold query that does not
-compile/run is treated as a harness/dataset bug and fails the run loudly (it is never the agent's
-fault).
+The gold answer comes from running each entry's `gold_query` live against the container and using its
+result set. Computing it on demand keeps the expected data resilient to demo-data changes. A gold
+query that does not compile/run is treated as a harness/dataset bug and fails the run loudly (it is
+never the agent's fault).
 
 ## The BC MCP tools
 
@@ -64,8 +64,8 @@ unreachable through it), and warms/caches the tool catalog. `agent_subprocess_en
 ## Dataset
 
 Each entry has an `nl_prompt` (the question) and a `gold_query` (the reference AL query whose result
-set defines "correct"), an optional baked `gold_rows`, plus `environment_setup_version` (the BC
-artifact) and `ordered`. See `dataset/dataquery.jsonl`.
+set defines "correct"), plus `environment_setup_version` (the BC artifact) and `ordered`. See
+`dataset/dataquery.jsonl`.
 
 ## Running it (no local containers)
 
