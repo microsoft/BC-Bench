@@ -16,6 +16,7 @@ class _RunMetrics(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     schema_version: Literal[1]
+    # "not-applicable" means engine preflight found no .al files, skipped the review, and emitted exact zero usage.
     metrics_source: Literal["copilot-cli-otel", "not-applicable"]
     cli_version: str | None
     wall_time_seconds: _NonNegativeFloat | None
