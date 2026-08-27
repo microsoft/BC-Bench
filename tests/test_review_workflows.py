@@ -4,6 +4,7 @@ import yaml
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
+AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
 
 
 def _workflow(name: str) -> str:
@@ -32,13 +33,17 @@ def test_claude_workflow_routes_code_review_through_claude() -> None:
 
 def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
+    config = yaml.safe_load(AGENT_CONFIG.read_text(encoding="utf-8"))
 
     assert "category: code-review" in workflow
     assert "bcbench evaluate pr-review" in workflow
-    assert "repository: microsoft/BC-ALAgents" in workflow
-    assert "533dd39dfe29218c09e5e31c39c78bb72fa20aa2" in workflow
-    assert "ref: main" not in workflow
-    assert '--engine-path "${{ github.workspace }}/bc-alagents-engine"' in workflow
+    assert "Checkout BC-ALAgents review engine" not in workflow
+    assert "--engine-local-path" not in workflow
+    assert "GH_TOKEN: ${{ github.token }}" in workflow
+    assert config["pr_review"]["engine"] == {
+        "repo": "microsoft/BC-ALAgents",
+        "ref": "533dd39dfe29218c09e5e31c39c78bb72fa20aa2",
+    }
     assert "BC_PR_REVIEW_ROOT:" not in workflow
     assert "install-agent-harnesses" in workflow
     assert "install-eval-clis" not in workflow

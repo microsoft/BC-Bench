@@ -15,7 +15,6 @@ import os
 import shutil
 import subprocess
 import time
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +27,8 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import commit_changes, has_changes, init_repo
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration, RepositoryProvenance
+from bcbench.operations import clone_repo_at_revision, commit_changes, has_changes, init_repo
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -44,13 +43,11 @@ def _load_pr_review_settings() -> dict[str, Any]:
     return yaml.safe_load(config_file.read_text(encoding="utf-8"))["pr_review"]
 
 
-def _resolve_pr_review_root(engine_path: Path | None) -> Path:
-    if engine_path is None:
-        raise AgentError("Engine root not configured. Pass --engine-path or set BC_PR_REVIEW_ROOT.")
+def _resolve_pr_review_root(engine_path: Path) -> Path:
     root = engine_path.expanduser().resolve()
     engine = root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
     if not engine.exists():
-        raise AgentError(f"Engine orchestrator not found at {engine}. Check --engine-path points at a BC-ALAgents checkout.")
+        raise AgentError(f"Engine orchestrator not found at {engine}. Check the BC-ALAgents source configuration.")
     return root
 
 
@@ -61,78 +58,22 @@ def _resolve_pwsh() -> str:
     return pwsh
 
 
-def _git_output(root: Path, *args: str) -> str | None:
-    try:
-        return (
-            subprocess.check_output(
-                ["git", "-C", str(root), *args],
-                stderr=subprocess.DEVNULL,
-                text=True,
-                encoding="utf-8",
-            ).strip()
-            or None
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return None
+def _environment_without_bcquality_overrides() -> dict[str, str]:
+    return {name: value for name, value in os.environ.items() if not name.startswith("BCQUALITY_")}
 
 
-def _git_bytes(root: Path, *args: str) -> bytes | None:
-    try:
-        return subprocess.check_output(
-            ["git", "-C", str(root), *args],
-            stderr=subprocess.DEVNULL,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return None
-
-
-def _dirty_content_hash(root: Path) -> str:
-    metadata = _git_bytes(root, "diff", "HEAD", "--raw", "-z", "--abbrev=40", "--no-renames", "--no-ext-diff")
-    tracked = _git_bytes(root, "diff", "HEAD", "--name-only", "-z", "--no-renames", "--no-ext-diff")
-    untracked = _git_bytes(root, "ls-files", "--others", "--exclude-standard", "-z")
-    if metadata is None or tracked is None or untracked is None:
-        raise AgentError(f"Could not fingerprint dirty repository at {root}.")
-
-    fingerprint = sha256(metadata)
-    changed_paths = sorted(set(tracked.rstrip(b"\0").split(b"\0")) | set(untracked.rstrip(b"\0").split(b"\0")))
-    for raw_path in filter(None, changed_paths):
-        relative_path = os.fsdecode(raw_path)
-        absolute_path = root / relative_path
-        if not absolute_path.exists():
-            object_hash = "deleted"
-        elif absolute_path.is_dir():
-            object_hash = _git_output(absolute_path, "rev-parse", "HEAD")
-        else:
-            object_hash = _git_output(root, "hash-object", "--no-filters", "--", relative_path)
-        if object_hash is None:
-            raise AgentError(f"Could not fingerprint changed path {relative_path} in {root}.")
-        fingerprint.update(raw_path)
-        fingerprint.update(b"\0")
-        fingerprint.update(object_hash.encode())
-    return fingerprint.hexdigest()
-
-
-def _repository_provenance(
-    root: Path,
-    repository: str | None = None,
-    ref: str | None = None,
-    *,
-    is_variant: bool | None = None,
-) -> RepositoryProvenance | None:
-    commit_sha = _git_output(root, "rev-parse", "HEAD")
-    resolved_repository = repository or _git_output(root, "config", "--get", "remote.origin.url")
-    resolved_ref = ref or _git_output(root, "branch", "--show-current")
-    dirty = bool(_git_output(root, "status", "--porcelain")) if commit_sha else False
-    if not any((resolved_repository, resolved_ref, commit_sha)):
-        return None
-    return RepositoryProvenance(
-        repository=resolved_repository,
-        ref=resolved_ref,
-        commit_sha=commit_sha,
-        dirty=dirty,
-        content_hash=_dirty_content_hash(root) if dirty else None,
-        is_variant=bool(is_variant or dirty or (is_variant is None and resolved_ref)),
-    )
+def _prepare_pr_review_root(
+    repo: str | None,
+    ref: str | None,
+    local_path: Path | None,
+    destination: Path,
+) -> Path:
+    if local_path:
+        return _resolve_pr_review_root(local_path)
+    if not repo or not ref:
+        raise AgentError("BC-ALAgents repo and ref must be configured when no local path is provided.")
+    clone_repo_at_revision(repo, ref, destination)
+    return _resolve_pr_review_root(destination)
 
 
 def _commit_patch_as_head(repo_path: Path) -> None:
@@ -158,24 +99,14 @@ def _prepare_bcquality_root(
     engine_root: Path,
     pwsh: str,
     dest: Path,
-    bcquality_ref: str | None,
-    bcquality_repo: str | None = None,
-    bcquality_local_path: Path | None = None,
 ) -> Path:
-    env = {**os.environ}
-    if bcquality_repo:
-        env["BCQUALITY_REPO"] = bcquality_repo
-    if bcquality_ref:
-        env["BCQUALITY_REF"] = bcquality_ref
     args = [pwsh, "-NoProfile", "-File", str(_PREPARE_BCQUALITY_SCRIPT), "-EngineRoot", str(engine_root), "-Root", str(dest)]
-    if bcquality_local_path:
-        args += ["-LocalPath", str(bcquality_local_path)]
     result = subprocess.run(
         args,
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=env,
+        env=_environment_without_bcquality_overrides(),
         check=False,
     )
     if result.returncode != 0:
@@ -216,10 +147,9 @@ def run_pr_review_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
-    engine_path: Path | None = None,
-    bcquality_ref: str | None = None,
-    bcquality_repo: str | None = None,
-    bcquality_local_path: Path | None = None,
+    engine_repo: str | None = None,
+    engine_ref: str | None = None,
+    engine_local_path: Path | None = None,
     min_severity: str | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
@@ -227,7 +157,7 @@ def run_pr_review_agent(
     Separate from run_copilot_agent by design: this spawns the PROD BC-ALAgents
     PowerShell orchestrator (Copilot is spawned inside the engine, not here), so it
     owns none of the copilot-harness prompt/MCP/LSP wiring and takes engine-specific
-    inputs (BCQuality source, min severity) for the code-review category only.
+    inputs (BC-ALAgents source, min severity) for the code-review category only.
 
     Returns:
         Tuple of (AgentMetrics, ExperimentConfiguration).
@@ -240,29 +170,22 @@ def run_pr_review_agent(
     repo_path = repo_path.resolve()
     output_dir = output_dir.resolve()
     settings = _load_pr_review_settings()
-    engine_root = _resolve_pr_review_root(engine_path)
+    engine_cfg = settings["engine"]
+    engine_repo = engine_repo or engine_cfg["repo"]
+    engine_ref = engine_ref or engine_cfg["ref"]
+    engine_root = _prepare_pr_review_root(engine_repo, engine_ref, engine_local_path, output_dir / "bc-alagents")
     pwsh = _resolve_pwsh()
     severity = min_severity or settings["min_severity"]
-    bcquality_cfg = settings["bcquality"]
-    bcquality_repo = bcquality_repo or bcquality_cfg["repo"]
-    bcquality_ref = bcquality_ref or bcquality_cfg["ref"]
     output_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Running BC-ALAgents review engine on: {entry.instance_id}")
 
     _commit_patch_as_head(repo_path)
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
-    bcquality_root = _prepare_bcquality_root(
-        engine_root,
-        pwsh,
-        output_dir / "bcquality",
-        bcquality_ref,
-        bcquality_repo,
-        bcquality_local_path,
-    )
+    bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
 
     engine = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
     env = {
-        **os.environ,
+        **_environment_without_bcquality_overrides(),
         "REVIEW_SOURCE": "local",
         "REVIEW_PHASE": "all",
         "BASE_REF": entry.base_commit,
@@ -275,15 +198,7 @@ def run_pr_review_agent(
         "AGENT_MINIMUM_SEVERITY": severity,
     }
 
-    config = ExperimentConfiguration(
-        pr_review_engine=_repository_provenance(engine_root),
-        bcquality=_repository_provenance(
-            bcquality_local_path or bcquality_root,
-            bcquality_repo,
-            bcquality_ref,
-            is_variant=bool(bcquality_repo or bcquality_ref or bcquality_local_path),
-        ),
-    )
+    config = ExperimentConfiguration()
 
     start = time.monotonic()
     try:

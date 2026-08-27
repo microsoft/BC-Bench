@@ -39,7 +39,9 @@ bcbench evaluate claude <entry> --category code-review
 bcbench evaluate pr-review <entry>
 ```
 
-The evaluation workflow pins BC-ALAgents and GitHub Copilot CLI versions for reproducible runs. Engine updates require a new BC-Bench version and must record the BC-ALAgents commit SHA in the release notes.
+BC-ALAgents is the PR Review harness boundary. Its repo and commit are pinned under `pr_review.engine` in `src/bcbench/agent/shared/config.yaml`, and that engine commit owns the BCQuality version through its own configuration. Engine updates require a new BC-Bench version and must record the BC-ALAgents commit SHA in the release notes.
+
+For an experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, then run BC-Bench with that BC-ALAgents repo/ref. This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality. A local BC-ALAgents checkout can be supplied with `--engine-local-path` for smoke testing.
 
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata remain in that raw artifact rather than being promoted into BC-Bench result and leaderboard schemas.
 
@@ -50,8 +52,6 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Engine</th>
-      <th>BCQuality</th>
       <th>Model</th>
       <th>Micro F1 (95% CI)</th>
       <th>Precision</th>
@@ -67,8 +67,6 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       {% if agg.experiment == null or agg.experiment.is_experiment == false %}
     <tr>
       <td>{{ agg.agent_name }}</td>
-      <td>{{ agg.experiment.pr_review_engine.display_name | default: "self-contained" }}</td>
-      <td>{{ agg.experiment.bcquality.display_name | default: "self-contained" }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
@@ -92,8 +90,6 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Engine</th>
-      <th>BCQuality</th>
       <th>Model</th>
       <th>Avg Time</th>
       <th>Avg Prompt Tokens</th>
@@ -108,8 +104,6 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
     {% for agg in performance_results %}
     <tr>
       <td>{{ agg.agent_name }}</td>
-      <td>{{ agg.experiment.pr_review_engine.display_name | default: "self-contained" }}</td>
-      <td>{{ agg.experiment.bcquality.display_name | default: "self-contained" }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td>{% if agg.average_prompt_tokens != null %}{{ agg.average_prompt_tokens | round: 0 }}{% else %}—{% endif %}</td>
@@ -131,15 +125,13 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
 
 - **Inline knowledge (pre-#8700)** — the review checklists BCApps shipped inline before adopting BCQuality, injected as custom instructions.
 
-{% assign experiment_rows = site.data.code-review.aggregate | where_exp: "agg", "agg.experiment.is_experiment == true or agg.experiment.custom_instructions == true" %}
+{% assign experiment_rows = site.data.code-review.aggregate | where_exp: "agg", "agg.experiment != null and agg.experiment.is_experiment != false" %}
 {% if experiment_rows and experiment_rows.size > 0 %}
 <table>
   <thead>
     <tr>
       <th>Variant</th>
       <th>Agent</th>
-      <th>Engine</th>
-      <th>BCQuality</th>
       <th>Model</th>
       <th>Micro F1 (95% CI)</th>
       <th>Macro F1 (95% CI)</th>
@@ -155,12 +147,9 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
     {% for agg in experiment_results %}
     <tr>
       <td>
-        {%- if agg.experiment.custom_instructions -%}Inline knowledge (pre-#8700)
-        {%- else -%}Source variant{%- endif -%}
+        {%- if agg.experiment.custom_instructions -%}Inline knowledge (pre-#8700){%- else -%}Other{%- endif -%}
       </td>
       <td>{{ agg.agent_name }}</td>
-      <td>{{ agg.experiment.pr_review_engine.display_name | default: "self-contained" }}</td>
-      <td>{{ agg.experiment.bcquality.display_name | default: "self-contained" }}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.f1 | times: 100.0 | round: 1 }}%{% if agg.f1_ci_low %} ({{ agg.f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{{ agg.macro_f1 | times: 100.0 | round: 1 }}%{% if agg.macro_f1_ci_low %} ({{ agg.macro_f1_ci_low | times: 100.0 | round: 1 }}-{{ agg.macro_f1_ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>

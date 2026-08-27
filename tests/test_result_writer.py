@@ -3,7 +3,7 @@ from unittest.mock import PropertyMock, patch
 
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration, RepositoryProvenance
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
 
 
@@ -293,30 +293,3 @@ class TestWriteBcevalResults:
         assert data["metadata"]["experiment"]["al_lsp_enabled"] is True
         assert data["metadata"]["experiment"]["custom_instructions"] is True
         assert data["metadata"]["git_branch"] == "feat/al-mcp"
-
-    def test_provenance_only_run_remains_baseline(self, tmp_path, sample_dataset_file, problem_statement_dir):
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-        provenance = RepositoryProvenance(repository="microsoft/BC-ALAgents", commit_sha="a" * 40)
-        result = create_bugfix_result(
-            metrics=AgentMetrics(execution_time=1.0),
-            experiment=ExperimentConfiguration(pr_review_engine=provenance),
-        )
-
-        with (
-            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
-            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
-        ):
-            write_bceval_results(
-                results=[result],
-                out_dir=output_dir,
-                run_id="run_provenance",
-                output_filename="results.jsonl",
-                category=EvaluationCategory.BUG_FIX,
-            )
-
-        with (output_dir / "results.jsonl").open() as f:
-            data = json.loads(f.readline())
-
-        assert data["metadata"]["EvalRunType"] == "baseline"
-        assert data["metadata"]["experiment"]["pr_review_engine"]["commit_sha"] == "a" * 40

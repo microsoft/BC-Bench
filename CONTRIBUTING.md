@@ -135,7 +135,7 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 
 ### Bump the BC PR Review engine
 
-1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/workflows/pr-review-evaluation.yml`
+1. Update the pinned `microsoft/BC-ALAgents` commit in `src/bcbench/agent/shared/config.yaml`
 2. Run a test evaluation through the `pr-review` workflow
 3. Bump the BC-Bench version following the Versioning Policy
 4. Include the exact BC-ALAgents commit SHA in the BC-Bench release notes
