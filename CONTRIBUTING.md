@@ -140,6 +140,8 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 3. Bump the BC-Bench version following the Versioning Policy
 4. Include the exact BC-ALAgents commit SHA in the BC-Bench release notes
 
+Comparison runs must use clean commits that can be fetched from the recorded remote. Local or dirty checkouts are for smoke tests only; a local SHA or content hash cannot recover their contents. Commit and push dependency changes before a full run.
+
 ### Create a new release
 
 After you bump the version in [pyproject.toml](https://github.com/microsoft/BC-Bench/blob/main/pyproject.toml#L7) following the Versioning Policy, use the repository's [`create-release` skill](.github/skills/create-release/SKILL.md) to prepare release notes after pushing your changes. The skill screens merged PRs since the previous version tag and returns Markdown covering only changes that may affect evaluation results, without creating the tag or release.

@@ -20,6 +20,21 @@ def remove_tree(path: Path) -> None:
     shutil.rmtree(path, onexc=_force_remove_readonly)
 
 
+def clear_directory(path: Path) -> None:
+    """
+    Remove everything inside a directory, leaving the directory itself in place.
+
+    Use instead of `remove_tree` when the directory should survive.
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    for child in path.iterdir():
+        if child.is_dir():
+            remove_tree(child)
+        else:
+            child.chmod(stat.S_IWRITE)
+            child.unlink()
+
+
 def prepare_run_dir(output_dir: Path, run_id: str) -> Path:
     """Prepare a directory for a run, removing any existing contents."""
     run_dir = output_dir / run_id
