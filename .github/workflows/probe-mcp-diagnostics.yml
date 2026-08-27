@@ -142,7 +142,11 @@ jobs:
 
             Write-Output "`n===== session.mcp_servers_loaded ====="
             $roster = $events | Where-Object { $_.type -eq "session.mcp_servers_loaded" }
-            if ($roster) { $roster | ForEach-Object { $_.data.servers | ConvertTo-Json -Depth 5 } } else { Write-Output "<event never emitted>" }
+            if ($roster) { $roster | ForEach-Object { "servers count: $(@($_.data.servers).Count)"; $_.data | ConvertTo-Json -Depth 6 } } else { Write-Output "<event never emitted>" }
+
+            Write-Output "`n===== session.warning (where the policy block goes in JSON mode) ====="
+            $warnings = $events | Where-Object { $_.type -eq "session.warning" }
+            if ($warnings) { $warnings | ForEach-Object { $_.data | ConvertTo-Json -Depth 6 } } else { Write-Output "<event never emitted>" }
 
             Write-Output "`n===== session.mcp_server_status_changed ====="
             $changes = $events | Where-Object { $_.type -like "session.mcp_server_*" -and $_.type -ne "session.mcp_servers_loaded" }
