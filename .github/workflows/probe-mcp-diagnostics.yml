@@ -1,0 +1,153 @@
+# Temporary diagnostic workflow. It reproduces only the Copilot CLI invocation - no BC container,
+# no dataset entry, no evaluation - to determine why `altool` never loads in CI.
+# Delete once the AL MCP investigation is closed.
+
+name: Probe Copilot MCP diagnostics
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      copilot-version:
+        description: "Copilot CLI version (match the evaluation workflow)"
+        required: false
+        default: "1.0.80"
+        type: string
+      al-tool-version:
+        description: "AL Tool version, installed on the self-hosted runner only"
+        required: false
+        default: "18.0.37.11445-beta"
+        type: string
+
+jobs:
+  probe:
+    name: ${{ matrix.runner }} / ${{ matrix.mode }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      copilot-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-latest isolates runner environment from token/policy: the token is identical on both.
+        runner: [ubuntu-latest, GitHub-BCBench]
+        # text reproduces pre-#810 behaviour, json reproduces current behaviour.
+        mode: [text, json]
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install Copilot CLI
+        shell: pwsh
+        run: npm install -g @github/copilot@${{ inputs.copilot-version }}
+
+      - name: Install AL Tool
+        if: ${{ matrix.runner != 'ubuntu-latest' }}
+        shell: pwsh
+        run: |
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version ${{ inputs.al-tool-version }}
+          "$HOME\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Probe MCP registration
+        shell: pwsh
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          # Set by src/bcbench/agent/copilot/agent.py, replicated so the probe matches the real run.
+          GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS: "true"
+          GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP: "true"
+        run: |
+          $ErrorActionPreference = "Stop"
+          Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
+
+          # Resolve the platform binary directly. The npm shims re-parse arguments and would corrupt
+          # the JSON handed to --additional-mcp-config, which is exactly what we are testing.
+          $npmRoot = (npm root -g).Trim()
+          $exe = @(
+            (Join-Path $npmRoot "@github/copilot-win32-x64/copilot.exe"),
+            (Join-Path $npmRoot "@github/copilot-linux-x64/copilot"),
+            (Join-Path $npmRoot "@github/copilot-darwin-arm64/copilot")
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $exe) { $exe = (Get-Command copilot).Source }
+
+          Write-Output "===== ENVIRONMENT ====="
+          Write-Output "runner   : ${{ matrix.runner }}"
+          Write-Output "mode     : ${{ matrix.mode }}"
+          Write-Output "binary   : $exe"
+          & $exe --version
+
+          # 'bogus' always fails to spawn, so a healthy MCP subsystem MUST report it. Silence therefore
+          # means the CLI is not reporting MCP state at all, rather than that every server was fine.
+          $servers = [ordered]@{
+            bogus = [ordered]@{ type = "stdio"; command = "definitely-not-a-real-command-xyz"; args = @() }
+          }
+          $al = Get-Command al -ErrorAction SilentlyContinue
+          if ($al) {
+            $cache = Join-Path $env:RUNNER_TEMP "probe-symbols"
+            New-Item -ItemType Directory -Path $cache -Force | Out-Null
+            $servers["altool"] = [ordered]@{
+              type    = "stdio"
+              command = $al.Source
+              args    = @("launchmcpserver", "--transport", "stdio", "--packagecachepath", $cache)
+            }
+          }
+          Write-Output "al on PATH: $([bool]$al)"
+
+          # No env block: the real config forwards BC_SERVER_PASSWORD, which must never be logged.
+          $cfg = [ordered]@{ mcpServers = $servers } | ConvertTo-Json -Depth 6 -Compress
+          Write-Output "config   : $cfg"
+
+          $work = Join-Path $env:RUNNER_TEMP "probe-work"
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $out = Join-Path $work "out.txt"
+          $err = Join-Path $work "err.txt"
+
+          $cliArgs = @(
+            "--allow-all-tools"
+            "--disable-builtin-mcps"
+            "--additional-mcp-config=$cfg"
+            "--prompt=Reply with exactly: OK"
+          )
+          if ("${{ matrix.mode }}" -eq "json") { $cliArgs = @("--output-format=json") + $cliArgs }
+
+          Push-Location $work
+          & $exe @cliArgs 1> $out 2> $err
+          $code = $LASTEXITCODE
+          Pop-Location
+
+          Write-Output "`n===== EXIT ====="
+          Write-Output "exit code: $code"
+
+          Write-Output "`n===== STDERR ====="
+          if ((Get-Item $err).Length -gt 0) { Get-Content $err } else { Write-Output "<empty>" }
+
+          if ("${{ matrix.mode }}" -eq "json") {
+            $events = Get-Content $out | ForEach-Object { try { $_ | ConvertFrom-Json } catch { $null } } | Where-Object { $_ }
+
+            Write-Output "`n===== EVENT TYPES SEEN ====="
+            $events | Group-Object type | Sort-Object Name | ForEach-Object { "{0,4}  {1}" -f $_.Count, $_.Name }
+
+            Write-Output "`n===== session.mcp_servers_loaded ====="
+            $roster = $events | Where-Object { $_.type -eq "session.mcp_servers_loaded" }
+            if ($roster) { $roster | ForEach-Object { $_.data.servers | ConvertTo-Json -Depth 5 } } else { Write-Output "<event never emitted>" }
+
+            Write-Output "`n===== session.mcp_server_status_changed ====="
+            $changes = $events | Where-Object { $_.type -like "session.mcp_server_*" -and $_.type -ne "session.mcp_servers_loaded" }
+            if ($changes) { $changes | ForEach-Object { "{0,-22} {1,-10} {2}" -f $_.data.serverName, $_.data.status, $_.data.error } } else { Write-Output "<event never emitted>" }
+
+            Write-Output "`n===== session.managed_settings_resolved ====="
+            $settings = $events | Where-Object { $_.type -eq "session.managed_settings_resolved" }
+            if ($settings) { $settings | ForEach-Object { $_.data | ConvertTo-Json -Depth 6 } } else { Write-Output "<event never emitted>" }
+          }
+          else {
+            # Text mode has no structured events, so scan the raw output for any MCP signal.
+            Write-Output "`n===== ANY MENTION OF mcp / policy / blocked ====="
+            $hits = Select-String -Path $out, $err -Pattern "mcp|policy|blocked" -ErrorAction SilentlyContinue
+            if ($hits) { $hits | ForEach-Object { $_.Line.Substring(0, [Math]::Min(300, $_.Line.Length)) } } else { Write-Output "<none>" }
+
+            Write-Output "`n===== RAW TEXT OUTPUT ====="
+            Get-Content $out
+          }
