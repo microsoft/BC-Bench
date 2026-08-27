@@ -484,9 +484,9 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
         valid_output_count: int = sum(1 for r in code_review_results if r.valid_review_output)
         valid_output_rate: float = valid_output_count / total_results
 
-        def average_metric(name: str) -> float | None:
-            values = [value for result in code_review_results if result.metrics and (value := getattr(result.metrics, name)) is not None]
-            return sum(values) / len(values) if values else None
+        def average_metric(values: Sequence[int | float | None]) -> float | None:
+            available = [value for value in values if value is not None]
+            return sum(available) / len(available) if available else None
 
         return summary.model_copy(
             update={
@@ -509,9 +509,9 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
-                "average_prompt_tokens": average_metric("prompt_tokens"),
-                "average_completion_tokens": average_metric("completion_tokens"),
-                "average_total_tokens": average_metric("total_tokens"),
-                "average_ai_credits": average_metric("ai_credits"),
+                "average_prompt_tokens": average_metric([result.metrics.prompt_tokens if result.metrics else None for result in code_review_results]),
+                "average_completion_tokens": average_metric([result.metrics.completion_tokens if result.metrics else None for result in code_review_results]),
+                "average_total_tokens": average_metric([result.metrics.total_tokens if result.metrics else None for result in code_review_results]),
+                "average_ai_credits": average_metric([result.metrics.ai_credits if result.metrics else None for result in code_review_results]),
             }
         )

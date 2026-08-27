@@ -163,9 +163,9 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
         cr_runs: list[CodeReviewResultSummary] = [run for run in runs if isinstance(run, CodeReviewResultSummary)]
         n = len(cr_runs)
 
-        def mean_metric(name: str) -> float | None:
-            values = [value for run in cr_runs if (value := getattr(run, name)) is not None]
-            return sum(values) / len(values) if values else None
+        def mean_metric(values: Sequence[float | None]) -> float | None:
+            available = [value for value in values if value is not None]
+            return sum(available) / len(available) if available else None
 
         # The micro headline pools every comment across the dataset, so there is no per-task
         # decomposition to resample; its CI is intentionally over run-level means and captures
@@ -195,10 +195,10 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "macro_precision": sum(r.macro_precision for r in cr_runs) / n,
                 "macro_recall": sum(r.macro_recall for r in cr_runs) / n,
                 "valid_review_output_rate": sum(r.valid_review_output_rate for r in cr_runs) / n,
-                "average_prompt_tokens": mean_metric("average_prompt_tokens"),
-                "average_completion_tokens": mean_metric("average_completion_tokens"),
-                "average_total_tokens": mean_metric("average_total_tokens"),
-                "average_ai_credits": mean_metric("average_ai_credits"),
+                "average_prompt_tokens": mean_metric([run.average_prompt_tokens for run in cr_runs]),
+                "average_completion_tokens": mean_metric([run.average_completion_tokens for run in cr_runs]),
+                "average_total_tokens": mean_metric([run.average_total_tokens for run in cr_runs]),
+                "average_ai_credits": mean_metric([run.average_ai_credits for run in cr_runs]),
             }
         )
 
