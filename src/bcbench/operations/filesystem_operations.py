@@ -18,3 +18,18 @@ def remove_tree(path: Path) -> None:
     Use when `shutil.rmtree` fails due to read-only files, which usually occur in secondary runs on Windows.
     """
     shutil.rmtree(path, onexc=_force_remove_readonly)
+
+
+def clear_directory(path: Path) -> None:
+    """
+    Remove everything inside a directory, leaving the directory itself in place.
+
+    Use instead of `remove_tree` when the directory should survive.
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    for child in path.iterdir():
+        if child.is_dir():
+            remove_tree(child)
+        else:
+            child.chmod(stat.S_IWRITE)
+            child.unlink()
