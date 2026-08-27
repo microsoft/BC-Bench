@@ -52,6 +52,7 @@ class Checklist(TypedDict):
 type ExpectedOutput = str | Checklist
 
 # A full git commit SHA: branches and tags move, so only a SHA pins content reproducibly
+# Reproducible only when fetchable from the recorded remote
 type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form

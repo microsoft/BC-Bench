@@ -229,7 +229,8 @@ mcp:
 # the production orchestrator's complete local, non-posting path to measure BC PR Review
 # + BCQuality on the code-review category, including production parsing and filtering.
 # Generic Copilot and Claude runners use code-review-template above on the same category.
-# Engine and local BCQuality checkout paths are machine inputs supplied through CLI flags.
+# Dirty engine checkouts and local BCQuality paths are for smoke tests only.
+# Full comparison runs require clean commits available remotely.
 # BCQuality repo/ref remain experiment settings; repo supports testing forks while null values
 # use the engine's pinned content source. CLI flags override these values.
 pr_review:
