@@ -8,6 +8,11 @@ permissions:
   contents: read
 
 on:
+  # workflow_dispatch alone is not usable here: GitHub only exposes it for workflows that exist on
+  # the default branch. The push trigger keeps this diagnostic entirely on the feature branch.
+  push:
+    branches: [enable-org-billing-token]
+    paths: [".github/workflows/probe-mcp-diagnostics.yml"]
   workflow_dispatch:
     inputs:
       copilot-version:
@@ -20,6 +25,11 @@ on:
         required: false
         default: "18.0.37.11445-beta"
         type: string
+
+env:
+  # inputs.* is empty on push events, so the defaults have to live here too.
+  COPILOT_VERSION: ${{ inputs.copilot-version || '1.0.80' }}
+  AL_TOOL_VERSION: ${{ inputs.al-tool-version || '18.0.37.11445-beta' }}
 
 jobs:
   probe:
@@ -43,13 +53,13 @@ jobs:
 
       - name: Install Copilot CLI
         shell: pwsh
-        run: npm install -g @github/copilot@${{ inputs.copilot-version }}
+        run: npm install -g @github/copilot@$env:COPILOT_VERSION
 
       - name: Install AL Tool
         if: ${{ matrix.runner != 'ubuntu-latest' }}
         shell: pwsh
         run: |
-          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version ${{ inputs.al-tool-version }}
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version $env:AL_TOOL_VERSION
           "$HOME\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Probe MCP registration
