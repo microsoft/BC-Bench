@@ -76,6 +76,7 @@ def _build_markdown_report(results: list[FilePathIdentificationResult]) -> str:
             f"| {len(results)} | {_pct(match_rate)} |",
             "",
             "> A match means the single predicted path exactly matched any file path modified by the gold bug-fix patch.",
+            "> This absolute match rate is a diagnostic baseline, not standalone evidence of contamination; attribution requires a comparable control set.",
         ]
     )
 

@@ -39,7 +39,11 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
         )
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)
-    predicted_files: list[str] = parse_prediction(raw_output)
+    try:
+        predicted_files: list[str] = parse_prediction(raw_output)
+    except ValueError:
+        logger.exception("Failed to parse filepath identification response for %s. Raw output:\n%s", entry.instance_id, raw_output)
+        raise
 
     result = FilePathIdentificationResult(
         instance_id=entry.instance_id,

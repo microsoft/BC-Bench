@@ -53,6 +53,33 @@ App/A.al
 ```"""
         assert parse_prediction(response) == ["App/A.al"]
 
+    def test_extracts_path_from_inline_fence(self):
+        assert parse_prediction("RESPONSE\n```App/A.al```") == ["App/A.al"]
+
+    def test_uses_first_fenced_block_after_response(self):
+        response = """RESPONSE
+```
+App/A.al
+```
+Additional example:
+```
+App/B.al
+```"""
+        assert parse_prediction(response) == ["App/A.al"]
+
+    @pytest.mark.parametrize(
+        ("raw_path", "expected"),
+        [
+            ("`App/A.al`", "App/A.al"),
+            ("App\\A.al", "App/A.al"),
+            ("./App/A.al", "App/A.al"),
+            ("a/App/A.al", "App/A.al"),
+            ('"App/A.al"', "App/A.al"),
+        ],
+    )
+    def test_normalizes_prediction_presentation(self, raw_path, expected):
+        assert parse_prediction(f"RESPONSE\n```\n{raw_path}\n```") == [expected]
+
     def test_multiple_paths_raise_for_one_shot_probe(self):
         response = """DISCUSSION
 Two files seem relevant.
@@ -147,17 +174,19 @@ App/Foo/Bar.Table.al
         assert result.metrics == metrics
         assert (result_dir / f"{entry.instance_id}.filepath-identification.jsonl").exists()
 
-    def test_unparseable_answer_fails_loudly_without_saving(self, tmp_path, monkeypatch):
+    def test_unparseable_answer_logs_raw_output_without_saving(self, tmp_path, monkeypatch, caplog):
         entry = create_dataset_entry(patch=FULL_PATCH)
         problem_dir = create_problem_statement_dir(tmp_path, "Sales invoice posting fails")
         monkeypatch.setattr(type(entry), "problem_statement_dir", property(lambda self: problem_dir))
-        monkeypatch.setattr(runner_mod, "invoke_copilot", lambda **_kwargs: (None, "I cannot determine the file."))
+        raw_output = "I cannot determine the file."
+        monkeypatch.setattr(runner_mod, "invoke_copilot", lambda **_kwargs: (None, raw_output))
         result_dir = tmp_path / "out"
         result_dir.mkdir()
 
         with pytest.raises(ValueError, match="fenced code block"):
             runner_mod.run_filepath_identification(entry=entry, model="m", result_dir=result_dir)
 
+        assert raw_output in caplog.text
         assert not list(result_dir.iterdir())
 
     def test_invocation_errors_propagate_without_saving(self, tmp_path, monkeypatch):

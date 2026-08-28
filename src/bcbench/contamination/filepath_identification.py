@@ -31,8 +31,10 @@ Given the issue description and project, provide a file-path of the .al file con
 def parse_prediction(raw_text: str) -> list[str]:
     """Extract the single predicted path from the model's RESPONSE block.
 
-    The answer is taken from the last fenced block, so decorated headers
-    (`RESPONSE:`, `**RESPONSE**`) and prose after the fence are tolerated.
+    The answer is taken from the first fenced block after the RESPONSE header,
+    so decorated headers, inline fences, and prose after the fence are tolerated.
+    Markdown wrappers, path separators, and common diff prefixes are normalized
+    on the prediction; gold paths remain unchanged for exact matching.
 
     Returns:
         A single-item list holding the predicted repository-relative path.
@@ -42,14 +44,26 @@ def parse_prediction(raw_text: str) -> list[str]:
             The probe is new, so unanswerable output should surface loudly
             rather than quietly count as a miss.
     """
-    blocks: list[str] = re.findall(r"```[^\n]*\n(.*?)\n?```", raw_text, re.DOTALL)
-    if not blocks:
-        raise ValueError("Expected the answer in a fenced code block")
+    response = re.search(r"(?im)^[ \t]*(?:[*_#>`]+[ \t]*)*RESPONSE[ \t]*:?[ \t]*(?:[*_`]+)?[ \t]*$", raw_text)
+    if response is None:
+        raise ValueError("Expected the answer in a fenced code block after RESPONSE")
 
-    paths = [line.strip() for line in blocks[-1].splitlines() if line.strip()]
+    block = re.search(r"```(?:(?:[A-Za-z0-9_+-]+)?[ \t]*\r?\n)?(.*?)```", raw_text[response.end() :], re.DOTALL)
+    if block is None:
+        raise ValueError("Expected the answer in a fenced code block after RESPONSE")
+
+    paths = [line.strip() for line in block.group(1).splitlines() if line.strip()]
     if len(paths) != 1:
         raise ValueError(f"Expected exactly one path in the answer block, got {len(paths)}")
-    return paths
+
+    inline_code = re.fullmatch(r"(?P<fence>`+)(?P<path>.+)(?P=fence)", paths[0])
+    path = inline_code.group("path").strip() if inline_code else paths[0]
+    path = path.strip("\"'").replace("\\", "/").strip()
+    while path.startswith("./"):
+        path = path[2:]
+    if path.startswith(("a/", "b/")):
+        path = path[2:]
+    return [path.strip("/")]
 
 
 def matches_any_gold_path(predicted_files: list[str], gold_files: list[str]) -> bool:
