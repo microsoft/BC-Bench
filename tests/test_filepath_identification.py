@@ -41,6 +41,10 @@ App/A.al
 Hope this helps!"""
         assert parse_prediction(response) == ["App/A.al"]
 
+    def test_tolerates_long_markdown_heading_prefix(self):
+        response = f"{'#' * 10_000} RESPONSE\n```\nApp/A.al\n```"
+        assert parse_prediction(response) == ["App/A.al"]
+
     def test_ignores_a_code_block_used_in_the_discussion(self):
         response = """DISCUSSION
 Relevant snippet:
