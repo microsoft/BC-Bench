@@ -109,7 +109,6 @@ def run_copilot_agent(
             cwd=str(repo_path),
             env=agent_subprocess_env(
                 {
-                    "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
                     "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
                 }
             ),
