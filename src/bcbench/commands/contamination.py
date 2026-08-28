@@ -14,7 +14,7 @@ from bcbench.contamination.filepath_identification import FilePathIdentification
 from bcbench.contamination.runner import load_identification_results, run_filepath_identification
 from bcbench.dataset import BugFixEntry
 from bcbench.logger import get_logger
-from bcbench.operations.filesystem_operations import prepare_run_dir
+from bcbench.operations import prepare_run_dir
 from bcbench.types import EvaluationCategory
 
 logger = get_logger(__name__)
