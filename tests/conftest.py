@@ -15,7 +15,7 @@ import pytest
 
 from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, ManagedLabel, NL2ALEntry, TestEntry
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
-from bcbench.dataset.dataset_entry import _BugFixTestGenBase
+from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.codereview import CodeReviewResult
@@ -337,6 +337,7 @@ def create_nl2al_entry(
     expected: list[ChecklistAssertion] | None = None,
     page: str = "Customer Card",
     audience: Literal["Business", "Technical", "Both"] = "Both",
+    area: str | None = None,
 ) -> NL2ALEntry:
     if project_paths is None:
         project_paths = ["JobBudgetVsActualReport"]
@@ -346,6 +347,7 @@ def create_nl2al_entry(
 
     return NL2ALEntry(
         instance_id=instance_id,
+        metadata=EntryMetadata(area=area),
         environment_setup_version=environment_setup_version,
         project_paths=project_paths,
         nl_prompt=nl_prompt,
