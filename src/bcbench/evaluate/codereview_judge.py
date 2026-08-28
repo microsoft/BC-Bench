@@ -152,7 +152,7 @@ def judge_verdicts(
     prompt = " ".join(_build_judge_prompt(pairs, _config.judge.result_file).split())
 
     try:
-        _, stdout = invoke_copilot(
+        _, final_response = invoke_copilot(
             prompt=prompt,
             model=model,
             work_dir=work_dir,
@@ -162,4 +162,4 @@ def judge_verdicts(
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, AgentError) as exc:
         raise LLMJudgeError(f"Judge subprocess failed: {exc}{_format_subprocess_output(exc)}") from exc
 
-    return _parse_judge_results(result_path, len(pairs), stdout=stdout)
+    return _parse_judge_results(result_path, len(pairs), stdout=final_response)
