@@ -7,12 +7,12 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.cli import invoke_copilot
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
+from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
@@ -45,7 +45,6 @@ def run_copilot_agent(
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    tool_log_path: Path = setup_hooks(repo_path, AgentHarness.COPILOT, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
@@ -88,7 +87,6 @@ def run_copilot_agent(
             extra_args=extra_args,
             env={
                 **os.environ,
-                "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": "true",
                 "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
             },
         )
@@ -96,10 +94,6 @@ def run_copilot_agent(
 
         if final_response:
             logger.info(final_response)
-
-        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

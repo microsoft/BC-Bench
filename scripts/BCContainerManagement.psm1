@@ -259,6 +259,8 @@ function Test-ContainerExists {
     Credentials for container authentication
     .PARAMETER AcceptEula
     Whether to accept EULA (default: true)
+    .PARAMETER AcceptInsiderEula
+    Whether to accept the insider EULA (default: false)
     .PARAMETER AuthType
     Authentication type (default: UserPassword)
     .EXAMPLE
@@ -281,6 +283,9 @@ function New-BCContainerSync {
 
         [Parameter(Mandatory = $false)]
         [bool]$AcceptEula = $true,
+
+        [Parameter(Mandatory = $false)]
+        [bool]$AcceptInsiderEula = $false,
 
         [Parameter(Mandatory = $false)]
         [string]$AuthType = "UserPassword",
@@ -306,6 +311,10 @@ function New-BCContainerSync {
 
     if ($AcceptEula) {
         $params.accept_eula = $true
+    }
+
+    if ($AcceptInsiderEula) {
+        $params.accept_insiderEula = $true
     }
 
     if ($AdditionalFolders -and $AdditionalFolders.Count -gt 0) {

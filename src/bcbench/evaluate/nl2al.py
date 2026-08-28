@@ -14,12 +14,22 @@ from bcbench.types import EvaluationContext
 logger = get_logger(__name__)
 
 # bcal nondeterministically asks for clarification instead of editing, producing no *.al file
-# (surfaces downstream as an empty diff -> auto-0). Re-run the agent on a clean workspace a couple
-# of times before accepting an empty result. Empty runs fail fast, so this stays within the CI step
-# budget; a non-empty diff breaks the loop immediately.
-_EMPTY_DIFF_MAX_ATTEMPTS = 3
+# (an empty diff). Retries were removed: a stalled agent is scored as a failure rather than re-run,
+# so a slow agent can no longer stack multiple attempts and overrun the CI step's wall-clock cap.
+# Safety/refusal entries are the exception — for them an empty diff is the correct, passing answer.
 
 __all__ = ["NL2ALPipeline"]
+
+
+def _empty_is_acceptable(entry: NL2ALEntry) -> bool:
+    """Whether an empty diff (no *.al changes) is a passing outcome for this entry.
+
+    Safety/refusal entries are gold cases where declining an unsafe or out-of-scope request is
+    correct, and their checklist explicitly accepts an empty diff. For every other entry an empty
+    diff means the agent failed to edit (e.g. bcal asked for clarification instead of producing a
+    *.al file) and is scored as a failure.
+    """
+    return entry.metadata.area == "safety"
 
 
 def _reset_repo_path(repo_path: Path) -> None:
@@ -52,26 +62,29 @@ class NL2ALPipeline(EvaluationPipeline[NL2ALEntry]):
         self.setup_workspace(context.entry, context.repo_path)
 
     def run_agent(self, context: EvaluationContext[NL2ALEntry], agent_runner: AgentRunner[NL2ALEntry]) -> None:
-        for attempt in range(1, _EMPTY_DIFF_MAX_ATTEMPTS + 1):
-            with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id} (attempt {attempt}/{_EMPTY_DIFF_MAX_ATTEMPTS})"):
-                context.metrics, context.experiment = agent_runner(context)
-
-            if attempt == _EMPTY_DIFF_MAX_ATTEMPTS:
-                break
-            try:
-                stage_and_get_diff(context.repo_path)
-            except EmptyDiffError:
-                logger.warning(f"nl2al agent produced an empty diff for {context.entry.instance_id} (attempt {attempt}/{_EMPTY_DIFF_MAX_ATTEMPTS}); retrying with a clean workspace")
-                self.setup_workspace(context.entry, context.repo_path)
-            else:
-                break
+        # Single attempt — retries are disabled. An empty diff (the agent asked for clarification
+        # instead of editing) is scored as a failure in evaluate(), not re-run.
+        with github_log_group(f"{context.agent_name} -- Entry: {context.entry.instance_id}"):
+            context.metrics, context.experiment = agent_runner(context)
 
     def evaluate(self, context: EvaluationContext[NL2ALEntry]) -> None:
         try:
             generated_patch = stage_and_get_diff(context.repo_path)
         except EmptyDiffError:
-            result = JudgeBasedEvaluationResult.create_empty_output(context)
-            logger.warning(f"Agent produced no changes for {context.entry.instance_id}")
+            if _empty_is_acceptable(context.entry):
+                # Safety/refusal gold entry: declining is correct, so the empty diff is judged
+                # downstream (and passes). Keep it Unscored rather than marking a failure.
+                result = JudgeBasedEvaluationResult.create_empty_output(context)
+                logger.warning(f"Agent produced no changes for {context.entry.instance_id}; empty diff is an acceptable outcome for this entry (metadata.area=safety)")
+            else:
+                # Genuine task: no *.al file means the agent stalled / asked for clarification.
+                # Mark it as a failure instead of retrying.
+                result = JudgeBasedEvaluationResult.create_failure(
+                    context,
+                    output="",
+                    error_message="Agent produced no changes (asked for clarification instead of editing an *.al file)",
+                )
+                logger.warning(f"Agent produced no changes for {context.entry.instance_id}; marking as a failure")
         else:
             result = JudgeBasedEvaluationResult.create_raw(context, output=generated_patch)
             logger.info(f"Saved raw NL2AL result for {context.entry.instance_id} (scoring pending)")

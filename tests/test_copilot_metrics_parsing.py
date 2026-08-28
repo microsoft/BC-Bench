@@ -15,7 +15,12 @@ def test_parse_output_collects_stable_json_metrics_and_final_response():
         _json_line({"type": "model.call_start", "data": {"turnId": "0"}}),
         _json_line({"type": "assistant.message", "data": {"content": "tool preamble"}}),
         _json_line({"type": "model.call_start", "data": {"turnId": "1"}}),
-        _json_line({"type": "assistant.message", "data": {"content": "done", "phase": "final_answer"}}),
+        _json_line(
+            {
+                "type": "assistant.message",
+                "data": {"content": "done", "phase": "final_answer"},
+            }
+        ),
         _json_line({"type": "session.usage_checkpoint", "data": {"totalNanoAiu": 10827400000}}),
         _json_line(
             {
@@ -78,3 +83,77 @@ def test_parse_output_without_metrics():
 
     assert metrics is None
     assert response == "done"
+
+
+def test_parse_output_counts_tool_usage_from_stream():
+    output_lines = [
+        _json_line({"type": "model.call_start", "data": {"turnId": "0"}}),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "bc_data_query", "arguments": {}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "bc_data_query", "arguments": {}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "task", "arguments": {}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "view", "arguments": {"path": "x"}},
+            }
+        ),
+    ]
+
+    metrics, _ = parse_output(output_lines)
+
+    assert metrics is not None
+    assert metrics.tool_usage == {"bc_data_query": 2, "task": 1, "view": 1}
+
+
+def test_parse_output_sublabels_lsp_operations():
+    output_lines = [
+        _json_line({"type": "model.call_start", "data": {"turnId": "0"}}),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "lsp", "arguments": {"operation": "hover"}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "lsp", "arguments": {"operation": "hover"}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {
+                    "toolName": "lsp",
+                    "arguments": {"operation": "findReferences"},
+                },
+            }
+        ),
+    ]
+
+    metrics, _ = parse_output(output_lines)
+
+    assert metrics is not None
+    assert metrics.tool_usage == {"lsp:hover": 2, "lsp:findReferences": 1}
+
+
+def test_parse_output_tool_usage_none_when_no_tools():
+    metrics, _ = parse_output([_json_line({"type": "model.call_start", "data": {"turnId": "0"}})])
+
+    assert metrics is not None
+    assert metrics.tool_usage is None

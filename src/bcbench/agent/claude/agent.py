@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import subprocess
@@ -6,13 +5,13 @@ from pathlib import Path
 
 import yaml
 
-from bcbench.agent.claude.metrics import parse_metrics
-from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins
+from bcbench.agent.claude.metrics import parse_stream_output
+from bcbench.agent.shared import build_al_lsp_plugin, build_mcp_config, build_prompt, resolve_config_plugins
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
@@ -49,7 +48,6 @@ def run_claude_code(
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    tool_log_path: Path = setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(
@@ -67,7 +65,8 @@ def run_claude_code(
     try:
         cmd_args = [
             claude_cmd,
-            "--output-format=json",
+            "--output-format=stream-json",  # emit every event (incl. tool_use, session init) as JSONL
+            "--verbose",  # required for stream-json in --print mode
             "--strict-mcp-config",  # Only use MCP servers from --mcp-config, ignoring all other MCP configurations
             "--setting-sources=project,local",
             f"--model={model}",
@@ -113,21 +112,9 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        metrics = None
-        for line in stdout.splitlines():
-            striped_line: str = line.strip()
-            if striped_line:
-                try:
-                    data = json.loads(striped_line)
-                    if "result" in data:
-                        logger.info(data["result"])
-                        metrics = parse_metrics(data)
-                except json.JSONDecodeError:
-                    logger.warning(f"Skipping non-JSON line: {striped_line}")
-
-        tool_usage: dict[str, int] | None = parse_tool_usage_from_hooks(tool_log_path)
-        if metrics and tool_usage:
-            metrics = metrics.model_copy(update={"tool_usage": tool_usage})
+        metrics, final_response = parse_stream_output(stdout.splitlines())
+        if final_response:
+            logger.info(final_response)
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
