@@ -197,11 +197,7 @@ mcp:
 # the production orchestrator's complete local, non-posting path to measure BC PR Review
 # + BCQuality on the code-review category, including production parsing and filtering.
 # Generic Copilot and Claude runners use code-review-template above on the same category.
-# BC-ALAgents is the harness boundary. Its pinned configuration owns the BCQuality version.
-# CLI flags can override this repo/ref or use a local checkout for harness experiments.
-# Local checkouts are for smoke tests only; comparison runs require remote commits.
+# BC-ALAgents is the harness boundary and its configuration owns the BCQuality version.
+# The evaluation workflow pins BC-ALAgents through install-agent-harnesses.
 pr_review:
   min_severity: Medium
-  engine:
-    repo: microsoft/BC-ALAgents
-    ref: 533dd39dfe29218c09e5e31c39c78bb72fa20aa2

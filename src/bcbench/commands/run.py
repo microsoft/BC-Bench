@@ -11,7 +11,7 @@ from bcbench.cli_options import (
     CopilotModel,
     EvaluationCategoryOption,
     OutputDir,
-    PRReviewEngineLocalPath,
+    PRReviewEnginePath,
     RepoPath,
 )
 from bcbench.config import get_config
@@ -99,9 +99,7 @@ def run_pr_review(
     model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
-    engine_repo: Annotated[str | None, typer.Option(help="Override the BC-ALAgents repository (defaults to config)")] = None,
-    engine_ref: Annotated[str | None, typer.Option(help="Override the BC-ALAgents commit or ref (defaults to config)")] = None,
-    engine_local_path: PRReviewEngineLocalPath = None,
+    engine_path: PRReviewEnginePath = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
     """
@@ -110,10 +108,9 @@ def run_pr_review(
     This production-fidelity runner is fixed to the code-review category, while the same
     category can also run through the generic copilot and claude commands for cross-system
     comparison. Writes review.json without scoring; for full evaluation use
-    'bcbench evaluate pr-review'. By default, BC-ALAgents is cloned at the repo/ref
-    pinned in config. Use --engine-local-path (or BC_PR_REVIEW_ROOT) for local
-    harness development. Requires PowerShell 7+, GitHub CLI authentication, and
-    an authenticated Copilot CLI.
+    'bcbench evaluate pr-review'. Requires a local BC-ALAgents checkout
+    (--engine-path or BC_PR_REVIEW_ROOT), PowerShell 7+, and an authenticated
+    Copilot CLI.
 
     Example:
         uv run bcbench run pr-review synthetic__style-018 --repo-path /path/to/testbed
@@ -128,9 +125,7 @@ def run_pr_review(
         repo_path=repo_path,
         category=category,
         output_dir=output_dir,
-        engine_repo=engine_repo,
-        engine_ref=engine_ref,
-        engine_local_path=engine_local_path,
+        engine_path=engine_path,
         min_severity=min_severity,
     )
 

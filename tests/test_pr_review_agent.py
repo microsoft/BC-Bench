@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _prepare_pr_review_root, _write_review_json, run_pr_review_agent
+from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
 from bcbench.exceptions import AgentError
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry
@@ -23,29 +23,9 @@ def _write_output(output_dir: Path, text: str) -> None:
     (output_dir / "al-code-review-findings.json").write_text(text, encoding="utf-8")
 
 
-def test_prepare_pr_review_root_uses_local_checkout(tmp_path: Path) -> None:
-    with patch("bcbench.agent.pr_review.agent._resolve_pr_review_root", return_value=tmp_path) as resolve:
-        root = _prepare_pr_review_root("ignored/repo", "ignored-ref", tmp_path, tmp_path / "clone")
-
-    assert root == tmp_path
-    resolve.assert_called_once_with(tmp_path)
-
-
-def test_prepare_pr_review_root_clones_configured_revision(tmp_path: Path) -> None:
-    destination = tmp_path / "clone"
-    with (
-        patch("bcbench.agent.pr_review.agent.clone_repo_at_revision") as clone,
-        patch("bcbench.agent.pr_review.agent._resolve_pr_review_root", return_value=destination),
-    ):
-        root = _prepare_pr_review_root("microsoft/BC-ALAgents", "a" * 40, None, destination)
-
-    assert root == destination
-    clone.assert_called_once_with("microsoft/BC-ALAgents", "a" * 40, destination)
-
-
-def test_prepare_pr_review_root_requires_configured_source(tmp_path: Path) -> None:
-    with pytest.raises(AgentError, match="repo and ref must be configured"):
-        _prepare_pr_review_root(None, None, None, tmp_path / "clone")
+def test_resolve_pr_review_root_requires_engine_path() -> None:
+    with pytest.raises(AgentError, match="Pass --engine-path"):
+        _resolve_pr_review_root(None)
 
 
 def test_prepare_bcquality_root_ignores_ambient_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,10 +116,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "microsoft/BC-Bench")
     monkeypatch.setenv("BCQUALITY_REF", "ambient-override")
-    settings = {
-        "min_severity": "Medium",
-        "engine": {"repo": "microsoft/BC-ALAgents", "ref": "a" * 40},
-    }
+    settings = {"min_severity": "Medium"}
     completed = subprocess.CompletedProcess(args=["pwsh"], returncode=0, stdout="✓", stderr="")
     entry = create_codereview_entry(repo="microsoft/BCApps")
     bcquality_root = tmp_path / "bcquality"
@@ -177,7 +154,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
 
     with (
         patch("bcbench.agent.pr_review.agent._load_pr_review_settings", return_value=settings),
-        patch("bcbench.agent.pr_review.agent._prepare_pr_review_root", return_value=tmp_path / "engine") as prepare_engine,
+        patch("bcbench.agent.pr_review.agent._resolve_pr_review_root", return_value=tmp_path / "engine") as resolve_engine,
         patch("bcbench.agent.pr_review.agent._resolve_pwsh", return_value="pwsh"),
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
@@ -192,7 +169,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             category=EvaluationCategory.CODE_REVIEW,
             repo_path=tmp_path / "repo",
             output_dir=Path("output"),
-            engine_local_path=tmp_path / "engine",
+            engine_path=tmp_path / "engine",
         )
 
     assert metrics is not None
@@ -202,7 +179,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert metrics.total_tokens == 110
     assert metrics.ai_credits == 0.25
     assert config.is_empty()
-    prepare_engine.assert_called_once_with("microsoft/BC-ALAgents", "a" * 40, tmp_path / "engine", (tmp_path / "output" / "bc-alagents").resolve())
+    resolve_engine.assert_called_once_with(tmp_path / "engine")
     prepare_bcquality.assert_called_once_with(tmp_path / "engine", "pwsh", (tmp_path / "output" / "bcquality").resolve())
     assert run_process.call_args.kwargs["encoding"] == "utf-8"
     assert run_process.call_args.kwargs["cwd"] == str((tmp_path / "repo").resolve())

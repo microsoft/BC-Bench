@@ -14,7 +14,7 @@ from bcbench.cli_options import (
     CopilotModel,
     EvaluationCategoryOption,
     OutputDir,
-    PRReviewEngineLocalPath,
+    PRReviewEnginePath,
     RepoPath,
     RunId,
 )
@@ -157,9 +157,7 @@ def evaluate_pr_review(
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "pr_review_test_run",
-    engine_repo: Annotated[str | None, typer.Option(help="Override the BC-ALAgents repository (defaults to config)")] = None,
-    engine_ref: Annotated[str | None, typer.Option(help="Override the BC-ALAgents commit or ref (defaults to config)")] = None,
-    engine_local_path: PRReviewEngineLocalPath = None,
+    engine_path: PRReviewEnginePath = None,
     min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
     """
@@ -168,9 +166,8 @@ def evaluate_pr_review(
     This production-fidelity runner is fixed to the code-review category, while the same
     category can also run through the generic copilot and claude commands for cross-system
     comparison. The resulting review.json is scored by the shared code-review pipeline.
-    By default, BC-ALAgents is cloned at the repo/ref pinned in config. Use
-    --engine-local-path (or BC_PR_REVIEW_ROOT) for local harness development.
-    Requires PowerShell 7+, GitHub CLI authentication, and an authenticated Copilot CLI.
+    Requires a local BC-ALAgents checkout (--engine-path or BC_PR_REVIEW_ROOT),
+    PowerShell 7+, and an authenticated Copilot CLI.
 
     To only generate review.json without scoring, use 'bcbench run pr-review' instead.
     """
@@ -198,9 +195,7 @@ def evaluate_pr_review(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            engine_repo=engine_repo,
-            engine_ref=engine_ref,
-            engine_local_path=engine_local_path,
+            engine_path=engine_path,
             min_severity=min_severity,
         ),
     )

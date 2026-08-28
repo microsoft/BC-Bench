@@ -1,5 +1,10 @@
 name: Install Agent Harnesses
-description: Install the Claude Code and GitHub Copilot CLIs used by the evaluation workflows
+description: Install the agent harnesses used by the evaluation workflows
+
+outputs:
+  bc-alagents-path:
+    description: Path to the pinned BC-ALAgents checkout
+    value: ${{ steps.bc-alagents-path.outputs.path }}
 
 runs:
   using: composite
@@ -10,4 +15,17 @@ runs:
 
     - name: Install GitHub Copilot CLI
       run: npm install -g @github/copilot@1.0.80
+      shell: pwsh
+
+    - name: Checkout BC-ALAgents
+      uses: actions/checkout@v5
+      with:
+        repository: microsoft/BC-ALAgents
+        ref: 533dd39dfe29218c09e5e31c39c78bb72fa20aa2
+        path: .agent-harnesses/bc-alagents
+        persist-credentials: false
+
+    - name: Export BC-ALAgents path
+      id: bc-alagents-path
+      run: '"path=$(Join-Path $env:GITHUB_WORKSPACE ''.agent-harnesses/bc-alagents'')" >> $env:GITHUB_OUTPUT'
       shell: pwsh

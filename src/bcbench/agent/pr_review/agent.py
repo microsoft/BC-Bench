@@ -27,7 +27,7 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import clone_repo_at_revision, commit_changes, has_changes, init_repo
+from bcbench.operations import commit_changes, has_changes, init_repo
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -43,11 +43,13 @@ def _load_pr_review_settings() -> dict[str, Any]:
     return yaml.safe_load(config_file.read_text(encoding="utf-8"))["pr_review"]
 
 
-def _resolve_pr_review_root(engine_path: Path) -> Path:
+def _resolve_pr_review_root(engine_path: Path | None) -> Path:
+    if engine_path is None:
+        raise AgentError("Engine root not configured. Pass --engine-path or set BC_PR_REVIEW_ROOT.")
     root = engine_path.expanduser().resolve()
     engine = root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
     if not engine.exists():
-        raise AgentError(f"Engine orchestrator not found at {engine}. Check the BC-ALAgents source configuration.")
+        raise AgentError(f"Engine orchestrator not found at {engine}. Check --engine-path points at a BC-ALAgents checkout.")
     return root
 
 
@@ -60,20 +62,6 @@ def _resolve_pwsh() -> str:
 
 def _environment_without_bcquality_overrides() -> dict[str, str]:
     return {name: value for name, value in os.environ.items() if not name.startswith("BCQUALITY_")}
-
-
-def _prepare_pr_review_root(
-    repo: str | None,
-    ref: str | None,
-    local_path: Path | None,
-    destination: Path,
-) -> Path:
-    if local_path:
-        return _resolve_pr_review_root(local_path)
-    if not repo or not ref:
-        raise AgentError("BC-ALAgents repo and ref must be configured when no local path is provided.")
-    clone_repo_at_revision(repo, ref, destination)
-    return _resolve_pr_review_root(destination)
 
 
 def _commit_patch_as_head(repo_path: Path) -> None:
@@ -149,9 +137,7 @@ def run_pr_review_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
-    engine_repo: str | None = None,
-    engine_ref: str | None = None,
-    engine_local_path: Path | None = None,
+    engine_path: Path | None = None,
     min_severity: str | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
@@ -172,10 +158,7 @@ def run_pr_review_agent(
     repo_path = repo_path.resolve()
     output_dir = output_dir.resolve()
     settings = _load_pr_review_settings()
-    engine_cfg = settings["engine"]
-    engine_repo = engine_repo or engine_cfg["repo"]
-    engine_ref = engine_ref or engine_cfg["ref"]
-    engine_root = _prepare_pr_review_root(engine_repo, engine_ref, engine_local_path, output_dir / "bc-alagents")
+    engine_root = _resolve_pr_review_root(engine_path)
     pwsh = _resolve_pwsh()
     severity = min_severity or settings["min_severity"]
     output_dir.mkdir(parents=True, exist_ok=True)

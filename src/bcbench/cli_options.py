@@ -11,10 +11,10 @@ from bcbench.types import EvaluationCategory
 # Note: Defaults are provided in function signatures, not here
 RepoPath = Annotated[Path, typer.Option(help="Path to repository")]
 
-PRReviewEngineLocalPath = Annotated[
+PRReviewEnginePath = Annotated[
     Path | None,
     typer.Option(
-        "--engine-local-path",
+        "--engine-path",
         envvar="BC_PR_REVIEW_ROOT",
         help="Path to a local BC-ALAgents checkout",
         exists=True,

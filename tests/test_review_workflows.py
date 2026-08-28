@@ -38,12 +38,8 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "category: code-review" in workflow
     assert "bcbench evaluate pr-review" in workflow
     assert "Checkout BC-ALAgents review engine" not in workflow
-    assert "--engine-local-path" not in workflow
-    assert "GH_TOKEN: ${{ github.token }}" in workflow
-    assert config["pr_review"]["engine"] == {
-        "repo": "microsoft/BC-ALAgents",
-        "ref": "533dd39dfe29218c09e5e31c39c78bb72fa20aa2",
-    }
+    assert '--engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}"' in workflow
+    assert config["pr_review"] == {"min_severity": "Medium"}
     assert "BC_PR_REVIEW_ROOT:" not in workflow
     assert "install-agent-harnesses" in workflow
     assert "install-eval-clis" not in workflow
@@ -59,3 +55,11 @@ def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
     assert "@github/copilot@1.0.80" in action
+
+
+def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
+    action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
+
+    assert "repository: microsoft/BC-ALAgents" in action
+    assert "ref: 533dd39dfe29218c09e5e31c39c78bb72fa20aa2" in action
+    assert "bc-alagents-path:" in action

@@ -77,11 +77,7 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
                 str(tmp_path / "out"),
                 "--run-id",
                 "pr-review",
-                "--engine-repo",
-                "contoso/BC-ALAgents",
-                "--engine-ref",
-                "feature",
-                "--engine-local-path",
+                "--engine-path",
                 str(tmp_path),
             ],
         )
@@ -91,9 +87,7 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
     assert contexts[0].agent_name is AgentHarness.PR_REVIEW
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
     assert contexts[0].model == "gpt-5.6-luna"
-    assert agent_runner.call_args.kwargs["engine_repo"] == "contoso/BC-ALAgents"
-    assert agent_runner.call_args.kwargs["engine_ref"] == "feature"
-    assert agent_runner.call_args.kwargs["engine_local_path"] == tmp_path
+    assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
 
 
 def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
@@ -113,11 +107,7 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
                 str(tmp_path),
                 "--output-dir",
                 str(tmp_path / "out"),
-                "--engine-repo",
-                "contoso/BC-ALAgents",
-                "--engine-ref",
-                "feature",
-                "--engine-local-path",
+                "--engine-path",
                 str(tmp_path),
             ],
         )
@@ -126,9 +116,7 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
     assert agent_runner.call_args.kwargs["entry"] is entry
     assert agent_runner.call_args.kwargs["category"] is EvaluationCategory.CODE_REVIEW
     assert agent_runner.call_args.kwargs["model"] == "gpt-5.6-luna"
-    assert agent_runner.call_args.kwargs["engine_repo"] == "contoso/BC-ALAgents"
-    assert agent_runner.call_args.kwargs["engine_ref"] == "feature"
-    assert agent_runner.call_args.kwargs["engine_local_path"] == tmp_path
+    assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
 
 
 def test_pr_review_is_public_command() -> None:
