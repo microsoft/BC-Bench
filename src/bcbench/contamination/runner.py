@@ -35,6 +35,7 @@ def run_filepath_identification(entry: BugFixEntry, model: str, result_dir: Path
             model=model,
             work_dir=Path(tmp),
             timeout=_config.timeout.filepath_identification,
+            allow_all_tools=False,
         )
 
     gold_files: list[str] = extract_file_paths_from_patch(entry.patch)
