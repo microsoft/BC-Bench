@@ -163,12 +163,19 @@ RESPONSE
 ```
 App/Foo/Bar.Table.al
 ```"""
-        monkeypatch.setattr(runner_mod, "invoke_copilot", lambda **_kwargs: (metrics, raw_output))
+        invocation_kwargs = {}
+
+        def invoke_copilot(**kwargs):
+            invocation_kwargs.update(kwargs)
+            return metrics, raw_output
+
+        monkeypatch.setattr(runner_mod, "invoke_copilot", invoke_copilot)
         result_dir = tmp_path / "out"
         result_dir.mkdir()
 
         result = runner_mod.run_filepath_identification(entry=entry, model="m", result_dir=result_dir)
 
+        assert invocation_kwargs["allow_all_tools"] is False
         assert result.predicted_files == ["App/Foo/Bar.Table.al"]
         assert result.matches_any_gold_path
         assert result.metrics == metrics

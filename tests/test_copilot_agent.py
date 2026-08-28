@@ -8,7 +8,7 @@ from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry
 
 
-def test_invoke_copilot_defaults_to_no_tools_and_no_custom_instructions(tmp_path: Path):
+def test_invoke_copilot_defaults_to_none_tool_argument_and_no_custom_instructions(tmp_path: Path):
     with (
         patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
         patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, None)),
@@ -22,7 +22,7 @@ def test_invoke_copilot_defaults_to_no_tools_and_no_custom_instructions(tmp_path
     assert mock_run.call_args.args[0] == [
         "copilot",
         "--output-format=json",
-        "--available-tools=",
+        "--available-tools=none",
         "--disable-builtin-mcps",
         "--no-custom-instructions",
         "--model=test-model",
