@@ -75,14 +75,20 @@ runs:
       run: |
         Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
         $version = Get-BCBenchEntryVersion -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}"
+        $artifactConfig = Get-BCBenchArtifactConfig -Category "${{ inputs.category }}"
+        $cacheKey = "bcartifacts-$version"
+        if ($artifactConfig.storageAccount) {
+          $cacheKey += "-$($artifactConfig.storageAccount)"
+        }
         "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "cache_key=$cacheKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     - name: Cache BC sandbox artifacts
       if: inputs.skip-container != 'true'
       uses: actions/cache@v5
       with:
         path: C:\bcartifacts.cache
-        key: bcartifacts-${{ steps.bcversion.outputs.version }}
+        key: ${{ steps.bcversion.outputs.cache_key }}
 
     - name: Setup BC container and repository for ${{ inputs.instance-id }}
       id: setup

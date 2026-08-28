@@ -91,13 +91,20 @@ if (-not $SkipContainer) {
 
     Write-Log "Creating container $ContainerName for version $Version..." -Level Info
 
-    # TEMPORARY (remove once BC 29 is GA on the public feed): the Data Query tools only exist in
-    # BC 29, so until it is GA pull the sandbox artifact from the insider feed.
-    [string] $url = Get-BCArtifactUrl -version $Version -Country $Country -select Latest -storageAccount bcinsider -accept_insiderEula
+    [hashtable] $artifactParameters = @{
+        version = $Version
+        Country = $Country
+    }
+    [hashtable] $categoryArtifactConfig = Get-BCBenchArtifactConfig -Category $Category
+    foreach ($key in $categoryArtifactConfig.Keys) {
+        $artifactParameters[$key] = $categoryArtifactConfig[$key]
+    }
+
+    [string] $url = Get-BCArtifactUrl @artifactParameters
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
     # Create container synchronously with NAV folder shared
-    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath)
+    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula ([bool]$categoryArtifactConfig.accept_insiderEula)
 
     # Create compiler folder synchronously
     New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url

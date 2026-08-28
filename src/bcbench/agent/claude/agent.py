@@ -5,12 +5,12 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.claude.metrics import parse_stream_output
-from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins, start_bc_mcp_gateway
+from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, resolve_config_plugins, start_bc_mcp_gateway
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
@@ -58,7 +58,6 @@ def run_claude_code(
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, skills_enabled_override=skills)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    tool_log_path: Path = setup_hooks(repo_path, AgentHarness.CLAUDE, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(
@@ -133,11 +132,6 @@ def run_claude_code(
         metrics, final_response = parse_stream_output(stdout.splitlines())
         if final_response:
             logger.info(final_response)
-
-        # The stream's tool_use events capture sub-agent and MCP tool calls; fall back to the pre-tool-use
-        # hook only when the stream carried none.
-        if metrics and not metrics.tool_usage and (hook_tool_usage := parse_tool_usage_from_hooks(tool_log_path)):
-            metrics = metrics.model_copy(update={"tool_usage": hook_tool_usage})
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

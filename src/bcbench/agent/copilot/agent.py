@@ -7,13 +7,13 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.metrics import parse_output
-from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, parse_tool_usage_from_hooks, resolve_config_plugins, start_bc_mcp_gateway
+from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, resolve_config_plugins, start_bc_mcp_gateway
 from bcbench.config import get_config
 from bcbench.copilot_cli import find_copilot
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_hooks, setup_instructions_from_config
+from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
@@ -63,7 +63,6 @@ def run_copilot_agent(
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT, skills_enabled_override=skills)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    tool_log_path: Path = setup_hooks(repo_path, AgentHarness.COPILOT, output_dir)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
@@ -129,12 +128,6 @@ def run_copilot_agent(
         metrics, final_response = parse_output(stdout.splitlines())
         if final_response:
             logger.info(final_response)
-
-        # Tool usage now comes from the JSON event stream (tool.execution_start), which — unlike the
-        # pre-tool-use hook — also captures sub-agent and MCP tool calls. Fall back to the hook only if
-        # the stream carried none.
-        if metrics and not metrics.tool_usage and (hook_tool_usage := parse_tool_usage_from_hooks(tool_log_path)):
-            metrics = metrics.model_copy(update={"tool_usage": hook_tool_usage})
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

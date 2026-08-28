@@ -15,7 +15,12 @@ def test_parse_output_collects_stable_json_metrics_and_final_response():
         _json_line({"type": "model.call_start", "data": {"turnId": "0"}}),
         _json_line({"type": "assistant.message", "data": {"content": "tool preamble"}}),
         _json_line({"type": "model.call_start", "data": {"turnId": "1"}}),
-        _json_line({"type": "assistant.message", "data": {"content": "done", "phase": "final_answer"}}),
+        _json_line(
+            {
+                "type": "assistant.message",
+                "data": {"content": "done", "phase": "final_answer"},
+            }
+        ),
         _json_line({"type": "session.usage_checkpoint", "data": {"totalNanoAiu": 10827400000}}),
         _json_line(
             {
@@ -83,11 +88,30 @@ def test_parse_output_without_metrics():
 def test_parse_output_counts_tool_usage_from_stream():
     output_lines = [
         _json_line({"type": "model.call_start", "data": {"turnId": "0"}}),
-        _json_line({"type": "tool.execution_start", "data": {"toolName": "bc_data_query", "arguments": {}}}),
-        _json_line({"type": "tool.execution_start", "data": {"toolName": "bc_data_query", "arguments": {}}}),
-        _json_line({"type": "tool.execution_start", "data": {"toolName": "task", "arguments": {}}}),
-        # A sub-agent's inner tool call surfaces in the same stream and must be counted too.
-        _json_line({"type": "tool.execution_start", "data": {"toolName": "view", "arguments": {"path": "x"}}}),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "bc_data_query", "arguments": {}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "bc_data_query", "arguments": {}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "task", "arguments": {}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "view", "arguments": {"path": "x"}},
+            }
+        ),
     ]
 
     metrics, _ = parse_output(output_lines)
@@ -99,9 +123,27 @@ def test_parse_output_counts_tool_usage_from_stream():
 def test_parse_output_sublabels_lsp_operations():
     output_lines = [
         _json_line({"type": "model.call_start", "data": {"turnId": "0"}}),
-        _json_line({"type": "tool.execution_start", "data": {"toolName": "lsp", "arguments": {"operation": "hover"}}}),
-        _json_line({"type": "tool.execution_start", "data": {"toolName": "lsp", "arguments": {"operation": "hover"}}}),
-        _json_line({"type": "tool.execution_start", "data": {"toolName": "lsp", "arguments": {"operation": "findReferences"}}}),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "lsp", "arguments": {"operation": "hover"}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {"toolName": "lsp", "arguments": {"operation": "hover"}},
+            }
+        ),
+        _json_line(
+            {
+                "type": "tool.execution_start",
+                "data": {
+                    "toolName": "lsp",
+                    "arguments": {"operation": "findReferences"},
+                },
+            }
+        ),
     ]
 
     metrics, _ = parse_output(output_lines)

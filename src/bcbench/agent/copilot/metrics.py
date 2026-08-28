@@ -23,7 +23,6 @@ def _milliseconds_to_seconds(value: object) -> float | None:
 
 
 def _tool_label(data: dict) -> str | None:
-    """Tool name for a tool.execution_start event, sub-labelling LSP ops (lsp:<operation>) like the hook did."""
     tool_name = data.get("toolName")
     if not isinstance(tool_name, str) or not tool_name:
         return None
@@ -39,8 +38,7 @@ def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str 
 
     Relevant events (CLI 1.0.80):
         model.call_start: one per request sent to the model, so counting them yields the turn count.
-        tool.execution_start: one per tool invocation (including sub-agent and MCP tool calls, which
-            the pre-tool-use hook never sees), so counting them by ``toolName`` yields tool usage.
+        tool.execution_start: one per tool invocation, including sub-agent and MCP tool calls.
         session.usage_checkpoint: `data.totalNanoAiu` is cumulative for the session, so the last one wins.
         result: terminal event whose `usage` sits at the event root rather than under `data`.
 

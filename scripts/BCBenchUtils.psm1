@@ -511,6 +511,33 @@ function Get-BCBenchDatasetPath {
 
 <#
 .SYNOPSIS
+    Gets additional BC artifact parameters for a category.
+.DESCRIPTION
+    Categories use the public artifact feed by default. Add only category-specific overrides here,
+    using parameter names accepted by Get-BCArtifactUrl.
+.PARAMETER Category
+    The evaluation category requesting a BC artifact.
+.OUTPUTS
+    Hashtable of additional Get-BCArtifactUrl parameters.
+#>
+function Get-BCBenchArtifactConfig {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Category
+    )
+
+    [hashtable] $categoryConfig = @{
+        # Add opt-in category overrides here. For example:
+        # "category" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+    }
+
+    return $categoryConfig[$Category] ?? @{}
+}
+
+<#
+.SYNOPSIS
     Resolves the BC sandbox version (environment_setup_version) for a dataset entry.
 .DESCRIPTION
     Centralizes the category -> dataset -> version lookup used by container setup, symbol download,
@@ -593,4 +620,4 @@ function Get-LatestReleaseBranch {
     return $latest.Name
 }
 
-Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
+Export-ModuleMember -Function Get-BCCredential, Invoke-GitCloneWithRetry, Get-EnvironmentVariable, Write-Log, Invoke-GitApplyPatch, Update-AppProjectVersion, Get-BCBenchDatasetPath, Get-BCBenchArtifactConfig, Get-BCBenchEntryVersion, Get-RepoCloneInfo, Get-LatestReleaseBranch
