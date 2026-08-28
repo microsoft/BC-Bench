@@ -132,7 +132,9 @@ def _write_review_json(output_dir: Path, repo_path: Path) -> int:
     if outcome == "failed":
         reason = report.get("outcomeReason") or "unknown reason"
         raise AgentError(f"Engine review failed: {reason}")
-    if outcome not in {"completed", "partial", "not-applicable", "no-knowledge"}:
+    if outcome == "not-applicable":
+        raise AgentError("Engine review was not applicable. BC-Bench code-review entries must contain AL changes.")
+    if outcome not in {"completed", "partial", "no-knowledge"}:
         raise AgentError(f"Engine {_FINDINGS_OUTPUT_FILE} has unsupported outcome {outcome!r}.")
     if not isinstance(report.get("findings"), list):
         raise AgentError(f"Engine report in {_FINDINGS_OUTPUT_FILE} has no findings list (got {type(report.get('findings')).__name__}); refusing to score it as a clean review.")

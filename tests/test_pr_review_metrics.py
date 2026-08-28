@@ -154,7 +154,7 @@ def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
         build_pr_review_metrics(tmp_path, execution_time=1.0)
 
 
-def test_not_applicable_zero_shape_is_accepted(tmp_path: Path) -> None:
+def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
     _write_run_metrics(
         tmp_path,
         metrics_source="not-applicable",
@@ -176,13 +176,8 @@ def test_not_applicable_zero_shape_is_accepted(tmp_path: Path) -> None:
         malformed_records=0,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=0.25)
-
-    assert metrics.execution_time == 0.25
-    assert metrics.prompt_tokens == 0
-    assert metrics.completion_tokens == 0
-    assert metrics.total_tokens == 0
-    assert metrics.ai_credits == 0.0
+    with pytest.raises(AgentError, match="must contain AL changes"):
+        build_pr_review_metrics(tmp_path, execution_time=0.25)
 
 
 @pytest.mark.parametrize(

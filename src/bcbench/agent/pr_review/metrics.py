@@ -78,6 +78,8 @@ def _load_run_metrics(path: Path) -> _RunMetrics:
 
 def build_pr_review_metrics(output_dir: Path, execution_time: float) -> AgentMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
+    if run.metrics_source == "not-applicable":
+        raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
     usage_values_available = run.malformed_records == 0
     token_values_available = usage_values_available and run.usage_complete
     return AgentMetrics(

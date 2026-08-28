@@ -122,6 +122,16 @@ def test_failed_engine_outcome_raises_instead_of_clean_review(tmp_path: Path) ->
     assert not (repo / "review.json").exists()
 
 
+def test_not_applicable_engine_outcome_raises_instead_of_clean_review(tmp_path: Path) -> None:
+    out, repo = _dirs(tmp_path)
+    _write_output(out, json.dumps({"outcome": "not-applicable", "outcome-reason": "No AL files.", "findings": []}))
+
+    with pytest.raises(AgentError, match="must contain AL changes"):
+        _write_review_json(out, repo)
+
+    assert not (repo / "review.json").exists()
+
+
 def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "microsoft/BC-Bench")
