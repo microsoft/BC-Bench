@@ -351,11 +351,11 @@ try {
         $$pair = "$$($$cred.UserName):$$($$cred.GetNetworkCredential().Password)"
         $$headers = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($$pair)) }
         $$base = 'http://localhost:7048/BC/api'
-        # Pin the company so the gold query runs against the same company the agent queried via MCP,
-        # rather than depending on the arbitrary ordering of the companies collection. Fall back to the
-        # first company only when no company was pinned.
+        # Pin the gold query to the company the agent queried via MCP so the comparison is against the
+        # same data. The company is required upstream, so a missing one here is a hard error, not a
+        # silent fall-through to an arbitrary company.
         $$companies = (Invoke-RestMethod -Uri "$$base/v2.0/companies" -Headers $$headers).value
-        $$companyId = if ($$company) { ($$companies | Where-Object { $$_.name -eq $$company } | Select-Object -First 1).id } else { $$companies[0].id }
+        $$companyId = ($$companies | Where-Object { $$_.name -eq $$company } | Select-Object -First 1).id
         if (-not $$companyId) { throw "Company '$$company' not found among $$($$companies.name -join ', ')" }
         # Follow @odata.nextLink so large result sets aren't silently truncated to the first page.
         $$rows = [System.Collections.Generic.List[object]]::new()
@@ -381,13 +381,14 @@ finally {
 )
 
 
-def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str | None = None) -> list[dict]:
+def execute_al_query(query_text: str, container: ContainerConfig, version: str, work_root: Path, suffix: Literal["generated", "gold"], company: str) -> list[dict]:
     """Compile + publish an AL query (wrapped as an API query) to the container and return its rows.
 
     Builds a throwaway app under ``work_root/.bcbench-query-<suffix>``, compiles + publishes it,
     then reads the query's OData endpoint. ``company`` pins which company the query runs against (so
-    the gold matches the company the agent queried via MCP); when omitted the first company is used.
-    Raises :class:`BuildError` if the query does not compile or publish.
+    the gold matches the company the agent queried via MCP) and is required — the query must run
+    against a known company, never an arbitrary default. Raises :class:`BuildError` if the query does
+    not compile or publish.
 
     NOTE: the container-side steps (compile/publish/OData fetch) require a running BC container
     and have not been validated locally; the wrapping and comparison logic are unit-tested.
@@ -421,7 +422,7 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
         version=_QUERY_API_VERSION,
         entity_set=_entity_set_name(object_id),
         result_file=_escape_ps_string(str(result_file)),
-        company=_escape_ps_string(company or ""),
+        company=_escape_ps_string(company),
     )
 
     try:
@@ -431,13 +432,13 @@ def execute_al_query(query_text: str, container: ContainerConfig, version: str, 
             capture_output=True,
             check=True,
             text=True,
-            timeout=_config.timeout.build_app,
+            timeout=_config.timeout.execute_query,
         )
     except subprocess.CalledProcessError as e:
         logger.debug(f"Query compile/publish/fetch failed ({suffix}): {e.stdout}\n{e.stderr}")
         raise BuildError(f"query-{suffix}", (e.stdout or "") + (e.stderr or "")) from None
     except subprocess.TimeoutExpired:
-        raise BuildTimeoutExpired(f"query-{suffix}", _config.timeout.build_app) from None
+        raise BuildTimeoutExpired(f"query-{suffix}", _config.timeout.execute_query) from None
 
     rows = json.loads(result_file.read_text(encoding="utf-8-sig") or "[]")
     return rows if isinstance(rows, list) else [rows]

@@ -48,11 +48,6 @@ on:
         required: false
         default: false
         type: boolean
-      skills:
-        description: "Enable agent skills"
-        required: false
-        default: false
-        type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
         required: false
@@ -128,6 +123,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-container: ${{ needs.get-entries.outputs.requires-container != 'true' }}
           skip-repo: ${{ needs.get-entries.outputs.requires-repo != 'true' }}
+          bc-mcp: ${{ inputs.bc-mcp }}
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -164,8 +160,7 @@ jobs:
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" `
             ${{ inputs.al-mcp && '--al-mcp' || '' }} `
             ${{ inputs.al-lsp && '--al-lsp' || '' }} `
-            ${{ inputs.bc-mcp && '--bc-mcp' || '' }} `
-            ${{ inputs.skills && '--skills' || '' }}
+            ${{ inputs.bc-mcp && '--bc-mcp' || '' }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
@@ -202,4 +197,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "bc-mcp": "${{ inputs.bc-mcp }}", "skills": "${{ inputs.skills }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "category": "${{ inputs.category }}", "test-run": "${{ inputs.test-run }}", "al-mcp": "${{ inputs.al-mcp }}", "al-lsp": "${{ inputs.al-lsp }}", "bc-mcp": "${{ inputs.bc-mcp }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

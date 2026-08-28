@@ -14,19 +14,13 @@ def setup_agent_skills(
     entry: BaseDatasetEntry,
     repo_path: Path,
     harness: AgentHarness,
-    skills_enabled_override: bool | None = None,
 ) -> bool:
-    """
-    Setup skills in the repository if available.
-
-    Args:
-        skills_enabled_override: When not None, takes precedence over ``config.yaml``'s
-            ``skills.enabled`` (used to toggle skills per run via the ``--skills`` CLI flag).
+    """Copy skills into the repository when enabled via ``config.yaml``'s ``skills.enabled``.
 
     Returns:
         True if skills were copied, False if skills are disabled.
     """
-    skills_enabled: bool = agent_config["skills"]["enabled"] if skills_enabled_override is None else skills_enabled_override
+    skills_enabled: bool = agent_config["skills"]["enabled"]
 
     if skills_enabled:
         source_skills: Path = _get_source_instructions_path(entry.customization_profile)

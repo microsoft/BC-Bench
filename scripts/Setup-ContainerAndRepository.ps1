@@ -41,7 +41,10 @@ param(
     [switch]$SkipContainer,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipRepo
+    [switch]$SkipRepo,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$BcMcp
 )
 
 [DatasetEntry[]] $entries = Get-DatasetEntries -DatasetPath $DatasetPath -Version $Version -InstanceId $InstanceId
@@ -111,10 +114,11 @@ if (-not $SkipContainer) {
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 
-    # data-query benchmarks the agent WITH the BC MCP server as a feedback loop. Publish the install
-    # app that provisions and activates the 'BCBench' MCP configuration, then expose the endpoint and
-    # company to the agent step so it can point its MCP client at the container.
-    if ($Category -eq 'data-query') {
+    # When the BC MCP server is requested (--bc-mcp), publish the install app that provisions and
+    # activates the 'BCBench' MCP configuration, then expose the endpoint and company to the agent step
+    # so it can point its MCP client at the container. Gated on the flag (not the category) so any
+    # category can opt into the BC MCP server.
+    if ($BcMcp) {
         Publish-MCPConfigApp -ContainerName $ContainerName -Version $Version -Credential $credential -BuildRoot $RepoPath
 
         $mcpInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName

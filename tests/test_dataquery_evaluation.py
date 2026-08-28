@@ -168,6 +168,7 @@ def test_execute_al_query_bootstraps_app_manifest(tmp_path, monkeypatch):
         "26.0.12345.0",
         tmp_path,
         "generated",
+        company="CRONUS",
     )
 
     manifest = json.loads((app_dir / "app.json").read_text(encoding="utf-8"))

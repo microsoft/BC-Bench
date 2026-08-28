@@ -75,6 +75,7 @@ class TimeoutConfig:
 
     build_baseapp: int
     build_app: int
+    execute_query: int
     test_execution: int
     agent_execution: int
     bcal_execution: int
@@ -85,7 +86,10 @@ class TimeoutConfig:
         """Get default timeout configuration."""
         return cls(
             build_baseapp=30 * 60,  # 30 minutes for BaseApp compilation
-            build_app=900,  # gold query is compiled/published/run live per entry; slow on the insider-29 artifact
+            build_app=5 * 60,  # 5 minutes for application compilation
+            # The data-query gold query is compiled, published AND run live per entry — it does more
+            # than a plain app build and is slow on the insider-29 artifact, so it gets its own budget.
+            execute_query=15 * 60,
             test_execution=3 * 60,  # 3 minutes for test execution
             agent_execution=60 * 60,  # 60 minutes for coding agent (claude and copilot) execution
             # Total bcal CLI budget per instance.

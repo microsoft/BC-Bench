@@ -25,6 +25,10 @@ inputs:
     description: Skip cloning the dataset repository (workspace is scaffolded by the pipeline)
     required: false
     default: "false"
+  bc-mcp:
+    description: Provision the BC MCP server in the container (publishes the MCP configuration app)
+    required: false
+    default: "false"
 
 outputs:
   repo_path:
@@ -103,5 +107,5 @@ runs:
           Write-Output "::add-mask::$env:ADO_TOKEN"
         }
 
-        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }} ${{ inputs.skip-repo == 'true' && '-SkipRepo' || '' }}
+        .\scripts\Setup-ContainerAndRepository.ps1 -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}" ${{ inputs.skip-container == 'true' && '-SkipContainer' || '' }} ${{ inputs.skip-repo == 'true' && '-SkipRepo' || '' }} ${{ inputs.bc-mcp == 'true' && '-BcMcp' || '' }}
       shell: pwsh

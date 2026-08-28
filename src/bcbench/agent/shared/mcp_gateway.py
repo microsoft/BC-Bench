@@ -196,7 +196,7 @@ class BcMcpGateway:
             self._rpc(self._origin_host, self._origin_port, self._injected_headers, "notifications/initialized", None, session_id=session_id)
         _, listed = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "tools/list", {}, request_id=2, session_id=session_id)
         result = listed.get("result")
-        tools = [t.get("name") for t in (result or {}).get("tools", []) if isinstance(t, dict)]
+        tools = [name for t in (result or {}).get("tools", []) if isinstance(t, dict) and isinstance(name := t.get("name"), str)]
         if tools and isinstance(result, dict):
             with self._lock:
                 self._cached_tools_result = result

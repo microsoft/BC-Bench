@@ -149,6 +149,9 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
 
         logger.info(f"Running gold query live for {context.entry.instance_id}")
         # Pin the gold query to the same company the agent queried via MCP (BC_MCP_COMPANY), so the
-        # comparison is against the same data rather than an arbitrary first company.
+        # comparison is against the same data. It must be set by container setup — a missing company is
+        # a harness bug, so fail loud rather than run the gold against an arbitrary company.
         company = os.environ.get("BC_MCP_COMPANY")
+        if not company:
+            raise OSError("BC_MCP_COMPANY is not set; container setup must export the company the gold query runs against.")
         return execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)

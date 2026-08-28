@@ -55,7 +55,6 @@ def evaluate_copilot(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
-    skills: Annotated[bool, typer.Option("--skills", help="Enable agent skills for the run")] = False,
 ) -> None:
     """
     Evaluate GitHub Copilot CLI on single dataset entry.
@@ -91,7 +90,6 @@ def evaluate_copilot(
             al_mcp=al_mcp if ctx.container else False,
             al_lsp=al_lsp,
             bc_mcp=bc_mcp if ctx.container else False,
-            skills=skills,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
@@ -114,7 +112,6 @@ def evaluate_claude_code(
     al_mcp: Annotated[bool, typer.Option("--al-mcp", help="Enable AL MCP server")] = False,
     al_lsp: Annotated[bool, typer.Option("--al-lsp", help="Enable AL LSP server")] = False,
     bc_mcp: Annotated[bool, typer.Option("--bc-mcp", help="Enable the Business Central MCP server")] = False,
-    skills: Annotated[bool, typer.Option("--skills", help="Enable agent skills for the run")] = False,
 ) -> None:
     """
     Evaluate Claude Code on single dataset entry.
@@ -150,7 +147,6 @@ def evaluate_claude_code(
             al_mcp=al_mcp if ctx.container else False,
             al_lsp=al_lsp,
             bc_mcp=bc_mcp if ctx.container else False,
-            skills=skills,
             container_name=ctx.get_container().name if ctx.container else "",
         ),
     )
