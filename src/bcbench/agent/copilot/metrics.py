@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from collections.abc import Sequence
 
 from bcbench.logger import get_logger
@@ -21,11 +22,23 @@ def _milliseconds_to_seconds(value: object) -> float | None:
     return None if milliseconds is None else milliseconds / 1000.0
 
 
+def _tool_label(data: dict) -> str | None:
+    tool_name = data.get("toolName")
+    if not isinstance(tool_name, str) or not tool_name:
+        return None
+    if tool_name == "lsp":
+        arguments = data.get("arguments")
+        if isinstance(arguments, dict) and isinstance(arguments.get("operation"), str):
+            return f"lsp:{arguments['operation']}"
+    return tool_name
+
+
 def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str | None]:
     """Parse metrics and the agent's final response from `copilot --output-format=json` (JSONL) stdout.
 
     Relevant events (CLI 1.0.80):
         model.call_start: one per request sent to the model, so counting them yields the turn count.
+        tool.execution_start: one per tool invocation, including sub-agent and MCP tool calls.
         session.usage_checkpoint: `data.totalNanoAiu` is cumulative for the session, so the last one wins.
         result: terminal event whose `usage` sits at the event root rather than under `data`.
 
@@ -36,6 +49,7 @@ def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str 
     llm_duration: float | None = None
     ai_credits: float | None = None
     turn_count = 0
+    tool_usage: Counter[str] = Counter()
     response: str | None = None
     final_response: str | None = None
 
@@ -56,6 +70,10 @@ def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str 
         match event.get("type"):
             case "model.call_start":
                 turn_count += 1
+            case "tool.execution_start":
+                data = event.get("data")
+                if isinstance(data, dict) and (label := _tool_label(data)):
+                    tool_usage[label] += 1
             case "assistant.message":
                 data = event.get("data")
                 if not isinstance(data, dict):
@@ -89,6 +107,7 @@ def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str 
             llm_duration=llm_duration,
             ai_credits=ai_credits,
             turn_count=turn_count or None,
+            tool_usage=dict(tool_usage) or None,
         )
     else:
         logger.warning("No metrics found in Copilot JSON output")

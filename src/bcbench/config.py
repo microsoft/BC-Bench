@@ -44,7 +44,6 @@ class PathConfig:
     evaluation_results_path: Path
     leaderboard_dir: Path
     agent_share_dir: Path
-    hook_script_path: Path
     bc_artifacts_cache: Path
     redteam_scorecard: Path
     plugin_root: Path
@@ -63,7 +62,6 @@ class PathConfig:
             evaluation_results_path=evaluation_results_path,
             leaderboard_dir=root / "docs" / "_data",
             agent_share_dir=agent_share_dir,
-            hook_script_path=agent_share_dir / "hooks" / "log-tool-usage.ps1",
             bc_artifacts_cache=Path(r"C:\bcartifacts.cache"),
             redteam_scorecard=evaluation_results_path / "redteam" / "scorecard.json",
             # `.bcbench` avoids colliding with agent-reserved dirs (`.claude/`, `.github/`)
@@ -111,9 +109,6 @@ class FilePatternConfig:
     test_project_identifiers: tuple[str, ...]
     problem_statement_readme: str
     problem_statement_dest_dir: str
-    tool_usage_log: str
-    copilot_hooks_config: str
-    claude_settings_local: str
     alpackages_dirname: str
     nl2al_export_subdir: str
     plugin_manifest: Path
@@ -131,9 +126,6 @@ class FilePatternConfig:
             test_project_identifiers=("test", "tests"),
             problem_statement_readme="README.md",
             problem_statement_dest_dir="problem",
-            tool_usage_log="tool_usage.jsonl",
-            copilot_hooks_config="bcbench-hooks.json",
-            claude_settings_local="settings.local.json",
             alpackages_dirname=".alpackages",
             nl2al_export_subdir="src",
             # Where both Copilot CLI and Claude Code look for a plugin's manifest

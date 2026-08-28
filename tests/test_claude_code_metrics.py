@@ -1,12 +1,14 @@
 """Tests for Claude Code metrics parsing."""
 
+import json
+
 import pytest
 
-from bcbench.agent.claude.metrics import parse_metrics
+from bcbench.agent.claude.metrics import parse_stream_output
 
 
 class TestClaudeCodeMetricsParsing:
-    def test_parse_metrics_full_output(self):
+    def test_parse_output_full_result(self):
         data = {
             "type": "result",
             "subtype": "success",
@@ -27,7 +29,7 @@ class TestClaudeCodeMetricsParsing:
             },
         }
 
-        metrics = parse_metrics(data)
+        metrics, _ = parse_stream_output([json.dumps(data)])
 
         assert metrics is not None
         assert metrics.execution_time == pytest.approx(2.814, rel=1e-3)
@@ -37,10 +39,10 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.completion_tokens == 5
         assert metrics.tool_usage is None
 
-    def test_parse_metrics_minimal_output(self):
+    def test_parse_output_minimal_result(self):
         data = {"type": "result", "duration_ms": 1000, "num_turns": 3}
 
-        metrics = parse_metrics(data)
+        metrics, _ = parse_stream_output([json.dumps(data)])
 
         assert metrics is not None
         assert metrics.execution_time == 1.0
@@ -49,7 +51,7 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.prompt_tokens is None
         assert metrics.completion_tokens is None
 
-    def test_parse_metrics_with_usage_no_cache(self):
+    def test_parse_output_with_usage_no_cache(self):
         data = {
             "type": "result",
             "duration_ms": 5000,
@@ -58,7 +60,7 @@ class TestClaudeCodeMetricsParsing:
             "usage": {"input_tokens": 100, "output_tokens": 50},
         }
 
-        metrics = parse_metrics(data)
+        metrics, _ = parse_stream_output([json.dumps(data)])
 
         assert metrics is not None
         assert metrics.execution_time == 5.0
@@ -67,15 +69,15 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.prompt_tokens == 100  # No cache tokens
         assert metrics.completion_tokens == 50
 
-    def test_parse_metrics_empty_dict(self):
-        metrics = parse_metrics({})
+    def test_parse_output_empty_dict(self):
+        metrics, _ = parse_stream_output([json.dumps({})])
 
         assert metrics is None  # No metrics fields present
 
-    def test_parse_metrics_only_duration(self):
-        data = {"duration_ms": 12345}
+    def test_parse_output_only_duration(self):
+        data = {"type": "result", "duration_ms": 12345}
 
-        metrics = parse_metrics(data)
+        metrics, _ = parse_stream_output([json.dumps(data)])
 
         assert metrics is not None
         assert metrics.execution_time == pytest.approx(12.345, rel=1e-3)
@@ -84,7 +86,7 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.prompt_tokens is None
         assert metrics.completion_tokens is None
 
-    def test_parse_metrics_with_model_usage(self):
+    def test_parse_output_with_model_usage(self):
         data = {
             "type": "result",
             "subtype": "success",
@@ -102,12 +104,15 @@ class TestClaudeCodeMetricsParsing:
                 "output_tokens": 1909,
             },
             "modelUsage": {
-                "claude-haiku-4-5-20251001": {"inputTokens": 48287, "outputTokens": 8017},
+                "claude-haiku-4-5-20251001": {
+                    "inputTokens": 48287,
+                    "outputTokens": 8017,
+                },
                 "claude-sonnet-4-5-20250929": {"inputTokens": 3, "outputTokens": 324},
             },
         }
 
-        metrics = parse_metrics(data)
+        metrics, _ = parse_stream_output([json.dumps(data)])
 
         assert metrics is not None
         assert metrics.execution_time == pytest.approx(175.011, rel=1e-3)
@@ -115,3 +120,81 @@ class TestClaudeCodeMetricsParsing:
         assert metrics.turn_count == 14
         assert metrics.prompt_tokens == 41 + 22439 + 246700
         assert metrics.completion_tokens == 1909
+
+
+class TestClaudeStreamParsing:
+    def _lines(self, *events: dict) -> list[str]:
+        return [json.dumps(event) for event in events]
+
+    def test_counts_tool_use_across_assistant_messages(self):
+        lines = self._lines(
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "tool_use", "name": "mcp__server__find", "input": {}}]},
+            },
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "tool_use", "name": "mcp__server__query", "input": {}}]},
+            },
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "tool_use", "name": "mcp__server__query", "input": {}}]},
+            },
+            {"type": "result", "duration_ms": 5000, "num_turns": 3, "result": "Done"},
+        )
+
+        metrics, final_response = parse_stream_output(lines)
+
+        assert final_response == "Done"
+        assert metrics is not None
+        assert metrics.tool_usage == {"mcp__server__find": 1, "mcp__server__query": 2}
+        assert metrics.execution_time == 5.0
+        assert metrics.turn_count == 3
+
+    def test_sublabels_lsp_operations(self):
+        lines = self._lines(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "lsp", "input": {"operation": "hover"}},
+                        {"type": "tool_use", "name": "lsp", "input": {"operation": "hover"}},
+                        {"type": "tool_use", "name": "lsp", "input": {"operation": "findReferences"}},
+                    ]
+                },
+            }
+        )
+
+        metrics, _ = parse_stream_output(lines)
+
+        assert metrics is not None
+        assert metrics.tool_usage == {"lsp:hover": 2, "lsp:findReferences": 1}
+
+    def test_tool_usage_without_result_event_still_returned(self):
+        lines = self._lines(
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {}}]},
+            }
+        )
+
+        metrics, final_response = parse_stream_output(lines)
+
+        assert final_response is None
+        assert metrics is not None
+        assert metrics.tool_usage == {"Bash": 1}
+
+    def test_no_events_returns_none(self):
+        assert parse_stream_output(["", "   "]) == (None, None)
+
+    def test_skips_malformed_lines(self):
+        metrics, final_response = parse_stream_output(
+            [
+                "not json",
+                json.dumps({"type": "result", "duration_ms": 1000, "result": "ok"}),
+            ]
+        )
+
+        assert final_response == "ok"
+        assert metrics is not None
+        assert metrics.execution_time == 1.0

@@ -7,12 +7,12 @@ from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry
 
 
-def test_copilot_does_not_enable_memory_or_unrestricted_urls(tmp_path: Path):
+def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Path, monkeypatch):
     repo_path = tmp_path / "repo"
     output_dir = tmp_path / "output"
     repo_path.mkdir()
     output_dir.mkdir()
-    tool_log_path = output_dir / "tool_usage.jsonl"
+    monkeypatch.delenv("GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS", raising=False)
 
     with (
         patch("bcbench.agent.copilot.agent.find_copilot", return_value="copilot"),
@@ -22,10 +22,8 @@ def test_copilot_does_not_enable_memory_or_unrestricted_urls(tmp_path: Path):
         patch("bcbench.agent.copilot.agent.setup_instructions_from_config", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
-        patch("bcbench.agent.copilot.agent.setup_hooks", return_value=tool_log_path),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
         patch("bcbench.agent.copilot.agent.parse_output", return_value=(None, None)) as mock_parse_output,
-        patch("bcbench.agent.copilot.agent.parse_tool_usage_from_hooks", return_value=None),
         patch(
             "bcbench.agent.copilot.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=b'{"type":"result"}\n', stderr=b""),
@@ -51,4 +49,5 @@ def test_copilot_does_not_enable_memory_or_unrestricted_urls(tmp_path: Path):
         "--no-custom-instructions",
     ]
     assert mock_run.call_args.kwargs["capture_output"] is True
+    assert "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS" not in mock_run.call_args.kwargs["env"]
     mock_parse_output.assert_called_once_with(['{"type":"result"}'])
