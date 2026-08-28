@@ -35,6 +35,8 @@ def invoke_copilot(
 ) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
+    When ``allow_all_tools`` is false, the Copilot CLI is invoked with no tools available.
+
     Returns:
         A tuple containing parsed agent metrics, when available, and the final assistant response. The response is empty when none is emitted.
     """
@@ -42,7 +44,7 @@ def invoke_copilot(
     if not copilot_cmd:
         raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
-    tool_access_arg = "--allow-all-tools" if allow_all_tools else "--available-tools="
+    tool_access_arg = "--allow-all-tools" if allow_all_tools else "--available-tools=none"
     cmd_args = [
         copilot_cmd,
         "--output-format=json",
