@@ -531,6 +531,7 @@ function Get-BCBenchArtifactConfig {
     [hashtable] $categoryConfig = @{
         # Add opt-in category overrides here. For example:
         # "category" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
+        "data-query" = @{ storageAccount = "bcinsider"; select = "Latest"; accept_insiderEula = $true }
     }
 
     return $categoryConfig[$Category] ?? @{}

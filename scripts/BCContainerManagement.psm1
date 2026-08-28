@@ -307,8 +307,6 @@ function New-BCContainerSync {
         shortcuts                = 'None'
         memoryLimit              = "16G"
         isolation                = "hyperv"
-        # TEMPORARY (remove once BC 29 is GA): required to build a container from an insider (BC 29) artifact.
-        accept_insiderEula       = $true
     }
 
     if ($AcceptEula) {
