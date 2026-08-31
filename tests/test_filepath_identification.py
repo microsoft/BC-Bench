@@ -64,6 +64,13 @@ App/A.al
         response = "DISCUSSION Found the table.\nRESPONSE ```App/A.al```"
         assert parse_prediction(response) == ["App/A.al"]
 
+    def test_tolerates_multiline_fence_on_response_line(self):
+        response = """DISCUSSION Traced the failing call stack to Codeunit 7322.
+RESPONSE ```
+BaseApp/Source/Base Application/Warehouse/Activity/CreateInventoryPickMovement.Codeunit.al
+```"""
+        assert parse_prediction(response) == ["BaseApp/Source/Base Application/Warehouse/Activity/CreateInventoryPickMovement.Codeunit.al"]
+
     def test_tolerates_tagged_fence_on_response_line(self):
         response = "DISCUSSION Found the table.\nRESPONSE ```text\nApp/A.al\n```"
         assert parse_prediction(response) == ["App/A.al"]

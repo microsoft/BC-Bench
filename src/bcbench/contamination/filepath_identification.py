@@ -45,7 +45,7 @@ def parse_prediction(raw_text: str) -> list[str]:
             rather than quietly count as a miss.
     """
     response = re.search(
-        r"(?im)^[ \t*_#>`]*RESPONSE\b[ \t]*:?[ \t*_`]*(?=\r?$|```)",
+        r"(?im)^[ \t*_#>`]*RESPONSE\b[ \t]*:?[ \t*_`]*?(?=\r?$|```)",
         raw_text,
     )
     if response is None:
