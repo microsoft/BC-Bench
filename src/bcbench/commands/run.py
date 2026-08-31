@@ -69,9 +69,9 @@ def run_copilot(
         model=model,
         category=category,
         output_dir=output_dir,
-        al_mcp=al_mcp if container_name else False,
+        al_mcp=al_mcp if container is not None else False,
         al_lsp=al_lsp,
-        bc_mcp=bc_mcp if container_name else False,
+        bc_mcp=bc_mcp if container is not None else False,
         container=container,
     )
 
@@ -113,9 +113,9 @@ def run_claude(
         model=model,
         category=category,
         output_dir=output_dir,
-        al_mcp=al_mcp if container_name else False,
+        al_mcp=al_mcp if container is not None else False,
         al_lsp=al_lsp,
-        bc_mcp=bc_mcp if container_name else False,
+        bc_mcp=bc_mcp if container is not None else False,
         container=container,
     )
 

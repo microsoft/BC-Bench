@@ -53,7 +53,7 @@ def run_claude_code(
         container=container,
         bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
     )
-    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.CLAUDE, al_lsp=al_lsp, container_name=container.name if container else "")
+    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.CLAUDE, al_lsp=al_lsp, container=container)
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)

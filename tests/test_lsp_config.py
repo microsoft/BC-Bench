@@ -6,7 +6,7 @@ import pytest
 
 from bcbench.agent.shared.lsp import build_al_lsp_plugin
 from bcbench.exceptions import AgentError
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import AgentHarness, ContainerConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry
 
 _PLUGIN_FOLDER = "al-lsp-plugin"
@@ -131,7 +131,7 @@ class TestSharedBehavior:
             "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
-            _build(entry, repo_path, harness, al_lsp=True, container_name="test-container")
+            _build(entry, repo_path, harness, al_lsp=True, container=ContainerConfig("test-container", "", ""))
 
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
@@ -148,7 +148,7 @@ class TestSharedBehavior:
             "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
-            _build(entry, repo_path, harness, al_lsp=True, container_name="test-container")
+            _build(entry, repo_path, harness, al_lsp=True, container=ContainerConfig("test-container", "", ""))
 
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
@@ -160,7 +160,7 @@ class TestSharedBehavior:
     @pytest.mark.usefixtures("no_artifacts")
     def test_raises_with_download_hint_when_neither_source_available(self, entry, repo_path, harness):
         with pytest.raises(AgentError, match=r"Download-BCSymbols\.ps1"):
-            _build(entry, repo_path, harness, al_lsp=True, container_name="")
+            _build(entry, repo_path, harness, al_lsp=True, container=None)
 
 
 class TestAgentSpecificSchema:

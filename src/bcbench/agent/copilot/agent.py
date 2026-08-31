@@ -50,7 +50,7 @@ def run_copilot_agent(
         container=container,
         bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
     )
-    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.COPILOT, al_lsp=al_lsp, container_name=container.name if container else "")
+    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.COPILOT, al_lsp=al_lsp, container=container)
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)

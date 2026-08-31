@@ -9,7 +9,7 @@ from bcbench.agent.shared.plugin import remove_agent_plugin, write_agent_plugin
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import AgentHarness, ContainerConfig, EvaluationCategory
 
 logger = get_logger(__name__)
 
@@ -17,14 +17,19 @@ _AL_LSP_PLUGIN_FOLDER = "al-lsp-plugin"
 _AL_LSP_MANIFEST = {"name": "al-lsp"}
 
 
-def _resolve_symbol_paths(entry: BaseDatasetEntry, category: EvaluationCategory, container_name: str, country: str = "w1") -> tuple[list[str], list[str]]:
+def _resolve_symbol_paths(
+    entry: BaseDatasetEntry,
+    category: EvaluationCategory,
+    container: ContainerConfig | None,
+    country: str = "w1",
+) -> tuple[list[str], list[str]]:
     """Resolve (package_cache_paths, assembly_probing_paths) for the LSP server.
 
     Prefers the container's compiler folder when available — its single flat layout is the exact same arg shape AL-MCP uses.
     Falls back to the raw BC artifact cache for container-free local runs. Raises a clear error pointing at the symbol-download script when neither is present.
     """
-    if container_name:
-        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container_name)
+    if container is not None:
+        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
         if symbols_folder.is_dir():
             logger.info(f"Using container compiler-folder symbols: {symbols_folder}")
             return [str(symbols_folder)], build_assembly_probing_paths(compiler_folder)
@@ -70,7 +75,14 @@ def _lsp_config_for(harness: AgentHarness, args: list[str]) -> dict:
             raise AgentError(f"Unsupported agent type for AL LSP config: {harness}")
 
 
-def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, repo_path: Path, harness: AgentHarness, al_lsp: bool, container_name: str = "") -> Path | None:
+def build_al_lsp_plugin(
+    entry: BaseDatasetEntry,
+    category: EvaluationCategory,
+    repo_path: Path,
+    harness: AgentHarness,
+    al_lsp: bool,
+    container: ContainerConfig | None = None,
+) -> Path | None:
     """Build a per-task AL-LSP plugin folder, return its path or None.
 
     Loaded by both Copilot CLI and Claude Code via ``--plugin-dir <path>`` for a single
@@ -83,7 +95,7 @@ def build_al_lsp_plugin(entry: BaseDatasetEntry, category: EvaluationCategory, r
         return None
 
     project_paths = [str(repo_path / p) for p in entry.project_paths]
-    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container_name)
+    package_cache_paths, assembly_probing_paths = _resolve_symbol_paths(entry, category, container)
     args = _build_lsp_args(project_paths, package_cache_paths, assembly_probing_paths)
     lsp_config = _lsp_config_for(harness, args)
 

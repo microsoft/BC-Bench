@@ -87,9 +87,9 @@ def evaluate_copilot(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            al_mcp=al_mcp if ctx.container else False,
+            al_mcp=al_mcp if ctx.container is not None else False,
             al_lsp=al_lsp,
-            bc_mcp=bc_mcp if ctx.container else False,
+            bc_mcp=bc_mcp if ctx.container is not None else False,
             container=ctx.container,
         ),
     )
@@ -148,9 +148,9 @@ def evaluate_claude_code(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            al_mcp=al_mcp if ctx.container else False,
+            al_mcp=al_mcp if ctx.container is not None else False,
             al_lsp=al_lsp,
-            bc_mcp=bc_mcp if ctx.container else False,
+            bc_mcp=bc_mcp if ctx.container is not None else False,
             container=ctx.container,
         ),
     )
