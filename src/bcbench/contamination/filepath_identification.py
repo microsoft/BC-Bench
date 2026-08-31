@@ -49,8 +49,6 @@ def parse_prediction(raw_text: str) -> list[str]:
         raw_text,
     )
     if response is None:
-        response = re.search(r"(?i)\bRESPONSE\b[ \t]*:?[ \t]*(?=```)", raw_text)
-    if response is None:
         raise ValueError("Expected the answer in a fenced code block after RESPONSE")
 
     block = re.search(r"```(?:(?:[A-Za-z0-9_+-]+)?[ \t]*\r?\n)?(.*?)```", raw_text[response.end() :], re.DOTALL)

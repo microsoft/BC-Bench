@@ -75,9 +75,10 @@ BaseApp/Source/Base Application/Warehouse/Activity/CreateInventoryPickMovement.C
         response = "DISCUSSION Found the table.\nRESPONSE ```text\nApp/A.al\n```"
         assert parse_prediction(response) == ["App/A.al"]
 
-    def test_tolerates_response_after_discussion_on_same_line(self):
+    def test_rejects_response_after_discussion_on_same_line(self):
         response = "DISCUSSION Found the table. RESPONSE ```App/A.al```"
-        assert parse_prediction(response) == ["App/A.al"]
+        with pytest.raises(ValueError, match="fenced code block"):
+            parse_prediction(response)
 
     def test_uses_first_fenced_block_after_response(self):
         response = """RESPONSE
@@ -114,9 +115,10 @@ App/B.al
         with pytest.raises(ValueError, match="exactly one path"):
             parse_prediction(response)
 
-    def test_answer_without_fenced_block_raises(self):
+    @pytest.mark.parametrize("answer", ["App/A.al", "`App/A.al`"])
+    def test_answer_without_fenced_block_raises(self, answer):
         with pytest.raises(ValueError, match="fenced code block"):
-            parse_prediction("DISCUSSION\nFound it.\nRESPONSE\nApp/A.al")
+            parse_prediction(f"DISCUSSION\nFound it.\nRESPONSE\n{answer}")
 
     def test_empty_output_raises(self):
         with pytest.raises(ValueError, match="fenced code block"):
