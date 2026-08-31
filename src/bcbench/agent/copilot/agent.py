@@ -1,15 +1,13 @@
 """GitHub Copilot CLI Agent implementation."""
 
 import subprocess
-import sys
 from pathlib import Path
 
 import yaml
 
-from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.copilot.cli import invoke_copilot
 from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, resolve_config_plugins, start_bc_mcp_gateway
 from bcbench.config import get_config
-from bcbench.copilot_cli import find_copilot
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
@@ -38,12 +36,6 @@ def run_copilot_agent(
     """
     config_file = Path(__file__).parent.parent / "shared" / "config.yaml"
     copilot_config = yaml.safe_load(config_file.read_text())
-
-    # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes PowerShell,
-    # which re-parses arguments and corrupts prompts containing double quotes (e.g. JSON examples).
-    copilot_cmd = find_copilot()
-    if not copilot_cmd:
-        raise AgentError("Copilot CLI not found in PATH. Please ensure it is installed and available.")
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
@@ -77,53 +69,39 @@ def run_copilot_agent(
     logger.debug(f"Using prompt:\n{prompt}")
 
     try:
-        cmd_args = [
-            copilot_cmd,
-            "--output-format=json",
-            "--allow-all-tools",  # required for non-interactive mode
-            "--disable-builtin-mcps",
-            f"--model={model}",
+        extra_args = [
             "--log-level=debug",
             f"--log-dir={output_dir.resolve()}",
-            f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
         ]
-        if not instructions_enabled:
-            cmd_args.append("--no-custom-instructions")
         if mcp_config_json:
-            cmd_args.append(f"--additional-mcp-config={mcp_config_json}")
+            extra_args.append(f"--additional-mcp-config={mcp_config_json}")
         if lsp_plugin_dir is not None:
-            cmd_args.append(f"--plugin-dir={lsp_plugin_dir}")
-        cmd_args.extend(f"--plugin-dir={plugin_dir}" for _, plugin_dir in plugins)
+            extra_args.append(f"--plugin-dir={lsp_plugin_dir}")
+        extra_args.extend(f"--plugin-dir={plugin_dir}" for _, plugin_dir in plugins)
         # --add-dir grants read+write (unlike --plugin-dir, which only registers a plugin), so hand it
         # only to plugins that opt in via grant_dir_access - currently a temporary accommodation for
         # BCQuality, whose skill reads its own knowledge files at runtime. Enabling a plugin must not
         # silently widen the agent's sandbox access.
-        cmd_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
+        extra_args.extend(f"--add-dir={plugin_dir}" for plugin, plugin_dir in plugins if plugin.grant_dir_access)
         if custom_agent:
-            cmd_args.append(f"--agent={custom_agent}")
+            extra_args.append(f"--agent={custom_agent}")
 
-        logger.debug(f"Copilot command args: {cmd_args}")
-
-        result = subprocess.run(
-            cmd_args,
-            cwd=str(repo_path),
+        metrics, final_response = invoke_copilot(
+            prompt=prompt,
+            model=model,
+            work_dir=repo_path,
+            timeout=_config.timeout.agent_execution,
+            allow_all_tools=True,
+            custom_instructions=instructions_enabled,
+            extra_args=extra_args,
             env=agent_subprocess_env(
                 {
                     "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
                 }
             ),
-            capture_output=True,
-            timeout=_config.timeout.agent_execution,
-            check=True,
         )
-
-        if result.stderr:
-            sys.stderr.buffer.write(result.stderr)
-            sys.stderr.buffer.flush()
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
 
-        stdout = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
-        metrics, final_response = parse_output(stdout.splitlines())
         if final_response:
             logger.info(final_response)
     except subprocess.TimeoutExpired:

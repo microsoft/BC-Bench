@@ -11,6 +11,7 @@ from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.evaluate.codereview import CodeReviewPipeline
 from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_results, judge_expected_and_ignored, judge_verdicts
 from bcbench.evaluate.review_parsing import parse_review_output
+from bcbench.exceptions import AgentError
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, match_comments, unmatched_generated
 from bcbench.types import EvaluationCategory
@@ -931,14 +932,13 @@ class TestJudge:
         assert judge_verdicts([], work_dir=Path()) == []
 
     def test_raises_when_copilot_not_found(self, tmp_path):
-        with patch("bcbench.evaluate.codereview_judge._find_copilot", return_value=None), pytest.raises(LLMJudgeError, match="Copilot CLI not found"):
+        with patch("bcbench.evaluate.codereview_judge.invoke_copilot", side_effect=AgentError("Copilot CLI not found")), pytest.raises(LLMJudgeError, match="Copilot CLI not found"):
             judge_verdicts([self._pair(10)], work_dir=tmp_path)
 
     def test_raises_when_subprocess_fails(self, tmp_path):
         with (
-            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
             patch(
-                "bcbench.evaluate.codereview_judge.subprocess.run",
+                "bcbench.evaluate.codereview_judge.invoke_copilot",
                 side_effect=subprocess.CalledProcessError(1, "copilot"),
             ),
             pytest.raises(LLMJudgeError, match="Judge subprocess failed"),
@@ -948,8 +948,7 @@ class TestJudge:
     def test_subprocess_failure_surfaces_copilot_output(self, tmp_path):
         error = subprocess.CalledProcessError(1, "copilot", output="partial stdout", stderr="model gpt-5.3-codex is not available")
         with (
-            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
-            patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=error),
+            patch("bcbench.evaluate.codereview_judge.invoke_copilot", side_effect=error),
             pytest.raises(LLMJudgeError, match="model gpt-5\\.3-codex is not available"),
         ):
             judge_verdicts([self._pair(10)], work_dir=tmp_path)
@@ -957,14 +956,11 @@ class TestJudge:
     def test_returns_verdicts_from_result_file(self, tmp_path):
         pairs = [self._pair(10), self._pair(20)]
 
-        def fake_run(*args, **kwargs):
+        def fake_invoke(**_kwargs):
             (tmp_path / _config.judge.result_file).write_text('[{"pair": 1, "match": true}, {"pair": 2, "match": false}]', encoding="utf-8")
-            return subprocess.CompletedProcess(args, 0)
+            return None, ""
 
-        with (
-            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
-            patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=fake_run),
-        ):
+        with patch("bcbench.evaluate.codereview_judge.invoke_copilot", side_effect=fake_invoke):
             result = judge_verdicts(pairs, work_dir=tmp_path)
 
         assert result == [True, False]
@@ -972,12 +968,9 @@ class TestJudge:
     def test_reads_verdicts_from_stdout_when_file_not_written(self, tmp_path):
         pairs = [self._pair(10), self._pair(20)]
 
-        def fake_run(*args, **kwargs):
-            return subprocess.CompletedProcess(args, 0, stdout='[{"pair": 1, "match": false}, {"pair": 2, "match": true}]')
-
-        with (
-            patch("bcbench.evaluate.codereview_judge._find_copilot", return_value="copilot"),
-            patch("bcbench.evaluate.codereview_judge.subprocess.run", side_effect=fake_run),
+        with patch(
+            "bcbench.evaluate.codereview_judge.invoke_copilot",
+            return_value=(None, '[{"pair": 1, "match": false}, {"pair": 2, "match": true}]'),
         ):
             result = judge_verdicts(pairs, work_dir=tmp_path)
 

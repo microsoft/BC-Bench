@@ -1,5 +1,4 @@
 import random
-import shutil
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -24,6 +23,7 @@ from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
 from bcbench.evaluate import AgentRunner, EvaluationPipeline
 from bcbench.evaluate.codereview_judge_calibration import run_calibration
 from bcbench.logger import get_logger
+from bcbench.operations import prepare_run_dir
 from bcbench.results import BaseEvaluationResult, CodeReviewResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
@@ -31,14 +31,6 @@ logger = get_logger(__name__)
 _config = get_config()
 
 evaluate_app = typer.Typer(help="Evaluate agents on benchmark datasets")
-
-
-def _prepare_run_dir(output_dir: Path, run_id: str) -> Path:
-    run_dir = output_dir / run_id
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True)
-    return run_dir
 
 
 @evaluate_app.command("copilot")
@@ -62,7 +54,7 @@ def evaluate_copilot(
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
@@ -119,7 +111,7 @@ def evaluate_claude_code(
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
 
@@ -182,7 +174,7 @@ def evaluate_pr_review(
     """
     category = EvaluationCategory.CODE_REVIEW
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
 
@@ -235,7 +227,7 @@ def evaluate_bcal(
     """
     category = EvaluationCategory.NL2AL
     entry: NL2ALEntry = cast(NL2ALEntry, category.entry_class.load(category.dataset_path, entry_id=entry_id)[0])
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    run_dir = prepare_run_dir(output_dir, run_id)
     backend_config = BCalBackendConfig(
         backend=backend,
         endpoint=endpoint,
@@ -305,7 +297,7 @@ def evaluate_mock(
     Evaluate mock agent on single dataset entry for testing purposes.
     """
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
-    run_dir = _prepare_run_dir(output_dir, run_id)
+    run_dir = prepare_run_dir(output_dir, run_id)
 
     logger.info(f"Running evaluation on entry {entry_id} with mock agent")
 

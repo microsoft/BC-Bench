@@ -1,154 +1,93 @@
-"""Pure, testable core for the context-free file-path identification task.
-
-No I/O or model invocation lives here — see ``runner.py`` for that. Everything
-in this module is a pure function of its inputs so it can be unit-tested without
-a network, a container, or a CLI.
-"""
+"""Pure functions and result models for file-path identification."""
 
 from __future__ import annotations
 
-import json
 import re
-from collections.abc import Callable
-from datetime import date
-from pathlib import PurePosixPath
-from typing import cast
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bcbench.collection.patch_utils import extract_file_paths_from_patch
-from bcbench.dataset import RepoGroundedEntry
-
-__all__ = [
-    "FilePathIdentificationResult",
-    "FilePathIdentificationScore",
-    "IdentificationAggregate",
-    "aggregate_results",
-    "build_identification_prompt",
-    "extract_gold_files",
-    "normalize_path",
-    "parse_prediction",
-    "score_prediction",
-    "split_by_cutoff",
-]
+from bcbench.types import AgentMetrics, EvaluationCategory
 
 
-def normalize_path(path: str) -> str:
-    cleaned = path.strip().strip("`\"'").replace("\\", "/").strip()
-    while cleaned.startswith("./"):
-        cleaned = cleaned[2:]
-    if cleaned.startswith(("a/", "b/")):
-        cleaned = cleaned[2:]
-    return cleaned.strip("/")
+def build_identification_prompt(task: str, repo: str = "microsoft/BCApps") -> str:
+    return f"""You will be provided with an issue statement explaining a problem to resolve within a codebase. The code base is: {repo}.
+<issue>
+{task}
+</issue>
+You must always include one discussion and one response as part of your response.
+Make sure you do not have multiple discussion/response tags.
+Please make sure your output precisely matches the following format.
+DISCUSSION
+Discuss here with yourself about how you came up with this response.
+RESPONSE
+```
+response(s) to the question asked.
+```
+Now answer the following question:
+Given the issue description and project, provide a file-path of the .al file containing the issue relative to the root."""
 
 
-def _basename(path: str) -> str:
-    normalized = normalize_path(path)
-    return PurePosixPath(normalized).name.lower() if normalized else ""
+def parse_prediction(raw_text: str) -> list[str]:
+    """Extract the single predicted path from the model's RESPONSE block.
 
+    The answer is taken from the first fenced block after the RESPONSE header,
+    so decorated headers, inline fences, and prose after the fence are tolerated.
+    Markdown wrappers, path separators, and common diff prefixes are normalized
+    on the prediction; gold paths remain unchanged for exact matching.
 
-def extract_gold_files(patch: str) -> list[str]:
-    """Repo-relative paths a fix patch modifies — the ground-truth buggy files."""
-    gold: list[str] = []
-    for raw in extract_file_paths_from_patch(patch):
-        normalized = normalize_path(raw)
-        if normalized and normalized not in gold:
-            gold.append(normalized)
-    return gold
+    Returns:
+        A single-item list holding the predicted repository-relative path.
 
-
-def build_identification_prompt(task: str, top_k: int, repo: str = "microsoft/BCApps") -> str:
-    # NOTE: ``task`` is interpolated as a value, so any braces in the AL bug report stay literal.
-    return (
-        f'You are analyzing a bug report from the Business Central (AL) repository "{repo}".\n\n'
-        f"You do NOT have access to the repository source code. Based ONLY on the bug report below, "
-        f"identify the {top_k} repository-relative file path(s) most likely to contain the code that must be "
-        f"changed to fix this bug, ordered from most to least likely.\n\n"
-        f"Business Central AL source files follow the convention <ObjectName>.<ObjectType>.al "
-        f"(for example SalesHeader.Table.al, SalesOrder.Page.al, SalesPost.Codeunit.al).\n\n"
-        f"Answer only from the bug report text. Respond with ONLY a JSON array of at most {top_k} path "
-        f'strings, for example ["src/App/Foo.Table.al", "src/App/Bar.Codeunit.al"]. Do not add any prose.\n\n'
-        f"Bug report:\n{task}"
-    )
-
-
-def _extract_json_array(text: str) -> str:
-    stripped = (text or "").strip()
-    if not stripped:
-        return "[]"
-    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", stripped, re.IGNORECASE)
-    if fence:
-        stripped = fence.group(1).strip()
-    start = stripped.find("[")
-    end = stripped.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        return stripped[start : end + 1]
-    return stripped
-
-
-def _candidate_path(item: object) -> str | None:
-    if isinstance(item, str):
-        return item
-    if isinstance(item, dict):
-        mapping = cast(dict[str, object], item)
-        for key in ("path", "file", "file_path", "filepath"):
-            value = mapping.get(key)
-            if isinstance(value, str):
-                return value
-    return None
-
-
-def parse_prediction(raw_text: str, top_k: int | None = None) -> list[str]:
-    try:
-        data = json.loads(_extract_json_array(raw_text))
-    except (json.JSONDecodeError, TypeError):
-        return []
-
-    if not isinstance(data, list):
-        return []
-
-    paths: list[str] = []
-    for item in data:
-        candidate = _candidate_path(item)
-        if candidate is None:
-            continue
-        normalized = normalize_path(candidate)
-        if normalized and normalized not in paths:
-            paths.append(normalized)
-
-    return paths[:top_k] if top_k is not None else paths
-
-
-class FilePathIdentificationScore(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    exact_hit: bool
-    basename_hit: bool
-    exact_recall: float
-    basename_recall: float
-
-
-def score_prediction(predicted: list[str], gold: list[str]) -> FilePathIdentificationScore:
-    """Score predicted paths against gold buggy files.
-
-    Reports two granularities: exact repo-relative path match (strict, needs
-    knowledge of the repo layout) and basename match (the AL object file name,
-    which is the real memorization signal).
+    Raises:
+        ValueError: If the model did not answer with exactly one fenced path.
+            The probe is new, so unanswerable output should surface loudly
+            rather than quietly count as a miss.
     """
-    gold_paths = {normalize_path(p) for p in gold if normalize_path(p)}
-    pred_paths = {normalize_path(p) for p in predicted if normalize_path(p)}
-    gold_names = {_basename(p) for p in gold if _basename(p)}
-    pred_names = {_basename(p) for p in predicted if _basename(p)}
-
-    exact_matched = gold_paths & pred_paths
-    name_matched = gold_names & pred_names
-
-    return FilePathIdentificationScore(
-        exact_hit=bool(exact_matched),
-        basename_hit=bool(name_matched),
-        exact_recall=len(exact_matched) / len(gold_paths) if gold_paths else 0.0,
-        basename_recall=len(name_matched) / len(gold_names) if gold_names else 0.0,
+    response = re.search(
+        r"(?im)^[ \t*_#>`]*RESPONSE\b[ \t]*:?[ \t*_`]*?(?=\r?$|```)",
+        raw_text,
     )
+    if response is None:
+        raise ValueError("Expected the answer in a fenced code block after RESPONSE")
+
+    block = re.search(r"```(?:(?:[A-Za-z0-9_+-]+)?[ \t]*\r?\n)?(.*?)```", raw_text[response.end() :], re.DOTALL)
+    if block is None:
+        raise ValueError("Expected the answer in a fenced code block after RESPONSE")
+
+    paths = [line.strip() for line in block.group(1).splitlines() if line.strip()]
+    if len(paths) != 1:
+        raise ValueError(f"Expected exactly one path in the answer block, got {len(paths)}")
+
+    inline_code = re.fullmatch(r"(?P<fence>`+)(?P<path>.+)(?P=fence)", paths[0])
+    path = inline_code.group("path").strip() if inline_code else paths[0]
+    path = path.strip("\"'").replace("\\", "/").strip()
+    while path.startswith("./"):
+        path = path[2:]
+    if path.startswith(("a/", "b/")):
+        path = path[2:]
+    return [path.strip("/")]
+
+
+def matches_any_gold_path(predicted_files: list[str], gold_files: list[str]) -> bool:
+    """Check whether any predicted path exactly matches a gold path.
+
+    Args:
+        predicted_files: Repository-relative paths predicted by the model.
+        gold_files: Repository-relative paths modified by the gold patch.
+
+    Returns:
+        Whether the two collections contain an identical path.
+
+    Examples:
+        >>> matches_any_gold_path(["App/B.al"], ["App/A.al", "App/B.al"])
+        True
+        >>> matches_any_gold_path(["B.al"], ["App/B.al"])
+        False
+    """
+    # Keep both sides as collections so an all-reference policy can be added later
+    # without changing the persisted result shape.
+    return bool(set(gold_files) & set(predicted_files))
 
 
 class FilePathIdentificationResult(BaseModel):
@@ -156,94 +95,9 @@ class FilePathIdentificationResult(BaseModel):
 
     instance_id: str
     model: str
-    category: str
-    created_at: str
-    area: str | None = None
-    top_k: int
+    category: EvaluationCategory
     gold_files: list[str]
-    predicted_files: list[str]
-    score: FilePathIdentificationScore
+    predicted_files: Annotated[list[str], Field(max_length=1)]
+    matches_any_gold_path: bool
+    metrics: AgentMetrics | None = None
     raw_output: str = ""
-    error: str | None = None
-
-    @classmethod
-    def build(
-        cls,
-        *,
-        entry: RepoGroundedEntry,
-        model: str,
-        category: str,
-        top_k: int,
-        predicted_files: list[str],
-        raw_output: str = "",
-        error: str | None = None,
-    ) -> FilePathIdentificationResult:
-        gold = extract_gold_files(entry.patch)
-        return cls(
-            instance_id=entry.instance_id,
-            model=model,
-            category=category,
-            created_at=entry.created_at,
-            area=entry.metadata.area,
-            top_k=top_k,
-            gold_files=gold,
-            predicted_files=predicted_files,
-            score=score_prediction(predicted_files, gold),
-            raw_output=raw_output,
-            error=error,
-        )
-
-
-class IdentificationAggregate(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    label: str
-    count: int = Field(description="Total results in this group, including errored ones")
-    scored: int = Field(description="Results that ran successfully and were scored")
-    error_count: int
-    exact_hit_rate: float
-    basename_hit_rate: float
-    mean_exact_recall: float
-    mean_basename_recall: float
-
-
-def aggregate_results(results: list[FilePathIdentificationResult], label: str = "all") -> IdentificationAggregate:
-    scored = [r for r in results if r.error is None]
-    n = len(scored)
-
-    def rate(predicate: Callable[[FilePathIdentificationResult], bool]) -> float:
-        return sum(1 for r in scored if predicate(r)) / n if n else 0.0
-
-    def mean(selector: Callable[[FilePathIdentificationResult], float]) -> float:
-        return sum(selector(r) for r in scored) / n if n else 0.0
-
-    return IdentificationAggregate(
-        label=label,
-        count=len(results),
-        scored=n,
-        error_count=sum(1 for r in results if r.error is not None),
-        exact_hit_rate=rate(lambda r: r.score.exact_hit),
-        basename_hit_rate=rate(lambda r: r.score.basename_hit),
-        mean_exact_recall=mean(lambda r: r.score.exact_recall),
-        mean_basename_recall=mean(lambda r: r.score.basename_recall),
-    )
-
-
-def split_by_cutoff(results: list[FilePathIdentificationResult], cutoff: str) -> tuple[list[FilePathIdentificationResult], list[FilePathIdentificationResult]]:
-    """Split results into (pre-cutoff, on-or-after-cutoff) by ``created_at``.
-
-    Pre-cutoff entries were public before the boundary (potentially in training
-    data); on/after-cutoff entries act as the clean control. Entries with an
-    unparseable date are conservatively grouped with the pre-cutoff set.
-    """
-    boundary = date.fromisoformat(cutoff)
-    pre: list[FilePathIdentificationResult] = []
-    post: list[FilePathIdentificationResult] = []
-    for result in results:
-        try:
-            created = date.fromisoformat(result.created_at[:10])
-        except ValueError:
-            pre.append(result)
-            continue
-        (post if created >= boundary else pre).append(result)
-    return pre, post

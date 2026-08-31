@@ -33,3 +33,12 @@ def clear_directory(path: Path) -> None:
         else:
             child.chmod(stat.S_IWRITE)
             child.unlink()
+
+
+def prepare_run_dir(output_dir: Path, run_id: str) -> Path:
+    """Prepare a directory for a run, removing any existing contents."""
+    run_dir = output_dir / run_id
+    if run_dir.exists():
+        remove_tree(run_dir)
+    run_dir.mkdir(parents=True)
+    return run_dir

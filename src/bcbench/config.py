@@ -95,7 +95,7 @@ class TimeoutConfig:
             # Total bcal CLI budget per instance.
             bcal_execution=25 * 60,
             # Context-free file-path identification; kept below the 20-min workflow step timeout
-            # so a hung run records an error result before the CI step is force-killed.
+            # so a hung run fails before the CI step is force-killed.
             filepath_identification=15 * 60,
         )
 

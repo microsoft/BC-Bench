@@ -13,8 +13,9 @@ Covers:
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
-from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
+from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
@@ -24,7 +25,7 @@ from bcbench.results.summary import (
 )
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import create_bugfix_result, create_evaluation_context, create_testgen_result
+from tests.conftest import create_bugfix_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
 
 
 def _make_config_with_summary(summary_path: str):
@@ -171,6 +172,25 @@ class TestFromJsonDispatch:
         payload["category"] = "nonexistent"
         with pytest.raises(ValueError, match="nonexistent"):
             BaseEvaluationResult.from_json(payload)
+
+
+class TestJudgeScoredValidation:
+    def test_restores_missing_judge_model_for_timeout(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
+        payload = BaseEvaluationResult.create_agent_timeout_failure(ctx).model_dump(mode="json")
+
+        loaded = JudgeBasedEvaluationResult.model_validate(payload)
+
+        assert isinstance(loaded, JudgeBasedEvaluationResult)
+        assert loaded.judge_model == EvaluationCategory.NL2AL.judge_model
+
+    def test_rejects_missing_judge_model_for_non_timeout(self, tmp_path):
+        ctx = create_evaluation_context(tmp_path, entry=create_nl2al_entry(), category=EvaluationCategory.NL2AL)
+        payload = JudgeBasedEvaluationResult.create_raw(ctx, "output").model_dump(mode="json")
+        del payload["judge_model"]
+
+        with pytest.raises(ValidationError, match="judge_model"):
+            JudgeBasedEvaluationResult.model_validate(payload)
 
 
 # ---------------------------------------------------------------------------

@@ -96,7 +96,7 @@ class EvaluationPipeline[E: BaseDatasetEntry](ABC):
         except AgentTimeoutError as e:
             context.metrics = e.metrics
             context.experiment = e.config
-            result = BaseEvaluationResult.create_agent_timeout_failure(context)
+            result = context.category.result_class.create_agent_timeout_failure(context)
             self.save_result(context, result)
             logger.info("Agent timed out during execution, counting as failure.")
             return

@@ -11,7 +11,7 @@ from bcbench.operations.bc_operations import (
     run_tests,
     wrap_query_as_api,
 )
-from bcbench.operations.filesystem_operations import clear_directory, remove_tree
+from bcbench.operations.filesystem_operations import clear_directory, prepare_run_dir, remove_tree
 from bcbench.operations.git_operations import (
     apply_patch,
     checkout_commit,
@@ -51,6 +51,7 @@ __all__ = [
     "fetch_commit_if_missing",
     "has_changes",
     "init_repo",
+    "prepare_run_dir",
     "remove_tree",
     "resolve_artifact_version_root",
     "run_tests",
