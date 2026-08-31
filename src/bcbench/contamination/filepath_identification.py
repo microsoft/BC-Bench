@@ -44,7 +44,12 @@ def parse_prediction(raw_text: str) -> list[str]:
             The probe is new, so unanswerable output should surface loudly
             rather than quietly count as a miss.
     """
-    response = re.search(r"(?im)^[ \t*_#>`]*RESPONSE[ \t]*:?[ \t*_`]*$", raw_text)
+    response = re.search(
+        r"(?im)^[ \t*_#>`]*RESPONSE\b[ \t]*:?[ \t*_`]*(?=\r?$|```)",
+        raw_text,
+    )
+    if response is None:
+        response = re.search(r"(?i)\bRESPONSE\b[ \t]*:?[ \t]*(?=```)", raw_text)
     if response is None:
         raise ValueError("Expected the answer in a fenced code block after RESPONSE")
 

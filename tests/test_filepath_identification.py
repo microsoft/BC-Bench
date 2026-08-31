@@ -60,6 +60,18 @@ App/A.al
     def test_extracts_path_from_inline_fence(self):
         assert parse_prediction("RESPONSE\n```App/A.al```") == ["App/A.al"]
 
+    def test_tolerates_inline_fence_on_response_line(self):
+        response = "DISCUSSION Found the table.\nRESPONSE ```App/A.al```"
+        assert parse_prediction(response) == ["App/A.al"]
+
+    def test_tolerates_tagged_fence_on_response_line(self):
+        response = "DISCUSSION Found the table.\nRESPONSE ```text\nApp/A.al\n```"
+        assert parse_prediction(response) == ["App/A.al"]
+
+    def test_tolerates_response_after_discussion_on_same_line(self):
+        response = "DISCUSSION Found the table. RESPONSE ```App/A.al```"
+        assert parse_prediction(response) == ["App/A.al"]
+
     def test_uses_first_fenced_block_after_response(self):
         response = """RESPONSE
 ```
