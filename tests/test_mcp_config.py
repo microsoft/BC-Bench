@@ -209,7 +209,6 @@ class TestAltoolEnvForwarding:
         parsed = json.loads(config_json)["mcpServers"]
         assert "env" not in parsed["filesystem"]
         assert parsed["altool"]["env"] == {
-            "BC_SERVER_INSTANCE": "BC",
             "BC_SERVER_PASSWORD": "secret",
             "BC_SERVER_USERNAME": "admin",
         }

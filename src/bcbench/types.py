@@ -516,7 +516,7 @@ class ContainerConfig:
     username: str
     password: str
     server_url: str = ""
-    server_instance: str = "BC"
+    server_instance: str = ""
     mcp_url: str | None = None
     company: str | None = None
 
