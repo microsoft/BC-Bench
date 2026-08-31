@@ -53,11 +53,16 @@ def repo_path() -> Path:
     return Path("/repo")
 
 
+@pytest.fixture
+def container() -> ContainerConfig:
+    return ContainerConfig("test-container", "", "", server_instance="")
+
+
 class TestAlMcpProjectPaths:
-    def test_project_paths_inserted_after_launchmcpserver(self, entry, repo_path):
+    def test_project_paths_inserted_after_launchmcpserver(self, entry, repo_path, container):
         config = _make_config(ALTOOL_SERVER)
 
-        config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=True)
+        config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=True, container=container)
         assert config_json is not None
 
         parsed = json.loads(config_json)
@@ -66,10 +71,10 @@ class TestAlMcpProjectPaths:
         assert args[launch_idx + 1] == str(repo_path / "src/App")
         assert args[launch_idx + 2] == str(repo_path / "src/TestApp")
 
-    def test_transport_stdio_is_present(self, entry, repo_path):
+    def test_transport_stdio_is_present(self, entry, repo_path, container):
         config = _make_config(ALTOOL_SERVER)
 
-        config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=True)
+        config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=True, container=container)
         assert config_json is not None
 
         args = json.loads(config_json)["mcpServers"]["altool"]["args"]
@@ -95,13 +100,17 @@ class TestAlMcpProjectPaths:
         assert "docs" in parsed["mcpServers"]
         assert names == ["docs"]
 
-    def test_returns_server_names(self, entry, repo_path):
+    def test_returns_server_names(self, entry, repo_path, container):
         config = _make_config(ALTOOL_SERVER, OTHER_HTTP_SERVER)
 
-        _, names = build_mcp_config(config, entry, repo_path, al_mcp=True)
+        _, names = build_mcp_config(config, entry, repo_path, al_mcp=True, container=container)
         assert names is not None
 
         assert set(names) == {"altool", "docs"}
+
+    def test_raises_without_container(self, entry, repo_path):
+        with pytest.raises(AgentError, match="container configuration"):
+            build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True)
 
 
 class TestBcMcp:
@@ -171,8 +180,8 @@ class TestAltoolEnvForwarding:
             "BC_SERVER_USERNAME": "admin",
         }
 
-    def test_omits_env_block_when_no_vars_set(self, entry, repo_path):
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True)
+    def test_omits_env_block_when_no_vars_set(self, entry, repo_path, container):
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True, container=container)
         assert config_json is not None
 
         assert "env" not in json.loads(config_json)["mcpServers"]["altool"]

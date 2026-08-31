@@ -407,7 +407,10 @@ def start_bc_mcp_gateway(enabled: bool, container: ContainerConfig | None) -> Bc
     if not enabled:
         return None
 
-    if container is None or not container.mcp_url:
+    if container is None:
+        raise AgentError("BC MCP requested but no container configuration is available; provide --container-name or BC_CONTAINER_NAME.")
+
+    if not container.mcp_url:
         raise AgentError("BC MCP requested but no MCP URL is configured; provide it through the --mcp-url CLI option.")
 
     gateway = BcMcpGateway(

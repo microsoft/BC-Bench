@@ -113,8 +113,12 @@ class TestBcMcpGateway:
     def test_disabled_returns_none(self):
         assert start_bc_mcp_gateway(enabled=False, container=None) is None
 
+    def test_raises_without_container(self):
+        with pytest.raises(AgentError, match="container configuration"):
+            start_bc_mcp_gateway(enabled=True, container=None)
+
     def test_raises_without_upstream_url(self):
-        with pytest.raises(AgentError):
+        with pytest.raises(AgentError, match="MCP URL"):
             start_bc_mcp_gateway(enabled=True, container=ContainerConfig("bcbench", "admin", "secret"))
 
     def test_base_url_mirrors_upstream_path(self, gateway):

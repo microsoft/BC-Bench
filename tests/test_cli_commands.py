@@ -1,6 +1,7 @@
 """Integration tests for CLI commands using Typer's CliRunner."""
 
 import json
+from types import SimpleNamespace
 from unittest.mock import PropertyMock, patch
 
 import pytest
@@ -8,6 +9,7 @@ from typer.testing import CliRunner
 
 from bcbench.cli import _redteam_group_installed, app
 from bcbench.commands import evaluate as evaluate_commands
+from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
 from bcbench.types import AgentMetrics, BCalLLMBackend, EvaluationCategory
 from tests.conftest import (
@@ -134,6 +136,58 @@ def test_evaluate_bcal_records_backend_model_label(tmp_path):
         )
 
     assert captured["context"].model == "gpt-5.2-prod"
+
+
+@pytest.fixture
+def agent_command_category(tmp_path):
+    entry = create_dataset_entry()
+
+    class EntryClass:
+        @staticmethod
+        def load(_dataset_path, entry_id: str):
+            assert entry_id == entry.instance_id
+            return [entry]
+
+    class Pipeline:
+        def setup_workspace(self, _entry, _repo_path):
+            pass
+
+        def execute(self, context, agent_runner):
+            agent_runner(context)
+
+    return entry, SimpleNamespace(
+        dataset_path=tmp_path / "dataset.jsonl",
+        entry_class=EntryClass,
+        pipeline=Pipeline(),
+    )
+
+
+@pytest.mark.parametrize(
+    ("commands", "command_name", "agent_name", "extra_args"),
+    [
+        (run_commands, "run_copilot", "run_copilot_agent", {}),
+        (run_commands, "run_claude", "run_claude_code", {}),
+        (evaluate_commands, "evaluate_copilot", "run_copilot_agent", {"run_id": "test-run"}),
+        (evaluate_commands, "evaluate_claude_code", "run_claude_code", {"run_id": "test-run"}),
+    ],
+)
+def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_category, commands, command_name, agent_name, extra_args):
+    entry, category = agent_command_category
+
+    with patch.object(commands, agent_name) as run_agent:
+        getattr(commands, command_name)(
+            entry_id=entry.instance_id,
+            category=category,
+            repo_path=tmp_path / "repo",
+            output_dir=tmp_path / "results",
+            al_mcp=True,
+            bc_mcp=True,
+            **extra_args,
+        )
+
+    assert run_agent.call_args.kwargs["al_mcp"] is True
+    assert run_agent.call_args.kwargs["bc_mcp"] is True
+    assert run_agent.call_args.kwargs["container"] is None
 
 
 @pytest.mark.integration

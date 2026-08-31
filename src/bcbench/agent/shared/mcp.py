@@ -92,7 +92,10 @@ def build_mcp_config(
         _configure_bc_mcp_server(next(s for s in mcp_servers if s["name"] == _BC_MCP_SERVER_NAME), bc_mcp_gateway_url)
 
     if al_mcp:
-        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name if container else "")
+        if container is None:
+            raise AgentError("AL MCP requested but no container configuration is available; provide --container-name or BC_CONTAINER_NAME.")
+
+        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
         template_context["package_cache_path"] = str(symbols_folder)
 
         al_server = next(s for s in mcp_servers if s["name"] == "altool")
@@ -110,20 +113,16 @@ def build_mcp_config(
 
         # altool defines these environment variable names as its connection-config interface. Values
         # are sourced from typed CLI configuration rather than reading the harness environment here.
-        forwarded = (
-            {
-                key: value
-                for key, value in {
-                    "BC_SERVER_URL": container.server_url,
-                    "BC_SERVER_INSTANCE": container.server_instance,
-                    "BC_SERVER_USERNAME": container.username,
-                    "BC_SERVER_PASSWORD": container.password,
-                }.items()
-                if value
-            }
-            if container
-            else {}
-        )
+        forwarded = {
+            key: value
+            for key, value in {
+                "BC_SERVER_URL": container.server_url,
+                "BC_SERVER_INSTANCE": container.server_instance,
+                "BC_SERVER_USERNAME": container.username,
+                "BC_SERVER_PASSWORD": container.password,
+            }.items()
+            if value
+        }
         if forwarded:
             al_server["env"] = forwarded
             logger.info(f"Forwarding env vars to altool MCP: {list(forwarded.keys())}")
