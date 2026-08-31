@@ -468,7 +468,6 @@ class EvaluationCategory(StrEnum):
 
     @property
     def pass_bc_credentials_to_agent(self) -> bool:
-        """Whether the agent process may inherit BC connection credentials."""
         match self:
             case EvaluationCategory.DATA_QUERY:
                 return False
