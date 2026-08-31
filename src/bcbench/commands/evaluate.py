@@ -1,5 +1,4 @@
 import random
-from dataclasses import replace
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -67,10 +66,7 @@ def evaluate_copilot(
 
     logger.info(f"Running evaluation on entry {entry_id} with GitHub Copilot CLI")
 
-    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
-
-    if container:
-        container = replace(container, server_url=server_url, server_instance=server_instance, mcp_url=mcp_url, company=company)
+    container = ContainerConfig(container_name, username, password, server_url, server_instance, mcp_url, company) if container_name else None
 
     context = EvaluationContext(
         entry=entry,
@@ -131,10 +127,7 @@ def evaluate_claude_code(
 
     logger.info(f"Running evaluation on entry {entry_id} with Claude Code")
 
-    container = ContainerConfig(name=container_name, username=username, password=password) if container_name else None
-
-    if container:
-        container = replace(container, server_url=server_url, server_instance=server_instance, mcp_url=mcp_url, company=company)
+    container = ContainerConfig(container_name, username, password, server_url, server_instance, mcp_url, company) if container_name else None
 
     context = EvaluationContext(
         entry=entry,

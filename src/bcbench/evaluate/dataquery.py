@@ -152,5 +152,5 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         # a harness bug, so fail loud rather than run the gold against an arbitrary company.
         company = context.get_container().company
         if not company:
-            raise OSError("BC_MCP_COMPANY is not set; container setup must export the company the gold query runs against.")
+            raise OSError("BC company is not set; provide it through the --company CLI option.")
         return execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)

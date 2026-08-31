@@ -1,6 +1,5 @@
 """CLI commands for running agents."""
 
-from dataclasses import replace
 from typing import Annotated, cast
 
 import typer
@@ -62,9 +61,7 @@ def run_copilot(
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
-    container = ContainerConfig(container_name, username, password) if container_name else None
-    if container:
-        container = replace(container, server_url=server_url, server_instance=server_instance, mcp_url=mcp_url, company=company)
+    container = ContainerConfig(container_name, username, password, server_url, server_instance, mcp_url, company) if container_name else None
 
     run_copilot_agent(
         entry=entry,
@@ -108,9 +105,7 @@ def run_claude(
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
-    container = ContainerConfig(container_name, username, password) if container_name else None
-    if container:
-        container = replace(container, server_url=server_url, server_instance=server_instance, mcp_url=mcp_url, company=company)
+    container = ContainerConfig(container_name, username, password, server_url, server_instance, mcp_url, company) if container_name else None
 
     run_claude_code(
         entry=entry,
