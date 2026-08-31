@@ -1,13 +1,13 @@
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
 from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
 from bcbench.exceptions import BuildError, EmptyGoldResultError
 from bcbench.operations import bc_operations, wrap_query_as_api
-from bcbench.types import ContainerConfig
+from bcbench.types import AgentHarness, ContainerConfig, EvaluationCategory, EvaluationContext
+from tests.conftest import create_data_query_entry
 
 
 class TestResultSetsMatch:
@@ -74,35 +74,38 @@ class TestResultSetsMatch:
 
 
 class TestGoldRowsEmptyGuard:
-    def _context(self):
-        context = MagicMock()
-        context.entry.instance_id = "dataquery__customer-count-by-country-1"
-        context.entry.gold_query = "query 50101 Q { elements { } }"
-        context.entry.environment_setup_version = "29.0.0.0"
-        context.repo_path = Path("/tmp/bcbench-test")
-        return context
+    def _context(self, tmp_path: Path, company: str | None = "CRONUS") -> EvaluationContext:
+        return EvaluationContext(
+            entry=create_data_query_entry(
+                instance_id="dataquery__customer-count-by-country-1",
+                gold_query="query 50101 Q { elements { } }",
+                environment_setup_version="29.0",
+            ),
+            repo_path=tmp_path / "repo",
+            result_dir=tmp_path / "results",
+            container=ContainerConfig("bcbench", "admin", "secret", company=company),
+            model="test-model",
+            agent_name=AgentHarness.COPILOT,
+            category=EvaluationCategory.DATA_QUERY,
+        )
 
-    def test_empty_gold_raises(self, monkeypatch):
+    def test_empty_gold_raises(self, tmp_path, monkeypatch):
         # An empty gold means the environment/harness is broken, not a valid expected answer. It must
         # fail loudly so a run that retrieved nothing can't score as resolved via empty-vs-empty.
-        monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS")
         monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: [])
 
         with pytest.raises(EmptyGoldResultError):
-            DataQueryPipeline()._gold_rows(self._context())
+            DataQueryPipeline()._gold_rows(self._context(tmp_path))
 
-    def test_non_empty_gold_returned(self, monkeypatch):
-        monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS")
+    def test_non_empty_gold_returned(self, tmp_path, monkeypatch):
         rows = [{"CountryRegionCode": "US", "CustomerCount": 3}]
         monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: rows)
 
-        assert DataQueryPipeline()._gold_rows(self._context()) == rows
+        assert DataQueryPipeline()._gold_rows(self._context(tmp_path)) == rows
 
-    def test_missing_company_raises(self, monkeypatch):
-        monkeypatch.delenv("BC_MCP_COMPANY", raising=False)
-
-        with pytest.raises(OSError, match="BC_MCP_COMPANY"):
-            DataQueryPipeline()._gold_rows(self._context())
+    def test_missing_company_raises(self, tmp_path):
+        with pytest.raises(OSError, match="BC company"):
+            DataQueryPipeline()._gold_rows(self._context(tmp_path, company=None))
 
 
 class TestLoadAnswerRows:
