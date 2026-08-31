@@ -98,7 +98,7 @@ def run_copilot_agent(
                 {
                     "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
                 },
-                pass_bc_credentials=category.pass_bc_credentials_to_agent,
+                pass_bc_credentials=category.pass_on_bc_container_credentials,
             ),
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")

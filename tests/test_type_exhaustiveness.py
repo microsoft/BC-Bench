@@ -130,4 +130,4 @@ def test_all_categories_have_core_score():
 
 def test_only_data_query_withholds_bc_credentials():
     for category in EvaluationCategory:
-        assert category.pass_bc_credentials_to_agent is (category is not EvaluationCategory.DATA_QUERY)
+        assert category.pass_on_bc_container_credentials is (category is not EvaluationCategory.DATA_QUERY)

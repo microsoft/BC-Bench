@@ -467,7 +467,8 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
-    def pass_bc_credentials_to_agent(self) -> bool:
+    def pass_on_bc_container_credentials(self) -> bool:
+        # Development agents may need direct container access; production-like categories must use MCP.
         match self:
             case EvaluationCategory.DATA_QUERY:
                 return False
