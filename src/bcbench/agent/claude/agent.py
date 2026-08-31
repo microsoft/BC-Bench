@@ -118,7 +118,8 @@ def run_claude_code(
                     # execution timeouts so the slow first response is tolerated.
                     "MCP_TIMEOUT": "180000",
                     "MCP_TOOL_TIMEOUT": "180000",
-                }
+                },
+                pass_bc_credentials=category.pass_bc_credentials_to_agent,
             ),
             timeout=_config.timeout.agent_execution,
             check=True,

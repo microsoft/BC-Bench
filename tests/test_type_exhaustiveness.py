@@ -126,3 +126,8 @@ def test_all_categories_have_core_score():
     for category in EvaluationCategory:
         assert isinstance(category.core_score, str)
         assert category.core_score, f"{category} must declare a non-empty core_score"
+
+
+def test_only_data_query_withholds_bc_credentials():
+    for category in EvaluationCategory:
+        assert category.pass_bc_credentials_to_agent is (category is not EvaluationCategory.DATA_QUERY)

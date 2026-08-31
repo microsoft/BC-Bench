@@ -56,6 +56,8 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     repo_path.mkdir()
     output_dir.mkdir()
     monkeypatch.delenv("GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS", raising=False)
+    monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
 
     with (
         patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
@@ -94,4 +96,6 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     assert mock_run.call_args.kwargs["capture_output"] is True
     assert mock_run.call_args.kwargs["text"] is True
     assert "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS" not in mock_run.call_args.kwargs["env"]
+    assert mock_run.call_args.kwargs["env"]["BC_SERVER_USERNAME"] == "admin"
+    assert mock_run.call_args.kwargs["env"]["BC_SERVER_PASSWORD"] == "secret"
     mock_parse_output.assert_called_once_with(['{"type":"result"}'])

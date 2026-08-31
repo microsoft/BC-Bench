@@ -14,6 +14,8 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
     repo_path.mkdir()
     output_dir.mkdir()
     monkeypatch.setenv("BCBENCH_TEST_SENTINEL", "preserved")
+    monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
     monkeypatch.delenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", raising=False)
 
     with (
@@ -59,4 +61,6 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
     env = mock_run.call_args.kwargs["env"]
     assert env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == "1"
     assert env["BCBENCH_TEST_SENTINEL"] == "preserved"
+    assert env["BC_SERVER_USERNAME"] == "admin"
+    assert env["BC_SERVER_PASSWORD"] == "secret"
     assert "CLAUDE_CODE_DISABLE_AUTO_MEMORY" not in os.environ

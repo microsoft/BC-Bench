@@ -467,6 +467,25 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
+    def pass_bc_credentials_to_agent(self) -> bool:
+        """Whether the agent process may inherit BC connection credentials."""
+        match self:
+            case EvaluationCategory.DATA_QUERY:
+                return False
+            case (
+                EvaluationCategory.BUG_FIX
+                | EvaluationCategory.TEST_GENERATION
+                | EvaluationCategory.CODE_REVIEW
+                | EvaluationCategory.NL2AL
+                | EvaluationCategory.EXT_REQUEST_ADVISOR
+                | EvaluationCategory.EXT_REQUEST_IMPLEMENT
+                | EvaluationCategory.EXT_REQUEST_TRIAGE
+            ):
+                return True
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
     def requires_repo(self) -> bool:
         """Whether evaluating this category works on a cloned dataset repository."""
         from bcbench.dataset import RepoGroundedEntry
