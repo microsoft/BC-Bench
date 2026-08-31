@@ -12,9 +12,10 @@ _WITHHELD_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
 _WITHHELD_ENV_VARS = frozenset({"BC_CONTAINER_NAME"})
 
 
-def agent_subprocess_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
-    """``os.environ`` for a launched agent, with the BC container connection vars removed."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
+def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
+    env = dict(os.environ)
+    if not pass_bc_credentials:
+        env = {k: v for k, v in env.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
     if overrides:
         env.update(overrides)
     return env

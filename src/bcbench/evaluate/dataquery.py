@@ -5,6 +5,7 @@ from pathlib import Path
 
 from bcbench.dataset import DataQueryEntry
 from bcbench.evaluate.base import EvaluationPipeline
+from bcbench.exceptions import EmptyGoldResultError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import clear_directory
@@ -141,8 +142,10 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         """The expected rows: run the entry's gold query live against the container's fixed dataset.
 
         Computing the gold on demand keeps it resilient to demo-data changes (no stale baked rows). A
-        gold query that doesn't compile/run is a harness/dataset bug, not the agent's fault, so this
-        deliberately does NOT catch its failure — it must fail the run loudly.
+        gold query that doesn't compile/run — or that returns zero rows — is a harness/dataset bug, not
+        the agent's fault, so this deliberately does NOT catch those failures: it must fail the run
+        loudly. In particular an empty gold is rejected (see EmptyGoldResultError) so an agent that
+        retrieved nothing cannot spuriously match it.
         """
         from bcbench.operations import execute_al_query
 
@@ -153,4 +156,10 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         company = context.get_container().company
         if not company:
             raise OSError("BC company is not set; provide it through the --company CLI option.")
-        return execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)
+        rows = execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)
+        if not rows:
+            # An empty gold would make an empty agent answer spuriously "match" (result_sets_match([],
+            # []) is True), scoring a run that retrieved nothing as resolved. Every question has a
+            # non-empty answer, so treat this as a harness/environment failure and fail loudly.
+            raise EmptyGoldResultError(context.entry.instance_id)
+        return rows

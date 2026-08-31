@@ -467,6 +467,26 @@ class EvaluationCategory(StrEnum):
         raise ValueError(f"Unknown evaluation category: {self}")
 
     @property
+    def pass_on_bc_container_credentials(self) -> bool:
+        # Categories that simulate development scenarios (e.g. Bug Fix) should have direct container access
+        # While categories that simulate production scenarios (e.g. Data Query) should only use exposed access methods, e.g. BC MCP
+        match self:
+            case EvaluationCategory.DATA_QUERY:
+                return False
+            case (
+                EvaluationCategory.BUG_FIX
+                | EvaluationCategory.TEST_GENERATION
+                | EvaluationCategory.CODE_REVIEW
+                | EvaluationCategory.NL2AL
+                | EvaluationCategory.EXT_REQUEST_ADVISOR
+                | EvaluationCategory.EXT_REQUEST_IMPLEMENT
+                | EvaluationCategory.EXT_REQUEST_TRIAGE
+            ):
+                return True
+
+        raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
     def requires_repo(self) -> bool:
         """Whether evaluating this category works on a cloned dataset repository."""
         from bcbench.dataset import RepoGroundedEntry

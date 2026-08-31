@@ -25,6 +25,18 @@ def test_preserves_other_vars(monkeypatch):
     assert "BC_SERVER_PASSWORD" not in env
 
 
+def test_preserves_bc_connection_vars_when_allowed(monkeypatch):
+    monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+    monkeypatch.setenv("BC_CONTAINER_NAME", "bcbench-sales")
+
+    env = agent_subprocess_env(pass_bc_credentials=True)
+
+    assert env["BC_SERVER_USERNAME"] == "admin"
+    assert env["BC_SERVER_PASSWORD"] == "secret"
+    assert env["BC_CONTAINER_NAME"] == "bcbench-sales"
+
+
 def test_overrides_are_applied(monkeypatch):
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
 
