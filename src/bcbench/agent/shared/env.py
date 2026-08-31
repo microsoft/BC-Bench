@@ -13,7 +13,6 @@ _WITHHELD_ENV_VARS = frozenset({"BC_CONTAINER_NAME"})
 
 
 def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
-    """Build the environment for a launched agent."""
     env = dict(os.environ)
     if not pass_bc_credentials:
         env = {k: v for k, v in env.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
