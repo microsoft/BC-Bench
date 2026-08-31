@@ -73,5 +73,9 @@ def invoke_copilot(
         sys.stderr.write(result.stderr)
         sys.stderr.flush()
 
+    if result.stdout:
+        sys.stdout.write(result.stdout)
+        sys.stdout.flush()
+
     metrics, final_response = parse_output(result.stdout.splitlines())
     return metrics, final_response or ""

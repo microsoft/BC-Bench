@@ -50,6 +50,21 @@ def test_invoke_copilot_can_enable_custom_instructions(tmp_path: Path):
     assert "--no-custom-instructions" not in mock_run.call_args.args[0]
 
 
+def test_invoke_copilot_writes_json_output_to_stdout(tmp_path: Path, capsys):
+    output = '{"type":"assistant.message","data":{"content":"working"}}\n{"type":"result"}\n'
+    with (
+        patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, None)),
+        patch(
+            "bcbench.agent.copilot.cli.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output, stderr=""),
+        ),
+    ):
+        invoke_copilot(prompt="do the task", model="test-model", work_dir=tmp_path, timeout=60)
+
+    assert capsys.readouterr().out == output
+
+
 def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Path, monkeypatch):
     repo_path = tmp_path / "repo"
     output_dir = tmp_path / "output"
