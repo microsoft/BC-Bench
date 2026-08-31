@@ -15,6 +15,7 @@ __all__ = [
     "ConfigurationError",
     "DatasetError",
     "EmptyDiffError",
+    "EmptyGoldResultError",
     "EntryNotFoundError",
     "GitOperationError",
     "InvalidEntryFormatError",
@@ -84,6 +85,25 @@ class EmptyDiffError(GitOperationError):
 
     def __init__(self) -> None:
         message = "Generated diff is empty. Agent did not make any changes."
+        super().__init__(message)
+
+
+class EmptyGoldResultError(BCBenchError):
+    """A data-query gold query returned zero rows.
+
+    Every data-query question is an aggregation with a determinate, non-empty answer, so an empty gold
+    means the harness/environment is broken (BC cold-start/degraded, wrong company, or a bad gold
+    query) — never a legitimate expected result. It must fail loudly: otherwise an agent that
+    retrieved nothing (empty answer.json) would spuriously match an empty gold and score as resolved.
+    """
+
+    def __init__(self, instance_id: str) -> None:
+        self.instance_id = instance_id
+        message = (
+            f"Gold query for {instance_id} returned 0 rows. A data-query gold must be non-empty; an "
+            "empty result indicates a harness/environment problem (degraded BC container, wrong "
+            "BC_MCP_COMPANY, or a broken gold_query), not a valid expected answer."
+        )
         super().__init__(message)
 
 

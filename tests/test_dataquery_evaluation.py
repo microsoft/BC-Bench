@@ -1,9 +1,11 @@
 import json
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-from bcbench.evaluate.dataquery import _load_answer_rows, result_sets_match
-from bcbench.exceptions import BuildError
+from bcbench.evaluate.dataquery import DataQueryPipeline, _load_answer_rows, result_sets_match
+from bcbench.exceptions import BuildError, EmptyGoldResultError
 from bcbench.operations import bc_operations, wrap_query_as_api
 from bcbench.types import ContainerConfig
 
@@ -64,6 +66,43 @@ class TestResultSetsMatch:
     def test_numeric_string_not_coerced_to_number(self):
         # A code that happens to look like a scaled number must not match the numeric value 1.
         assert not result_sets_match([{"Key": "1.0"}], [{"Key": 1}])
+
+    def test_two_empty_sets_match(self):
+        # Documents the pitfall the empty-gold guard defends against: empty-vs-empty compares equal,
+        # so an agent that retrieved nothing would spuriously "resolve" against an empty gold.
+        assert result_sets_match([], [])
+
+
+class TestGoldRowsEmptyGuard:
+    def _context(self):
+        context = MagicMock()
+        context.entry.instance_id = "dataquery__customer-count-by-country-1"
+        context.entry.gold_query = "query 50101 Q { elements { } }"
+        context.entry.environment_setup_version = "29.0.0.0"
+        context.repo_path = Path("/tmp/bcbench-test")
+        return context
+
+    def test_empty_gold_raises(self, monkeypatch):
+        # An empty gold means the environment/harness is broken, not a valid expected answer. It must
+        # fail loudly so a run that retrieved nothing can't score as resolved via empty-vs-empty.
+        monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS")
+        monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: [])
+
+        with pytest.raises(EmptyGoldResultError):
+            DataQueryPipeline()._gold_rows(self._context())
+
+    def test_non_empty_gold_returned(self, monkeypatch):
+        monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS")
+        rows = [{"CountryRegionCode": "US", "CustomerCount": 3}]
+        monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: rows)
+
+        assert DataQueryPipeline()._gold_rows(self._context()) == rows
+
+    def test_missing_company_raises(self, monkeypatch):
+        monkeypatch.delenv("BC_MCP_COMPANY", raising=False)
+
+        with pytest.raises(OSError, match="BC_MCP_COMPANY"):
+            DataQueryPipeline()._gold_rows(self._context())
 
 
 class TestLoadAnswerRows:
