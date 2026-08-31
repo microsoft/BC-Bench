@@ -2,9 +2,9 @@
 
 import json
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -130,6 +130,22 @@ class JudgeScoredEvaluationResult(BaseEvaluationResult):
     """Result for categories whose scoring involves an LLM judge, recording which judge model was pinned for the run."""
 
     judge_model: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_missing_timeout_judge_model(cls, payload: object) -> object:
+        if not isinstance(payload, dict):
+            return payload
+
+        payload = cast(dict[str, object], payload)
+        if payload.get("timeout") is not True or "judge_model" in payload:
+            return payload
+
+        category = EvaluationCategory(payload["category"])
+        if (judge_model := category.judge_model) is None:
+            return payload
+
+        return {**payload, "judge_model": judge_model}
 
     @classmethod
     def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:

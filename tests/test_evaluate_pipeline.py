@@ -8,15 +8,15 @@ import pytest
 
 from bcbench.commands.evaluate import MockEvaluationPipeline
 from bcbench.config import get_config
-from bcbench.dataset import BaseDatasetEntry, BugFixEntry
+from bcbench.dataset import BaseDatasetEntry, BugFixEntry, NL2ALEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
 from bcbench.exceptions import AgentTimeoutError
-from bcbench.results.base import BaseEvaluationResult
+from bcbench.results.base import BaseEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 from tests.conftest import create_codereview_entry, create_dataset_entry, create_evaluation_context, create_ext_advisor_entry, create_nl2al_entry
 
 
-class _StubPipeline(EvaluationPipeline[BugFixEntry]):
+class _StubPipeline[E: BaseDatasetEntry](EvaluationPipeline[E]):
     def __init__(self, *, raise_in_evaluate: Exception | None = None, raise_in_run_agent: Exception | None = None) -> None:
         self.raise_in_evaluate = raise_in_evaluate
         self.raise_in_run_agent = raise_in_run_agent
@@ -24,19 +24,19 @@ class _StubPipeline(EvaluationPipeline[BugFixEntry]):
         self.run_agent_called = False
         self.evaluate_called = False
 
-    def setup_workspace(self, entry: BugFixEntry, repo_path: Path) -> None:
+    def setup_workspace(self, entry: E, repo_path: Path) -> None:
         pass
 
-    def setup(self, context: EvaluationContext[BugFixEntry]) -> None:
+    def setup(self, context: EvaluationContext[E]) -> None:
         self.setup_called = True
 
-    def run_agent(self, context: EvaluationContext[BugFixEntry], agent_runner: AgentRunner[BugFixEntry]) -> None:
+    def run_agent(self, context: EvaluationContext[E], agent_runner: AgentRunner[E]) -> None:
         self.run_agent_called = True
         if self.raise_in_run_agent is not None:
             raise self.raise_in_run_agent
         context.metrics, context.experiment = agent_runner(context)
 
-    def evaluate(self, context: EvaluationContext[BugFixEntry]) -> None:
+    def evaluate(self, context: EvaluationContext[E]) -> None:
         self.evaluate_called = True
         if self.raise_in_evaluate is not None:
             raise self.raise_in_evaluate
@@ -46,7 +46,7 @@ def _noop_runner(_ctx: EvaluationContext[BugFixEntry]) -> tuple[AgentMetrics | N
     return AgentMetrics(execution_time=1.0), ExperimentConfiguration()
 
 
-def _read_only_result(ctx: EvaluationContext[BugFixEntry]) -> BaseEvaluationResult:
+def _read_only_result[E: BaseDatasetEntry](ctx: EvaluationContext[E]) -> BaseEvaluationResult:
     result_file = ctx.result_dir / f"{ctx.entry.instance_id}{get_config().file_patterns.result_pattern}"
     payload = result_file.read_text(encoding="utf-8").strip().splitlines()
     assert len(payload) == 1, f"Expected one persisted result, got {len(payload)}: {payload}"
@@ -57,7 +57,7 @@ def _read_only_result(ctx: EvaluationContext[BugFixEntry]) -> BaseEvaluationResu
 class TestExecuteHappyPath:
     def test_runs_setup_then_agent_then_evaluate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
-        pipeline = _StubPipeline()
+        pipeline = _StubPipeline[BugFixEntry]()
 
         pipeline.execute(ctx, _noop_runner)
 
@@ -71,7 +71,7 @@ class TestExecuteAgentTimeout:
         ctx = create_evaluation_context(tmp_path)
         timeout_metrics = AgentMetrics(execution_time=600.0)
         timeout_config = ExperimentConfiguration(custom_instructions=True)
-        pipeline = _StubPipeline(raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
+        pipeline = _StubPipeline[BugFixEntry](raise_in_run_agent=AgentTimeoutError("test timeout", metrics=timeout_metrics, config=timeout_config))
 
         pipeline.execute(ctx, _noop_runner)
 
@@ -82,11 +82,26 @@ class TestExecuteAgentTimeout:
         assert result.metrics == timeout_metrics
         assert result.experiment == timeout_config
 
+    def test_persists_category_specific_timeout_result(self, tmp_path):
+        entry = create_nl2al_entry()
+        ctx = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.NL2AL)
+        pipeline = _StubPipeline[NL2ALEntry](raise_in_run_agent=AgentTimeoutError("test timeout"))
+
+        pipeline.execute(ctx, lambda _: (None, None))
+
+        result_file = ctx.result_dir / f"{entry.instance_id}{get_config().file_patterns.result_pattern}"
+        payload = json.loads(result_file.read_text(encoding="utf-8"))
+        assert payload["judge_model"] == EvaluationCategory.NL2AL.judge_model
+
+        result = _read_only_result(ctx)
+        assert isinstance(result, JudgeBasedEvaluationResult)
+        assert result.judge_model == EvaluationCategory.NL2AL.judge_model
+
 
 class TestExecuteEvaluateError:
     def test_unexpected_exceptions_still_propagate(self, tmp_path):
         ctx = create_evaluation_context(tmp_path)
-        pipeline = _StubPipeline(raise_in_evaluate=RuntimeError("infra blew up"))
+        pipeline = _StubPipeline[BugFixEntry](raise_in_evaluate=RuntimeError("infra blew up"))
 
         with pytest.raises(RuntimeError, match="infra blew up"):
             pipeline.execute(ctx, _noop_runner)
