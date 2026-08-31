@@ -468,7 +468,8 @@ class EvaluationCategory(StrEnum):
 
     @property
     def pass_on_bc_container_credentials(self) -> bool:
-        # Development agents may need direct container access; production-like categories must use MCP.
+        # Categories that simulate development scenarios (e.g. Bug Fix) should have direct container access
+        # While categories that simulate production scenarios (e.g. Data Query) should only use exposed access methods, e.g. BC MCP
         match self:
             case EvaluationCategory.DATA_QUERY:
                 return False
