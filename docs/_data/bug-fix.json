@@ -10,6 +10,7 @@
       "average_prompt_tokens": 685413.2,
       "average_completion_tokens": 4821.8,
       "average_llm_duration": 163.8,
+      "average_ai_credits": null,
       "average_tool_usage": null,
       "github_run_id": "21469730914",
       "experiment": null,
@@ -132,6 +133,7 @@
       "average_prompt_tokens": 775292.4,
       "average_completion_tokens": 5616.1,
       "average_llm_duration": 178.3,
+      "average_ai_credits": null,
       "average_tool_usage": null,
       "github_run_id": "21443171345",
       "experiment": null,
@@ -254,6 +256,7 @@
       "average_prompt_tokens": 768330.2,
       "average_completion_tokens": 4856.7,
       "average_llm_duration": 165.3,
+      "average_ai_credits": null,
       "average_tool_usage": null,
       "github_run_id": "21475608209",
       "experiment": null,
@@ -376,6 +379,7 @@
       "average_prompt_tokens": 699079.4,
       "average_completion_tokens": 4883.2,
       "average_llm_duration": 173.7,
+      "average_ai_credits": null,
       "average_tool_usage": null,
       "github_run_id": "21481919249",
       "experiment": null,
@@ -498,6 +502,7 @@
       "average_prompt_tokens": 670830.9,
       "average_completion_tokens": 4531.2,
       "average_llm_duration": 162.8,
+      "average_ai_credits": null,
       "average_tool_usage": null,
       "github_run_id": "21491024329",
       "experiment": null,
@@ -620,6 +625,7 @@
       "average_prompt_tokens": 765122.8,
       "average_completion_tokens": 5847.5,
       "average_llm_duration": 139.7,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.06,
         "view": 10.98,
@@ -755,6 +761,7 @@
       "average_prompt_tokens": 685809.9,
       "average_completion_tokens": 5605.0,
       "average_llm_duration": 139.3,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.14,
         "task": 0.68,
@@ -888,6 +895,7 @@
       "average_prompt_tokens": 652539.6,
       "average_completion_tokens": 5573.3,
       "average_llm_duration": 143.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.06,
         "task": 0.72,
@@ -1021,6 +1029,7 @@
       "average_prompt_tokens": 918806.9,
       "average_completion_tokens": 6780.2,
       "average_llm_duration": 171.6,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.13,
         "task": 0.72,
@@ -1154,6 +1163,7 @@
       "average_prompt_tokens": 729084.2,
       "average_completion_tokens": 5930.7,
       "average_llm_duration": 152.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.08,
         "task": 0.67,
@@ -1287,6 +1297,7 @@
       "average_prompt_tokens": 485205.0,
       "average_completion_tokens": 4296.0,
       "average_llm_duration": 78.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.97,
         "update_todo": 3.54,
@@ -1418,6 +1429,7 @@
       "average_prompt_tokens": 499240.6,
       "average_completion_tokens": 4416.8,
       "average_llm_duration": 80.5,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.87,
         "update_todo": 3.49,
@@ -1550,6 +1562,7 @@
       "average_prompt_tokens": 438743.6,
       "average_completion_tokens": 4197.6,
       "average_llm_duration": 78.8,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.91,
         "update_todo": 3.45,
@@ -1682,6 +1695,7 @@
       "average_prompt_tokens": 476105.9,
       "average_completion_tokens": 4435.6,
       "average_llm_duration": 86.7,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.95,
         "update_todo": 3.45,
@@ -1814,6 +1828,7 @@
       "average_prompt_tokens": 544017.8,
       "average_completion_tokens": 4611.9,
       "average_llm_duration": 88.4,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.96,
         "update_todo": 3.46,
@@ -1947,6 +1962,7 @@
       "average_prompt_tokens": 1150160.4,
       "average_completion_tokens": 13120.8,
       "average_llm_duration": 179.3,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 13.28,
         "rg": 13.95,
@@ -2079,6 +2095,7 @@
       "average_prompt_tokens": 1116916.8,
       "average_completion_tokens": 13183.2,
       "average_llm_duration": 160.7,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 14.71,
         "rg": 13.82,
@@ -2211,6 +2228,7 @@
       "average_prompt_tokens": 1044537.6,
       "average_completion_tokens": 12434.7,
       "average_llm_duration": 151.4,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 12.67,
         "powershell": 1.37,
@@ -2343,6 +2361,7 @@
       "average_prompt_tokens": 1296138.6,
       "average_completion_tokens": 13812.9,
       "average_llm_duration": 172.4,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 15.2,
         "powershell": 1.31,
@@ -2476,6 +2495,7 @@
       "average_prompt_tokens": 1011275.2,
       "average_completion_tokens": 12405.0,
       "average_llm_duration": 153.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 13.65,
         "powershell": 1.35,
@@ -2608,6 +2628,7 @@
       "average_prompt_tokens": 1161854.4,
       "average_completion_tokens": 15468.3,
       "average_llm_duration": 198.9,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 3.15,
         "rg": 9.86,
@@ -2741,6 +2762,7 @@
       "average_prompt_tokens": 1103166.3,
       "average_completion_tokens": 15082.2,
       "average_llm_duration": 195.9,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.78,
         "rg": 10.11,
@@ -2873,6 +2895,7 @@
       "average_prompt_tokens": 1161079.2,
       "average_completion_tokens": 13122.8,
       "average_llm_duration": 176.4,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.61,
         "powershell": 1.02,
@@ -3006,6 +3029,7 @@
       "average_prompt_tokens": 1177443.6,
       "average_completion_tokens": 16704.9,
       "average_llm_duration": 211.3,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.37,
         "rg": 11.28,
@@ -3139,6 +3163,7 @@
       "average_prompt_tokens": 993145.5,
       "average_completion_tokens": 12764.4,
       "average_llm_duration": 164.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 3.38,
         "rg": 9.09,
@@ -3272,6 +3297,7 @@
       "average_prompt_tokens": 703851.0,
       "average_completion_tokens": 5459.8,
       "average_llm_duration": 108.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.06,
         "task": 0.34,
@@ -3404,6 +3430,7 @@
       "average_prompt_tokens": 813378.2,
       "average_completion_tokens": 6099.5,
       "average_llm_duration": 118.6,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.07,
         "task": 0.18,
@@ -3536,6 +3563,7 @@
       "average_prompt_tokens": 875464.4,
       "average_completion_tokens": 6321.5,
       "average_llm_duration": 129.6,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.03,
         "task": 0.29,
@@ -3667,6 +3695,7 @@
       "average_prompt_tokens": 734789.0,
       "average_completion_tokens": 6307.9,
       "average_llm_duration": 124.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.05,
         "task": 0.22,
@@ -3799,6 +3828,7 @@
       "average_prompt_tokens": 940013.9,
       "average_completion_tokens": 6613.1,
       "average_llm_duration": 132.4,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.1,
         "task": 0.25,
@@ -3930,6 +3960,7 @@
       "average_prompt_tokens": 2309306.2,
       "average_completion_tokens": 5765.7,
       "average_llm_duration": 239.6,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.63,
         "grep": 40.84,
@@ -4060,6 +4091,7 @@
       "average_prompt_tokens": 2836024.2,
       "average_completion_tokens": 6366.2,
       "average_llm_duration": 227.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.81,
         "grep": 39.15,
@@ -4190,6 +4222,7 @@
       "average_prompt_tokens": 2857442.6,
       "average_completion_tokens": 6997.2,
       "average_llm_duration": 140.3,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.71,
         "grep": 44.04,
@@ -4320,6 +4353,7 @@
       "average_prompt_tokens": 2729943.6,
       "average_completion_tokens": 6247.4,
       "average_llm_duration": 129.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.7,
         "grep": 45.91,
@@ -4450,6 +4484,7 @@
       "average_prompt_tokens": 3262340.6,
       "average_completion_tokens": 7884.8,
       "average_llm_duration": 162.8,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.76,
         "grep": 43.51,
@@ -4581,6 +4616,7 @@
       "average_prompt_tokens": 577420.8,
       "average_completion_tokens": 6914.9,
       "average_llm_duration": 205.3,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 4.54,
         "sql": 4.48,
@@ -4715,6 +4751,7 @@
       "average_prompt_tokens": 752979.2,
       "average_completion_tokens": 7640.6,
       "average_llm_duration": 241.3,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 3.6,
         "sql": 4.68,
@@ -4851,6 +4888,7 @@
       "average_prompt_tokens": 559108.9,
       "average_completion_tokens": 6901.0,
       "average_llm_duration": 216.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 3.68,
         "sql": 4.49,
@@ -4986,6 +5024,7 @@
       "average_prompt_tokens": 520989.1,
       "average_completion_tokens": 6781.2,
       "average_llm_duration": 203.4,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 4.49,
         "sql": 4.4,
@@ -5119,6 +5158,7 @@
       "average_prompt_tokens": 586618.8,
       "average_completion_tokens": 6933.7,
       "average_llm_duration": 246.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 4.06,
         "sql": 4.7,
@@ -5254,6 +5294,7 @@
       "average_prompt_tokens": 1013296.9,
       "average_completion_tokens": 16492.4,
       "average_llm_duration": 385.3,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.98,
         "task": 1.13,
@@ -5386,6 +5427,7 @@
       "average_prompt_tokens": 938878.6,
       "average_completion_tokens": 18622.6,
       "average_llm_duration": 461.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.03,
         "task": 1.19,
@@ -5519,6 +5561,7 @@
       "average_prompt_tokens": 876680.8,
       "average_completion_tokens": 16298.0,
       "average_llm_duration": 373.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.02,
         "view": 22.66,
@@ -5651,6 +5694,7 @@
       "average_prompt_tokens": 1104286.9,
       "average_completion_tokens": 17810.9,
       "average_llm_duration": 383.7,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.99,
         "task": 1.06,
@@ -5783,6 +5827,7 @@
       "average_prompt_tokens": 907388.9,
       "average_completion_tokens": 16865.4,
       "average_llm_duration": 360.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.95,
         "view": 22.58,
@@ -5915,6 +5960,7 @@
       "average_prompt_tokens": 909938.4,
       "average_completion_tokens": 13862.6,
       "average_llm_duration": 445.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.87,
         "task": 1.79,
@@ -6062,6 +6108,7 @@
       "average_prompt_tokens": 888358.0,
       "average_completion_tokens": 13388.7,
       "average_llm_duration": 383.7,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.74,
         "task": 1.58,
@@ -6208,6 +6255,7 @@
       "average_prompt_tokens": 864440.4,
       "average_completion_tokens": 15359.2,
       "average_llm_duration": 427.9,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.9,
         "task": 1.8,
@@ -6355,6 +6403,7 @@
       "average_prompt_tokens": 1038357.0,
       "average_completion_tokens": 15623.5,
       "average_llm_duration": 485.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.97,
         "task": 1.72,
@@ -6503,6 +6552,7 @@
       "average_prompt_tokens": 1191660.4,
       "average_completion_tokens": 17130.5,
       "average_llm_duration": 541.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.94,
         "task": 1.85,
@@ -6650,6 +6700,7 @@
       "average_prompt_tokens": 567540.5,
       "average_completion_tokens": 8209.8,
       "average_llm_duration": 201.6,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "ToolSearch": 1.0,
         "Grep": 11.0,
@@ -6782,6 +6833,7 @@
       "average_prompt_tokens": 737099.0,
       "average_completion_tokens": 11181.0,
       "average_llm_duration": 271.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "ToolSearch": 1.0,
         "Grep": 13.19,
@@ -6913,6 +6965,7 @@
       "average_prompt_tokens": 588667.0,
       "average_completion_tokens": 9307.4,
       "average_llm_duration": 223.7,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "ToolSearch": 1.0,
         "Grep": 11.98,
@@ -7044,6 +7097,7 @@
       "average_prompt_tokens": 625684.3,
       "average_completion_tokens": 9353.6,
       "average_llm_duration": 220.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "ToolSearch": 1.0,
         "Grep": 12.21,
@@ -7176,6 +7230,7 @@
       "average_prompt_tokens": 569837.9,
       "average_completion_tokens": 8156.1,
       "average_llm_duration": 195.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "ToolSearch": 1.0,
         "Grep": 11.58,
@@ -7308,6 +7363,7 @@
       "average_prompt_tokens": 773900.0,
       "average_completion_tokens": 14464.3,
       "average_llm_duration": 418.8,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.74,
         "task": 1.54,
@@ -7443,6 +7499,7 @@
       "average_prompt_tokens": 698180.0,
       "average_completion_tokens": 13992.5,
       "average_llm_duration": 382.8,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.8,
         "task": 1.68,
@@ -7577,6 +7634,7 @@
       "average_prompt_tokens": 710827.0,
       "average_completion_tokens": 13110.5,
       "average_llm_duration": 410.6,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.78,
         "task": 1.68,
@@ -7711,6 +7769,7 @@
       "average_prompt_tokens": 770625.0,
       "average_completion_tokens": 15042.6,
       "average_llm_duration": 450.5,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.79,
         "task": 1.76,
@@ -7845,6 +7904,7 @@
       "average_prompt_tokens": 810260.0,
       "average_completion_tokens": 13883.0,
       "average_llm_duration": 413.1,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 2.74,
         "task": 1.76,
@@ -7980,6 +8040,7 @@
       "average_prompt_tokens": 1544536.6,
       "average_completion_tokens": 13370.9,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.23,
         "glob": 1.98,
@@ -8113,6 +8174,7 @@
       "average_prompt_tokens": 1641102.9,
       "average_completion_tokens": 14722.4,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.66,
         "glob": 1.92,
@@ -8246,6 +8308,7 @@
       "average_prompt_tokens": 1787151.5,
       "average_completion_tokens": 14350.6,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "glob": 2.01,
         "report_intent": 1.23,
@@ -8380,6 +8443,7 @@
       "average_prompt_tokens": 1656748.5,
       "average_completion_tokens": 13800.9,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "glob": 1.76,
         "grep": 11.5,
@@ -8515,6 +8579,7 @@
       "average_prompt_tokens": 1891613.8,
       "average_completion_tokens": 16306.7,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.39,
         "glob": 1.66,
@@ -8648,6 +8713,7 @@
       "average_prompt_tokens": 2196543.6,
       "average_completion_tokens": 24774.6,
       "average_llm_duration": 406.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "Bash": 13.12,
         "Agent": 0.67,
@@ -8780,6 +8846,7 @@
       "average_prompt_tokens": 2222197.8,
       "average_completion_tokens": 23354.0,
       "average_llm_duration": 391.9,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "Bash": 14.98,
         "Agent": 0.7,
@@ -8911,6 +8978,7 @@
       "average_prompt_tokens": 2524842.9,
       "average_completion_tokens": 25122.0,
       "average_llm_duration": 448.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "Bash": 15.77,
         "Agent": 0.69,
@@ -9043,6 +9111,7 @@
       "average_prompt_tokens": 2454934.0,
       "average_completion_tokens": 25435.6,
       "average_llm_duration": 419.2,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "Bash": 12.43,
         "Read": 19.29,
@@ -9175,6 +9244,7 @@
       "average_prompt_tokens": 2516707.2,
       "average_completion_tokens": 24502.0,
       "average_llm_duration": 407.4,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "Bash": 12.51,
         "Grep": 13.53,
@@ -9307,6 +9377,7 @@
       "average_prompt_tokens": 1537605.0,
       "average_completion_tokens": 16453.8,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.37,
         "grep": 10.47,
@@ -9442,6 +9513,7 @@
       "average_prompt_tokens": 1486641.0,
       "average_completion_tokens": 15707.6,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.42,
         "grep": 10.34,
@@ -9577,6 +9649,7 @@
       "average_prompt_tokens": 1727779.2,
       "average_completion_tokens": 18206.6,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.27,
         "grep": 11.69,
@@ -9711,6 +9784,7 @@
       "average_prompt_tokens": 1642758.4,
       "average_completion_tokens": 19042.5,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.33,
         "grep": 10.18,
@@ -9845,6 +9919,7 @@
       "average_prompt_tokens": 1558467.0,
       "average_completion_tokens": 17384.2,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "report_intent": 1.26,
         "grep": 10.01,
@@ -9978,6 +10053,7 @@
       "average_prompt_tokens": 1511258.4,
       "average_completion_tokens": 11654.5,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "grep": 15.94,
         "glob": 1.52,
@@ -10108,6 +10184,7 @@
       "average_prompt_tokens": 1306650.5,
       "average_completion_tokens": 10281.3,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "glob": 1.48,
         "grep": 16.52,
@@ -10241,6 +10318,7 @@
       "average_prompt_tokens": 1362173.3,
       "average_completion_tokens": 10608.9,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "grep": 15.97,
         "glob": 1.39,
@@ -10372,6 +10450,7 @@
       "average_prompt_tokens": 1334515.8,
       "average_completion_tokens": 10793.1,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "grep": 16.03,
         "glob": 1.34,
@@ -10504,6 +10583,7 @@
       "average_prompt_tokens": 1333603.9,
       "average_completion_tokens": 10223.8,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "grep": 15.88,
         "glob": 1.53,
@@ -10636,6 +10716,7 @@
       "average_prompt_tokens": 752377.2,
       "average_completion_tokens": 4698.0,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "rg": 14.86,
         "powershell": 5.14,
@@ -10765,6 +10846,7 @@
       "average_prompt_tokens": 732645.5,
       "average_completion_tokens": 4827.0,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "rg": 15.17,
         "powershell": 5.9,
@@ -10895,6 +10977,7 @@
       "average_prompt_tokens": 742035.6,
       "average_completion_tokens": 4848.3,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "glob": 1.83,
         "rg": 15.3,
@@ -11025,6 +11108,7 @@
       "average_prompt_tokens": 762467.3,
       "average_completion_tokens": 4877.7,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "rg": 17.32,
         "powershell": 5.39,
@@ -11154,6 +11238,7 @@
       "average_prompt_tokens": 834929.7,
       "average_completion_tokens": 5925.7,
       "average_llm_duration": 0.0,
+      "average_ai_credits": null,
       "average_tool_usage": {
         "rg": 15.45,
         "glob": 2.17,
@@ -11270,6 +11355,136 @@
         "microsoftInternal__NAV-214825": true,
         "microsoftInternal__NAV-224668": true,
         "microsoftInternal__NAV-192565": true,
+        "microsoftInternal__NAV-223493": true,
+        "microsoftInternal__NAV-185696": true,
+        "microsoftInternal__NAV-174087": true
+      }
+    },
+    {
+      "total": 101,
+      "date": "2026-08-31",
+      "model": "mai-code-1-1-flash",
+      "agent_name": "GitHub Copilot",
+      "category": "bug-fix",
+      "average_duration": 260.3,
+      "average_prompt_tokens": 0.0,
+      "average_completion_tokens": 0.0,
+      "average_llm_duration": 152.0,
+      "average_ai_credits": 6.53,
+      "average_tool_usage": {
+        "grep": 11.92,
+        "glob": 1.1,
+        "view": 12.88,
+        "edit": 2.39,
+        "powershell": 0.92,
+        "read_powershell": 0.01
+      },
+      "github_run_id": "33366296460",
+      "experiment": null,
+      "benchmark_version": "0.9.0",
+      "resolved": 46,
+      "failed": 55,
+      "build": 92,
+      "percentage": 45.5,
+      "instance_results": {
+        "microsoft__BCApps-4766": false,
+        "microsoftInternal__NAV-207247": true,
+        "microsoftInternal__NAV-207236": true,
+        "microsoftInternal__NAV-204450": false,
+        "microsoftInternal__NAV-220036": false,
+        "microsoftInternal__NAV-226004": false,
+        "microsoftInternal__NAV-210200": false,
+        "microsoftInternal__NAV-226448": false,
+        "microsoftInternal__NAV-217104": false,
+        "microsoftInternal__NAV-207177": true,
+        "microsoftInternal__NAV-208320": false,
+        "microsoftInternal__NAV-218856": false,
+        "microsoftInternal__NAV-213524": false,
+        "microsoftInternal__NAV-216572": false,
+        "microsoftInternal__NAV-178045": false,
+        "microsoftInternal__NAV-217797": false,
+        "microsoftInternal__NAV-216057": false,
+        "microsoftInternal__NAV-208851": true,
+        "microsoftInternal__NAV-181900": false,
+        "microsoftInternal__NAV-227219": true,
+        "microsoftInternal__NAV-224447": false,
+        "microsoftInternal__NAV-218253": false,
+        "microsoftInternal__NAV-216918": false,
+        "microsoftInternal__NAV-215225": true,
+        "microsoftInternal__NAV-191624": false,
+        "microsoftInternal__NAV-205825": false,
+        "microsoftInternal__NAV-188438": true,
+        "microsoftInternal__NAV-213683": true,
+        "microsoftInternal__NAV-214926": true,
+        "microsoftInternal__NAV-217974": true,
+        "microsoftInternal__NAV-218786": true,
+        "microsoftInternal__NAV-211710": true,
+        "microsoftInternal__NAV-227358": true,
+        "microsoftInternal__NAV-176150": true,
+        "microsoftInternal__NAV-218323": true,
+        "microsoftInternal__NAV-176426": false,
+        "microsoftInternal__NAV-193649": false,
+        "microsoftInternal__NAV-220452": false,
+        "microsoftInternal__NAV-207878": false,
+        "microsoftInternal__NAV-213671": false,
+        "microsoftInternal__NAV-176194": false,
+        "microsoftInternal__NAV-201169": false,
+        "microsoftInternal__NAV-226875": true,
+        "microsoftInternal__NAV-226223": true,
+        "microsoftInternal__NAV-218062": false,
+        "microsoftInternal__NAV-183399": true,
+        "microsoftInternal__NAV-224009": false,
+        "microsoftInternal__NAV-222484": false,
+        "microsoftInternal__NAV-209496": true,
+        "microsoftInternal__NAV-220314": true,
+        "microsoftInternal__NAV-222092": false,
+        "microsoftInternal__NAV-203923": true,
+        "microsoftInternal__NAV-206527": true,
+        "microsoftInternal__NAV-175577": false,
+        "microsoftInternal__NAV-193853": false,
+        "microsoftInternal__NAV-213629": true,
+        "microsoftInternal__NAV-208748": true,
+        "microsoftInternal__NAV-227153": true,
+        "microsoftInternal__NAV-195193": false,
+        "microsoft__BCApps-5633": false,
+        "microsoftInternal__NAV-223819": true,
+        "microsoftInternal__NAV-211548": false,
+        "microsoft__BCApps-4822": false,
+        "microsoftInternal__NAV-185792": true,
+        "microsoftInternal__NAV-209450": false,
+        "microsoftInternal__NAV-214557": false,
+        "microsoftInternal__NAV-177493": true,
+        "microsoftInternal__NAV-213741": false,
+        "microsoftInternal__NAV-174794": true,
+        "microsoft__BCApps-4699": true,
+        "microsoftInternal__NAV-215972": false,
+        "microsoftInternal__NAV-220984": false,
+        "microsoftInternal__NAV-218995": true,
+        "microsoftInternal__NAV-177750": false,
+        "microsoftInternal__NAV-219082": true,
+        "microsoftInternal__NAV-223202": true,
+        "microsoftInternal__NAV-176082": true,
+        "microsoftInternal__NAV-209737": false,
+        "microsoftInternal__NAV-180484": false,
+        "microsoftInternal__NAV-209835": false,
+        "microsoftInternal__NAV-223790": false,
+        "microsoftInternal__NAV-208649": false,
+        "microsoftInternal__NAV-222488": false,
+        "microsoftInternal__NAV-182354": false,
+        "microsoftInternal__NAV-211521": true,
+        "microsoftInternal__NAV-206977": true,
+        "microsoftInternal__NAV-175765": false,
+        "microsoftInternal__NAV-206135": false,
+        "microsoftInternal__NAV-221877": true,
+        "microsoftInternal__NAV-179733": false,
+        "microsoftInternal__NAV-210528": true,
+        "microsoftInternal__NAV-185488": true,
+        "microsoftInternal__NAV-215645": false,
+        "microsoftInternal__NAV-212355": true,
+        "microsoftInternal__NAV-227240": true,
+        "microsoftInternal__NAV-214825": true,
+        "microsoftInternal__NAV-224668": true,
+        "microsoftInternal__NAV-192565": false,
         "microsoftInternal__NAV-223493": true,
         "microsoftInternal__NAV-185696": true,
         "microsoftInternal__NAV-174087": true
@@ -11523,6 +11738,20 @@
       "ci_low": 0.519,
       "ci_high": 0.576,
       "pass_hat_5": 0.317
+    },
+    {
+      "model": "mai-code-1-1-flash",
+      "agent_name": "GitHub Copilot",
+      "category": "bug-fix",
+      "experiment": null,
+      "total": 101,
+      "num_runs": 1,
+      "average_duration": 260.3,
+      "benchmark_version": "0.9.0",
+      "average": 0.455,
+      "ci_low": null,
+      "ci_high": null,
+      "pass_hat_5": null
     }
   ]
 }
