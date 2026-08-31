@@ -177,8 +177,8 @@ class TestAltoolEnvForwarding:
 
         assert "env" not in json.loads(config_json)["mcpServers"]["altool"]
 
-    def test_skips_empty_string_values(self, entry, repo_path):
-        container = ContainerConfig("bcbench", "admin", "", "", "")
+    def test_skips_empty_connection_values(self, entry, repo_path):
+        container = ContainerConfig("bcbench", "admin", "", server_url="", server_instance="")
         config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True, container=container)
         assert config_json is not None
 
