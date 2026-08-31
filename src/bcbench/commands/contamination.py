@@ -69,7 +69,9 @@ def _build_markdown_report(results: list[FilePathIdentificationResult]) -> str:
         [
             "## File-path identification",
             "",
-            f"Model: **{first_result.model}** · category: **{first_result.category.value}** · one-shot bug localization without repository access.",
+            f"- Model: **{first_result.model}**",
+            f"- Category: **{first_result.category.value}**",
+            "- One-shot bug localization without repository access.",
             "",
             "| Results | Matches any gold path |",
             "| --- | --- |",
