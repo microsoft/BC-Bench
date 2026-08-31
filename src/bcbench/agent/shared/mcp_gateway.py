@@ -408,7 +408,7 @@ def start_bc_mcp_gateway(enabled: bool, container: ContainerConfig | None) -> Bc
         return None
 
     if container is None or not container.mcp_url:
-        raise AgentError("BC MCP requested but BC_MCP_URL is not set; container setup must export it.")
+        raise AgentError("BC MCP requested but no MCP URL is configured; provide it through the --mcp-url CLI option.")
 
     gateway = BcMcpGateway(
         upstream_url=container.mcp_url,
