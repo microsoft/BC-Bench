@@ -9,13 +9,11 @@ agent could replay against ``/api``.
 This gateway closes both holes: it path-restricts to ``/mcp`` (everything else -> 403) and injects the
 Basic auth / Company / ConfigurationName headers itself, so the agent's MCP config carries only a
 credential-free ``http://127.0.0.1:<port>/.../mcp`` URL. The upstream endpoint and credentials come
-from the harness environment (``BC_MCP_URL`` / ``BC_SERVER_*`` / ``BC_MCP_COMPANY``), which is never
-scrubbed for the harness itself.
+from typed container configuration populated at the CLI boundary.
 """
 
 import base64
 import json
-import os
 import threading
 import time
 from http.client import HTTPConnection
@@ -24,6 +22,7 @@ from urllib.parse import urlsplit
 
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
+from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
 
@@ -403,20 +402,19 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
     return _ProxyHandler
 
 
-def start_bc_mcp_gateway(enabled: bool) -> BcMcpGateway | None:
+def start_bc_mcp_gateway(enabled: bool, container: ContainerConfig | None) -> BcMcpGateway | None:
     """Start a localhost MCP gateway in front of the BC container, or return None when disabled."""
     if not enabled:
         return None
 
-    upstream = os.environ.get("BC_MCP_URL")
-    if not upstream:
+    if container is None or not container.mcp_url:
         raise AgentError("BC MCP requested but BC_MCP_URL is not set; container setup must export it.")
 
     gateway = BcMcpGateway(
-        upstream_url=upstream,
-        username=os.environ.get("BC_SERVER_USERNAME", ""),
-        password=os.environ.get("BC_SERVER_PASSWORD", ""),
-        company=os.environ.get("BC_MCP_COMPANY"),
+        upstream_url=container.mcp_url,
+        username=container.username,
+        password=container.password,
+        company=container.company,
     ).start()
     logger.info(f"BC MCP gateway listening at {gateway.base_url}/mcp (credential-free; path-restricted to /mcp)")
     gateway.warm_up()

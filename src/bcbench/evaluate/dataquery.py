@@ -1,5 +1,4 @@
 import json
-import os
 from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -148,10 +147,10 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         from bcbench.operations import execute_al_query
 
         logger.info(f"Running gold query live for {context.entry.instance_id}")
-        # Pin the gold query to the same company the agent queried via MCP (BC_MCP_COMPANY), so the
+        # Pin the gold query to the same company the agent queried via MCP, so the
         # comparison is against the same data. It must be set by container setup — a missing company is
         # a harness bug, so fail loud rather than run the gold against an arbitrary company.
-        company = os.environ.get("BC_MCP_COMPANY")
+        company = context.get_container().company
         if not company:
             raise OSError("BC_MCP_COMPANY is not set; container setup must export the company the gold query runs against.")
         return execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)

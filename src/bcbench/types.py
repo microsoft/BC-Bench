@@ -495,6 +495,10 @@ class ContainerConfig:
     name: str
     username: str
     password: str
+    server_url: str = ""
+    server_instance: str = "BC"
+    mcp_url: str | None = None
+    company: str | None = None
 
 
 @dataclass(frozen=True)

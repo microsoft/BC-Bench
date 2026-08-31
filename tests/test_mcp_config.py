@@ -7,6 +7,7 @@ import pytest
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
 from bcbench.agent.shared.mcp import build_mcp_config
 from bcbench.exceptions import AgentError
+from bcbench.types import ContainerConfig
 from tests.conftest import create_dataset_entry
 
 
@@ -151,32 +152,15 @@ class TestBcMcp:
 
 
 class TestAltoolEnvForwarding:
-    _MANAGED_VARS = (
-        "BC_SERVER_URL",
-        "BC_SERVER_INSTANCE",
-        "BC_SERVER_USERNAME",
-        "BC_SERVER_PASSWORD",
-    )
-
-    @pytest.fixture(autouse=True)
-    def _isolate_env(self):
-        import os
-
-        saved = {var: os.environ.pop(var, None) for var in self._MANAGED_VARS}
-        yield
-        for var in self._MANAGED_VARS:
-            os.environ.pop(var, None)
-            value = saved[var]
-            if value is not None:
-                os.environ[var] = value
-
-    def test_forwards_set_bc_server_vars(self, entry, repo_path, monkeypatch):
-        monkeypatch.setenv("BC_SERVER_URL", "http://bcbench-210528")
-        monkeypatch.setenv("BC_SERVER_INSTANCE", "BC")
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
-
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True)
+    def test_forwards_container_connection(self, entry, repo_path):
+        container = ContainerConfig(
+            "bcbench",
+            "admin",
+            "secret",
+            server_url="http://bcbench-210528",
+            server_instance="BC",
+        )
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True, container=container)
         assert config_json is not None
 
         env = json.loads(config_json)["mcpServers"]["altool"]["env"]
@@ -193,18 +177,15 @@ class TestAltoolEnvForwarding:
 
         assert "env" not in json.loads(config_json)["mcpServers"]["altool"]
 
-    def test_skips_empty_string_values(self, entry, repo_path, monkeypatch):
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-        monkeypatch.setenv("BC_SERVER_PASSWORD", "")
-
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True)
+    def test_skips_empty_string_values(self, entry, repo_path):
+        container = ContainerConfig("bcbench", "admin", "")
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True, container=container)
         assert config_json is not None
 
         env = json.loads(config_json)["mcpServers"]["altool"]["env"]
-        assert env == {"BC_SERVER_USERNAME": "admin"}
+        assert env == {"BC_SERVER_INSTANCE": "BC", "BC_SERVER_USERNAME": "admin"}
 
-    def test_does_not_forward_to_other_stdio_servers(self, entry, repo_path, monkeypatch):
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
+    def test_does_not_forward_to_other_stdio_servers(self, entry, repo_path):
         other_stdio = {
             "name": "filesystem",
             "type": "stdio",
@@ -212,12 +193,17 @@ class TestAltoolEnvForwarding:
             "args": ["server.js"],
         }
 
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER, other_stdio), entry, repo_path, al_mcp=True)
+        container = ContainerConfig("bcbench", "admin", "secret")
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER, other_stdio), entry, repo_path, al_mcp=True, container=container)
         assert config_json is not None
 
         parsed = json.loads(config_json)["mcpServers"]
         assert "env" not in parsed["filesystem"]
-        assert parsed["altool"]["env"] == {"BC_SERVER_USERNAME": "admin"}
+        assert parsed["altool"]["env"] == {
+            "BC_SERVER_INSTANCE": "BC",
+            "BC_SERVER_PASSWORD": "secret",
+            "BC_SERVER_USERNAME": "admin",
+        }
 
 
 class TestBuildAssemblyProbingPaths:

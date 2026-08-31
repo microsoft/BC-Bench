@@ -10,6 +10,7 @@ import pytest
 
 from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
 from bcbench.exceptions import AgentError
+from bcbench.types import ContainerConfig
 
 _WARMUP_MODULE = "bcbench.agent.shared.mcp_gateway"
 
@@ -82,13 +83,16 @@ def upstream():
 
 
 @pytest.fixture
-def gateway(upstream, monkeypatch):
+def gateway(upstream):
     port = upstream.server_address[1]
-    monkeypatch.setenv("BC_MCP_URL", f"http://127.0.0.1:{port}/BC")
-    monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-    monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
-    monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS International Ltd.")
-    gw = start_bc_mcp_gateway(enabled=True)
+    container = ContainerConfig(
+        "bcbench",
+        "admin",
+        "secret",
+        mcp_url=f"http://127.0.0.1:{port}/BC",
+        company="CRONUS International Ltd.",
+    )
+    gw = start_bc_mcp_gateway(enabled=True, container=container)
     assert gw is not None
     yield gw
     gw.stop()
@@ -107,12 +111,11 @@ def _request(base_url: str, method: str, path: str, body: bytes | None = None):
 
 class TestBcMcpGateway:
     def test_disabled_returns_none(self):
-        assert start_bc_mcp_gateway(enabled=False) is None
+        assert start_bc_mcp_gateway(enabled=False, container=None) is None
 
-    def test_raises_without_upstream_url(self, monkeypatch):
-        monkeypatch.delenv("BC_MCP_URL", raising=False)
+    def test_raises_without_upstream_url(self):
         with pytest.raises(AgentError):
-            start_bc_mcp_gateway(enabled=True)
+            start_bc_mcp_gateway(enabled=True, container=ContainerConfig("bcbench", "admin", "secret"))
 
     def test_base_url_mirrors_upstream_path(self, gateway):
         assert gateway.base_url.endswith("/BC")
@@ -206,16 +209,13 @@ class _McpHandler(BaseHTTPRequestHandler):
 
 class TestBcMcpProbe:
     @pytest.fixture
-    def mcp_gateway(self, monkeypatch):
+    def mcp_gateway(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), _McpHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         port = server.server_address[1]
-        monkeypatch.setenv("BC_MCP_URL", f"http://127.0.0.1:{port}/BC")
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
-        monkeypatch.delenv("BC_MCP_COMPANY", raising=False)
-        gw = start_bc_mcp_gateway(enabled=True)
+        container = ContainerConfig("bcbench", "admin", "secret", mcp_url=f"http://127.0.0.1:{port}/BC")
+        gw = start_bc_mcp_gateway(enabled=True, container=container)
         assert gw is not None
         yield gw
         gw.stop()
@@ -241,10 +241,8 @@ class TestBcMcpProbe:
         assert [t["name"] for t in payload["result"]["tools"]] == ["bc_data_find_tables", "bc_data_query"]
 
     def test_warm_up_never_raises_on_bad_upstream(self, monkeypatch):
-        monkeypatch.setenv("BC_MCP_URL", "http://127.0.0.1:1/BC")  # nothing listening
-        monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
-        monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
-        gw = start_bc_mcp_gateway(enabled=True)
+        container = ContainerConfig("bcbench", "admin", "secret", mcp_url="http://127.0.0.1:1/BC")
+        gw = start_bc_mcp_gateway(enabled=True, container=container)
         assert gw is not None
         try:
             assert gw.warm_up() == []

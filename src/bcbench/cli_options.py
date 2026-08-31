@@ -46,6 +46,14 @@ ContainerUsername = Annotated[str, typer.Option(envvar="BC_SERVER_USERNAME", hel
 
 ContainerPassword = Annotated[str, typer.Option(envvar="BC_SERVER_PASSWORD", help="Password for BC container")]
 
+ContainerServerUrl = Annotated[str, typer.Option(envvar="BC_SERVER_URL", help="BC server URL")]
+
+ContainerServerInstance = Annotated[str, typer.Option(envvar="BC_SERVER_INSTANCE", help="BC server instance")]
+
+ContainerMcpUrl = Annotated[str | None, typer.Option(envvar="BC_MCP_URL", help="BC MCP upstream URL")]
+
+ContainerCompany = Annotated[str | None, typer.Option(envvar="BC_MCP_COMPANY", help="BC company name")]
+
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
 
 CopilotModelName = Literal[

@@ -1,5 +1,6 @@
 """CLI commands for running agents."""
 
+from dataclasses import replace
 from typing import Annotated, cast
 
 import typer
@@ -8,7 +9,13 @@ from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, ru
 from bcbench.cli_options import (
     BCQualityLocalPath,
     ClaudeCodeModel,
+    ContainerCompany,
+    ContainerMcpUrl,
     ContainerName,
+    ContainerPassword,
+    ContainerServerInstance,
+    ContainerServerUrl,
+    ContainerUsername,
     CopilotModel,
     EvaluationCategoryOption,
     OutputDir,
@@ -18,7 +25,7 @@ from bcbench.cli_options import (
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend, EvaluationCategory
+from bcbench.types import BCalLLMBackend, ContainerConfig, EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -31,6 +38,12 @@ def run_copilot(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
+    server_url: ContainerServerUrl = "",
+    server_instance: ContainerServerInstance = "BC",
+    mcp_url: ContainerMcpUrl = None,
+    company: ContainerCompany = None,
     model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -49,6 +62,10 @@ def run_copilot(
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
+    container = ContainerConfig(container_name, username, password) if container_name else None
+    if container:
+        container = replace(container, server_url=server_url, server_instance=server_instance, mcp_url=mcp_url, company=company)
+
     run_copilot_agent(
         entry=entry,
         repo_path=repo_path,
@@ -58,7 +75,7 @@ def run_copilot(
         al_mcp=al_mcp if container_name else False,
         al_lsp=al_lsp,
         bc_mcp=bc_mcp if container_name else False,
-        container_name=container_name,
+        container=container,
     )
 
 
@@ -67,6 +84,12 @@ def run_claude(
     entry_id: Annotated[str, typer.Argument(help="Entry ID to run")],
     category: EvaluationCategoryOption,
     container_name: ContainerName = "",
+    username: ContainerUsername = "",
+    password: ContainerPassword = "",
+    server_url: ContainerServerUrl = "",
+    server_instance: ContainerServerInstance = "BC",
+    mcp_url: ContainerMcpUrl = None,
+    company: ContainerCompany = None,
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -85,6 +108,10 @@ def run_claude(
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
 
+    container = ContainerConfig(container_name, username, password) if container_name else None
+    if container:
+        container = replace(container, server_url=server_url, server_instance=server_instance, mcp_url=mcp_url, company=company)
+
     run_claude_code(
         entry=entry,
         repo_path=repo_path,
@@ -94,7 +121,7 @@ def run_claude(
         al_mcp=al_mcp if container_name else False,
         al_lsp=al_lsp,
         bc_mcp=bc_mcp if container_name else False,
-        container_name=container_name,
+        container=container,
     )
 
 

@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -10,6 +9,7 @@ from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, comp
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
+from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
 
@@ -72,7 +72,7 @@ def build_mcp_config(
     repo_path: Path,
     al_mcp: bool = False,
     bc_mcp: bool = False,
-    container_name: str = "bcbench",
+    container: ContainerConfig | None = None,
     bc_mcp_gateway_url: str | None = None,
 ) -> tuple[str | None, list[str] | None]:
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
@@ -92,7 +92,7 @@ def build_mcp_config(
         _configure_bc_mcp_server(next(s for s in mcp_servers if s["name"] == _BC_MCP_SERVER_NAME), bc_mcp_gateway_url)
 
     if al_mcp:
-        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container_name)
+        compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name if container else "")
         template_context["package_cache_path"] = str(symbols_folder)
 
         al_server = next(s for s in mcp_servers if s["name"] == "altool")
@@ -108,8 +108,22 @@ def build_mcp_config(
             al_server["args"].extend(["--assemblyprobingpaths", *assembly_probing_paths])
             logger.info(f"Assembly probing paths: {assembly_probing_paths}")
 
-        # forward BC_SERVER_* environment variables explicitly
-        forwarded = {k: os.environ[k] for k in ("BC_SERVER_URL", "BC_SERVER_INSTANCE", "BC_SERVER_USERNAME", "BC_SERVER_PASSWORD") if os.environ.get(k)}
+        # altool defines these environment variable names as its connection-config interface. Values
+        # are sourced from typed CLI configuration rather than reading the harness environment here.
+        forwarded = (
+            {
+                key: value
+                for key, value in {
+                    "BC_SERVER_URL": container.server_url,
+                    "BC_SERVER_INSTANCE": container.server_instance,
+                    "BC_SERVER_USERNAME": container.username,
+                    "BC_SERVER_PASSWORD": container.password,
+                }.items()
+                if value
+            }
+            if container
+            else {}
+        )
         if forwarded:
             al_server["env"] = forwarded
             logger.info(f"Forwarding env vars to altool MCP: {list(forwarded.keys())}")
