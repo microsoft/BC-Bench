@@ -230,8 +230,10 @@ def test_container_options_without_name_are_rejected():
 
 
 def test_bc_mcp_requires_mcp_url():
-    with pytest.raises(typer.BadParameter, match="MCP URL is required"):
+    with pytest.raises(typer.BadParameter, match="MCP URL is required") as error:
         _resolve_runtime(container_name="bcbench", company="CRONUS", bc_mcp=True)
+
+    assert error.value.param_hint == "--mcp-url"
 
 
 def test_required_evaluation_container_is_resolved_at_boundary():
@@ -240,8 +242,10 @@ def test_required_evaluation_container_is_resolved_at_boundary():
 
 
 def test_every_container_requires_company():
-    with pytest.raises(typer.BadParameter, match="Company must not be empty"):
-        _resolve_runtime(container_name="bcbench")
+    with pytest.raises(typer.BadParameter, match="Company must not be empty") as error:
+        _resolve_runtime(container_name="bcbench", bc_mcp=True)
+
+    assert error.value.param_hint == "--company"
 
 
 def test_al_lsp_accepts_resolved_container():
