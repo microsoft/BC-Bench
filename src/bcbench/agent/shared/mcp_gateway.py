@@ -61,6 +61,10 @@ def _header_safe(key: str, value: str) -> bool:
     return not any(c in key or c in value for c in ("\r", "\n"))
 
 
+def _strip_crlf(value: str) -> str:
+    return value.replace("\r", "").replace("\n", "")
+
+
 def _jsonrpc_method_and_id(body: bytes | None) -> tuple[str | None, object]:
     if not body:
         return None, None
@@ -320,7 +324,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type") and _header_safe(k, v)]
             self.send_response_only(200)
             for key, value in forwarded_headers:
-                self.send_header(key, value)
+                self.send_header(_strip_crlf(key), _strip_crlf(value))
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Transfer-Encoding", "chunked")
             self.end_headers()
@@ -365,10 +369,10 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                     continue
                 if not _header_safe(key, value):
                     continue
-                self.send_header(key, value)
+                self.send_header(_strip_crlf(key), _strip_crlf(value))
 
             if content_length is not None:
-                self.send_header("Content-Length", content_length)
+                self.send_header("Content-Length", _strip_crlf(content_length))
                 self.end_headers()
                 remaining = int(content_length)
                 while remaining > 0:
