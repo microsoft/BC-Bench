@@ -419,7 +419,7 @@ function Get-BCContainerCompany {
     )
 
     $companies = @(Get-CompanyInBcContainer -containerName $ContainerName)
-    [string]$evaluationCompany = $companies | Where-Object { $_.EvaluationCompany } | Select-Object -First 1
+    $evaluationCompany = $companies | Where-Object { $_.EvaluationCompany } | Select-Object -First 1
     if (-not $evaluationCompany) {
         $evaluationCompany = $companies | Select-Object -First 1
     }
