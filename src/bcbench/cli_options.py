@@ -77,7 +77,8 @@ def resolve_agent_tooling(
     try:
         return AgentToolingConfig(al_mcp=al_mcp, al_lsp=al_lsp, bc_mcp=bc_mcp, container=container)
     except ValueError as error:
-        raise typer.BadParameter(str(error)) from error
+        param_hint = "--mcp-url" if bc_mcp and container is not None else "--container-name"
+        raise typer.BadParameter(str(error), param_hint=param_hint) from error
 
 
 CopilotModelName = Literal[
