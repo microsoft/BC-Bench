@@ -2,12 +2,15 @@
 
 import json
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import PropertyMock, patch
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from bcbench.cli import _redteam_group_installed, app
+from bcbench.cli_options import resolve_agent_tooling
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
@@ -159,6 +162,7 @@ def agent_command_category(tmp_path):
         dataset_path=tmp_path / "dataset.jsonl",
         entry_class=EntryClass,
         pipeline=Pipeline(),
+        requires_container=False,
     )
 
 
@@ -180,14 +184,68 @@ def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_cat
             category=category,
             repo_path=tmp_path / "repo",
             output_dir=tmp_path / "results",
+            container_name="bcbench",
+            mcp_url="https://bc.example/mcp",
             al_mcp=True,
             bc_mcp=True,
             **extra_args,
         )
 
-    assert run_agent.call_args.kwargs["al_mcp"] is True
-    assert run_agent.call_args.kwargs["bc_mcp"] is True
-    assert run_agent.call_args.kwargs["container"] is None
+    tooling = run_agent.call_args.kwargs["tooling"]
+    assert tooling.al_mcp is True
+    assert tooling.bc_mcp is True
+    assert tooling.container.name == "bcbench"
+
+
+def _resolve_tooling(**overrides):
+    options: dict[str, Any] = {
+        "category": EvaluationCategory.CODE_REVIEW,
+        "container_name": "",
+        "username": "",
+        "container_password": "",
+        "server_url": "",
+        "server_instance": "",
+        "mcp_url": None,
+        "company": None,
+        "al_mcp": False,
+        "al_lsp": False,
+        "bc_mcp": False,
+        "for_evaluation": False,
+    }
+    return resolve_agent_tooling(**(options | overrides))
+
+
+@pytest.mark.parametrize("feature", ["al_mcp", "al_lsp", "bc_mcp"])
+def test_agent_features_require_container(feature):
+    with pytest.raises(typer.BadParameter, match="container is required"):
+        _resolve_tooling(**{feature: True})
+
+
+def test_container_options_without_name_are_rejected():
+    with pytest.raises(typer.BadParameter, match="require --container-name"):
+        _resolve_tooling(username="admin")
+
+
+def test_bc_mcp_requires_mcp_url():
+    with pytest.raises(typer.BadParameter, match="MCP URL is required"):
+        _resolve_tooling(container_name="bcbench", bc_mcp=True)
+
+
+def test_required_evaluation_container_is_resolved_at_boundary():
+    with pytest.raises(typer.BadParameter, match="bug-fix category requires a container"):
+        _resolve_tooling(category=EvaluationCategory.BUG_FIX, for_evaluation=True)
+
+
+def test_data_query_evaluation_requires_company():
+    with pytest.raises(typer.BadParameter, match="data-query category requires a company"):
+        _resolve_tooling(category=EvaluationCategory.DATA_QUERY, container_name="bcbench", for_evaluation=True)
+
+
+def test_al_lsp_accepts_resolved_container():
+    tooling = _resolve_tooling(container_name=" bcbench ", al_lsp=True)
+
+    assert tooling.al_lsp is True
+    assert tooling.container.name == "bcbench"
 
 
 @pytest.mark.integration

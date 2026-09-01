@@ -19,11 +19,12 @@ from bcbench.cli_options import (
     OutputDir,
     PRReviewEnginePath,
     RepoPath,
+    resolve_agent_tooling,
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
 from bcbench.logger import get_logger
-from bcbench.types import BCalLLMBackend, ContainerConfig, EvaluationCategory
+from bcbench.types import BCalLLMBackend, EvaluationCategory
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -57,10 +58,22 @@ def run_copilot(
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
+    tooling = resolve_agent_tooling(
+        category=category,
+        container_name=container_name,
+        username=username,
+        container_password=password,
+        server_url=server_url,
+        server_instance=server_instance,
+        mcp_url=mcp_url,
+        company=company,
+        al_mcp=al_mcp,
+        al_lsp=al_lsp,
+        bc_mcp=bc_mcp,
+        for_evaluation=False,
+    )
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
-
-    container = ContainerConfig(container_name, username, password, server_url, server_instance, mcp_url, company) if container_name else None
 
     run_copilot_agent(
         entry=entry,
@@ -68,10 +81,7 @@ def run_copilot(
         model=model,
         category=category,
         output_dir=output_dir,
-        al_mcp=al_mcp,
-        al_lsp=al_lsp,
-        bc_mcp=bc_mcp,
-        container=container,
+        tooling=tooling,
     )
 
 
@@ -101,10 +111,22 @@ def run_claude(
     Example:
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
+    tooling = resolve_agent_tooling(
+        category=category,
+        container_name=container_name,
+        username=username,
+        container_password=password,
+        server_url=server_url,
+        server_instance=server_instance,
+        mcp_url=mcp_url,
+        company=company,
+        al_mcp=al_mcp,
+        al_lsp=al_lsp,
+        bc_mcp=bc_mcp,
+        for_evaluation=False,
+    )
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
-
-    container = ContainerConfig(container_name, username, password, server_url, server_instance, mcp_url, company) if container_name else None
 
     run_claude_code(
         entry=entry,
@@ -112,10 +134,7 @@ def run_claude(
         model=model,
         category=category,
         output_dir=output_dir,
-        al_mcp=al_mcp,
-        al_lsp=al_lsp,
-        bc_mcp=bc_mcp,
-        container=container,
+        tooling=tooling,
     )
 
 

@@ -530,6 +530,27 @@ class ContainerConfig:
     mcp_url: str | None = None
     company: str | None = None
 
+    def __post_init__(self) -> None:
+        name = self.name.strip()
+        if not name:
+            raise ValueError("Container name must not be empty")
+        object.__setattr__(self, "name", name)
+
+
+@dataclass(frozen=True)
+class AgentToolingConfig:
+    al_mcp: bool = False
+    al_lsp: bool = False
+    bc_mcp: bool = False
+    container: ContainerConfig | None = None
+
+    def __post_init__(self) -> None:
+        container = self.container
+        if (self.al_mcp or self.al_lsp or self.bc_mcp) and container is None:
+            raise ValueError("A container is required when AL MCP, AL LSP, or BC MCP is enabled")
+        if self.bc_mcp and container is not None and not container.mcp_url:
+            raise ValueError("An MCP URL is required when BC MCP is enabled")
+
 
 @dataclass(frozen=True)
 class JudgeCalibrationReport:
