@@ -9,7 +9,7 @@ from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, comp
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import AgentRuntimeConfig
+from bcbench.types import AgentRuntimeConfig, ContainerConfig
 
 logger = get_logger(__name__)
 
@@ -90,7 +90,7 @@ def build_mcp_config(
         _configure_bc_mcp_server(next(s for s in mcp_servers if s["name"] == _BC_MCP_SERVER_NAME), bc_mcp_gateway_url)
 
     if runtime is not None and runtime.al_mcp:
-        container = runtime.container
+        container: ContainerConfig = runtime.container
         compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
         template_context["package_cache_path"] = str(symbols_folder)
 

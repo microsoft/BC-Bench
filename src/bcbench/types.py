@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
@@ -525,7 +525,7 @@ class ContainerConfig:
     name: str
     username: str
     password: str
-    company: str = ""
+    company: str
     server_url: str = ""
     server_instance: str = ""
     mcp_url: str | None = None
@@ -534,7 +534,11 @@ class ContainerConfig:
         name = self.name.strip()
         if not name:
             raise ValueError("Container name must not be empty")
+        company = self.company.strip()
+        if not company:
+            raise ValueError("Company must not be empty")
         object.__setattr__(self, "name", name)
+        object.__setattr__(self, "company", company)
 
 
 @dataclass(frozen=True)
@@ -545,12 +549,8 @@ class AgentRuntimeConfig:
     bc_mcp: bool = False
 
     def __post_init__(self) -> None:
-        company = self.container.company.strip()
-        if not company:
-            raise ValueError("Company must not be empty")
         if self.bc_mcp and not self.container.mcp_url:
             raise ValueError("An MCP URL is required when BC MCP is enabled")
-        object.__setattr__(self, "container", replace(self.container, company=company))
 
 
 @dataclass(frozen=True)

@@ -228,7 +228,7 @@ class TestRunTestSuite:
         bc_operations.run_test_suite(
             test_entries=test_entries,
             expectation="Pass",
-            container=ContainerConfig(name="bcserver", username="admin", password="Test123"),
+            container=ContainerConfig(name="bcserver", username="admin", password="Test123", company="CRONUS"),
         )
 
         assert len(mock_subprocess) == 1
@@ -249,7 +249,7 @@ class TestRunTestSuite:
         bc_operations.run_test_suite(
             test_entries=test_entries,
             expectation="Pass",
-            container=ContainerConfig(name="bcserver", username="admin", password="Test123"),
+            container=ContainerConfig(name="bcserver", username="admin", password="Test123", company="CRONUS"),
         )
 
         assert len(mock_subprocess) == 1

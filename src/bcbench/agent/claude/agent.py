@@ -53,8 +53,7 @@ def run_claude_code(
         category,
         repo_path,
         AgentHarness.CLAUDE,
-        al_lsp=bool(runtime and runtime.al_lsp),
-        container=runtime.container if runtime else None,
+        runtime=runtime,
     )
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)

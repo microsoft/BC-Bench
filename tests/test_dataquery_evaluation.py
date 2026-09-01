@@ -202,7 +202,7 @@ def test_execute_al_query_bootstraps_app_manifest(tmp_path, monkeypatch):
 
     rows = bc_operations.execute_al_query(
         'query 50100 MyQuery { elements { dataitem(Customer; Customer) { column(No; "No.") { } } } }',
-        ContainerConfig(name="bcserver", username="admin", password="password"),
+        ContainerConfig(name="bcserver", username="admin", password="password", company="CRONUS"),
         "26.0.12345.0",
         tmp_path,
         "generated",

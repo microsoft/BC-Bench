@@ -58,6 +58,11 @@ def resolve_agent_runtime(
     al_lsp: bool,
     bc_mcp: bool,
 ) -> AgentRuntimeConfig | None:
+    """
+    Resolve optional container and tooling options into validated runtime configuration.
+
+    Mostly used for local development and testing. For CI runs, use `resolve_evaluation_runtime` instead, which enforces category-specific container requirements.
+    """
     container_name = container_name.strip()
     mcp_url = mcp_url.strip() or None if mcp_url is not None else None
     container_values = (username, container_password, server_url, server_instance, mcp_url, company)
@@ -90,6 +95,7 @@ def resolve_evaluation_runtime(
     al_lsp: bool,
     bc_mcp: bool,
 ) -> AgentRuntimeConfig | None:
+    """Resolve runtime configuration and enforce the category's container requirement."""
     runtime = resolve_agent_runtime(
         container_name=container_name,
         username=username,

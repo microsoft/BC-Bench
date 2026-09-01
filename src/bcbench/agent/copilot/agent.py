@@ -50,8 +50,7 @@ def run_copilot_agent(
         category,
         repo_path,
         AgentHarness.COPILOT,
-        al_lsp=bool(runtime and runtime.al_lsp),
-        container=runtime.container if runtime else None,
+        runtime=runtime,
     )
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)

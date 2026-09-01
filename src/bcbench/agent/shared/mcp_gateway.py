@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import AgentRuntimeConfig
+from bcbench.types import AgentRuntimeConfig, ContainerConfig
 
 logger = get_logger(__name__)
 
@@ -410,7 +410,7 @@ def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None) -> BcMcpGateway | N
     if runtime is None or not runtime.bc_mcp:
         return None
 
-    container = runtime.container
+    container: ContainerConfig = runtime.container
     gateway = BcMcpGateway(
         upstream_url=cast(str, container.mcp_url),
         username=container.username,
