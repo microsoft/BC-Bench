@@ -40,7 +40,7 @@ ContainerServerInstance = Annotated[str, typer.Option(envvar="BC_SERVER_INSTANCE
 
 ContainerMcpUrl = Annotated[str | None, typer.Option(envvar="BC_MCP_URL", help="BC MCP upstream URL")]
 
-ContainerCompany = Annotated[str | None, typer.Option(envvar="BC_MCP_COMPANY", help="BC company name")]
+ContainerCompany = Annotated[str | None, typer.Option(envvar="BC_COMPANY", help="BC company name")]
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
 

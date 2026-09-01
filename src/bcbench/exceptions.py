@@ -102,7 +102,7 @@ class EmptyGoldResultError(BCBenchError):
         message = (
             f"Gold query for {instance_id} returned 0 rows. A data-query gold must be non-empty; an "
             "empty result indicates a harness/environment problem (degraded BC container, wrong "
-            "BC_MCP_COMPANY, or a broken gold_query), not a valid expected answer."
+            "BC_COMPANY, or a broken gold_query), not a valid expected answer."
         )
         super().__init__(message)
 

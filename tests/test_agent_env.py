@@ -6,12 +6,13 @@ def test_scrubs_bc_connection_vars(monkeypatch):
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
     monkeypatch.setenv("BC_MCP_URL", "http://172.17.0.2:7048/BC")
-    monkeypatch.setenv("BC_MCP_COMPANY", "CRONUS")
+    monkeypatch.setenv("BC_COMPANY", "CRONUS")
     monkeypatch.setenv("BC_CONTAINER_NAME", "bcbench-sales")
 
     env = agent_subprocess_env()
 
     assert not any(k.startswith(("BC_SERVER_", "BC_MCP_")) for k in env)
+    assert "BC_COMPANY" not in env
     assert "BC_CONTAINER_NAME" not in env
 
 
@@ -28,12 +29,14 @@ def test_preserves_other_vars(monkeypatch):
 def test_preserves_bc_connection_vars_when_allowed(monkeypatch):
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+    monkeypatch.setenv("BC_COMPANY", "CRONUS")
     monkeypatch.setenv("BC_CONTAINER_NAME", "bcbench-sales")
 
     env = agent_subprocess_env(pass_bc_credentials=True)
 
     assert env["BC_SERVER_USERNAME"] == "admin"
     assert env["BC_SERVER_PASSWORD"] == "secret"
+    assert env["BC_COMPANY"] == "CRONUS"
     assert env["BC_CONTAINER_NAME"] == "bcbench-sales"
 
 

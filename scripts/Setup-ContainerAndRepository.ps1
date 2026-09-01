@@ -114,19 +114,20 @@ if (-not $SkipContainer) {
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 
-    # When the BC MCP server is requested (--bc-mcp), publish the install app that provisions and
-    # activates the 'BCBench' MCP configuration, then expose the endpoint and company to the agent step
-    # so it can point its MCP client at the container. Gated on the flag (not the category) so any
-    # category can opt into the BC MCP server.
+    [string] $company = Get-BCContainerCompany -ContainerName $ContainerName
+    Write-Log "BC company: '$company'" -Level Info
+
+    if ($env:GITHUB_ENV) {
+        "BC_COMPANY=$company" | Out-File -FilePath $env:GITHUB_ENV -Append
+    }
+
     if ($BcMcp) {
         Publish-MCPConfigApp -ContainerName $ContainerName -Version $Version -Credential $credential -BuildRoot $RepoPath
-
         $mcpInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName
-        Write-Log "BC MCP base URL: $($mcpInfo.BaseUrl) (company '$($mcpInfo.Company)')" -Level Info
+        Write-Log "BC MCP base URL: $($mcpInfo.BaseUrl)" -Level Info
 
         if ($env:GITHUB_ENV) {
             "BC_MCP_URL=$($mcpInfo.BaseUrl)" | Out-File -FilePath $env:GITHUB_ENV -Append
-            "BC_MCP_COMPANY=$($mcpInfo.Company)" | Out-File -FilePath $env:GITHUB_ENV -Append
         }
     }
 }

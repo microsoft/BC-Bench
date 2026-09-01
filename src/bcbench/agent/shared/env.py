@@ -9,7 +9,7 @@ import os
 # so the agent's MCP config stays credential-free), so withholding these from the agent process closes
 # the direct-API/direct-DB side-doors without breaking MCP connectivity.
 _WITHHELD_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
-_WITHHELD_ENV_VARS = frozenset({"BC_CONTAINER_NAME"})
+_WITHHELD_ENV_VARS = frozenset({"BC_COMPANY", "BC_CONTAINER_NAME"})
 
 
 def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:

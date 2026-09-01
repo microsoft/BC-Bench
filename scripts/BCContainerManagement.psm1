@@ -403,6 +403,36 @@ function Publish-MCPConfigApp {
     }
 }
 
+<#
+    .SYNOPSIS
+    Retrieves the name of the first company in the specified BC container
+    .DESCRIPTION
+    This function retrieves the name of the first company in the specified BC container, prioritizing the evaluation company if present.
+    .PARAMETER ContainerName
+    The name of the container to query
+#>
+function Get-BCContainerCompany {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ContainerName
+    )
+
+    $companies = @(Get-CompanyInBcContainer -containerName $ContainerName)
+    [string]$evaluationCompany = $companies | Where-Object { $_.EvaluationCompany } | Select-Object -First 1
+    if (-not $evaluationCompany) {
+        $evaluationCompany = $companies | Select-Object -First 1
+    }
+
+    # BcContainerHelper has exposed the company name as either CompanyName or Name across versions.
+    [string]$company = $evaluationCompany.CompanyName
+    if (-not $company) {
+        $company = $evaluationCompany.Name
+    }
+
+    return $company
+}
+
 function Get-BCMCPConnectionInfo {
     [CmdletBinding()]
     param(
@@ -421,22 +451,10 @@ function Get-BCMCPConnectionInfo {
     # off the same base as the API endpoint the query harness already uses (base + '/mcp').
     [string]$baseUrl = "http://${ip}:7048/BC"
 
-    $companies = @(Get-CompanyInBcContainer -containerName $ContainerName)
-    $evaluationCompany = $companies | Where-Object { $_.EvaluationCompany } | Select-Object -First 1
-    if (-not $evaluationCompany) {
-        $evaluationCompany = $companies | Select-Object -First 1
-    }
-
-    # BcContainerHelper has exposed the company name as either CompanyName or Name across versions.
-    [string]$company = $evaluationCompany.CompanyName
-    if (-not $company) {
-        $company = $evaluationCompany.Name
-    }
-
     return [PSCustomObject]@{
         BaseUrl = $baseUrl
-        Company = $company
+        Company = (Get-BCContainerCompany -ContainerName $ContainerName)
     }
 }
 
-Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync, New-BCCompilerFolderSync, Publish-MCPConfigApp, Get-BCMCPConnectionInfo
+Export-ModuleMember -Function Test-Database, Set-AppVersion, Move-AppIntoDevScope, Initialize-ContainerForDevelopment, Test-ContainerExists, New-BCContainerSync, New-BCCompilerFolderSync, Publish-MCPConfigApp, Get-BCContainerCompany, Get-BCMCPConnectionInfo
