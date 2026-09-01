@@ -9,7 +9,7 @@ from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, comp
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import ContainerConfig
+from bcbench.types import AgentRuntimeConfig
 
 logger = get_logger(__name__)
 
@@ -70,17 +70,15 @@ def build_mcp_config(
     config: dict[str, Any],
     entry: BaseDatasetEntry,
     repo_path: Path,
-    al_mcp: bool = False,
-    bc_mcp: bool = False,
-    container: ContainerConfig | None = None,
+    runtime: AgentRuntimeConfig | None = None,
     bc_mcp_gateway_url: str | None = None,
 ) -> tuple[str | None, list[str] | None]:
     mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
 
-    if not al_mcp:
+    if runtime is None or not runtime.al_mcp:
         mcp_servers = list(filter(lambda s: s.get("name") != "altool", mcp_servers))
 
-    if not bc_mcp:
+    if runtime is None or not runtime.bc_mcp:
         mcp_servers = list(filter(lambda s: s.get("name") != _BC_MCP_SERVER_NAME, mcp_servers))
 
     if not mcp_servers:
@@ -88,13 +86,11 @@ def build_mcp_config(
 
     template_context: dict[str, str | Path] = {"repo_path": repo_path}
 
-    if bc_mcp:
+    if runtime is not None and runtime.bc_mcp:
         _configure_bc_mcp_server(next(s for s in mcp_servers if s["name"] == _BC_MCP_SERVER_NAME), bc_mcp_gateway_url)
 
-    if al_mcp:
-        if container is None:
-            raise AgentError("AL MCP requested but no container configuration is available; provide --container-name or BC_CONTAINER_NAME.")
-
+    if runtime is not None and runtime.al_mcp:
+        container = runtime.container
         compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
         template_context["package_cache_path"] = str(symbols_folder)
 

@@ -7,7 +7,7 @@ import pytest
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
 from bcbench.agent.shared.mcp import build_mcp_config
 from bcbench.exceptions import AgentError
-from bcbench.types import ContainerConfig
+from bcbench.types import AgentRuntimeConfig, ContainerConfig
 from tests.conftest import create_dataset_entry
 
 
@@ -55,14 +55,18 @@ def repo_path() -> Path:
 
 @pytest.fixture
 def container() -> ContainerConfig:
-    return ContainerConfig("test-container", "", "", server_instance="")
+    return ContainerConfig("test-container", "", "", "CRONUS", server_instance="")
+
+
+def _runtime(container: ContainerConfig, *, al_mcp: bool = False, bc_mcp: bool = False) -> AgentRuntimeConfig:
+    return AgentRuntimeConfig(container=container, al_mcp=al_mcp, bc_mcp=bc_mcp)
 
 
 class TestAlMcpProjectPaths:
     def test_project_paths_inserted_after_launchmcpserver(self, entry, repo_path, container):
         config = _make_config(ALTOOL_SERVER)
 
-        config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=True, container=container)
+        config_json, _ = build_mcp_config(config, entry, repo_path, runtime=_runtime(container, al_mcp=True))
         assert config_json is not None
 
         parsed = json.loads(config_json)
@@ -74,7 +78,7 @@ class TestAlMcpProjectPaths:
     def test_transport_stdio_is_present(self, entry, repo_path, container):
         config = _make_config(ALTOOL_SERVER)
 
-        config_json, _ = build_mcp_config(config, entry, repo_path, al_mcp=True, container=container)
+        config_json, _ = build_mcp_config(config, entry, repo_path, runtime=_runtime(container, al_mcp=True))
         assert config_json is not None
 
         args = json.loads(config_json)["mcpServers"]["altool"]["args"]
@@ -84,14 +88,14 @@ class TestAlMcpProjectPaths:
     def test_altool_excluded_when_al_mcp_disabled(self, entry, repo_path):
         config = _make_config(ALTOOL_SERVER)
 
-        result = build_mcp_config(config, entry, repo_path, al_mcp=False)
+        result = build_mcp_config(config, entry, repo_path)
 
         assert result == (None, None)
 
     def test_altool_excluded_but_other_servers_kept(self, entry, repo_path):
         config = _make_config(ALTOOL_SERVER, OTHER_HTTP_SERVER)
 
-        config_json, names = build_mcp_config(config, entry, repo_path, al_mcp=False)
+        config_json, names = build_mcp_config(config, entry, repo_path)
         assert config_json is not None
         assert names is not None
 
@@ -103,21 +107,17 @@ class TestAlMcpProjectPaths:
     def test_returns_server_names(self, entry, repo_path, container):
         config = _make_config(ALTOOL_SERVER, OTHER_HTTP_SERVER)
 
-        _, names = build_mcp_config(config, entry, repo_path, al_mcp=True, container=container)
+        _, names = build_mcp_config(config, entry, repo_path, runtime=_runtime(container, al_mcp=True))
         assert names is not None
 
         assert set(names) == {"altool", "docs"}
-
-    def test_raises_without_container(self, entry, repo_path):
-        with pytest.raises(AgentError, match="container configuration"):
-            build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True)
 
 
 class TestBcMcp:
     _GATEWAY_URL = "http://127.0.0.1:54321/BC"
 
     def test_bcmcp_excluded_when_disabled(self, entry, repo_path):
-        assert build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=False) == (None, None)
+        assert build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path) == (None, None)
 
     def test_mslearn_included_when_present_in_config(self, entry, repo_path):
         # mslearn has no dispatch flag anymore: its presence in config.yaml is what enables it.
@@ -131,11 +131,12 @@ class TestBcMcp:
         config = _make_config(BCMCP_SERVER, MSLEARN_SERVER)
 
         # bc-mcp off -> bcmcp excluded, but mslearn stays (config-controlled, no gateway needed)
-        _, bc_off = build_mcp_config(config, entry, repo_path, bc_mcp=False)
+        _, bc_off = build_mcp_config(config, entry, repo_path)
         assert bc_off == ["mslearn"]
 
         # bc-mcp on -> both present
-        _, both = build_mcp_config(config, entry, repo_path, bc_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
+        container = ContainerConfig("bcbench", "admin", "secret", "CRONUS", mcp_url="https://bc.example")
+        _, both = build_mcp_config(config, entry, repo_path, runtime=_runtime(container, bc_mcp=True), bc_mcp_gateway_url=self._GATEWAY_URL)
         assert both is not None
         assert set(both) == {"bcmcp", "mslearn"}
 
@@ -145,7 +146,8 @@ class TestBcMcp:
         assert json.loads(config_json)["mcpServers"]["mslearn"]["url"] == "https://learn.microsoft.com/api/mcp"
 
     def test_bcmcp_points_at_gateway_without_credentials(self, entry, repo_path):
-        config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True, bc_mcp_gateway_url=self._GATEWAY_URL)
+        container = ContainerConfig("bcbench", "admin", "secret", "CRONUS", mcp_url="https://bc.example")
+        config_json, _ = build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, runtime=_runtime(container, bc_mcp=True), bc_mcp_gateway_url=self._GATEWAY_URL)
         assert config_json is not None
         bcmcp = json.loads(config_json)["mcpServers"]["bcmcp"]
 
@@ -156,8 +158,9 @@ class TestBcMcp:
         assert "Basic" not in config_json
 
     def test_raises_when_gateway_url_missing(self, entry, repo_path):
+        container = ContainerConfig("bcbench", "admin", "secret", "CRONUS", mcp_url="https://bc.example")
         with pytest.raises(AgentError):
-            build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, bc_mcp=True)
+            build_mcp_config(_make_config(BCMCP_SERVER), entry, repo_path, runtime=_runtime(container, bc_mcp=True))
 
 
 class TestAltoolEnvForwarding:
@@ -166,10 +169,11 @@ class TestAltoolEnvForwarding:
             "bcbench",
             "admin",
             "secret",
+            "CRONUS",
             server_url="http://bcbench-210528",
             server_instance="BC",
         )
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True, container=container)
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, runtime=_runtime(container, al_mcp=True))
         assert config_json is not None
 
         env = json.loads(config_json)["mcpServers"]["altool"]["env"]
@@ -181,14 +185,14 @@ class TestAltoolEnvForwarding:
         }
 
     def test_omits_env_block_when_no_vars_set(self, entry, repo_path, container):
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True, container=container)
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, runtime=_runtime(container, al_mcp=True))
         assert config_json is not None
 
         assert "env" not in json.loads(config_json)["mcpServers"]["altool"]
 
     def test_skips_empty_connection_values(self, entry, repo_path):
-        container = ContainerConfig("bcbench", "admin", "", server_url="", server_instance="")
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, al_mcp=True, container=container)
+        container = ContainerConfig("bcbench", "admin", "", "CRONUS", server_url="", server_instance="")
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, runtime=_runtime(container, al_mcp=True))
         assert config_json is not None
 
         env = json.loads(config_json)["mcpServers"]["altool"]["env"]
@@ -202,8 +206,8 @@ class TestAltoolEnvForwarding:
             "args": ["server.js"],
         }
 
-        container = ContainerConfig("bcbench", "admin", "secret")
-        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER, other_stdio), entry, repo_path, al_mcp=True, container=container)
+        container = ContainerConfig("bcbench", "admin", "secret", "CRONUS")
+        config_json, _ = build_mcp_config(_make_config(ALTOOL_SERVER, other_stdio), entry, repo_path, runtime=_runtime(container, al_mcp=True))
         assert config_json is not None
 
         parsed = json.loads(config_json)["mcpServers"]

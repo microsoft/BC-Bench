@@ -12,11 +12,10 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, AgentToolingConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
 _config = get_config()
-_DEFAULT_TOOLING = AgentToolingConfig()
 
 
 def run_copilot_agent(
@@ -25,7 +24,7 @@ def run_copilot_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
-    tooling: AgentToolingConfig = _DEFAULT_TOOLING,
+    runtime: AgentRuntimeConfig | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
@@ -37,18 +36,23 @@ def run_copilot_agent(
 
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=tooling.al_mcp)
-    bc_gateway = start_bc_mcp_gateway(tooling.bc_mcp, tooling.container)
+    prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=bool(runtime and runtime.al_mcp))
+    bc_gateway = start_bc_mcp_gateway(runtime)
     mcp_config_json, mcp_server_names = build_mcp_config(
         copilot_config,
         entry,
         repo_path,
-        al_mcp=tooling.al_mcp,
-        bc_mcp=tooling.bc_mcp,
-        container=tooling.container,
+        runtime=runtime,
         bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
     )
-    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.COPILOT, al_lsp=tooling.al_lsp, container=tooling.container)
+    lsp_plugin_dir: Path | None = build_al_lsp_plugin(
+        entry,
+        category,
+        repo_path,
+        AgentHarness.COPILOT,
+        al_lsp=bool(runtime and runtime.al_lsp),
+        container=runtime.container if runtime else None,
+    )
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)

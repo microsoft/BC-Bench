@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 import typer
 
-from bcbench.types import AgentToolingConfig, ContainerConfig, EvaluationCategory
+from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationCategory
 
 # Type aliases for cleaner command signatures
 # Note: Defaults are provided in function signatures, not here
@@ -40,12 +40,43 @@ ContainerServerInstance = Annotated[str, typer.Option(envvar="BC_SERVER_INSTANCE
 
 ContainerMcpUrl = Annotated[str | None, typer.Option(envvar="BC_MCP_URL", help="BC MCP upstream URL")]
 
-ContainerCompany = Annotated[str | None, typer.Option(envvar="BC_COMPANY", help="BC company name")]
+ContainerCompany = Annotated[str, typer.Option(envvar="BC_COMPANY", help="BC company name")]
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
 
 
-def resolve_agent_tooling(
+def resolve_agent_runtime(
+    *,
+    container_name: str,
+    username: str,
+    container_password: str,
+    server_url: str,
+    server_instance: str,
+    mcp_url: str | None,
+    company: str,
+    al_mcp: bool,
+    al_lsp: bool,
+    bc_mcp: bool,
+) -> AgentRuntimeConfig | None:
+    container_name = container_name.strip()
+    mcp_url = mcp_url.strip() or None if mcp_url is not None else None
+    container_values = (username, container_password, server_url, server_instance, mcp_url, company)
+    if not container_name and any(container_values):
+        raise typer.BadParameter("Container options require --container-name", param_hint="--container-name")
+    if not container_name:
+        if al_mcp or al_lsp or bc_mcp:
+            raise typer.BadParameter("A container is required when AL MCP, AL LSP, or BC MCP is enabled", param_hint="--container-name")
+        return None
+
+    try:
+        container = ContainerConfig(container_name, username, container_password, company, server_url, server_instance, mcp_url)
+        return AgentRuntimeConfig(container=container, al_mcp=al_mcp, al_lsp=al_lsp, bc_mcp=bc_mcp)
+    except ValueError as error:
+        param_hint = "--company" if not company.strip() else "--mcp-url"
+        raise typer.BadParameter(str(error), param_hint=param_hint) from error
+
+
+def resolve_evaluation_runtime(
     *,
     category: EvaluationCategory,
     container_name: str,
@@ -54,31 +85,26 @@ def resolve_agent_tooling(
     server_url: str,
     server_instance: str,
     mcp_url: str | None,
-    company: str | None,
+    company: str,
     al_mcp: bool,
     al_lsp: bool,
     bc_mcp: bool,
-    for_evaluation: bool,
-) -> AgentToolingConfig:
-    container_name = container_name.strip()
-    mcp_url = mcp_url.strip() or None if mcp_url is not None else None
-    company = company.strip() or None if company is not None else None
-    container_values = (username, container_password, server_url, server_instance, mcp_url, company)
-    if not container_name and any(container_values):
-        raise typer.BadParameter("Container options require --container-name", param_hint="--container-name")
-
-    container = ContainerConfig(container_name, username, container_password, server_url, server_instance, mcp_url, company) if container_name else None
-
-    if for_evaluation and category.requires_container and container is None:
+) -> AgentRuntimeConfig | None:
+    runtime = resolve_agent_runtime(
+        container_name=container_name,
+        username=username,
+        container_password=container_password,
+        server_url=server_url,
+        server_instance=server_instance,
+        mcp_url=mcp_url,
+        company=company,
+        al_mcp=al_mcp,
+        al_lsp=al_lsp,
+        bc_mcp=bc_mcp,
+    )
+    if category.requires_container and runtime is None:
         raise typer.BadParameter(f"The {category.value} category requires a container", param_hint="--container-name")
-    if for_evaluation and category is EvaluationCategory.DATA_QUERY and not company:
-        raise typer.BadParameter("The data-query category requires a company", param_hint="--company")
-
-    try:
-        return AgentToolingConfig(al_mcp=al_mcp, al_lsp=al_lsp, bc_mcp=bc_mcp, container=container)
-    except ValueError as error:
-        param_hint = "--mcp-url" if bc_mcp and container is not None else "--container-name"
-        raise typer.BadParameter(str(error), param_hint=param_hint) from error
+    return runtime
 
 
 CopilotModelName = Literal[

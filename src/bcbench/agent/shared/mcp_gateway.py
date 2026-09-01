@@ -18,11 +18,12 @@ import threading
 import time
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import cast
 from urllib.parse import urlsplit
 
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import ContainerConfig
+from bcbench.types import AgentRuntimeConfig
 
 logger = get_logger(__name__)
 
@@ -404,19 +405,14 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
     return _ProxyHandler
 
 
-def start_bc_mcp_gateway(enabled: bool, container: ContainerConfig | None) -> BcMcpGateway | None:
+def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None) -> BcMcpGateway | None:
     """Start a localhost MCP gateway in front of the BC container, or return None when disabled."""
-    if not enabled:
+    if runtime is None or not runtime.bc_mcp:
         return None
 
-    if container is None:
-        raise AgentError("BC MCP requested but no container configuration is available; provide --container-name or BC_CONTAINER_NAME.")
-
-    if not container.mcp_url:
-        raise AgentError("BC MCP requested but no MCP URL is configured; provide it through the --mcp-url CLI option.")
-
+    container = runtime.container
     gateway = BcMcpGateway(
-        upstream_url=container.mcp_url,
+        upstream_url=cast(str, container.mcp_url),
         username=container.username,
         password=container.password,
         company=container.company,

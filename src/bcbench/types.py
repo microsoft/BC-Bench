@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
@@ -525,10 +525,10 @@ class ContainerConfig:
     name: str
     username: str
     password: str
+    company: str = ""
     server_url: str = ""
     server_instance: str = ""
     mcp_url: str | None = None
-    company: str | None = None
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -538,18 +538,19 @@ class ContainerConfig:
 
 
 @dataclass(frozen=True)
-class AgentToolingConfig:
+class AgentRuntimeConfig:
+    container: ContainerConfig
     al_mcp: bool = False
     al_lsp: bool = False
     bc_mcp: bool = False
-    container: ContainerConfig | None = None
 
     def __post_init__(self) -> None:
-        container = self.container
-        if (self.al_mcp or self.al_lsp or self.bc_mcp) and container is None:
-            raise ValueError("A container is required when AL MCP, AL LSP, or BC MCP is enabled")
-        if self.bc_mcp and container is not None and not container.mcp_url:
+        company = self.container.company.strip()
+        if not company:
+            raise ValueError("Company must not be empty")
+        if self.bc_mcp and not self.container.mcp_url:
             raise ValueError("An MCP URL is required when BC MCP is enabled")
+        object.__setattr__(self, "container", replace(self.container, company=company))
 
 
 @dataclass(frozen=True)

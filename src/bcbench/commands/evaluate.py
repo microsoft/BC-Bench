@@ -20,7 +20,7 @@ from bcbench.cli_options import (
     PRReviewEnginePath,
     RepoPath,
     RunId,
-    resolve_agent_tooling,
+    resolve_evaluation_runtime,
 )
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry, NL2ALEntry
@@ -47,7 +47,7 @@ def evaluate_copilot(
     server_url: ContainerServerUrl = "",
     server_instance: ContainerServerInstance = "",
     mcp_url: ContainerMcpUrl = None,
-    company: ContainerCompany = None,
+    company: ContainerCompany = "",
     model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -61,7 +61,7 @@ def evaluate_copilot(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run copilot' instead.
     """
-    tooling = resolve_agent_tooling(
+    runtime = resolve_evaluation_runtime(
         category=category,
         container_name=container_name,
         username=username,
@@ -73,7 +73,6 @@ def evaluate_copilot(
         al_mcp=al_mcp,
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
-        for_evaluation=True,
     )
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
@@ -84,7 +83,7 @@ def evaluate_copilot(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=tooling.container,
+        container=runtime.container if runtime else None,
         model=model,
         agent_name=AgentHarness.COPILOT,
         category=category,
@@ -99,7 +98,7 @@ def evaluate_copilot(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            tooling=tooling,
+            runtime=runtime,
         ),
     )
 
@@ -117,7 +116,7 @@ def evaluate_claude_code(
     server_url: ContainerServerUrl = "",
     server_instance: ContainerServerInstance = "",
     mcp_url: ContainerMcpUrl = None,
-    company: ContainerCompany = None,
+    company: ContainerCompany = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -131,7 +130,7 @@ def evaluate_claude_code(
 
     To only run the agent to generate a patch without building/testing, use 'bcbench run claude' instead.
     """
-    tooling = resolve_agent_tooling(
+    runtime = resolve_evaluation_runtime(
         category=category,
         container_name=container_name,
         username=username,
@@ -143,7 +142,6 @@ def evaluate_claude_code(
         al_mcp=al_mcp,
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
-        for_evaluation=True,
     )
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     run_dir = prepare_run_dir(output_dir, run_id)
@@ -154,7 +152,7 @@ def evaluate_claude_code(
         entry=entry,
         repo_path=repo_path,
         result_dir=run_dir,
-        container=tooling.container,
+        container=runtime.container if runtime else None,
         model=model,
         agent_name=AgentHarness.CLAUDE,
         category=category,
@@ -169,7 +167,7 @@ def evaluate_claude_code(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
-            tooling=tooling,
+            runtime=runtime,
         ),
     )
 

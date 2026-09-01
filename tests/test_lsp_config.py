@@ -131,7 +131,7 @@ class TestSharedBehavior:
             "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
-            _build(entry, repo_path, harness, al_lsp=True, container=ContainerConfig("test-container", "", ""))
+            _build(entry, repo_path, harness, al_lsp=True, container=ContainerConfig("test-container", "", "", "CRONUS"))
 
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]
@@ -148,7 +148,7 @@ class TestSharedBehavior:
             "bcbench.agent.shared.lsp.compiler_symbol_folder_for_container",
             return_value=(compiler_root, compiler_root / "symbols"),
         ):
-            _build(entry, repo_path, harness, al_lsp=True, container=ContainerConfig("test-container", "", ""))
+            _build(entry, repo_path, harness, al_lsp=True, container=ContainerConfig("test-container", "", "", "CRONUS"))
 
         config = _read_lsp(plugin_root)
         server = config["lspServers"]["altool"] if "lspServers" in config else config["altool"]

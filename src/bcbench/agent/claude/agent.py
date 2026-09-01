@@ -11,11 +11,10 @@ from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
-from bcbench.types import AgentHarness, AgentMetrics, AgentToolingConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
+from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
 _config = get_config()
-_DEFAULT_TOOLING = AgentToolingConfig()
 
 
 def run_claude_code(
@@ -24,7 +23,7 @@ def run_claude_code(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
-    tooling: AgentToolingConfig = _DEFAULT_TOOLING,
+    runtime: AgentRuntimeConfig | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
 
@@ -40,18 +39,23 @@ def run_claude_code(
 
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
-    prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=tooling.al_mcp)
-    bc_gateway = start_bc_mcp_gateway(tooling.bc_mcp, tooling.container)
+    prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=bool(runtime and runtime.al_mcp))
+    bc_gateway = start_bc_mcp_gateway(runtime)
     mcp_config_json, mcp_server_names = build_mcp_config(
         claude_config,
         entry,
         repo_path,
-        al_mcp=tooling.al_mcp,
-        bc_mcp=tooling.bc_mcp,
-        container=tooling.container,
+        runtime=runtime,
         bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
     )
-    lsp_plugin_dir: Path | None = build_al_lsp_plugin(entry, category, repo_path, AgentHarness.CLAUDE, al_lsp=tooling.al_lsp, container=tooling.container)
+    lsp_plugin_dir: Path | None = build_al_lsp_plugin(
+        entry,
+        category,
+        repo_path,
+        AgentHarness.CLAUDE,
+        al_lsp=bool(runtime and runtime.al_lsp),
+        container=runtime.container if runtime else None,
+    )
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)

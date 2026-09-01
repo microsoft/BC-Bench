@@ -19,7 +19,7 @@ from bcbench.cli_options import (
     OutputDir,
     PRReviewEnginePath,
     RepoPath,
-    resolve_agent_tooling,
+    resolve_agent_runtime,
 )
 from bcbench.config import get_config
 from bcbench.dataset import NL2ALEntry
@@ -42,7 +42,7 @@ def run_copilot(
     server_url: ContainerServerUrl = "",
     server_instance: ContainerServerInstance = "",
     mcp_url: ContainerMcpUrl = None,
-    company: ContainerCompany = None,
+    company: ContainerCompany = "",
     model: CopilotModel = "gpt-5.6-luna",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -58,8 +58,7 @@ def run_copilot(
     Example:
         uv run bcbench run copilot microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    tooling = resolve_agent_tooling(
-        category=category,
+    runtime = resolve_agent_runtime(
         container_name=container_name,
         username=username,
         container_password=password,
@@ -70,7 +69,6 @@ def run_copilot(
         al_mcp=al_mcp,
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
-        for_evaluation=False,
     )
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
@@ -81,7 +79,7 @@ def run_copilot(
         model=model,
         category=category,
         output_dir=output_dir,
-        tooling=tooling,
+        runtime=runtime,
     )
 
 
@@ -95,7 +93,7 @@ def run_claude(
     server_url: ContainerServerUrl = "",
     server_instance: ContainerServerInstance = "",
     mcp_url: ContainerMcpUrl = None,
-    company: ContainerCompany = None,
+    company: ContainerCompany = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
@@ -111,8 +109,7 @@ def run_claude(
     Example:
         uv run bcbench run claude microsoft__BCApps-5633 --category bug-fix --repo-path /path/to/BCApps
     """
-    tooling = resolve_agent_tooling(
-        category=category,
+    runtime = resolve_agent_runtime(
         container_name=container_name,
         username=username,
         container_password=password,
@@ -123,7 +120,6 @@ def run_claude(
         al_mcp=al_mcp,
         al_lsp=al_lsp,
         bc_mcp=bc_mcp,
-        for_evaluation=False,
     )
     entry = category.entry_class.load(category.dataset_path, entry_id=entry_id)[0]
     category.pipeline.setup_workspace(entry, repo_path)
@@ -134,7 +130,7 @@ def run_claude(
         model=model,
         category=category,
         output_dir=output_dir,
-        tooling=tooling,
+        runtime=runtime,
     )
 
 

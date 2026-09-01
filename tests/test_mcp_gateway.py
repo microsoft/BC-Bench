@@ -9,8 +9,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
-from bcbench.exceptions import AgentError
-from bcbench.types import ContainerConfig
+from bcbench.types import AgentRuntimeConfig, ContainerConfig
 
 _WARMUP_MODULE = "bcbench.agent.shared.mcp_gateway"
 
@@ -92,7 +91,7 @@ def gateway(upstream):
         mcp_url=f"http://127.0.0.1:{port}/BC",
         company="CRONUS International Ltd.",
     )
-    gw = start_bc_mcp_gateway(enabled=True, container=container)
+    gw = start_bc_mcp_gateway(AgentRuntimeConfig(container=container, bc_mcp=True))
     assert gw is not None
     yield gw
     gw.stop()
@@ -111,15 +110,7 @@ def _request(base_url: str, method: str, path: str, body: bytes | None = None):
 
 class TestBcMcpGateway:
     def test_disabled_returns_none(self):
-        assert start_bc_mcp_gateway(enabled=False, container=None) is None
-
-    def test_raises_without_container(self):
-        with pytest.raises(AgentError, match="container configuration"):
-            start_bc_mcp_gateway(enabled=True, container=None)
-
-    def test_raises_without_upstream_url(self):
-        with pytest.raises(AgentError, match="MCP URL"):
-            start_bc_mcp_gateway(enabled=True, container=ContainerConfig("bcbench", "admin", "secret"))
+        assert start_bc_mcp_gateway(None) is None
 
     def test_base_url_mirrors_upstream_path(self, gateway):
         assert gateway.base_url.endswith("/BC")
@@ -218,8 +209,8 @@ class TestBcMcpProbe:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         port = server.server_address[1]
-        container = ContainerConfig("bcbench", "admin", "secret", mcp_url=f"http://127.0.0.1:{port}/BC")
-        gw = start_bc_mcp_gateway(enabled=True, container=container)
+        container = ContainerConfig("bcbench", "admin", "secret", "CRONUS", mcp_url=f"http://127.0.0.1:{port}/BC")
+        gw = start_bc_mcp_gateway(AgentRuntimeConfig(container=container, bc_mcp=True))
         assert gw is not None
         yield gw
         gw.stop()
@@ -245,8 +236,8 @@ class TestBcMcpProbe:
         assert [t["name"] for t in payload["result"]["tools"]] == ["bc_data_find_tables", "bc_data_query"]
 
     def test_warm_up_never_raises_on_bad_upstream(self, monkeypatch):
-        container = ContainerConfig("bcbench", "admin", "secret", mcp_url="http://127.0.0.1:1/BC")
-        gw = start_bc_mcp_gateway(enabled=True, container=container)
+        container = ContainerConfig("bcbench", "admin", "secret", "CRONUS", mcp_url="http://127.0.0.1:1/BC")
+        gw = start_bc_mcp_gateway(AgentRuntimeConfig(container=container, bc_mcp=True))
         assert gw is not None
         try:
             assert gw.warm_up() == []

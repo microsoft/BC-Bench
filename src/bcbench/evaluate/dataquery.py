@@ -150,12 +150,7 @@ class DataQueryPipeline(EvaluationPipeline[DataQueryEntry]):
         from bcbench.operations import execute_al_query
 
         logger.info(f"Running gold query live for {context.entry.instance_id}")
-        # Pin the gold query to the same company the agent queried via MCP, so the
-        # comparison is against the same data. It must be set by container setup — a missing company is
-        # a harness bug, so fail loud rather than run the gold against an arbitrary company.
         company = context.get_container().company
-        if not company:
-            raise OSError("BC company is not set; provide it through the --company CLI option.")
         rows = execute_al_query(context.entry.gold_query, context.get_container(), context.entry.environment_setup_version, context.repo_path, "gold", company=company)
         if not rows:
             # An empty gold would make an empty agent answer spuriously "match" (result_sets_match([],

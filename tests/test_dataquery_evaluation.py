@@ -74,7 +74,7 @@ class TestResultSetsMatch:
 
 
 class TestGoldRowsEmptyGuard:
-    def _context(self, tmp_path: Path, company: str | None = "CRONUS") -> EvaluationContext:
+    def _context(self, tmp_path: Path) -> EvaluationContext:
         return EvaluationContext(
             entry=create_data_query_entry(
                 instance_id="dataquery__customer-count-by-country-1",
@@ -83,7 +83,7 @@ class TestGoldRowsEmptyGuard:
             ),
             repo_path=tmp_path / "repo",
             result_dir=tmp_path / "results",
-            container=ContainerConfig("bcbench", "admin", "secret", company=company),
+            container=ContainerConfig("bcbench", "admin", "secret", company="CRONUS"),
             model="test-model",
             agent_name=AgentHarness.COPILOT,
             category=EvaluationCategory.DATA_QUERY,
@@ -102,10 +102,6 @@ class TestGoldRowsEmptyGuard:
         monkeypatch.setattr("bcbench.operations.execute_al_query", lambda *args, **kwargs: rows)
 
         assert DataQueryPipeline()._gold_rows(self._context(tmp_path)) == rows
-
-    def test_missing_company_raises(self, tmp_path):
-        with pytest.raises(OSError, match="BC company"):
-            DataQueryPipeline()._gold_rows(self._context(tmp_path, company=None))
 
 
 class TestLoadAnswerRows:
