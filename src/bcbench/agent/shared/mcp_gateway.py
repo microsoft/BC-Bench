@@ -368,9 +368,11 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 self.send_header(key, value)
 
             if content_length is not None:
-                self.send_header("Content-Length", content_length)
-                self.end_headers()
+                # Parse first, then emit the re-serialised int: the raw value skips the _header_safe
+                # check above, and an unparsable length must fail before any bytes reach the client.
                 remaining = int(content_length)
+                self.send_header("Content-Length", str(remaining))
+                self.end_headers()
                 while remaining > 0:
                     chunk = response.read(min(_STREAM_CHUNK_BYTES, remaining))
                     if not chunk:
