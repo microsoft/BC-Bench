@@ -64,5 +64,5 @@ def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
     assert "repository: microsoft/BC-ALAgents" in action
-    assert "ref: 5a4503f98e9757c7e7b913f0a729894b70c8bcc0" in action
+    assert "ref: e9d9249eaa25be88388b60106b4cbf8cd7aa8a7d" in action
     assert "bc-alagents-path:" in action
