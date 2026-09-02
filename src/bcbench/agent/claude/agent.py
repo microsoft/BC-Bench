@@ -56,7 +56,7 @@ def run_claude_code(
         runtime=runtime,
     )
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-    skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
+    skill_names: list[str] = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
 
@@ -64,7 +64,8 @@ def run_claude_code(
         mcp_servers=mcp_server_names,
         al_lsp_enabled=lsp_plugin_dir is not None,
         custom_instructions=instructions_enabled,
-        skills_enabled=skills_enabled,
+        skills_enabled=bool(skill_names),
+        skill_names=skill_names or None,
         custom_agent=custom_agent,
         plugins=[plugin.record for plugin, _ in plugins] or None,
     )

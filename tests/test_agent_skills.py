@@ -31,7 +31,7 @@ def test_setup_agent_skills():
 
         # Setup skills
         result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
-        assert result is True
+        assert result == sorted(item.name for item in skills_source.iterdir() if item.is_dir())
 
         # Verify
         target_path = repo_path / ".github" / "skills"
@@ -149,7 +149,7 @@ def test_path_specific_skills_removed_before_copy():
 
 
 def test_skills_disabled():
-    """When skills disabled, should return False and not create directory."""
+    """When skills disabled, should return no skill names and not create directory."""
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)
         entry = MagicMock(spec=RepoGroundedEntry)
@@ -158,5 +158,32 @@ def test_skills_disabled():
 
         result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
 
-        assert result is False
+        assert result == []
+        assert not (repo_path / ".github" / "skills").exists()
+
+
+def test_only_named_skills_are_copied():
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
+        config = {"skills": {"enabled": True, "names": ["bc-fix-bug"]}}
+
+        setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
+
+        skills_dir = repo_path / ".github" / "skills"
+        assert [path.name for path in skills_dir.iterdir()] == ["bc-fix-bug"]
+        assert (skills_dir / "bc-fix-bug" / "SKILL.md").exists()
+
+
+def test_unmatched_named_skills_copy_nothing():
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "dataquery"
+        config = {"skills": {"enabled": True, "names": ["bc-fix-bug"]}}
+
+        result = setup_agent_skills(config, entry, repo_path, harness=AgentHarness.COPILOT)
+
+        assert result == []
         assert not (repo_path / ".github" / "skills").exists()

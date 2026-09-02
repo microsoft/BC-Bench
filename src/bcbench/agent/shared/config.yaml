@@ -16,20 +16,11 @@ prompt:
   bug-fix-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
-    Task: Fix the issue described below test-first {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
-    1. Write ONE new test that reproduces the issue. Add it to an EXISTING test codeunit
-       unless no suitable test suite exists. The test MUST live in the repository's existing
-       AL test project - the project that already contains test codeunits (declaring
-       `Subtype = Test;`) - never in an application project. If you must create a new test
-       codeunit, it still belongs inside that existing test project, and its file must be
-       named `<Name>.Codeunit.al`. It must fail against the current, unfixed code.
-    2. Then implement the minimal fix that makes that test pass.
+    Task: Fix the issue described below {% if include_project_paths %}in the following projects: {{project_paths}}{% endif %}
 
     Important constraints:
-    - Do NOT modify existing tests
-    - Add exactly ONE new `[Test]` procedure and no extras: every `[Test]` procedure you add
-      is run together as a single batch, and ALL of them must pass after the fix, so a stray
-      extra test can fail the whole run even if your fix is correct
+    - Do NOT modify any testing logic or test files
+    - Focus solely on fixing the reported issue
     {% if not al_mcp %}
     - Do NOT try to build or run tests, just provide the code changes needed
     {% endif %}
@@ -153,10 +144,18 @@ instructions:
 # 1. whether to copy skills from `src/bcbench/agent/shared/instructions/<sanitized-repo>/skills/`
 #    - Copilot: copies to repo/.github/skills/
 #    - Claude: copies to repo/.claude/skills/
+# 2. which skills to copy: `names` is an allow-list of skill folder names; an empty list copies every
+#    skill in the profile. Name the skills explicitly so an arm stays attributable to one skill -
+#    the profiles also hold unrelated skills (al-test-generation, bc-ext-advisor, ...) that would
+#    otherwise be exposed to the agent as well. Profiles are repo-keyed, so bug-fix, test-generation,
+#    code-review and the extensibility categories all share them - `names` selects a skill, not a
+#    category, and only data-query and nl2al have profiles of their own. Run this config against the
+#    category the named skill targets.
 # NOTE: skills load independently of `instructions.enabled` - Copilot still discovers
 #       .github/skills/ when --no-custom-instructions is passed, so this is a clean arm on its own.
 skills:
   enabled: true
+  names: ["bc-fix-bug"]
 
 # controls:
 # 1. whether to copy custom agents from `src/bcbench/agent/shared/instructions/<sanitized-repo>/agents/`

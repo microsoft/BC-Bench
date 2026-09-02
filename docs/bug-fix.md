@@ -7,7 +7,7 @@ title: Bug Fixing - BC-Bench
 
 This category follows the [SWE-Bench](https://www.swebench.com/) methodology. The system is tasked with fixing a bug in the Business Central (AL) codebase given an issue description.
 
-An optional `bc-fix-bug` skill arm is available for this category: a trimmed vendored copy of the skill from [`microsoft/BCAppsBugFix`](https://github.com/microsoft/BCAppsBugFix), reduced to the phases that can run offline — investigate and plan, then a self-correcting fix loop. The work-item fetch, test baseline, Miapp propagation, critique, AL review and pull-request phases are removed. Enable it with `skills.enabled: true`; see [EXPERIMENT.md](https://github.com/microsoft/BC-Bench/blob/main/EXPERIMENT.md) for how to run it as an experiment arm.
+An optional `bc-fix-bug` skill arm is available for this category: a trimmed vendored copy of the skill from [`microsoft/BCAppsBugFix`](https://github.com/microsoft/BCAppsBugFix), reduced to the phases that can run offline — investigate and plan, then a self-correcting fix loop. The work-item fetch, test baseline, Miapp propagation, critique, AL review and pull-request phases are removed, so the arm stays consistent with this category's evaluation, which reverts any agent edit to a test project and scores the fix against the dataset's own test patch. Enable it with `skills.enabled: true` and `skills.names: ["bc-fix-bug"]`; see [EXPERIMENT.md](https://github.com/microsoft/BC-Bench/blob/main/EXPERIMENT.md) for how to run it as an experiment arm.
 
 ## Baseline Leaderboard
 

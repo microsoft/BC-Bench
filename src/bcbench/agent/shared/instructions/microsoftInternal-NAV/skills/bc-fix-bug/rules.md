@@ -16,8 +16,8 @@ These rules apply to every step of `workflow.md`.
    pre-existing uncommitted changes alone.
 
 4. **Nothing scratch inside the repository.** Plans, notes, logs, and state files go to `$env:TEMP`,
-   never into the repository. Every extra file under the repo root lands in the collected diff and
-   counts against the change.
+   never into the repository. Any extra `.al` file under the repo root lands in the collected diff
+   and counts against the change.
 
 5. **Do not touch the environment.** The repository, the BC container, and the AL tools are
    provisioned by the harness. Never provision, restart, or reconfigure a container, never install
@@ -49,9 +49,10 @@ These rules apply to every step of `workflow.md`.
    afterwards.
 
 10. **Connection details are already configured.** The AL tool server is started by the harness with
-    the container's server URL, instance, and credentials. Call the tools without hunting for
-    connection values: the BC server variables are deliberately not present in your environment, and
-    guessed values will not reach the container.
+    the container's server URL, instance, and credentials, so call the tools without hunting for
+    connection values. This category may also expose `BC_*` variables in your own environment; they
+    are not yours to use - reaching the container with them instead of through the AL tools breaks
+    Rule 8.
 
 11. **Missing symbols**: on `AL0185`, `AL1022`, or a similar missing-symbol error, call
     `al_downloadsymbols` **once**, then rebuild. If the type belongs to a namespace the file has not
