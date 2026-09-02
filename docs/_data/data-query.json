@@ -1,0 +1,87 @@
+{
+  "runs": [
+    {
+      "total": 11,
+      "date": "2026-09-02",
+      "model": "claude-sonnet-5",
+      "agent_name": "Claude Code",
+      "category": "data-query",
+      "average_duration": 265.6,
+      "average_prompt_tokens": 1951519.4,
+      "average_completion_tokens": 8294.4,
+      "average_llm_duration": 102.9,
+      "average_ai_credits": null,
+      "average_tool_usage": {
+        "ToolSearch": 8.0,
+        "mcp__bcmcp__bc_data_find_tables": 0.91,
+        "mcp__bcmcp__bc_data_get_table_schema": 1.36,
+        "mcp__bcmcp__bc_data_query": 2.36,
+        "Bash": 2.73,
+        "Write": 2.18,
+        "ListMcpResourcesTool": 0.45,
+        "ReadMcpResourceDirTool": 0.18,
+        "Read": 1.27,
+        "Grep": 0.18,
+        "TaskOutput": 0.64,
+        "Monitor": 0.09,
+        "TaskCreate": 0.09,
+        "TaskUpdate": 0.09,
+        "ScheduleWakeup": 0.18
+      },
+      "github_run_id": "33634155765",
+      "experiment": {
+        "mcp_servers": [
+          "bcmcp"
+        ],
+        "al_lsp_enabled": false,
+        "custom_instructions": false,
+        "skills_enabled": false,
+        "custom_agent": null,
+        "plugins": null
+      },
+      "benchmark_version": "0.9.0",
+      "resolved": 7,
+      "failed": 4,
+      "build": 10,
+      "percentage": 63.6,
+      "instance_results": {
+        "dataquery__total-posted-sales-amount-by-customer-1": true,
+        "dataquery__outstanding-sales-value-by-customer-1": true,
+        "dataquery__total-purchase-amount-by-vendor-1": false,
+        "dataquery__open-sales-order-count-by-customer-1": true,
+        "dataquery__opportunity-count-by-status-1": true,
+        "dataquery__customer-count-by-country-1": true,
+        "dataquery__total-sold-quantity-by-item-1": true,
+        "dataquery__line-count-per-open-sales-order-1": true,
+        "dataquery__total-purchased-quantity-by-item-1": false,
+        "dataquery__avg-invoice-amount-by-country-1": false,
+        "dataquery__outstanding-purchase-value-by-vendor-1": false
+      }
+    }
+  ],
+  "aggregate": [
+    {
+      "model": "claude-sonnet-5",
+      "agent_name": "Claude Code",
+      "category": "data-query",
+      "experiment": {
+        "mcp_servers": [
+          "bcmcp"
+        ],
+        "al_lsp_enabled": false,
+        "custom_instructions": false,
+        "skills_enabled": false,
+        "custom_agent": null,
+        "plugins": null
+      },
+      "total": 11,
+      "num_runs": 1,
+      "average_duration": 265.6,
+      "benchmark_version": "0.9.0",
+      "average": 0.636,
+      "ci_low": null,
+      "ci_high": null,
+      "pass_hat_5": null
+    }
+  ]
+}
