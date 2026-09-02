@@ -260,7 +260,7 @@ class EvaluationCategory(StrEnum):
             case EvaluationCategory.CODE_REVIEW:
                 return get_config().paths.dataset_dir / "codereview.jsonl"
             case EvaluationCategory.NL2AL:
-                return get_config().paths.dataset_dir / "nl2al.jsonl"
+                return get_config().paths.dataset_dir / "nl2al_challenge.jsonl"
             case EvaluationCategory.DATA_QUERY:
                 return get_config().paths.dataset_dir / "dataquery.jsonl"
             case EvaluationCategory.EXT_REQUEST_ADVISOR:
