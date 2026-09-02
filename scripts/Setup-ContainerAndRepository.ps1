@@ -114,11 +114,6 @@ if (-not $SkipContainer) {
 
     Initialize-ContainerForDevelopment -ContainerName $ContainerName -RepoVersion ([System.Version]$Version)
 
-    $connectionInfo = Get-BCMCPConnectionInfo -ContainerName $ContainerName
-    if ($env:GITHUB_ENV) {
-        "BC_COMPANY=$($connectionInfo.Company)" | Out-File -FilePath $env:GITHUB_ENV -Append
-    }
-
     [string] $company = Get-BCContainerCompany -ContainerName $ContainerName
     Write-Log "BC company: '$company'" -Level Info
 
