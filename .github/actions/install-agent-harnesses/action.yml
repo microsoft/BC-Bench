@@ -14,14 +14,14 @@ runs:
       shell: pwsh
 
     - name: Install GitHub Copilot CLI
-      run: npm install -g @github/copilot@1.0.80
+      run: npm install -g @github/copilot@1.0.81-11
       shell: pwsh
 
     - name: Checkout BC-ALAgents
       uses: actions/checkout@v5
       with:
         repository: microsoft/BC-ALAgents
-        ref: 533dd39dfe29218c09e5e31c39c78bb72fa20aa2
+        ref: 5a4503f98e9757c7e7b913f0a729894b70c8bcc0
         path: .agent-harnesses/bc-alagents
         persist-credentials: false
 

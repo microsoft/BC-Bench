@@ -47,6 +47,9 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert 'agent: "BC PR Review"' in workflow
     assert '"mai-code-1.1-flash"' in workflow
     assert "mai-code-1-flash-picker" not in workflow
+    assert '"gemini-3.7-flash"' in workflow
+    assert "gemini-3.6-flash" not in workflow
+    assert '"grok-4.6"' in workflow
     for input_name in ("model:", "test-run:", "repeat:", "git-ref:"):
         assert input_name in workflow
 
@@ -54,12 +57,12 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.80" in action
+    assert "@github/copilot@1.0.81-11" in action
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
     assert "repository: microsoft/BC-ALAgents" in action
-    assert "ref: 533dd39dfe29218c09e5e31c39c78bb72fa20aa2" in action
+    assert "ref: 5a4503f98e9757c7e7b913f0a729894b70c8bcc0" in action
     assert "bc-alagents-path:" in action

@@ -36,7 +36,7 @@ def _tool_label(data: dict) -> str | None:
 def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str | None]:
     """Parse metrics and the agent's final response from `copilot --output-format=json` (JSONL) stdout.
 
-    Relevant events (CLI 1.0.80):
+    Relevant events (CLI 1.0.81-11):
         model.call_start: one per request sent to the model, so counting them yields the turn count.
         tool.execution_start: one per tool invocation, including sub-agent and MCP tool calls.
         session.usage_checkpoint: `data.totalNanoAiu` is cumulative for the session, so the last one wins.

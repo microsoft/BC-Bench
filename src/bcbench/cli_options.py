@@ -121,7 +121,8 @@ CopilotModelName = Literal[
     "gpt-5.6-luna",
     "gpt-5.3-codex",
     "mai-code-1.1-flash",
-    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "grok-4.6",
 ]
 
 CopilotModel = Annotated[CopilotModelName, typer.Option(help="Copilot model to use")]
