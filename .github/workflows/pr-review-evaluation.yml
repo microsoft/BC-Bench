@@ -127,7 +127,7 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-          COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model == 'none' && '' || inputs.leaf-model }}
+          COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model != 'none' && inputs.leaf-model || '' }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
