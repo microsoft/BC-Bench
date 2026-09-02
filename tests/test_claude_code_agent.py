@@ -27,7 +27,7 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
             "bcbench.agent.claude.agent.setup_instructions_from_config",
             return_value=False,
         ),
-        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=[]),
         patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
         patch(
