@@ -20,6 +20,15 @@ on:
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
           - "gemini-3.6-flash"
+      leaf-model:
+        description: "Weaker/faster model for the leaf sub-skill agents; the super-skill keeps `model` for roll-up, adjudication, and self-review. `none` runs every agent on `model`."
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - "none"
+          - "mai-code-1.1-flash"
+          - "gemini-3.6-flash"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -118,6 +127,7 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model == 'none' && '' || inputs.leaf-model }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -162,4 +172,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
