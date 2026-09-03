@@ -13,11 +13,19 @@ the change, implement it, and validate it with the AL tools when they are availa
 does not fetch work items, does not create branches, does not commit, and does not open pull
 requests. Its only output is the change in the working tree plus a short report.
 
-## Step 1: Read the rules
+## Step 1: Locate the support files and read the rules
 
-Set `AGENT_ROOT` to `.github/agents/fix-bug` when that folder exists, otherwise to
-`.claude/agents/fix-bug`. Read `AGENT_ROOT/rules.md` before acting. It defines the hard constraints,
-how to use the AL tools, and how to fail.
+Set `AGENT_ROOT` from the harness running this agent:
+
+- GitHub Copilot CLI: `.github/agents/fix-bug`
+- Claude Code: `.claude/agents/fix-bug`
+
+Use only the path for the current harness; do not select it based on whether the other directory
+exists, because a repository can contain configuration for both harnesses. If the expected directory
+does not exist, stop and report the missing path.
+
+Read `AGENT_ROOT/rules.md` before acting. It defines the hard constraints, how to use the AL tools,
+and how to fail.
 
 ## Step 2: Extract the task
 
