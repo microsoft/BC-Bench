@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -84,6 +84,23 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+    # PR Review diagnostics retained for advanced analysis.
+    cached_tokens: int | None = Field(default=None, ge=0)
+    cache_creation_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    api_calls: int | None = Field(default=None, ge=0)
+    failed_api_calls: int | None = Field(default=None, ge=0)
+    usage_api_calls: int | None = Field(default=None, ge=0)
+    premium_requests: float | None = Field(default=None, ge=0)
+    usage_complete: bool | None = None
+    malformed_records: int | None = Field(default=None, ge=0)
+    knowledge_files: int | None = Field(default=None, ge=0)
+    knowledge_pruned: int | None = Field(default=None, ge=0)
+    knowledge_used: int | None = Field(default=None, ge=0)
+    knowledge_suppressed: int | None = Field(default=None, ge=0)
+    sub_skills_executed: int | None = Field(default=None, ge=0)
+    sub_skills_skipped: int | None = Field(default=None, ge=0)
 
 
 class ExperimentConfiguration(BaseModel):

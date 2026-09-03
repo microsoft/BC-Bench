@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_review_metrics
+from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS_FILE_NAME, build_pr_review_metrics
 from bcbench.exceptions import AgentError
 
 
@@ -33,18 +33,34 @@ def _run_metrics(**overrides: object) -> dict[str, object]:
 
 def _write_run_metrics(root: Path, **overrides: object) -> None:
     (root / RUN_METRICS_FILE_NAME).write_text(json.dumps(_run_metrics(**overrides)), encoding="utf-8")
+    (root / FILTER_REPORT_FILE_NAME).write_text(json.dumps({"removed": []}), encoding="utf-8")
 
 
 def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path)
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=12.5)
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=12.5)
 
     assert metrics.execution_time == 12.5
     assert metrics.prompt_tokens == 150
     assert metrics.completion_tokens == 28
     assert metrics.total_tokens == 178
     assert metrics.ai_credits == 1.75
+    assert metrics.cached_tokens == 60
+    assert metrics.cache_creation_tokens == 10
+    assert metrics.reasoning_tokens == 7
+    assert metrics.api_calls == 2
+    assert metrics.failed_api_calls == 1
+    assert metrics.usage_api_calls == 2
+    assert metrics.premium_requests == 1.75
+    assert metrics.usage_complete is True
+    assert metrics.malformed_records == 0
+    assert metrics.knowledge_files == 0
+    assert metrics.knowledge_pruned == 0
+    assert metrics.knowledge_used == 0
+    assert metrics.knowledge_suppressed == 0
+    assert metrics.sub_skills_executed is None
+    assert metrics.sub_skills_skipped == 0
 
 
 def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: Path) -> None:
@@ -60,7 +76,7 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
         models=["gpt-5.4-mini", "gpt-5.6-sol"],
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
 
     assert metrics.ai_credits is None
     assert metrics.total_tokens == 178
@@ -84,12 +100,17 @@ def test_malformed_records_suppress_all_usage_metrics(tmp_path: Path) -> None:
         malformed_records=3,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
 
     assert metrics.prompt_tokens is None
     assert metrics.completion_tokens is None
     assert metrics.total_tokens is None
     assert metrics.ai_credits is None
+    assert metrics.api_calls == 2
+    assert metrics.failed_api_calls == 1
+    assert metrics.usage_api_calls == 1
+    assert metrics.usage_complete is False
+    assert metrics.malformed_records == 3
 
 
 def test_incomplete_usage_suppresses_tokens_but_preserves_exact_credits(tmp_path: Path) -> None:
@@ -104,7 +125,7 @@ def test_incomplete_usage_suppresses_tokens_but_preserves_exact_credits(tmp_path
         malformed_records=0,
     )
 
-    metrics = build_pr_review_metrics(tmp_path, execution_time=2.0)
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.0)
 
     assert metrics.prompt_tokens is None
     assert metrics.completion_tokens is None
@@ -114,14 +135,14 @@ def test_incomplete_usage_suppresses_tokens_but_preserves_exact_credits(tmp_path
 
 def test_missing_run_metrics_raises(tmp_path: Path) -> None:
     with pytest.raises(AgentError, match="run metrics artifact not found"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 def test_invalid_run_metrics_json_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text("not json", encoding="utf-8")
 
     with pytest.raises(AgentError, match="Could not read engine run metrics artifact"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 @pytest.mark.parametrize(
@@ -142,7 +163,7 @@ def test_invalid_run_metrics_contract_raises(tmp_path: Path, overrides: dict[str
     _write_run_metrics(tmp_path, **overrides)
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
@@ -151,7 +172,7 @@ def test_missing_run_metrics_key_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(AgentError, match="does not satisfy schema version 1"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
 def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
@@ -177,7 +198,7 @@ def test_not_applicable_zero_shape_fails_evaluation(tmp_path: Path) -> None:
     )
 
     with pytest.raises(AgentError, match="must contain AL changes"):
-        build_pr_review_metrics(tmp_path, execution_time=0.25)
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=0.25)
 
 
 @pytest.mark.parametrize(
@@ -217,4 +238,45 @@ def test_not_applicable_rejects_noncanonical_shape(tmp_path: Path, field: str, v
     _write_run_metrics(tmp_path, **not_applicable)
 
     with pytest.raises(AgentError, match="not-applicable metrics have invalid fields"):
-        build_pr_review_metrics(tmp_path, execution_time=1.0)
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+def test_engine_diagnostics_count_knowledge_and_sub_skills(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / "microsoft" / "knowledge").mkdir(parents=True)
+    (tmp_path / "community" / "knowledge").mkdir(parents=True)
+    (tmp_path / "custom" / "skills").mkdir(parents=True)
+    (tmp_path / "microsoft" / "knowledge" / "one.md").write_text("one", encoding="utf-8")
+    (tmp_path / "community" / "knowledge" / "two.md").write_text("two", encoding="utf-8")
+    (tmp_path / "custom" / "skills" / "not-knowledge.md").write_text("skill", encoding="utf-8")
+    (tmp_path / FILTER_REPORT_FILE_NAME).write_text(
+        json.dumps({"removed": [{"kind": "knowledge"}, {"kind": "knowledge"}, {"kind": "skill"}]}),
+        encoding="utf-8",
+    )
+    (tmp_path / "al-code-review-findings.json").write_text(
+        json.dumps(
+            {
+                "findings": [{"references": [{"path": "microsoft/knowledge/one.md"}, {"path": ""}]}],
+                "subResults": [
+                    {
+                        "references": [
+                            {"path": "community/knowledge/two.md"},
+                            {"path": "MICROSOFT\\KNOWLEDGE\\ONE.MD"},
+                        ]
+                    }
+                ],
+                "skippedSubSkills": [{"name": "one"}, {"name": "two"}],
+                "suppressed": [{"path": "custom/knowledge/three.md"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.knowledge_files == 2
+    assert metrics.knowledge_pruned == 2
+    assert metrics.knowledge_used == 2
+    assert metrics.knowledge_suppressed == 1
+    assert metrics.sub_skills_executed == 1
+    assert metrics.sub_skills_skipped == 2
