@@ -125,6 +125,8 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
 
 - **Inline knowledge (pre-#8700)** — the review checklists BCApps shipped inline before adopting BCQuality, injected as custom instructions.
 
+For detailed aggregate and per-run quality, performance, configuration, and usage metrics, open the [Advanced Metrics view](code-review-details.html).
+
 {% assign experiment_rows = site.data.code-review.aggregate | where_exp: "agg", "agg.experiment != null" %}
 {% assign experiment_rows = experiment_rows | where_exp: "agg", "agg.experiment.is_experiment != false" %}
 {% if experiment_rows and experiment_rows.size > 0 %}
