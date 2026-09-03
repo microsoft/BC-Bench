@@ -19,7 +19,7 @@ on:
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
-          - "gemini-3.6-flash"
+          - "gemini-3.7-flash"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false

@@ -36,7 +36,7 @@ def _tool_label(block: dict) -> str | None:
     return tool_name
 
 
-def parse_stream_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str | None]:
+def parse_stream_output(output_lines: Sequence[str], *, log_transcript: bool = False) -> tuple[AgentMetrics | None, str | None]:
     execution_time: float | None = None
     llm_duration: float | None = None
     turn_count: int | None = None
@@ -44,6 +44,9 @@ def parse_stream_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | Non
     completion_tokens: int | None = None
     tool_usage: Counter[str] = Counter()
     final_response: str | None = None
+    # The final text is emitted in both AssistantMessage and ResultMessage:
+    # https://code.claude.com/docs/en/agent-sdk/agent-loop#the-loop-at-a-glance
+    last_assistant_message: str | None = None
 
     for line_number, line in enumerate(output_lines, start=1):
         if not line.strip():
@@ -67,8 +70,19 @@ def parse_stream_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | Non
                     if not isinstance(content, list):
                         continue
                     for block in content:
-                        if isinstance(block, dict) and block.get("type") == "tool_use" and (label := _tool_label(block)):
-                            tool_usage[label] += 1
+                        if not isinstance(block, dict):
+                            continue
+                        match block.get("type"):
+                            case "text":
+                                text = block.get("text")
+                                if log_transcript and isinstance(text, str) and text.strip():
+                                    last_assistant_message = text.strip()
+                                    logger.info("Claude Code: %s", last_assistant_message)
+                            case "tool_use":
+                                if label := _tool_label(block):
+                                    tool_usage[label] += 1
+                                    if log_transcript:
+                                        logger.info("Claude Code tool: %s", label)
             case "result":
                 execution_time = _milliseconds_to_seconds(event.get("duration_ms"))
                 llm_duration = _milliseconds_to_seconds(event.get("duration_api_ms"))
@@ -88,6 +102,8 @@ def parse_stream_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | Non
                 result_text = event.get("result")
                 if isinstance(result_text, str) and result_text:
                     final_response = result_text
+                    if log_transcript and result_text.strip() != last_assistant_message:
+                        logger.info("Claude Code: %s", result_text.strip())
 
     metrics = None
     if execution_time is not None or llm_duration is not None or turn_count is not None or prompt_tokens is not None or completion_tokens is not None or tool_usage:

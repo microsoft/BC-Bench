@@ -126,6 +126,8 @@ class EvaluationResultSummary(BaseModel, ABC):
         data["average_prompt_tokens"] = round(data["average_prompt_tokens"], 1) if data["average_prompt_tokens"] is not None else None
         data["average_completion_tokens"] = round(data["average_completion_tokens"], 1) if data["average_completion_tokens"] is not None else None
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
+        if data["average_tool_usage"] is None:
+            del data["average_tool_usage"]
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:

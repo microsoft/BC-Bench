@@ -131,9 +131,7 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        metrics, final_response = parse_stream_output(stdout.splitlines())
-        if final_response:
-            logger.info(final_response)
+        metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

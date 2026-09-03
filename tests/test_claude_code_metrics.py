@@ -198,3 +198,37 @@ class TestClaudeStreamParsing:
         assert final_response == "ok"
         assert metrics is not None
         assert metrics.execution_time == 1.0
+
+    def test_logs_readable_transcript(self, caplog: pytest.LogCaptureFixture):
+        caplog.set_level("INFO")
+
+        parse_stream_output(
+            self._lines(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "Inspecting the implementation."},
+                            {"type": "tool_use", "id": "tool-1", "name": "Read", "input": {}},
+                        ]
+                    },
+                },
+                {"type": "assistant", "message": {"content": [{"type": "text", "text": "Done."}]}},
+                {"type": "result", "result": "Done."},
+            ),
+            log_transcript=True,
+        )
+
+        assert "Claude Code: Inspecting the implementation." in caplog.messages
+        assert "Claude Code tool: Read" in caplog.messages
+        assert caplog.messages.count("Claude Code: Done.") == 1
+
+    def test_logs_final_result_without_assistant_message(self, caplog: pytest.LogCaptureFixture):
+        caplog.set_level("INFO")
+
+        parse_stream_output(
+            self._lines({"type": "result", "duration_ms": 1000, "result": "Done."}),
+            log_transcript=True,
+        )
+
+        assert "Claude Code: Done." in caplog.messages
