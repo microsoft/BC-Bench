@@ -131,6 +131,29 @@ class TestFromResults:
         assert summary.github_run_id == "test_run_123"
         assert summary.date == datetime.now(UTC).date()
 
+    def test_from_results_records_harness_identity_from_environment(self, sample_results, monkeypatch):
+        identity = {
+            "BCBENCH_COMMIT": "0" * 40,
+            "COPILOT_CLI_VERSION": "1.0.82",
+            "BC_ALAGENTS_REPOSITORY": "microsoft/BC-ALAgents",
+            "BC_ALAGENTS_COMMIT": "1" * 40,
+            "BCQUALITY_REPOSITORY": "microsoft/BCQuality",
+            "BCQUALITY_COMMIT": "2" * 40,
+            "BCQUALITY_VERSION": "1.6",
+        }
+        for name, value in identity.items():
+            monkeypatch.setenv(name, value)
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
+
+        assert summary.benchmark_commit == "0" * 40
+        assert summary.copilot_cli_version == "1.0.82"
+        assert summary.bc_alagents_repository == "microsoft/BC-ALAgents"
+        assert summary.bc_alagents_commit == "1" * 40
+        assert summary.bcquality_repository == "microsoft/BCQuality"
+        assert summary.bcquality_commit == "2" * 40
+        assert summary.bcquality_version == "1.6"
+
     def test_from_results_calculates_averages_correctly(self, sample_results):
         summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
 
@@ -829,6 +852,44 @@ class TestLeaderboard:
 
         with pytest.raises(ValueError, match="different combinations"):
             LeaderboardAggregate.from_runs([run1, run2])
+
+    def test_aggregate_rejects_runs_with_different_harness_pins(self):
+        from bcbench.results.leaderboard import LeaderboardAggregate
+
+        run1 = ExecutionBasedEvaluationResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__1", resolved=True)],
+            run_id="run_1",
+        ).model_copy(update={"bc_alagents_commit": "1" * 40})
+        run2 = run1.model_copy(update={"github_run_id": "run_2", "bc_alagents_commit": "2" * 40})
+
+        with pytest.raises(ValueError, match="different combinations"):
+            LeaderboardAggregate.from_runs([run1, run2])
+
+    def test_aggregate_includes_harness_identity(self):
+        from bcbench.results.leaderboard import LeaderboardAggregate
+
+        run = ExecutionBasedEvaluationResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__1", resolved=True)],
+            run_id="run_1",
+        ).model_copy(
+            update={
+                "benchmark_commit": "0" * 40,
+                "copilot_cli_version": "1.0.82",
+                "bc_alagents_repository": "microsoft/BC-ALAgents",
+                "bc_alagents_commit": "1" * 40,
+                "bcquality_repository": "microsoft/BCQuality",
+                "bcquality_commit": "2" * 40,
+                "bcquality_version": "1.6",
+            }
+        )
+
+        aggregate = LeaderboardAggregate.from_runs([run])
+
+        assert aggregate.benchmark_commit == "0" * 40
+        assert aggregate.copilot_cli_version == "1.0.82"
+        assert aggregate.bc_alagents_commit == "1" * 40
+        assert aggregate.bcquality_commit == "2" * 40
+        assert aggregate.bcquality_version == "1.6"
 
     def test_aggregate_rejects_runs_with_different_judge_models(self):
         from bcbench.results.leaderboard import LeaderboardAggregate

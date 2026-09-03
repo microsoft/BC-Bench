@@ -90,6 +90,9 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Avg Sub-skills Skipped</th>
       <th>Judge</th>
       <th>BC-Bench</th>
+      <th>Copilot CLI</th>
+      <th>BC-ALAgents</th>
+      <th>BCQuality</th>
     </tr>
   </thead>
   <tbody>
@@ -137,7 +140,10 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if agg.average_sub_skills_executed != null %}{{ agg.average_sub_skills_executed | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_sub_skills_skipped != null %}{{ agg.average_sub_skills_skipped | round: 1 }}{% else %}—{% endif %}</td>
       <td>{{ agg.judge_model }}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}</td>
+      <td>{% if agg.copilot_cli_version %}{{ agg.copilot_cli_version }}{% else %}—{% endif %}</td>
+      <td>{% if agg.bc_alagents_commit %}<a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">{{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
+      <td>{% if agg.bcquality_commit %}<a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">{{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -204,6 +210,9 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Avg Tool Usage</th>
       <th>Judge</th>
       <th>BC-Bench</th>
+      <th>Copilot CLI</th>
+      <th>BC-ALAgents</th>
+      <th>BCQuality</th>
     </tr>
   </thead>
   <tbody>
@@ -259,7 +268,10 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if run.average_sub_skills_skipped != null %}{{ run.average_sub_skills_skipped | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_tool_usage %}<code>{{ run.average_tool_usage | jsonify }}</code>{% else %}—{% endif %}</td>
       <td>{{ run.judge_model }}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ run.benchmark_version }}" target="_blank">{{ run.benchmark_version }}</a></td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ run.benchmark_version }}" target="_blank">{{ run.benchmark_version }}</a>{% if run.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ run.benchmark_commit }}" target="_blank">{{ run.benchmark_commit | slice: 0, 8 }}</a>){% endif %}</td>
+      <td>{% if run.copilot_cli_version %}{{ run.copilot_cli_version }}{% else %}—{% endif %}</td>
+      <td>{% if run.bc_alagents_commit %}<a href="https://github.com/{{ run.bc_alagents_repository }}/commit/{{ run.bc_alagents_commit }}" target="_blank">{{ run.bc_alagents_commit | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
+      <td>{% if run.bcquality_commit %}<a href="https://github.com/{{ run.bcquality_repository }}/commit/{{ run.bcquality_commit }}" target="_blank">{{ run.bcquality_commit | slice: 0, 8 }}</a>{% if run.bcquality_version %} ({{ run.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>

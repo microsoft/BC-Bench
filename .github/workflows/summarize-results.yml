@@ -34,6 +34,41 @@ on:
         required: false
         type: string
         default: ""
+      benchmark-commit:
+        description: "Immutable BC-Bench commit used for the evaluation"
+        required: false
+        type: string
+        default: ""
+      copilot-cli-version:
+        description: "GitHub Copilot CLI version used by the evaluation"
+        required: false
+        type: string
+        default: ""
+      bc-alagents-repository:
+        description: "BC-ALAgents repository used by PR Review"
+        required: false
+        type: string
+        default: ""
+      bc-alagents-commit:
+        description: "Immutable BC-ALAgents commit used by PR Review"
+        required: false
+        type: string
+        default: ""
+      bcquality-repository:
+        description: "BCQuality repository used by PR Review"
+        required: false
+        type: string
+        default: ""
+      bcquality-commit:
+        description: "Immutable BCQuality commit used by PR Review"
+        required: false
+        type: string
+        default: ""
+      bcquality-version:
+        description: "BCQuality content version used by PR Review"
+        required: false
+        type: string
+        default: ""
 
 env:
   BCEVAL_RESULT_FILE: bceval_results.jsonl
@@ -63,6 +98,14 @@ jobs:
           merge-multiple: true
 
       - name: Summarize evaluation results
+        env:
+          BCBENCH_COMMIT: ${{ inputs.benchmark-commit }}
+          COPILOT_CLI_VERSION: ${{ inputs.copilot-cli-version }}
+          BC_ALAGENTS_REPOSITORY: ${{ inputs.bc-alagents-repository }}
+          BC_ALAGENTS_COMMIT: ${{ inputs.bc-alagents-commit }}
+          BCQUALITY_REPOSITORY: ${{ inputs.bcquality-repository }}
+          BCQUALITY_COMMIT: ${{ inputs.bcquality-commit }}
+          BCQUALITY_VERSION: ${{ inputs.bcquality-version }}
         run: uv run bcbench result summarize --category "${{ inputs.category }}" --result-dir "${{ inputs.results-dir }}" --bceval-output "${{ env.BCEVAL_RESULT_FILE }}" --summary-output "${{ env.SUMMARY_OUTPUT_FILE }}" --git-ref "${{ inputs.git-ref || github.ref_name }}"
 
       - name: Upload evaluation summary to artifacts
