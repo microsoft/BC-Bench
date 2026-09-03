@@ -39,7 +39,7 @@ title: Code Review Advanced Metrics - BC-Bench
 
 This view exposes every quality, performance, configuration, and usage metric persisted in the public code-review leaderboard data. The [default leaderboard](code-review.html) keeps only the headline metrics.
 
-Producer-only diagnostics that are not stored in `docs/_data/code-review.json` cannot be displayed here.
+Diagnostic averages use only tasks that reported the metric. Coverage columns show what share of tasks contributed complete token or credit telemetry.
 
 ## Aggregate metrics
 
@@ -71,6 +71,23 @@ Producer-only diagnostics that are not stored in `docs/_data/code-review.json` c
       <th>Avg Completion Tokens</th>
       <th>Avg Total Tokens</th>
       <th>Avg AI Credits</th>
+      <th>Token Coverage</th>
+      <th>Credit Coverage</th>
+      <th>Usage Complete</th>
+      <th>Avg Cached Tokens</th>
+      <th>Avg Cache Creation Tokens</th>
+      <th>Avg Reasoning Tokens</th>
+      <th>Avg API Calls</th>
+      <th>Avg Failed API Calls</th>
+      <th>Avg Calls With Usage</th>
+      <th>Avg Premium Requests</th>
+      <th>Avg Malformed Records</th>
+      <th>Avg Articles Retained</th>
+      <th>Avg Articles Pruned</th>
+      <th>Avg Articles Used in Findings</th>
+      <th>Avg Articles Suppressed</th>
+      <th>Avg Sub-skills Executed</th>
+      <th>Avg Sub-skills Skipped</th>
       <th>Judge</th>
       <th>BC-Bench</th>
     </tr>
@@ -102,6 +119,23 @@ Producer-only diagnostics that are not stored in `docs/_data/code-review.json` c
       <td>{% if agg.average_completion_tokens != null %}{{ agg.average_completion_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_total_tokens != null %}{{ agg.average_total_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.token_coverage_rate != null %}{{ agg.token_coverage_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
+      <td>{% if agg.credit_coverage_rate != null %}{{ agg.credit_coverage_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
+      <td>{% if agg.usage_complete_rate != null %}{{ agg.usage_complete_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
+      <td>{% if agg.average_cached_tokens != null %}{{ agg.average_cached_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_cache_creation_tokens != null %}{{ agg.average_cache_creation_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_reasoning_tokens != null %}{{ agg.average_reasoning_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_api_calls != null %}{{ agg.average_api_calls | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_failed_api_calls != null %}{{ agg.average_failed_api_calls | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_usage_api_calls != null %}{{ agg.average_usage_api_calls | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_premium_requests != null %}{{ agg.average_premium_requests | round: 3 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_malformed_records != null %}{{ agg.average_malformed_records | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_knowledge_files != null %}{{ agg.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_knowledge_pruned != null %}{{ agg.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_knowledge_used != null %}{{ agg.average_knowledge_used | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_knowledge_suppressed != null %}{{ agg.average_knowledge_suppressed | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_sub_skills_executed != null %}{{ agg.average_sub_skills_executed | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if agg.average_sub_skills_skipped != null %}{{ agg.average_sub_skills_skipped | round: 1 }}{% else %}—{% endif %}</td>
       <td>{{ agg.judge_model }}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>
@@ -150,6 +184,23 @@ Producer-only diagnostics that are not stored in `docs/_data/code-review.json` c
       <th>Avg Completion Tokens</th>
       <th>Avg Total Tokens</th>
       <th>Avg AI Credits</th>
+      <th>Token Coverage</th>
+      <th>Credit Coverage</th>
+      <th>Usage Complete</th>
+      <th>Avg Cached Tokens</th>
+      <th>Avg Cache Creation Tokens</th>
+      <th>Avg Reasoning Tokens</th>
+      <th>Avg API Calls</th>
+      <th>Avg Failed API Calls</th>
+      <th>Avg Calls With Usage</th>
+      <th>Avg Premium Requests</th>
+      <th>Avg Malformed Records</th>
+      <th>Avg Articles Retained</th>
+      <th>Avg Articles Pruned</th>
+      <th>Avg Articles Used in Findings</th>
+      <th>Avg Articles Suppressed</th>
+      <th>Avg Sub-skills Executed</th>
+      <th>Avg Sub-skills Skipped</th>
       <th>Avg Tool Usage</th>
       <th>Judge</th>
       <th>BC-Bench</th>
@@ -189,6 +240,23 @@ Producer-only diagnostics that are not stored in `docs/_data/code-review.json` c
       <td>{% if run.average_completion_tokens != null %}{{ run.average_completion_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_total_tokens != null %}{{ run.average_total_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_ai_credits != null %}{{ run.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
+      <td>{% if run.token_coverage_rate != null %}{{ run.token_coverage_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
+      <td>{% if run.credit_coverage_rate != null %}{{ run.credit_coverage_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
+      <td>{% if run.usage_complete_rate != null %}{{ run.usage_complete_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
+      <td>{% if run.average_cached_tokens != null %}{{ run.average_cached_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_cache_creation_tokens != null %}{{ run.average_cache_creation_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_reasoning_tokens != null %}{{ run.average_reasoning_tokens | round: 0 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_api_calls != null %}{{ run.average_api_calls | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_failed_api_calls != null %}{{ run.average_failed_api_calls | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_usage_api_calls != null %}{{ run.average_usage_api_calls | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_premium_requests != null %}{{ run.average_premium_requests | round: 3 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_malformed_records != null %}{{ run.average_malformed_records | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_knowledge_files != null %}{{ run.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_knowledge_pruned != null %}{{ run.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_knowledge_used != null %}{{ run.average_knowledge_used | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_knowledge_suppressed != null %}{{ run.average_knowledge_suppressed | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_sub_skills_executed != null %}{{ run.average_sub_skills_executed | round: 1 }}{% else %}—{% endif %}</td>
+      <td>{% if run.average_sub_skills_skipped != null %}{{ run.average_sub_skills_skipped | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_tool_usage %}<code>{{ run.average_tool_usage | jsonify }}</code>{% else %}—{% endif %}</td>
       <td>{{ run.judge_model }}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ run.benchmark_version }}" target="_blank">{{ run.benchmark_version }}</a></td>
