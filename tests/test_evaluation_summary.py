@@ -269,6 +269,7 @@ class TestFromResults:
         assert summary.average_tool_usage["view"] == 4
         # edit: (0 + 2) / 2 = 1
         assert summary.average_tool_usage["edit"] == 1
+        assert summary.to_dict()["average_tool_usage"] == {"bash": 8.0, "view": 4.0, "edit": 1.0}
 
     def test_from_results_handles_no_tool_usage(self):
         results = [
@@ -283,6 +284,7 @@ class TestFromResults:
         summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run")
 
         assert summary.average_tool_usage is None
+        assert "average_tool_usage" not in summary.to_dict()
 
 
 class TestExperimentConfiguration:
