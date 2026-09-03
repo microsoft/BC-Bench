@@ -56,7 +56,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.81-11" in action
+    assert "@github/copilot@1.0.82" in action
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
