@@ -45,7 +45,7 @@ For an experiment, push the pipeline and/or BCQuality changes through a BC-ALAge
 
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata are retained for the [Advanced Metrics view](code-review-details.html).
 
-## Baseline Leaderboard
+## Production BC PR Review Baseline
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
 <table>
@@ -62,7 +62,8 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.code-review.aggregate | sort: "f1" | reverse %}
+    {% assign production_results = site.data.code-review.aggregate | where: "agent_name", "BC PR Review" %}
+    {% assign sorted_results = production_results | sort: "f1" | reverse %}
     {% for agg in sorted_results %}
       {% if agg.experiment == null or agg.experiment.is_experiment == false %}
     <tr>
@@ -88,7 +89,7 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
 <p><em>No results available yet. Check back soon!</em></p>
 {% endif %}
 
-## Performance Leaderboard
+## Production BC PR Review Performance
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
 <table>
@@ -105,7 +106,8 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
     </tr>
   </thead>
   <tbody>
-    {% assign performance_results = site.data.code-review.aggregate | sort: "average_duration" %}
+    {% assign production_results = site.data.code-review.aggregate | where: "agent_name", "BC PR Review" %}
+    {% assign performance_results = production_results | sort: "average_duration" %}
     {% for agg in performance_results %}
     <tr>
       <td>{{ agg.agent_name }}</td>
@@ -129,9 +131,44 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
 <p><em>No performance results available yet. Check back soon!</em></p>
 {% endif %}
 
+## Legacy Direct-Agent Results
+
+These historical rows evaluate the generic Copilot or Claude runners against the same code-review dataset and scorer. They are retained for reference but are not directly comparable to the production `BC-Bench -> BC-ALAgents -> BCQuality` pipeline above.
+
+{% assign legacy_results = site.data.code-review.aggregate | where_exp: "agg", "agg.agent_name != 'BC PR Review'" %}
+{% if legacy_results and legacy_results.size > 0 %}
+<table>
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Model</th>
+      <th>Micro F1</th>
+      <th>Precision</th>
+      <th>Recall</th>
+      <th>Avg Time</th>
+      <th>BC-Bench</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% assign legacy_results = legacy_results | sort: "f1" | reverse %}
+    {% for agg in legacy_results %}
+    <tr>
+      <td>{{ agg.agent_name }}</td>
+      <td>{{ agg.model }}</td>
+      <td>{{ agg.f1 | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 ## Experiment Leaderboard
 
-Compares review-knowledge configurations for the same model (see the Baseline Leaderboard above for the plain agent):
+Compares review-knowledge configurations for the same runner and model. Runner identity remains visible because historical direct-agent experiments are not comparable to production BC PR Review experiments.
 
 - **Inline knowledge (pre-#8700)** — the review checklists BCApps shipped inline before adopting BCQuality, injected as custom instructions.
 
