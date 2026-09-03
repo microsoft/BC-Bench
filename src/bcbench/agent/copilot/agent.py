@@ -87,7 +87,7 @@ def run_copilot_agent(
         if custom_agent:
             extra_args.append(f"--agent={custom_agent}")
 
-        metrics, final_response = invoke_copilot(
+        metrics, _ = invoke_copilot(
             prompt=prompt,
             model=model,
             work_dir=repo_path,
@@ -103,9 +103,6 @@ def run_copilot_agent(
             ),
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
-
-        if final_response:
-            logger.info(final_response)
     except subprocess.TimeoutExpired:
         logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

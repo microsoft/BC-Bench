@@ -33,7 +33,7 @@ def _tool_label(data: dict) -> str | None:
     return tool_name
 
 
-def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str | None]:
+def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -> tuple[AgentMetrics | None, str | None]:
     """Parse metrics and the agent's final response from `copilot --output-format=json` (JSONL) stdout.
 
     Relevant events (CLI 1.0.82):
@@ -74,6 +74,8 @@ def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str 
                 data = event.get("data")
                 if isinstance(data, dict) and (label := _tool_label(data)):
                     tool_usage[label] += 1
+                    if log_transcript:
+                        logger.info("Copilot tool: %s", label)
             case "assistant.message":
                 data = event.get("data")
                 if not isinstance(data, dict):
@@ -82,6 +84,8 @@ def parse_output(output_lines: Sequence[str]) -> tuple[AgentMetrics | None, str 
                 content = data.get("content")
                 if isinstance(content, str) and content:
                     response = content
+                    if log_transcript and content.strip():
+                        logger.info("Copilot: %s", content.strip())
                     if data.get("phase") == "final_answer":
                         final_response = content
             case "session.usage_checkpoint":

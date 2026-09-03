@@ -50,11 +50,11 @@ def test_invoke_copilot_can_enable_custom_instructions(tmp_path: Path):
     assert "--no-custom-instructions" not in mock_run.call_args.args[0]
 
 
-def test_invoke_copilot_writes_json_output_to_stdout(tmp_path: Path, capsys):
-    output = '{"type":"assistant.message","data":{"content":"working"}}\n{"type":"result"}\n'
+def test_invoke_copilot_logs_readable_transcript(tmp_path: Path, caplog):
+    output = '{"type":"model.call_start","data":{"turnId":"0"}}\n{"type":"assistant.message","data":{"content":"working"}}\n{"type":"result"}\n'
+    caplog.set_level("INFO")
     with (
         patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
-        patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, None)),
         patch(
             "bcbench.agent.copilot.cli.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output, stderr=""),
@@ -62,7 +62,8 @@ def test_invoke_copilot_writes_json_output_to_stdout(tmp_path: Path, capsys):
     ):
         invoke_copilot(prompt="do the task", model="test-model", work_dir=tmp_path, timeout=60)
 
-    assert capsys.readouterr().out == output
+    assert "Copilot: working" in caplog.messages
+    assert output not in caplog.text
 
 
 def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Path, monkeypatch):
@@ -113,4 +114,4 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     assert "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS" not in mock_run.call_args.kwargs["env"]
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_USERNAME"] == "admin"
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_PASSWORD"] == "secret"
-    mock_parse_output.assert_called_once_with(['{"type":"result"}'])
+    mock_parse_output.assert_called_once_with(['{"type":"result"}'], log_transcript=True)
