@@ -60,6 +60,29 @@ def test_build_prompt_with_project_paths(tmp_path: Path):
     assert "Update the sales calculation" in result
 
 
+def test_bug_fix_experiment_uses_fix_bug_custom_agent():
+    config_path = get_config().paths.agent_share_dir / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    assert config["skills"]["enabled"] is False
+    assert config["agents"] == {"enabled": True, "name": "fix-bug"}
+
+
+def test_bug_fix_prompt_does_not_explicitly_select_skill(tmp_path: Path):
+    config_path = get_config().paths.agent_share_dir / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    entry = create_dataset_entry(
+        instance_id="microsoftInternal__NAV-999",
+        project_paths=["App/Layers/W1/BaseApp"],
+    )
+    problem_dir = create_problem_statement_dir(tmp_path, "Fix the reported bug")
+
+    with patch.object(type(entry), "problem_statement_dir", property(lambda self: problem_dir)):
+        prompt = build_prompt(entry, tmp_path, config, EvaluationCategory.BUG_FIX)
+
+    assert "bc-fix-bug" not in prompt
+
+
 def test_build_prompt_test_generation_gold_patch_mode(tmp_path: Path):
     entry = create_dataset_entry(
         instance_id="microsoftInternal__NAV-3",

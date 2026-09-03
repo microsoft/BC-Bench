@@ -1,4 +1,4 @@
-# Rules for the bc-fix-bug Workflow
+# Rules for the fix-bug Workflow
 
 These rules apply to every step of `workflow.md`.
 

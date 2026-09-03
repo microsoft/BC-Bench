@@ -109,6 +109,33 @@ def test_setup_custom_agent():
         assert (agents_dir / "extensibility-request-advisor.agent.md").exists()
 
 
+def test_setup_fix_bug_custom_agent():
+    with TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        entry = MagicMock(spec=RepoGroundedEntry)
+        entry.customization_profile = "microsoftInternal-NAV"
+        config = {
+            "agents": {
+                "enabled": True,
+                "name": "fix-bug",
+            }
+        }
+
+        result = setup_custom_agent(
+            config,
+            entry,
+            repo_path,
+            harness=AgentHarness.COPILOT,
+        )
+
+        agents_dir = repo_path / ".github" / "agents"
+        assert result == "fix-bug"
+        assert (agents_dir / "fix-bug.agent.md").exists()
+        assert (agents_dir / "fix-bug" / "rules.md").exists()
+        assert (agents_dir / "fix-bug" / "workflow.md").exists()
+        assert (agents_dir / "fix-bug" / "troubleshooting.md").exists()
+
+
 def test_custom_agent_disabled():
     with TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir)

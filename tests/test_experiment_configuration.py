@@ -60,12 +60,6 @@ class TestExperimentConfiguration:
         assert config.skills_enabled is True
         assert config.custom_agent is None
 
-    def test_with_skill_names(self):
-        config = ExperimentConfiguration(skills_enabled=True, skill_names=["bc-fix-bug"])
-
-        assert config.skill_names == ["bc-fix-bug"]
-        assert not config.is_empty()
-
     def test_with_all_fields(self):
         mcp_servers = ["server-1"]
         custom_agent = "test-agent"
@@ -74,14 +68,12 @@ class TestExperimentConfiguration:
             mcp_servers=mcp_servers,
             custom_instructions=True,
             skills_enabled=True,
-            skill_names=["bc-fix-bug"],
             custom_agent=custom_agent,
         )
 
         assert config.mcp_servers == mcp_servers
         assert config.custom_instructions is True
         assert config.skills_enabled is True
-        assert config.skill_names == ["bc-fix-bug"]
         assert config.custom_agent == custom_agent
 
     def test_empty_mcp_servers_list(self):

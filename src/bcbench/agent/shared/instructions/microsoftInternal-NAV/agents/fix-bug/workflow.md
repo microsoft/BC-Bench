@@ -3,7 +3,7 @@
 You investigate one bug in the checked-out repository, write a fix plan, implement it, and validate
 it. Read `rules.md` before executing this workflow.
 
-**Input**: the issue description and repository path extracted in Step 2 of `SKILL.md`.
+**Input**: the issue description and repository path extracted in Step 2 of `fix-bug.agent.md`.
 
 ---
 

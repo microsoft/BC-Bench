@@ -53,7 +53,7 @@ def run_copilot_agent(
         runtime=runtime,
     )
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-    skill_names: list[str] = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
+    skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
@@ -61,8 +61,7 @@ def run_copilot_agent(
         mcp_servers=mcp_server_names,
         al_lsp_enabled=lsp_plugin_dir is not None,
         custom_instructions=instructions_enabled,
-        skills_enabled=bool(skill_names),
-        skill_names=skill_names or None,
+        skills_enabled=skills_enabled,
         custom_agent=custom_agent,
         plugins=[plugin.record for plugin, _ in plugins] or None,
     )

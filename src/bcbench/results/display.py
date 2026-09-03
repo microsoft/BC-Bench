@@ -8,7 +8,6 @@ from bcbench.config import get_config
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary, calculate_average_tool_usage
-from bcbench.types import ExperimentConfiguration
 
 logger = get_logger(__name__)
 console = Console()
@@ -23,13 +22,6 @@ def _status_style(status_label: str) -> tuple[str, str]:
     return "green", ":white_check_mark:"
 
 
-def _skills_label(experiment: ExperimentConfiguration | None) -> str:
-    """Which skills a run used: their names, or a plain yes for results recorded before names were."""
-    if experiment is None or not experiment.skills_enabled:
-        return "None"
-    return ", ".join(experiment.skill_names) if experiment.skill_names else "Yes"
-
-
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
     console.print(f"Total Processed: [bold]{len(results)}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
@@ -37,7 +29,7 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
     console.print(f"MCP Servers: [bold]{', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}[/bold]")
     console.print(f"AL LSP: [bold]{'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}[/bold]")
     console.print(f"Custom Instructions: [bold]{'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}[/bold]")
-    console.print(f"Skills: [bold]{_skills_label(results[0].experiment)}[/bold]")
+    console.print(f"Skills: [bold]{'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}[/bold]")
     console.print(f"Custom Agent: [bold]{results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}[/bold]")
     console.print(f"Plugins: [bold]{', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}[/bold]")
 
@@ -105,7 +97,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             f"- MCP Servers used: {', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}",
             f"- AL LSP: {'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}",
             f"- Custom Instructions: {'Yes' if results[0].experiment and results[0].experiment.custom_instructions else 'No'}",
-            f"- Skills: {_skills_label(results[0].experiment)}",
+            f"- Skills: {'Yes' if results[0].experiment and results[0].experiment.skills_enabled else 'No'}",
             f"- Custom Agent: {results[0].experiment.custom_agent if results[0].experiment and results[0].experiment.custom_agent else 'N/A'}",
             f"- Plugins: {', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}",
         ]

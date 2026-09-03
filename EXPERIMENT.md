@@ -22,7 +22,6 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 |---|---|---|
 | `instructions.enabled` | `false` | Copy the **entire** `instructions/<profile>/` folder (instructions + skills + agents) into the target repo before running the agent |
 | `skills.enabled` | `false` | Copy **only** `instructions/<profile>/skills/` |
-| `skills.names` | `[]` | Allow-list of skill folder names to copy; empty copies every skill in the profile. Name them explicitly to keep an arm attributable to a single skill. A profile holding none of them gets no skills, and the result records the skills that were actually copied |
 | `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<profile>/agents/` and pass `--agent=<name>` to the CLI |
 | `mcp.servers` | _(none)_ | List of MCP servers to register |
 | `plugins` | _(all disabled)_ | List of agent plugins to load for the run — one entry per plugin, local or cloned from GitHub at a revision, passed to the CLI via `--plugin-dir` |

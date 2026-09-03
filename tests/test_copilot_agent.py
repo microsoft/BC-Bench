@@ -81,7 +81,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=(None, None)),
         patch("bcbench.agent.copilot.agent.build_al_lsp_plugin", return_value=None),
         patch("bcbench.agent.copilot.agent.setup_instructions_from_config", return_value=False),
-        patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=[]),
+        patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
         patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, None)) as mock_parse_output,

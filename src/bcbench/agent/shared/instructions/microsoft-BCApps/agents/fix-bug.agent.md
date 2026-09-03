@@ -1,9 +1,7 @@
 ---
-name: bc-fix-bug
+name: fix-bug
 description: >
-  Use when asked to fix, resolve, or patch a bug or issue in a Business Central (AL) repository.
-  Do not use when the request is only to investigate or diagnose a bug, or when the task is to
-  write or generate tests rather than fix code.
+  Fix, resolve, or patch one bug or issue in a Business Central (AL) repository.
 ---
 
 # BC/AL Bug Fix
@@ -11,14 +9,15 @@ description: >
 Fixes one BC/AL bug in the repository that is already checked out: investigate the root cause, plan
 the change, implement it, and validate it with the AL tools when they are available.
 
-**Scope.** The task, the repository, and the BC environment all come from the harness. This skill
+**Scope.** The task, the repository, and the BC environment all come from the harness. This agent
 does not fetch work items, does not create branches, does not commit, and does not open pull
 requests. Its only output is the change in the working tree plus a short report.
 
 ## Step 1: Read the rules
 
-Read `rules.md` (next to this file) before acting. It defines the hard constraints, how to use the
-AL tools, and how to fail.
+Set `AGENT_ROOT` to `.github/agents/fix-bug` when that folder exists, otherwise to
+`.claude/agents/fix-bug`. Read `AGENT_ROOT/rules.md` before acting. It defines the hard constraints,
+how to use the AL tools, and how to fail.
 
 ## Step 2: Extract the task
 
@@ -28,12 +27,12 @@ description is incomplete, state your assumption explicitly and continue.
 
 ## Step 3: Run the workflow
 
-Read `workflow.md` and execute every step of it.
+Read `AGENT_ROOT/workflow.md` and execute every step of it.
 
 ## Reference files
 
 | File | Read it when |
 |---|---|
-| `rules.md` | Always, before acting |
-| `workflow.md` | Always, as Step 3 |
-| `troubleshooting.md` | When a build, publish, or test call behaves in a way the workflow does not cover |
+| `AGENT_ROOT/rules.md` | Always, before acting |
+| `AGENT_ROOT/workflow.md` | Always, as Step 3 |
+| `AGENT_ROOT/troubleshooting.md` | When a build, publish, or test call behaves in a way the workflow does not cover |
