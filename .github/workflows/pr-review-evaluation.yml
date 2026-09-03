@@ -149,6 +149,7 @@ jobs:
       mock: ${{ inputs.test-run }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
+      skip-leaderboard: true
     secrets: inherit
 
   requeue:
