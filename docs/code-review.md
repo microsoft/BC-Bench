@@ -43,7 +43,7 @@ BC-ALAgents is the PR Review harness boundary. Its repo and commit are pinned wi
 
 For an experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, update the action pin to that immutable commit, then run BC-Bench from the corresponding BC-Bench commit. This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality. A local BC-ALAgents checkout can be supplied with `--engine-path` for smoke testing.
 
-BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata remain in that raw artifact rather than being promoted into BC-Bench result and leaderboard schemas.
+BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata are retained for the [Advanced Metrics view](code-review-details.html).
 
 ## Baseline Leaderboard
 
@@ -58,7 +58,7 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <th>Recall</th>
       <th>Valid Output</th>
       <th>Avg Time</th>
-      <th>Ver</th>
+      <th>Harness</th>
     </tr>
   </thead>
   <tbody>
@@ -73,7 +73,12 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
       <td>{% if agg.valid_review_output_rate != null %}{{ agg.valid_review_output_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+      <td>
+        <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
+        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
+        {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
+      </td>
     </tr>
       {% endif %}
     {% endfor %}
@@ -96,7 +101,7 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <th>Avg Completion Tokens</th>
       <th>Avg Total Tokens</th>
       <th>Avg AI Credits</th>
-      <th>Ver</th>
+      <th>Harness</th>
     </tr>
   </thead>
   <tbody>
@@ -110,7 +115,12 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <td>{% if agg.average_completion_tokens != null %}{{ agg.average_completion_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_total_tokens != null %}{{ agg.average_total_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+      <td>
+        <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
+        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
+        {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -142,7 +152,7 @@ For detailed aggregate and per-run quality, performance, configuration, and usag
       <th>Recall</th>
       <th>Valid Output</th>
       <th>Avg Time</th>
-      <th>Ver</th>
+      <th>Harness</th>
     </tr>
   </thead>
   <tbody>
@@ -160,7 +170,12 @@ For detailed aggregate and per-run quality, performance, configuration, and usag
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
       <td>{% if agg.valid_review_output_rate != null %}{{ agg.valid_review_output_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+      <td>
+        <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
+        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
+        {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

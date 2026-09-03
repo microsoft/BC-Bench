@@ -1,4 +1,5 @@
 import json
+import os
 import tomllib
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -58,6 +59,13 @@ class EvaluationResultSummary(BaseModel, ABC):
     experiment: ExperimentConfiguration | None = None
 
     benchmark_version: str
+    benchmark_commit: str | None = None
+    copilot_cli_version: str | None = None
+    bc_alagents_repository: str | None = None
+    bc_alagents_commit: str | None = None
+    bcquality_repository: str | None = None
+    bcquality_commit: str | None = None
+    bcquality_version: str | None = None
 
     @abstractmethod
     def render_github_metrics_markdown(self) -> str:
@@ -100,6 +108,13 @@ class EvaluationResultSummary(BaseModel, ABC):
             "github_run_id": run_id,
             "experiment": experiment,
             "benchmark_version": get_benchmark_version(),
+            "benchmark_commit": os.getenv("BCBENCH_COMMIT") or None,
+            "copilot_cli_version": os.getenv("COPILOT_CLI_VERSION") or None,
+            "bc_alagents_repository": os.getenv("BC_ALAGENTS_REPOSITORY") or None,
+            "bc_alagents_commit": os.getenv("BC_ALAGENTS_COMMIT") or None,
+            "bcquality_repository": os.getenv("BCQUALITY_REPOSITORY") or None,
+            "bcquality_commit": os.getenv("BCQUALITY_COMMIT") or None,
+            "bcquality_version": os.getenv("BCQUALITY_VERSION") or None,
         }
 
     @classmethod
@@ -145,7 +160,19 @@ class EvaluationResultSummary(BaseModel, ABC):
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
-        return (self.agent_name, self.model, experiment_key, self.benchmark_version)
+        return (
+            self.agent_name,
+            self.model,
+            experiment_key,
+            self.benchmark_version,
+            self.benchmark_commit,
+            self.copilot_cli_version,
+            self.bc_alagents_repository,
+            self.bc_alagents_commit,
+            self.bcquality_repository,
+            self.bcquality_commit,
+            self.bcquality_version,
+        )
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
