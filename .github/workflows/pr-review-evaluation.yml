@@ -152,7 +152,7 @@ jobs:
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !inputs.test-run && needs.pin-commit.result == 'success' }}
+    if: ${{ !cancelled() && !inputs.test-run && needs.pin-commit.result != 'failure' }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
