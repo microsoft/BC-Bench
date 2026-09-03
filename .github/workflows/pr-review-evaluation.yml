@@ -62,6 +62,7 @@ jobs:
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
+      modified-only: true
       test-run: ${{ inputs.test-run }}
       category: code-review
 
