@@ -41,9 +41,19 @@ on:
         required: false
         default: ""
         type: string
+      engine-ref:
+        description: "BC-ALAgents ref to evaluate (branch, tag, or SHA). Leave blank to use the pinned baseline engine."
+        required: false
+        default: ""
+        type: string
+      modified-only:
+        description: "Only evaluate dataset entries changed versus origin/main"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: pr-review-evaluation-${{ inputs.test-run && 'test' || inputs.modified-only && 'modified' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -62,6 +72,7 @@ jobs:
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
+      modified-only: ${{ inputs.modified-only }}
       test-run: ${{ inputs.test-run }}
       category: code-review
 
@@ -111,6 +122,8 @@ jobs:
       - name: Install evaluation CLIs
         id: install-harnesses
         uses: $/.github/actions/install-agent-harnesses
+        with:
+          bc-alagents-ref: ${{ inputs.engine-ref }}
 
       - name: Run BC PR Review for entry ${{ matrix.entry }}
         timeout-minutes: 120
@@ -148,11 +161,12 @@ jobs:
       mock: ${{ inputs.test-run }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
+      skip-leaderboard: ${{ inputs.modified-only }}
     secrets: inherit
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
+    if: ${{ !cancelled() && !failure() && !inputs.test-run && !inputs.modified-only }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
@@ -162,4 +176,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}", "engine-ref": "${{ inputs.engine-ref }}"}

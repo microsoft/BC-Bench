@@ -1,6 +1,15 @@
 name: Install Agent Harnesses
 description: Install the agent harnesses used by the evaluation workflows
 
+inputs:
+  bc-alagents-ref:
+    description: >-
+      BC-ALAgents ref to evaluate. Leave empty to use the pinned baseline.
+      Override it to score an engine branch before it merges - for example a
+      branch whose bcquality.config.yaml points at an unmerged BCQuality PR.
+    required: false
+    default: ""
+
 outputs:
   bc-alagents-path:
     description: Path to the pinned BC-ALAgents checkout
@@ -21,7 +30,7 @@ runs:
       uses: actions/checkout@v5
       with:
         repository: microsoft/BC-ALAgents
-        ref: e9d9249eaa25be88388b60106b4cbf8cd7aa8a7d
+        ref: ${{ inputs.bc-alagents-ref || 'e9d9249eaa25be88388b60106b4cbf8cd7aa8a7d' }}
         path: .agent-harnesses/bc-alagents
         persist-credentials: false
 
