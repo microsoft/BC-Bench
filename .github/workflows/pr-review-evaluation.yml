@@ -43,7 +43,7 @@ on:
         type: string
 
 concurrency:
-  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.git-ref || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -152,7 +152,7 @@ jobs:
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
+    if: ${{ !cancelled() && !inputs.test-run && needs.pin-commit.result == 'success' }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
