@@ -150,8 +150,8 @@ skills:
 #    - Claude: copies to repo/.claude/agents/
 # 2. whether to pass --agent=<agent-name> to copilot or claude
 agents:
-  enabled: false
-  name: ALTest
+  enabled: true
+  name: fix-bug
 
 # controls loading agent plugins for the run, only enabled entries are validated and loaded.
 # Each plugin gets its own entry, and is passed to the CLI via `--plugin-dir` (session-scoped).
