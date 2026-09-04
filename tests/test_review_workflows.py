@@ -62,6 +62,18 @@ def test_pr_review_workflow_propagates_modified_only() -> None:
     assert '"modified-only": "${{ inputs.modified-only }}"' in workflow
 
 
+def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
+    """A modified-only run scores a subset, so it must not be recorded as a benchmark result."""
+    workflow = _workflow("pr-review-evaluation.yml")
+
+    # Publishing to Braintrust/Kusto and the leaderboard is gated on `mock`.
+    assert "mock: ${{ inputs.test-run || inputs.modified-only }}" in workflow
+    # Requeue is disabled, so pin-commit must not leave an ephemeral tag behind.
+    assert "test-run: ${{ inputs.test-run || inputs.modified-only }}" in workflow
+    assert "!inputs.test-run && !inputs.modified-only" in workflow
+    assert "retention-days: ${{ (inputs.test-run || inputs.modified-only) && 1 || 30 }}" in workflow
+
+
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
