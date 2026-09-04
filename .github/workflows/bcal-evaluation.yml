@@ -30,6 +30,7 @@ on:
           - "claude-opus-4-8"
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
+          - "gpt-56-ceres"
           - "gpt-55-chat-2026-04-29"
       test-run:
         description: "Indicate this is a test run (with few entries)"
