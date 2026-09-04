@@ -8,12 +8,20 @@
     does: read the engine's pinned repo/ref via Get-BCQualityConfig.ps1, shallow
     fetch that ref, then run Invoke-BCQualityFilter.ps1 over the checkout.
 
-    Emits the resolved root as `root=<path>` on stdout for the Python caller.
+    CandidateRepo/CandidateRef redirect only the fetch, so an unmerged BCQuality
+    revision can be evaluated without editing the engine pin. The filter still
+    runs from the engine's own configuration, so a candidate is evaluated under
+    baseline rules rather than rules it supplied itself.
+
+    Emits `root=<path>` plus the baseline and executed coordinates on stdout, so
+    the caller can record what actually ran instead of assuming the pin.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string] $EngineRoot,
-    [Parameter(Mandatory)] [string] $Root
+    [Parameter(Mandatory)] [string] $Root,
+    [string] $CandidateRepo,
+    [string] $CandidateRef
 )
 
 Set-StrictMode -Version Latest
@@ -31,10 +39,16 @@ if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
 
 # The engine configuration drives both the BCQuality fetch and filter.
 $cfg = & $getConfig
-$repo = $cfg.bcquality.repo
-$ref = $cfg.bcquality.ref
+$baselineRepo = $cfg.bcquality.repo
+$baselineRef = $cfg.bcquality.ref
+
+$repo = if ($CandidateRepo) { $CandidateRepo } else { $baselineRepo }
+$ref = if ($CandidateRef) { $CandidateRef } else { $baselineRef }
 
 Write-Host "Fetching BCQuality from $repo@$ref into $Root"
+if ($repo -ne $baselineRepo -or $ref -ne $baselineRef) {
+    Write-Host "Candidate override in effect; baseline is $baselineRepo@$baselineRef"
+}
 if (Test-Path -LiteralPath $Root) { Remove-Item -LiteralPath $Root -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $Root | Out-Null
 git -C $Root init -q
@@ -44,6 +58,14 @@ if ($LASTEXITCODE -ne 0) { throw "git fetch of BCQuality ref '$ref' failed (exit
 git -C $Root checkout -q FETCH_HEAD
 if ($LASTEXITCODE -ne 0) { throw "git checkout of BCQuality ref '$ref' failed (exit $LASTEXITCODE)" }
 
+# A ref is mutable, so report the commit the fetch actually landed on.
+$resolvedCommit = "$(git -C $Root rev-parse HEAD)".Trim()
+
 & $filter -BCQualityRoot $Root -Config $cfg | Out-Null
 
 "root=$Root"
+"baseline-repo=$baselineRepo"
+"baseline-ref=$baselineRef"
+"resolved-repo=$repo"
+"resolved-ref=$ref"
+"resolved-commit=$resolvedCommit"

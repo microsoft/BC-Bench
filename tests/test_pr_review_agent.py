@@ -10,6 +10,8 @@ from bcbench.exceptions import AgentError
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry
 
+_PREPARE_SCRIPT = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "pr_review" / "scripts" / "Prepare-BCQualityRoot.ps1"
+
 
 def _dirs(tmp_path: Path) -> tuple[Path, Path]:
     out = tmp_path / "out"
@@ -42,6 +44,33 @@ def test_prepare_bcquality_root_ignores_ambient_overrides(tmp_path: Path, monkey
     assert root == destination
     child_env = run.call_args.kwargs["env"]
     assert not any(name.startswith("BCQUALITY_") for name in child_env)
+
+
+def test_prepare_script_defaults_to_the_engine_pin() -> None:
+    script = _PREPARE_SCRIPT.read_text(encoding="utf-8")
+
+    assert "[string] $CandidateRepo" in script
+    assert "[string] $CandidateRef" in script
+    assert "$repo = if ($CandidateRepo) { $CandidateRepo } else { $baselineRepo }" in script
+    assert "$ref = if ($CandidateRef) { $CandidateRef } else { $baselineRef }" in script
+
+
+def test_prepare_script_filters_a_candidate_under_baseline_rules() -> None:
+    """A candidate redirects only the fetch.
+
+    The filter keeps running from the engine's own configuration, so a candidate
+    revision cannot widen ``enabled-layers`` or ``knowledge.allow`` to smuggle
+    content it supplied itself past the filter.
+    """
+    assert "$filter -BCQualityRoot $Root -Config $cfg" in _PREPARE_SCRIPT.read_text(encoding="utf-8")
+
+
+def test_prepare_script_reports_what_actually_ran() -> None:
+    script = _PREPARE_SCRIPT.read_text(encoding="utf-8")
+
+    # A ref is mutable, so the resolved commit is what makes two runs comparable.
+    for key in ("root=", "baseline-repo=", "baseline-ref=", "resolved-repo=", "resolved-ref=", "resolved-commit="):
+        assert f'"{key}' in script
 
 
 def test_valid_empty_findings_is_a_clean_review(tmp_path: Path) -> None:
