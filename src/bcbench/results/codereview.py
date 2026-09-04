@@ -314,6 +314,23 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
     average_total_tokens: float | None = None
+    average_cached_tokens: float | None = None
+    average_cache_creation_tokens: float | None = None
+    average_reasoning_tokens: float | None = None
+    average_api_calls: float | None = None
+    average_failed_api_calls: float | None = None
+    average_usage_api_calls: float | None = None
+    average_premium_requests: float | None = None
+    average_malformed_records: float | None = None
+    average_knowledge_files: float | None = None
+    average_knowledge_pruned: float | None = None
+    average_knowledge_used: float | None = None
+    average_knowledge_suppressed: float | None = None
+    average_sub_skills_executed: float | None = None
+    average_sub_skills_skipped: float | None = None
+    token_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    credit_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    usage_complete_rate: float | None = Field(default=None, ge=0.0, le=1.0)
 
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
@@ -488,6 +505,9 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             available = [value for value in values if value is not None]
             return sum(available) / len(available) if available else None
 
+        def metric_values(name: str) -> list[int | float | None]:
+            return [getattr(result.metrics, name) if result.metrics else None for result in code_review_results]
+
         return summary.model_copy(
             update={
                 "generated_comment_count": generated_total,
@@ -509,9 +529,26 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
-                "average_prompt_tokens": average_metric([result.metrics.prompt_tokens if result.metrics else None for result in code_review_results]),
-                "average_completion_tokens": average_metric([result.metrics.completion_tokens if result.metrics else None for result in code_review_results]),
-                "average_total_tokens": average_metric([result.metrics.total_tokens if result.metrics else None for result in code_review_results]),
-                "average_ai_credits": average_metric([result.metrics.ai_credits if result.metrics else None for result in code_review_results]),
+                "average_prompt_tokens": average_metric(metric_values("prompt_tokens")),
+                "average_completion_tokens": average_metric(metric_values("completion_tokens")),
+                "average_total_tokens": average_metric(metric_values("total_tokens")),
+                "average_ai_credits": average_metric(metric_values("ai_credits")),
+                "average_cached_tokens": average_metric(metric_values("cached_tokens")),
+                "average_cache_creation_tokens": average_metric(metric_values("cache_creation_tokens")),
+                "average_reasoning_tokens": average_metric(metric_values("reasoning_tokens")),
+                "average_api_calls": average_metric(metric_values("api_calls")),
+                "average_failed_api_calls": average_metric(metric_values("failed_api_calls")),
+                "average_usage_api_calls": average_metric(metric_values("usage_api_calls")),
+                "average_premium_requests": average_metric(metric_values("premium_requests")),
+                "average_malformed_records": average_metric(metric_values("malformed_records")),
+                "average_knowledge_files": average_metric(metric_values("knowledge_files")),
+                "average_knowledge_pruned": average_metric(metric_values("knowledge_pruned")),
+                "average_knowledge_used": average_metric(metric_values("knowledge_used")),
+                "average_knowledge_suppressed": average_metric(metric_values("knowledge_suppressed")),
+                "average_sub_skills_executed": average_metric(metric_values("sub_skills_executed")),
+                "average_sub_skills_skipped": average_metric(metric_values("sub_skills_skipped")),
+                "token_coverage_rate": sum(value is not None for value in metric_values("total_tokens")) / total_results,
+                "credit_coverage_rate": sum(value is not None for value in metric_values("ai_credits")) / total_results,
+                "usage_complete_rate": sum(value is True for value in metric_values("usage_complete")) / total_results,
             }
         )

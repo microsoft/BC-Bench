@@ -34,6 +34,13 @@ class LeaderboardAggregate(BaseModel, ABC):
     average_duration: float
 
     benchmark_version: str
+    benchmark_commit: str | None = None
+    copilot_cli_version: str | None = None
+    bc_alagents_repository: str | None = None
+    bc_alagents_commit: str | None = None
+    bcquality_repository: str | None = None
+    bcquality_commit: str | None = None
+    bcquality_version: str | None = None
 
     @staticmethod
     def _validate_consistent_runs(runs: Sequence[EvaluationResultSummary]) -> None:
@@ -59,6 +66,13 @@ class LeaderboardAggregate(BaseModel, ABC):
             "num_runs": len(runs),
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "benchmark_version": first_run.benchmark_version,
+            "benchmark_commit": first_run.benchmark_commit,
+            "copilot_cli_version": first_run.copilot_cli_version,
+            "bc_alagents_repository": first_run.bc_alagents_repository,
+            "bc_alagents_commit": first_run.bc_alagents_commit,
+            "bcquality_repository": first_run.bcquality_repository,
+            "bcquality_commit": first_run.bcquality_commit,
+            "bcquality_version": first_run.bcquality_version,
         }
 
     @classmethod
@@ -152,6 +166,23 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     average_completion_tokens: float | None = None
     average_total_tokens: float | None = None
     average_ai_credits: float | None = None
+    average_cached_tokens: float | None = None
+    average_cache_creation_tokens: float | None = None
+    average_reasoning_tokens: float | None = None
+    average_api_calls: float | None = None
+    average_failed_api_calls: float | None = None
+    average_usage_api_calls: float | None = None
+    average_premium_requests: float | None = None
+    average_malformed_records: float | None = None
+    average_knowledge_files: float | None = None
+    average_knowledge_pruned: float | None = None
+    average_knowledge_used: float | None = None
+    average_knowledge_suppressed: float | None = None
+    average_sub_skills_executed: float | None = None
+    average_sub_skills_skipped: float | None = None
+    token_coverage_rate: float | None = None
+    credit_coverage_rate: float | None = None
+    usage_complete_rate: float | None = None
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":
@@ -199,6 +230,23 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "average_completion_tokens": mean_metric([run.average_completion_tokens for run in cr_runs]),
                 "average_total_tokens": mean_metric([run.average_total_tokens for run in cr_runs]),
                 "average_ai_credits": mean_metric([run.average_ai_credits for run in cr_runs]),
+                "average_cached_tokens": mean_metric([run.average_cached_tokens for run in cr_runs]),
+                "average_cache_creation_tokens": mean_metric([run.average_cache_creation_tokens for run in cr_runs]),
+                "average_reasoning_tokens": mean_metric([run.average_reasoning_tokens for run in cr_runs]),
+                "average_api_calls": mean_metric([run.average_api_calls for run in cr_runs]),
+                "average_failed_api_calls": mean_metric([run.average_failed_api_calls for run in cr_runs]),
+                "average_usage_api_calls": mean_metric([run.average_usage_api_calls for run in cr_runs]),
+                "average_premium_requests": mean_metric([run.average_premium_requests for run in cr_runs]),
+                "average_malformed_records": mean_metric([run.average_malformed_records for run in cr_runs]),
+                "average_knowledge_files": mean_metric([run.average_knowledge_files for run in cr_runs]),
+                "average_knowledge_pruned": mean_metric([run.average_knowledge_pruned for run in cr_runs]),
+                "average_knowledge_used": mean_metric([run.average_knowledge_used for run in cr_runs]),
+                "average_knowledge_suppressed": mean_metric([run.average_knowledge_suppressed for run in cr_runs]),
+                "average_sub_skills_executed": mean_metric([run.average_sub_skills_executed for run in cr_runs]),
+                "average_sub_skills_skipped": mean_metric([run.average_sub_skills_skipped for run in cr_runs]),
+                "token_coverage_rate": mean_metric([run.token_coverage_rate for run in cr_runs]),
+                "credit_coverage_rate": mean_metric([run.credit_coverage_rate for run in cr_runs]),
+                "usage_complete_rate": mean_metric([run.usage_complete_rate for run in cr_runs]),
             }
         )
 

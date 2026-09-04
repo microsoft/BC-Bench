@@ -43,9 +43,9 @@ BC-ALAgents is the PR Review harness boundary. Its repo and commit are pinned wi
 
 For an experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, update the action pin to that immutable commit, then run BC-Bench from the corresponding BC-Bench commit. This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality. A local BC-ALAgents checkout can be supplied with `--engine-path` for smoke testing.
 
-BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata remain in that raw artifact rather than being promoted into BC-Bench result and leaderboard schemas.
+BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata are retained for the [Advanced Metrics view](code-review-details.html).
 
-## Baseline Leaderboard
+## Production BC PR Review Baseline
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
 <table>
@@ -58,11 +58,12 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <th>Recall</th>
       <th>Valid Output</th>
       <th>Avg Time</th>
-      <th>Ver</th>
+      <th>Harness</th>
     </tr>
   </thead>
   <tbody>
-    {% assign sorted_results = site.data.code-review.aggregate | sort: "f1" | reverse %}
+    {% assign production_results = site.data.code-review.aggregate | where: "agent_name", "BC PR Review" %}
+    {% assign sorted_results = production_results | sort: "f1" | reverse %}
     {% for agg in sorted_results %}
       {% if agg.experiment == null or agg.experiment.is_experiment == false %}
     <tr>
@@ -73,7 +74,12 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
       <td>{% if agg.valid_review_output_rate != null %}{{ agg.valid_review_output_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+      <td>
+        <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
+        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
+        {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
+      </td>
     </tr>
       {% endif %}
     {% endfor %}
@@ -83,7 +89,7 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
 <p><em>No results available yet. Check back soon!</em></p>
 {% endif %}
 
-## Performance Leaderboard
+## Production BC PR Review Performance
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
 <table>
@@ -96,11 +102,12 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <th>Avg Completion Tokens</th>
       <th>Avg Total Tokens</th>
       <th>Avg AI Credits</th>
-      <th>Ver</th>
+      <th>Harness</th>
     </tr>
   </thead>
   <tbody>
-    {% assign performance_results = site.data.code-review.aggregate | sort: "average_duration" %}
+    {% assign production_results = site.data.code-review.aggregate | where: "agent_name", "BC PR Review" %}
+    {% assign performance_results = production_results | sort: "average_duration" %}
     {% for agg in performance_results %}
     <tr>
       <td>{{ agg.agent_name }}</td>
@@ -110,7 +117,12 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <td>{% if agg.average_completion_tokens != null %}{{ agg.average_completion_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_total_tokens != null %}{{ agg.average_total_tokens | round: 0 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+      <td>
+        <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
+        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
+        {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -119,11 +131,48 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
 <p><em>No performance results available yet. Check back soon!</em></p>
 {% endif %}
 
+## Legacy Direct-Agent Results
+
+These historical rows evaluate the generic Copilot or Claude runners against the same code-review dataset and scorer. They are retained for reference but are not directly comparable to the production `BC-Bench -> BC-ALAgents -> BCQuality` pipeline above.
+
+{% assign legacy_results = site.data.code-review.aggregate | where_exp: "agg", "agg.agent_name != 'BC PR Review'" %}
+{% if legacy_results and legacy_results.size > 0 %}
+<table>
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Model</th>
+      <th>Micro F1</th>
+      <th>Precision</th>
+      <th>Recall</th>
+      <th>Avg Time</th>
+      <th>BC-Bench</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% assign legacy_results = legacy_results | sort: "f1" | reverse %}
+    {% for agg in legacy_results %}
+    <tr>
+      <td>{{ agg.agent_name }}</td>
+      <td>{{ agg.model }}</td>
+      <td>{{ agg.f1 | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.precision | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
+      <td>{{ agg.average_duration | round: 1 }}s</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 ## Experiment Leaderboard
 
-Compares review-knowledge configurations for the same model (see the Baseline Leaderboard above for the plain agent):
+Compares review-knowledge configurations for the same runner and model. Runner identity remains visible because historical direct-agent experiments are not comparable to production BC PR Review experiments.
 
 - **Inline knowledge (pre-#8700)** — the review checklists BCApps shipped inline before adopting BCQuality, injected as custom instructions.
+
+For detailed aggregate and per-run quality, performance, configuration, and usage metrics, open the [Advanced Metrics view](code-review-details.html).
 
 {% assign experiment_rows = site.data.code-review.aggregate | where_exp: "agg", "agg.experiment != null" %}
 {% assign experiment_rows = experiment_rows | where_exp: "agg", "agg.experiment.is_experiment != false" %}
@@ -140,7 +189,7 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
       <th>Recall</th>
       <th>Valid Output</th>
       <th>Avg Time</th>
-      <th>Ver</th>
+      <th>Harness</th>
     </tr>
   </thead>
   <tbody>
@@ -158,7 +207,12 @@ Compares review-knowledge configurations for the same model (see the Baseline Le
       <td>{{ agg.recall | times: 100.0 | round: 1 }}%</td>
       <td>{% if agg.valid_review_output_rate != null %}{{ agg.valid_review_output_rate | times: 100.0 | round: 1 }}%{% else %}—{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
+      <td>
+        <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
+        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
+        {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

@@ -63,5 +63,27 @@ def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
     assert "repository: microsoft/BC-ALAgents" in action
-    assert "ref: e9d9249eaa25be88388b60106b4cbf8cd7aa8a7d" in action
+    assert "ref: 441eb8d4dd87b30e4c4e2f8a572500699744a379" in action
     assert "bc-alagents-path:" in action
+    assert "copilot-cli-version:" in action
+    assert "bc-alagents-commit:" in action
+    assert "bcquality-repository:" in action
+    assert "bcquality-commit:" in action
+    assert "bcquality-version:" in action
+
+
+def test_pr_review_workflow_records_complete_harness_identity() -> None:
+    workflow = _workflow("pr-review-evaluation.yml")
+    summary_workflow = _workflow("summarize-results.yml")
+
+    for field in (
+        "benchmark-commit",
+        "copilot-cli-version",
+        "bc-alagents-repository",
+        "bc-alagents-commit",
+        "bcquality-repository",
+        "bcquality-commit",
+        "bcquality-version",
+    ):
+        assert field in workflow
+        assert field in summary_workflow
