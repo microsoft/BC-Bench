@@ -6,7 +6,14 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.copilot.cli import invoke_copilot
-from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, resolve_config_plugins, start_bc_mcp_gateway
+from bcbench.agent.shared import (
+    agent_subprocess_env,
+    build_al_lsp_plugin,
+    build_mcp_config,
+    build_prompt,
+    resolve_config_plugins,
+    start_bc_mcp_gateway,
+)
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError

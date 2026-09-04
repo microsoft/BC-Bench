@@ -17,7 +17,6 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
     monkeypatch.delenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", raising=False)
-
     with (
         patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
         patch("bcbench.agent.claude.agent.build_prompt", return_value="line one\nline two"),
