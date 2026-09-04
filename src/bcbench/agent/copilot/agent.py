@@ -83,7 +83,7 @@ def run_copilot_agent(
         source_compatibility = prepare_altool_source_compatibility(
             repo_path,
             entry.project_paths,
-            enabled=bool(runtime and (runtime.al_mcp or runtime.al_lsp)),
+            enabled=category.requires_agent_source_compatibility,
         )
         extra_args = [
             "--log-level=debug",

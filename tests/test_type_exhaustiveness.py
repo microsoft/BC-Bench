@@ -132,3 +132,9 @@ def test_pass_on_bc_container_credentials_exhaustiveness():
     categories_with_credentials_withheld = {EvaluationCategory.DATA_QUERY}
     for category in EvaluationCategory:
         assert category.pass_on_bc_container_credentials is (category not in categories_with_credentials_withheld)
+
+
+def test_agent_source_compatibility_is_limited_to_execution_source_categories():
+    compatible_categories = {EvaluationCategory.BUG_FIX, EvaluationCategory.TEST_GENERATION}
+    for category in EvaluationCategory:
+        assert category.requires_agent_source_compatibility is (category in compatible_categories)

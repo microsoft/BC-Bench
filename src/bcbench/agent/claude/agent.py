@@ -86,7 +86,7 @@ def run_claude_code(
         source_compatibility = prepare_altool_source_compatibility(
             repo_path,
             entry.project_paths,
-            enabled=bool(runtime and (runtime.al_mcp or runtime.al_lsp)),
+            enabled=category.requires_agent_source_compatibility,
         )
         cmd_args = [
             claude_cmd,

@@ -17,6 +17,7 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
     monkeypatch.delenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", raising=False)
+    entry = create_dataset_entry()
 
     with (
         patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
@@ -30,13 +31,14 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
         patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
         patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch("bcbench.agent.claude.agent.prepare_altool_source_compatibility") as mock_source_compatibility,
         patch(
             "bcbench.agent.claude.agent.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=b"{}\n", stderr=b""),
         ) as mock_run,
     ):
         run_claude_code(
-            entry=create_dataset_entry(),
+            entry=entry,
             model="claude-test-model",
             category=EvaluationCategory.BUG_FIX,
             repo_path=repo_path,
@@ -64,3 +66,5 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
     assert env["BC_SERVER_USERNAME"] == "admin"
     assert env["BC_SERVER_PASSWORD"] == "secret"
     assert "CLAUDE_CODE_DISABLE_AUTO_MEMORY" not in os.environ
+    mock_source_compatibility.assert_called_once_with(repo_path, entry.project_paths, enabled=True)
+    mock_source_compatibility.return_value.restore.assert_called_once()

@@ -74,6 +74,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     monkeypatch.delenv("GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS", raising=False)
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
+    entry = create_dataset_entry()
 
     with (
         patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
@@ -84,6 +85,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
+        patch("bcbench.agent.copilot.agent.prepare_altool_source_compatibility") as mock_source_compatibility,
         patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, None)) as mock_parse_output,
         patch(
             "bcbench.agent.copilot.cli.subprocess.run",
@@ -91,7 +93,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         ) as mock_run,
     ):
         run_copilot_agent(
-            entry=create_dataset_entry(),
+            entry=entry,
             model="copilot-test-model",
             category=EvaluationCategory.BUG_FIX,
             repo_path=repo_path,
@@ -115,3 +117,5 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_USERNAME"] == "admin"
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_PASSWORD"] == "secret"
     mock_parse_output.assert_called_once_with(['{"type":"result"}'], log_transcript=True)
+    mock_source_compatibility.assert_called_once_with(repo_path, entry.project_paths, enabled=True)
+    mock_source_compatibility.return_value.restore.assert_called_once()
