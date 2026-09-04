@@ -49,8 +49,17 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "mai-code-1-flash-picker" not in workflow
     assert '"gemini-3.7-flash"' in workflow
     assert "gemini-3.6-flash" not in workflow
-    for input_name in ("model:", "test-run:", "repeat:", "git-ref:"):
+    for input_name in ("model:", "test-run:", "repeat:", "git-ref:", "modified-only:"):
         assert input_name in workflow
+
+
+def test_pr_review_workflow_propagates_modified_only() -> None:
+    workflow = _workflow("pr-review-evaluation.yml")
+
+    # Entry selection is delegated to get-entries.yml, which already implements --modified-only.
+    assert "modified-only: ${{ inputs.modified-only }}" in workflow
+    # A requeue that dropped the flag would silently re-run the full corpus.
+    assert '"modified-only": "${{ inputs.modified-only }}"' in workflow
 
 
 def test_agent_harness_action_pins_published_copilot_version() -> None:

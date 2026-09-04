@@ -25,6 +25,11 @@ on:
         required: false
         default: true
         type: boolean
+      modified-only:
+        description: "Only evaluate entries added or modified against origin/main (takes precedence over test-run)"
+        required: false
+        default: false
+        type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
         required: false
@@ -43,7 +48,7 @@ on:
         type: string
 
 concurrency:
-  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: pr-review-evaluation-${{ inputs.modified-only && 'modified' || inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -62,6 +67,7 @@ jobs:
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
+      modified-only: ${{ inputs.modified-only }}
       test-run: ${{ inputs.test-run }}
       category: code-review
 
@@ -162,4 +168,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "modified-only": "${{ inputs.modified-only }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
