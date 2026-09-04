@@ -34,9 +34,9 @@ outputs:
   repo_path:
     description: Path to the cloned repository
     value: ${{ steps.setup.outputs.repo_path }}
-  al_tool_framework:
-    description: .NET target framework required by the entry's BC version
-    value: ${{ steps.bcversion.outputs.al_tool_framework }}
+  al_tool_dotnet_version:
+    description: .NET version required by the AL tool for this entry
+    value: ${{ steps.bcversion.outputs.al_tool_dotnet_version }}
 
 runs:
   using: composite
@@ -81,14 +81,14 @@ runs:
       run: |
         Import-Module ./scripts/BCBenchUtils.psm1 -Force -DisableNameChecking
         $version = Get-BCBenchEntryVersion -InstanceId "${{ inputs.instance-id }}" -Category "${{ inputs.category }}"
-        $alToolFramework = if (([System.Version]$version).Major -lt 29) { "net8.0" } else { "net10.0" }
+        $alToolDotNetVersion = if (([System.Version]$version).Major -lt 29) { "8.0" } else { "10.0" }
         $artifactConfig = Get-BCBenchArtifactConfig -Category "${{ inputs.category }}"
         $cacheKey = "bcartifacts-$version"
         if ($artifactConfig.storageAccount) {
           $cacheKey += "-$($artifactConfig.storageAccount)"
         }
         "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        "al_tool_framework=$alToolFramework" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        "al_tool_dotnet_version=$alToolDotNetVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         "cache_key=$cacheKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     - name: Cache BC sandbox artifacts

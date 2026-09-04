@@ -6,12 +6,10 @@ import yaml
 
 from bcbench.agent.claude.metrics import parse_stream_output
 from bcbench.agent.shared import (
-    AlToolSourceCompatibility,
     agent_subprocess_env,
     build_al_lsp_plugin,
     build_mcp_config,
     build_prompt,
-    prepare_altool_source_compatibility,
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
@@ -81,13 +79,7 @@ def run_claude_code(
     logger.info(f"Executing Claude Code in directory: {repo_path}")
     logger.debug(f"Using prompt:\n{prompt}")
 
-    source_compatibility: AlToolSourceCompatibility | None = None
     try:
-        source_compatibility = prepare_altool_source_compatibility(
-            repo_path,
-            entry.project_paths,
-            enabled=category.requires_agent_source_compatibility,
-        )
         cmd_args = [
             claude_cmd,
             "--output-format=stream-json",  # emit every event (incl. tool_use, session init) as JSONL
@@ -159,9 +151,5 @@ def run_claude_code(
     else:
         return metrics, config
     finally:
-        try:
-            if source_compatibility is not None:
-                source_compatibility.restore()
-        finally:
-            if bc_gateway is not None:
-                bc_gateway.stop()
+        if bc_gateway is not None:
+            bc_gateway.stop()

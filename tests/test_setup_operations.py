@@ -1,9 +1,15 @@
 import json
+import re
+import subprocess
 import uuid
+from pathlib import Path
 
 import pytest
 
-from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version
+from bcbench.dataset import BugFixEntry
+from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
+from bcbench.types import EvaluationCategory
+from tests.conftest import create_dataset_entry
 
 
 class TestSetRuntimeVersion:
@@ -36,6 +42,38 @@ class TestSetRuntimeVersion:
 
     def test_skips_missing_app_json(self, tmp_path):
         set_runtime_version(tmp_path, [str(tmp_path)])  # should not raise
+
+
+def test_setup_repo_prebuild_commits_scope_compatibility_baseline(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    project = repo / "App"
+    project.mkdir(parents=True)
+    table = project / "Example.Table.al"
+    table.write_bytes(b"\xef\xbb\xbftable 50100 Example\r\n{\r\n    Scope = OnPrem;\r\n}\r\n")
+    outside = repo / "Outside.Table.al"
+    outside.write_text("table 50101 Outside\n{\n    Scope = OnPrem;\n}\n", encoding="utf-8")
+
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "base"],
+        cwd=repo,
+        check=True,
+    )
+    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, encoding="utf-8", text=True, check=True).stdout.strip()
+
+    setup_repo_prebuild(create_dataset_entry(base_commit=base_commit, project_paths=["App"]), repo)
+
+    assert "Scope = OnPrem;" not in table.read_text(encoding="utf-8-sig")
+    assert "Scope = OnPrem;" in outside.read_text(encoding="utf-8")
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, encoding="utf-8", text=True, check=True).stdout == ""
+    assert subprocess.run(["git", "log", "-1", "--format=%s"], cwd=repo, capture_output=True, encoding="utf-8", text=True, check=True).stdout.strip() == "Remove 1 Scope = OnPrem declaration(s)"
+
+
+def test_benchmark_patches_do_not_depend_on_removed_scope_lines() -> None:
+    for entry in BugFixEntry.load(EvaluationCategory.BUG_FIX.dataset_path):
+        for patch in (entry.patch, entry.test_patch):
+            assert re.search(r"(?im)^[-+ ]\s*Scope\s*=\s*OnPrem;", patch) is None, entry.instance_id
 
 
 class TestBootstrapAppJson:
