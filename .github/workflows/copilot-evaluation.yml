@@ -190,7 +190,10 @@ jobs:
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
+    # Only a failed pin-commit blocks the chain: without its tag there is
+    # nothing to requeue. A flaky evaluation entry must not, since the matrix
+    # is fail-fast: false and every entry uploads its artifact regardless.
+    if: ${{ !cancelled() && !inputs.test-run && needs.pin-commit.result != 'failure' }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
