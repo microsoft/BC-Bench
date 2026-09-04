@@ -25,6 +25,11 @@ on:
         required: false
         default: true
         type: boolean
+      modified-only:
+        description: "Only evaluate entries added or modified against origin/main (takes precedence over test-run). Scores a partial corpus, so the run never publishes results or requeues."
+        required: false
+        default: false
+        type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
         required: false
@@ -43,7 +48,7 @@ on:
         type: string
 
 concurrency:
-  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: pr-review-evaluation-${{ inputs.modified-only && 'modified' || inputs.test-run && 'test' || 'full' }}
   cancel-in-progress: false
 
 env:
@@ -56,12 +61,14 @@ jobs:
       contents: write
     with:
       agent: pr-review
-      test-run: ${{ inputs.test-run }}
+      # A modified-only run never requeues, so it must not leave an ephemeral tag behind.
+      test-run: ${{ inputs.test-run || inputs.modified-only }}
       repeat: ${{ inputs.repeat }}
 
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
+      modified-only: ${{ inputs.modified-only }}
       test-run: ${{ inputs.test-run }}
       category: code-review
 
@@ -133,7 +140,7 @@ jobs:
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
-          retention-days: ${{ inputs.test-run && 1 || 30 }}
+          retention-days: ${{ (inputs.test-run || inputs.modified-only) && 1 || 30 }}
 
   summarize-results:
     needs: evaluate-with-pr-review
@@ -145,14 +152,16 @@ jobs:
       results-dir: ${{ needs.evaluate-with-pr-review.outputs.results-dir }}
       model: ${{ inputs.model }}
       agent: "BC PR Review"
-      mock: ${{ inputs.test-run }}
+      # Scores only the modified entries, so publishing it to Braintrust/Kusto or the
+      # leaderboard would record a partial corpus as a benchmark result.
+      mock: ${{ inputs.test-run || inputs.modified-only }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
+    if: ${{ !cancelled() && !failure() && !inputs.test-run && !inputs.modified-only }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
