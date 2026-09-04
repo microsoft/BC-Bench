@@ -65,3 +65,14 @@ def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     assert "repository: microsoft/BC-ALAgents" in action
     assert "ref: e9d9249eaa25be88388b60106b4cbf8cd7aa8a7d" in action
     assert "bc-alagents-path:" in action
+
+
+def test_agent_workflows_select_al_tool_framework_for_bc_version() -> None:
+    setup_action = (ACTIONS / "setup-bc-container-repo" / "action.yml").read_text(encoding="utf-8")
+
+    assert 'Major -lt 29) { "net8.0" } else { "net10.0" }' in setup_action
+    assert "al_tool_framework=$alToolFramework" in setup_action
+
+    for workflow_name in ("claude-evaluation.yml", "copilot-evaluation.yml"):
+        workflow = _workflow(workflow_name)
+        assert '--framework "${{ steps.setup-env.outputs.al_tool_framework }}"' in workflow
