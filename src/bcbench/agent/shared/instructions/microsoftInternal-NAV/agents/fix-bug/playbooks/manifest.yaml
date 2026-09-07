@@ -1,0 +1,7 @@
+playbooks:
+  - id: warehouse
+    file: warehouse.md
+    areas:
+      - warehouse
+    paths:
+      - App/Layers/W1/BaseApp/Warehouse/**

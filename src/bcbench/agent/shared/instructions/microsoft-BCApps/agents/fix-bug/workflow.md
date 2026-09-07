@@ -43,7 +43,24 @@ contract. Read them only; never edit them (Rule 1).
 Issue images, when the task references them, are under `problem/` at the repository root. Read them
 if the described symptom is visual.
 
-### Step 2: Write the plan
+### Step 2: Load a discovered area playbook
+
+Skip this step when `AGENT_ROOT/playbooks/selected.yaml` exists.
+
+Use only source paths confirmed during Step 1. Do not inspect the benchmark dataset, gold patch,
+hidden test patch, or benchmark answer files.
+
+Read `AGENT_ROOT/playbooks/manifest.yaml`. Normalize confirmed paths to repository-relative paths
+with `/` separators and compare them case-insensitively with the manifest patterns:
+
+- Exactly one distinct playbook matches: read that playbook before writing the plan.
+- No playbook matches: continue without one.
+- Different confirmed paths match different playbooks: report the ambiguity in the plan and read
+  none of them.
+
+Read at most one area playbook. Do not browse unrelated playbooks.
+
+### Step 3: Write the plan
 
 Hold the plan in memory - do not write it to a file (Rule 4). It must cover:
 

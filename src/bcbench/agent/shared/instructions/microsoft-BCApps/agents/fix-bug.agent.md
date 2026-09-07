@@ -27,6 +27,10 @@ does not exist, stop and report the missing path.
 Read `AGENT_ROOT/rules.md` before acting. It defines the hard constraints, how to use the AL tools,
 and how to fail.
 
+If `AGENT_ROOT/playbooks/selected.yaml` exists, read it and then read the playbook named by its
+`file` field before extracting the task. Read no other area playbook. If the marker names a missing
+file, stop and report that the agent package is incomplete.
+
 ## Step 2: Extract the task
 
 From the user prompt, identify the issue description, the repository path, and any reproduction
@@ -44,3 +48,5 @@ Read `AGENT_ROOT/workflow.md` and execute every step of it.
 | `AGENT_ROOT/rules.md` | Always, before acting |
 | `AGENT_ROOT/workflow.md` | Always, as Step 3 |
 | `AGENT_ROOT/troubleshooting.md` | When a build, publish, or test call behaves in a way the workflow does not cover |
+| `AGENT_ROOT/playbooks/manifest.yaml` | During discover-mode routing |
+| `AGENT_ROOT/playbooks/selected.yaml` | When present; identifies the selected-mode playbook |
