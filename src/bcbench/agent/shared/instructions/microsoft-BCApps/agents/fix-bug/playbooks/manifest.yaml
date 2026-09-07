@@ -5,3 +5,23 @@ playbooks:
       - warehouse
     paths:
       - App/Layers/W1/BaseApp/Warehouse/**
+      - App/Layers/W1/BaseApp/Inventory/Tracking/**
+
+  - id: manufacturing
+    file: manufacturing.md
+    areas:
+      - manufacturing
+    paths:
+      - App/Layers/W1/BaseApp/Manufacturing/**
+
+  - id: costing
+    file: costing.md
+    paths:
+      - App/Layers/W1/BaseApp/Inventory/Costing/**
+
+  - id: subscription-billing
+    file: subscription-billing.md
+    areas:
+      - subscription billing
+    paths:
+      - src/Apps/W1/Subscription Billing/App/**
