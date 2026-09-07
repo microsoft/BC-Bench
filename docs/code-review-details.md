@@ -207,7 +207,6 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Avg Articles Suppressed</th>
       <th>Avg Sub-skills Executed</th>
       <th>Avg Sub-skills Skipped</th>
-      <th>Avg Tool Usage</th>
       <th>Judge</th>
       <th>BC-Bench</th>
       <th>Copilot CLI</th>
@@ -266,7 +265,6 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if run.average_knowledge_suppressed != null %}{{ run.average_knowledge_suppressed | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_sub_skills_executed != null %}{{ run.average_sub_skills_executed | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_sub_skills_skipped != null %}{{ run.average_sub_skills_skipped | round: 1 }}{% else %}—{% endif %}</td>
-      <td>{% if run.average_tool_usage %}<code>{{ run.average_tool_usage | jsonify }}</code>{% else %}—{% endif %}</td>
       <td>{{ run.judge_model }}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ run.benchmark_version }}" target="_blank">{{ run.benchmark_version }}</a>{% if run.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ run.benchmark_commit }}" target="_blank">{{ run.benchmark_commit | slice: 0, 8 }}</a>){% endif %}</td>
       <td>{% if run.copilot_cli_version %}{{ run.copilot_cli_version }}{% else %}—{% endif %}</td>
