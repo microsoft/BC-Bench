@@ -74,7 +74,6 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     monkeypatch.delenv("GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS", raising=False)
     monkeypatch.setenv("BC_SERVER_USERNAME", "admin")
     monkeypatch.setenv("BC_SERVER_PASSWORD", "secret")
-
     with (
         patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
         patch("bcbench.agent.copilot.agent.build_prompt", return_value="line one\nline two"),

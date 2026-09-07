@@ -87,3 +87,14 @@ def test_pr_review_workflow_records_complete_harness_identity() -> None:
     ):
         assert field in workflow
         assert field in summary_workflow
+
+
+def test_agent_workflows_select_al_tool_dotnet_version_for_bc_version() -> None:
+    setup_action = (ACTIONS / "setup-bc-container-repo" / "action.yml").read_text(encoding="utf-8")
+
+    assert 'Major -lt 29) { "8.0" } else { "10.0" }' in setup_action
+    assert "al_tool_dotnet_version=$alToolDotNetVersion" in setup_action
+
+    for workflow_name in ("claude-evaluation.yml", "copilot-evaluation.yml"):
+        workflow = _workflow(workflow_name)
+        assert '--framework "net${{ steps.setup-env.outputs.al_tool_dotnet_version }}"' in workflow
