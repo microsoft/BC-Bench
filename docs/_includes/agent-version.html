@@ -1,0 +1,9 @@
+{%- if include.result.agent_version and include.result.agent_version != "" -%}
+  {%- if include.result.agent_name == "BC PR Review" -%}
+    <a href="https://github.com/microsoft/BC-ALAgents/commit/{{ include.result.agent_version | escape }}" title="{{ include.result.agent_version | escape }}">{{ include.result.agent_version | slice: 0, 7 | escape }}</a>
+  {%- else -%}
+    {{ include.result.agent_version | escape }}
+  {%- endif -%}
+{%- else -%}
+  <span title="Agent version unrecorded">—</span>
+{%- endif -%}
