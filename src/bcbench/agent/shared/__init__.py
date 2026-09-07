@@ -7,4 +7,11 @@ from bcbench.agent.shared.mcp_gateway import start_bc_mcp_gateway
 from bcbench.agent.shared.plugin import resolve_config_plugins
 from bcbench.agent.shared.prompt import build_prompt
 
-__all__ = ["agent_subprocess_env", "build_al_lsp_plugin", "build_mcp_config", "build_prompt", "resolve_config_plugins", "start_bc_mcp_gateway"]
+__all__ = [
+    "agent_subprocess_env",
+    "build_al_lsp_plugin",
+    "build_mcp_config",
+    "build_prompt",
+    "resolve_config_plugins",
+    "start_bc_mcp_gateway",
+]
