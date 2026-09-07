@@ -76,10 +76,6 @@ class EvaluationResultSummary(BaseModel, ABC):
 
     @classmethod
     def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
-        identities = {(result.agent_name, result.agent_version) for result in results}
-        if len(identities) > 1:
-            raise ValueError(f"Cannot summarize results from different harness identities: {identities}")
-
         durations: list[float] = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
         prompt_tokens: list[int] = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
         completion_tokens: list[int] = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]

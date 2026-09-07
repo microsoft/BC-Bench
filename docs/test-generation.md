@@ -14,12 +14,11 @@ This category "reverses" the SWE-Bench workflow: instead of generating a fix, th
   <thead>
     <tr>
       <th>Agent</th>
-      <th>Agent Version</th>
       <th>Model</th>
       <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
-      <th>BC-Bench</th>
+      <th>Version</th>
     </tr>
   </thead>
   <tbody>
@@ -28,7 +27,6 @@ This category "reverses" the SWE-Bench workflow: instead of generating a fix, th
       {% if agg.experiment == null %}
     <tr>
       <td>{{ agg.agent_name }}</td>
-      <td>{% include agent-version.html result=agg %}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
@@ -61,13 +59,12 @@ Comparing GitHub Copilot CLI runs that enable AL developer tooling—the **AL MC
   <thead>
     <tr>
       <th>Model</th>
-      <th>Agent Version</th>
       <th>MCP Servers</th>
       <th>AL LSP</th>
       <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
-      <th>BC-Bench</th>
+      <th>Ver</th>
     </tr>
   </thead>
   <tbody>
@@ -86,7 +83,6 @@ Comparing GitHub Copilot CLI runs that enable AL developer tooling—the **AL MC
       {%- if show_row %}
     <tr>
       <td>{{ agg.model }}</td>
-      <td>{% include agent-version.html result=agg %}</td>
       <td>{% if is_tooling %}{% if agg.experiment.mcp_servers.size > 0 %}{{ agg.experiment.mcp_servers | join: ", " }}{% else %}—{% endif %}{% else %}<em>Default</em>{% endif %}</td>
       <td>{% if is_tooling and agg.experiment.al_lsp_enabled %}✓{% else %}—{% endif %}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
@@ -110,11 +106,10 @@ Comparing experimental configurations for GitHub Copilot CLI with `ALTest` custo
   <thead>
     <tr>
       <th>Custom Agent</th>
-      <th>Agent Version</th>
       <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
-      <th>BC-Bench</th>
+      <th>Ver</th>
     </tr>
   </thead>
   <tbody>
@@ -123,7 +118,6 @@ Comparing experimental configurations for GitHub Copilot CLI with `ALTest` custo
       {% if agg.model == "claude-opus-4-6" and agg.agent_name == "GitHub Copilot" %}
     <tr>
       <td>{% if agg.experiment == null %}Default{% else %}{{ agg.experiment.custom_agent }}{% endif %}</td>
-      <td>{% include agent-version.html result=agg %}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
       <td>{{ agg.average_duration | round: 1 }}s</td>

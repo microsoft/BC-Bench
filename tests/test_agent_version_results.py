@@ -46,19 +46,6 @@ def test_timeout_result_keeps_version_resolved_before_execution(tmp_path: Path) 
     assert result.agent_version == "1.2.3"
 
 
-@pytest.mark.parametrize("versions", [("1.2.3", "1.2.4"), ("1.2.3", None)])
-def test_summary_rejects_mixed_agent_versions(versions: tuple[str | None, str | None]) -> None:
-    results = [create_bugfix_result().model_copy(update={"agent_version": version}) for version in versions]
-    with pytest.raises(ValueError, match="different harness identities"):
-        EvaluationResultSummary.from_results(results, "run")
-
-
-def test_summary_rejects_mixed_harnesses() -> None:
-    results = [create_bugfix_result(agent_name=name) for name in (AgentHarness.COPILOT, AgentHarness.CLAUDE)]
-    with pytest.raises(ValueError, match="different harness identities"):
-        EvaluationResultSummary.from_results(results, "run")
-
-
 def test_summary_uses_artifact_version_not_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     result = create_bugfix_result().model_copy(update={"agent_version": "1.2.3"})
     monkeypatch.setenv("COPILOT_CLI_VERSION", "9.9.9")

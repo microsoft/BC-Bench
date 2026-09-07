@@ -272,7 +272,9 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     with (
         patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
-        patch("subprocess.run", side_effect=AssertionError("Summarizing artifacts must not invoke installed harnesses")),
+        patch.object(evaluate_commands, "get_copilot_version", side_effect=AssertionError("Must use artifact version")),
+        patch.object(evaluate_commands, "get_claude_version", side_effect=AssertionError("Must use artifact version")),
+        patch.object(evaluate_commands, "get_pr_review_version", side_effect=AssertionError("Must use artifact version")),
     ):
         result = runner.invoke(
             app,
@@ -300,23 +302,6 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     assert summary["agent_version"] == "1.2.3"
     exported = (results_dir / "bceval_results.jsonl").read_text().splitlines()
     assert all(json.loads(line)["metadata"]["agent_version"] == "1.2.3" for line in exported)
-
-
-def test_result_summarize_rejects_mixed_versions_before_writing_outputs(sample_results_directory):
-    base_path, run_id, _ = sample_results_directory
-    results_dir = base_path / run_id
-    result_path = next(results_dir.glob("*.jsonl"))
-    payload = json.loads(result_path.read_text())
-    payload["agent_version"] = "1.2.3"
-    result_path.write_text(json.dumps(payload), encoding="utf-8")
-
-    result = runner.invoke(app, ["result", "summarize", "--category", "bug-fix", "--run-id", run_id, "--result-dir", str(base_path)])
-
-    assert result.exit_code != 0
-    assert isinstance(result.exception, ValueError)
-    assert "different harness identities" in str(result.exception)
-    assert not (results_dir / "bceval_results.jsonl").exists()
-    assert not (results_dir / "evaluation_summary.json").exists()
 
 
 @pytest.mark.integration
