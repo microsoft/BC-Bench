@@ -1,0 +1,77 @@
+{
+  "runs": [
+    {
+      "total": 11,
+      "date": "2026-09-07",
+      "model": "claude-sonnet-5",
+      "agent_name": "Claude Code",
+      "category": "data-query",
+      "average_duration": 36.7,
+      "average_prompt_tokens": 212979.6,
+      "average_completion_tokens": 2439.9,
+      "average_llm_duration": 28.3,
+      "average_ai_credits": null,
+      "average_tool_usage": {
+        "ToolSearch": 1.0,
+        "mcp__bcmcp__bc_data_find_tables": 0.73,
+        "mcp__bcmcp__bc_data_get_table_schema": 1.73,
+        "mcp__bcmcp__bc_data_query": 1.91,
+        "Write": 2.0
+      },
+      "github_run_id": "34091802148",
+      "experiment": {
+        "mcp_servers": [
+          "bcmcp"
+        ],
+        "al_lsp_enabled": false,
+        "custom_instructions": false,
+        "skills_enabled": false,
+        "custom_agent": null,
+        "plugins": null
+      },
+      "benchmark_version": "0.10.1",
+      "resolved": 9,
+      "failed": 2,
+      "build": 11,
+      "percentage": 81.8,
+      "instance_results": {
+        "dataquery__total-posted-sales-amount-by-customer-1": true,
+        "dataquery__total-sold-quantity-by-item-1": true,
+        "dataquery__opportunity-count-by-status-1": true,
+        "dataquery__total-purchase-amount-by-vendor-1": false,
+        "dataquery__outstanding-purchase-value-by-vendor-1": true,
+        "dataquery__total-purchased-quantity-by-item-1": true,
+        "dataquery__customer-count-by-country-1": true,
+        "dataquery__avg-invoice-amount-by-country-1": false,
+        "dataquery__outstanding-sales-value-by-customer-1": true,
+        "dataquery__open-sales-order-count-by-customer-1": true,
+        "dataquery__line-count-per-open-sales-order-1": true
+      }
+    }
+  ],
+  "aggregate": [
+    {
+      "model": "claude-sonnet-5",
+      "agent_name": "Claude Code",
+      "category": "data-query",
+      "experiment": {
+        "mcp_servers": [
+          "bcmcp"
+        ],
+        "al_lsp_enabled": false,
+        "custom_instructions": false,
+        "skills_enabled": false,
+        "custom_agent": null,
+        "plugins": null
+      },
+      "total": 11,
+      "num_runs": 1,
+      "average_duration": 36.7,
+      "benchmark_version": "0.10.1",
+      "average": 0.818,
+      "ci_low": null,
+      "ci_high": null,
+      "pass_hat_5": null
+    }
+  ]
+}
