@@ -24,7 +24,7 @@ from bcbench.operations.git_operations import (
     init_repo,
     stage_and_get_diff,
 )
-from bcbench.operations.instruction_operations import copy_problem_statement_folder, setup_custom_agent, setup_instructions_from_config
+from bcbench.operations.instruction_operations import copy_problem_statement_folder, setup_agent_playbooks, setup_custom_agent, setup_instructions_from_config
 from bcbench.operations.project_operations import categorize_projects
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
 from bcbench.operations.skills_operations import setup_agent_skills
@@ -56,6 +56,7 @@ __all__ = [
     "resolve_artifact_version_root",
     "run_tests",
     "set_runtime_version",
+    "setup_agent_playbooks",
     "setup_agent_skills",
     "setup_custom_agent",
     "setup_instructions_from_config",

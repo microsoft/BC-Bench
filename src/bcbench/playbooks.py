@@ -12,6 +12,7 @@ from bcbench.types import PlaybookMode
 __all__ = [
     "PlaybookDefinition",
     "PlaybookManifest",
+    "PlaybookSetup",
     "load_playbook_manifest",
     "playbook_revision",
     "resolve_playbook_for_area",
@@ -49,6 +50,15 @@ class PlaybookManifest(BaseModel):
                 if left_id != right_id and (left_root == right_root or left_root.startswith(f"{right_root}/") or right_root.startswith(f"{left_root}/")):
                     raise ValueError(f"overlapping playbook paths: {left_id} and {right_id}")
         return self
+
+
+class PlaybookSetup(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = False
+    mode: PlaybookMode | None = None
+    revision: str | None = None
+    playbook_id: str | None = None
 
 
 def _normalize_path(value: str) -> str:
