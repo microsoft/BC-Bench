@@ -26,7 +26,7 @@ on:
         default: true
         type: boolean
       modified-only:
-        description: "Only evaluate entries added or modified against origin/main (takes precedence over test-run). Scores a partial corpus, so the run never publishes results or requeues."
+        description: "Only evaluate added or modified entries (never publishes results)"
         required: false
         default: false
         type: boolean
