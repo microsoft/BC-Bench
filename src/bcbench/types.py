@@ -30,12 +30,14 @@ __all__ = [
     "ExpectedOutput",
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
+    "PlaybookMode",
     "PluginConfig",
     "RepoSlug",
 ]
 
 
 type ChecklistLevel = Literal["critical", "expected", "aspirational"]
+type PlaybookMode = Literal["discover", "selected"]
 
 
 class ChecklistAssertion(TypedDict):
