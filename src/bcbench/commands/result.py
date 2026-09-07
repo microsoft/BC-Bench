@@ -86,9 +86,9 @@ def result_summarize(
     if expected_entries is not None:
         _validate_selected_coverage(results, expected_entries, run_dir)
 
-    summary = EvaluationResultSummary.from_results(results, run_id=run_id)
-
     write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref, dataset=dataset)
+
+    summary = EvaluationResultSummary.from_results(results, run_id=run_id)
 
     if _config.env.github_actions:
         create_github_job_summary(results, summary)

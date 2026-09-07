@@ -14,12 +14,6 @@ A benchmark for evaluating AI coding agents on real-world **Business Central (AL
 | [Code Review](code-review.md) | Reviews AL pull requests; scored with Precision / Recall / F1 against gold findings |
 | [Data Query](data-query.md) | Retrieves data from a live BC environment to answer natural-language questions; scored deterministically against a gold query's result set (baseline vs. BC MCP Data Query tools) |
 
-## Result identity
-
-**BC-Bench** (`benchmark_version`) identifies the benchmark release and its default harness pins. **Agent Version** (`agent_version`) records the harness actually used: the installed GitHub Copilot CLI or Claude Code version, or a BC-ALAgents commit for **BC PR Review**. PR Review commits are shown as short links; result artifacts retain the full SHA. A dash means the version was **unrecorded**, not the release default.
-
-Experimental overrides may use a different harness version under the same benchmark release. Aggregation keeps these versions separate. Harness versions do not change `ExperimentConfiguration`, so a version-only comparison can appear in a baseline table; check both version columns when comparing rows. Updating a released default still follows the [versioning policy](https://github.com/microsoft/BC-Bench/blob/main/CONTRIBUTING.md#versioning-policy).
-
 ## What is Business Central?
 
 **Microsoft Dynamics 365 Business Central** is a comprehensive business management solution for small and medium-sized organizations. It connects sales, service, finance, and operations to help businesses work smarter, adapt faster, and perform better.
