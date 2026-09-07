@@ -9,8 +9,9 @@ An experiment compares agent performance under different configurations against 
 - Toggling custom instructions / skills / a custom agent
 - Adding an MCP server (e.g. the AL MCP) and measuring impact
 - Comparing models under the same setup
+- Comparing harness versions while keeping the model and configuration fixed
 
-The dataset, category, evaluation pipeline, and result format stay constant. Only [`src/bcbench/agent/shared/config.yaml`](src/bcbench/agent/shared/config.yaml) (and the files it references) change between experiments.
+The dataset, category, evaluation pipeline, and result format stay constant. Configuration experiments change [`src/bcbench/agent/shared/config.yaml`](src/bcbench/agent/shared/config.yaml) and the files it references; harness-version comparisons change the installed CLI or engine revision instead.
 
 > If you want to evaluate a **different kind of output** (e.g. code review instead of bug fix), that's a new category, not an experiment — see [CATEGORIES.md](CATEGORIES.md).
 
@@ -68,6 +69,28 @@ A [plugin](https://docs.github.com/en/copilot/concepts/agents/about-plugins) is 
 Entries are parsed into [`PluginConfig`](src/bcbench/types.py), and each enabled plugin is passed to the CLI as `--plugin-dir <path>` (repeatable, supported by both agents), so it is loaded for that single session only. `github` plugins are shallow-cloned with `gh repo clone` into the gitignored `<bc-bench>/.bcbench/`, deliberately outside the repo under evaluation so plugin content never reaches its diff or the agent's working directory.
 
 Results record `ExperimentConfiguration.plugins` as `"<name>@<revision>"` / `"<name>@local"`. A `local` path is machine-specific and won't reproduce in CI, so switch to a `github` revision for a shareable run.
+
+### Comparing harness versions
+
+`benchmark_version` identifies the BC-Bench release and its default harness pins. `agent_version` separately records what actually ran: the installed GitHub Copilot CLI or Claude Code version, or the full BC-ALAgents commit SHA for **BC PR Review**. An experimental override can differ from the release default without changing `benchmark_version`. Changing the released default still requires the [versioning policy](CONTRIBUTING.md#versioning-policy).
+
+`ExperimentConfiguration` keeps its existing meaning: optional instructions, skills, custom agents, MCP/LSP tooling, and plugins. A harness-version-only comparison does not set its experiment flags. Such runs can appear in baseline tables, but aggregation and display distinguish their harness versions. Missing `agent_version` values are unrecorded, never reconstructed from today's installation or a release pin. Historical results, BCal, and mock agents can omit the field; new Copilot, Claude, and BC PR Review evaluations require a concrete resolved version.
+
+For BC PR Review:
+
+1. Commit and push pipeline or BCQuality changes to `microsoft/BC-ALAgents`. That repository owns BCQuality's version through its own configuration; BC-Bench records the engine commit, not a separate BCQuality experiment setting.
+2. Trigger **Evaluation with BC PR Review** using **`engine-sha`** set to the full 40-character commit SHA. Leave it blank to use the release pin in `.github/actions/install-agent-harnesses/action.yml`. Repeated/requeued runs retain the same override.
+3. Keep the model, dataset, scorer, internal Copilot CLI version, and minimum severity fixed for the comparison.
+4. Review the recorded `agent_version` in the results. Dashboards display a short SHA linked to the full BC-ALAgents commit; JSON artifacts retain the full SHA.
+
+Locally, use the existing `--engine-path` option:
+
+```powershell
+uv run bcbench evaluate pr-review <entry> --repo-path C:\depot\BCApps --engine-path C:\depot\BC-ALAgents
+uv run bcbench run pr-review <entry> --repo-path C:\depot\BCApps --engine-path C:\depot\BC-ALAgents --min-severity Low
+```
+
+The evaluation command rejects dirty engine source and does not accept `--min-severity`; comparisons use the minimum severity from the baseline configuration. `bcbench run pr-review` permits dirty source and arbitrary severity overrides through `--min-severity` for local smoke tests only, not reproducible comparison runs. Commit and push changes before publishing results.
 
 ### Encouraging plugin usage
 
@@ -159,6 +182,7 @@ Each run uploads artifacts and updates a `leaderboard/<category>/<run_id>` branc
 ### Agent & Model
 
 - **Agent:**
+- **Agent version:** <!-- Installed CLI version or full BC-ALAgents SHA; separate from experiment configuration -->
 - **Model:**
 - **Category:** <!-- bug-fix | test-generation | ... -->
 

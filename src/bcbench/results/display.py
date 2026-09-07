@@ -3,6 +3,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from bcbench.config import get_config
 from bcbench.logger import get_logger
@@ -22,9 +23,19 @@ def _status_style(status_label: str) -> tuple[str, str]:
     return "green", ":white_check_mark:"
 
 
+def _agent_version_display(agent_name: str, agent_version: str | None) -> tuple[str, str | None]:
+    if not agent_version:
+        return "Unrecorded", None
+    if agent_name == "BC PR Review":
+        return agent_version[:7], f"https://github.com/microsoft/BC-ALAgents/commit/{agent_version}"
+    return agent_version, None
+
+
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
     console.print(f"Total Processed: [bold]{len(results)}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
+    version, version_url = _agent_version_display(results[0].agent_name, results[0].agent_version)
+    console.print("Agent Version: ", Text(version, style=f"bold link {version_url}" if version_url else "bold"), sep="")
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
     console.print(f"MCP Servers: [bold]{', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}[/bold]")
     console.print(f"AL LSP: [bold]{'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}[/bold]")
@@ -79,6 +90,8 @@ def _get_short_error_message(error_message: str | None) -> str:
 
 def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     metrics_section: str = summary.render_github_metrics_markdown().strip()
+    version, version_url = _agent_version_display(results[0].agent_name, results[0].agent_version)
+    version_display = f"[{version}]({version_url})" if version_url else version
 
     # Calculate average tool usage
     tool_usage_section: str = ""
@@ -93,6 +106,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     header_section: str = "\n".join(
         [
             f"Total entries processed: {len(results)}, using **{results[0].agent_name} ({results[0].model})**",
+            f"- Agent Version: {version_display}",
             f"- Category: `{results[0].category.value}`",
             f"- MCP Servers used: {', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}",
             f"- AL LSP: {'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}",

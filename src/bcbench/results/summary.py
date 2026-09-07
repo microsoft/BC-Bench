@@ -45,6 +45,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     model: str
     agent_name: str
     category: EvaluationCategory
+    agent_version: str | None = None
 
     average_duration: float
     average_prompt_tokens: float
@@ -75,6 +76,10 @@ class EvaluationResultSummary(BaseModel, ABC):
 
     @classmethod
     def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
+        identities = {(result.agent_name, result.agent_version) for result in results}
+        if len(identities) > 1:
+            raise ValueError(f"Cannot summarize results from different harness identities: {identities}")
+
         durations: list[float] = [r.metrics.execution_time for r in results if r.metrics and r.metrics.execution_time is not None]
         prompt_tokens: list[int] = [r.metrics.prompt_tokens for r in results if r.metrics and r.metrics.prompt_tokens is not None]
         completion_tokens: list[int] = [r.metrics.completion_tokens for r in results if r.metrics and r.metrics.completion_tokens is not None]
@@ -91,6 +96,7 @@ class EvaluationResultSummary(BaseModel, ABC):
             "category": first_result.category,
             "model": first_result.model,
             "agent_name": first_result.agent_name,
+            "agent_version": first_result.agent_version,
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
             "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
@@ -138,14 +144,14 @@ class EvaluationResultSummary(BaseModel, ABC):
         logger.info(f"Saved evaluation summary to {output_file}")
 
     def combination_key(self) -> tuple[str | None, ...]:
-        """Key for identifying runs of the same agent, model, experiment, and benchmark version.
+        """Key for runs with the same harness version, model, experiment, and benchmark version.
 
         Judge-scored categories extend the key with their judge model, so runs judged by different models stay separate.
         """
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
-        return (self.agent_name, self.model, experiment_key, self.benchmark_version)
+        return (self.agent_name, self.agent_version, self.model, experiment_key, self.benchmark_version)
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):

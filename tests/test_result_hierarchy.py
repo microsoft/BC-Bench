@@ -11,9 +11,11 @@ Covers:
 """
 
 from datetime import UTC, datetime
+from io import StringIO
 
 import pytest
 from pydantic import ValidationError
+from rich.console import Console
 
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
@@ -25,7 +27,7 @@ from bcbench.results.summary import (
 )
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import create_bugfix_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
+from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
 
 
 def _make_config_with_summary(summary_path: str):
@@ -371,6 +373,59 @@ class TestSummaryFromJson:
 # ---------------------------------------------------------------------------
 # display.py — console and GitHub summary
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("result_factory", "agent_name", "agent_version", "expected_label", "linked"),
+    [
+        pytest.param(create_bugfix_result, "GitHub Copilot", "1.0.82", "1.0.82", False, id="copilot-version"),
+        pytest.param(create_testgen_result, "Claude Code", "2.1.221", "2.1.221", False, id="claude-version"),
+        pytest.param(create_codereview_result, "GitHub Copilot", "1.0.82", "1.0.82", False, id="copilot-code-review"),
+        pytest.param(create_codereview_result, "BC PR Review", "0123456789abcdef" * 2 + "01234567", "0123456", True, id="pr-review-sha"),
+        pytest.param(create_codereview_result, "BC PR Review", None, "Unrecorded", False, id="pr-review-unrecorded"),
+        pytest.param(create_bugfix_result, "GitHub Copilot", None, "Unrecorded", False, id="copilot-unrecorded"),
+        pytest.param(create_testgen_result, "Claude Code", None, "Unrecorded", False, id="claude-unrecorded"),
+        pytest.param(create_bugfix_result, "GitHub Copilot", "a" * 40, "a" * 40, False, id="ordinary-version-not-engine-sha"),
+    ],
+)
+class TestAgentVersionDisplay:
+    def test_console_header(self, monkeypatch, result_factory, agent_name, agent_version, expected_label, linked):
+        result = result_factory()
+        result.agent_name = agent_name
+        result.agent_version = agent_version
+        summary = EvaluationResultSummary.from_results([result], run_id="")
+        output = Console(file=StringIO(), record=True, width=160)
+        monkeypatch.setattr("bcbench.results.display.console", output)
+
+        create_console_summary([result], summary)
+
+        assert f"Agent Version: {expected_label}" in output.export_text(clear=False)
+        html = output.export_html()
+        if linked:
+            assert f'href="https://github.com/microsoft/BC-ALAgents/commit/{agent_version}"' in html
+        else:
+            assert "BC-ALAgents/commit/" not in html
+        assert result.agent_version == agent_version
+        assert summary.agent_version == agent_version
+
+    def test_github_header(self, monkeypatch, result_factory, agent_name, agent_version, expected_label, linked):
+        result = result_factory()
+        result.agent_name = agent_name
+        result.agent_version = agent_version
+        summary = EvaluationResultSummary.from_results([result], run_id="")
+        sections = []
+        monkeypatch.setattr("bcbench.results.display._write_github_step_summary", sections.append)
+
+        create_github_job_summary([result], summary)
+
+        content = sections[0]
+        if linked:
+            assert f"- Agent Version: [{expected_label}](https://github.com/microsoft/BC-ALAgents/commit/{agent_version})\n" in content
+        else:
+            assert f"- Agent Version: {expected_label}\n" in content
+            assert "BC-ALAgents/commit/" not in content
+        assert result.agent_version == agent_version
+        assert summary.agent_version == agent_version
 
 
 class TestConsoleSummary:

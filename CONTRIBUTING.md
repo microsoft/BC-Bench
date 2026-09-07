@@ -88,6 +88,10 @@ The upstream workflows are wired for Microsoft's internal environment. To run th
 
 BC-Bench uses [semantic versioning](https://semver.org/) to track changes that may affect evaluation results. The version is stored in `pyproject.toml` and automatically embedded in all evaluation results.
 
+`benchmark_version` identifies the BC-Bench release, including its default harness pins. The separate, nullable `agent_version` records the harness actually used: the installed GitHub Copilot CLI or Claude Code version, or the full BC-ALAgents commit SHA for BC PR Review. Experimental overrides can therefore have a different `agent_version` under the same `benchmark_version`; changing a released default still follows the versioning policy below.
+
+Harness versions are not part of `ExperimentConfiguration`, which continues to describe optional instructions, skills, custom agents, MCP/LSP tooling, and plugins. Missing versions remain unrecorded, not inferred from a release pin. The field remains optional for historical results, BCal, and mock agents; new Copilot, Claude, and BC PR Review evaluations must resolve a concrete version before running.
+
 ### When to Bump Versions
 
 | Change Type | Version Bump | Examples |
@@ -100,7 +104,7 @@ BC-Bench uses [semantic versioning](https://semver.org/) to track changes that m
 
 Results from different benchmark versions **cannot be aggregated** together. When you run `bcbench result update`, the system will raise an error if you try to combine runs with different `benchmark_version` values.
 
-This ensures the leaderboard always compares apples-to-apples. When bumping versions:
+Within a benchmark version, aggregation also keeps different `agent_version` values separate, including unrecorded versions. Compare the harness version as well as the model and experiment configuration. When bumping versions:
 1. Update the version in `pyproject.toml`
 2. Create a GitHub release with release notes describing the changes
 3. Clear old results from `docs/_data/*.json` if needed
@@ -135,12 +139,16 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 
 ### Bump the BC PR Review engine
 
-1. Update the pinned `microsoft/BC-ALAgents` commit in `src/bcbench/agent/shared/config.yaml`
+1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/actions/install-agent-harnesses/action.yml`
 2. Run a test evaluation through the `pr-review` workflow
 3. Bump the BC-Bench version following the Versioning Policy
 4. Include the exact BC-ALAgents commit SHA in the BC-Bench release notes
 
-Comparison runs must use clean commits that can be fetched from the recorded remote. Local or dirty checkouts are for smoke tests only; a local SHA or content hash cannot recover their contents. Commit and push dependency changes before a full run.
+BC-ALAgents owns the BCQuality version through its own configuration. Keep the internal Copilot CLI version and minimum severity fixed when comparing engine revisions, so the engine commit is the variable under test.
+
+To compare an experimental engine revision without changing the released default, supply its full commit SHA through the `engine-sha` input of `Evaluation with BC PR Review`. Blank uses the release pin; repeated/requeued runs preserve the override. See [EXPERIMENT.md](EXPERIMENT.md#comparing-harness-versions).
+
+Comparison runs must use clean commits that can be fetched from the recorded remote. An existing checkout can be supplied with `--engine-path`; `bcbench evaluate pr-review` rejects dirty engine source and uses the configured minimum severity, with no `--min-severity` override. Only `bcbench run pr-review` accepts `--min-severity` and dirty checkouts, for local smoke tests rather than publishable comparisons. A local SHA alone cannot recover uncommitted contents; commit and push dependency changes before a full run.
 
 ### Create a new release
 

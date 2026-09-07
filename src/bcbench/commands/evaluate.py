@@ -4,7 +4,7 @@ from typing import Annotated, cast
 
 import typer
 
-from bcbench.agent import BCalBackendConfig, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
+from bcbench.agent import BCalBackendConfig, get_claude_version, get_copilot_version, get_pr_review_version, run_bcal_agent, run_claude_code, run_copilot_agent, run_pr_review_agent
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -86,6 +86,7 @@ def evaluate_copilot(
         container=runtime.container if runtime else None,
         model=model,
         agent_name=AgentHarness.COPILOT,
+        agent_version=get_copilot_version(),
         category=category,
     )
 
@@ -155,6 +156,7 @@ def evaluate_claude_code(
         container=runtime.container if runtime else None,
         model=model,
         agent_name=AgentHarness.CLAUDE,
+        agent_version=get_claude_version(),
         category=category,
     )
 
@@ -183,7 +185,6 @@ def evaluate_pr_review(
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "pr_review_test_run",
     engine_path: PRReviewEnginePath = None,
-    min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
 ) -> None:
     """
     Evaluate BC PR Review on a single code-review entry.
@@ -209,6 +210,7 @@ def evaluate_pr_review(
         container=None,
         model=model,
         agent_name=AgentHarness.PR_REVIEW,
+        agent_version=get_pr_review_version(engine_path),
         category=category,
     )
 
@@ -221,7 +223,6 @@ def evaluate_pr_review(
             model=ctx.model,
             output_dir=ctx.result_dir,
             engine_path=engine_path,
-            min_severity=min_severity,
         ),
     )
 

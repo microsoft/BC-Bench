@@ -178,7 +178,11 @@ def agent_command_category(tmp_path):
 def test_agent_commands_preserve_requested_mcp_flags(tmp_path, agent_command_category, commands, command_name, agent_name, extra_args):
     entry, category = agent_command_category
 
-    with patch.object(commands, agent_name) as run_agent:
+    with (
+        patch.object(commands, agent_name) as run_agent,
+        patch.object(evaluate_commands, "get_copilot_version", return_value="1.2.3"),
+        patch.object(evaluate_commands, "get_claude_version", return_value="1.2.3"),
+    ):
         getattr(commands, command_name)(
             entry_id=entry.instance_id,
             category=category,
@@ -260,10 +264,15 @@ def test_al_lsp_accepts_resolved_container():
 def test_result_summarize_creates_all_outputs(sample_results_directory, problem_statement_dir):
     base_path, run_id, dataset_path = sample_results_directory
     results_dir = base_path / run_id
+    for result_path in results_dir.glob("*.jsonl"):
+        payload = json.loads(result_path.read_text())
+        payload["agent_version"] = "1.2.3"
+        result_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with (
         patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
         patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=dataset_path),
+        patch("subprocess.run", side_effect=AssertionError("Summarizing artifacts must not invoke installed harnesses")),
     ):
         result = runner.invoke(
             app,
@@ -288,6 +297,26 @@ def test_result_summarize_creates_all_outputs(sample_results_directory, problem_
     assert summary["resolved"] == 2
     assert summary["failed"] == 1
     assert summary["build"] == 3
+    assert summary["agent_version"] == "1.2.3"
+    exported = (results_dir / "bceval_results.jsonl").read_text().splitlines()
+    assert all(json.loads(line)["metadata"]["agent_version"] == "1.2.3" for line in exported)
+
+
+def test_result_summarize_rejects_mixed_versions_before_writing_outputs(sample_results_directory):
+    base_path, run_id, _ = sample_results_directory
+    results_dir = base_path / run_id
+    result_path = next(results_dir.glob("*.jsonl"))
+    payload = json.loads(result_path.read_text())
+    payload["agent_version"] = "1.2.3"
+    result_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = runner.invoke(app, ["result", "summarize", "--category", "bug-fix", "--run-id", run_id, "--result-dir", str(base_path)])
+
+    assert result.exit_code != 0
+    assert isinstance(result.exception, ValueError)
+    assert "different harness identities" in str(result.exception)
+    assert not (results_dir / "bceval_results.jsonl").exists()
+    assert not (results_dir / "evaluation_summary.json").exists()
 
 
 @pytest.mark.integration
