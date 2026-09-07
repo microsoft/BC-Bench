@@ -71,9 +71,9 @@ def result_summarize(
         logger.error("No results found in the result files")
         raise typer.Exit(code=1)
 
-    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
-
     summary = EvaluationResultSummary.from_results(results, run_id=run_id)
+
+    write_bceval_results(results, run_dir, run_id, bceval_output, category, git_ref=git_ref)
 
     if _config.env.github_actions:
         create_github_job_summary(results, summary)

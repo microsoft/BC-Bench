@@ -28,11 +28,12 @@ The point of the category is to compare **how the data is retrieved**:
   <thead>
     <tr>
       <th>Agent</th>
+      <th>Agent Version</th>
       <th>Model</th>
       <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
-      <th>Version</th>
+      <th>BC-Bench</th>
     </tr>
   </thead>
   <tbody>
@@ -41,6 +42,7 @@ The point of the category is to compare **how the data is retrieved**:
       {% if agg.experiment == null %}
     <tr>
       <td>{{ agg.agent_name }}</td>
+      <td>{% include agent-version.html result=agg %}</td>
       <td>{{ agg.model }}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
       <td>{% if agg.pass_hat_5 %}{{ agg.pass_hat_5 | times: 100.0 | round: 1 }}%{% endif %}</td>
@@ -71,12 +73,13 @@ matching no-tooling **Default** baseline for the same model.
   <thead>
     <tr>
       <th>Model</th>
+      <th>Agent Version</th>
       <th>MCP Servers</th>
       <th>Skills</th>
       <th>mean (95% CI)</th>
       <th>pass^5</th>
       <th>Avg Time</th>
-      <th>Ver</th>
+      <th>BC-Bench</th>
     </tr>
   </thead>
   <tbody>
@@ -93,6 +96,7 @@ matching no-tooling **Default** baseline for the same model.
       {%- if show_row %}
     <tr>
       <td>{{ agg.model }}</td>
+      <td>{% include agent-version.html result=agg %}</td>
       <td>{% if is_mcp %}{{ agg.experiment.mcp_servers | join: ", " }}{% else %}<em>Default</em>{% endif %}</td>
       <td>{% if is_mcp and agg.experiment.skills_enabled %}✓{% else %}—{% endif %}</td>
       <td>{{ agg.average | times: 100.0 | round: 1 }}%{% if agg.ci_low %} ({{ agg.ci_low | times: 100.0 | round: 1 }}-{{ agg.ci_high | times: 100.0 | round: 1 }}%){% endif %}</td>
