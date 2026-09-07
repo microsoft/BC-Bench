@@ -31,6 +31,7 @@ on:
           - "gpt-56-reasoning-nano-luna"
           - "gpt-56-reasoning-sol"
           - "gpt-55-chat-2026-04-29"
+          - "mai-code-1-flash"
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
