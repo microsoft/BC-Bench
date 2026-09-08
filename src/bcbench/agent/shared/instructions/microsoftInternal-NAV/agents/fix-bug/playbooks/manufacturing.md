@@ -424,4 +424,3 @@ names over stale object IDs from bug text.
   no-output order to prove the per-line logic.
 - **Assembly copy fixes need resource, item-component, and archive variants.** The fix was only accepted after item-component and archived quote scenarios were
   covered; the later fix started with resource + item-component coverage.
-

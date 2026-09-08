@@ -229,3 +229,14 @@ def test_invalid_playbook_mode_fails(tmp_path: Path):
             harness=AgentHarness.COPILOT,
             custom_agent="fix-bug",
         )
+
+
+@pytest.mark.parametrize("profile", ["microsoft-BCApps", "microsoftInternal-NAV"])
+def test_fix_bug_agent_forbids_delegation_and_background_work(profile: str):
+    agent_file = Path("src/bcbench/agent/shared/instructions") / profile / "agents" / "fix-bug.agent.md"
+    content = agent_file.read_text(encoding="utf-8")
+
+    assert "Do not use the Agent tool" in content
+    assert "Do not delegate" in content
+    assert "Do not start background work" in content
+    assert "Execute the workflow directly in this agent" in content

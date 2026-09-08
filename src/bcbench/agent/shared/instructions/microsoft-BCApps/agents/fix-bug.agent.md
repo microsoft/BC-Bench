@@ -13,6 +13,13 @@ the change, implement it, and validate it with the AL tools when they are availa
 does not fetch work items, does not create branches, does not commit, and does not open pull
 requests. Its only output is the change in the working tree plus a short report.
 
+## Execution model
+
+Execute the workflow directly in this agent. Do not use the Agent tool. Do not delegate any part of
+the task to a subagent. Do not start background work. This is an unattended, non-interactive
+run: returning ends the session immediately, so all investigation, edits, and validation must finish
+before the final response.
+
 ## Step 1: Locate the support files and read the rules
 
 Set `AGENT_ROOT` from the harness running this agent:

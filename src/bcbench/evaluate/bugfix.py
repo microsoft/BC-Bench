@@ -2,7 +2,7 @@ from pathlib import Path
 
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, TestExecutionError
+from bcbench.exceptions import BuildError, EmptyDiffError, TestExecutionError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import (
@@ -56,7 +56,20 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
         # Clean test projects to revert any unintended agent changes before capturing diff
         clean_project_paths(context.repo_path, test_projects)
 
-        generated_patch = stage_and_get_diff(context.repo_path)
+        try:
+            generated_patch = stage_and_get_diff(context.repo_path)
+        except EmptyDiffError as error:
+            logger.warning(f"Agent produced no AL changes for {context.entry.instance_id}")
+            result = BugFixResult.create_result(
+                context,
+                "",
+                build=False,
+                resolved=False,
+                error_message=str(error),
+            )
+            self.save_result(context, result)
+            return
+
         result: BugFixResult | None = None
 
         try:
