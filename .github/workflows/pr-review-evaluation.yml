@@ -20,6 +20,11 @@ on:
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
           - "gemini-3.7-flash"
+      engine-sha:
+        description: "Full BC-ALAgents commit SHA (blank uses the default pin)"
+        required: false
+        default: ""
+        type: string
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -118,6 +123,8 @@ jobs:
       - name: Install evaluation CLIs
         id: install-harnesses
         uses: $/.github/actions/install-agent-harnesses
+        with:
+          engine-sha: ${{ inputs.engine-sha }}
 
       - name: Run BC PR Review for entry ${{ matrix.entry }}
         timeout-minutes: 120
@@ -154,7 +161,7 @@ jobs:
       agent: "BC PR Review"
       # Scores only the modified entries, so publishing it to Braintrust/Kusto or the
       # leaderboard would record a partial corpus as a benchmark result.
-      mock: ${{ inputs.test-run || inputs.modified-only }}
+      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
@@ -171,4 +178,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

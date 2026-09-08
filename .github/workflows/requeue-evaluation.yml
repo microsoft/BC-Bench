@@ -33,6 +33,7 @@ jobs:
       - name: Reuse tag for requeue
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUTS_JSON: ${{ inputs.workflow-inputs }}
         run: |
           REF="${{ github.ref }}"
 
@@ -50,7 +51,6 @@ jobs:
           fi
 
           # Build the workflow dispatch command with inputs from JSON
-          INPUTS_JSON='${{ inputs.workflow-inputs }}'
           NEXT_REPEAT=$(( ${{ inputs.repeat }} - 1 ))
 
           # Build the arguments array safely (handles spaces and special chars)

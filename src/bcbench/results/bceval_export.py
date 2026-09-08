@@ -58,6 +58,7 @@ def write_bceval_results(
 
             metadata: dict[str, Any] = {
                 "model": result.model,
+                "agent_version": result.agent_version,
                 **result.export_metadata,
                 "prompt_tokens": (result.metrics.prompt_tokens if result.metrics else None) or 0,
                 "completion_tokens": (result.metrics.completion_tokens if result.metrics else None) or 0,

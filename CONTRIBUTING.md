@@ -88,6 +88,8 @@ The upstream workflows are wired for Microsoft's internal environment. To run th
 
 BC-Bench uses [semantic versioning](https://semver.org/) to track changes that may affect evaluation results. The version is stored in `pyproject.toml` and automatically embedded in all evaluation results.
 
+`benchmark_version` identifies the release and its default harness pins. Results separately record the actual harness as `agent_version` (Copilot/Claude CLI version or BC-ALAgents SHA), without changing `ExperimentConfiguration`. A one-off `engine-sha` override does not require a benchmark version bump because its results are never published; changing a released default pin still follows the policy below and belongs on a branch with an [experiment PR](EXPERIMENT.md#experiment-pr-template).
+
 ### When to Bump Versions
 
 | Change Type | Version Bump | Examples |
@@ -99,6 +101,8 @@ BC-Bench uses [semantic versioning](https://semver.org/) to track changes that m
 ### Version Compatibility
 
 Results from different benchmark versions **cannot be aggregated** together. When you run `bcbench result update`, the system will raise an error if you try to combine runs with different `benchmark_version` values.
+
+Different `agent_version` values also form separate aggregates; an unrecorded version does not match a known version.
 
 This ensures the leaderboard always compares apples-to-apples. When bumping versions:
 1. Update the version in `pyproject.toml`
@@ -135,7 +139,7 @@ Keep evaluation tools pinned so benchmark runs remain reproducible. For example,
 
 ### Bump the BC PR Review engine
 
-1. Update the pinned `microsoft/BC-ALAgents` commit in `src/bcbench/agent/shared/config.yaml`
+1. Update the pinned `microsoft/BC-ALAgents` commit in `.github/actions/install-agent-harnesses/action.yml`
 2. Run a test evaluation through the `pr-review` workflow
 3. Bump the BC-Bench version following the Versioning Policy
 4. Include the exact BC-ALAgents commit SHA in the BC-Bench release notes
