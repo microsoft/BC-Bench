@@ -1,6 +1,12 @@
 name: Install Agent Harnesses
 description: Install the agent harnesses used by the evaluation workflows
 
+inputs:
+  engine-sha:
+    description: Full BC-ALAgents commit SHA (blank uses the default pin)
+    required: false
+    default: ""
+
 outputs:
   bc-alagents-path:
     description: Path to the pinned BC-ALAgents checkout
@@ -9,6 +15,17 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Validate BC-ALAgents revision
+      id: engine-sha
+      shell: pwsh
+      env:
+        ENGINE_SHA: ${{ inputs.engine-sha || 'ecf8e31759d6ddd6d78e3a0b7836b40134368009' }}
+      run: |
+        if ($env:ENGINE_SHA -notmatch '\A[0-9a-fA-F]{40}\z') {
+          throw "engine-sha must be a full 40-character hexadecimal commit SHA."
+        }
+        "sha=$env:ENGINE_SHA" >> $env:GITHUB_OUTPUT
+
     - name: Install Claude Code
       run: npm install -g @anthropic-ai/claude-code@2.1.221
       shell: pwsh
@@ -21,7 +38,7 @@ runs:
       uses: actions/checkout@v5
       with:
         repository: microsoft/BC-ALAgents
-        ref: e9d9249eaa25be88388b60106b4cbf8cd7aa8a7d
+        ref: ${{ steps.engine-sha.outputs.sha }}
         path: .agent-harnesses/bc-alagents
         persist-credentials: false
 
