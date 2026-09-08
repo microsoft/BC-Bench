@@ -29,7 +29,7 @@ from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import commit_changes, has_changes, init_repo
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration, PrReviewMetrics
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -226,7 +226,7 @@ def run_pr_review_agent(
         logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
     except subprocess.TimeoutExpired:
         logger.exception(f"Engine review timed out after {_config.timeout.agent_execution} seconds")
-        metrics = PrReviewMetrics(execution_time=_config.timeout.agent_execution)
+        metrics = PRReviewMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")

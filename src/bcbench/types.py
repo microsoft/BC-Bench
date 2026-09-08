@@ -31,8 +31,8 @@ __all__ = [
     "ExpectedOutput",
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
+    "PRReviewMetrics",
     "PluginConfig",
-    "PrReviewMetrics",
     "RepoSlug",
 ]
 
@@ -90,7 +90,7 @@ class AgentMetrics(BaseModel):
     tool_usage: dict[str, int] | None = None
 
 
-class PrReviewMetrics(AgentMetrics):
+class PRReviewMetrics(AgentMetrics):
     kind: Literal["pr-review"] = "pr-review"
 
     cached_tokens: int | None = Field(default=None, ge=0)
@@ -105,7 +105,7 @@ class PrReviewMetrics(AgentMetrics):
     copilot_cli_version: str | None = None
 
 
-type AnyAgentMetrics = Annotated[AgentMetrics | PrReviewMetrics, Field(discriminator="kind")]
+type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]
 
 
 class ExperimentConfiguration(BaseModel):
@@ -199,9 +199,10 @@ class AgentHarness(StrEnum):
 
     @property
     def expected_metrics(self) -> frozenset[str]:
-        """Metrics this agent should always report.
+        """Metrics this harness should always populate.
 
-        Only these are warned about when missing, so agents that never collect a metric don't emit a warning for every single instance of a run.
+        Metric models define which fields may be reported. This separate harness
+        capability contract controls which missing values produce warnings.
         """
 
         match self:
@@ -225,7 +226,7 @@ class AgentHarness(StrEnum):
             case AgentHarness.BCAL:
                 expected = AgentMetrics(execution_time=None)
             case AgentHarness.PR_REVIEW:
-                expected = PrReviewMetrics(
+                expected = PRReviewMetrics(
                     execution_time=None,
                     prompt_tokens=None,
                     completion_tokens=None,

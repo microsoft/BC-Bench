@@ -4,7 +4,7 @@ import pytest
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PrReviewMetrics
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
@@ -232,7 +232,7 @@ class TestCategorySerialization:
     def test_pr_review_metrics_round_trip(self, tmp_path):
         original = create_codereview_result(
             agent_name=AgentHarness.PR_REVIEW,
-            metrics=PrReviewMetrics(
+            metrics=PRReviewMetrics(
                 execution_time=10.0,
                 api_calls=2,
                 usage_complete=True,
@@ -245,7 +245,7 @@ class TestCategorySerialization:
         loaded = BaseEvaluationResult.from_json(payload)
 
         assert payload["metrics"]["kind"] == "pr-review"
-        assert isinstance(loaded.metrics, PrReviewMetrics)
+        assert isinstance(loaded.metrics, PRReviewMetrics)
         assert loaded.metrics.api_calls == 2
         assert loaded.metrics.copilot_cli_version == "1.0.82"
 

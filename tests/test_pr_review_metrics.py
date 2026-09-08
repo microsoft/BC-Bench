@@ -8,7 +8,7 @@ from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_revi
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, EvaluationCategory, PrReviewMetrics
+from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry, create_codereview_result
 
 
@@ -45,7 +45,7 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
 
     metrics = build_pr_review_metrics(tmp_path, execution_time=12.5)
 
-    assert isinstance(metrics, PrReviewMetrics)
+    assert isinstance(metrics, PRReviewMetrics)
     assert metrics.kind == "pr-review"
     assert metrics.execution_time == 12.5
     assert metrics.prompt_tokens == 150

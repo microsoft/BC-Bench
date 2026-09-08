@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from bcbench.exceptions import AgentError
-from bcbench.types import PrReviewMetrics
+from bcbench.types import PRReviewMetrics
 
 RUN_METRICS_FILE_NAME = "_run-metrics.json"
 _NonNegativeInt = Annotated[int, Field(ge=0)]
@@ -76,13 +76,13 @@ def _load_run_metrics(path: Path) -> _RunMetrics:
         raise AgentError(f"Engine run metrics artifact {path} does not satisfy schema version 1: {exc}") from exc
 
 
-def build_pr_review_metrics(output_dir: Path, execution_time: float) -> PrReviewMetrics:
+def build_pr_review_metrics(output_dir: Path, execution_time: float) -> PRReviewMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
     usage_values_available = run.malformed_records == 0
     token_values_available = usage_values_available and run.usage_complete
-    return PrReviewMetrics(
+    return PRReviewMetrics(
         execution_time=execution_time,
         prompt_tokens=run.prompt_tokens if token_values_available else None,
         completion_tokens=run.completion_tokens if token_values_available else None,

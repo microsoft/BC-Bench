@@ -7,7 +7,7 @@ import pytest
 
 from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
 from bcbench.exceptions import AgentError
-from bcbench.types import EvaluationCategory, PrReviewMetrics
+from bcbench.types import EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry
 
 
@@ -172,7 +172,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             engine_path=tmp_path / "engine",
         )
 
-    assert isinstance(metrics, PrReviewMetrics)
+    assert isinstance(metrics, PRReviewMetrics)
     assert metrics.execution_time == 2.5
     assert metrics.prompt_tokens == 100
     assert metrics.completion_tokens == 10

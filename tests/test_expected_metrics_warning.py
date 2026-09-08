@@ -1,7 +1,7 @@
 import logging
 
 from bcbench.results.bugfix import BugFixResult
-from bcbench.types import AgentHarness, AgentMetrics
+from bcbench.types import AgentHarness, AgentMetrics, PRReviewMetrics
 from tests.conftest import create_evaluation_context
 
 
@@ -36,6 +36,21 @@ class TestExpectedMetricsWarning:
             BugFixResult.create_success(context, "patch")
 
         assert _missing_metric_warnings(caplog) == [f"Result for {context.entry.instance_id} missing metrics: turn_count"]
+
+    def test_optional_pr_review_diagnostics_do_not_warn(self, tmp_path, caplog):
+        context = create_evaluation_context(tmp_path, agent_name=AgentHarness.PR_REVIEW)
+        context.metrics = PRReviewMetrics(
+            execution_time=12.0,
+            prompt_tokens=100,
+            completion_tokens=10,
+            total_tokens=110,
+            ai_credits=0.25,
+        )
+
+        with caplog.at_level(logging.WARNING):
+            BugFixResult.create_success(context, "patch")
+
+        assert _missing_metric_warnings(caplog) == []
 
     def test_warns_when_no_metrics_at_all(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)
