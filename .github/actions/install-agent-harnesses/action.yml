@@ -11,18 +11,6 @@ outputs:
   bc-alagents-path:
     description: Path to the pinned BC-ALAgents checkout
     value: ${{ steps.bc-alagents-path.outputs.path }}
-  copilot-cli-version:
-    description: Installed GitHub Copilot CLI version
-    value: ${{ steps.harness-identity.outputs.copilot-cli-version }}
-  bcquality-repository:
-    description: BCQuality repository pinned by BC-ALAgents
-    value: ${{ steps.harness-identity.outputs.bcquality-repository }}
-  bcquality-commit:
-    description: BCQuality commit pinned by BC-ALAgents
-    value: ${{ steps.harness-identity.outputs.bcquality-commit }}
-  bcquality-version:
-    description: BCQuality content version pinned by BC-ALAgents
-    value: ${{ steps.harness-identity.outputs.bcquality-version }}
 
 runs:
   using: composite
@@ -58,22 +46,3 @@ runs:
       id: bc-alagents-path
       run: '"path=$(Join-Path $env:GITHUB_WORKSPACE ''.agent-harnesses/bc-alagents'')" >> $env:GITHUB_OUTPUT'
       shell: pwsh
-
-    - name: Export harness identity
-      id: harness-identity
-      shell: pwsh
-      run: |
-        $configPath = Join-Path $env:GITHUB_WORKSPACE '.agent-harnesses/bc-alagents/agents/ALReviewAgent/bcquality.config.yaml'
-        $config = Get-Content -LiteralPath $configPath -Raw
-        $repo = [regex]::Match($config, '(?m)^\s*repo:\s*(?<value>\S+)\s*$').Groups['value'].Value
-        $commit = [regex]::Match($config, '(?m)^\s*ref:\s*(?<value>[0-9a-fA-F]{40})\s*$').Groups['value'].Value
-        $version = [regex]::Match($config, '(?m)^\s*version:\s*["'']?(?<value>[^"''\s]+)["'']?\s*$').Groups['value'].Value
-        if (-not $repo -or -not $commit -or -not $version) {
-          throw "Could not resolve BCQuality identity from $configPath"
-        }
-        $repo = $repo -replace '^https://github.com/', '' -replace '\.git$', ''
-
-        "copilot-cli-version=1.0.82" >> $env:GITHUB_OUTPUT
-        "bcquality-repository=$repo" >> $env:GITHUB_OUTPUT
-        "bcquality-commit=$commit" >> $env:GITHUB_OUTPUT
-        "bcquality-version=$version" >> $env:GITHUB_OUTPUT

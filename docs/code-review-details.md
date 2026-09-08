@@ -140,7 +140,7 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if agg.average_sub_skills_executed != null %}{{ agg.average_sub_skills_executed | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_sub_skills_skipped != null %}{{ agg.average_sub_skills_skipped | round: 1 }}{% else %}—{% endif %}</td>
       <td>{{ agg.judge_model }}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
       <td>{% if agg.copilot_cli_version %}{{ agg.copilot_cli_version }}{% else %}—{% endif %}</td>
       {% assign engine_version = agg.agent_version | default: agg.bc_alagents_commit %}
       <td>{% if agg.agent_name == "BC PR Review" and engine_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ engine_version }}" target="_blank">{{ engine_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
@@ -267,7 +267,7 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if run.average_sub_skills_executed != null %}{{ run.average_sub_skills_executed | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_sub_skills_skipped != null %}{{ run.average_sub_skills_skipped | round: 1 }}{% else %}—{% endif %}</td>
       <td>{{ run.judge_model }}</td>
-      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ run.benchmark_version }}" target="_blank">{{ run.benchmark_version }}</a>{% if run.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ run.benchmark_commit }}" target="_blank">{{ run.benchmark_commit | slice: 0, 8 }}</a>){% endif %}</td>
+      <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ run.benchmark_version }}" target="_blank">{{ run.benchmark_version }}</a></td>
       <td>{% if run.copilot_cli_version %}{{ run.copilot_cli_version }}{% else %}—{% endif %}</td>
       {% assign engine_version = run.agent_version | default: run.bc_alagents_commit %}
       <td>{% if run.agent_name == "BC PR Review" and engine_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ engine_version }}" target="_blank">{{ engine_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>

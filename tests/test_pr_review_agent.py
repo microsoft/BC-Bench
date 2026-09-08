@@ -159,6 +159,10 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root) as prepare_bcquality,
+        patch(
+            "bcbench.agent.pr_review.metrics._load_bcquality_identity",
+            return_value=("microsoft/BCQuality", "a" * 40, "1.6"),
+        ),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
@@ -178,6 +182,10 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert metrics.completion_tokens == 10
     assert metrics.total_tokens == 110
     assert metrics.ai_credits == 0.25
+    assert metrics.copilot_cli_version == "1.0.81-0"
+    assert metrics.bcquality_repository == "microsoft/BCQuality"
+    assert metrics.bcquality_commit == "a" * 40
+    assert metrics.bcquality_version == "1.6"
     assert config.is_empty()
     resolve_engine.assert_called_once_with(tmp_path / "engine")
     prepare_bcquality.assert_called_once_with(tmp_path / "engine", "pwsh", (tmp_path / "output" / "bcquality").resolve())

@@ -131,24 +131,32 @@ class TestFromResults:
         assert summary.github_run_id == "test_run_123"
         assert summary.date == datetime.now(UTC).date()
 
-    def test_from_results_records_harness_identity_from_environment(self, sample_results, monkeypatch):
-        identity = {
-            "BCBENCH_COMMIT": "0" * 40,
-            "COPILOT_CLI_VERSION": "1.0.82",
-            "BCQUALITY_REPOSITORY": "microsoft/BCQuality",
-            "BCQUALITY_COMMIT": "2" * 40,
-            "BCQUALITY_VERSION": "1.6",
-        }
-        for name, value in identity.items():
-            monkeypatch.setenv(name, value)
+    def test_from_results_records_runtime_provenance_from_metrics(self, sample_results):
+        metrics = sample_results[0].metrics.model_copy(
+            update={
+                "copilot_cli_version": "1.0.82",
+                "bcquality_repository": "microsoft/BCQuality",
+                "bcquality_commit": "2" * 40,
+                "bcquality_version": "1.6",
+            }
+        )
+        results = [result.model_copy(update={"metrics": metrics}) for result in sample_results]
 
-        summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
 
-        assert summary.benchmark_commit == "0" * 40
         assert summary.copilot_cli_version == "1.0.82"
         assert summary.bcquality_repository == "microsoft/BCQuality"
         assert summary.bcquality_commit == "2" * 40
         assert summary.bcquality_version == "1.6"
+
+    def test_from_results_omits_inconsistent_runtime_provenance(self, sample_results, caplog):
+        first = sample_results[0].model_copy(update={"metrics": sample_results[0].metrics.model_copy(update={"bcquality_commit": "1" * 40})})
+        second = sample_results[1].model_copy(update={"metrics": sample_results[1].metrics.model_copy(update={"bcquality_commit": "2" * 40})})
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results([first, second], run_id="test_run_123")
+
+        assert summary.bcquality_commit is None
+        assert "inconsistent bcquality_commit" in caplog.text
 
     def test_from_results_calculates_averages_correctly(self, sample_results):
         summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
@@ -867,7 +875,6 @@ class TestLeaderboard:
         ).model_copy(
             update={
                 "agent_version": "1" * 40,
-                "benchmark_commit": "0" * 40,
                 "copilot_cli_version": "1.0.82",
                 "bcquality_repository": "microsoft/BCQuality",
                 "bcquality_commit": "2" * 40,
@@ -878,7 +885,6 @@ class TestLeaderboard:
         aggregate = LeaderboardAggregate.from_runs([run])
 
         assert aggregate.agent_version == "1" * 40
-        assert aggregate.benchmark_commit == "0" * 40
         assert aggregate.copilot_cli_version == "1.0.82"
         assert aggregate.bcquality_commit == "2" * 40
         assert aggregate.bcquality_version == "1.6"

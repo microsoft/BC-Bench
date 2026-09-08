@@ -131,7 +131,7 @@ def test_agent_harness_action_pins_published_copilot_version() -> None:
     assert "@github/copilot@1.0.82" in action
 
 
-def test_agent_harness_action_pins_engine_and_exports_transitive_identity() -> None:
+def test_agent_harness_action_pins_engine_without_exporting_transitive_identity() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
     config = yaml.safe_load(action)
     validation = next(step for step in config["runs"]["steps"] if step.get("id") == "engine-sha")
@@ -139,10 +139,6 @@ def test_agent_harness_action_pins_engine_and_exports_transitive_identity() -> N
 
     assert "repository: microsoft/BC-ALAgents" in action
     assert "bc-alagents-path:" in action
-    assert "copilot-cli-version:" in action
-    assert "bcquality-repository:" in action
-    assert "bcquality-commit:" in action
-    assert "bcquality-version:" in action
     assert config["inputs"]["engine-sha"]["required"] is False
     assert config["inputs"]["engine-sha"]["default"] == ""
     assert validation["env"]["ENGINE_SHA"] == "${{ inputs.engine-sha || '" + DEFAULT_ENGINE_SHA + "' }}"
@@ -151,16 +147,10 @@ def test_agent_harness_action_pins_engine_and_exports_transitive_identity() -> N
     assert config["runs"]["steps"].index(validation) < config["runs"]["steps"].index(checkout)
     assert checkout["with"]["ref"] == "${{ steps.engine-sha.outputs.sha }}"
     assert checkout["with"]["persist-credentials"] is False
-    assert set(config["outputs"]) == {
-        "bc-alagents-path",
-        "copilot-cli-version",
-        "bcquality-repository",
-        "bcquality-commit",
-        "bcquality-version",
-    }
+    assert set(config["outputs"]) == {"bc-alagents-path"}
 
 
-def test_pr_review_workflow_records_evaluation_stack_identity() -> None:
+def test_shared_summary_workflow_has_no_pr_review_provenance_inputs() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
     summary_workflow = _workflow("summarize-results.yml")
 
@@ -171,8 +161,8 @@ def test_pr_review_workflow_records_evaluation_stack_identity() -> None:
         "bcquality-commit",
         "bcquality-version",
     ):
-        assert field in workflow
-        assert field in summary_workflow
+        assert field not in workflow
+        assert field not in summary_workflow
     assert "bc-alagents-commit" not in workflow
     assert "bc-alagents-commit" not in summary_workflow
 

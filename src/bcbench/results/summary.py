@@ -1,5 +1,4 @@
 import json
-import os
 import tomllib
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -72,7 +71,6 @@ class EvaluationResultSummary(BaseModel, ABC):
     experiment: ExperimentConfiguration | None = None
 
     benchmark_version: str
-    benchmark_commit: str | None = None
     copilot_cli_version: str | None = None
     bcquality_repository: str | None = None
     bcquality_commit: str | None = None
@@ -109,6 +107,19 @@ class EvaluationResultSummary(BaseModel, ABC):
         first_result = results[0]
         experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
 
+        def consistent_metric_value(name: str) -> str | None:
+            values: set[str] = set()
+            for result in results:
+                value = getattr(result.metrics, name) if result.metrics else None
+                if value is not None:
+                    if not isinstance(value, str):
+                        raise TypeError(f"Expected {name} to be a string, got {type(value).__name__}")
+                    values.add(value)
+            if len(values) > 1:
+                logger.warning(f"Results contain inconsistent {name} values; omitting provenance: {values}")
+                return None
+            return next(iter(values), None)
+
         return {
             "total": len(results),
             "date": datetime.now(UTC).date(),
@@ -125,11 +136,10 @@ class EvaluationResultSummary(BaseModel, ABC):
             "github_run_id": run_id,
             "experiment": experiment,
             "benchmark_version": get_benchmark_version(),
-            "benchmark_commit": os.getenv("BCBENCH_COMMIT") or None,
-            "copilot_cli_version": os.getenv("COPILOT_CLI_VERSION") or None,
-            "bcquality_repository": os.getenv("BCQUALITY_REPOSITORY") or None,
-            "bcquality_commit": os.getenv("BCQUALITY_COMMIT") or None,
-            "bcquality_version": os.getenv("BCQUALITY_VERSION") or None,
+            "copilot_cli_version": consistent_metric_value("copilot_cli_version"),
+            "bcquality_repository": consistent_metric_value("bcquality_repository"),
+            "bcquality_commit": consistent_metric_value("bcquality_commit"),
+            "bcquality_version": consistent_metric_value("bcquality_version"),
         }
 
     @classmethod

@@ -101,6 +101,10 @@ class AgentMetrics(BaseModel):
     knowledge_suppressed: int | None = Field(default=None, ge=0)
     sub_skills_executed: int | None = Field(default=None, ge=0)
     sub_skills_skipped: int | None = Field(default=None, ge=0)
+    copilot_cli_version: str | None = None
+    bcquality_repository: RepoSlug | None = None
+    bcquality_commit: CommitSha | None = None
+    bcquality_version: str | None = None
 
 
 class ExperimentConfiguration(BaseModel):

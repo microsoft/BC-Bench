@@ -28,6 +28,10 @@ def _metrics(*, duration: float, scale: int) -> AgentMetrics:
         knowledge_suppressed=2 * scale,
         sub_skills_executed=3 * scale,
         sub_skills_skipped=scale,
+        copilot_cli_version="1.0.82",
+        bcquality_repository="microsoft/BCQuality",
+        bcquality_commit="a" * 40,
+        bcquality_version="1.6",
     )
 
 
@@ -63,6 +67,10 @@ def test_summary_aggregates_public_pr_review_metrics() -> None:
     assert summary.credit_coverage_rate == 1.0
     assert summary.usage_complete_rate == 1.0
     assert summary.valid_review_output_rate == 1.0
+    assert summary.copilot_cli_version == "1.0.82"
+    assert summary.bcquality_repository == "microsoft/BCQuality"
+    assert summary.bcquality_commit == "a" * 40
+    assert summary.bcquality_version == "1.6"
 
 
 def test_summary_preserves_unavailable_usage_as_none() -> None:
@@ -132,6 +140,10 @@ def test_leaderboard_propagates_public_pr_review_metrics() -> None:
     assert aggregate.credit_coverage_rate == 1.0
     assert aggregate.usage_complete_rate == 1.0
     assert aggregate.valid_review_output_rate == 1.0
+    assert aggregate.copilot_cli_version == "1.0.82"
+    assert aggregate.bcquality_repository == "microsoft/BCQuality"
+    assert aggregate.bcquality_commit == "a" * 40
+    assert aggregate.bcquality_version == "1.6"
 
 
 def test_github_summary_renders_only_public_performance_metrics() -> None:

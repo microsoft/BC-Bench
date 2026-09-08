@@ -1,9 +1,11 @@
 import json
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS_FILE_NAME, build_pr_review_metrics
+from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS_FILE_NAME, _count_available_knowledge, build_pr_review_metrics
 from bcbench.exceptions import AgentError
 
 
@@ -138,6 +140,24 @@ def test_missing_run_metrics_raises(tmp_path: Path) -> None:
         build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
+def test_missing_filter_report_preserves_other_diagnostics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / FILTER_REPORT_FILE_NAME).unlink()
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.prompt_tokens == 150
+    assert metrics.knowledge_pruned is None
+
+
+def test_invalid_filter_report_still_raises(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / FILTER_REPORT_FILE_NAME).write_text("not json", encoding="utf-8")
+
+    with pytest.raises(AgentError, match="Could not read BCQuality filter report"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
 def test_invalid_run_metrics_json_raises(tmp_path: Path) -> None:
     (tmp_path / RUN_METRICS_FILE_NAME).write_text("not json", encoding="utf-8")
 
@@ -242,6 +262,7 @@ def test_not_applicable_rejects_noncanonical_shape(tmp_path: Path, field: str, v
 
 
 def test_engine_diagnostics_count_knowledge_and_sub_skills(tmp_path: Path) -> None:
+    _count_available_knowledge.cache_clear()
     _write_run_metrics(tmp_path)
     (tmp_path / "microsoft" / "knowledge").mkdir(parents=True)
     (tmp_path / "community" / "knowledge").mkdir(parents=True)
@@ -256,7 +277,17 @@ def test_engine_diagnostics_count_knowledge_and_sub_skills(tmp_path: Path) -> No
     (tmp_path / "al-code-review-findings.json").write_text(
         json.dumps(
             {
-                "findings": [{"references": [{"path": "microsoft/knowledge/one.md"}, {"path": ""}]}],
+                "findings": [
+                    {
+                        "references": [
+                            {"path": "microsoft/knowledge/one.md"},
+                            {"path": "C:/checkout/bcquality/microsoft/knowledge/one.md"},
+                            {"path": "microsoft/skills/not-knowledge.md"},
+                            {"path": "microsoft/knowledge/../skills/not-knowledge.md"},
+                            {"path": ""},
+                        ]
+                    }
+                ],
                 "subResults": [
                     {
                         "references": [
@@ -280,3 +311,46 @@ def test_engine_diagnostics_count_knowledge_and_sub_skills(tmp_path: Path) -> No
     assert metrics.knowledge_suppressed == 1
     assert metrics.sub_skills_executed == 1
     assert metrics.sub_skills_skipped == 2
+
+
+def test_available_knowledge_count_is_cached_per_checkout(tmp_path: Path) -> None:
+    _count_available_knowledge.cache_clear()
+    knowledge_root = tmp_path / "microsoft" / "knowledge"
+    knowledge_root.mkdir(parents=True)
+    (knowledge_root / "one.md").write_text("one", encoding="utf-8")
+
+    assert _count_available_knowledge(tmp_path.resolve()) == 1
+    (knowledge_root / "two.md").write_text("two", encoding="utf-8")
+    assert _count_available_knowledge(tmp_path.resolve()) == 1
+
+
+def test_runtime_provenance_is_derived_from_metrics_and_checkout(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+    engine_root = tmp_path / "engine"
+    config = engine_root / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        "bcquality:\n  repo: https://github.com/microsoft/BCQuality.git\n  ref: " + "a" * 40 + '\n  version: "1.6"\n',
+        encoding="utf-8",
+    )
+
+    completed = subprocess.CompletedProcess(args=["git"], returncode=0, stdout="b" * 40 + "\n", stderr="")
+    with patch("bcbench.agent.pr_review.metrics.subprocess.run", return_value=completed):
+        metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=engine_root)
+
+    assert metrics.copilot_cli_version == "1.0.82"
+    assert metrics.bcquality_repository == "microsoft/BCQuality"
+    assert metrics.bcquality_commit == "b" * 40
+    assert metrics.bcquality_version == "1.6"
+
+
+def test_unavailable_runtime_provenance_does_not_fail_metrics(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "missing-engine")
+
+    assert metrics.copilot_cli_version == "1.0.82"
+    assert metrics.bcquality_repository is None
+    assert metrics.bcquality_commit is None
+    assert metrics.bcquality_version is None
+    assert "BCQuality provenance unavailable" in caplog.text
