@@ -72,13 +72,9 @@ Results record `ExperimentConfiguration.plugins` as `"<name>@<revision>"` / `"<n
 
 ### Comparing harness versions
 
-A harness-version experiment follows the same process as a configuration experiment — it just changes a pin instead of `config.yaml`. Create a branch, update the default `microsoft/BC-ALAgents` pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml), bump the BC-Bench version per the [versioning policy](CONTRIBUTING.md#versioning-policy), and open a draft PR using the [template](#experiment-pr-template) so the intent and the exact revision under evaluation are visible. Then dispatch **Evaluation with BC PR Review** from that branch (GitHub's *Use workflow from* selector); the branch is recorded on the results, and publishing still requires merging the `leaderboard/<category>/<run_id>` branch as usual.
+A harness-version experiment is a configuration experiment that changes a pin instead of `config.yaml`, so it follows the same process: a branch, the pin update, a BC-Bench version bump per the [versioning policy](CONTRIBUTING.md#versioning-policy), and a draft PR describing what is being evaluated. Harness pins live in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml). The version that actually ran is recorded on every result as `agent_version`, which keeps revisions in separate aggregates without changing `ExperimentConfiguration`.
 
-The workflow also accepts an `engine-sha` input — a full 40-character BC-ALAgents commit SHA — purely as a **convenience** for a quick look at a revision without branching or re-pinning. It is not a substitute for the process above: nothing records *why* the revision was run, so the results are scored but never published to Braintrust/Kusto or the leaderboard. Read the scores and `agent_version` from the job summary and run artifacts, and move to a branch and draft PR once you intend the numbers to count.
-
-Either way, the SHA that actually ran is recorded as `agent_version`, which separates aggregates without changing `ExperimentConfiguration`. Keep the benchmark, model, internal Copilot CLI version, and configured minimum severity fixed. Blank `engine-sha` uses the default pin; requeues retain the override.
-
-Locally, `bcbench evaluate pr-review --engine-path <checkout>` requires a clean engine checkout and uses the configured severity. Use `bcbench run pr-review` for dirty-checkout smoke tests or `--min-severity` overrides.
+BC PR Review additionally exposes the engine revision as a workflow input for one-off comparisons — see [Code Review](docs/code-review.md) for that harness's specifics.
 
 ### Encouraging plugin usage
 
