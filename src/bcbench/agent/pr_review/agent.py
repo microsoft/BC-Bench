@@ -12,6 +12,7 @@ to ``review.json`` in the repo root so the existing code-review scorer runs unch
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -51,6 +52,27 @@ def _resolve_pr_review_root(engine_path: Path | None) -> Path:
     if not engine.exists():
         raise AgentError(f"Engine orchestrator not found at {engine}. Check --engine-path points at a BC-ALAgents checkout.")
     return root
+
+
+def get_pr_review_version(engine_path: Path | None) -> str:
+    root = _resolve_pr_review_root(engine_path)
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            check=True,
+        )
+        git_root, commit = result.stdout.strip().splitlines()
+        if Path(git_root).resolve() != root or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+            raise AgentError(f"PR Review engine path must be the root of a Git checkout: {root}")
+        if has_changes(root):
+            raise AgentError("PR Review evaluations require a clean engine checkout. Commit changes first, or use 'bcbench run pr-review' for a smoke test.")
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise AgentError(f"Could not determine PR Review engine version at {root}: {exc}") from exc
+    return commit
 
 
 def _resolve_pwsh() -> str:

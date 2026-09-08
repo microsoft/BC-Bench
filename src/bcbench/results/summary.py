@@ -7,9 +7,9 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
@@ -19,6 +19,18 @@ if TYPE_CHECKING:
     from rich.console import RenderableType
 
 logger = get_logger(__name__)
+
+
+def restore_legacy_pr_review_agent_version(payload: object) -> object:
+    if not isinstance(payload, dict):
+        return payload
+    data = cast(dict[str, Any], payload)
+    if data.get("agent_version") or data.get("agent_name") != "BC PR Review":
+        return payload
+    legacy_version = data.get("bc_alagents_commit")
+    if not isinstance(legacy_version, str) or not legacy_version:
+        return payload
+    return {**data, "agent_version": legacy_version}
 
 
 def get_benchmark_version() -> str:
@@ -46,6 +58,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     model: str
     agent_name: str
     category: EvaluationCategory
+    agent_version: str | None = None
 
     average_duration: float
     average_prompt_tokens: float
@@ -61,11 +74,14 @@ class EvaluationResultSummary(BaseModel, ABC):
     benchmark_version: str
     benchmark_commit: str | None = None
     copilot_cli_version: str | None = None
-    bc_alagents_repository: str | None = None
-    bc_alagents_commit: str | None = None
     bcquality_repository: str | None = None
     bcquality_commit: str | None = None
     bcquality_version: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_legacy_agent_version(cls, payload: object) -> object:
+        return restore_legacy_pr_review_agent_version(payload)
 
     @abstractmethod
     def render_github_metrics_markdown(self) -> str:
@@ -99,6 +115,7 @@ class EvaluationResultSummary(BaseModel, ABC):
             "category": first_result.category,
             "model": first_result.model,
             "agent_name": first_result.agent_name,
+            "agent_version": first_result.agent_version,
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "average_prompt_tokens": sum(prompt_tokens) / len(prompt_tokens) if prompt_tokens else 0.0,
             "average_completion_tokens": sum(completion_tokens) / len(completion_tokens) if completion_tokens else 0.0,
@@ -110,8 +127,6 @@ class EvaluationResultSummary(BaseModel, ABC):
             "benchmark_version": get_benchmark_version(),
             "benchmark_commit": os.getenv("BCBENCH_COMMIT") or None,
             "copilot_cli_version": os.getenv("COPILOT_CLI_VERSION") or None,
-            "bc_alagents_repository": os.getenv("BC_ALAGENTS_REPOSITORY") or None,
-            "bc_alagents_commit": os.getenv("BC_ALAGENTS_COMMIT") or None,
             "bcquality_repository": os.getenv("BCQUALITY_REPOSITORY") or None,
             "bcquality_commit": os.getenv("BCQUALITY_COMMIT") or None,
             "bcquality_version": os.getenv("BCQUALITY_VERSION") or None,
@@ -153,7 +168,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         logger.info(f"Saved evaluation summary to {output_file}")
 
     def combination_key(self) -> tuple[str | None, ...]:
-        """Key for identifying runs of the same agent, model, experiment, and benchmark version.
+        """Key for runs with the same harness version, model, experiment, and benchmark version.
 
         Judge-scored categories extend the key with their judge model, so runs judged by different models stay separate.
         """
@@ -162,13 +177,12 @@ class EvaluationResultSummary(BaseModel, ABC):
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
         return (
             self.agent_name,
+            self.agent_version,
             self.model,
             experiment_key,
             self.benchmark_version,
             self.benchmark_commit,
             self.copilot_cli_version,
-            self.bc_alagents_repository,
-            self.bc_alagents_commit,
             self.bcquality_repository,
             self.bcquality_commit,
             self.bcquality_version,

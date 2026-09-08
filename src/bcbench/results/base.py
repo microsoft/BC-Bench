@@ -20,6 +20,7 @@ class BaseEvaluationResult(BaseModel):
     model: str
     agent_name: str
     category: EvaluationCategory
+    agent_version: str | None = None
 
     timeout: bool = False
 
@@ -42,6 +43,7 @@ class BaseEvaluationResult(BaseModel):
             "model": context.model.replace(".", "-"),
             "category": context.category,
             "agent_name": context.agent_name,
+            "agent_version": context.agent_version,
             "metrics": context.metrics,
             "experiment": context.experiment,
         }

@@ -39,9 +39,13 @@ bcbench evaluate claude <entry> --category code-review
 bcbench evaluate pr-review <entry>
 ```
 
-BC-ALAgents is the PR Review harness boundary. Its repo and commit are pinned with the other harnesses in `.github/actions/install-agent-harnesses`, and that engine commit owns the BCQuality version through its own configuration. Engine updates require a new BC-Bench version and must record the BC-ALAgents commit SHA in the release notes.
+BC-ALAgents is the PR Review harness boundary. Its repo and default commit are pinned with the other harnesses in `.github/actions/install-agent-harnesses`, and that engine commit owns the BCQuality version through its own configuration. Changing the *default* pin still requires a new BC-Bench version and must record the BC-ALAgents commit SHA in the release notes.
 
-For an experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, update the action pin to that immutable commit, then run BC-Bench from the corresponding BC-Bench commit. This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality. A local BC-ALAgents checkout can be supplied with `--engine-path` for smoke testing.
+For a durable experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, update the action pin to that immutable commit, then run BC-Bench from a branch with a draft PR describing the experiment (see [EXPERIMENT.md](https://github.com/microsoft/BC-Bench/blob/main/EXPERIMENT.md)). This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality, and records why the revision was evaluated.
+
+The `pr-review` workflow also accepts an `engine-sha` input — a full 40-character BC-ALAgents commit SHA — as a **convenience** for a quick look at a revision without branching or re-pinning. It does not replace the process above: nothing records the intent behind the run, so an override is scored but never published to Braintrust/Kusto or the leaderboard. Blank keeps the default pin, requeued repeats retain the override, and the SHA that ran is recorded as `agent_version` on every result — read it from the job summary and run artifacts.
+
+Either way, hold everything else fixed: the benchmark version, the model, the Copilot CLI version the engine uses internally, and the configured minimum severity. Locally, `bcbench evaluate pr-review --engine-path <checkout>` requires a clean engine checkout and uses the configured severity; use `bcbench run pr-review` for dirty-checkout smoke tests or `--min-severity` overrides.
 
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata are retained for the [Advanced Metrics view](code-review-details.html).
 
@@ -58,7 +62,7 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <th>Recall</th>
       <th>Valid Output</th>
       <th>Avg Time</th>
-      <th>Harness</th>
+      <th>Evaluation Stack</th>
     </tr>
   </thead>
   <tbody>
@@ -76,7 +80,8 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td>
         <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
-        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% assign engine_version = agg.agent_version | default: agg.bc_alagents_commit %}
+        {% if engine_version %}<br><a href="https://github.com/microsoft/BC-ALAgents/commit/{{ engine_version }}" target="_blank">BC-ALAgents {{ engine_version | slice: 0, 8 }}</a>{% endif %}
         {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
         {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
       </td>
@@ -102,7 +107,7 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <th>Avg Completion Tokens</th>
       <th>Avg Total Tokens</th>
       <th>Avg AI Credits</th>
-      <th>Harness</th>
+      <th>Evaluation Stack</th>
     </tr>
   </thead>
   <tbody>
@@ -119,7 +124,8 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
       <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
       <td>
         <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
-        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% assign engine_version = agg.agent_version | default: agg.bc_alagents_commit %}
+        {% if engine_version %}<br><a href="https://github.com/microsoft/BC-ALAgents/commit/{{ engine_version }}" target="_blank">BC-ALAgents {{ engine_version | slice: 0, 8 }}</a>{% endif %}
         {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
         {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
       </td>
@@ -189,7 +195,7 @@ For detailed aggregate and per-run quality, performance, configuration, and usag
       <th>Recall</th>
       <th>Valid Output</th>
       <th>Avg Time</th>
-      <th>Harness</th>
+      <th>Evaluation Stack</th>
     </tr>
   </thead>
   <tbody>
@@ -209,7 +215,10 @@ For detailed aggregate and per-run quality, performance, configuration, and usag
       <td>{{ agg.average_duration | round: 1 }}s</td>
       <td>
         <a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">BC-Bench {{ agg.benchmark_version }}</a>{% if agg.benchmark_commit %} (<a href="https://github.com/microsoft/BC-Bench/commit/{{ agg.benchmark_commit }}" target="_blank">{{ agg.benchmark_commit | slice: 0, 8 }}</a>){% endif %}
-        {% if agg.bc_alagents_commit %}<br><a href="https://github.com/{{ agg.bc_alagents_repository }}/commit/{{ agg.bc_alagents_commit }}" target="_blank">BC-ALAgents {{ agg.bc_alagents_commit | slice: 0, 8 }}</a>{% endif %}
+        {% if agg.agent_name == "BC PR Review" %}
+          {% assign engine_version = agg.agent_version | default: agg.bc_alagents_commit %}
+          {% if engine_version %}<br><a href="https://github.com/microsoft/BC-ALAgents/commit/{{ engine_version }}" target="_blank">BC-ALAgents {{ engine_version | slice: 0, 8 }}</a>{% endif %}
+        {% endif %}
         {% if agg.bcquality_commit %}<br><a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">BCQuality {{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% endif %}
         {% if agg.copilot_cli_version %}<br>Copilot CLI {{ agg.copilot_cli_version }}{% endif %}
       </td>

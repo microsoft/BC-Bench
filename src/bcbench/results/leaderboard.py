@@ -5,11 +5,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from bcbench.logger import get_logger
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
-from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
+from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary, restore_legacy_pr_review_agent_version
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -26,6 +26,7 @@ class LeaderboardAggregate(BaseModel, ABC):
     model: str
     agent_name: str
     category: EvaluationCategory
+    agent_version: str | None = None
     experiment: ExperimentConfiguration | None = None
 
     total: int
@@ -36,11 +37,14 @@ class LeaderboardAggregate(BaseModel, ABC):
     benchmark_version: str
     benchmark_commit: str | None = None
     copilot_cli_version: str | None = None
-    bc_alagents_repository: str | None = None
-    bc_alagents_commit: str | None = None
     bcquality_repository: str | None = None
     bcquality_commit: str | None = None
     bcquality_version: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_legacy_agent_version(cls, payload: object) -> object:
+        return restore_legacy_pr_review_agent_version(payload)
 
     @staticmethod
     def _validate_consistent_runs(runs: Sequence[EvaluationResultSummary]) -> None:
@@ -60,6 +64,7 @@ class LeaderboardAggregate(BaseModel, ABC):
         return {
             "model": first_run.model,
             "agent_name": first_run.agent_name,
+            "agent_version": first_run.agent_version,
             "category": first_run.category,
             "experiment": first_run.experiment,
             "total": first_run.total,
@@ -68,8 +73,6 @@ class LeaderboardAggregate(BaseModel, ABC):
             "benchmark_version": first_run.benchmark_version,
             "benchmark_commit": first_run.benchmark_commit,
             "copilot_cli_version": first_run.copilot_cli_version,
-            "bc_alagents_repository": first_run.bc_alagents_repository,
-            "bc_alagents_commit": first_run.bc_alagents_commit,
             "bcquality_repository": first_run.bcquality_repository,
             "bcquality_commit": first_run.bcquality_commit,
             "bcquality_version": first_run.bcquality_version,

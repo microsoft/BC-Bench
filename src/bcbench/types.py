@@ -606,6 +606,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
 
+    agent_version: str | None = None
+
     # Agent execution metrics
     metrics: AgentMetrics | None = None
 

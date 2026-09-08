@@ -44,16 +44,6 @@ on:
         required: false
         type: string
         default: ""
-      bc-alagents-repository:
-        description: "BC-ALAgents repository used by PR Review"
-        required: false
-        type: string
-        default: ""
-      bc-alagents-commit:
-        description: "Immutable BC-ALAgents commit used by PR Review"
-        required: false
-        type: string
-        default: ""
       bcquality-repository:
         description: "BCQuality repository used by PR Review"
         required: false
@@ -101,8 +91,6 @@ jobs:
         env:
           BCBENCH_COMMIT: ${{ inputs.benchmark-commit }}
           COPILOT_CLI_VERSION: ${{ inputs.copilot-cli-version }}
-          BC_ALAGENTS_REPOSITORY: ${{ inputs.bc-alagents-repository }}
-          BC_ALAGENTS_COMMIT: ${{ inputs.bc-alagents-commit }}
           BCQUALITY_REPOSITORY: ${{ inputs.bcquality-repository }}
           BCQUALITY_COMMIT: ${{ inputs.bcquality-commit }}
           BCQUALITY_VERSION: ${{ inputs.bcquality-version }}

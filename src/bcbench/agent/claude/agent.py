@@ -13,6 +13,7 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
+from bcbench.agent.shared.version import get_cli_version
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -22,6 +23,10 @@ from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, Evalua
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def get_claude_version() -> str:
+    return get_cli_version(shutil.which("claude"), "Claude Code")
 
 
 def run_claude_code(

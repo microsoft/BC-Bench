@@ -9,8 +9,9 @@ An experiment compares agent performance under different configurations against 
 - Toggling custom instructions / skills / a custom agent
 - Adding an MCP server (e.g. the AL MCP) and measuring impact
 - Comparing models under the same setup
+- Comparing harness versions while keeping the model and configuration fixed
 
-The dataset, category, evaluation pipeline, and result format stay constant. Only [`src/bcbench/agent/shared/config.yaml`](src/bcbench/agent/shared/config.yaml) (and the files it references) change between experiments.
+The dataset, category, evaluation pipeline, and result format stay constant. Configuration experiments change [`src/bcbench/agent/shared/config.yaml`](src/bcbench/agent/shared/config.yaml) and the files it references; harness-version comparisons change the installed CLI or engine revision instead.
 
 > If you want to evaluate a **different kind of output** (e.g. code review instead of bug fix), that's a new category, not an experiment — see [CATEGORIES.md](CATEGORIES.md).
 
@@ -69,6 +70,12 @@ Entries are parsed into [`PluginConfig`](src/bcbench/types.py), and each enabled
 
 Results record `ExperimentConfiguration.plugins` as `"<name>@<revision>"` / `"<name>@local"`. A `local` path is machine-specific and won't reproduce in CI, so switch to a `github` revision for a shareable run.
 
+### Comparing harness versions
+
+A harness-version experiment is a configuration experiment that changes a pin instead of `config.yaml`, so it follows the same process: a branch, the pin update, a BC-Bench version bump per the [versioning policy](CONTRIBUTING.md#versioning-policy), and a draft PR describing what is being evaluated. Harness pins live in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml). The version that actually ran is recorded on every result as `agent_version`, which keeps revisions in separate aggregates without changing `ExperimentConfiguration`.
+
+BC PR Review additionally exposes the engine revision as a workflow input for one-off comparisons — see [Code Review](docs/code-review.md) for that harness's specifics.
+
 ### Encouraging plugin usage
 
 Loading a plugin makes its capabilities **available** — it does not guarantee the agent **uses** them. What it takes depends on what the plugin contributes:
@@ -91,9 +98,9 @@ Articulate what you expect to see before triggering anything. A short hypothesis
 
 ## Running an Experiment
 
-### 1. Land your config changes
+### 1. Land your changes
 
-Edit [`config.yaml`](src/bcbench/agent/shared/config.yaml), add any instruction/agent/skill files, and open a draft PR using the [template](#experiment-pr-template) below. The PR will not be merged, only serve as an entry point so people can see what exactly is being evaluated.
+Edit [`config.yaml`](src/bcbench/agent/shared/config.yaml) and add any instruction/agent/skill files, or — for a harness-version experiment — update the pin in [`.github/actions/install-agent-harnesses/action.yml`](.github/actions/install-agent-harnesses/action.yml). Then open a draft PR using the [template](#experiment-pr-template) below. The PR will not be merged, only serve as an entry point so people can see what exactly is being evaluated.
 
 ### 2. Smoke-test locally on a single entry
 
@@ -107,9 +114,9 @@ This only generates a patch (no build/test) and finishes in a couple of minutes.
 
 ### 3. Test run (4 entries)
 
-Trigger the evaluation workflow from the **Actions** tab:
+Trigger the evaluation workflow from the **Actions** tab, selecting your experiment branch under *Use workflow from*:
 
-- **Workflow:** `Evaluation with GitHub Copilot` or `Evaluation with Claude Code`
+- **Workflow:** `Evaluation with GitHub Copilot`, `Evaluation with Claude Code`, or `Evaluation with BC PR Review`
 - **`test-run`:** `true` (default — runs 4 entries, ~10 min)
 - **`model`**, **`category`**, **`al-mcp`**, **`al-lsp`**: as needed
 
@@ -154,6 +161,7 @@ Each run uploads artifacts and updates a `leaderboard/<category>/<run_id>` branc
 - [ ] Custom agents (`agents.enabled: true`, name: ___)
 - [ ] MCP servers (list below)
 - [ ] Plugins (name + `local` path or `repo`@`revision`)
+- [ ] Harness version (BC-ALAgents pin: ___, or CLI version: ___)
 - [ ] Other (describe)
 
 ### Agent & Model
