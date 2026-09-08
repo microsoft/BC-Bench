@@ -1,0 +1,10 @@
+{
+  "engineCommit": "35b7bcdecf431b9b1a18ca83830a38c2fc353344",
+  "bcQualityCommit": "e74e2a6601ec87a1ffec6e3d7eb074aa67437ef2",
+  "datasetHash": "ACDC50C36CC88DD31A5AB628A7C3D06A44E5F7628DA9DA79A0916E6AF0F46222",
+  "entryIds": [
+    "synthetic__perf-watermark-folder-sync-01"
+  ],
+  "model": "gpt-5.6-luna",
+  "judgeModel": "gpt-5.3-codex"
+}
