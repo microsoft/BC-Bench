@@ -4,7 +4,7 @@ import pytest
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, PrReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():
@@ -35,6 +35,12 @@ def test_all_agent_names_have_expected_metrics():
         expected = agent_name.expected_metrics
         assert expected
         assert expected <= AgentMetrics.model_fields.keys()
+
+
+def test_pr_review_metrics_extend_generic_metrics():
+    assert issubclass(PrReviewMetrics, AgentMetrics)
+    assert PrReviewMetrics().kind == "pr-review"
+    assert "api_calls" not in AgentMetrics.model_fields
 
 
 def test_all_categories_have_pipelines():

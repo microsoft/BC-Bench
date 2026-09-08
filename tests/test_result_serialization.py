@@ -4,8 +4,8 @@ import pytest
 
 from bcbench.results.base import BaseEvaluationResult
 from bcbench.results.summary import EvaluationResultSummary
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import create_bugfix_result, create_testgen_result
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PrReviewMetrics
+from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 
 class TestCategorySerialization:
@@ -214,6 +214,7 @@ class TestCategorySerialization:
             "build": True,
             "output": "patch",
             "metrics": {
+                "kind": "generic",
                 "execution_time": 100.0,
                 "prompt_tokens": 5000,
                 "completion_tokens": 1000,
@@ -227,6 +228,26 @@ class TestCategorySerialization:
         assert result.metrics.tool_usage is not None
         assert result.metrics.tool_usage["bash"] == 5
         assert result.metrics.tool_usage["view"] == 3
+
+    def test_pr_review_metrics_round_trip(self, tmp_path):
+        original = create_codereview_result(
+            agent_name=AgentHarness.PR_REVIEW,
+            metrics=PrReviewMetrics(
+                execution_time=10.0,
+                api_calls=2,
+                usage_complete=True,
+                copilot_cli_version="1.0.82",
+            ),
+        )
+        original.save(tmp_path, "result.jsonl")
+
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert payload["metrics"]["kind"] == "pr-review"
+        assert isinstance(loaded.metrics, PrReviewMetrics)
+        assert loaded.metrics.api_calls == 2
+        assert loaded.metrics.copilot_cli_version == "1.0.82"
 
     def test_tool_usage_round_trip(self, tmp_path):
         tool_usage = {"bash": 10, "view": 5}

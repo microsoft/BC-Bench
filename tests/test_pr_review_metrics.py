@@ -8,7 +8,7 @@ from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_revi
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import AgentHarness, EvaluationCategory, PrReviewMetrics
 from tests.conftest import create_codereview_entry, create_codereview_result
 
 
@@ -45,11 +45,23 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
 
     metrics = build_pr_review_metrics(tmp_path, execution_time=12.5)
 
+    assert isinstance(metrics, PrReviewMetrics)
+    assert metrics.kind == "pr-review"
     assert metrics.execution_time == 12.5
     assert metrics.prompt_tokens == 150
     assert metrics.completion_tokens == 28
     assert metrics.total_tokens == 178
     assert metrics.ai_credits == 1.75
+    assert metrics.cached_tokens == 60
+    assert metrics.cache_creation_tokens == 10
+    assert metrics.reasoning_tokens == 7
+    assert metrics.api_calls == 2
+    assert metrics.failed_api_calls == 1
+    assert metrics.usage_api_calls == 2
+    assert metrics.premium_requests == 1.75
+    assert metrics.usage_complete is True
+    assert metrics.malformed_records == 0
+    assert metrics.copilot_cli_version == "1.0.81-0"
 
 
 def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: Path) -> None:

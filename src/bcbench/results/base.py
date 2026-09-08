@@ -7,7 +7,7 @@ from typing import Any, Self, cast
 from pydantic import BaseModel, model_validator
 
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,7 @@ class BaseEvaluationResult(BaseModel):
     output: str = ""
     error_message: str | None = None
 
-    metrics: AgentMetrics | None = None
+    metrics: AnyAgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
 
     @classmethod

@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 __all__ = [
     "AgentHarness",
     "AgentMetrics",
+    "AnyAgentMetrics",
     "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
@@ -31,6 +32,7 @@ __all__ = [
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
     "PluginConfig",
+    "PrReviewMetrics",
     "RepoSlug",
 ]
 
@@ -67,6 +69,8 @@ class AgentMetrics(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    kind: Literal["generic"] = "generic"
+
     # Total execution time in seconds
     execution_time: float | None = None
     llm_duration: float | None = None
@@ -84,6 +88,24 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+
+class PrReviewMetrics(AgentMetrics):
+    kind: Literal["pr-review"] = "pr-review"
+
+    cached_tokens: int | None = Field(default=None, ge=0)
+    cache_creation_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    api_calls: int | None = Field(default=None, ge=0)
+    failed_api_calls: int | None = Field(default=None, ge=0)
+    usage_api_calls: int | None = Field(default=None, ge=0)
+    premium_requests: float | None = Field(default=None, ge=0)
+    usage_complete: bool | None = None
+    malformed_records: int | None = Field(default=None, ge=0)
+    copilot_cli_version: str | None = None
+
+
+type AnyAgentMetrics = Annotated[AgentMetrics | PrReviewMetrics, Field(discriminator="kind")]
 
 
 class ExperimentConfiguration(BaseModel):
@@ -203,7 +225,7 @@ class AgentHarness(StrEnum):
             case AgentHarness.BCAL:
                 expected = AgentMetrics(execution_time=None)
             case AgentHarness.PR_REVIEW:
-                expected = AgentMetrics(
+                expected = PrReviewMetrics(
                     execution_time=None,
                     prompt_tokens=None,
                     completion_tokens=None,
