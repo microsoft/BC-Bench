@@ -21,7 +21,7 @@ runs:
       uses: actions/checkout@v5
       with:
         repository: microsoft/BC-ALAgents
-        ref: ecf8e31759d6ddd6d78e3a0b7836b40134368009
+        ref: 159572aad814d6e1022ca8d54e85a6eab7c4d5c6
         path: .agent-harnesses/bc-alagents
         persist-credentials: false
 
