@@ -36,7 +36,6 @@ class LeaderboardAggregate(BaseModel, ABC):
     average_duration: float
 
     benchmark_version: str
-    benchmark_commit: str | None = None
     copilot_cli_version: str | None = None
     bc_alagents_repository: str | None = None
     bc_alagents_commit: str | None = None
@@ -69,7 +68,6 @@ class LeaderboardAggregate(BaseModel, ABC):
             "num_runs": len(runs),
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "benchmark_version": first_run.benchmark_version,
-            "benchmark_commit": first_run.benchmark_commit,
             "copilot_cli_version": first_run.copilot_cli_version,
             "bc_alagents_repository": first_run.bc_alagents_repository,
             "bc_alagents_commit": first_run.bc_alagents_commit,
