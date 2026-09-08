@@ -6,7 +6,11 @@ from unittest.mock import patch
 import pytest
 
 from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS_FILE_NAME, _count_available_knowledge, build_pr_review_metrics
+from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
+from bcbench.results.bceval_export import write_bceval_results
+from bcbench.types import AgentHarness, EvaluationCategory
+from tests.conftest import create_codereview_entry, create_codereview_result
 
 
 def _run_metrics(**overrides: object) -> dict[str, object]:
@@ -82,6 +86,45 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
 
     assert metrics.ai_credits is None
     assert metrics.total_tokens == 178
+
+
+@pytest.mark.parametrize("has_token_usage", [False, True], ids=["no-chat-spans", "chat-without-billing"])
+def test_valid_engine_metrics_without_billing_preserve_unknown_credits_through_export(tmp_path: Path, has_token_usage: bool) -> None:
+    # Get-CopilotRunMetrics at engine 159572aad814d6e1022ca8d54e85a6eab7c4d5c6 emits these nullable shapes.
+    _write_run_metrics(
+        tmp_path,
+        cli_version=None,
+        wall_time_seconds=2.5,
+        prompt_tokens=150 if has_token_usage else None,
+        cached_tokens=None,
+        cache_creation_tokens=None,
+        completion_tokens=28 if has_token_usage else None,
+        reasoning_tokens=None,
+        total_tokens=178 if has_token_usage else None,
+        api_calls=1 if has_token_usage else None,
+        failed_api_calls=0 if has_token_usage else None,
+        usage_api_calls=1 if has_token_usage else None,
+        ai_credits=None,
+        premium_requests=None,
+        models=[],
+        usage_complete=has_token_usage,
+        malformed_records=0,
+    )
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=2.5)
+    assert metrics.ai_credits is None
+    assert metrics.total_tokens == (178 if has_token_usage else None)
+    result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
+    result.save(tmp_path, "raw-result.jsonl")
+    assert json.loads((tmp_path / "raw-result.jsonl").read_text(encoding="utf-8"))["metrics"]["ai_credits"] is None
+
+    with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
+        write_bceval_results([result], tmp_path, "run", "export.jsonl", EvaluationCategory.CODE_REVIEW)
+
+    metadata = json.loads((tmp_path / "export.jsonl").read_text(encoding="utf-8"))["metadata"]
+    assert metadata["ai_credits"] is None
+    assert metadata["prompt_tokens"] == (150 if has_token_usage else 0)
+    assert metadata["completion_tokens"] == (28 if has_token_usage else 0)
 
 
 def test_malformed_records_suppress_all_usage_metrics(tmp_path: Path) -> None:
