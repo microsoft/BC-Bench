@@ -129,8 +129,8 @@ def test_summary_downloads_only_evaluation_results() -> None:
 
     assert download["with"]["pattern"] == "evaluation-results-${{ github.run_id }}-*"
     assert download["with"]["merge-multiple"] is True
-    for name in ("pr-review", "copilot", "claude", "bcal"):
-        assert "name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}" in _workflow(f"{name}-evaluation.yml")
+    for name in ("CI.yml", "pr-review-evaluation.yml", "copilot-evaluation.yml", "claude-evaluation.yml", "bcal-evaluation.yml"):
+        assert "name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}" in _workflow(name)
 
 
 def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:

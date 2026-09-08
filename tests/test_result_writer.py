@@ -20,9 +20,11 @@ class TestWriteBcevalResults:
             AgentMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178, ai_credits=1.75),
             AgentMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178),
             AgentMetrics(ai_credits=1.75),
+            AgentMetrics(prompt_tokens=150),
+            AgentMetrics(completion_tokens=28),
         ],
     )
-    def test_pr_review_usage_preserves_missing_zero_and_observed_values(self, tmp_path, metrics):
+    def test_pr_review_credits_preserve_missing_zero_and_observed_values(self, tmp_path, metrics):
         result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
         with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
             write_bceval_results(
@@ -34,8 +36,10 @@ class TestWriteBcevalResults:
             )
 
         metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
-        for name in ("prompt_tokens", "completion_tokens", "total_tokens", "ai_credits"):
-            assert metadata[name] == (getattr(metrics, name) if metrics is not None else None)
+        assert metadata["ai_credits"] == (metrics.ai_credits if metrics is not None else None)
+        # bc-eval 0.3.14 adds these fields before invoking our custom metric callback.
+        assert isinstance(metadata["prompt_tokens"], int)
+        assert isinstance(metadata["completion_tokens"], int)
 
     def test_writes_bceval_results_with_all_fields(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
         output_dir = tmp_path / "output"
@@ -97,8 +101,8 @@ class TestWriteBcevalResults:
             line = f.readline()
             data = json.loads(line)
 
-        assert data["metadata"]["prompt_tokens"] is None
-        assert data["metadata"]["completion_tokens"] is None
+        assert data["metadata"]["prompt_tokens"] == 0
+        assert data["metadata"]["completion_tokens"] == 0
         assert data["metadata"]["latency"] == 0
 
     def test_handles_mixed_results(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, sample_testgen_result, problem_statement_dir):
@@ -129,8 +133,8 @@ class TestWriteBcevalResults:
         assert data1["metadata"]["latency"] == 120.5
 
         data2 = json.loads(lines[1])
-        assert data2["metadata"]["prompt_tokens"] is None
-        assert data2["metadata"]["completion_tokens"] is None
+        assert data2["metadata"]["prompt_tokens"] == 0
+        assert data2["metadata"]["completion_tokens"] == 0
         assert data2["metadata"]["latency"] == 0
 
     def test_includes_expected_fields_in_bceval_format(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
@@ -211,7 +215,7 @@ class TestWriteBcevalResults:
         with output_file.open() as f:
             data = json.loads(f.readline())
 
-        assert data["metadata"]["prompt_tokens"] is None
+        assert data["metadata"]["prompt_tokens"] == 0
         assert data["metadata"]["completion_tokens"] == 1500
         assert data["metadata"]["latency"] == 100.0
 
