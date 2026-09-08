@@ -72,6 +72,16 @@ def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> No
     assert DEFAULT_ENGINE_SHA not in _workflow("pr-review-evaluation.yml")
 
 
+def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
+    """An override runs a revision other than the reviewed default pin, so it must stay off the dashboards."""
+    workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
+    summarize = workflow["jobs"]["summarize-results"]["with"]
+
+    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}"
+    # Repeats stay available so an override can be measured over several runs.
+    assert "inputs.engine-sha" not in workflow["jobs"]["requeue"]["if"]
+
+
 @pytest.mark.parametrize("engine_sha", ["", "a" * 40, "A" * 40, "'\"$(echo injected)"])
 def test_pr_review_requeue_preserves_engine_sha(engine_sha: str) -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
@@ -104,7 +114,7 @@ def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
 
     # Publishing to Braintrust/Kusto and the leaderboard is gated on `mock`.
-    assert "mock: ${{ inputs.test-run || inputs.modified-only }}" in workflow
+    assert "inputs.test-run || inputs.modified-only ||" in workflow
     assert "retention-days: ${{ (inputs.test-run || inputs.modified-only) && 1 || 30 }}" in workflow
     # One run verifies the new entries; repeats are for the full corpus after merge.
     assert "!inputs.test-run && !inputs.modified-only" in workflow

@@ -74,6 +74,8 @@ Results record `ExperimentConfiguration.plugins` as `"<name>@<revision>"` / `"<n
 
 To compare BC PR Review revisions, pass a full BC-ALAgents commit SHA as `engine-sha` to **Evaluation with BC PR Review**. Blank uses the default pin; requeues retain the override. The actual SHA is recorded as `agent_version` and separates aggregates without changing `ExperimentConfiguration`. Keep the benchmark, model, internal Copilot CLI version, and configured minimum severity fixed.
 
+An override runs a revision other than the reviewed default pin, so it is scored but never published to Braintrust/Kusto or the leaderboard. Read the resulting scores and `agent_version` from the job summary and run artifacts. Promote a revision by bumping the default pin in `.github/actions/install-agent-harnesses/action.yml` and cutting a BC-Bench release; runs from then on publish and stay separate from the old pin's aggregate.
+
 Locally, `bcbench evaluate pr-review --engine-path <checkout>` requires a clean engine checkout and uses the configured severity. Use `bcbench run pr-review` for dirty-checkout smoke tests or `--min-severity` overrides.
 
 ### Encouraging plugin usage
