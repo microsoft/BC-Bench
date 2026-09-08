@@ -51,8 +51,6 @@ BC PR Review records wall-clock duration, prompt/completion/total tokens, and ex
 
 Unavailable AI credits remain `null` in bceval exports; observed zero remains zero. The pinned bc-eval 0.3.14 consumer requires numeric prompt/completion tokens, so its existing zero fallbacks for missing tokens remain unchanged. Use the original per-entry result metrics, not bceval token fields, to distinguish unknown usage from measured zero.
 
-Actions preserves `_run-metrics.json` in a separate `pr-review-metrics-<run-id>-<entry-id>` artifact, including on failed evaluations when the file exists. It has the same retention as the entry results and is excluded from result aggregation. Only this structured aggregate is uploaded, not raw OTel traces or transcripts.
-
 ## Baseline Leaderboard
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}

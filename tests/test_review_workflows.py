@@ -109,30 +109,6 @@ def test_pr_review_workflow_propagates_modified_only() -> None:
     assert "modified-only: ${{ inputs.modified-only }}" in workflow
 
 
-def test_pr_review_workflow_preserves_run_metrics_separately_from_results() -> None:
-    workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
-    uploads = [step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if step.get("uses") == "actions/upload-artifact@v6"]
-    metrics_upload = next(step for step in uploads if step["with"]["name"].startswith("pr-review-metrics-"))
-    results_upload = next(step for step in uploads if step["with"]["name"].startswith("evaluation-results-"))
-
-    assert metrics_upload["if"] == "always()"
-    assert metrics_upload["with"]["name"] == "pr-review-metrics-${{ github.run_id }}-${{ matrix.entry }}"
-    assert metrics_upload["with"]["path"] == "${{ env.EVALUATION_RESULTS_DIR }}/${{ github.run_id }}/_run-metrics.json"
-    assert metrics_upload["with"]["retention-days"] == results_upload["with"]["retention-days"]
-    assert metrics_upload["with"]["if-no-files-found"] == "warn"
-    assert results_upload["with"]["path"] == "${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl"
-
-
-def test_summary_downloads_only_evaluation_results() -> None:
-    workflow = yaml.safe_load(_workflow("summarize-results.yml"))
-    download = next(step for step in workflow["jobs"]["summarize-results"]["steps"] if step.get("uses") == "actions/download-artifact@v7")
-
-    assert download["with"]["pattern"] == "evaluation-results-${{ github.run_id }}-*"
-    assert download["with"]["merge-multiple"] is True
-    for name in ("CI.yml", "pr-review-evaluation.yml", "copilot-evaluation.yml", "claude-evaluation.yml", "bcal-evaluation.yml"):
-        assert "name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}" in _workflow(name)
-
-
 def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
     """A modified-only run scores a subset, so it must not be recorded as a benchmark result."""
     workflow = _workflow("pr-review-evaluation.yml")
