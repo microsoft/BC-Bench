@@ -39,9 +39,11 @@ bcbench evaluate claude <entry> --category code-review
 bcbench evaluate pr-review <entry>
 ```
 
-BC-ALAgents is the PR Review harness boundary. Its repo and commit are pinned with the other harnesses in `.github/actions/install-agent-harnesses`, and that engine commit owns the BCQuality version through its own configuration. Engine updates require a new BC-Bench version and must record the BC-ALAgents commit SHA in the release notes.
+BC-ALAgents is the PR Review harness boundary. Its repo and default commit are pinned with the other harnesses in `.github/actions/install-agent-harnesses`, and that engine commit owns the BCQuality version through its own configuration. Changing the *default* pin still requires a new BC-Bench version and must record the BC-ALAgents commit SHA in the release notes.
 
-For an experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, update the action pin to that immutable commit, then run BC-Bench from the corresponding BC-Bench commit. This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality. A local BC-ALAgents checkout can be supplied with `--engine-path` for smoke testing.
+For a one-off comparison, the `pr-review` workflow offers an `engine-sha` input as a convenience: supply a full 40-character BC-ALAgents commit SHA to run that revision without re-pinning the action or cutting a BC-Bench release. Blank keeps the default pin, and requeued repeats retain the override. The SHA that actually ran is recorded as `agent_version` on every result, so revisions never aggregate together. The dashboards show only the default-pin runs by benchmark version, so read `agent_version` from the run artifacts or job summary when comparing overrides.
+
+For a durable experiment, push the pipeline and/or BCQuality changes through a BC-ALAgents branch, update the action pin to that immutable commit, then run BC-Bench from the corresponding BC-Bench commit. This keeps the reproducible dependency chain BC-Bench -> BC-ALAgents -> BCQuality. A local BC-ALAgents checkout can be supplied with `--engine-path` for smoke testing.
 
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata remain in that raw artifact rather than being promoted into BC-Bench result and leaderboard schemas.
 

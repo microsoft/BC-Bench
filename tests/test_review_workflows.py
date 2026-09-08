@@ -10,7 +10,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "1dbb15f793826be85959724ab82427db9452ac34"
+DEFAULT_ENGINE_SHA = "ecf8e31759d6ddd6d78e3a0b7836b40134368009"
 PWSH = shutil.which("pwsh")
 
 
@@ -127,6 +127,7 @@ def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     checkout = next(step for step in config["runs"]["steps"] if step.get("uses") == "actions/checkout@v5")
 
     assert "repository: microsoft/BC-ALAgents" in action
+    assert "bc-alagents-path:" in action
     assert config["inputs"]["engine-sha"]["required"] is False
     assert config["inputs"]["engine-sha"]["default"] == ""
     assert validation["env"]["ENGINE_SHA"] == "${{ inputs.engine-sha || '" + DEFAULT_ENGINE_SHA + "' }}"
@@ -146,8 +147,8 @@ def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
         ("a" * 40, True),
         ("ABCDEF0123" * 4, True),
         ("main", False),
-        ("v1.38.6", False),
-        ("1dbb15f", False),
+        ("v1.39.6", False),
+        ("ecf8e31", False),
         ("a" * 39, False),
         ("a" * 41, False),
         ("g" * 40, False),
