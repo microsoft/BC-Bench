@@ -159,10 +159,8 @@ jobs:
       results-dir: ${{ needs.evaluate-with-pr-review.outputs.results-dir }}
       model: ${{ inputs.model }}
       agent: "BC PR Review"
-      # modified-only scores a partial corpus, and an engine-sha override runs a revision
-      # that is not the reviewed default pin. Publishing either to Braintrust/Kusto or the
-      # leaderboard would record it as a comparable benchmark result. Scores and the
-      # resolved agent_version still reach the job summary and artifacts.
+      # Scores only the modified entries, so publishing it to Braintrust/Kusto or the
+      # leaderboard would record a partial corpus as a benchmark result.
       mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}

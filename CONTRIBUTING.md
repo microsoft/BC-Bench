@@ -88,7 +88,7 @@ The upstream workflows are wired for Microsoft's internal environment. To run th
 
 BC-Bench uses [semantic versioning](https://semver.org/) to track changes that may affect evaluation results. The version is stored in `pyproject.toml` and automatically embedded in all evaluation results.
 
-`benchmark_version` identifies the release and its default harness pins. Results separately record the actual harness as `agent_version` (Copilot/Claude CLI version or BC-ALAgents SHA), without changing `ExperimentConfiguration`. Experimental harness overrides do not require a benchmark version bump; changing a released default still follows the policy below.
+`benchmark_version` identifies the release and its default harness pins. Results separately record the actual harness as `agent_version` (Copilot/Claude CLI version or BC-ALAgents SHA), without changing `ExperimentConfiguration`. A one-off `engine-sha` override does not require a benchmark version bump because its results are never published; changing a released default pin still follows the policy below and belongs on a branch with an [experiment PR](EXPERIMENT.md#experiment-pr-template).
 
 ### When to Bump Versions
 
