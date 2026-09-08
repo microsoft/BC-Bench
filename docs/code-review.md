@@ -49,6 +49,8 @@ Either way, hold everything else fixed: the benchmark version, the model, the Co
 
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata remain in that raw artifact rather than being promoted into BC-Bench result and leaderboard schemas.
 
+Unavailable token counts and AI credits remain `null`, including in bceval exports; observed zero remains zero. Actions preserves `_run-metrics.json` in a separate `pr-review-metrics-<run-id>-<entry-id>` artifact, including on failed evaluations when the file exists. It has the same retention as the entry results and is excluded from result aggregation. Only this structured aggregate is uploaded, not raw OTel traces or transcripts.
+
 ## Baseline Leaderboard
 
 {% if site.data.code-review.aggregate and site.data.code-review.aggregate.size > 0 %}
