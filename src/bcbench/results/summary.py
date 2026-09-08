@@ -175,18 +175,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         experiment_key: str | None = None
         if self.experiment and not self.experiment.is_empty():
             experiment_key = json.dumps(self.experiment.model_dump(mode="json"), sort_keys=True)
-        return (
-            self.agent_name,
-            self.agent_version,
-            self.model,
-            experiment_key,
-            self.benchmark_version,
-            self.benchmark_commit,
-            self.copilot_cli_version,
-            self.bcquality_repository,
-            self.bcquality_commit,
-            self.bcquality_version,
-        )
+        return (self.agent_name, self.agent_version, self.model, experiment_key, self.benchmark_version)
 
 
 class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):

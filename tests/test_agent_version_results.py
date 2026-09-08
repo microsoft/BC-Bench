@@ -49,6 +49,7 @@ def test_timeout_result_keeps_version_resolved_before_execution(tmp_path: Path) 
 def test_summary_uses_artifact_version_not_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     result = create_bugfix_result().model_copy(update={"agent_version": "1.2.3"})
     monkeypatch.setenv("COPILOT_CLI_VERSION", "9.9.9")
+    monkeypatch.setenv("BC_ALAGENTS_COMMIT", "f" * 40)
 
     assert EvaluationResultSummary.from_results([result], "run").agent_version == "1.2.3"
 

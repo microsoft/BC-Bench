@@ -9,6 +9,7 @@ import yaml
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
+DOCS = Path(__file__).parents[1] / "docs"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
 DEFAULT_ENGINE_SHA = "fdc02d7020632795810057500d62cff2a61513d7"
 PWSH = shutil.which("pwsh")
@@ -174,6 +175,19 @@ def test_pr_review_workflow_records_evaluation_stack_identity() -> None:
         assert field in summary_workflow
     assert "bc-alagents-commit" not in workflow
     assert "bc-alagents-commit" not in summary_workflow
+
+
+def test_transitive_provenance_is_only_displayed_on_advanced_dashboard() -> None:
+    dashboard = (DOCS / "code-review.md").read_text(encoding="utf-8")
+    advanced = (DOCS / "code-review-details.md").read_text(encoding="utf-8")
+
+    assert "Evaluation Stack" not in dashboard
+    assert "bcquality_commit" not in dashboard
+    assert "copilot_cli_version" not in dashboard
+    assert "<th>Version</th>" in dashboard
+    assert "agent_version" in advanced
+    assert "bcquality_commit" in advanced
+    assert "copilot_cli_version" in advanced
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is required to test the composite action script")
