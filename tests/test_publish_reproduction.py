@@ -90,6 +90,21 @@ def test_timed_out_request_sends_cancellation(tmp_path):
     assert evidence.records[-1]["timed_out"] is True
 
 
+def test_request_detects_failure_inside_an_al_tool_result(tmp_path):
+    probe = load_probe()
+    transport = SimpleNamespace(stdin=io.StringIO())
+    messages = Queue()
+    messages.put(json.dumps({"jsonrpc": "2.0", "id": 4, "result": {"content": [{"type": "text", "text": json.dumps({"succeeded": False, "message": "Publish failed"})}]}}))
+    evidence = probe.Evidence(tmp_path, ())
+    assert probe.request(transport, messages, evidence, 4, "tools/call", {"name": "al_publish"}) is None
+    assert evidence.records[-1]["returncode"] == 1
+
+
+def test_replay_budget_matches_baseapp_operations():
+    probe = load_probe()
+    assert probe.get_config().timeout.build_baseapp == probe.MCP_TIMEOUT
+
+
 def test_evidence_redacts_streams_and_records_failure(tmp_path):
     probe = load_probe()
     evidence = probe.Evidence(tmp_path, ("secret",))
@@ -138,7 +153,16 @@ for line in sys.stdin:
     evidence = probe.Evidence(tmp_path / "logs", ())
     entry = SimpleNamespace(project_paths=["app"])
     container = probe.ContainerConfig("test", "admin", "secret", "CRONUS")
+    deadlines = []
+    read_response = probe.read_response
+
+    def record_deadline(messages, request_id, timeout):
+        deadlines.append(timeout)
+        return read_response(messages, request_id, timeout)
+
+    monkeypatch.setattr(probe, "read_response", record_deadline)
     assert probe.run_al_mcp(entry, tmp_path, container, evidence)
+    assert deadlines == [180, 180, 1800, 1800]
     assert evidence.records[-1]["phase"] == "mcp-shutdown"
     assert evidence.records[-1]["returncode"] == 0
     publish = json.loads((evidence.root / "mcp-4-al_publish.request.json").read_text())

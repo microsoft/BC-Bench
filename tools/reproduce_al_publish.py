@@ -20,7 +20,8 @@ from bcbench.operations.bc_operations import _escape_ps_string, build_ps_app_bui
 from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationCategory
 
 INSTANCE_ID = "microsoftInternal__NAV-223493"
-MCP_TIMEOUT = 180
+MCP_STARTUP_TIMEOUT = 180
+MCP_TIMEOUT = get_config().timeout.build_baseapp
 
 
 def redact(text: str, secrets: tuple[str, ...]) -> str:
@@ -139,6 +140,22 @@ def send(process: subprocess.Popen[str], message: dict[str, Any]) -> None:
     process.stdin.flush()
 
 
+def response_failed(response: dict[str, Any]) -> bool:
+    result = response.get("result", {})
+    if "error" in response or result.get("isError", False):
+        return True
+    for content in result.get("content", []):
+        if content.get("type") != "text":
+            continue
+        try:
+            payload = json.loads(content["text"])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("succeeded") is False:
+            return True
+    return False
+
+
 def request(
     process: subprocess.Popen[str],
     messages: Queue[str | None],
@@ -157,9 +174,9 @@ def request(
         response = read_response(messages, request_id, timeout)
     except Empty:
         evidence.record(phase, 124, time.monotonic() - started, timed_out=True)
-        send(process, {"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": request_id, "reason": "Original Claude MCP deadline elapsed"}})
+        send(process, {"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": request_id, "reason": "Configured MCP deadline elapsed"}})
         return None
-    failed = "error" in response or response.get("result", {}).get("isError", False)
+    failed = response_failed(response)
     evidence.record(phase, int(failed), time.monotonic() - started, json.dumps(response, indent=2))
     return None if failed else response
 
@@ -205,12 +222,20 @@ def run_al_mcp(entry: BugFixEntry, repo_path: Path, container: ContainerConfig, 
             reader.start()
         try:
             if (
-                request(process, messages, evidence, 1, "initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "bcbench-publish-reproduction", "version": "1.0"}})
+                request(
+                    process,
+                    messages,
+                    evidence,
+                    1,
+                    "initialize",
+                    {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "bcbench-publish-reproduction", "version": "1.0"}},
+                    timeout=MCP_STARTUP_TIMEOUT,
+                )
                 is None
             ):
                 return False
             send(process, {"jsonrpc": "2.0", "method": "notifications/initialized"})
-            if request(process, messages, evidence, 2, "tools/list", {}) is None:
+            if request(process, messages, evidence, 2, "tools/list", {}, timeout=MCP_STARTUP_TIMEOUT) is None:
                 return False
             if request(process, messages, evidence, 3, "tools/call", {"name": "al_build", "arguments": {"projectPath": project, "onlyErrors": True}}) is None:
                 return False
