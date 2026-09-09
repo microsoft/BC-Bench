@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bcbench.agent.claude.agent import run_claude_code
+from bcbench.playbooks import PlaybookSetup
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry
 
@@ -28,6 +29,7 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
         ),
         patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
         patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.setup_agent_playbooks", return_value=PlaybookSetup()),
         patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
         patch(
             "bcbench.agent.claude.agent.subprocess.run",

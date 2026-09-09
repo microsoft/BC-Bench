@@ -30,12 +30,14 @@ __all__ = [
     "ExpectedOutput",
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
+    "PlaybookMode",
     "PluginConfig",
     "RepoSlug",
 ]
 
 
 type ChecklistLevel = Literal["critical", "expected", "aspirational"]
+type PlaybookMode = Literal["discover", "selected"]
 
 
 class ChecklistAssertion(TypedDict):
@@ -110,6 +112,12 @@ class ExperimentConfiguration(BaseModel):
     # Custom agent name used in experiment (if any)
     custom_agent: str | None = None
 
+    # Area-specific bug-fix playbook configuration
+    playbooks_enabled: bool = False
+    playbook_mode: PlaybookMode | None = None
+    playbook_revision: str | None = None
+    playbook_id: str | None = None
+
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
@@ -119,7 +127,21 @@ class ExperimentConfiguration(BaseModel):
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.playbooks_enabled is False
+            and self.playbook_mode is None
+            and self.playbook_revision is None
+            and self.playbook_id is None
+            and self.plugins is None
+        )
+
+    def for_aggregate(self) -> ExperimentConfiguration:
+        return self.model_copy(update={"playbook_id": None})
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub

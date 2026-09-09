@@ -1,11 +1,15 @@
 from pathlib import Path
 from shutil import copytree, rmtree
+from typing import cast
+
+import yaml
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.dataset_entry import RepoGroundedEntry
 from bcbench.logger import get_logger
-from bcbench.types import AgentHarness
+from bcbench.playbooks import PlaybookSetup, load_playbook_manifest, playbook_revision, resolve_playbook_for_area
+from bcbench.types import AgentHarness, PlaybookMode
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -64,6 +68,44 @@ def setup_custom_agent(agent_config: dict, entry: BaseDatasetEntry, repo_path: P
         return custom_agent_config.get("name")
 
     return None
+
+
+def setup_agent_playbooks(
+    agent_config: dict,
+    entry: BaseDatasetEntry,
+    repo_path: Path,
+    harness: AgentHarness,
+    custom_agent: str | None,
+) -> PlaybookSetup:
+    playbook_config: dict = agent_config.get("playbooks", {})
+    if not playbook_config.get("enabled", False):
+        return PlaybookSetup()
+
+    if custom_agent is None:
+        raise ValueError("playbooks require a custom agent")
+
+    mode = playbook_config.get("mode")
+    if mode not in ("discover", "selected"):
+        raise ValueError(f"Invalid playbook mode: {mode!r}")
+
+    playbook_dir = harness.get_target_dir(repo_path) / "agents" / custom_agent / "playbooks"
+    manifest = load_playbook_manifest(playbook_dir)
+    marker = playbook_dir / "selected.yaml"
+    marker.unlink(missing_ok=True)
+
+    selected = resolve_playbook_for_area(manifest, entry.metadata.area) if mode == "selected" else None
+    if selected is not None:
+        marker.write_text(
+            yaml.safe_dump({"id": selected.id, "file": selected.file}, sort_keys=False),
+            encoding="utf-8",
+        )
+
+    return PlaybookSetup(
+        enabled=True,
+        mode=cast(PlaybookMode, mode),
+        revision=playbook_revision(playbook_dir, manifest),
+        playbook_id=selected.id if selected else None,
+    )
 
 
 def _get_source_instructions_path(profile: str) -> Path:

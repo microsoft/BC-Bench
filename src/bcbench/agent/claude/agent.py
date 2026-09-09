@@ -18,7 +18,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
+from bcbench.operations import setup_agent_playbooks, setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
@@ -70,6 +70,7 @@ def run_claude_code(
     instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
+    playbooks = setup_agent_playbooks(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, custom_agent=custom_agent)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(
@@ -78,6 +79,10 @@ def run_claude_code(
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
+        playbooks_enabled=playbooks.enabled,
+        playbook_mode=playbooks.mode,
+        playbook_revision=playbooks.revision,
+        playbook_id=playbooks.playbook_id,
         plugins=[plugin.record for plugin, _ in plugins] or None,
     )
 

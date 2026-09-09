@@ -84,7 +84,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
 
         first_result = results[0]
-        experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
+        experiment = first_result.experiment.for_aggregate() if first_result.experiment and not first_result.experiment.is_empty() else None
 
         return {
             "total": len(results),

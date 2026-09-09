@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from bcbench.agent.copilot.agent import run_copilot_agent
 from bcbench.agent.copilot.cli import invoke_copilot
+from bcbench.playbooks import PlaybookSetup
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry
 
@@ -82,6 +83,7 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
         patch("bcbench.agent.copilot.agent.setup_instructions_from_config", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=False),
         patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.copilot.agent.setup_agent_playbooks", return_value=PlaybookSetup()),
         patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
         patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, None)) as mock_parse_output,
         patch(

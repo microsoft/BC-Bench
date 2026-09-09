@@ -18,7 +18,7 @@ from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
-from bcbench.operations import setup_agent_skills, setup_custom_agent, setup_instructions_from_config
+from bcbench.operations import setup_agent_playbooks, setup_agent_skills, setup_custom_agent, setup_instructions_from_config
 from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, EvaluationCategory, ExperimentConfiguration, PluginConfig
 
 logger = get_logger(__name__)
@@ -62,6 +62,7 @@ def run_copilot_agent(
     instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
+    playbooks = setup_agent_playbooks(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT, custom_agent=custom_agent)
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
@@ -70,6 +71,10 @@ def run_copilot_agent(
         custom_instructions=instructions_enabled,
         skills_enabled=skills_enabled,
         custom_agent=custom_agent,
+        playbooks_enabled=playbooks.enabled,
+        playbook_mode=playbooks.mode,
+        playbook_revision=playbooks.revision,
+        playbook_id=playbooks.playbook_id,
         plugins=[plugin.record for plugin, _ in plugins] or None,
     )
 
