@@ -1,10 +1,11 @@
 from pathlib import Path
 
 import pytest
+from pydantic import TypeAdapter
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetrics, AgentMetricsContract, EvaluationCategory, PRReviewMetrics
+from bcbench.types import AgentHarness, AgentMetrics, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():
@@ -40,6 +41,17 @@ def test_all_agent_names_have_metrics_contracts():
 def test_agent_metrics_contract_rejects_unknown_required_fields():
     with pytest.raises(ValueError, match="does not define required fields"):
         AgentMetricsContract(AgentMetrics, frozenset({"unknown"}))
+
+
+def test_every_harness_metrics_type_round_trips_through_the_union():
+    # Results are persisted and read back through AnyAgentMetrics, so a metrics type missing from that
+    # union, or a subclass that forgot to override `kind`, would serialize fine and then fail to load or
+    # silently downcast and drop its extra fields.
+    adapter = TypeAdapter(AnyAgentMetrics)
+    for agent_name in AgentHarness:
+        metrics_type = agent_name.metrics_contract.metrics_type
+        restored = adapter.validate_python(metrics_type().model_dump(mode="json"))
+        assert type(restored) is metrics_type, f"{metrics_type.__name__} needs a unique `kind` and a place in AnyAgentMetrics"
 
 
 def test_pr_review_metrics_extend_generic_metrics():
