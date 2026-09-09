@@ -1,5 +1,7 @@
 import logging
 
+import pytest
+
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import AgentHarness, AgentMetrics, PRReviewMetrics
 from tests.conftest import create_evaluation_context
@@ -51,6 +53,13 @@ class TestExpectedMetricsWarning:
             BugFixResult.create_success(context, "patch")
 
         assert _missing_metric_warnings(caplog) == []
+
+    def test_rejects_metrics_type_not_registered_for_harness(self, tmp_path):
+        context = create_evaluation_context(tmp_path, agent_name=AgentHarness.PR_REVIEW)
+        context.metrics = AgentMetrics(execution_time=12.0)
+
+        with pytest.raises(TypeError, match="BC PR Review must use PRReviewMetrics"):
+            BugFixResult.create_success(context, "patch")
 
     def test_warns_when_no_metrics_at_all(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)

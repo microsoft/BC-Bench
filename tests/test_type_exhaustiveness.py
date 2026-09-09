@@ -4,7 +4,7 @@ import pytest
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, PRReviewMetrics
+from bcbench.types import AgentHarness, AgentMetrics, AgentMetricsContract, EvaluationCategory, PRReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():
@@ -30,17 +30,23 @@ def test_other_harnesses_reject_repository_setup(harness: AgentHarness):
         assert harness.instruction_filename
 
 
-def test_all_agent_names_have_expected_metrics():
+def test_all_agent_names_have_metrics_contracts():
     for agent_name in AgentHarness:
-        expected = agent_name.expected_metrics
-        assert expected
-        assert expected <= AgentMetrics.model_fields.keys()
+        contract = agent_name.metrics_contract
+        assert contract.required_fields
+        assert contract.required_fields <= contract.metrics_type.model_fields.keys()
+
+
+def test_agent_metrics_contract_rejects_unknown_required_fields():
+    with pytest.raises(ValueError, match="does not define required fields"):
+        AgentMetricsContract(AgentMetrics, frozenset({"unknown"}))
 
 
 def test_pr_review_metrics_extend_generic_metrics():
     assert issubclass(PRReviewMetrics, AgentMetrics)
     assert PRReviewMetrics().kind == "pr-review"
     assert "api_calls" not in AgentMetrics.model_fields
+    assert AgentHarness.PR_REVIEW.metrics_contract.metrics_type is PRReviewMetrics
 
 
 def test_all_categories_have_pipelines():

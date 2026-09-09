@@ -32,9 +32,12 @@ class BaseEvaluationResult(BaseModel):
 
     @classmethod
     def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+        metrics_contract = context.agent_name.metrics_contract
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        elif missing_metrics := sorted(name for name in context.agent_name.expected_metrics if getattr(context.metrics, name) is None):
+        elif type(context.metrics) is not metrics_contract.metrics_type:
+            raise TypeError(f"{context.agent_name} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
+        elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
