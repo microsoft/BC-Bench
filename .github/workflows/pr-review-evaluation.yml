@@ -9,17 +9,34 @@ on:
       model:
         description: "Copilot model used internally by BC PR Review"
         required: false
-        default: "gpt-5.6-luna"
+        default: "claude-sonnet-5"
         type: choice
         options:
           - "claude-sonnet-5"
           - "claude-opus-5"
+          - "gpt-5.4"
           - "gpt-5.6-sol"
           - "gpt-5.6-terra"
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
           - "gemini-3.7-flash"
+      leaf-model:
+        description: "Model used by parallel domain leaf agents"
+        required: false
+        default: "gpt-5.4"
+        type: choice
+        options:
+          - "gpt-5.4"
+          - "claude-sonnet-5"
+          - "gpt-5.6-luna"
+          - "mai-code-1.1-flash"
+          - "gemini-3.7-flash"
+      parallel-leaves:
+        description: "Dispatch isolated domain leaf agents concurrently"
+        required: false
+        default: true
+        type: boolean
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -118,6 +135,8 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}
+          COPILOT_REVIEW_PARALLEL_LEAVES: ${{ inputs.parallel-leaves }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -162,4 +181,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "parallel-leaves": "${{ inputs.parallel-leaves }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

@@ -49,19 +49,23 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "mai-code-1-flash-picker" not in workflow
     assert '"gemini-3.7-flash"' in workflow
     assert "gemini-3.6-flash" not in workflow
-    for input_name in ("model:", "test-run:", "repeat:", "git-ref:"):
+    assert 'default: "claude-sonnet-5"' in workflow
+    assert 'default: "gpt-5.4"' in workflow
+    assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
+    assert "COPILOT_REVIEW_PARALLEL_LEAVES: ${{ inputs.parallel-leaves }}" in workflow
+    for input_name in ("model:", "leaf-model:", "parallel-leaves:", "test-run:", "repeat:", "git-ref:"):
         assert input_name in workflow
 
 
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.82" in action
+    assert "@github/copilot@1.0.83" in action
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
     assert "repository: microsoft/BC-ALAgents" in action
-    assert "ref: e9d9249eaa25be88388b60106b4cbf8cd7aa8a7d" in action
+    assert "ref: 982663354cc340fb6fd1840fd6c5e65b47e40f9d" in action
     assert "bc-alagents-path:" in action
