@@ -6,7 +6,7 @@ import pytest
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
 
 
@@ -15,13 +15,13 @@ class TestWriteBcevalResults:
         "metrics",
         [
             None,
-            AgentMetrics(execution_time=232.257560403),
-            AgentMetrics(prompt_tokens=0, completion_tokens=0, total_tokens=0, ai_credits=0.0),
-            AgentMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178, ai_credits=1.75),
-            AgentMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178),
-            AgentMetrics(ai_credits=1.75),
-            AgentMetrics(prompt_tokens=150),
-            AgentMetrics(completion_tokens=28),
+            PRReviewMetrics(execution_time=232.257560403),
+            PRReviewMetrics(prompt_tokens=0, completion_tokens=0, total_tokens=0, ai_credits=0.0),
+            PRReviewMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178, ai_credits=1.75),
+            PRReviewMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178),
+            PRReviewMetrics(ai_credits=1.75),
+            PRReviewMetrics(prompt_tokens=150),
+            PRReviewMetrics(completion_tokens=28),
         ],
     )
     def test_pr_review_credits_preserve_missing_zero_and_observed_values(self, tmp_path, metrics):
