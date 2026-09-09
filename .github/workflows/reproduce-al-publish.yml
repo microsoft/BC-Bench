@@ -1,0 +1,73 @@
+name: Reproduce AL publishing collision
+
+on:
+  push:
+    branches:
+      - private/ventselartur/publish-repro-34091156251
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    name: Publishing replay for NAV-223493
+    runs-on: [GitHub-BCBench]
+    timeout-minutes: 120
+    environment:
+      name: ado-read
+      deployment: false
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v5
+
+      - name: Setup disposable BC container and repository
+        id: setup-env
+        timeout-minutes: 40
+        uses: ./.github/actions/setup-bc-container-repo
+        with:
+          instance-id: microsoftInternal__NAV-223493
+          category: bug-fix
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python with UV
+        uses: ./.github/actions/setup-python-uv
+
+      - name: Install the original AL development tool
+        shell: pwsh
+        run: |
+          dotnet tool install -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta --framework "net${{ steps.setup-env.outputs.al_tool_dotnet_version }}"
+          "$HOME\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Download the saved generated fix
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 34091156251 --repo microsoft/BC-Bench `
+            --name evaluation-results-34091156251-microsoftInternal__NAV-223493 `
+            --dir saved-publish-result
+
+      - name: Replay publishing without a coding agent
+        shell: pwsh
+        env:
+          BCBENCH_PUBLISH_REPRO: microsoftInternal__NAV-223493
+        run: |
+          uv run python tools\reproduce_al_publish.py `
+            --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
+            --result-file saved-publish-result\34091156251\microsoftInternal__NAV-223493.jsonl `
+            --output-dir publish-diagnostics
+
+      - name: Upload publishing evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: publish-reproduction-${{ github.run_id }}
+          path: publish-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
