@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "26365d6a41a96fac41df9dcc8339cb71241fcb1f",
+  "datasetHash": "DA04922C9B6506D8E6C092A272730988DBC9996DF1E7E9720B923A4D89A2051E",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/10010#discussion_r3774272003"
+  ],
+  "entryIds": [
+    "synthetic__testing-permission-mock-webservice-01"
+  ],
+  "newEntryIds": [
+    "synthetic__testing-permission-mock-webservice-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__testing-permission-mock-webservice-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/10010#discussion_r3774272003",
+          "purpose": "false_positive_guard",
+          "file": "src/Layers/W1/Tests/Report/ReportInboxAPIE2E.Codeunit.al",
+          "lineStart": 5,
+          "lineEnd": 9,
+          "rationale": "Negative (thumbs-down) feedback on the flagged test codeunit, with the maintainer explaining the TestPermissions = Disabled / no-permission-lowering pattern is correct here because the API pages run under the web-service session's identity, not the test codeunit's session -- so lowering permissions on the test session cannot exercise the ReadPermission/WritePermission gates anyway. The synthetic entry reproduces that same web-service E2E shape (Library - Graph Mgt driving the call, TestPermissions = Disabled, no Permissions Mock) and asserts expect_findings=false with no expected or ignored comment in the codeunit-declaration/TestPermissions range, guarding the general 'permission tests must lower the execution context' rule against over-firing on this out-of-process E2E pattern. Limitation: this only covers the web-service E2E boundary; it does not establish that in-process permission tests calling business logic directly are exempt, nor does it validate the API triggers' gates themselves are correct."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "E68AF709C5073BAA70571DCA5BD7E80A249A1CC7CBB551A792A6A9ED23C63608",
+      "instanceId": "synthetic__testing-permission-mock-webservice-01"
+    }
+  ]
+}
