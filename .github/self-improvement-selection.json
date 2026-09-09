@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "26365d6a41a96fac41df9dcc8339cb71241fcb1f",
+  "datasetHash": "AB3371B46C6015755BEC8562BDEDEF179EB6385D8D51C5C9CDAD8BA6D19A4AF7",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/10466#discussion_r3829376820"
+  ],
+  "entryIds": [
+    "synthetic__breaking-fallback-description-match-01"
+  ],
+  "newEntryIds": [
+    "synthetic__breaking-fallback-description-match-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__breaking-fallback-description-match-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/10466#discussion_r3829376820",
+          "purpose": "calibration_context",
+          "file": "src/Synthetic/EDocPurchaseLineResolver.Codeunit.al",
+          "lineStart": 10,
+          "lineEnd": 13,
+          "rationale": "Negative (THUMBS_DOWN) reaction with a developer reply ('That's new behavior this PR is doing') that confirms rather than refutes the described behavior change, so this is a recommendation disagreement (opt-in gating) over a genuine finding, not a clean negative. Keeps an expected finding on the fallback resolution call site so the boundary isn't miscoded as a false-positive guard. Limitation: does not validate the reviewer's specific 'add an opt-in setting' remediation, only the underlying silent-default-change premise; severity/remediation choice remains a human-reviewed judgment call."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "72B94F544E4ABE6FA4D238F75DE960BFF00F566F4A2916A449709FDEE2C32FA4",
+      "instanceId": "synthetic__breaking-fallback-description-match-01"
+    }
+  ]
+}
