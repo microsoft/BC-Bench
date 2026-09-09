@@ -19,7 +19,21 @@ on:
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
-          - "gemini-3.6-flash"
+          - "gemini-3.7-flash"
+      leaf-model:
+        description: "Model used by per-article leaf agents; none inherits the root model"
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - "none"
+          - "gpt-5.6-luna"
+          - "gemini-3.7-flash"
+      entries:
+        description: "Optional JSON array of entry IDs for a focused experiment"
+        required: false
+        default: ""
+        type: string
       test-run:
         description: "Indicate this is a test run (with few entries)"
         required: false
@@ -83,7 +97,7 @@ jobs:
       fail-fast: false
       max-parallel: 64
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry: ${{ fromJson(inputs.entries != '' && inputs.entries || needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -118,6 +132,7 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model != 'none' && inputs.leaf-model || '' }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -145,7 +160,7 @@ jobs:
       results-dir: ${{ needs.evaluate-with-pr-review.outputs.results-dir }}
       model: ${{ inputs.model }}
       agent: "BC PR Review"
-      mock: ${{ inputs.test-run }}
+      mock: ${{ inputs.test-run || inputs.entries != '' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
@@ -162,4 +177,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "entries": ${{ toJSON(inputs.entries) }}, "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
