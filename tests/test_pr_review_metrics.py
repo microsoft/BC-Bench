@@ -58,7 +58,6 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.api_calls == 2
     assert metrics.failed_api_calls == 1
     assert metrics.usage_api_calls == 2
-    assert metrics.premium_requests == 1.75
     assert metrics.usage_complete is True
     assert metrics.malformed_records == 0
     assert metrics.copilot_cli_version == "1.0.81-0"

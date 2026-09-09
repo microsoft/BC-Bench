@@ -94,7 +94,6 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float) -> PRReview
         api_calls=run.api_calls,
         failed_api_calls=run.failed_api_calls,
         usage_api_calls=run.usage_api_calls,
-        premium_requests=run.premium_requests,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
         copilot_cli_version=run.cli_version,
