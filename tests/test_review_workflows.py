@@ -47,6 +47,8 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert 'agent: "BC PR Review"' in workflow
     assert '"mai-code-1.1-flash"' in workflow
     assert "mai-code-1-flash-picker" not in workflow
+    assert '"gemini-3.7-flash"' in workflow
+    assert "gemini-3.6-flash" not in workflow
     for input_name in ("model:", "leaf-model:", "entries:", "test-run:", "repeat:", "git-ref:"):
         assert input_name in workflow
     assert "COPILOT_REVIEW_LEAF_MODEL:" in workflow
