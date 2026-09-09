@@ -320,7 +320,6 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     average_api_calls: float | None = None
     average_failed_api_calls: float | None = None
     average_usage_api_calls: float | None = None
-    average_premium_requests: float | None = None
     average_malformed_records: float | None = None
     average_knowledge_files: float | None = None
     average_knowledge_pruned: float | None = None
@@ -506,7 +505,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             return sum(available) / len(available) if available else None
 
         def metric_values(name: str) -> list[int | float | None]:
-            return [getattr(result.metrics, name) if result.metrics else None for result in code_review_results]
+            return [getattr(result.metrics, name, None) if result.metrics else None for result in code_review_results]
 
         return summary.model_copy(
             update={
@@ -539,7 +538,6 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "average_api_calls": average_metric(metric_values("api_calls")),
                 "average_failed_api_calls": average_metric(metric_values("failed_api_calls")),
                 "average_usage_api_calls": average_metric(metric_values("usage_api_calls")),
-                "average_premium_requests": average_metric(metric_values("premium_requests")),
                 "average_malformed_records": average_metric(metric_values("malformed_records")),
                 "average_knowledge_files": average_metric(metric_values("knowledge_files")),
                 "average_knowledge_pruned": average_metric(metric_values("knowledge_pruned")),

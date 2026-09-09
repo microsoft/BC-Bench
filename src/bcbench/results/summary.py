@@ -110,7 +110,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         def consistent_metric_value(name: str) -> str | None:
             values: set[str] = set()
             for result in results:
-                value = getattr(result.metrics, name) if result.metrics else None
+                value = getattr(result.metrics, name, None) if result.metrics else None
                 if value is not None:
                     if not isinstance(value, str):
                         raise TypeError(f"Expected {name} to be a string, got {type(value).__name__}")

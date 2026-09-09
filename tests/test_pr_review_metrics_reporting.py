@@ -2,12 +2,12 @@ import json
 
 from bcbench.results.codereview import CodeReviewResultSummary
 from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
-from bcbench.types import AgentMetrics
+from bcbench.types import AgentHarness, AgentMetrics, PRReviewMetrics
 from tests.conftest import create_codereview_result
 
 
-def _metrics(*, duration: float, scale: int) -> AgentMetrics:
-    return AgentMetrics(
+def _metrics(*, duration: float, scale: int) -> PRReviewMetrics:
+    return PRReviewMetrics(
         execution_time=duration,
         prompt_tokens=900 * scale,
         completion_tokens=100 * scale,
@@ -19,7 +19,6 @@ def _metrics(*, duration: float, scale: int) -> AgentMetrics:
         api_calls=10 * scale,
         failed_api_calls=scale - 1,
         usage_api_calls=9 * scale,
-        premium_requests=0.5 * scale,
         usage_complete=True,
         malformed_records=0,
         knowledge_files=40 * scale,
@@ -38,8 +37,8 @@ def _metrics(*, duration: float, scale: int) -> AgentMetrics:
 def test_summary_aggregates_public_pr_review_metrics() -> None:
     summary = CodeReviewResultSummary.from_results(
         [
-            create_codereview_result(instance_id="proj__review-1", metrics=_metrics(duration=4.0, scale=1)),
-            create_codereview_result(instance_id="proj__review-2", metrics=_metrics(duration=6.0, scale=2)),
+            create_codereview_result(instance_id="proj__review-1", agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1)),
+            create_codereview_result(instance_id="proj__review-2", agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=6.0, scale=2)),
         ],
         run_id="run",
     )
@@ -55,7 +54,6 @@ def test_summary_aggregates_public_pr_review_metrics() -> None:
     assert summary.average_api_calls == 15
     assert summary.average_failed_api_calls == 0.5
     assert summary.average_usage_api_calls == 13.5
-    assert summary.average_premium_requests == 0.75
     assert summary.average_malformed_records == 0
     assert summary.average_knowledge_files == 60
     assert summary.average_knowledge_pruned == 30
@@ -114,11 +112,11 @@ def test_aggregate_preserves_missing_legacy_coverage_as_none() -> None:
 
 def test_leaderboard_propagates_public_pr_review_metrics() -> None:
     first = CodeReviewResultSummary.from_results(
-        [create_codereview_result(instance_id="proj__review-1", metrics=_metrics(duration=4.0, scale=1))],
+        [create_codereview_result(instance_id="proj__review-1", agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1))],
         run_id="one",
     )
     second = CodeReviewResultSummary.from_results(
-        [create_codereview_result(instance_id="proj__review-1", metrics=_metrics(duration=6.0, scale=2))],
+        [create_codereview_result(instance_id="proj__review-1", agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=6.0, scale=2))],
         run_id="two",
     )
 
@@ -148,7 +146,7 @@ def test_leaderboard_propagates_public_pr_review_metrics() -> None:
 
 def test_github_summary_renders_only_public_performance_metrics() -> None:
     summary = CodeReviewResultSummary.from_results(
-        [create_codereview_result(instance_id="proj__review-1", metrics=_metrics(duration=4.0, scale=1))],
+        [create_codereview_result(instance_id="proj__review-1", agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1))],
         run_id="run",
     )
 
@@ -164,7 +162,7 @@ def test_github_summary_renders_only_public_performance_metrics() -> None:
 
 
 def test_result_json_persists_pr_review_diagnostics(tmp_path) -> None:
-    result = create_codereview_result(metrics=_metrics(duration=4.0, scale=1))
+    result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1))
     result.save(tmp_path, "results.jsonl")
 
     saved_metrics = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metrics"]
@@ -179,7 +177,6 @@ def test_result_json_persists_pr_review_diagnostics(tmp_path) -> None:
     assert saved_metrics["api_calls"] == 10
     assert saved_metrics["failed_api_calls"] == 0
     assert saved_metrics["usage_api_calls"] == 9
-    assert saved_metrics["premium_requests"] == 0.5
     assert saved_metrics["usage_complete"] is True
     assert saved_metrics["malformed_records"] == 0
     assert saved_metrics["knowledge_files"] == 40
@@ -192,7 +189,7 @@ def test_result_json_persists_pr_review_diagnostics(tmp_path) -> None:
 
 def test_summary_and_leaderboard_schemas_include_pr_review_diagnostics() -> None:
     summary = CodeReviewResultSummary.from_results(
-        [create_codereview_result(metrics=_metrics(duration=4.0, scale=1))],
+        [create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=_metrics(duration=4.0, scale=1))],
         run_id="run",
     )
     aggregate = CodeReviewLeaderboardAggregate.from_runs([summary])
@@ -205,7 +202,6 @@ def test_summary_and_leaderboard_schemas_include_pr_review_diagnostics() -> None
             "average_api_calls",
             "average_failed_api_calls",
             "average_usage_api_calls",
-            "average_premium_requests",
             "usage_complete_rate",
             "average_malformed_records",
             "average_knowledge_files",

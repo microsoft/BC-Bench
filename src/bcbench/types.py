@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 __all__ = [
     "AgentHarness",
     "AgentMetrics",
+    "AgentMetricsContract",
+    "AnyAgentMetrics",
     "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
@@ -30,6 +32,7 @@ __all__ = [
     "ExpectedOutput",
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
+    "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
 ]
@@ -67,6 +70,8 @@ class AgentMetrics(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    kind: Literal["generic"] = "generic"
+
     # Total execution time in seconds
     execution_time: float | None = None
     llm_duration: float | None = None
@@ -85,14 +90,16 @@ class AgentMetrics(BaseModel):
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
 
-    # PR Review diagnostics retained for advanced analysis.
+
+class PRReviewMetrics(AgentMetrics):
+    kind: Literal["pr-review"] = "pr-review"
+
     cached_tokens: int | None = Field(default=None, ge=0)
     cache_creation_tokens: int | None = Field(default=None, ge=0)
     reasoning_tokens: int | None = Field(default=None, ge=0)
     api_calls: int | None = Field(default=None, ge=0)
     failed_api_calls: int | None = Field(default=None, ge=0)
     usage_api_calls: int | None = Field(default=None, ge=0)
-    premium_requests: float | None = Field(default=None, ge=0)
     usage_complete: bool | None = None
     malformed_records: int | None = Field(default=None, ge=0)
     knowledge_files: int | None = Field(default=None, ge=0)
@@ -105,6 +112,19 @@ class AgentMetrics(BaseModel):
     bcquality_repository: RepoSlug | None = None
     bcquality_commit: CommitSha | None = None
     bcquality_version: str | None = None
+
+
+type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]
+
+
+@dataclass(frozen=True)
+class AgentMetricsContract:
+    metrics_type: type[AgentMetrics]
+    required_fields: frozenset[str]
+
+    def __post_init__(self) -> None:
+        if unknown_fields := self.required_fields - self.metrics_type.model_fields.keys():
+            raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
 
 
 class ExperimentConfiguration(BaseModel):
@@ -197,15 +217,16 @@ class AgentHarness(StrEnum):
     PR_REVIEW = "BC PR Review"
 
     @property
-    def expected_metrics(self) -> frozenset[str]:
-        """Metrics this agent should always report.
+    def metrics_contract(self) -> AgentMetricsContract:
+        """Metrics schema and fields this harness must populate.
 
-        Only these are warned about when missing, so agents that never collect a metric don't emit a warning for every single instance of a run.
+        The model defines which fields may be reported. The required subset
+        controls which missing values produce warnings.
         """
 
         match self:
             case AgentHarness.COPILOT:
-                expected = AgentMetrics(
+                metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
                     ai_credits=None,
@@ -213,7 +234,7 @@ class AgentHarness(StrEnum):
                     tool_usage=None,
                 )
             case AgentHarness.CLAUDE | AgentHarness.MOCK:
-                expected = AgentMetrics(
+                metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
                     turn_count=None,
@@ -222,9 +243,9 @@ class AgentHarness(StrEnum):
                     tool_usage=None,
                 )
             case AgentHarness.BCAL:
-                expected = AgentMetrics(execution_time=None)
+                metrics = AgentMetrics(execution_time=None)
             case AgentHarness.PR_REVIEW:
-                expected = AgentMetrics(
+                metrics = PRReviewMetrics(
                     execution_time=None,
                     prompt_tokens=None,
                     completion_tokens=None,
@@ -234,7 +255,7 @@ class AgentHarness(StrEnum):
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
 
-        return frozenset(expected.model_fields_set)
+        return AgentMetricsContract(type(metrics), frozenset(metrics.model_fields_set))
 
     @property
     def instruction_filename(self) -> str:

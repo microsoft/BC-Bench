@@ -9,7 +9,7 @@ from bcbench.agent.pr_review.metrics import FILTER_REPORT_FILE_NAME, RUN_METRICS
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentHarness, EvaluationCategory
+from bcbench.types import AgentHarness, EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry, create_codereview_result
 
 
@@ -47,6 +47,8 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
 
     metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=12.5)
 
+    assert isinstance(metrics, PRReviewMetrics)
+    assert metrics.kind == "pr-review"
     assert metrics.execution_time == 12.5
     assert metrics.prompt_tokens == 150
     assert metrics.completion_tokens == 28
@@ -58,7 +60,6 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.api_calls == 2
     assert metrics.failed_api_calls == 1
     assert metrics.usage_api_calls == 2
-    assert metrics.premium_requests == 1.75
     assert metrics.usage_complete is True
     assert metrics.malformed_records == 0
     assert metrics.knowledge_files == 0
@@ -67,6 +68,7 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.knowledge_suppressed == 0
     assert metrics.sub_skills_executed is None
     assert metrics.sub_skills_skipped == 0
+    assert metrics.copilot_cli_version == "1.0.81-0"
 
 
 def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: Path) -> None:

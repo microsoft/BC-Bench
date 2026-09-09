@@ -80,7 +80,6 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Avg API Calls</th>
       <th>Avg Failed API Calls</th>
       <th>Avg Calls With Usage</th>
-      <th>Avg Premium Requests</th>
       <th>Avg Malformed Records</th>
       <th>Avg Articles Retained</th>
       <th>Avg Articles Pruned</th>
@@ -131,7 +130,6 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if agg.average_api_calls != null %}{{ agg.average_api_calls | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_failed_api_calls != null %}{{ agg.average_failed_api_calls | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_usage_api_calls != null %}{{ agg.average_usage_api_calls | round: 1 }}{% else %}—{% endif %}</td>
-      <td>{% if agg.average_premium_requests != null %}{{ agg.average_premium_requests | round: 3 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_malformed_records != null %}{{ agg.average_malformed_records | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_files != null %}{{ agg.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if agg.average_knowledge_pruned != null %}{{ agg.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>
@@ -200,7 +198,6 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <th>Avg API Calls</th>
       <th>Avg Failed API Calls</th>
       <th>Avg Calls With Usage</th>
-      <th>Avg Premium Requests</th>
       <th>Avg Malformed Records</th>
       <th>Avg Articles Retained</th>
       <th>Avg Articles Pruned</th>
@@ -258,7 +255,6 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{% if run.average_api_calls != null %}{{ run.average_api_calls | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_failed_api_calls != null %}{{ run.average_failed_api_calls | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_usage_api_calls != null %}{{ run.average_usage_api_calls | round: 1 }}{% else %}—{% endif %}</td>
-      <td>{% if run.average_premium_requests != null %}{{ run.average_premium_requests | round: 3 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_malformed_records != null %}{{ run.average_malformed_records | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_knowledge_files != null %}{{ run.average_knowledge_files | round: 1 }}{% else %}—{% endif %}</td>
       <td>{% if run.average_knowledge_pruned != null %}{{ run.average_knowledge_pruned | round: 1 }}{% else %}—{% endif %}</td>

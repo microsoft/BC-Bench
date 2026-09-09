@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics
+from bcbench.types import PRReviewMetrics
 
 logger = get_logger(__name__)
 
@@ -212,7 +212,7 @@ def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[s
     return repository, commit, version
 
 
-def build_pr_review_metrics(output_dir: Path, bcquality_root: Path, execution_time: float, engine_root: Path | None = None) -> AgentMetrics:
+def build_pr_review_metrics(output_dir: Path, bcquality_root: Path, execution_time: float, engine_root: Path | None = None) -> PRReviewMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
@@ -221,7 +221,7 @@ def build_pr_review_metrics(output_dir: Path, bcquality_root: Path, execution_ti
     bcquality_identity = _load_bcquality_identity(engine_root, bcquality_root) if engine_root is not None else None
     usage_values_available = run.malformed_records == 0
     token_values_available = usage_values_available and run.usage_complete
-    return AgentMetrics(
+    return PRReviewMetrics(
         execution_time=execution_time,
         prompt_tokens=run.prompt_tokens if token_values_available else None,
         completion_tokens=run.completion_tokens if token_values_available else None,
@@ -233,7 +233,6 @@ def build_pr_review_metrics(output_dir: Path, bcquality_root: Path, execution_ti
         api_calls=run.api_calls,
         failed_api_calls=run.failed_api_calls,
         usage_api_calls=run.usage_api_calls,
-        premium_requests=run.premium_requests,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
         knowledge_files=_count_available_knowledge(bcquality_root.resolve()),

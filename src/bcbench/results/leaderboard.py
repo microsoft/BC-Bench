@@ -173,7 +173,6 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     average_api_calls: float | None = None
     average_failed_api_calls: float | None = None
     average_usage_api_calls: float | None = None
-    average_premium_requests: float | None = None
     average_malformed_records: float | None = None
     average_knowledge_files: float | None = None
     average_knowledge_pruned: float | None = None
@@ -237,7 +236,6 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
                 "average_api_calls": mean_metric([run.average_api_calls for run in cr_runs]),
                 "average_failed_api_calls": mean_metric([run.average_failed_api_calls for run in cr_runs]),
                 "average_usage_api_calls": mean_metric([run.average_usage_api_calls for run in cr_runs]),
-                "average_premium_requests": mean_metric([run.average_premium_requests for run in cr_runs]),
                 "average_malformed_records": mean_metric([run.average_malformed_records for run in cr_runs]),
                 "average_knowledge_files": mean_metric([run.average_knowledge_files for run in cr_runs]),
                 "average_knowledge_pruned": mean_metric([run.average_knowledge_pruned for run in cr_runs]),
