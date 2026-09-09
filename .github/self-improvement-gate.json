@@ -1,0 +1,10 @@
+{
+  "engineCommit": "8558750e58fac1624187201ae462383f4d697661",
+  "bcQualityCommit": "ff91a136a29cc8c49a78c6e3739bcd976dec4f91",
+  "datasetHash": "D3F92967ABDE17CF834EFFE7ED69523E42DDDCA8A135B9D8A24A7A0313034A05",
+  "entryIds": [
+    "synthetic__privacy-activity-log-lifecycle-01"
+  ],
+  "model": "gpt-5.6-luna",
+  "judgeModel": "gpt-5.3-codex"
+}
