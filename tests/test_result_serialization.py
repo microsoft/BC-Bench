@@ -249,6 +249,16 @@ class TestCategorySerialization:
         assert loaded.metrics.api_calls == 2
         assert loaded.metrics.copilot_cli_version == "1.0.82"
 
+    def test_rejects_pr_review_result_with_generic_metrics(self):
+        payload = create_codereview_result(
+            agent_name=AgentHarness.PR_REVIEW,
+            metrics=PRReviewMetrics(execution_time=10.0),
+        ).model_dump(mode="json")
+        payload["metrics"] = AgentMetrics(execution_time=10.0).model_dump(mode="json")
+
+        with pytest.raises(ValueError, match="BC PR Review must use PRReviewMetrics, got AgentMetrics"):
+            BaseEvaluationResult.from_json(payload)
+
     def test_tool_usage_round_trip(self, tmp_path):
         tool_usage = {"bash": 10, "view": 5}
         original = create_bugfix_result(

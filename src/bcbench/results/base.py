@@ -7,7 +7,7 @@ from typing import Any, Self, cast
 from pydantic import BaseModel, model_validator
 
 from bcbench.logger import get_logger
-from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentHarness, AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 
@@ -29,6 +29,21 @@ class BaseEvaluationResult(BaseModel):
 
     metrics: AnyAgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
+
+    @model_validator(mode="after")
+    def validate_metrics_contract(self) -> Self:
+        if self.metrics is None:
+            return self
+
+        try:
+            metrics_contract = AgentHarness(self.agent_name).metrics_contract
+        except ValueError:
+            return self
+
+        if type(self.metrics) is not metrics_contract.metrics_type:
+            raise ValueError(f"{self.agent_name} must use {metrics_contract.metrics_type.__name__}, got {type(self.metrics).__name__}")
+
+        return self
 
     @classmethod
     def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:

@@ -30,6 +30,7 @@ class _RunMetrics(BaseModel):
     failed_api_calls: _NonNegativeInt | None
     usage_api_calls: _NonNegativeInt | None
     ai_credits: _NonNegativeFloat | None
+    # Retained in the engine artifact schema, but intentionally excluded from persisted benchmark metrics.
     premium_requests: _NonNegativeFloat | None
     models: list[str]
     usage_complete: bool
