@@ -110,6 +110,7 @@ Unavailable AI credits remain `null` in bceval exports; observed zero remains ze
     {% assign production_results = site.data.code-review.aggregate | where: "agent_name", "BC PR Review" %}
     {% assign performance_results = production_results | sort: "average_duration" %}
     {% for agg in performance_results %}
+      {% if agg.experiment == null or agg.experiment.is_experiment == false %}
     <tr>
       <td>{{ agg.agent_name }}</td>
       <td>{{ agg.model }}</td>
@@ -120,6 +121,7 @@ Unavailable AI credits remain `null` in bceval exports; observed zero remains ze
       <td>{% if agg.average_ai_credits != null %}{{ agg.average_ai_credits | round: 4 }}{% else %}—{% endif %}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
     </tr>
+      {% endif %}
     {% endfor %}
   </tbody>
 </table>

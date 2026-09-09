@@ -178,6 +178,7 @@ def test_transitive_provenance_is_only_displayed_on_advanced_dashboard() -> None
     assert "agent_version" in advanced
     assert "bcquality_commit" in advanced
     assert "copilot_cli_version" in advanced
+    assert dashboard.count("{% if agg.experiment == null or agg.experiment.is_experiment == false %}") == 2
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is required to test the composite action script")

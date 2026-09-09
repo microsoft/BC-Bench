@@ -88,6 +88,31 @@ def test_summary_preserves_unavailable_usage_as_none() -> None:
     assert serialized["usage_complete_rate"] == 0.0
 
 
+def test_summary_excludes_unavailable_findings_diagnostics() -> None:
+    unavailable = _metrics(duration=4.0, scale=1).model_copy(
+        update={
+            "knowledge_used": None,
+            "knowledge_suppressed": None,
+            "sub_skills_executed": None,
+            "sub_skills_skipped": None,
+        }
+    )
+    measured = _metrics(duration=6.0, scale=2)
+
+    summary = CodeReviewResultSummary.from_results(
+        [
+            create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=unavailable),
+            create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=measured),
+        ],
+        run_id="run",
+    )
+
+    assert summary.average_knowledge_used == measured.knowledge_used
+    assert summary.average_knowledge_suppressed == measured.knowledge_suppressed
+    assert summary.average_sub_skills_executed == measured.sub_skills_executed
+    assert summary.average_sub_skills_skipped == measured.sub_skills_skipped
+
+
 def test_aggregate_preserves_missing_legacy_coverage_as_none() -> None:
     summary = CodeReviewResultSummary.model_validate(
         {

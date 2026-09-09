@@ -37,10 +37,10 @@ class _FilterReport(BaseModel):
 class _EngineDiagnostics(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    knowledge_used: _NonNegativeInt
-    knowledge_suppressed: _NonNegativeInt
+    knowledge_used: _NonNegativeInt | None
+    knowledge_suppressed: _NonNegativeInt | None
     sub_skills_executed: _NonNegativeInt | None
-    sub_skills_skipped: _NonNegativeInt
+    sub_skills_skipped: _NonNegativeInt | None
 
 
 class _RunMetrics(BaseModel):
@@ -141,7 +141,7 @@ def _normalize_knowledge_reference(path: str) -> str | None:
 
 def _load_engine_diagnostics(path: Path) -> _EngineDiagnostics:
     if not path.exists():
-        return _EngineDiagnostics(knowledge_used=0, knowledge_suppressed=0, sub_skills_executed=None, sub_skills_skipped=0)
+        return _EngineDiagnostics(knowledge_used=None, knowledge_suppressed=None, sub_skills_executed=None, sub_skills_skipped=None)
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError) as exc:

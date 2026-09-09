@@ -64,10 +64,10 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.malformed_records == 0
     assert metrics.knowledge_files == 0
     assert metrics.knowledge_pruned == 0
-    assert metrics.knowledge_used == 0
-    assert metrics.knowledge_suppressed == 0
+    assert metrics.knowledge_used is None
+    assert metrics.knowledge_suppressed is None
     assert metrics.sub_skills_executed is None
-    assert metrics.sub_skills_skipped == 0
+    assert metrics.sub_skills_skipped is None
     assert metrics.copilot_cli_version == "1.0.81-0"
 
 
@@ -193,6 +193,21 @@ def test_missing_filter_report_preserves_other_diagnostics(tmp_path: Path) -> No
 
     assert metrics.prompt_tokens == 150
     assert metrics.knowledge_pruned is None
+
+
+def test_empty_engine_diagnostics_are_measured_zeros(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / "al-code-review-findings.json").write_text(
+        json.dumps({"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": []}),
+        encoding="utf-8",
+    )
+
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.knowledge_used == 0
+    assert metrics.knowledge_suppressed == 0
+    assert metrics.sub_skills_executed == 0
+    assert metrics.sub_skills_skipped == 0
 
 
 def test_invalid_filter_report_still_raises(tmp_path: Path) -> None:
