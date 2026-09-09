@@ -1,0 +1,10 @@
+{
+  "engineCommit": "ea0104e6ad2c21173b774ba627852f8c0b65b515",
+  "bcQualityCommit": "e7ee9b4b5af18f344f5ca45eebeaf92ac578dd69",
+  "datasetHash": "40F87789093B7D383AE8F4406D8057AC4F15DFD7E86D72D1D3AE9FF599F1692E",
+  "entryIds": [
+    "synthetic__upgrade-alwayslogtable-removal-01"
+  ],
+  "model": "gpt-5.6-luna",
+  "judgeModel": "gpt-5.3-codex"
+}
