@@ -17,6 +17,7 @@ __all__ = [
     "EmptyDiffError",
     "EmptyGoldResultError",
     "EntryNotFoundError",
+    "GeneratedOutputError",
     "GitOperationError",
     "InvalidEntryFormatError",
     "NoEntriesFoundError",
@@ -209,6 +210,10 @@ class NoTestsExtractedError(BCBenchError):
     def __init__(self) -> None:
         message = "No tests extracted from the generated patch."
         super().__init__(message)
+
+
+class GeneratedOutputError(BCBenchError):
+    pass
 
 
 class AgentError(BCBenchError):
