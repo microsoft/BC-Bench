@@ -6,9 +6,9 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult
@@ -18,18 +18,6 @@ if TYPE_CHECKING:
     from rich.console import RenderableType
 
 logger = get_logger(__name__)
-
-
-def restore_legacy_pr_review_agent_version(payload: object) -> object:
-    if not isinstance(payload, dict):
-        return payload
-    data = cast(dict[str, Any], payload)
-    if data.get("agent_version") or data.get("agent_name") != "BC PR Review":
-        return payload
-    legacy_version = data.get("bc_alagents_commit")
-    if not isinstance(legacy_version, str) or not legacy_version:
-        return payload
-    return {**data, "agent_version": legacy_version}
 
 
 def get_benchmark_version() -> str:
@@ -71,15 +59,6 @@ class EvaluationResultSummary(BaseModel, ABC):
     experiment: ExperimentConfiguration | None = None
 
     benchmark_version: str
-    copilot_cli_version: str | None = None
-    bcquality_repository: str | None = None
-    bcquality_commit: str | None = None
-    bcquality_version: str | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def restore_legacy_agent_version(cls, payload: object) -> object:
-        return restore_legacy_pr_review_agent_version(payload)
 
     @abstractmethod
     def render_github_metrics_markdown(self) -> str:
@@ -107,19 +86,6 @@ class EvaluationResultSummary(BaseModel, ABC):
         first_result = results[0]
         experiment = first_result.experiment if first_result.experiment and not first_result.experiment.is_empty() else None
 
-        def consistent_metric_value(name: str) -> str | None:
-            values: set[str] = set()
-            for result in results:
-                value = getattr(result.metrics, name, None) if result.metrics else None
-                if value is not None:
-                    if not isinstance(value, str):
-                        raise TypeError(f"Expected {name} to be a string, got {type(value).__name__}")
-                    values.add(value)
-            if len(values) > 1:
-                logger.warning(f"Results contain inconsistent {name} values; omitting provenance: {values}")
-                return None
-            return next(iter(values), None)
-
         return {
             "total": len(results),
             "date": datetime.now(UTC).date(),
@@ -136,10 +102,6 @@ class EvaluationResultSummary(BaseModel, ABC):
             "github_run_id": run_id,
             "experiment": experiment,
             "benchmark_version": get_benchmark_version(),
-            "copilot_cli_version": consistent_metric_value("copilot_cli_version"),
-            "bcquality_repository": consistent_metric_value("bcquality_repository"),
-            "bcquality_commit": consistent_metric_value("bcquality_commit"),
-            "bcquality_version": consistent_metric_value("bcquality_version"),
         }
 
     @classmethod

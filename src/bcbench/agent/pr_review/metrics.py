@@ -9,10 +9,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from bcbench.exceptions import AgentError
-from bcbench.logger import get_logger
 from bcbench.types import PRReviewMetrics
-
-logger = get_logger(__name__)
 
 RUN_METRICS_FILE_NAME = "_run-metrics.json"
 FILTER_REPORT_FILE_NAME = "_filter-report.json"
@@ -41,6 +38,27 @@ class _EngineDiagnostics(BaseModel):
     knowledge_suppressed: _NonNegativeInt | None
     sub_skills_executed: _NonNegativeInt | None
     sub_skills_skipped: _NonNegativeInt | None
+
+
+class _KnowledgeReference(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    path: str | None = None
+
+
+class _DiagnosticItem(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    references: list[_KnowledgeReference] = Field(default_factory=list)
+
+
+class _EngineFindings(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    findings: list[_DiagnosticItem]
+    sub_results: list[_DiagnosticItem] = Field(alias="subResults")
+    skipped_sub_skills: list[object] = Field(alias="skippedSubSkills")
+    suppressed: list[object]
 
 
 class _RunMetrics(BaseModel):
@@ -141,43 +159,33 @@ def _normalize_knowledge_reference(path: str) -> str | None:
 
 def _load_engine_diagnostics(path: Path) -> _EngineDiagnostics:
     if not path.exists():
-        return _EngineDiagnostics(knowledge_used=None, knowledge_suppressed=None, sub_skills_executed=None, sub_skills_skipped=None)
+        raise AgentError(f"Engine findings artifact not found at {path}.")
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError) as exc:
         raise AgentError(f"Could not read engine findings artifact {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise AgentError(f"Engine findings artifact {path} must contain a JSON object.")
+    try:
+        report = _EngineFindings.model_validate(payload)
+    except ValidationError as exc:
+        raise AgentError(f"Engine findings artifact {path} has an invalid diagnostics shape: {exc}") from exc
 
     cited: set[str] = set()
-    for collection_name in ("findings", "subResults"):
-        collection = payload.get(collection_name, [])
-        if not isinstance(collection, list):
-            continue
-        for item in collection:
-            if not isinstance(item, dict):
-                continue
-            references = item.get("references", [])
-            if not isinstance(references, list):
-                continue
-            for reference in references:
-                if isinstance(reference, dict) and isinstance(reference.get("path"), str):
-                    normalized = _normalize_knowledge_reference(reference["path"])
-                    if normalized is not None:
-                        cited.add(normalized)
+    for item in [*report.findings, *report.sub_results]:
+        for reference in item.references:
+            if reference.path is not None:
+                normalized = _normalize_knowledge_reference(reference.path)
+                if normalized is not None:
+                    cited.add(normalized)
 
-    sub_results = payload.get("subResults")
-    skipped_sub_skills = payload.get("skippedSubSkills", [])
-    suppressed = payload.get("suppressed", [])
     return _EngineDiagnostics(
         knowledge_used=len(cited),
-        knowledge_suppressed=len(suppressed) if isinstance(suppressed, list) else 0,
-        sub_skills_executed=len(sub_results) if isinstance(sub_results, list) else None,
-        sub_skills_skipped=len(skipped_sub_skills) if isinstance(skipped_sub_skills, list) else 0,
+        knowledge_suppressed=len(report.suppressed),
+        sub_skills_executed=len(report.sub_results),
+        sub_skills_skipped=len(report.skipped_sub_skills),
     )
 
 
-def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[str, str, str] | None:
+def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[str, str, str]:
     config_path = engine_root / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
     try:
         config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -185,15 +193,12 @@ def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[s
         repository = bcquality["repo"]
         version = bcquality["version"]
     except (OSError, TypeError, KeyError, yaml.YAMLError) as exc:
-        logger.warning(f"BCQuality provenance unavailable from {config_path}: {exc}")
-        return None
+        raise AgentError(f"Could not read BCQuality provenance from {config_path}: {exc}") from exc
     if not isinstance(repository, str) or not isinstance(version, str):
-        logger.warning(f"BCQuality provenance unavailable: {config_path} must contain string repo and version values.")
-        return None
+        raise AgentError(f"BCQuality provenance config {config_path} must contain string repo and version values.")
     repository = re.sub(r"\.git$", "", re.sub(r"^(https://github\.com/|git@github\.com:)", "", repository))
     if re.fullmatch(r"[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+", repository) is None:
-        logger.warning(f"BCQuality provenance unavailable: invalid repository {repository!r} in {config_path}.")
-        return None
+        raise AgentError(f"BCQuality provenance config {config_path} contains invalid repository {repository!r}.")
     try:
         commit = subprocess.run(
             ["git", "-C", str(bcquality_root), "rev-parse", "HEAD"],
@@ -204,11 +209,9 @@ def _load_bcquality_identity(engine_root: Path, bcquality_root: Path) -> tuple[s
             check=True,
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as exc:
-        logger.warning(f"BCQuality provenance unavailable from checkout {bcquality_root}: {exc}")
-        return None
+        raise AgentError(f"Could not resolve BCQuality provenance from checkout {bcquality_root}: {exc}") from exc
     if re.fullmatch(r"[0-9a-fA-F]{40}", commit) is None:
-        logger.warning(f"BCQuality provenance unavailable: checkout at {bcquality_root} returned invalid commit {commit!r}.")
-        return None
+        raise AgentError(f"BCQuality checkout at {bcquality_root} returned invalid commit {commit!r}.")
     return repository, commit, version
 
 

@@ -54,25 +54,6 @@ def test_summary_uses_artifact_version_not_environment(monkeypatch: pytest.Monke
     assert EvaluationResultSummary.from_results([result], "run").agent_version == "1.2.3"
 
 
-def test_legacy_pr_review_identity_loads_as_agent_version() -> None:
-    summary = EvaluationResultSummary.from_results(
-        [create_codereview_result(agent_name=AgentHarness.PR_REVIEW)],
-        "run",
-    )
-    payload = summary.to_dict()
-    payload["agent_version"] = None
-    payload["bc_alagents_commit"] = "a" * 40
-
-    restored = EvaluationResultSummary.from_json(payload)
-    aggregate_payload = LeaderboardAggregate.from_runs([summary]).model_dump(mode="json")
-    aggregate_payload["agent_version"] = None
-    aggregate_payload["bc_alagents_commit"] = "a" * 40
-    restored_aggregate = LeaderboardAggregate.from_json(aggregate_payload)
-
-    assert restored.agent_version == "a" * 40
-    assert restored_aggregate.agent_version == "a" * 40
-
-
 def test_repeated_versions_aggregate_and_different_versions_stay_separate(tmp_path: Path) -> None:
     for index, version in enumerate(["a" * 40, "b" * 40, "a" * 40]):
         result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW).model_copy(update={"agent_version": version})

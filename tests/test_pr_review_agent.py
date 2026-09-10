@@ -151,6 +151,10 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         ),
         encoding="utf-8",
     )
+    (output_dir / "al-code-review-findings.json").write_text(
+        json.dumps({"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": []}),
+        encoding="utf-8",
+    )
 
     with (
         patch("bcbench.agent.pr_review.agent._load_pr_review_settings", return_value=settings),

@@ -40,6 +40,10 @@ def _run_metrics(**overrides: object) -> dict[str, object]:
 def _write_run_metrics(root: Path, **overrides: object) -> None:
     (root / RUN_METRICS_FILE_NAME).write_text(json.dumps(_run_metrics(**overrides)), encoding="utf-8")
     (root / FILTER_REPORT_FILE_NAME).write_text(json.dumps({"removed": []}), encoding="utf-8")
+    (root / "al-code-review-findings.json").write_text(
+        json.dumps({"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": []}),
+        encoding="utf-8",
+    )
 
 
 def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> None:
@@ -64,10 +68,10 @@ def test_build_metrics_promotes_public_performance_metrics(tmp_path: Path) -> No
     assert metrics.malformed_records == 0
     assert metrics.knowledge_files == 0
     assert metrics.knowledge_pruned == 0
-    assert metrics.knowledge_used is None
-    assert metrics.knowledge_suppressed is None
-    assert metrics.sub_skills_executed is None
-    assert metrics.sub_skills_skipped is None
+    assert metrics.knowledge_used == 0
+    assert metrics.knowledge_suppressed == 0
+    assert metrics.sub_skills_executed == 0
+    assert metrics.sub_skills_skipped == 0
     assert metrics.copilot_cli_version == "1.0.81-0"
 
 
@@ -215,6 +219,33 @@ def test_invalid_filter_report_still_raises(tmp_path: Path) -> None:
     (tmp_path / FILTER_REPORT_FILE_NAME).write_text("not json", encoding="utf-8")
 
     with pytest.raises(AgentError, match="Could not read BCQuality filter report"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+def test_missing_engine_findings_raises(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / "al-code-review-findings.json").unlink()
+
+    with pytest.raises(AgentError, match="findings artifact not found"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"findings": {}, "subResults": [], "skippedSubSkills": [], "suppressed": []},
+        {"findings": [], "subResults": {}, "skippedSubSkills": [], "suppressed": []},
+        {"findings": [], "subResults": [], "skippedSubSkills": {}, "suppressed": []},
+        {"findings": [], "subResults": [], "skippedSubSkills": [], "suppressed": {}},
+        {"findings": [{"references": {}}], "subResults": [], "skippedSubSkills": [], "suppressed": []},
+    ],
+)
+def test_invalid_engine_diagnostics_raise(tmp_path: Path, payload: object) -> None:
+    _write_run_metrics(tmp_path)
+    (tmp_path / "al-code-review-findings.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(AgentError, match="invalid diagnostics shape"):
         build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
@@ -404,13 +435,31 @@ def test_runtime_provenance_is_derived_from_metrics_and_checkout(tmp_path: Path)
     assert metrics.bcquality_version == "1.6"
 
 
-def test_unavailable_runtime_provenance_does_not_fail_metrics(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_unavailable_runtime_provenance_fails_metrics(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path, cli_version="1.0.82")
 
-    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "missing-engine")
+    with pytest.raises(AgentError, match="Could not read BCQuality provenance"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "missing-engine")
 
-    assert metrics.copilot_cli_version == "1.0.82"
-    assert metrics.bcquality_repository is None
-    assert metrics.bcquality_commit is None
-    assert metrics.bcquality_version is None
-    assert "BCQuality provenance unavailable" in caplog.text
+
+def test_invalid_runtime_provenance_config_fails_metrics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('bcquality:\n  repo: "not a repo"\n  version: "1.6"\n', encoding="utf-8")
+
+    with pytest.raises(AgentError, match="contains invalid repository"):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "engine")
+
+
+def test_unresolvable_runtime_provenance_checkout_fails_metrics(tmp_path: Path) -> None:
+    _write_run_metrics(tmp_path, cli_version="1.0.82")
+    config = tmp_path / "engine" / "agents" / "ALReviewAgent" / "bcquality.config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('bcquality:\n  repo: "microsoft/BCQuality"\n  version: "1.6"\n', encoding="utf-8")
+
+    with (
+        patch("bcbench.agent.pr_review.metrics.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])),
+        pytest.raises(AgentError, match="Could not resolve BCQuality provenance"),
+    ):
+        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0, engine_root=tmp_path / "engine")

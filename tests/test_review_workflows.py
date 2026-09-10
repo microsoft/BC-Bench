@@ -131,6 +131,18 @@ def test_agent_harness_action_pins_published_copilot_version() -> None:
     assert "@github/copilot@1.0.82" in action
 
 
+def test_code_review_dashboard_data_uses_current_harness_identity() -> None:
+    dashboard_data_path = Path(__file__).parents[1] / "docs" / "_data" / "code-review.json"
+    dashboard_data = dashboard_data_path.read_text(encoding="utf-8")
+    payload = json.loads(dashboard_data)
+    pr_review_rows = [row for section in ("aggregate", "runs") for row in payload[section] if row["agent_name"] == "BC PR Review"]
+
+    assert '"bc_alagents_commit"' not in dashboard_data
+    assert '"bc_alagents_repository"' not in dashboard_data
+    assert pr_review_rows
+    assert all(row["agent_version"] for row in pr_review_rows)
+
+
 def test_agent_harness_action_pins_engine_without_exporting_transitive_identity() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
     config = yaml.safe_load(action)

@@ -5,11 +5,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator
 
 from bcbench.logger import get_logger
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
-from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary, restore_legacy_pr_review_agent_version
+from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -35,15 +35,6 @@ class LeaderboardAggregate(BaseModel, ABC):
     average_duration: float
 
     benchmark_version: str
-    copilot_cli_version: str | None = None
-    bcquality_repository: str | None = None
-    bcquality_commit: str | None = None
-    bcquality_version: str | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def restore_legacy_agent_version(cls, payload: object) -> object:
-        return restore_legacy_pr_review_agent_version(payload)
 
     @staticmethod
     def _validate_consistent_runs(runs: Sequence[EvaluationResultSummary]) -> None:
@@ -70,10 +61,6 @@ class LeaderboardAggregate(BaseModel, ABC):
             "num_runs": len(runs),
             "average_duration": sum(durations) / len(durations) if durations else 0.0,
             "benchmark_version": first_run.benchmark_version,
-            "copilot_cli_version": first_run.copilot_cli_version,
-            "bcquality_repository": first_run.bcquality_repository,
-            "bcquality_commit": first_run.bcquality_commit,
-            "bcquality_version": first_run.bcquality_version,
         }
 
     @classmethod
@@ -183,6 +170,24 @@ class CodeReviewLeaderboardAggregate(JudgeBasedLeaderboardAggregate):
     token_coverage_rate: float | None = None
     credit_coverage_rate: float | None = None
     usage_complete_rate: float | None = None
+    copilot_cli_version: str | None = None
+    bcquality_repository: str | None = None
+    bcquality_commit: str | None = None
+    bcquality_version: str | None = None
+
+    @classmethod
+    def _base_fields(cls, runs: Sequence[EvaluationResultSummary]) -> dict[str, Any]:
+        from bcbench.results.codereview import CodeReviewResultSummary
+
+        first_run = runs[0]
+        assert isinstance(first_run, CodeReviewResultSummary)
+        return {
+            **super()._base_fields(runs),
+            "copilot_cli_version": first_run.copilot_cli_version,
+            "bcquality_repository": first_run.bcquality_repository,
+            "bcquality_commit": first_run.bcquality_commit,
+            "bcquality_version": first_run.bcquality_version,
+        }
 
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "CodeReviewLeaderboardAggregate":

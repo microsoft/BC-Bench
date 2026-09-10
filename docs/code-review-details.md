@@ -140,8 +140,7 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{{ agg.judge_model }}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ agg.benchmark_version }}" target="_blank">{{ agg.benchmark_version }}</a></td>
       <td>{% if agg.copilot_cli_version %}{{ agg.copilot_cli_version }}{% else %}—{% endif %}</td>
-      {% assign engine_version = agg.agent_version | default: agg.bc_alagents_commit %}
-      <td>{% if agg.agent_name == "BC PR Review" and engine_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ engine_version }}" target="_blank">{{ engine_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
+      <td>{% if agg.agent_name == "BC PR Review" and agg.agent_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ agg.agent_version }}" target="_blank">{{ agg.agent_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
       <td>{% if agg.bcquality_commit %}<a href="https://github.com/{{ agg.bcquality_repository }}/commit/{{ agg.bcquality_commit }}" target="_blank">{{ agg.bcquality_commit | slice: 0, 8 }}</a>{% if agg.bcquality_version %} ({{ agg.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
@@ -265,8 +264,7 @@ Diagnostic averages use only tasks that reported the metric. Coverage columns sh
       <td>{{ run.judge_model }}</td>
       <td><a href="https://github.com/microsoft/BC-Bench/releases/tag/v{{ run.benchmark_version }}" target="_blank">{{ run.benchmark_version }}</a></td>
       <td>{% if run.copilot_cli_version %}{{ run.copilot_cli_version }}{% else %}—{% endif %}</td>
-      {% assign engine_version = run.agent_version | default: run.bc_alagents_commit %}
-      <td>{% if run.agent_name == "BC PR Review" and engine_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ engine_version }}" target="_blank">{{ engine_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
+      <td>{% if run.agent_name == "BC PR Review" and run.agent_version %}<a href="https://github.com/microsoft/BC-ALAgents/commit/{{ run.agent_version }}" target="_blank">{{ run.agent_version | slice: 0, 8 }}</a>{% else %}—{% endif %}</td>
       <td>{% if run.bcquality_commit %}<a href="https://github.com/{{ run.bcquality_repository }}/commit/{{ run.bcquality_commit }}" target="_blank">{{ run.bcquality_commit | slice: 0, 8 }}</a>{% if run.bcquality_version %} ({{ run.bcquality_version }}){% endif %}{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}

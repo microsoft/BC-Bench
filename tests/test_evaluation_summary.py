@@ -131,33 +131,6 @@ class TestFromResults:
         assert summary.github_run_id == "test_run_123"
         assert summary.date == datetime.now(UTC).date()
 
-    def test_from_results_records_runtime_provenance_from_metrics(self, sample_results):
-        metrics = sample_results[0].metrics.model_copy(
-            update={
-                "copilot_cli_version": "1.0.82",
-                "bcquality_repository": "microsoft/BCQuality",
-                "bcquality_commit": "2" * 40,
-                "bcquality_version": "1.6",
-            }
-        )
-        results = [result.model_copy(update={"metrics": metrics}) for result in sample_results]
-
-        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run_123")
-
-        assert summary.copilot_cli_version == "1.0.82"
-        assert summary.bcquality_repository == "microsoft/BCQuality"
-        assert summary.bcquality_commit == "2" * 40
-        assert summary.bcquality_version == "1.6"
-
-    def test_from_results_omits_inconsistent_runtime_provenance(self, sample_results, caplog):
-        first = sample_results[0].model_copy(update={"metrics": sample_results[0].metrics.model_copy(update={"bcquality_commit": "1" * 40})})
-        second = sample_results[1].model_copy(update={"metrics": sample_results[1].metrics.model_copy(update={"bcquality_commit": "2" * 40})})
-
-        summary = ExecutionBasedEvaluationResultSummary.from_results([first, second], run_id="test_run_123")
-
-        assert summary.bcquality_commit is None
-        assert "inconsistent bcquality_commit" in caplog.text
-
     def test_from_results_calculates_averages_correctly(self, sample_results):
         summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
 
@@ -856,38 +829,6 @@ class TestLeaderboard:
 
         with pytest.raises(ValueError, match="different combinations"):
             LeaderboardAggregate.from_runs([run1, run2])
-
-    def test_transitive_provenance_does_not_replace_agent_version_grouping(self):
-        run1 = ExecutionBasedEvaluationResultSummary.from_results(
-            [create_bugfix_result(instance_id="test__1", resolved=True)],
-            run_id="run_1",
-        ).model_copy(update={"bcquality_commit": "1" * 40})
-        run2 = run1.model_copy(update={"github_run_id": "run_2", "bcquality_commit": "2" * 40})
-
-        assert run1.combination_key() == run2.combination_key()
-
-    def test_aggregate_includes_advanced_provenance(self):
-        from bcbench.results.leaderboard import LeaderboardAggregate
-
-        run = ExecutionBasedEvaluationResultSummary.from_results(
-            [create_bugfix_result(instance_id="test__1", resolved=True)],
-            run_id="run_1",
-        ).model_copy(
-            update={
-                "agent_version": "1" * 40,
-                "copilot_cli_version": "1.0.82",
-                "bcquality_repository": "microsoft/BCQuality",
-                "bcquality_commit": "2" * 40,
-                "bcquality_version": "1.6",
-            }
-        )
-
-        aggregate = LeaderboardAggregate.from_runs([run])
-
-        assert aggregate.agent_version == "1" * 40
-        assert aggregate.copilot_cli_version == "1.0.82"
-        assert aggregate.bcquality_commit == "2" * 40
-        assert aggregate.bcquality_version == "1.6"
 
     def test_aggregate_rejects_runs_with_different_judge_models(self):
         from bcbench.results.leaderboard import LeaderboardAggregate

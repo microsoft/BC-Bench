@@ -1,7 +1,8 @@
 import json
 
 from bcbench.results.codereview import CodeReviewResultSummary
-from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate
+from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate
+from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentHarness, AgentMetrics, PRReviewMetrics
 from tests.conftest import create_codereview_result
 
@@ -32,6 +33,15 @@ def _metrics(*, duration: float, scale: int) -> PRReviewMetrics:
         bcquality_commit="a" * 40,
         bcquality_version="1.6",
     )
+
+
+def test_pr_review_provenance_fields_are_code_review_specific() -> None:
+    provenance_fields = {"copilot_cli_version", "bcquality_repository", "bcquality_commit", "bcquality_version"}
+
+    assert provenance_fields <= CodeReviewResultSummary.model_fields.keys()
+    assert provenance_fields <= CodeReviewLeaderboardAggregate.model_fields.keys()
+    assert provenance_fields.isdisjoint(ExecutionBasedEvaluationResultSummary.model_fields)
+    assert provenance_fields.isdisjoint(ExecutionBasedLeaderboardAggregate.model_fields)
 
 
 def test_summary_aggregates_public_pr_review_metrics() -> None:
@@ -85,7 +95,23 @@ def test_summary_preserves_unavailable_usage_as_none() -> None:
     assert serialized["average_ai_credits"] is None
     assert serialized["token_coverage_rate"] == 0.0
     assert serialized["credit_coverage_rate"] == 0.0
-    assert serialized["usage_complete_rate"] == 0.0
+    assert serialized["usage_complete_rate"] is None
+
+
+def test_summary_omits_inconsistent_runtime_provenance(caplog) -> None:
+    first = _metrics(duration=4.0, scale=1)
+    second = _metrics(duration=6.0, scale=2).model_copy(update={"bcquality_commit": "b" * 40})
+
+    summary = CodeReviewResultSummary.from_results(
+        [
+            create_codereview_result(instance_id="proj__review-1", agent_name=AgentHarness.PR_REVIEW, metrics=first),
+            create_codereview_result(instance_id="proj__review-2", agent_name=AgentHarness.PR_REVIEW, metrics=second),
+        ],
+        run_id="run",
+    )
+
+    assert summary.bcquality_commit is None
+    assert "inconsistent bcquality_commit" in caplog.text
 
 
 def test_summary_excludes_unavailable_findings_diagnostics() -> None:
