@@ -296,6 +296,42 @@ def test_load_test_run_summary_reads_discovery_and_outcomes(tmp_path: Path):
     )
 
 
+def test_all_pass_rejects_plain_junit_error_evidence(tmp_path: Path):
+    from bcbench.operations.test_execution import load_test_run_summary
+
+    results_path = tmp_path / "results-50100.xml"
+    write_discovery(tmp_path, 50100, ["InfrastructureError"])
+    write_results(tmp_path, 50100, '<testcase name="InfrastructureError"><error /></testcase>')
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"InfrastructureError"}))]
+
+    with pytest.raises(ValueError, match="JUnit error evidence") as error:
+        load_test_run_summary(tmp_path, entries).require(TestExpectation.ALL_PASS)
+
+    assert "50100" in str(error.value)
+    assert "InfrastructureError" in str(error.value)
+    assert str(results_path) in str(error.value)
+
+
+def test_all_pass_rejects_namespaced_junit_error_evidence(tmp_path: Path):
+    from bcbench.operations.test_execution import load_test_run_summary
+
+    results_path = tmp_path / "results-50100.xml"
+    write_discovery(tmp_path, 50100, ["NamespacedInfrastructureError"])
+    write_results(
+        tmp_path,
+        50100,
+        '<testcase name="NamespacedInfrastructureError"><junit:error xmlns:junit="urn:junit" /></testcase>',
+    )
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"NamespacedInfrastructureError"}))]
+
+    with pytest.raises(ValueError, match="JUnit error evidence") as error:
+        load_test_run_summary(tmp_path, entries).require(TestExpectation.ALL_PASS)
+
+    assert "50100" in str(error.value)
+    assert "NamespacedInfrastructureError" in str(error.value)
+    assert str(results_path) in str(error.value)
+
+
 def test_same_function_name_in_two_codeunits_remains_distinct(tmp_path: Path):
     from bcbench.operations.test_execution import load_test_run_summary
 

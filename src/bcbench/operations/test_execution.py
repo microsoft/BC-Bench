@@ -149,13 +149,16 @@ def load_test_run_summary(evidence_dir: Path, test_entries: Iterable[TestEntry])
         root = ET.parse(results_path).getroot()
         for testcase in (node for node in root.iter() if _local_name(node.tag) == "testcase"):
             child_tags = {_local_name(child.tag) for child in testcase}
+            function_name = testcase.attrib["name"]
+            if "error" in child_tags:
+                raise ValueError(f"JUnit error evidence for codeunit {codeunit_id}, function {function_name}: {results_path}")
             if "failure" in child_tags:
                 outcome = TestOutcome.FAIL
             elif "skipped" in child_tags:
                 outcome = TestOutcome.SKIP
             else:
                 outcome = TestOutcome.PASS
-            results.append(TestCaseResult(TestIdentity(codeunit_id, testcase.attrib["name"]), outcome))
+            results.append(TestCaseResult(TestIdentity(codeunit_id, function_name), outcome))
 
     return TestRunSummary(requested=requested, discovered=tuple(discovered), results=tuple(results))
 
