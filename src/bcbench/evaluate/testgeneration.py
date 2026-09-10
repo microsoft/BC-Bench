@@ -10,6 +10,7 @@ from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionE
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import (
+    TestExpectation,
     apply_patch,
     build_and_publish_projects,
     categorize_projects,
@@ -109,7 +110,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Fail", container)
+            run_test_suite(generated_tests, TestExpectation.ANY_FAIL, container, context.repo_path)
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
 
@@ -119,7 +120,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Pass", container)
+            run_test_suite(generated_tests, TestExpectation.ALL_PASS, container, context.repo_path)
 
             result = TestGenerationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
@@ -129,7 +130,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
-            if e.expectation == "Fail":
+            if e.expectation is TestExpectation.ANY_FAIL:
                 result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, "Generated tests Passed pre-patch\n" + str(e))
             else:
                 result = TestGenerationResult.create_post_patch_failure(context, generated_patch, "Generated tests Failed post-patch\n" + str(e))

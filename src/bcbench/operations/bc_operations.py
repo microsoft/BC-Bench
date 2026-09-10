@@ -1,12 +1,13 @@
 """Business Central specific operations for building, publishing, and testing."""
 
+import json
 import shutil
 import subprocess
+import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from string import Template
 from typing import Literal
-
-from pydantic import TypeAdapter
 
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
@@ -15,6 +16,7 @@ from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionErr
 from bcbench.logger import get_logger
 from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.setup_operations import bootstrap_app_json
+from bcbench.operations.test_execution import TestExpectation, TestRunSummary, load_test_run_summary
 from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
@@ -86,7 +88,14 @@ $$password = ConvertTo-SecureString '$password' -AsPlainText -Force
 $$credential = New-Object System.Management.Automation.PSCredential('$username', $$password)
 
 Write-Host "Running tests for codeunit $codeunit_id"
-Invoke-BCTest -containerName '$container_name' -credential $$credential -codeunitID $codeunit_id$function_param
+$$evidenceRoot = '$evidence_directory'
+$$evidenceDirectory = Join-Path $$evidenceRoot "bcbench-test-evidence-$$([System.Guid]::NewGuid())"
+try {
+    Invoke-BCTest -containerName '$container_name' -credential $$credential -codeunitID $codeunit_id$function_param -evidenceDirectory $$evidenceDirectory
+}
+finally {
+    Remove-Item -Path $$evidenceDirectory -Recurse -Force -ErrorAction SilentlyContinue
+}
 """.strip()
 )
 
@@ -101,7 +110,7 @@ $$credential = New-Object System.Management.Automation.PSCredential('$username',
 
 $$testEntries = '$test_entries_json' | ConvertFrom-Json
 
-Invoke-DatasetTests -containerName '$container_name' -credential $$credential -testEntries $$testEntries -expectation '$expectation'
+Invoke-DatasetTests -containerName '$container_name' -credential $$credential -testEntries $$testEntries -evidenceDirectory '$evidence_directory'
 """.strip()
 )
 
@@ -119,8 +128,16 @@ def build_ps_app_build_and_publish(container_name: str, username: str, password:
     )
 
 
-def build_ps_test_script(container_name: str, username: str, password: str, codeunit_id: int, function_names: list[str] | None = None) -> str:
+def build_ps_test_script(
+    container_name: str,
+    username: str,
+    password: str,
+    codeunit_id: int,
+    function_names: list[str] | None = None,
+    evidence_directory: Path | None = None,
+) -> str:
     app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
+    evidence_root = evidence_directory or Path.cwd()
 
     # Build function parameter if needed
     if function_names:
@@ -136,10 +153,11 @@ def build_ps_test_script(container_name: str, username: str, password: str, code
         password=_escape_ps_string(password),
         codeunit_id=codeunit_id,
         function_param=function_param,
+        evidence_directory=_escape_ps_string(str(evidence_root)),
     )
 
 
-def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, expectation: Literal["Pass", "Fail"]) -> str:
+def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, evidence_directory: Path) -> str:
     app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     return _DATASET_TESTS_TEMPLATE.substitute(
@@ -148,7 +166,7 @@ def build_ps_dataset_tests_script(container_name: str, username: str, password: 
         username=_escape_ps_string(username),
         password=_escape_ps_string(password),
         test_entries_json=_escape_ps_string(test_entries_json),
-        expectation=_escape_ps_string(expectation),
+        evidence_directory=_escape_ps_string(str(evidence_directory)),
     )
 
 
@@ -193,50 +211,92 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
     logger.info("All projects built and published")
 
 
-def run_tests(entry: _BugFixTestGenBase, container: ContainerConfig) -> None:
+def run_tests(entry: _BugFixTestGenBase, container: ContainerConfig, repo_path: Path) -> TestRunSummary:
+    summaries: list[TestRunSummary] = []
     if entry.fail_to_pass:
         logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
-        run_test_suite(entry.fail_to_pass, "Pass", container)
+        summaries.append(run_test_suite(entry.fail_to_pass, TestExpectation.ALL_PASS, container, repo_path))
 
     if entry.pass_to_pass:
         logger.info(f"Running {len(entry.pass_to_pass)} pass-to-pass tests")
-        run_test_suite(entry.pass_to_pass, "Pass", container)
+        summaries.append(run_test_suite(entry.pass_to_pass, TestExpectation.ALL_PASS, container, repo_path))
 
     logger.info("All tests completed")
+    combined = TestRunSummary.combine(summaries)
+    combined.require(TestExpectation.ALL_PASS)
+    return combined
 
 
-def run_test_suite(test_entries: list[TestEntry], expectation: Literal["Pass", "Fail"], container: ContainerConfig) -> None:
-    """Run a suite of tests."""
-    test_entries_json: str = TypeAdapter(list[TestEntry]).dump_json(test_entries).decode()
+def _normalize_test_entries(test_entries: list[TestEntry]) -> list[TestEntry]:
+    functions_by_codeunit: dict[int, set[str]] = {}
+    for entry in test_entries:
+        functions_by_codeunit.setdefault(entry.codeunitID, set()).update(entry.functionName)
+    return [TestEntry(codeunitID=codeunit_id, functionName=frozenset(function_names)) for codeunit_id, function_names in sorted(functions_by_codeunit.items())]
 
-    ps_script = build_ps_dataset_tests_script(
-        container_name=container.name,
-        username=container.username,
-        password=container.password,
-        test_entries_json=test_entries_json,
-        expectation=expectation,
-    )
 
-    try:
+def _serialize_test_entries(test_entries: list[TestEntry]) -> str:
+    serializable_entries = [{"codeunitID": entry.codeunitID, "functionName": sorted(entry.functionName)} for entry in test_entries]
+    return json.dumps(serializable_entries, separators=(",", ":"))
+
+
+def run_test_suite(
+    test_entries: list[TestEntry],
+    expectation: TestExpectation,
+    container: ContainerConfig,
+    repo_path: Path,
+) -> TestRunSummary:
+    normalized_entries = _normalize_test_entries(test_entries)
+    test_entries_json = _serialize_test_entries(normalized_entries)
+
+    with tempfile.TemporaryDirectory(prefix=".bcbench-test-evidence-", dir=repo_path) as evidence_directory:
+        evidence_path = Path(evidence_directory)
+        ps_script = build_ps_dataset_tests_script(
+            container.name,
+            container.username,
+            container.password,
+            test_entries_json,
+            evidence_path,
+        )
         logger.info(f"Running test suite with expectation: {expectation}")
         logger.info(f"Tests to run: {test_entries_json}")
-        result = subprocess.run(
-            ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
-            capture_output=True,
-            check=True,
-            text=True,
-            timeout=_config.timeout.test_execution,
-        )
-        logger.info(f"Test suite completed with expectation met: {expectation}")
+        try:
+            result = subprocess.run(
+                ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                cwd=repo_path,
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=_config.timeout.test_execution,
+            )
+        except subprocess.TimeoutExpired:
+            logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
+            raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
+
         if result.stdout:
             logger.debug(f"Test output:\n{result.stdout}")
-    except subprocess.CalledProcessError as e:
-        logger.debug(f"Test result did not meet expectation (expected: {expectation})")
-        logger.debug(f"Full test output: {e.stdout}")
-        raise TestExecutionError(expectation, e.stderr, e.stdout) from None
-    except subprocess.TimeoutExpired:
-        logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
-        raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
+
+        try:
+            summary = load_test_run_summary(evidence_path, normalized_entries)
+        except (OSError, ValueError, ET.ParseError) as error:
+            raise TestExecutionError(
+                expectation,
+                stderr=result.stderr,
+                stdout=result.stdout,
+                reason=f"Invalid test evidence: {error}",
+            ) from error
+
+        if result.returncode != 0:
+            raise TestExecutionError(
+                expectation,
+                stderr=result.stderr,
+                stdout=result.stdout,
+                reason="Business Central test execution failed before evidence validation",
+                summary=summary,
+            )
+
+        summary.require(expectation)
+        logger.info(f"Test suite completed with expectation met: {expectation}")
+        return summary
 
 
 # --- data-query category: compile + run an AL query and capture its rows via a wrapped API query ---

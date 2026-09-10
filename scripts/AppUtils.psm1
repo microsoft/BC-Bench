@@ -125,6 +125,8 @@ function Invoke-AppBuildAndPublish {
     The ID of the test codeunit to run.
     .Parameter functionNames
     Optional array of function names to run. If not specified, all tests in the codeunit will run.
+    .Parameter evidenceDirectory
+    The directory where discovery and JUnit evidence will be written.
     .Description
     This function runs tests for a single codeunit in a Business Central container.
     Returns $true if all tests pass, $false otherwise.
@@ -141,38 +143,76 @@ function Invoke-BCTest {
         [int] $codeunitID,
 
         [Parameter(Mandatory = $false)]
-        [string[]] $functionNames
+        [string[]] $functionNames,
+
+        [Parameter(Mandatory = $true)]
+        [string] $evidenceDirectory
     )
 
     if ($functionNames -and $functionNames.Count -gt 0) {
-        [string] $combinedFunctions = $functionNames -join '|'
-        Write-Log "Running tests for Codeunit $codeunitID with functions: $combinedFunctions" -Level Info
+        [string] $functionList = [string]::Join(', ', $functionNames)
+        [string[]] $functionsToRun = $functionNames
+        Write-Log "Running tests for Codeunit $codeunitID with functions: $functionList" -Level Info
     }
     else {
-        [string] $combinedFunctions = '*'
+        [string[]] $functionsToRun = @('*')
         Write-Log "Running all tests for Codeunit $codeunitID" -Level Info
     }
 
-    $testParams = @{
-        containerName         = $containerName
-        credential            = $credential
-        returnTrueIfAllPassed = $true
-        testCodeunitRange     = $codeunitID.ToString()
-        testFunction          = $combinedFunctions
-        detailed              = $true
-    }
-
     try {
-        [bool] $testPassed = Run-TestsInBcContainer @testParams
+        New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
 
-        if ($testPassed) {
+        [object[]] $availableCodeunits = @(
+            Get-TestsFromBcContainer `
+                -containerName $containerName `
+                -credential $credential `
+                -testCodeunitRange $codeunitID.ToString() `
+                -ignoreGroups
+        )
+        [object] $availableCodeunit = $availableCodeunits |
+            Where-Object { [int]$_.Id -eq $codeunitID } |
+            Select-Object -First 1
+        [string[]] $availableFunctions = if ($availableCodeunit) { @($availableCodeunit.Tests) } else { @() }
+        [string[]] $discoveredFunctions = @(
+            $functionNames | Where-Object { $availableFunctions -ccontains $_ }
+        )
+
+        [string] $discoveryPath = Join-Path $evidenceDirectory "discovery-$codeunitID.json"
+        [PSCustomObject]@{
+            codeunitID  = $codeunitID
+            functionName = $discoveredFunctions
+        } | ConvertTo-Json -Depth 5 | Set-Content -Path $discoveryPath -Encoding UTF8
+
+        [string] $resultPath = Join-Path $evidenceDirectory "results-$codeunitID.xml"
+        [bool] $allTestsPassed = $true
+        [bool] $appendToResult = $false
+        foreach ($functionName in $functionsToRun) {
+            [hashtable] $testParams = @{
+                containerName           = $containerName
+                credential              = $credential
+                returnTrueIfAllPassed   = $true
+                testCodeunitRange       = $codeunitID.ToString()
+                testFunction            = $functionName
+                detailed                = $true
+                JUnitResultFileName     = $resultPath
+                AppendToJUnitResultFile = $appendToResult
+            }
+
+            [bool] $testPassed = Run-TestsInBcContainer @testParams
+            if (-not $testPassed) {
+                $allTestsPassed = $false
+            }
+            $appendToResult = $true
+        }
+
+        if ($allTestsPassed) {
             Write-Log "Tests passed for Codeunit $codeunitID" -Level Success
         }
         else {
             Write-Log "Tests failed for Codeunit $codeunitID" -Level Error
         }
 
-        return $testPassed
+        return $allTestsPassed
     }
     catch {
         Write-Log "Test execution error for Codeunit ${codeunitID}: $($_.Exception.Message)" -Level Error
@@ -189,12 +229,12 @@ function Invoke-BCTest {
     The credential to use when running tests.
     .Parameter testEntries
     An array of TestEntry objects containing codeunitID and functionName arrays.
-    .Parameter expectation
-    Expected test outcome: 'Pass' or 'Fail'. Throws an error if the actual result doesn't match.
+    .Parameter evidenceDirectory
+    The directory where discovery and JUnit evidence will be written.
     .Description
     This function runs tests in a Business Central container based on TestEntry objects
     from the dataset. Each TestEntry contains a codeunit ID and array of function names.
-    Throws an error if the test results don't match the expectation.
+    Test expectations are enforced by Python after the evidence is parsed.
 #>
 function Invoke-DatasetTests {
     param(
@@ -208,12 +248,13 @@ function Invoke-DatasetTests {
         [TestEntry[]] $testEntries,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('Pass', 'Fail')]
-        [string] $expectation
+        [string] $evidenceDirectory
     )
     if ($env:CI) {
-        Write-Output "::group::Running Tests for: $($testEntries.CodeunitID), expectation: $expectation"
+        Write-Output "::group::Running Tests for: $($testEntries.CodeunitID)"
     }
+
+    New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
 
     if ($testEntries.Count -eq 0) {
         Write-Log "No test entries provided, skipping test execution" -Level Warning
@@ -224,27 +265,19 @@ function Invoke-DatasetTests {
         return
     }
 
-    [bool] $allTestsPassed = $true
-
     foreach ($testEntry in $testEntries) {
         [int] $codeunitID = $testEntry.codeunitID
         [string[]] $functionNames = $testEntry.functionName
 
-        [bool] $testPassed = Invoke-BCTest -containerName $containerName -credential $credential -codeunitID $codeunitID -functionNames $functionNames
-
-        if (-not $testPassed) {
-            $allTestsPassed = $false
-        }
+        Invoke-BCTest `
+            -containerName $containerName `
+            -credential $credential `
+            -codeunitID $codeunitID `
+            -functionNames $functionNames `
+            -evidenceDirectory $evidenceDirectory | Out-Null
     }
 
-    if ($expectation -eq 'Pass' -and -not $allTestsPassed) {
-        throw "Tests were expected to Pass but some tests failed"
-    }
-    elseif ($expectation -eq 'Fail' -and $allTestsPassed) {
-        throw "Tests were expected to Fail but all tests passed"
-    }
-
-    Write-Log "Test expectation '$expectation' met successfully" -Level Success
+    Write-Log "Test execution completed" -Level Success
 
     if ($env:CI) {
         Write-Output "::endgroup::"

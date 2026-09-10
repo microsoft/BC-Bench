@@ -6,6 +6,7 @@ from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix import BugFixPipeline
 from bcbench.exceptions import NoTestsExtractedError, TestExecutionError
+from bcbench.operations.test_execution import TestExpectation
 from bcbench.results.bugfix import BugFixResult
 from tests.conftest import create_evaluation_context
 
@@ -34,7 +35,7 @@ def _configure_successful_evaluation(monkeypatch: pytest.MonkeyPatch) -> tuple[l
     )
     monkeypatch.setattr(
         "bcbench.evaluate.bugfix.run_test_suite",
-        lambda _tests, expectation, _container: test_expectations.append(expectation),
+        lambda _tests, expectation, _container, _repo_path: test_expectations.append(expectation),
     )
     monkeypatch.setattr("bcbench.evaluate.bugfix.run_tests", lambda *_args: None)
     return applied_patches, test_expectations
@@ -51,7 +52,7 @@ def test_bugfix_requires_generated_test_and_hidden_test_to_pass(tmp_path, monkey
     assert result.generated_test_pre_patch_failed is True
     assert result.generated_test_post_patch_passed is True
     assert result.benchmark_test_passed is True
-    assert test_expectations == ["Fail", "Pass"]
+    assert test_expectations == [TestExpectation.ANY_FAIL, TestExpectation.ALL_PASS]
     assert applied_patches == [
         f"{context.entry.instance_id} generated fix patch",
         f"{context.entry.instance_id} benchmark test patch",
@@ -80,13 +81,13 @@ def test_bugfix_rejects_patch_without_generated_test(tmp_path, monkeypatch):
     ("failing_call", "error_prefix", "pre_patch_failed", "post_patch_passed"),
     [
         (
-            lambda expectation, _call_index: expectation == "Fail",
+            lambda expectation, _call_index: expectation is TestExpectation.ANY_FAIL,
             "Generated tests passed before the product-code fix",
             False,
             False,
         ),
         (
-            lambda expectation, _call_index: expectation == "Pass",
+            lambda expectation, _call_index: expectation is TestExpectation.ALL_PASS,
             "Generated tests failed after the product-code fix",
             True,
             False,
@@ -105,7 +106,7 @@ def test_bugfix_rejects_invalid_generated_test_transition(
     _configure_successful_evaluation(monkeypatch)
     call_index = 0
 
-    def run_generated_tests(_tests, expectation, _container):
+    def run_generated_tests(_tests, expectation, _container, _repo_path):
         nonlocal call_index
         call_index += 1
         if failing_call(expectation, call_index):

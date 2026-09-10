@@ -1,13 +1,19 @@
 import json
+import re
+import subprocess
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from types import SimpleNamespace
 from xml.etree.ElementTree import ParseError
 
 import pytest
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import TestExecutionError
+from bcbench.exceptions import TestExecutionError, TestExecutionTimeoutExpired
+from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestCaseResult, TestExpectation, TestIdentity, TestOutcome, TestRunSummary
+from bcbench.types import ContainerConfig
+from tests.conftest import create_evaluation_context
 
 
 def make_summary(*outcomes: TestOutcome) -> TestRunSummary:
@@ -31,6 +37,23 @@ def write_results(evidence_dir: Path, codeunit_id: int, testcases: str) -> None:
         f"<testsuite>{testcases}</testsuite>",
         encoding="utf-8",
     )
+
+
+def evidence_path_from_command(command: str) -> Path:
+    match = re.search(r"-evidenceDirectory '((?:''|[^'])*)'", command)
+    assert match is not None
+    return Path(match.group(1).replace("''", "'"))
+
+
+def entries_json_from_command(command: str) -> str:
+    match = re.search(r"\$testEntries = '((?:''|[^'])*)' \| ConvertFrom-Json", command)
+    assert match is not None
+    return match.group(1).replace("''", "'")
+
+
+@pytest.fixture
+def container(tmp_path: Path) -> ContainerConfig:
+    return create_evaluation_context(tmp_path).container
 
 
 def test_test_execution_enum_values():
@@ -472,3 +495,194 @@ def test_discovery_json_accepts_utf8_bom(tmp_path: Path):
     summary = load_test_run_summary(tmp_path, entries)
 
     summary.require(TestExpectation.ALL_PASS)
+
+
+def test_normalize_test_entries_groups_codeunits_and_unions_functions_deterministically():
+    entries = [
+        TestEntry(codeunitID=200, functionName=frozenset({"Zulu"})),
+        TestEntry(codeunitID=100, functionName=frozenset({"Beta", "Alpha"})),
+        TestEntry(codeunitID=100, functionName=frozenset({"Gamma", "Alpha"})),
+    ]
+
+    normalized = bc_operations._normalize_test_entries(entries)
+
+    assert normalized == [
+        TestEntry(codeunitID=100, functionName=frozenset({"Alpha", "Beta", "Gamma"})),
+        TestEntry(codeunitID=200, functionName=frozenset({"Zulu"})),
+    ]
+
+
+def test_run_test_suite_serializes_exact_json_and_returns_parsed_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        evidence_path = evidence_path_from_command(command[-1])
+        assert evidence_path.parent == repo_path
+        assert evidence_path.name.startswith(".bcbench-test-evidence-")
+        write_discovery(evidence_path, 100, ["Alpha", "Beta", "Gamma"])
+        write_results(evidence_path, 100, '<testcase name="Alpha" /><testcase name="Beta" /><testcase name="Gamma" />')
+        write_discovery(evidence_path, 200, ["Zulu"])
+        write_results(evidence_path, 200, '<testcase name="Zulu" />')
+        return subprocess.CompletedProcess(command, returncode=0, stdout="test output", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [
+        TestEntry(codeunitID=200, functionName=frozenset({"Zulu"})),
+        TestEntry(codeunitID=100, functionName=frozenset({"Beta", "Alpha"})),
+        TestEntry(codeunitID=100, functionName=frozenset({"Gamma"})),
+    ]
+
+    summary = bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    command, kwargs = calls[0]
+    assert entries_json_from_command(command[-1]) == ('[{"codeunitID":100,"functionName":["Alpha","Beta","Gamma"]},{"codeunitID":200,"functionName":["Zulu"]}]')
+    assert kwargs["cwd"] == repo_path
+    assert kwargs["check"] is False
+    assert summary.requested == (
+        TestIdentity(100, "Alpha"),
+        TestIdentity(100, "Beta"),
+        TestIdentity(100, "Gamma"),
+        TestIdentity(200, "Zulu"),
+    )
+    assert all(result.outcome is TestOutcome.PASS for result in summary.results)
+
+
+def test_expected_failed_tests_do_not_depend_on_subprocess_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        write_discovery(evidence_path, 50100, ["RegressionTest"])
+        write_results(evidence_path, 50100, '<testcase name="RegressionTest"><failure /></testcase>')
+        return subprocess.CompletedProcess(command, returncode=0, stdout="tests failed as expected", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    summary = bc_operations.run_test_suite(entries, TestExpectation.ANY_FAIL, container, repo_path)
+
+    assert summary.results == (TestCaseResult(TestIdentity(50100, "RegressionTest"), TestOutcome.FAIL),)
+
+
+def test_nonzero_subprocess_with_valid_partial_summary_is_infrastructure_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        write_discovery(evidence_path, 50100, ["First", "Second"])
+        write_results(evidence_path, 50100, '<testcase name="First" />')
+        return subprocess.CompletedProcess(command, returncode=1, stdout="partial output", stderr="infrastructure error")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"First", "Second"}))]
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    assert error.value.reason == "Business Central test execution failed before evidence validation"
+    assert error.value.summary is not None
+    assert error.value.summary.executed == (TestIdentity(50100, "First"),)
+    assert error.value.stdout == "partial output"
+    assert error.value.stderr == "infrastructure error"
+
+
+@pytest.mark.parametrize("invalid_evidence", ["malformed-json", "malformed-xml", "missing-junit", "os-error"])
+def test_invalid_test_evidence_is_wrapped(
+    invalid_evidence: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        if invalid_evidence == "malformed-json":
+            (evidence_path / "discovery-50100.json").write_text("{", encoding="utf-8")
+            write_results(evidence_path, 50100, '<testcase name="RegressionTest" />')
+        elif invalid_evidence == "malformed-xml":
+            write_discovery(evidence_path, 50100, ["RegressionTest"])
+            (evidence_path / "results-50100.xml").write_text("<testsuite>", encoding="utf-8")
+        elif invalid_evidence == "missing-junit":
+            write_discovery(evidence_path, 50100, ["RegressionTest"])
+        return subprocess.CompletedProcess(command, returncode=0, stdout="output", stderr="error output")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    if invalid_evidence == "os-error":
+        monkeypatch.setattr(bc_operations, "load_test_run_summary", lambda *_args: (_ for _ in ()).throw(OSError("read failed")), raising=False)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    assert error.value.reason.startswith("Invalid test evidence: ")
+    assert error.value.expectation is TestExpectation.ALL_PASS
+    assert error.value.stdout == "output"
+    assert error.value.stderr == "error output"
+
+
+def test_run_test_suite_preserves_timeout_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(command, timeout=123)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    with pytest.raises(TestExecutionTimeoutExpired) as error:
+        bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    assert error.value.tests == '[{"codeunitID":50100,"functionName":["RegressionTest"]}]'
+
+
+def test_run_tests_combines_fail_to_pass_and_pass_to_pass_summaries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
+    repo_path = tmp_path / "repo"
+    first = TestEntry(codeunitID=50100, functionName=frozenset({"First"}))
+    second = TestEntry(codeunitID=50200, functionName=frozenset({"Second"}))
+    entry = SimpleNamespace(fail_to_pass=[first], pass_to_pass=[second])
+    calls: list[tuple[list[TestEntry], TestExpectation, ContainerConfig, Path]] = []
+    summaries = [
+        TestRunSummary((TestIdentity(50100, "First"),), (TestIdentity(50100, "First"),), (TestCaseResult(TestIdentity(50100, "First"), TestOutcome.PASS),)),
+        TestRunSummary((TestIdentity(50200, "Second"),), (TestIdentity(50200, "Second"),), (TestCaseResult(TestIdentity(50200, "Second"), TestOutcome.PASS),)),
+    ]
+
+    def run_test_suite(
+        test_entries: list[TestEntry],
+        expectation: TestExpectation,
+        actual_container: ContainerConfig,
+        actual_repo_path: Path,
+    ) -> TestRunSummary:
+        calls.append((test_entries, expectation, actual_container, actual_repo_path))
+        return summaries[len(calls) - 1]
+
+    monkeypatch.setattr(bc_operations, "run_test_suite", run_test_suite)
+
+    summary = bc_operations.run_tests(entry, container, repo_path)
+
+    assert calls == [
+        ([first], TestExpectation.ALL_PASS, container, repo_path),
+        ([second], TestExpectation.ALL_PASS, container, repo_path),
+    ]
+    assert summary == TestRunSummary.combine(summaries)
+
+
+def test_run_tests_rejects_empty_benchmark_selection(tmp_path: Path, container: ContainerConfig):
+    entry = SimpleNamespace(fail_to_pass=[], pass_to_pass=[])
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_tests(entry, container, tmp_path)
+
+    assert error.value.reason == "No tests were requested."
+    assert error.value.expectation is TestExpectation.ALL_PASS

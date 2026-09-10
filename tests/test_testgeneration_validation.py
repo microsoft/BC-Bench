@@ -3,7 +3,14 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from bcbench.evaluate.testgeneration import _get_test_generation_input_mode
+from bcbench.config import get_config
+from bcbench.dataset import TestEntry
+from bcbench.evaluate.testgeneration import TestGenerationPipeline, _get_test_generation_input_mode
+from bcbench.exceptions import TestExecutionError
+from bcbench.operations.test_execution import TestExpectation, TestRunSummary
+from bcbench.results.testgeneration import TestGenerationResult
+from bcbench.types import EvaluationCategory
+from tests.conftest import create_evaluation_context
 
 
 def test_get_test_generation_input_mode_valid_gold_patch():
@@ -68,3 +75,63 @@ def test_get_test_generation_input_mode_empty_string():
 
     with patch("pathlib.Path.read_text", return_value=config_content), pytest.raises(ValueError, match="Invalid test-generation-input mode: ''"):
         _get_test_generation_input_mode()
+
+
+def test_test_generation_any_fail_error_is_classified_as_pre_patch(tmp_path, monkeypatch):
+    context = create_evaluation_context(tmp_path, category=EvaluationCategory.TEST_GENERATION)
+    generated_tests = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+    calls: list[tuple[object, ...]] = []
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.categorize_projects", lambda _paths: (["test"], ["app"]))
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.clean_project_paths", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.stage_and_get_diff", lambda _repo_path: "generated patch")
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_file_paths_from_patch", lambda _patch: [])
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_tests_from_patch", lambda *_args: generated_tests)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.build_and_publish_projects", lambda *_args: None)
+
+    def run_test_suite(test_entries, expectation, container, repo_path):
+        calls.append((test_entries, expectation, container, repo_path))
+        raise TestExecutionError(TestExpectation.ANY_FAIL)
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.run_test_suite", run_test_suite)
+
+    TestGenerationPipeline().evaluate(context)
+
+    result_path = context.result_dir / f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result = TestGenerationResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    assert calls == [(generated_tests, TestExpectation.ANY_FAIL, context.container, context.repo_path)]
+    assert result.pre_patch_failed is False
+    assert result.error_message is not None
+    assert result.error_message.startswith("Generated tests Passed pre-patch")
+
+
+def test_test_generation_non_any_fail_error_is_classified_as_post_patch(tmp_path, monkeypatch):
+    context = create_evaluation_context(tmp_path, category=EvaluationCategory.TEST_GENERATION)
+    generated_tests = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+    calls = 0
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.categorize_projects", lambda _paths: (["test"], ["app"]))
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.clean_project_paths", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.stage_and_get_diff", lambda _repo_path: "generated patch")
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_file_paths_from_patch", lambda _patch: [])
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_tests_from_patch", lambda *_args: generated_tests)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.build_and_publish_projects", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.apply_patch", lambda *_args: None)
+
+    def run_test_suite(_test_entries, expectation, _container, _repo_path):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return TestRunSummary((), (), ())
+        raise TestExecutionError(expectation)
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.run_test_suite", run_test_suite)
+
+    TestGenerationPipeline().evaluate(context)
+
+    result_path = context.result_dir / f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result = TestGenerationResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    assert result.pre_patch_failed is True
+    assert result.post_patch_passed is False
+    assert result.error_message is not None
+    assert result.error_message.startswith("Generated tests Failed post-patch")

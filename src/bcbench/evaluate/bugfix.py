@@ -8,6 +8,7 @@ from bcbench.exceptions import BuildError, EmptyDiffError, NoTestsExtractedError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import (
+    TestExpectation,
     apply_patch,
     build_and_publish_projects,
     categorize_projects,
@@ -112,7 +113,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Fail", container)
+            run_test_suite(generated_tests, TestExpectation.ANY_FAIL, container, context.repo_path)
             generated_test_pre_patch_failed = True
 
             apply_patch(context.repo_path, generated_fix_patch, f"{context.entry.instance_id} generated fix patch")
@@ -122,7 +123,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Pass", container)
+            run_test_suite(generated_tests, TestExpectation.ALL_PASS, container, context.repo_path)
             generated_test_post_patch_passed = True
 
             clean_project_paths(context.repo_path, test_projects)
@@ -133,7 +134,7 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_tests(context.entry, container)
+            run_tests(context.entry, container, context.repo_path)
 
             result = BugFixResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
