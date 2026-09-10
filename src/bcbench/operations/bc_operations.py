@@ -271,6 +271,11 @@ def run_test_suite(
         except subprocess.TimeoutExpired:
             logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
             raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
+        except OSError as error:
+            raise TestExecutionError(
+                expectation,
+                reason=f"Failed to launch Business Central test execution infrastructure: {error}",
+            ) from error
 
         if result.stdout:
             logger.debug(f"Test output:\n{result.stdout}")

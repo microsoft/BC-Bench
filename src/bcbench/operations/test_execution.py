@@ -149,7 +149,9 @@ def load_test_run_summary(evidence_dir: Path, test_entries: Iterable[TestEntry])
         root = ET.parse(results_path).getroot()
         for testcase in (node for node in root.iter() if _local_name(node.tag) == "testcase"):
             child_tags = {_local_name(child.tag) for child in testcase}
-            function_name = testcase.attrib["name"]
+            function_name = testcase.attrib.get("name")
+            if function_name is None:
+                raise ValueError(f"JUnit testcase is missing required name attribute for codeunit {codeunit_id}: {results_path}")
             if "error" in child_tags:
                 raise ValueError(f"JUnit error evidence for codeunit {codeunit_id}, function {function_name}: {results_path}")
             if "failure" in child_tags:

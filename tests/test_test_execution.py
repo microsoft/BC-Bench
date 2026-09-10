@@ -355,6 +355,20 @@ def test_all_pass_rejects_namespaced_junit_error_evidence(tmp_path: Path):
     assert str(results_path) in str(error.value)
 
 
+def test_junit_testcase_requires_name_attribute(tmp_path: Path):
+    from bcbench.operations.test_execution import load_test_run_summary
+
+    results_path = tmp_path / "results-50100.xml"
+    write_discovery(tmp_path, 50100, ["MissingName"])
+    write_results(tmp_path, 50100, "<testcase />")
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"MissingName"}))]
+
+    with pytest.raises(ValueError, match="JUnit testcase is missing required name attribute") as error:
+        load_test_run_summary(tmp_path, entries)
+
+    assert str(results_path) in str(error.value)
+
+
 def test_same_function_name_in_two_codeunits_remains_distinct(tmp_path: Path):
     from bcbench.operations.test_execution import load_test_run_summary
 
@@ -629,6 +643,52 @@ def test_invalid_test_evidence_is_wrapped(
     assert error.value.expectation is TestExpectation.ALL_PASS
     assert error.value.stdout == "output"
     assert error.value.stderr == "error output"
+
+
+def test_missing_junit_testcase_name_is_wrapped_as_invalid_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        write_discovery(evidence_path, 50100, ["MissingName"])
+        write_results(evidence_path, 50100, "<testcase />")
+        return subprocess.CompletedProcess(command, returncode=0, stdout="output", stderr="error output")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"MissingName"}))]
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    assert error.value.reason.startswith("Invalid test evidence: JUnit testcase is missing required name attribute")
+    assert "results-50100.xml" in error.value.reason
+    assert isinstance(error.value.__cause__, ValueError)
+
+
+def test_subprocess_launch_oserror_is_wrapped_as_infrastructure_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    launch_error = FileNotFoundError(2, "No such file or directory", "pwsh")
+    monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: (_ for _ in ()).throw(launch_error))
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    assert error.value.reason.startswith("Failed to launch Business Central test execution infrastructure: ")
+    assert "pwsh" in error.value.reason
+    assert error.value.expectation is TestExpectation.ALL_PASS
+    assert error.value.summary is None
+    assert error.value.__cause__ is launch_error
 
 
 def test_run_test_suite_preserves_timeout_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
