@@ -81,11 +81,21 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float) -> AgentMet
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
     usage_values_available = run.malformed_records == 0
-    token_values_available = usage_values_available and run.usage_complete
     return AgentMetrics(
         execution_time=execution_time,
-        prompt_tokens=run.prompt_tokens if token_values_available else None,
-        completion_tokens=run.completion_tokens if token_values_available else None,
-        total_tokens=run.total_tokens if token_values_available else None,
+        prompt_tokens=run.prompt_tokens if usage_values_available else None,
+        cached_tokens=run.cached_tokens if usage_values_available else None,
+        cache_creation_tokens=run.cache_creation_tokens if usage_values_available else None,
+        completion_tokens=run.completion_tokens if usage_values_available else None,
+        reasoning_tokens=run.reasoning_tokens if usage_values_available else None,
+        total_tokens=run.total_tokens if usage_values_available else None,
+        api_calls=run.api_calls if usage_values_available else None,
+        failed_api_calls=run.failed_api_calls if usage_values_available else None,
+        usage_api_calls=run.usage_api_calls if usage_values_available else None,
         ai_credits=run.ai_credits if usage_values_available else None,
+        premium_requests=run.premium_requests if usage_values_available else None,
+        models=run.models,
+        cli_version=run.cli_version,
+        usage_complete=run.usage_complete,
+        malformed_records=run.malformed_records,
     )

@@ -78,9 +78,19 @@ class AgentMetrics(BaseModel):
 
     # Token usage from LLM calls
     prompt_tokens: int | None = None
+    cached_tokens: int | None = None
+    cache_creation_tokens: int | None = None
     completion_tokens: int | None = None
-
+    reasoning_tokens: int | None = None
     total_tokens: int | None = None
+    api_calls: int | None = None
+    failed_api_calls: int | None = None
+    usage_api_calls: int | None = None
+    premium_requests: float | None = None
+    models: list[str] | None = None
+    cli_version: str | None = None
+    usage_complete: bool | None = None
+    malformed_records: int | None = None
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None

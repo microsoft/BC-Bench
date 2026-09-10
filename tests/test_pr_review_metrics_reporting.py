@@ -84,8 +84,26 @@ def test_github_summary_renders_only_public_performance_metrics() -> None:
         assert diagnostic not in markdown
 
 
-def test_result_json_excludes_raw_only_diagnostics(tmp_path) -> None:
-    result = create_codereview_result(metrics=_metrics(duration=4.0, scale=1))
+def test_result_json_preserves_raw_diagnostics(tmp_path) -> None:
+    metrics = AgentMetrics(
+        execution_time=4.0,
+        prompt_tokens=900,
+        cached_tokens=700,
+        cache_creation_tokens=50,
+        completion_tokens=100,
+        reasoning_tokens=40,
+        total_tokens=1000,
+        api_calls=5,
+        failed_api_calls=0,
+        usage_api_calls=4,
+        ai_credits=0.5,
+        premium_requests=0.5,
+        models=["claude-sonnet-5", "gpt-5.4"],
+        cli_version="1.0.83",
+        usage_complete=False,
+        malformed_records=0,
+    )
+    result = create_codereview_result(metrics=metrics)
     result.save(tmp_path, "results.jsonl")
 
     saved_metrics = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metrics"]
@@ -94,17 +112,17 @@ def test_result_json_excludes_raw_only_diagnostics(tmp_path) -> None:
     assert saved_metrics["completion_tokens"] == 100
     assert saved_metrics["total_tokens"] == 1000
     assert saved_metrics["ai_credits"] == 0.5
-    for diagnostic in (
-        "cached_tokens",
-        "cache_creation_tokens",
-        "reasoning_tokens",
-        "failed_api_calls",
-        "usage_api_calls",
-        "premium_requests",
-        "usage_complete",
-        "malformed_records",
-    ):
-        assert diagnostic not in saved_metrics
+    assert saved_metrics["cached_tokens"] == 700
+    assert saved_metrics["cache_creation_tokens"] == 50
+    assert saved_metrics["reasoning_tokens"] == 40
+    assert saved_metrics["api_calls"] == 5
+    assert saved_metrics["failed_api_calls"] == 0
+    assert saved_metrics["usage_api_calls"] == 4
+    assert saved_metrics["premium_requests"] == 0.5
+    assert saved_metrics["models"] == ["claude-sonnet-5", "gpt-5.4"]
+    assert saved_metrics["cli_version"] == "1.0.83"
+    assert saved_metrics["usage_complete"] is False
+    assert saved_metrics["malformed_records"] == 0
 
 
 def test_summary_and_leaderboard_schemas_exclude_raw_only_diagnostics() -> None:
