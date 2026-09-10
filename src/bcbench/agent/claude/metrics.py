@@ -2,6 +2,7 @@ import json
 from collections import Counter
 from collections.abc import Sequence
 
+from bcbench.agent.shared.playbook_audit import PlaybookUsageTracker
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
@@ -36,7 +37,12 @@ def _tool_label(block: dict) -> str | None:
     return tool_name
 
 
-def parse_stream_output(output_lines: Sequence[str], *, log_transcript: bool = False) -> tuple[AgentMetrics | None, str | None]:
+def parse_stream_output(
+    output_lines: Sequence[str],
+    *,
+    log_transcript: bool = False,
+    playbook_tracker: PlaybookUsageTracker | None = None,
+) -> tuple[AgentMetrics | None, str | None]:
     execution_time: float | None = None
     llm_duration: float | None = None
     turn_count: int | None = None
@@ -81,6 +87,8 @@ def parse_stream_output(output_lines: Sequence[str], *, log_transcript: bool = F
                             case "tool_use":
                                 if label := _tool_label(block):
                                     tool_usage[label] += 1
+                                    if playbook_tracker is not None:
+                                        playbook_tracker.record_tool_call(label, block.get("input"))
                                     if log_transcript:
                                         logger.info("Claude Code tool: %s", label)
             case "result":
@@ -105,8 +113,20 @@ def parse_stream_output(output_lines: Sequence[str], *, log_transcript: bool = F
                     if log_transcript and result_text.strip() != last_assistant_message:
                         logger.info("Claude Code: %s", result_text.strip())
 
+    playbook_usage = playbook_tracker.finish() if playbook_tracker is not None else None
+    if playbook_usage is not None:
+        logger.info(
+            "Playbook usage: status=%s playbook=%s route_event=%s first_edit_event=%s compliant=%s%s",
+            playbook_usage.status,
+            playbook_usage.playbook_id or "none",
+            playbook_usage.route_event,
+            playbook_usage.first_edit_event,
+            playbook_usage.compliant,
+            f" violation={playbook_usage.violation}" if playbook_usage.violation else "",
+        )
+
     metrics = None
-    if execution_time is not None or llm_duration is not None or turn_count is not None or prompt_tokens is not None or completion_tokens is not None or tool_usage:
+    if execution_time is not None or llm_duration is not None or turn_count is not None or prompt_tokens is not None or completion_tokens is not None or tool_usage or playbook_usage is not None:
         metrics = AgentMetrics(
             execution_time=execution_time,
             llm_duration=llm_duration,
@@ -114,6 +134,7 @@ def parse_stream_output(output_lines: Sequence[str], *, log_transcript: bool = F
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             tool_usage=dict(tool_usage) or None,
+            playbook_usage=playbook_usage,
         )
     else:
         logger.warning("No metrics found in Claude Code JSON output")

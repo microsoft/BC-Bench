@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths as _build_assembly_probing_paths
-from bcbench.agent.shared.mcp import build_mcp_config
+from bcbench.agent.shared.mcp import build_mcp_config, build_playbook_mcp_server
 from bcbench.exceptions import AgentError
 from bcbench.types import AgentRuntimeConfig, ContainerConfig
 from tests.conftest import create_dataset_entry
@@ -111,6 +111,16 @@ class TestAlMcpProjectPaths:
         assert names is not None
 
         assert set(names) == {"altool", "docs"}
+
+    def test_adds_playbook_router_server(self, entry, repo_path, tmp_path):
+        server = build_playbook_mcp_server(tmp_path / "playbooks")
+
+        config_json, names = build_mcp_config(_make_config(), entry, repo_path, additional_servers=[server])
+
+        assert config_json is not None
+        assert names == ["playbooks"]
+        parsed = json.loads(config_json)["mcpServers"]["playbooks"]
+        assert parsed["args"] == ["-m", "bcbench.playbook_mcp", str(tmp_path / "playbooks")]
 
 
 class TestBcMcp:

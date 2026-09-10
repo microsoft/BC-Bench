@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -31,6 +31,8 @@ __all__ = [
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
     "PlaybookMode",
+    "PlaybookRouteStatus",
+    "PlaybookUsage",
     "PluginConfig",
     "RepoSlug",
 ]
@@ -38,6 +40,21 @@ __all__ = [
 
 type ChecklistLevel = Literal["critical", "expected", "aspirational"]
 type PlaybookMode = Literal["discover", "selected"]
+type PlaybookRouteStatus = Literal["loaded", "none", "ambiguous", "missing"]
+
+
+class PlaybookUsage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: PlaybookRouteStatus
+    playbook_id: str | None = None
+    matching_playbook_ids: list[str] = Field(default_factory=list)
+    confirmed_paths: list[str] = Field(default_factory=list)
+    route_event: int | None = None
+    first_edit_event: int | None = None
+    routed_before_edit: bool | None = None
+    compliant: bool
+    violation: str | None = None
 
 
 class ChecklistAssertion(TypedDict):
@@ -86,6 +103,9 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+    # Runtime evidence that the required playbook routing protocol was followed
+    playbook_usage: PlaybookUsage | None = None
 
 
 class ExperimentConfiguration(BaseModel):

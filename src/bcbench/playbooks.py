@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path, PurePosixPath
-from typing import Annotated
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -12,11 +12,14 @@ from bcbench.types import PlaybookMode
 __all__ = [
     "PlaybookDefinition",
     "PlaybookManifest",
+    "PlaybookRoute",
     "PlaybookSetup",
     "load_playbook_manifest",
+    "match_playbooks_for_paths",
     "playbook_revision",
     "resolve_playbook_for_area",
     "resolve_playbook_for_paths",
+    "route_playbook_for_paths",
 ]
 
 
@@ -59,6 +62,18 @@ class PlaybookSetup(BaseModel):
     mode: PlaybookMode | None = None
     revision: str | None = None
     playbook_id: str | None = None
+    source_dir: Path | None = None
+    router_enabled: bool = False
+
+
+class PlaybookRoute(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["loaded", "none", "ambiguous"]
+    playbook_id: str | None = None
+    matching_playbook_ids: list[str] = Field(default_factory=list)
+    confirmed_paths: list[str]
+    content: str | None = None
 
 
 def _normalize_path(value: str) -> str:
@@ -93,10 +108,31 @@ def resolve_playbook_for_area(manifest: PlaybookManifest, area: str | None) -> P
 
 
 def resolve_playbook_for_paths(manifest: PlaybookManifest, paths: list[str]) -> PlaybookDefinition | None:
-    matches = {
-        playbook.id: playbook for path in paths for playbook in manifest.playbooks if any(PurePosixPath(_normalize_path(path)).full_match(_normalize_path(pattern)) for pattern in playbook.paths)
-    }
+    matches = match_playbooks_for_paths(manifest, paths)
     return next(iter(matches.values())) if len(matches) == 1 else None
+
+
+def match_playbooks_for_paths(manifest: PlaybookManifest, paths: list[str]) -> dict[str, PlaybookDefinition]:
+    return {playbook.id: playbook for path in paths for playbook in manifest.playbooks if any(PurePosixPath(_normalize_path(path)).full_match(_normalize_path(pattern)) for pattern in playbook.paths)}
+
+
+def route_playbook_for_paths(playbook_dir: Path, confirmed_paths: list[str]) -> PlaybookRoute:
+    manifest = load_playbook_manifest(playbook_dir)
+    matches = match_playbooks_for_paths(manifest, confirmed_paths)
+    matching_ids = sorted(matches)
+    if not matches:
+        return PlaybookRoute(status="none", confirmed_paths=confirmed_paths)
+    if len(matches) > 1:
+        return PlaybookRoute(status="ambiguous", matching_playbook_ids=matching_ids, confirmed_paths=confirmed_paths)
+
+    selected = next(iter(matches.values()))
+    return PlaybookRoute(
+        status="loaded",
+        playbook_id=selected.id,
+        matching_playbook_ids=[selected.id],
+        confirmed_paths=confirmed_paths,
+        content=(playbook_dir / selected.file).read_text(encoding="utf-8"),
+    )
 
 
 def playbook_revision(playbook_dir: Path, manifest: PlaybookManifest) -> str:

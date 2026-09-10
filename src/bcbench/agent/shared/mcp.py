@@ -1,5 +1,7 @@
 import json
 import shutil
+import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -72,8 +74,10 @@ def build_mcp_config(
     repo_path: Path,
     runtime: AgentRuntimeConfig | None = None,
     bc_mcp_gateway_url: str | None = None,
+    additional_servers: list[dict[str, Any]] | None = None,
 ) -> tuple[str | None, list[str] | None]:
-    mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
+    mcp_servers: list[dict[str, Any]] = deepcopy(config.get("mcp", {}).get("servers", []))
+    mcp_servers.extend(deepcopy(additional_servers or []))
 
     if runtime is None or not runtime.al_mcp:
         mcp_servers = list(filter(lambda s: s.get("name") != "altool", mcp_servers))
@@ -132,3 +136,12 @@ def build_mcp_config(
     logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
 
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names
+
+
+def build_playbook_mcp_server(playbook_dir: Path) -> dict[str, Any]:
+    return {
+        "name": "playbooks",
+        "type": "stdio",
+        "command": sys.executable,
+        "args": ["-m", "bcbench.playbook_mcp", str(playbook_dir)],
+    }

@@ -53,6 +53,7 @@ class EvaluationResultSummary(BaseModel, ABC):
     # None rather than 0.0 when unavailable: only Copilot reports credits, and 0.0 would read as "free"
     average_ai_credits: float | None = None
     average_tool_usage: dict[str, float] | None = None
+    playbook_usage: dict[str, int] | None = None
 
     github_run_id: str | None = None
     experiment: ExperimentConfiguration | None = None
@@ -81,6 +82,7 @@ class EvaluationResultSummary(BaseModel, ABC):
         llm_durations: list[float] = [r.metrics.llm_duration for r in results if r.metrics and r.metrics.llm_duration is not None]
         ai_credits: list[float] = [r.metrics.ai_credits for r in results if r.metrics and r.metrics.ai_credits is not None]
         tool_usages: list[dict[str, int]] = [r.metrics.tool_usage for r in results if r.metrics and r.metrics.tool_usage is not None]
+        playbook_usages = [r.metrics.playbook_usage for r in results if r.metrics and r.metrics.playbook_usage is not None]
 
         first_result = results[0]
         experiment = first_result.experiment.for_aggregate() if first_result.experiment and not first_result.experiment.is_empty() else None
@@ -97,6 +99,19 @@ class EvaluationResultSummary(BaseModel, ABC):
             "average_llm_duration": sum(llm_durations) / len(llm_durations) if llm_durations else 0.0,
             "average_ai_credits": sum(ai_credits) / len(ai_credits) if ai_credits else None,
             "average_tool_usage": calculate_average_tool_usage(tool_usages) if tool_usages else None,
+            "playbook_usage": (
+                {
+                    "total": len(playbook_usages),
+                    "compliant": sum(usage.compliant for usage in playbook_usages),
+                    "violations": sum(not usage.compliant for usage in playbook_usages),
+                    "loaded": sum(usage.status == "loaded" for usage in playbook_usages),
+                    "none": sum(usage.status == "none" for usage in playbook_usages),
+                    "ambiguous": sum(usage.status == "ambiguous" for usage in playbook_usages),
+                    "missing": sum(usage.status == "missing" for usage in playbook_usages),
+                }
+                if playbook_usages
+                else None
+            ),
             "github_run_id": run_id,
             "experiment": experiment,
             "benchmark_version": get_benchmark_version(),
@@ -128,6 +143,8 @@ class EvaluationResultSummary(BaseModel, ABC):
         data["average_llm_duration"] = round(data["average_llm_duration"], 1) if data["average_llm_duration"] is not None else None
         if data["average_tool_usage"] is None:
             del data["average_tool_usage"]
+        if data["playbook_usage"] is None:
+            del data["playbook_usage"]
         return data
 
     def save(self, output_dir: Path, summary_file: str) -> None:

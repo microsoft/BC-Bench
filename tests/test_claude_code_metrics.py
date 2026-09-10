@@ -5,6 +5,9 @@ import json
 import pytest
 
 from bcbench.agent.claude.metrics import parse_stream_output
+from bcbench.agent.shared.playbook_audit import PlaybookUsageTracker
+from bcbench.playbooks import PlaybookSetup
+from tests.test_playbooks import write_package
 
 
 class TestClaudeCodeMetricsParsing:
@@ -232,3 +235,38 @@ class TestClaudeStreamParsing:
         )
 
         assert "Claude Code: Done." in caplog.messages
+
+    def test_records_playbook_router_evidence(self, tmp_path):
+        tracker = PlaybookUsageTracker(
+            PlaybookSetup(
+                enabled=True,
+                mode="discover",
+                revision="revision",
+                source_dir=write_package(tmp_path),
+                router_enabled=True,
+            )
+        )
+
+        metrics, _ = parse_stream_output(
+            self._lines(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "mcp__playbooks__route_bug_fix_playbook",
+                                "input": {"confirmed_paths": ["App/Layers/W1/BaseApp/Warehouse/Activity/Foo.Codeunit.al"]},
+                            },
+                            {"type": "tool_use", "name": "Edit", "input": {"file_path": "Foo.Codeunit.al"}},
+                        ]
+                    },
+                }
+            ),
+            playbook_tracker=tracker,
+        )
+
+        assert metrics is not None
+        assert metrics.playbook_usage is not None
+        assert metrics.playbook_usage.playbook_id == "warehouse"
+        assert metrics.playbook_usage.compliant is True

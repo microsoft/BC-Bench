@@ -13,6 +13,7 @@ from bcbench.playbooks import (
     playbook_revision,
     resolve_playbook_for_area,
     resolve_playbook_for_paths,
+    route_playbook_for_paths,
 )
 from bcbench.types import AgentHarness
 
@@ -119,6 +120,36 @@ def test_revision_changes_with_playbook_content(tmp_path: Path):
     assert playbook_revision(playbook_dir, manifest) != original
 
 
+def test_route_returns_matching_playbook_content(tmp_path: Path):
+    playbook_dir = write_package(tmp_path)
+
+    route = route_playbook_for_paths(playbook_dir, ["App/Layers/W1/BaseApp/Warehouse/Activity/Foo.Codeunit.al"])
+
+    assert route.status == "loaded"
+    assert route.playbook_id == "warehouse"
+    assert route.matching_playbook_ids == ["warehouse"]
+    assert route.content == "# Warehouse\n"
+
+
+def test_route_distinguishes_no_match_from_ambiguity(tmp_path: Path):
+    playbook_dir = write_package(tmp_path)
+
+    no_match = route_playbook_for_paths(playbook_dir, ["App/Layers/W1/BaseApp/Sales/Foo.Codeunit.al"])
+    ambiguous = route_playbook_for_paths(
+        playbook_dir,
+        [
+            "App/Layers/W1/BaseApp/Warehouse/Activity/Foo.Codeunit.al",
+            "App/Layers/W1/BaseApp/Projects/Project/Foo.Codeunit.al",
+        ],
+    )
+
+    assert no_match.status == "none"
+    assert no_match.matching_playbook_ids == []
+    assert ambiguous.status == "ambiguous"
+    assert ambiguous.matching_playbook_ids == ["project", "warehouse"]
+    assert ambiguous.content is None
+
+
 def install_package(tmp_path: Path, harness: AgentHarness) -> Path:
     source_root = tmp_path / "source"
     source_root.mkdir()
@@ -131,6 +162,7 @@ def install_package(tmp_path: Path, harness: AgentHarness) -> Path:
 def entry_with_area(area: str | None) -> MagicMock:
     entry = MagicMock()
     entry.metadata.area = area
+    entry.customization_profile = "microsoftInternal-NAV"
     return entry
 
 
@@ -158,6 +190,8 @@ def test_selected_mode_writes_harness_specific_marker(tmp_path: Path, harness: A
         mode="selected",
         revision=setup.revision,
         playbook_id="warehouse",
+        source_dir=setup.source_dir,
+        router_enabled=False,
     )
     assert setup.revision
     assert yaml.safe_load(marker.read_text(encoding="utf-8")) == {"id": "warehouse", "file": "warehouse.md"}
@@ -177,7 +211,9 @@ def test_discover_mode_validates_package_without_marker(tmp_path: Path):
     assert setup.enabled is True
     assert setup.mode == "discover"
     assert setup.playbook_id is None
-    assert not (playbook_dir / "selected.yaml").exists()
+    assert setup.source_dir is not None
+    assert setup.router_enabled is True
+    assert not playbook_dir.exists()
 
 
 def test_disabled_playbooks_do_not_require_custom_agent(tmp_path: Path):
@@ -206,7 +242,8 @@ def test_selected_mode_with_unmapped_area_removes_stale_marker(tmp_path: Path):
     )
 
     assert setup.playbook_id is None
-    assert not marker.exists()
+    assert setup.router_enabled is True
+    assert not marker.parent.exists()
 
 
 def test_enabled_playbooks_require_custom_agent(tmp_path: Path):

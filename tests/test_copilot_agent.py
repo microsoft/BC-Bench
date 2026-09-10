@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from bcbench.agent.copilot.agent import run_copilot_agent
 from bcbench.agent.copilot.cli import invoke_copilot
@@ -115,4 +115,4 @@ def test_copilot_does_not_enable_hooks_memory_or_unrestricted_urls(tmp_path: Pat
     assert "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS" not in mock_run.call_args.kwargs["env"]
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_USERNAME"] == "admin"
     assert mock_run.call_args.kwargs["env"]["BC_SERVER_PASSWORD"] == "secret"
-    mock_parse_output.assert_called_once_with(['{"type":"result"}'], log_transcript=True)
+    mock_parse_output.assert_called_once_with(['{"type":"result"}'], log_transcript=True, playbook_tracker=ANY)

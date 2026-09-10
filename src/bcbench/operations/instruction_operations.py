@@ -88,23 +88,29 @@ def setup_agent_playbooks(
     if mode not in ("discover", "selected"):
         raise ValueError(f"Invalid playbook mode: {mode!r}")
 
-    playbook_dir = harness.get_target_dir(repo_path) / "agents" / custom_agent / "playbooks"
-    manifest = load_playbook_manifest(playbook_dir)
-    marker = playbook_dir / "selected.yaml"
+    source_dir = _get_source_instructions_path(entry.customization_profile) / "agents" / custom_agent / "playbooks"
+    target_dir = harness.get_target_dir(repo_path) / "agents" / custom_agent / "playbooks"
+    manifest = load_playbook_manifest(source_dir)
+    marker = target_dir / "selected.yaml"
     marker.unlink(missing_ok=True)
 
     selected = resolve_playbook_for_area(manifest, entry.metadata.area) if mode == "selected" else None
+    router_enabled = mode == "discover" or selected is None
     if selected is not None:
         marker.write_text(
             yaml.safe_dump({"id": selected.id, "file": selected.file}, sort_keys=False),
             encoding="utf-8",
         )
+    elif target_dir.exists():
+        rmtree(target_dir)
 
     return PlaybookSetup(
         enabled=True,
         mode=cast(PlaybookMode, mode),
-        revision=playbook_revision(playbook_dir, manifest),
+        revision=playbook_revision(source_dir, manifest),
         playbook_id=selected.id if selected else None,
+        source_dir=source_dir,
+        router_enabled=router_enabled,
     )
 
 

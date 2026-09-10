@@ -6,9 +6,11 @@ import yaml
 
 from bcbench.agent.claude.metrics import parse_stream_output
 from bcbench.agent.shared import (
+    PlaybookUsageTracker,
     agent_subprocess_env,
     build_al_lsp_plugin,
     build_mcp_config,
+    build_playbook_mcp_server,
     build_prompt,
     resolve_config_plugins,
     start_bc_mcp_gateway,
@@ -47,14 +49,6 @@ def run_claude_code(
     logger.info(f"Running Claude Code on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, claude_config, category, al_mcp=bool(runtime and runtime.al_mcp))
-    bc_gateway = start_bc_mcp_gateway(runtime)
-    mcp_config_json, mcp_server_names = build_mcp_config(
-        claude_config,
-        entry,
-        repo_path,
-        runtime=runtime,
-        bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
-    )
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(
         entry,
         category,
@@ -66,6 +60,17 @@ def run_claude_code(
     skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
     playbooks = setup_agent_playbooks(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE, custom_agent=custom_agent)
+    playbook_tracker = PlaybookUsageTracker(playbooks)
+    additional_mcp_servers = [build_playbook_mcp_server(playbooks.source_dir)] if playbooks.router_enabled and playbooks.source_dir else None
+    bc_gateway = start_bc_mcp_gateway(runtime)
+    mcp_config_json, mcp_server_names = build_mcp_config(
+        claude_config,
+        entry,
+        repo_path,
+        runtime=runtime,
+        bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
+        additional_servers=additional_mcp_servers,
+    )
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
 
     config = ExperimentConfiguration(
@@ -142,7 +147,7 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
+        metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True, playbook_tracker=playbook_tracker)
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

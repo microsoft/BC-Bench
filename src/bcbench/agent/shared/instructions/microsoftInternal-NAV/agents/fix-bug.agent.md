@@ -36,7 +36,8 @@ and how to fail.
 
 If `AGENT_ROOT/playbooks/selected.yaml` exists, read it and then read the playbook named by its
 `file` field before extracting the task. Read no other area playbook. If the marker names a missing
-file, stop and report that the agent package is incomplete.
+file, stop and report that the agent package is incomplete. If the marker does not exist, do not
+search for or read playbook files directly; the workflow routes them through a dedicated tool.
 
 ## Step 2: Extract the task
 
@@ -55,5 +56,4 @@ Read `AGENT_ROOT/workflow.md` and execute every step of it.
 | `AGENT_ROOT/rules.md` | Always, before acting |
 | `AGENT_ROOT/workflow.md` | Always, as Step 3 |
 | `AGENT_ROOT/troubleshooting.md` | When a build, publish, or test call behaves in a way the workflow does not cover |
-| `AGENT_ROOT/playbooks/manifest.yaml` | During discover-mode routing |
 | `AGENT_ROOT/playbooks/selected.yaml` | When present; identifies the selected-mode playbook |

@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.shared.playbook_audit import PlaybookUsageTracker
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
@@ -32,6 +33,7 @@ def invoke_copilot(
     custom_instructions: bool = False,
     extra_args: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
+    playbook_tracker: PlaybookUsageTracker | None = None,
 ) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
@@ -73,5 +75,5 @@ def invoke_copilot(
         sys.stderr.write(result.stderr)
         sys.stderr.flush()
 
-    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
+    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True, playbook_tracker=playbook_tracker)
     return metrics, final_response or ""

@@ -7,9 +7,11 @@ import yaml
 
 from bcbench.agent.copilot.cli import invoke_copilot
 from bcbench.agent.shared import (
+    PlaybookUsageTracker,
     agent_subprocess_env,
     build_al_lsp_plugin,
     build_mcp_config,
+    build_playbook_mcp_server,
     build_prompt,
     resolve_config_plugins,
     start_bc_mcp_gateway,
@@ -44,14 +46,6 @@ def run_copilot_agent(
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=bool(runtime and runtime.al_mcp))
-    bc_gateway = start_bc_mcp_gateway(runtime)
-    mcp_config_json, mcp_server_names = build_mcp_config(
-        copilot_config,
-        entry,
-        repo_path,
-        runtime=runtime,
-        bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
-    )
     lsp_plugin_dir: Path | None = build_al_lsp_plugin(
         entry,
         category,
@@ -63,6 +57,17 @@ def run_copilot_agent(
     skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
     playbooks = setup_agent_playbooks(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT, custom_agent=custom_agent)
+    playbook_tracker = PlaybookUsageTracker(playbooks)
+    additional_mcp_servers = [build_playbook_mcp_server(playbooks.source_dir)] if playbooks.router_enabled and playbooks.source_dir else None
+    bc_gateway = start_bc_mcp_gateway(runtime)
+    mcp_config_json, mcp_server_names = build_mcp_config(
+        copilot_config,
+        entry,
+        repo_path,
+        runtime=runtime,
+        bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
+        additional_servers=additional_mcp_servers,
+    )
     plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
 
     config = ExperimentConfiguration(
@@ -113,6 +118,7 @@ def run_copilot_agent(
                 },
                 pass_bc_credentials=category.pass_on_bc_container_credentials,
             ),
+            playbook_tracker=playbook_tracker,
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
     except subprocess.TimeoutExpired:

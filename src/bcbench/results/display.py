@@ -50,6 +50,12 @@ def create_console_summary(results: Sequence[BaseEvaluationResult], summary: Eva
             for tool_name, count in sorted_tools:
                 console.print(f"  {tool_name}: [bold]{count}[/bold]")
 
+    if summary.playbook_usage:
+        usage = summary.playbook_usage
+        console.print("\n[bold cyan]Playbook Protocol[/bold cyan]")
+        console.print(f"  Compliant: [bold]{usage['compliant']}/{usage['total']}[/bold]")
+        console.print(f"  Loaded: [bold]{usage['loaded']}[/bold], None: [bold]{usage['none']}[/bold], Ambiguous: [bold]{usage['ambiguous']}[/bold], Missing: [bold]{usage['missing']}[/bold]")
+
     table = Table(title="\nDetailed Results", show_lines=True)
     table.add_column("Instance ID", style="cyan", no_wrap=True)
     table.add_column("Project", style="magenta", no_wrap=True)
@@ -93,6 +99,20 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             tool_lines = [f"  - `{tool}`: {count}" for tool, count in sorted_tools]
             tool_usage_section = "## Average Tool Usage\n" + "\n".join(tool_lines)
 
+    playbook_usage_section = ""
+    if summary.playbook_usage:
+        usage = summary.playbook_usage
+        playbook_usage_section = "\n".join(
+            [
+                "## Playbook Protocol",
+                f"- Compliant: **{usage['compliant']}/{usage['total']}**",
+                f"- Loaded: **{usage['loaded']}**",
+                f"- No match: **{usage['none']}**",
+                f"- Ambiguous: **{usage['ambiguous']}**",
+                f"- Missing or invalid routing: **{usage['missing']}**",
+            ]
+        )
+
     header_section: str = "\n".join(
         [
             f"Total entries processed: {len(results)}, using **{results[0].agent_name} ({results[0].model})**",
@@ -108,7 +128,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
             f"- Plugins: {', '.join(results[0].experiment.plugins) if results[0].experiment and results[0].experiment.plugins else 'None'}",
         ]
     )
-    sections: list[str] = [header_section, *(section for section in [metrics_section, tool_usage_section] if section), "## Detailed Results\n\n"]
+    sections: list[str] = [header_section, *(section for section in [metrics_section, tool_usage_section, playbook_usage_section] if section), "## Detailed Results\n\n"]
     markdown_summary: str = "\n\n".join(sections)
 
     # Dynamic columns from display_row()

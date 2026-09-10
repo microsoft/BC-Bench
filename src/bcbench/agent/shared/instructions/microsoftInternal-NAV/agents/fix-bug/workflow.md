@@ -48,17 +48,17 @@ if the described symptom is visual.
 Skip this step when `AGENT_ROOT/playbooks/selected.yaml` exists.
 
 Use only source paths confirmed during Step 1. Do not inspect the benchmark dataset, gold patch,
-hidden test patch, or benchmark answer files.
+hidden test patch, benchmark answer files, the playbook manifest, or playbook files directly.
 
-Read `AGENT_ROOT/playbooks/manifest.yaml`. Normalize confirmed paths to repository-relative paths
-with `/` separators and compare them case-insensitively with the manifest patterns:
+Call `route_bug_fix_playbook` exactly once with every confirmed repository-relative source path,
+using `/` separators. The tool deterministically returns one of:
 
-- Exactly one distinct playbook matches: read that playbook before writing the plan.
-- No playbook matches: continue without one.
-- Different confirmed paths match different playbooks: report the ambiguity in the plan and read
-  none of them.
+- `loaded`: use the returned playbook content before writing the plan.
+- `none`: continue without a playbook.
+- `ambiguous`: record the returned matches as an ambiguity in the plan and continue without a
+  playbook.
 
-Read at most one area playbook. Do not browse unrelated playbooks.
+Do not edit source files before this routing call. Do not call the routing tool again.
 
 ### Step 3: Write the plan
 

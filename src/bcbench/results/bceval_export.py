@@ -70,6 +70,7 @@ def write_bceval_results(
                 "project": result.project,
                 "error_message": result.error_message,
                 "tool_usage": (result.metrics.tool_usage if result.metrics and result.metrics.tool_usage else None) or 0,
+                "playbook_usage": result.metrics.playbook_usage.model_dump(mode="json") if result.metrics and result.metrics.playbook_usage else None,
                 **_experiment_metadata(result.experiment, git_ref, benchmark_version),
             }
 

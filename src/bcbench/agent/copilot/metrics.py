@@ -2,6 +2,7 @@ import json
 from collections import Counter
 from collections.abc import Sequence
 
+from bcbench.agent.shared.playbook_audit import PlaybookUsageTracker
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
@@ -33,7 +34,12 @@ def _tool_label(data: dict) -> str | None:
     return tool_name
 
 
-def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -> tuple[AgentMetrics | None, str | None]:
+def parse_output(
+    output_lines: Sequence[str],
+    *,
+    log_transcript: bool = False,
+    playbook_tracker: PlaybookUsageTracker | None = None,
+) -> tuple[AgentMetrics | None, str | None]:
     """Parse metrics and the agent's final response from `copilot --output-format=json` (JSONL) stdout.
 
     Relevant events (CLI 1.0.82):
@@ -74,6 +80,8 @@ def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -
                 data = event.get("data")
                 if isinstance(data, dict) and (label := _tool_label(data)):
                     tool_usage[label] += 1
+                    if playbook_tracker is not None:
+                        playbook_tracker.record_tool_call(label, data.get("arguments"))
                     if log_transcript:
                         logger.info("Copilot tool: %s", label)
             case "assistant.message":
@@ -104,14 +112,27 @@ def parse_output(output_lines: Sequence[str], *, log_transcript: bool = False) -
                 execution_time = _milliseconds_to_seconds(usage.get("sessionDurationMs"))
                 llm_duration = _milliseconds_to_seconds(usage.get("totalApiDurationMs"))
 
+    playbook_usage = playbook_tracker.finish() if playbook_tracker is not None else None
+    if playbook_usage is not None:
+        logger.info(
+            "Playbook usage: status=%s playbook=%s route_event=%s first_edit_event=%s compliant=%s%s",
+            playbook_usage.status,
+            playbook_usage.playbook_id or "none",
+            playbook_usage.route_event,
+            playbook_usage.first_edit_event,
+            playbook_usage.compliant,
+            f" violation={playbook_usage.violation}" if playbook_usage.violation else "",
+        )
+
     metrics = None
-    if execution_time is not None or llm_duration is not None or ai_credits is not None or turn_count:
+    if execution_time is not None or llm_duration is not None or ai_credits is not None or turn_count or playbook_usage is not None:
         metrics = AgentMetrics(
             execution_time=execution_time,
             llm_duration=llm_duration,
             ai_credits=ai_credits,
             turn_count=turn_count or None,
             tool_usage=dict(tool_usage) or None,
+            playbook_usage=playbook_usage,
         )
     else:
         logger.warning("No metrics found in Copilot JSON output")

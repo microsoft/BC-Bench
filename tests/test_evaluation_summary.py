@@ -5,7 +5,7 @@ import pytest
 
 from bcbench.config import get_config
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration, PlaybookUsage
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
 _config = get_config()
@@ -285,6 +285,47 @@ class TestFromResults:
 
         assert summary.average_tool_usage is None
         assert "average_tool_usage" not in summary.to_dict()
+
+    def test_from_results_summarizes_playbook_protocol(self):
+        results = [
+            create_bugfix_result(
+                instance_id="test__1",
+                project="app",
+                resolved=True,
+                metrics=AgentMetrics(
+                    playbook_usage=PlaybookUsage(
+                        status="loaded",
+                        playbook_id="warehouse",
+                        matching_playbook_ids=["warehouse"],
+                        compliant=True,
+                    )
+                ),
+            ),
+            create_bugfix_result(
+                instance_id="test__2",
+                project="app",
+                resolved=False,
+                metrics=AgentMetrics(
+                    playbook_usage=PlaybookUsage(
+                        status="missing",
+                        compliant=False,
+                        violation="route_bug_fix_playbook was not called",
+                    )
+                ),
+            ),
+        ]
+
+        summary = ExecutionBasedEvaluationResultSummary.from_results(results, run_id="test_run")
+
+        assert summary.playbook_usage == {
+            "total": 2,
+            "compliant": 1,
+            "violations": 1,
+            "loaded": 1,
+            "none": 0,
+            "ambiguous": 0,
+            "missing": 1,
+        }
 
 
 class TestExperimentConfiguration:
