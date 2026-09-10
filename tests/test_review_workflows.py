@@ -62,6 +62,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
         "test-run:",
         "repeat:",
         "repetition-id:",
+        "entries:",
         "git-ref:",
     ):
         assert input_name in workflow
