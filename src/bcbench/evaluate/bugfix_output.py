@@ -31,6 +31,20 @@ def _changed_paths(patched_file: PatchedFile) -> tuple[str, ...]:
     return tuple(dict.fromkeys(_strip_diff_path_prefix(file_path) for file_path in (patched_file.source_file, patched_file.target_file) if file_path != "/dev/null"))
 
 
+def _is_complete_rename(patched_file: PatchedFile) -> bool:
+    patch_info_lines = str(patched_file.patch_info).splitlines()
+    return patched_file.is_rename and any(line.startswith("rename from ") for line in patch_info_lines) and any(line.startswith("rename to ") for line in patch_info_lines)
+
+
+def _validate_patch_structure(patch_set: PatchSet) -> None:
+    if not patch_set:
+        raise GeneratedOutputError("Malformed generated patch: no patched files found.")
+
+    for patched_file in patch_set:
+        if not patched_file and not _is_complete_rename(patched_file):
+            raise GeneratedOutputError(f"Malformed generated patch: {patched_file.path} has no hunks.")
+
+
 def analyze_generated_bugfix_output(repo_path: Path, generated_patch: str) -> GeneratedBugFixOutput:
     if not generated_patch.strip():
         raise GeneratedOutputError("Generated patch is blank.")
@@ -39,6 +53,8 @@ def analyze_generated_bugfix_output(repo_path: Path, generated_patch: str) -> Ge
         patch_set = PatchSet(generated_patch)
     except UnidiffParseError as exc:
         raise GeneratedOutputError(f"Failed to parse generated patch: {exc}") from exc
+
+    _validate_patch_structure(patch_set)
 
     fix_files: list[PatchedFile] = []
     test_files: list[PatchedFile] = []

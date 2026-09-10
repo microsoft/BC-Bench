@@ -31,6 +31,14 @@ def _rename_patch(source_path: str, target_path: str) -> str:
     return f"diff --git a/{source_path} b/{target_path}\nsimilarity index 100%\nrename from {source_path}\nrename to {target_path}\n"
 
 
+def _new_file_patch(file_path: str) -> str:
+    return f"diff --git a/{file_path} b/{file_path}\nnew file mode 100644\nindex 0000000..1111111\n--- /dev/null\n+++ b/{file_path}\n@@ -0,0 +1 @@\n+codeunit 50100 Feature {{}}\n"
+
+
+def _deleted_file_patch(file_path: str) -> str:
+    return f"diff --git a/{file_path} b/{file_path}\ndeleted file mode 100644\nindex 1111111..0000000\n--- a/{file_path}\n+++ /dev/null\n@@ -1 +0,0 @@\n-codeunit 50100 Feature {{}}\n"
+
+
 def test_analyzes_base_app_fix_and_scm_manufacturing_test(tmp_path: Path):
     repo_path = tmp_path / "repo"
     app_project = _create_project(repo_path, "App/Layers/W1/BaseApp")
@@ -230,6 +238,35 @@ def test_same_class_cross_project_rename_touches_both_projects(tmp_path: Path):
     assert result.test_projects == (str(test_project.relative_to(repo_path)),)
 
 
+@pytest.mark.parametrize(
+    ("fix_patch", "mode_line"),
+    [
+        (_new_file_patch("src/Main/Feature.Codeunit.al"), "new file mode 100644"),
+        (_deleted_file_patch("src/Main/Feature.Codeunit.al"), "deleted file mode 100644"),
+    ],
+)
+def test_preserves_valid_new_and_deleted_al_text_diffs(tmp_path: Path, fix_patch: str, mode_line: str):
+    repo_path = tmp_path / "repo"
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    test_file = "src/Tests/FeatureTests.Codeunit.al"
+    _write_file(
+        repo_path,
+        test_file,
+        'codeunit 50101 "Feature Tests"\n{\n    [Test]\n    procedure VerifiesFeature()\n    begin\n    end;\n}\n',
+    )
+    test_patch = _patch(
+        test_file,
+        'codeunit 50101 "Feature Tests"',
+        ["{", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;", "}"],
+    )
+
+    result = analyze_generated_bugfix_output(repo_path, fix_patch + test_patch)
+
+    assert mode_line in result.fix_patch
+    assert result.test_patch == test_patch
+
+
 def test_rejects_rename_between_product_and_test_projects(tmp_path: Path):
     repo_path = tmp_path / "repo"
     _create_project(repo_path, "src/Main")
@@ -245,6 +282,20 @@ def test_rejects_rename_between_product_and_test_projects(tmp_path: Path):
 def test_rejects_blank_patch(tmp_path: Path):
     with pytest.raises(GeneratedOutputError, match=r"Generated patch is blank\."):
         analyze_generated_bugfix_output(tmp_path, " \n\t")
+
+
+def test_rejects_header_only_diff(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    _create_project(repo_path, "src/Main")
+    header_only_patch = "diff --git a/src/Main/Feature.al b/src/Main/Feature.al\n"
+
+    with pytest.raises(GeneratedOutputError, match=r"Malformed generated patch:.*no hunks"):
+        analyze_generated_bugfix_output(repo_path, header_only_patch)
+
+
+def test_rejects_nonblank_text_that_parses_to_no_files(tmp_path: Path):
+    with pytest.raises(GeneratedOutputError, match=r"Malformed generated patch:.*no patched files"):
+        analyze_generated_bugfix_output(tmp_path, "not a patch\n")
 
 
 def test_wraps_malformed_patch_error(tmp_path: Path):
