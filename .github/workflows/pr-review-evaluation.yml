@@ -53,6 +53,16 @@ on:
           - "3"
           - "4"
           - "5"
+      repetition-id:
+        description: "Independent repetition identifier used to allow concurrent full runs"
+        required: false
+        default: "default"
+        type: string
+      entries:
+        description: "Optional JSON array of entry IDs for a focused experiment"
+        required: false
+        default: ""
+        type: string
       git-ref:
         description: "Branch to record for experiment tracking (auto-filled on requeue; leave blank for manual runs)"
         required: false
@@ -60,7 +70,7 @@ on:
         type: string
 
 concurrency:
-  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.repetition-id }}
   cancel-in-progress: false
 
 env:
@@ -100,7 +110,7 @@ jobs:
       fail-fast: false
       max-parallel: 64
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry: ${{ fromJson(inputs.entries != '' && inputs.entries || needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -164,7 +174,7 @@ jobs:
       results-dir: ${{ needs.evaluate-with-pr-review.outputs.results-dir }}
       model: ${{ inputs.model }}
       agent: "BC PR Review"
-      mock: ${{ inputs.test-run }}
+      mock: ${{ inputs.test-run || inputs.entries != '' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
@@ -181,4 +191,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "parallel-leaves": "${{ inputs.parallel-leaves }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "parallel-leaves": "${{ inputs.parallel-leaves }}", "test-run": "${{ inputs.test-run }}", "repetition-id": "${{ inputs.repetition-id }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
