@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import cast
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import TestExecutionError
@@ -36,11 +37,27 @@ class TestCaseResult:
     outcome: TestOutcome
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class TestRunSummary:
     requested: tuple[TestIdentity, ...]
     discovered: tuple[TestIdentity, ...]
     results: tuple[TestCaseResult, ...]
+
+    def __init__(
+        self,
+        requested: Iterable[TestIdentity],
+        discovered: Iterable[TestIdentity],
+        results: Iterable[TestCaseResult],
+    ) -> None:
+        object.__setattr__(self, "requested", requested)
+        object.__setattr__(self, "discovered", discovered)
+        object.__setattr__(self, "results", results)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "requested", tuple(self.requested))
+        object.__setattr__(self, "discovered", tuple(self.discovered))
+        object.__setattr__(self, "results", tuple(self.results))
 
     @property
     def executed(self) -> tuple[TestIdentity, ...]:
@@ -67,7 +84,9 @@ class TestRunSummary:
             results=tuple(result for summary in summary_list for result in summary.results),
         )
 
-    def require(self, expectation: TestExpectation) -> None:
+    def require(self, expectation: TestExpectation | str) -> None:
+        expectation = TestExpectation(expectation)
+
         if not self.requested:
             raise TestExecutionError(expectation, reason="No tests were requested.", summary=self)
 
@@ -101,10 +120,12 @@ class TestRunSummary:
             if not unexpected_count:
                 return
             reason = f"Expected every test to fail, but {unexpected_count} did not."
-        else:
+        elif expectation is TestExpectation.ANY_FAIL:
             if any(outcome is TestOutcome.FAIL for outcome in outcomes):
                 return
             reason = "Expected at least one test to fail."
+        else:
+            raise ValueError(f"Unsupported test expectation: {expectation!r}")
 
         raise TestExecutionError(expectation, reason=reason, summary=self)
 
@@ -119,23 +140,42 @@ def load_test_run_summary(evidence_dir: Path, test_entries: Iterable[TestEntry])
     for codeunit_id in codeunit_ids:
         discovery_path = evidence_dir / f"discovery-{codeunit_id}.json"
         if discovery_path.exists():
-            discovery = json.loads(discovery_path.read_text(encoding="utf-8-sig"))
-            discovered.extend(TestIdentity(discovery["codeunitID"], function_name) for function_name in discovery["functionName"])
+            discovered.extend(_load_discovery(discovery_path, codeunit_id))
 
         results_path = evidence_dir / f"results-{codeunit_id}.xml"
-        if results_path.exists():
-            root = ET.parse(results_path).getroot()
-            for testcase in (node for node in root.iter() if _local_name(node.tag) == "testcase"):
-                child_tags = {_local_name(child.tag) for child in testcase}
-                if "failure" in child_tags:
-                    outcome = TestOutcome.FAIL
-                elif "skipped" in child_tags:
-                    outcome = TestOutcome.SKIP
-                else:
-                    outcome = TestOutcome.PASS
-                results.append(TestCaseResult(TestIdentity(codeunit_id, testcase.attrib["name"]), outcome))
+        if not results_path.exists():
+            raise FileNotFoundError(f"Missing JUnit results for codeunit {codeunit_id}: {results_path}")
+
+        root = ET.parse(results_path).getroot()
+        for testcase in (node for node in root.iter() if _local_name(node.tag) == "testcase"):
+            child_tags = {_local_name(child.tag) for child in testcase}
+            if "failure" in child_tags:
+                outcome = TestOutcome.FAIL
+            elif "skipped" in child_tags:
+                outcome = TestOutcome.SKIP
+            else:
+                outcome = TestOutcome.PASS
+            results.append(TestCaseResult(TestIdentity(codeunit_id, testcase.attrib["name"]), outcome))
 
     return TestRunSummary(requested=requested, discovered=tuple(discovered), results=tuple(results))
+
+
+def _load_discovery(discovery_path: Path, expected_codeunit_id: int) -> tuple[TestIdentity, ...]:
+    discovery: object = json.loads(discovery_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(discovery, dict):
+        raise ValueError(f"Discovery evidence must be an object: {discovery_path}")  # noqa: TRY004 - Invalid evidence is classified by ValueError.
+    discovery_fields = cast(dict[str, object], discovery)
+
+    codeunit_id = discovery_fields.get("codeunitID")
+    if type(codeunit_id) is not int or codeunit_id != expected_codeunit_id:
+        raise ValueError(f"Discovery evidence codeunitID must equal expected integer {expected_codeunit_id}, got {codeunit_id!r}: {discovery_path}")
+
+    function_names = discovery_fields.get("functionName")
+    if not isinstance(function_names, list) or not all(isinstance(function_name, str) for function_name in function_names):
+        raise ValueError(f"Discovery evidence functionName must be a list of strings: {discovery_path}")
+    validated_function_names = cast(list[str], function_names)
+
+    return tuple(TestIdentity(expected_codeunit_id, function_name) for function_name in validated_function_names)
 
 
 def _local_name(tag: str) -> str:

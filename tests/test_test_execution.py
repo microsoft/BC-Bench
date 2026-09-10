@@ -65,7 +65,24 @@ def test_summary_is_immutable_and_exposes_counts_and_executed_identities():
     assert summary.discovered_count == 1
     assert summary.executed_count == 1
     with pytest.raises(FrozenInstanceError):
-        summary.requested = ()
+        summary.requested = ()  # ty: ignore[invalid-assignment]
+
+
+def test_summary_copies_caller_owned_lists():
+    identity = TestIdentity(50100, "Stable")
+    result = TestCaseResult(identity, TestOutcome.PASS)
+    requested = [identity]
+    discovered = [identity]
+    results = [result]
+
+    summary = TestRunSummary(requested=requested, discovered=discovered, results=results)
+    requested.clear()
+    discovered.append(TestIdentity(50100, "Added"))
+    results.clear()
+
+    assert summary.requested == (identity,)
+    assert summary.discovered == (identity,)
+    assert summary.results == (result,)
 
 
 def test_combine_concatenates_summary_evidence():
@@ -106,6 +123,23 @@ def test_all_pass_is_accepted():
 
 def test_any_fail_is_accepted_with_mixed_outcomes():
     make_summary(TestOutcome.PASS, TestOutcome.FAIL).require(TestExpectation.ANY_FAIL)
+
+
+@pytest.mark.parametrize(
+    ("expectation", "outcomes"),
+    [
+        ("all-pass", (TestOutcome.PASS,)),
+        ("all-fail", (TestOutcome.FAIL,)),
+        ("any-fail", (TestOutcome.PASS, TestOutcome.FAIL)),
+    ],
+)
+def test_valid_expectation_strings_are_accepted(expectation: str, outcomes: tuple[TestOutcome, ...]):
+    make_summary(*outcomes).require(expectation)
+
+
+def test_invalid_expectation_string_is_rejected():
+    with pytest.raises(ValueError, match="not-an-expectation"):
+        make_summary(TestOutcome.FAIL).require("not-an-expectation")
 
 
 def test_mixed_outcomes_reject_all_pass():
@@ -298,18 +332,76 @@ def test_missing_discovery_file_remains_absent(tmp_path: Path):
     assert error.value.reason == "Discovery evidence mismatch: missing 1, unexpected 0."
 
 
-def test_missing_results_file_remains_absent(tmp_path: Path):
+def test_missing_results_file_raises_file_not_found_error(tmp_path: Path):
     from bcbench.operations.test_execution import load_test_run_summary
 
     write_discovery(tmp_path, 50100, ["MissingExecution"])
     entries = [TestEntry(codeunitID=50100, functionName=frozenset({"MissingExecution"}))]
+    results_path = tmp_path / "results-50100.xml"
 
-    summary = load_test_run_summary(tmp_path, entries)
+    with pytest.raises(FileNotFoundError) as error:
+        load_test_run_summary(tmp_path, entries)
 
-    assert summary.results == ()
-    with pytest.raises(TestExecutionError) as error:
-        summary.require(TestExpectation.ALL_PASS)
-    assert error.value.reason == "Execution evidence mismatch: missing 1, unexpected 0."
+    assert str(results_path) in str(error.value)
+    assert "50100" in str(error.value)
+
+
+def test_discovery_payload_must_be_an_object(tmp_path: Path):
+    from bcbench.operations.test_execution import load_test_run_summary
+
+    discovery_path = tmp_path / "discovery-50100.json"
+    discovery_path.write_text(json.dumps(["NotAnObject"]), encoding="utf-8")
+    write_results(tmp_path, 50100, '<testcase name="Invalid" />')
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"Invalid"}))]
+
+    with pytest.raises(ValueError, match="object") as error:
+        load_test_run_summary(tmp_path, entries)
+
+    assert str(discovery_path) in str(error.value)
+
+
+def test_discovery_codeunit_id_must_match_expected_codeunit(tmp_path: Path):
+    from bcbench.operations.test_execution import load_test_run_summary
+
+    discovery_path = tmp_path / "discovery-50100.json"
+    discovery_path.write_text(json.dumps({"codeunitID": 50200, "functionName": ["WrongCodeunit"]}), encoding="utf-8")
+    write_results(tmp_path, 50100, '<testcase name="WrongCodeunit" />')
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"WrongCodeunit"}))]
+
+    with pytest.raises(ValueError, match="codeunitID") as error:
+        load_test_run_summary(tmp_path, entries)
+
+    assert str(discovery_path) in str(error.value)
+    assert "50100" in str(error.value)
+    assert "50200" in str(error.value)
+
+
+def test_discovery_function_names_must_be_a_list(tmp_path: Path):
+    from bcbench.operations.test_execution import load_test_run_summary
+
+    discovery_path = tmp_path / "discovery-50100.json"
+    discovery_path.write_text(json.dumps({"codeunitID": 50100, "functionName": "Scalar"}), encoding="utf-8")
+    write_results(tmp_path, 50100, '<testcase name="Scalar" />')
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"Scalar"}))]
+
+    with pytest.raises(ValueError, match="functionName") as error:
+        load_test_run_summary(tmp_path, entries)
+
+    assert str(discovery_path) in str(error.value)
+
+
+def test_discovery_function_names_must_contain_only_strings(tmp_path: Path):
+    from bcbench.operations.test_execution import load_test_run_summary
+
+    discovery_path = tmp_path / "discovery-50100.json"
+    discovery_path.write_text(json.dumps({"codeunitID": 50100, "functionName": ["Valid", 42]}), encoding="utf-8")
+    write_results(tmp_path, 50100, '<testcase name="Valid" />')
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"Valid"}))]
+
+    with pytest.raises(ValueError, match="functionName") as error:
+        load_test_run_summary(tmp_path, entries)
+
+    assert str(discovery_path) in str(error.value)
 
 
 def test_malformed_xml_propagates_parse_error(tmp_path: Path):
