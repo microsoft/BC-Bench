@@ -35,7 +35,7 @@ on:
       parallel-leaves:
         description: "Dispatch isolated domain leaf agents concurrently"
         required: false
-        default: true
+        default: false
         type: boolean
       test-run:
         description: "Indicate this is a test run (with few entries)"
