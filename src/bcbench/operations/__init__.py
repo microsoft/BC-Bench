@@ -28,9 +28,12 @@ from bcbench.operations.instruction_operations import copy_problem_statement_fol
 from bcbench.operations.project_operations import categorize_projects, find_project_path, is_test_project, order_project_paths
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
 from bcbench.operations.skills_operations import setup_agent_skills
+from bcbench.operations.test_execution import TestExpectation, TestRunSummary
 from bcbench.operations.test_operations import extract_tests_from_patch
 
 __all__ = [
+    "TestExpectation",
+    "TestRunSummary",
     "apply_patch",
     "bootstrap_app_json",
     "build_and_publish_projects",

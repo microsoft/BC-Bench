@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from bcbench.operations.test_execution import TestRunSummary
     from bcbench.types import AgentMetrics, ExperimentConfiguration
 
 __all__ = [
@@ -183,12 +184,23 @@ class BuildTimeoutExpired(BCBenchError):
 class TestExecutionError(BCBenchError):
     """Test execution failures."""
 
-    def __init__(self, expectation: str, stderr: str = "", stdout: str = "") -> None:
+    def __init__(
+        self,
+        expectation: str,
+        stderr: str = "",
+        stdout: str = "",
+        reason: str = "",
+        summary: TestRunSummary | None = None,
+    ) -> None:
         self.expectation = expectation
         self.stderr = stderr
         self.stdout = stdout
+        self.reason = reason
+        self.summary = summary
         self.errors = _extract_test_errors(stdout)
         message = f"Test result did not meet expectation (expected: {expectation})"
+        if reason:
+            message += f": {reason}"
         if self.errors:
             message += f"\n{self.errors}"
         super().__init__(message)
