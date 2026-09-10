@@ -54,7 +54,16 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert 'parallel-leaves:\n        description: "Dispatch isolated domain leaf agents concurrently"\n        required: false\n        default: false' in workflow
     assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
     assert "COPILOT_REVIEW_PARALLEL_LEAVES: ${{ inputs.parallel-leaves }}" in workflow
-    for input_name in ("model:", "leaf-model:", "parallel-leaves:", "test-run:", "repeat:", "git-ref:"):
+    assert "full' }}-${{ inputs.repetition-id }}" in workflow
+    for input_name in (
+        "model:",
+        "leaf-model:",
+        "parallel-leaves:",
+        "test-run:",
+        "repeat:",
+        "repetition-id:",
+        "git-ref:",
+    ):
         assert input_name in workflow
 
 

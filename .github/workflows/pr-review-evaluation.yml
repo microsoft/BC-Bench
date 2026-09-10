@@ -53,6 +53,11 @@ on:
           - "3"
           - "4"
           - "5"
+      repetition-id:
+        description: "Independent repetition identifier used to allow concurrent full runs"
+        required: false
+        default: "default"
+        type: string
       git-ref:
         description: "Branch to record for experiment tracking (auto-filled on requeue; leave blank for manual runs)"
         required: false
@@ -60,7 +65,7 @@ on:
         type: string
 
 concurrency:
-  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}
+  group: pr-review-evaluation-${{ inputs.test-run && 'test' || 'full' }}-${{ inputs.repetition-id }}
   cancel-in-progress: false
 
 env:
@@ -181,4 +186,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "parallel-leaves": "${{ inputs.parallel-leaves }}", "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "parallel-leaves": "${{ inputs.parallel-leaves }}", "test-run": "${{ inputs.test-run }}", "repetition-id": "${{ inputs.repetition-id }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
