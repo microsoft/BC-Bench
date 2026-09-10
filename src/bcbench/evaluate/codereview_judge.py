@@ -1,9 +1,4 @@
-"""LLM-based semantic judge for validating structurally matched code review comment pairs.
-
-After structural matching (file + line proximity), the judge validates whether
-each matched pair actually describes the same underlying issue. This filters out
-false positives where two comments happen to be near each other but address different concerns.
-"""
+"""Judge all same-file candidates before assigning one-to-one code review matches."""
 
 import json
 import re
@@ -14,6 +9,7 @@ from bcbench.agent.copilot.cli import invoke_copilot
 from bcbench.config import get_config
 from bcbench.dataset.codereview import ReviewComment
 from bcbench.exceptions import AgentError, LLMJudgeError
+from bcbench.results.codereview import assign_comment_matches
 
 _config = get_config()
 
@@ -109,35 +105,19 @@ def judge_expected_and_ignored(
     work_dir: Path,
     model: str = _config.judge.code_review_model,
 ) -> tuple[list[tuple[ReviewComment, ReviewComment]], list[tuple[ReviewComment, ReviewComment]]]:
-    """Judge the expected and ignored structural buckets in a single semantic-judge pass.
+    """Judge both candidate buckets once, then assign only confirmed edges one-to-one.
 
-    Runs ONE judge subprocess over the concatenation of both buckets, then splits the confirmed
-    pairs apart. A single pass keeps scoring to one LLM call per evaluation (less run-to-run
-    nondeterminism, one calibration target) and cannot reuse a stale verdict file, since a second
-    pass never runs. Defaults to a fixed judge model (``_config.judge.code_review_model``)
-    independent of the experiment model, so scores reflect AL review quality rather than a model
-    judging itself.
-
-    Expected takes precedence: a generated comment the judge confirms as an expected match is
-    dropped from the ignored bucket, so a finding is never both credited as expected and
-    neutralized as ignored. Because ignored pairs are matched against every generated comment
-    (not only the ones left over after expected structural matching), a finding whose expected
-    pair the judge rejects can still be neutralized as ignored instead of counting as a false
-    positive.
-
-    Returns:
-        ``(validated_expected, validated_ignored)`` — the judge-confirmed subset of each bucket.
+    Maximize expected matches first, ignored matches second, and minimize line distance last.
+    The fixed judge model is independent of the experiment model.
 
     Raises:
-        LLMJudgeError: If the judge cannot run or produce a usable verdict. Failing loudly avoids
-            silently inflating scores when the judge is broken.
+        LLMJudgeError: If the judge cannot run or produce a usable verdict.
     """
     split = len(expected_pairs)
     verdicts = judge_verdicts(expected_pairs + ignored_pairs, work_dir, model=model)
     validated_expected = [pair for pair, is_match in zip(expected_pairs, verdicts[:split], strict=True) if is_match]
-    expected_generated_ids = {id(generated) for _, generated in validated_expected}
-    validated_ignored = [pair for pair, is_match in zip(ignored_pairs, verdicts[split:], strict=True) if is_match and id(pair[1]) not in expected_generated_ids]
-    return validated_expected, validated_ignored
+    validated_ignored = [pair for pair, is_match in zip(ignored_pairs, verdicts[split:], strict=True) if is_match]
+    return assign_comment_matches(validated_expected, validated_ignored)
 
 
 def judge_verdicts(

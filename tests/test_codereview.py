@@ -1,5 +1,6 @@
 import json
 import subprocess
+from itertools import product
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,7 +14,7 @@ from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_result
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.exceptions import AgentError
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, match_comments, unmatched_generated
+from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs, match_comments, unmatched_generated
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
@@ -130,6 +131,123 @@ class TestMatchComments:
         assert len(pairs) == 1
         _, matched_generated = pairs[0]
         assert matched_generated.line_start == 12
+
+
+class TestCandidateCommentPairs:
+    def test_all_same_file_pairs_preserve_identity_and_order(self):
+        comment = ReviewComment(file="src/app.al", line_start=1, body="same")
+        expected = [comment.model_copy() for _ in range(2)]
+        generated = [comment.model_copy() for _ in range(3)]
+
+        pairs = candidate_comment_pairs(expected, generated)
+
+        assert [(id(gold), id(candidate)) for gold, candidate in pairs] == [(id(gold), id(candidate)) for gold in expected for candidate in generated]
+        assert len(pairs) == 6
+
+    def test_normalized_files_are_the_only_candidate_filter(self):
+        expected = [ReviewComment(file="src/app.al", line_start=1, domain="style", severity=Severity.LOW, body="expected")]
+        generated = [
+            ReviewComment(file="src/app.al", line_start=10000, domain="security", severity=Severity.HIGH, body="far away").model_copy(update={"file": ".\\src\\app.al"}),
+            ReviewComment(file="elsewhere/app.al", line_start=1, body="expected"),
+        ]
+
+        assert candidate_comment_pairs(expected, generated) == [(expected[0], generated[0])]
+        assert candidate_comment_pairs(expected, []) == []
+        assert candidate_comment_pairs([], generated) == []
+
+    def test_candidate_growth_is_complete_per_file_without_top_k(self):
+        expected = [ReviewComment(file="a.al", line_start=i + 1, body="gold") for i in range(4)]
+        ignored = [ReviewComment(file="a.al", line_start=i + 1, body="optional") for i in range(3)]
+        generated = [ReviewComment(file="a.al", line_start=i + 1, body="generated") for i in range(40)]
+        expected.append(ReviewComment(file="b.al", line_start=1, body="another file"))
+        generated.extend(ReviewComment(file="b.al", line_start=i + 1, body="another file") for i in range(2))
+
+        pairs = candidate_comment_pairs(expected, generated) + candidate_comment_pairs(ignored, generated)
+
+        assert len(pairs) == (4 + 3) * 40 + 1 * 2
+        assert all(gold.file == candidate.file for gold, candidate in pairs)
+
+
+class TestAssignCommentMatches:
+    def test_cardinality_beats_total_distance_on_sparse_graph(self):
+        expected = [ReviewComment(file="a.al", line_start=line, body="gold") for line in (1, 1001, 2001)]
+        generated = [comment.model_copy() for comment in expected]
+        eligible = [(expected[e], generated[g]) for e, g in [(0, 0), (0, 1), (1, 1), (1, 2), (2, 0)]]
+
+        matched, ignored = assign_comment_matches(eligible, [])
+
+        assert matched == [(expected[0], generated[1]), (expected[1], generated[2]), (expected[2], generated[0])]
+        assert ignored == []
+
+    @pytest.mark.parametrize("alternative_line", [1, 10000])
+    def test_expected_assignment_preserves_ignored_eligibility_before_distance(self, alternative_line):
+        expected = ReviewComment(file="a.al", line_start=1, body="expected")
+        ignored = ReviewComment(file="a.al", line_start=1, body="ignored")
+        generated = [ReviewComment(file="a.al", line_start=line, body="generated") for line in (1, alternative_line)]
+
+        matched, neutral = assign_comment_matches([(expected, g) for g in generated], [(ignored, generated[0])])
+
+        assert len(matched) == len(neutral) == 1
+        assert matched[0][1] is generated[1]
+        assert neutral[0][1] is generated[0]
+
+    def test_equal_value_gold_and_generated_remain_distinct_across_buckets(self):
+        comment = ReviewComment(file="a.al", line_start=1, body="identical")
+        expected = [comment.model_copy() for _ in range(2)]
+        ignored = [comment.model_copy()]
+        generated = [comment.model_copy() for _ in range(3)]
+
+        matched, neutral = assign_comment_matches(candidate_comment_pairs(expected, generated), candidate_comment_pairs(ignored, generated))
+
+        assert len(matched) == 2
+        assert len(neutral) == 1
+        assert {id(gold) for gold, _ in matched} == {id(gold) for gold in expected}
+        assert neutral[0][0] is ignored[0]
+        assert {id(g) for _, g in matched + neutral} == {id(g) for g in generated}
+
+    def test_repeated_pair_or_gold_identity_is_not_reused(self):
+        gold = ReviewComment(file="a.al", line_start=1, body="same gold instance")
+        generated = [gold.model_copy(), gold.model_copy()]
+
+        matched, neutral = assign_comment_matches([(gold, generated[0])] * 2, [(gold, generated[1])])
+
+        assert matched == [(gold, generated[0])]
+        assert neutral == []
+
+    def test_assignment_agrees_with_exhaustive_lexicographic_optimum(self):
+        gold = [
+            ReviewComment(file="a.al", line_start=1, body="expected 0"),
+            ReviewComment(file="a.al", line_start=1, line_end=4, body="expected 1"),
+            ReviewComment(file="a.al", line_start=100, body="ignored"),
+        ]
+        generated = [ReviewComment(file="a.al", line_start=line, body="generated") for line in (1, 3, 1000)]
+        possible_edges = list(product(range(3), repeat=2))
+        possible_assignments = [
+            [(e, g) for e, g in enumerate(assignment) if g is not None]
+            for assignment in product([None, 0, 1, 2], repeat=3)
+            if len([g for g in assignment if g is not None]) == len({g for g in assignment if g is not None})
+        ]
+
+        def objective(assignment):
+            distances = [max(gold[e].line_start - generated[g].line_start, 0, generated[g].line_start - (gold[e].line_end or gold[e].line_start)) for e, g in assignment]
+            return sum(e < 2 for e, _ in assignment), sum(e == 2 for e, _ in assignment), -sum(distances)
+
+        # All 512 graphs on two expected, one ignored, and three generated vertices.
+        for mask in range(1 << len(possible_edges)):
+            edges = {edge for bit, edge in enumerate(possible_edges) if mask & (1 << bit)}
+            expected_pairs = [(gold[e], generated[g]) for e, g in possible_edges if e < 2 and (e, g) in edges]
+            ignored_pairs = [(gold[e], generated[g]) for e, g in possible_edges if e == 2 and (e, g) in edges]
+
+            matched, neutral = assign_comment_matches(expected_pairs, ignored_pairs)
+
+            gold_indices = {id(comment): i for i, comment in enumerate(gold)}
+            generated_indices = {id(comment): i for i, comment in enumerate(generated)}
+            actual = [(gold_indices[id(e)], generated_indices[id(g)]) for e, g in matched + neutral]
+            assert len({e for e, _ in actual}) == len({g for _, g in actual}) == len(actual)
+            assert set(actual) <= edges
+            assert all(gold_indices[id(e)] < 2 for e, _ in matched)
+            assert all(gold_indices[id(e)] == 2 for e, _ in neutral)
+            assert objective(actual) == max(objective(assignment) for assignment in possible_assignments if set(assignment) <= edges), f"edge mask {mask}"
 
 
 class TestCodeReviewEntry:
@@ -262,7 +380,7 @@ class TestCodeReviewResult:
         assert result.generated_comments[0].file == "src/app.al"
         assert result.generated_comments[0].line_start == 42
 
-    def test_metrics_match_expected_comments_with_tolerance(self):
+    def test_metrics_match_expected_comments_structurally(self):
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
             ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity=Severity.HIGH),
@@ -891,6 +1009,144 @@ class TestCodeReviewPipeline:
         with pytest.raises(RuntimeError, match="No review generated"):
             pipeline.evaluate(context)
 
+    @pytest.mark.parametrize(
+        ("expected_line", "line_end", "wrong_line", "correct_line", "issue", "unrelated"),
+        [
+            pytest.param(23, None, 23, 23, "missing ToolTip", "missing Caption", id="style-018-same-line"),
+            pytest.param(17, 19, 14, 28, "silent migration skip", "permissions", id="silent-skip-nearer-distractor"),
+        ],
+    )
+    @pytest.mark.parametrize("reverse_generated", [False, True])
+    def test_judges_competing_issues_before_assignment(self, tmp_path, expected_line, line_end, wrong_line, correct_line, issue, unrelated, reverse_generated):
+        expected = ReviewComment(file="src/app.al", line_start=expected_line, line_end=line_end, body=issue, severity=Severity.MEDIUM)
+        generated = [
+            ReviewComment(file="src/app.al", line_start=wrong_line, body=unrelated, severity=Severity.HIGH),
+            ReviewComment(file="src/app.al", line_start=correct_line, body=issue, severity=Severity.MEDIUM),
+        ]
+        if reverse_generated:
+            generated.reverse()
+        entry = create_codereview_entry(expected_comments=[expected])
+        context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+        context.repo_path.mkdir()
+        (context.repo_path / "review.json").write_text(json.dumps([c.model_dump(mode="json") for c in generated]), encoding="utf-8")
+        pipeline = CodeReviewPipeline()
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge:
+            pipeline.evaluate(context)
+
+        result = BaseEvaluationResult.from_json(json.loads(next(context.result_dir.glob("*.jsonl")).read_text(encoding="utf-8")))
+        assert isinstance(result, CodeReviewResult)
+        assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (1, 0, 1)
+        assert result.recall == 1.0
+        assert result.precision == 0.5
+        assert result.severity_mae == 0.0
+        judge.assert_called_once()
+        assert len(judge.call_args.args[0]) == 2
+        assert judge.call_args.kwargs["model"] == _config.judge.code_review_model
+
+    def test_crossed_semantic_pairs_multiple_files_and_ignored(self, tmp_path):
+        expected = [
+            ReviewComment(file="a.al", line_start=1, body="first"),
+            ReviewComment(file="a.al", line_start=20, body="second"),
+            ReviewComment(file="b.al", line_start=1, body="third"),
+            ReviewComment(file="unseen.al", line_start=1, body="first"),
+        ]
+        ignored = [ReviewComment(file="a.al", line_start=1, body="optional")]
+        generated = [
+            ReviewComment(file="a.al", line_start=1, body="second"),
+            ReviewComment(file="a.al", line_start=20, body="first"),
+            ReviewComment(file="b.al", line_start=1, body="third"),
+            ReviewComment(file="a.al", line_start=500, body="optional"),
+        ]
+        entry = create_codereview_entry(expected_comments=expected, ignored_comments=ignored)
+        context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+        context.repo_path.mkdir()
+        (context.repo_path / "review.json").write_text(json.dumps([c.model_dump(mode="json") for c in generated]), encoding="utf-8")
+        pipeline = CodeReviewPipeline()
+
+        with (
+            patch("bcbench.evaluate.codereview_judge.judge_verdicts", side_effect=lambda pairs, *_args, **_kwargs: [e.body == g.body for e, g in pairs]) as judge,
+            patch.object(pipeline, "save_result") as save,
+        ):
+            pipeline.evaluate(context)
+
+        judge.assert_called_once()
+        pairs = judge.call_args.args[0]
+        assert len(pairs) == 10
+        assert all(e.file == g.file for e, g in pairs)
+        result = save.call_args.args[1]
+        assert (result.matched_comment_count, result.ignored_matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (3, 1, 1, 0)
+        assert result.precision == 1.0
+        assert result.recall == 0.75
+
+    @pytest.mark.parametrize(
+        ("expected_count", "ignored_count", "generated_count", "counts", "precision", "recall"),
+        [
+            (0, 0, 0, (0, 0, 0, 0), 1.0, 1.0),
+            (1, 1, 0, (0, 0, 1, 0), 1.0, 0.0),
+            (0, 0, 1, (0, 0, 0, 1), 0.0, 1.0),
+            (0, 1, 1, (0, 1, 0, 0), 1.0, 1.0),
+        ],
+    )
+    def test_empty_buckets(self, tmp_path, expected_count, ignored_count, generated_count, counts, precision, recall):
+        comment = ReviewComment(file="a.al", line_start=1, body="finding")
+        entry = create_codereview_entry(expected_comments=[comment.model_copy() for _ in range(expected_count)], ignored_comments=[comment.model_copy() for _ in range(ignored_count)])
+        context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+        context.repo_path.mkdir()
+        (context.repo_path / "review.json").write_text(json.dumps([comment.model_dump(mode="json")] * generated_count), encoding="utf-8")
+        pipeline = CodeReviewPipeline()
+
+        with (
+            patch("bcbench.evaluate.codereview_judge.invoke_copilot", return_value=(None, '[{"pair":1,"match":true}]')) as invoke,
+            patch.object(pipeline, "save_result") as save,
+        ):
+            pipeline.evaluate(context)
+
+        assert invoke.call_count == int(bool((expected_count + ignored_count) * generated_count))
+        result = save.call_args.args[1]
+        assert (result.matched_comment_count, result.ignored_matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == counts
+        assert result.precision == precision
+        assert result.recall == recall
+
+    @pytest.mark.parametrize("judge_output", ["not json", '[{"pair":1,"match":false},{"pair":2,"match":false}]'])
+    def test_judge_rejection_or_failure_never_falls_back_to_structural_matches(self, tmp_path, judge_output):
+        entry = create_codereview_entry()
+        context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+        context.repo_path.mkdir()
+        (context.repo_path / "review.json").write_text(json.dumps([entry.expected_comments[0].model_dump(mode="json")]), encoding="utf-8")
+        pipeline = CodeReviewPipeline()
+
+        with (
+            patch("bcbench.evaluate.codereview_judge.invoke_copilot", return_value=(None, judge_output)) as invoke,
+            patch.object(pipeline, "save_result") as save,
+        ):
+            if judge_output == "not json":
+                with pytest.raises(LLMJudgeError):
+                    pipeline.evaluate(context)
+                save.assert_not_called()
+            else:
+                pipeline.evaluate(context)
+                result = save.call_args.args[1]
+                assert (result.matched_comment_count, result.missed_comment_count, result.incorrect_comment_count) == (0, 2, 1)
+        invoke.assert_called_once()
+
+    def test_judge_subprocess_failure_propagates_without_saving_score(self, tmp_path):
+        entry = create_codereview_entry()
+        context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+        context.repo_path.mkdir()
+        (context.repo_path / "review.json").write_text(json.dumps([entry.expected_comments[0].model_dump(mode="json")]), encoding="utf-8")
+        pipeline = CodeReviewPipeline()
+
+        with (
+            patch("bcbench.evaluate.codereview_judge.invoke_copilot", side_effect=AgentError("Judge unavailable")) as invoke,
+            patch.object(pipeline, "save_result") as save,
+            pytest.raises(LLMJudgeError, match="Judge unavailable"),
+        ):
+            pipeline.evaluate(context)
+
+        invoke.assert_called_once()
+        save.assert_not_called()
+
 
 class TestJudge:
     @staticmethod
@@ -1164,6 +1420,45 @@ class TestJudgeExpectedAndIgnored:
 
         assert validated_expected == []
         assert validated_ignored == ignored_pairs
+
+    def test_confirmed_edges_are_assigned_jointly_without_reusing_comments(self, tmp_path):
+        expected, generated = self._pair(10, "expected")
+        ignored, alternative = self._pair(100, "ignored")
+        expected_pairs = [(expected, generated), (expected, alternative)]
+        ignored_pairs = [(ignored, generated), (ignored, alternative)]
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[True, True, True, False]) as judge:
+            matched, neutral = judge_expected_and_ignored(expected_pairs, ignored_pairs, work_dir=tmp_path)
+
+        judge.assert_called_once_with(expected_pairs + ignored_pairs, tmp_path, model=_config.judge.code_review_model)
+        assert matched == [(expected, alternative)]
+        assert neutral == [(ignored, generated)]
+
+    def test_value_equal_comments_keep_independent_pair_verdicts(self, tmp_path):
+        comment = ReviewComment(file="a.al", line_start=1, body="same")
+        expected = [comment.model_copy(), comment.model_copy()]
+        generated = [comment.model_copy(), comment.model_copy()]
+        pairs = candidate_comment_pairs(expected, generated)
+
+        with patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=[False, True, True, False]):
+            matched, neutral = judge_expected_and_ignored(pairs, [], work_dir=tmp_path)
+
+        assert len(matched) == 2
+        assert matched[0][0] is expected[0]
+        assert matched[0][1] is generated[1]
+        assert matched[1][0] is expected[1]
+        assert matched[1][1] is generated[0]
+        assert neutral == []
+
+    @pytest.mark.parametrize("verdicts", [[True], [True, False, True]])
+    def test_verdict_count_mismatch_cannot_silently_change_candidate_mapping(self, tmp_path, verdicts):
+        pairs = [self._pair(10, "first"), self._pair(20, "second")]
+
+        with (
+            patch("bcbench.evaluate.codereview_judge.judge_verdicts", return_value=verdicts),
+            pytest.raises(ValueError, match="zip"),
+        ):
+            judge_expected_and_ignored(pairs, [], work_dir=tmp_path)
 
 
 class TestUnmatchedGenerated:
