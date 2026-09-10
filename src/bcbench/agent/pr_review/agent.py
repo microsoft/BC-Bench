@@ -29,7 +29,7 @@ from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import commit_changes, has_changes, init_repo
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -161,7 +161,7 @@ def run_pr_review_agent(
     output_dir: Path,
     engine_path: Path | None = None,
     min_severity: str | None = None,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
 
     Separate from run_copilot_agent by design: this spawns the PROD BC-ALAgents
@@ -170,7 +170,7 @@ def run_pr_review_agent(
     inputs (BC-ALAgents source, min severity) for the code-review category only.
 
     Returns:
-        Tuple of (AgentMetrics, ExperimentConfiguration).
+        Tuple of (PRReviewMetrics, ExperimentConfiguration).
     """
     if category is not EvaluationCategory.CODE_REVIEW:
         raise AgentError(f"The engine agent only supports the code-review category, got {category.value}.")
@@ -226,7 +226,7 @@ def run_pr_review_agent(
         logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
     except subprocess.TimeoutExpired:
         logger.exception(f"Engine review timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+        metrics = PRReviewMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")

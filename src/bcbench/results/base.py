@@ -7,7 +7,7 @@ from typing import Any, Self, cast
 from pydantic import BaseModel, model_validator
 
 from bcbench.logger import get_logger
-from bcbench.types import AgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AnyAgentMetrics, EvaluationCategory, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 
@@ -27,14 +27,17 @@ class BaseEvaluationResult(BaseModel):
     output: str = ""
     error_message: str | None = None
 
-    metrics: AgentMetrics | None = None
+    metrics: AnyAgentMetrics | None = None
     experiment: ExperimentConfiguration | None = None
 
     @classmethod
     def _base_fields(cls, context: "EvaluationContext") -> dict[str, Any]:
+        metrics_contract = context.agent_name.metrics_contract
         if not context.metrics:
             logger.warning(f"Creating result for {context.entry.instance_id} with no agent metrics - performance data will be unavailable")
-        elif missing_metrics := sorted(name for name in context.agent_name.expected_metrics if getattr(context.metrics, name) is None):
+        elif type(context.metrics) is not metrics_contract.metrics_type:
+            raise TypeError(f"{context.agent_name} must use {metrics_contract.metrics_type.__name__}, got {type(context.metrics).__name__}")
+        elif missing_metrics := sorted(name for name in metrics_contract.required_fields if getattr(context.metrics, name) is None):
             logger.warning(f"Result for {context.entry.instance_id} missing metrics: {', '.join(missing_metrics)}")
 
         return {
