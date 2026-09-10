@@ -127,6 +127,10 @@ def _extract_compiler_errors(output: str, max_lines: int = 30) -> str:
     return "\n".join(lines[-max_lines:])
 
 
+def _bounded_output(lines: list[str], max_lines: int, max_chars: int = 4000) -> str:
+    return "\n".join(lines[:max_lines])[:max_chars]
+
+
 def _extract_test_errors(output: str, max_lines: int = 20) -> str:
     """Extract test failure information from test output, filtering verbose lines."""
     if not output:
@@ -154,10 +158,16 @@ def _extract_test_errors(output: str, max_lines: int = 20) -> str:
     filtered = list(filter(is_relevant, lines))
 
     if filtered:
-        return "\n".join(filtered[:max_lines])
+        failure_index = next(
+            (index for index, line in enumerate(filtered) if "Testfunction " in line and " Failure" in line),
+            None,
+        )
+        if failure_index is not None:
+            return _bounded_output(filtered[max(0, failure_index - 1) :], max_lines)
+        return _bounded_output(filtered, max_lines)
 
     # Fallback: return last N lines if no pattern found
-    return "\n".join(lines[-max_lines:])
+    return _bounded_output(lines[-max_lines:], max_lines)
 
 
 class BuildError(BCBenchError):
@@ -199,12 +209,19 @@ class TestExecutionError(BCBenchError):
         self.reason = reason
         self.summary = summary
         self.errors = _extract_test_errors(stdout)
-        message = f"Test result did not meet expectation (expected: {expectation})"
-        if reason:
-            message += f": {reason}"
+        super().__init__(self.diagnostic_message)
+
+    @property
+    def diagnostic_message(self) -> str:
+        message = f"Test result did not meet expectation (expected: {self.expectation})"
+        if self.reason:
+            message += f": {self.reason}"
         if self.errors:
-            message += f"\n{self.errors}"
-        super().__init__(message)
+            message += f"\nTest output:\n{self.errors}"
+        stderr = _bounded_output(self.stderr.strip().splitlines(), max_lines=20)
+        if stderr:
+            message += f"\nStandard error:\n{stderr}"
+        return message
 
 
 class TestInfrastructureError(BCBenchError):

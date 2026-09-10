@@ -1,3 +1,4 @@
+import subprocess
 from collections.abc import Callable
 
 import pytest
@@ -6,8 +7,10 @@ from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix import BugFixPipeline
 from bcbench.exceptions import NoTestsExtractedError, TestExecutionError, TestInfrastructureError
+from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestExpectation
 from bcbench.results.bugfix import BugFixResult
+from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from tests.conftest import create_evaluation_context
 
 
@@ -142,6 +145,60 @@ def test_bugfix_rejects_fix_when_benchmark_test_fails(tmp_path, monkeypatch):
     assert result.benchmark_test_passed is False
     assert result.error_message is not None
     assert result.error_message.startswith("Benchmark tests failed after the generated fix")
+
+
+def test_bugfix_persists_expectation_failure_diagnostics(tmp_path, monkeypatch):
+    context = create_evaluation_context(tmp_path)
+    _configure_successful_evaluation(monkeypatch)
+    stdout = """\
+Codeunit 50100 Regression Tests
+    Testfunction RegressionTest Failure (0.25 seconds)
+      Error:
+        Assert.AreEqual failed. Expected:<1>. Actual:<2>.
+"""
+    monkeypatch.setattr(
+        "bcbench.evaluate.bugfix.run_tests",
+        lambda *_args: (_ for _ in ()).throw(
+            TestExecutionError(
+                TestExpectation.ALL_PASS,
+                stdout=stdout,
+                stderr="PowerShell assertion diagnostic",
+                reason="Expected every test to pass, but 1 did not.",
+            )
+        ),
+    )
+
+    BugFixPipeline().evaluate(context)
+
+    result = _read_result(context)
+    assert result.error_message is not None
+    assert "Testfunction RegressionTest Failure" in result.error_message
+    assert "Assert.AreEqual failed" in result.error_message
+    assert "Standard error:" in result.error_message
+    assert "PowerShell assertion diagnostic" in result.error_message
+
+
+def test_bugfix_persists_timeout_as_score_excluded_infrastructure_failure(tmp_path, monkeypatch):
+    context = create_evaluation_context(tmp_path)
+    context.repo_path.mkdir(parents=True)
+    _configure_successful_evaluation(monkeypatch)
+    monkeypatch.setattr("bcbench.evaluate.bugfix.run_test_suite", bc_operations.run_test_suite)
+    monkeypatch.setattr(
+        bc_operations.subprocess,
+        "run",
+        lambda command, **_kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired(command, timeout=123)),
+    )
+
+    BugFixPipeline().evaluate(context)
+
+    result = _read_result(context)
+    summary = ExecutionBasedEvaluationResultSummary.from_results([result], run_id="test-run")
+    assert result.infrastructure_failure is True
+    assert result.error_message is not None
+    assert "timed out" in result.error_message
+    assert summary.infrastructure_failed == 1
+    assert summary.failed == 0
+    assert summary.instance_results == {}
 
 
 @pytest.mark.parametrize(

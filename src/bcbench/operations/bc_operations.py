@@ -268,9 +268,17 @@ def run_test_suite(
                 text=True,
                 timeout=_config.timeout.test_execution,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as error:
             logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
-            raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
+            timeout_error = TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution)
+            stdout = error.stdout.decode(errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
+            stderr = error.stderr.decode(errors="replace") if isinstance(error.stderr, bytes) else error.stderr or ""
+            raise TestInfrastructureError(
+                expectation,
+                reason=f"Business Central test execution timed out after {_config.timeout.test_execution} seconds",
+                stdout=stdout,
+                stderr=stderr,
+            ) from timeout_error
         except OSError as error:
             raise TestInfrastructureError(
                 expectation,

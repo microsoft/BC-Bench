@@ -1,3 +1,4 @@
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -7,7 +8,9 @@ from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.testgeneration import TestGenerationPipeline, _get_test_generation_input_mode
 from bcbench.exceptions import TestExecutionError, TestInfrastructureError
+from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestExpectation, TestRunSummary
+from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_evaluation_context
@@ -135,6 +138,82 @@ def test_test_generation_non_any_fail_error_is_classified_as_post_patch(tmp_path
     assert result.post_patch_passed is False
     assert result.error_message is not None
     assert result.error_message.startswith("Generated tests Failed post-patch")
+
+
+def test_test_generation_persists_expectation_failure_diagnostics(tmp_path, monkeypatch):
+    context = create_evaluation_context(tmp_path, category=EvaluationCategory.TEST_GENERATION)
+    generated_tests = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+    calls = 0
+    stdout = """\
+Codeunit 50100 Regression Tests
+    Testfunction RegressionTest Failure (0.25 seconds)
+      Error:
+        Assert.AreEqual failed. Expected:<1>. Actual:<2>.
+"""
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.categorize_projects", lambda _paths: (["test"], ["app"]))
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.clean_project_paths", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.stage_and_get_diff", lambda _repo_path: "generated patch")
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_file_paths_from_patch", lambda _patch: [])
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_tests_from_patch", lambda *_args: generated_tests)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.build_and_publish_projects", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.apply_patch", lambda *_args: None)
+
+    def run_test_suite(_test_entries, expectation, _container, _repo_path):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return TestRunSummary((), (), ())
+        raise TestExecutionError(
+            expectation,
+            stdout=stdout,
+            stderr="PowerShell assertion diagnostic",
+            reason="Expected every test to pass, but 1 did not.",
+        )
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.run_test_suite", run_test_suite)
+
+    TestGenerationPipeline().evaluate(context)
+
+    result_path = context.result_dir / f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result = TestGenerationResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    assert result.error_message is not None
+    assert "Testfunction RegressionTest Failure" in result.error_message
+    assert "Assert.AreEqual failed" in result.error_message
+    assert "Standard error:" in result.error_message
+    assert "PowerShell assertion diagnostic" in result.error_message
+
+
+def test_test_generation_persists_timeout_as_score_excluded_infrastructure_failure(tmp_path, monkeypatch):
+    context = create_evaluation_context(tmp_path, category=EvaluationCategory.TEST_GENERATION)
+    context.repo_path.mkdir(parents=True)
+    generated_tests = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.categorize_projects", lambda _paths: (["test"], ["app"]))
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.clean_project_paths", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.stage_and_get_diff", lambda _repo_path: "generated patch")
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_file_paths_from_patch", lambda _patch: [])
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_tests_from_patch", lambda *_args: generated_tests)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.build_and_publish_projects", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.apply_patch", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.run_test_suite", bc_operations.run_test_suite)
+    monkeypatch.setattr(
+        bc_operations.subprocess,
+        "run",
+        lambda command, **_kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired(command, timeout=123)),
+    )
+
+    TestGenerationPipeline().evaluate(context)
+
+    result_path = context.result_dir / f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result = TestGenerationResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    summary = ExecutionBasedEvaluationResultSummary.from_results([result], run_id="test-run")
+    assert result.infrastructure_failure is True
+    assert result.error_message is not None
+    assert "timed out" in result.error_message
+    assert summary.infrastructure_failed == 1
+    assert summary.failed == 0
+    assert summary.instance_results == {}
 
 
 @pytest.mark.parametrize(

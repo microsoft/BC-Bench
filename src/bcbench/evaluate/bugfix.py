@@ -162,11 +162,11 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
 
         except TestExecutionError as e:
             if not generated_test_pre_patch_failed:
-                error_message = "Generated tests passed before the product-code fix\n" + str(e)
+                error_message = "Generated tests passed before the product-code fix\n" + e.diagnostic_message
             elif not generated_test_post_patch_passed:
-                error_message = "Generated tests failed after the product-code fix\n" + str(e)
+                error_message = "Generated tests failed after the product-code fix\n" + e.diagnostic_message
             else:
-                error_message = "Benchmark tests failed after the generated fix\n" + str(e)
+                error_message = "Benchmark tests failed after the generated fix\n" + e.diagnostic_message
 
             result = BugFixResult.create_verification_failure(
                 context,

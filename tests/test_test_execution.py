@@ -8,6 +8,7 @@ from xml.etree.ElementTree import ParseError
 
 import pytest
 
+from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import TestExecutionError, TestExecutionTimeoutExpired, TestInfrastructureError
 from bcbench.operations import bc_operations
@@ -731,20 +732,34 @@ def test_subprocess_launch_oserror_is_wrapped_as_infrastructure_failure(
     assert error.value.__cause__ is launch_error
 
 
-def test_run_test_suite_preserves_timeout_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
+def test_run_test_suite_wraps_timeout_as_infrastructure_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
     def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        raise subprocess.TimeoutExpired(command, timeout=123)
+        raise subprocess.TimeoutExpired(
+            command,
+            timeout=123,
+            output="partial test output",
+            stderr="timeout diagnostic",
+        )
 
     monkeypatch.setattr(subprocess, "run", run)
     entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
 
-    with pytest.raises(TestExecutionTimeoutExpired) as error:
+    with pytest.raises(TestInfrastructureError) as error:
         bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
 
-    assert error.value.tests == '[{"codeunitID":50100,"functionName":["RegressionTest"]}]'
+    assert error.value.expectation is TestExpectation.ALL_PASS
+    assert error.value.reason == f"Business Central test execution timed out after {get_config().timeout.test_execution} seconds"
+    assert error.value.stdout == "partial test output"
+    assert error.value.stderr == "timeout diagnostic"
+    assert isinstance(error.value.__cause__, TestExecutionTimeoutExpired)
+    assert error.value.__cause__.tests == '[{"codeunitID":50100,"functionName":["RegressionTest"]}]'
 
 
 def test_run_tests_combines_fail_to_pass_and_pass_to_pass_summaries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
