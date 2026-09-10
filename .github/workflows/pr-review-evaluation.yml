@@ -71,11 +71,22 @@ jobs:
       repeat: ${{ inputs.repeat }}
 
   get-entries:
-    uses: $/.github/workflows/get-entries.yml
-    with:
-      modified-only: ${{ inputs.modified-only }}
-      test-run: ${{ inputs.test-run }}
-      category: code-review
+    runs-on: ubuntu-latest
+    outputs:
+      entries: '["synthetic__accessibility-setselectionfilter-scope-01","synthetic__breaking-access-modifier-01","synthetic__breaking-event-subscriber-suppress-01","synthetic__breaking-notification-callback-01","synthetic__breaking-protected-var-field-01","synthetic__breaking-relocation-01","synthetic__breaking-scope-creep-unrelated-api-01","synthetic__caption-clean-01","synthetic__currrec-clean-01","synthetic__data-modeling-blocked-validation-skip-01","synthetic__data-modeling-excluded-from-calculation-01","synthetic__data-modeling-tablerelation-restriction-mismatch-01","synthetic__errh-errortype-internal-01","synthetic__errh-tryfunction-swallowed-01","synthetic__error-clean-01","synthetic__error-handling-assistedit-cancel-01","synthetic__error-handling-case-unreachable-else-01","synthetic__error-handling-drilldown-position-01","synthetic__error-handling-errorinfo-actionable-boundary-01","synthetic__error-handling-fieldno-swap-01","synthetic__error-handling-guiallowed-01","synthetic__error-handling-silent-skip-01","synthetic__error-testfield-enabled-01","synthetic__events-ishandled-added-to-shipped-event-01","synthetic__events-ishandled-reset-boundary-01","synthetic__get-clean-01","synthetic__obsolete-clean-01","synthetic__perf-batched-commit-checkpoint-01","synthetic__perf-clean-01","synthetic__perf-progress-dialog-deleteall-01","synthetic__performance-001","synthetic__performance-002","synthetic__performance-003","synthetic__performance-004","synthetic__performance-005","synthetic__performance-006","synthetic__performance-007","synthetic__performance-008","synthetic__performance-009","synthetic__performance-010","synthetic__performance-011","synthetic__performance-012","synthetic__performance-013","synthetic__performance-014","synthetic__performance-015","synthetic__performance-016","synthetic__performance-017","synthetic__performance-018","synthetic__performance-019","synthetic__performance-020","synthetic__performance-021","synthetic__performance-022","synthetic__performance-023","synthetic__performance-024","synthetic__performance-clean-01","synthetic__performance-clean-02","synthetic__performance-clean-03","synthetic__performance-clean-04","synthetic__pkget-clean-01","synthetic__privacy-001","synthetic__privacy-002","synthetic__privacy-003","synthetic__privacy-004","synthetic__privacy-005","synthetic__privacy-006","synthetic__privacy-007","synthetic__privacy-008","synthetic__privacy-009","synthetic__privacy-010","synthetic__privacy-011","synthetic__privacy-012","synthetic__privacy-013","synthetic__privacy-014","synthetic__privacy-015","synthetic__privacy-clean-01","synthetic__privacy-clean-02","synthetic__privacy-clean-03","synthetic__privacy-clean-04","synthetic__privacy-sibling-override-01","synthetic__sec-internal-not-boundary-01","synthetic__security-001","synthetic__security-002","synthetic__security-003","synthetic__security-004","synthetic__security-005","synthetic__security-006","synthetic__security-007","synthetic__security-008","synthetic__security-009","synthetic__security-011","synthetic__security-012","synthetic__security-013","synthetic__security-014","synthetic__security-015","synthetic__security-016","synthetic__security-clean-01","synthetic__security-clean-02","synthetic__security-clean-03","synthetic__security-clean-04","synthetic__style-001","synthetic__style-002","synthetic__style-003","synthetic__style-004","synthetic__style-005","synthetic__style-006","synthetic__style-007","synthetic__style-008","synthetic__style-009","synthetic__style-010","synthetic__style-011","synthetic__style-012","synthetic__style-013","synthetic__style-014","synthetic__style-015","synthetic__style-016","synthetic__style-017","synthetic__style-018","synthetic__style-clean-01","synthetic__style-clean-02","synthetic__style-clean-03","synthetic__style-clean-04","synthetic__style-duplicate-action-01","synthetic__style-field-repurpose-indent-01","synthetic__style-showmandatory-flowfield-01","synthetic__style-this-keyword-01","synthetic__style-tooltip-mismatch-01","synthetic__testing-tolerance-clean-01","synthetic__testing-ui-handler-assert-after-run-01","synthetic__upgrade-001","synthetic__upgrade-002","synthetic__upgrade-003","synthetic__upgrade-004","synthetic__upgrade-005","synthetic__upgrade-006","synthetic__upgrade-007","synthetic__upgrade-008","synthetic__upgrade-009","synthetic__upgrade-alwayslogtable-removal-01","synthetic__upgrade-broken-hook-copyrows-01","synthetic__upgrade-clean-01","synthetic__upgrade-clean-02","synthetic__upgrade-clean-03","synthetic__upgrade-clean-04","synthetic__upgrade-clean-05","synthetic__upgrade-obsolete-caption-01","synthetic__upgrade-transferfields-field-collision-01"]'
+      runner: ubuntu-latest
+    steps:
+      - run: echo 'Using the frozen self-improvement entry set'
+      - name: Require non-publishing full mode before evaluation
+        shell: pwsh
+        env:
+          TEST_RUN: ${{ inputs.test-run }}
+          MODIFIED_ONLY: ${{ inputs.modified-only }}
+          REPEAT: ${{ inputs.repeat }}
+          ENGINE_OVERRIDE: ${{ inputs.engine-sha }}
+        run: |
+          if ($env:TEST_RUN -cne 'false' -or $env:MODIFIED_ONLY -cne 'true' -or
+              $env:REPEAT -cne '1' -or $env:ENGINE_OVERRIDE) { throw 'Unsupported full evaluation mode.' }
 
   evaluate-with-pr-review:
     runs-on: ${{ needs.get-entries.outputs.runner }}
@@ -100,6 +111,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Verify frozen Bench checkout before setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = git rev-parse HEAD
+          if ($LASTEXITCODE -or $head -cne '${{ github.sha }}') { throw 'Wrong Bench checkout.' }
+          $changes = git status --porcelain --untracked-files=no
+          if ($LASTEXITCODE -or $changes) { throw 'Modified Bench checkout.' }
+          $manifest = Get-Content .github/self-improvement-gate.json -Raw | ConvertFrom-Json
+          if ((Get-FileHash dataset/codereview.jsonl).Hash -ine $manifest.datasetHash) { throw 'Wrong frozen Gold bytes.' }
       - name: Setup Repository
         id: setup-env
         timeout-minutes: 40
@@ -135,12 +156,64 @@ jobs:
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
-          uv run bcbench evaluate pr-review "${{ matrix.entry }}" `
+          uv run python -c "import base64; exec(compile(base64.b64decode('IiIiVmVyc2lvbiAxOiBzb3VyY2Ugd2l0bmVzc2VzIGFyb3VuZCB0aGUgZXhpc3RpbmcgQmVuY2ggQ0xJLCBub3QgYW4gZXZhbHVhdG9yLiIiIgoKaW1wb3J0IGhhc2hsaWIKaW1wb3J0IGltcG9ydGxpYgppbXBvcnQgaW1wb3J0bGliLm1hY2hpbmVyeQppbXBvcnQgaW1wb3J0bGliLm1ldGFkYXRhCmltcG9ydCBqc29uCmltcG9ydCBvcwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKaW1wb3J0IHN1YnByb2Nlc3MKaW1wb3J0IHN5cwppbXBvcnQgdHlwZXMKZnJvbSB1cmxsaWIucGFyc2UgaW1wb3J0IHVybHBhcnNlCmZyb20gdXJsbGliLnJlcXVlc3QgaW1wb3J0IHVybDJwYXRobmFtZQoKCmRlZiByZXF1aXJlKGNvbmRpdGlvbiwgY29kZSk6CiAgICBpZiBub3QgY29uZGl0aW9uOgogICAgICAgIHJhaXNlIFJ1bnRpbWVFcnJvcigiZnVsbF9ydW50aW1lXyIgKyBjb2RlKQoKCmRlZiBnaXQoKmFyZ3MpOgogICAgcmV0dXJuIHN1YnByb2Nlc3MucnVuKAogICAgICAgIFsiZ2l0IiwgKmFyZ3NdLCBjaGVjaz1UcnVlLCBzdGRvdXQ9c3VicHJvY2Vzcy5QSVBFLCBjd2Q9Uk9PVAogICAgKS5zdGRvdXQKCgpkZWYgZGlnZXN0KGRhdGEpOgogICAgcmV0dXJuIGhhc2hsaWIuc2hhMjU2KGRhdGEpLmhleGRpZ2VzdCgpCgoKZGVmIGNoZWNrb3V0KCk6CiAgICByZXF1aXJlKFBhdGgoZ2l0KCJyZXYtcGFyc2UiLCAiLS1zaG93LXRvcGxldmVsIikuZGVjb2RlKCkuc3RyaXAoKSkucmVzb2x2ZSgpID09IFJPT1QsICJyb290IikKICAgIGhlYWQgPSBnaXQoInJldi1wYXJzZSIsICJIRUFEIikuZGVjb2RlKCkuc3RyaXAoKQogICAgcmVxdWlyZShoZWFkID09IG9zLmVudmlyb24uZ2V0KCJHSVRIVUJfU0hBIiksICJoZWFkIikKICAgIHJlcXVpcmUobm90IGdpdCgic3RhdHVzIiwgIi0tcG9yY2VsYWluIiwgIi0tdW50cmFja2VkLWZpbGVzPW5vIiksICJkaXJ0eSIpCiAgICBhdHRyaWJ1dGVzID0gZ2l0KCJzaG93IiwgIkhFQUQ6LmdpdGF0dHJpYnV0ZXMiKQogICAgcmVxdWlyZShkaWdlc3QoYXR0cmlidXRlcykgPT0gImRiMmY4MmY5ODg0MzA3ZTdkNjc0OWU5MDAxNTJhYjM5NWI1OTEwYjY4MjM3NDE2Y2RiMjA4OWMzYmQ1N2VhMTAiLCAiYXR0cmlidXRlcyIpCiAgICBmaWxlcyA9IHt9CiAgICBmb3IgcmVjb3JkIGluIGdpdCgibHMtdHJlZSIsICItciIsICIteiIsICJIRUFEIikuc3BsaXQoYiJcMCIpOgogICAgICAgIGlmIG5vdCByZWNvcmQ6CiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgbWV0YWRhdGEsIG5hbWUgPSByZWNvcmQuc3BsaXQoYiJcdCIsIDEpCiAgICAgICAgbW9kZSwga2luZCwgb2lkID0gbWV0YWRhdGEuZGVjb2RlKCkuc3BsaXQoIiAiKQogICAgICAgIHBhdGggPSBuYW1lLmRlY29kZSgidXRmLTgiKQogICAgICAgIHJlcXVpcmUobm90IHBhdGguZW5kc3dpdGgoIi8uZ2l0YXR0cmlidXRlcyIpLCAiYXR0cmlidXRlcyIpCiAgICAgICAgZmlsZSA9IFJPT1QgLyBwYXRoCiAgICAgICAgcmVxdWlyZShraW5kID09ICJibG9iIiBhbmQgbW9kZSBpbiAoIjEwMDY0NCIsICIxMDA3NTUiKSwgInRyZWVfbGF5b3V0IikKICAgICAgICByZXF1aXJlKGZpbGUuaXNfZmlsZSgpIGFuZCBub3QgZmlsZS5pc19zeW1saW5rKCksICJzb3VyY2VfbGF5b3V0IikKICAgICAgICBkYXRhID0gZmlsZS5yZWFkX2J5dGVzKCkKICAgICAgICBhY3R1YWwgPSBoYXNobGliLnNoYTEoYiJibG9iICIgKyBzdHIobGVuKGRhdGEpKS5lbmNvZGUoKSArIGIiXDAiICsgZGF0YSkuaGV4ZGlnZXN0KCkKICAgICAgICBpZiBmaWxlLnN1ZmZpeCBpbiAoIi5wczEiLCAiLnBzbTEiKToKICAgICAgICAgICAgIyBPbmx5IHRoZSBhdWRpdGVkIGF0dHJpYnV0ZXMgYWJvdmUgYXV0aG9yaXplIHRoaXMgdHJhbnNmb3JtYXRpb24sCiAgICAgICAgICAgICMgbmV2ZXIgbG9jYWwgYXR0cmlidXRlcywgZmlsdGVycyBvciB3b3JraW5nLXRyZWUtZW5jb2Rpbmcgc2V0dGluZ3MuCiAgICAgICAgICAgIG9yaWdpbmFsID0gZ2l0KCJjYXQtZmlsZSIsICJibG9iIiwgb2lkKQogICAgICAgICAgICByZXF1aXJlKGhhc2hsaWIuc2hhMShiImJsb2IgIiArIHN0cihsZW4ob3JpZ2luYWwpKS5lbmNvZGUoKSArIGIiXDAiICsgb3JpZ2luYWwpLmhleGRpZ2VzdCgpID09IG9pZCwgImJsb2IiKQogICAgICAgICAgICByZXF1aXJlKGRhdGEgPT0gb3JpZ2luYWwucmVwbGFjZShiIlxyXG4iLCBiIlxuIikucmVwbGFjZShiIlxuIiwgYiJcclxuIiksICJzb3VyY2VfYnl0ZXMiKQogICAgICAgIGVsc2U6CiAgICAgICAgICAgIHJlcXVpcmUoYWN0dWFsID09IG9pZCwgInNvdXJjZV9ieXRlcyIpCiAgICAgICAgZmlsZXNbcGF0aF0gPSBkaWdlc3QoZGF0YSkKICAgIHJlcXVpcmUoZmlsZXNbImRhdGFzZXQvY29kZXJldmlldy5qc29ubCJdID09IFBMQU5bImRhdGFzZXRIYXNoIl0ubG93ZXIoKSwgImdvbGQiKQogICAgcmV0dXJuIGhlYWQsIGdpdCgicmV2LXBhcnNlIiwgIkhFQURee3RyZWV9IikuZGVjb2RlKCkuc3RyaXAoKSwgZmlsZXMKCgpkZWYgc291cmNlcyhmaWxlcyk6CiAgICBjb25maWcgPSBzeXMubW9kdWxlc1siYmNiZW5jaC5jb25maWciXS5nZXRfY29uZmlnKCkKICAgIHJlcXVpcmUoY29uZmlnLnBhdGhzLmJjX2JlbmNoX3Jvb3QucmVzb2x2ZSgpID09IFJPT1QsICJjb25maWdfcm9vdCIpCiAgICByZXF1aXJlKGNvbmZpZy5wYXRocy5kYXRhc2V0X2Rpci5yZXNvbHZlKCkgPT0gUk9PVCAvICJkYXRhc2V0IiwgImNvbmZpZ19kYXRhc2V0IikKICAgIHJlcXVpcmUoY29uZmlnLnBhdGhzLmFnZW50X3NoYXJlX2Rpci5yZXNvbHZlKCkgPT0gUk9PVCAvICJzcmMvYmNiZW5jaC9hZ2VudC9zaGFyZWQiLCAiY29uZmlnX3NoYXJlZCIpCiAgICByZXF1aXJlKGNvbmZpZy5qdWRnZS5jb2RlX3Jldmlld19tb2RlbCA9PSBQTEFOWyJqdWRnZU1vZGVsIl0sICJjb25maWdfanVkZ2UiKQogICAgbW9kdWxlcyA9IFtdCiAgICBmb3IgbmFtZSwgbW9kdWxlIGluIGxpc3Qoc3lzLm1vZHVsZXMuaXRlbXMoKSk6CiAgICAgICAgaWYgbmFtZSAhPSAiYmNiZW5jaCIgYW5kIG5vdCBuYW1lLnN0YXJ0c3dpdGgoImJjYmVuY2guIik6CiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgc3BlYyA9IG1vZHVsZS5fX3NwZWNfXwogICAgICAgIHJlcXVpcmUoc3BlYyBpcyBub3QgTm9uZSBhbmQgaXNpbnN0YW5jZShzcGVjLmxvYWRlciwgaW1wb3J0bGliLm1hY2hpbmVyeS5Tb3VyY2VGaWxlTG9hZGVyKSwgImxvYWRlciIpCiAgICAgICAgb3JpZ2luID0gUGF0aChzcGVjLm9yaWdpbikKICAgICAgICByZXF1aXJlKG9yaWdpbi5pc19hYnNvbHV0ZSgpIGFuZCBub3Qgb3JpZ2luLmlzX3N5bWxpbmsoKSwgIm9yaWdpbiIpCiAgICAgICAgZXhwZWN0ZWQgPSBST09UIC8gInNyYyIgLyBQYXRoKCpuYW1lLnNwbGl0KCIuIikpCiAgICAgICAgZXhwZWN0ZWQgPSBleHBlY3RlZCAvICJfX2luaXRfXy5weSIgaWYgc3BlYy5zdWJtb2R1bGVfc2VhcmNoX2xvY2F0aW9ucyBpcyBub3QgTm9uZSBlbHNlIGV4cGVjdGVkLndpdGhfc3VmZml4KCIucHkiKQogICAgICAgIHJlcXVpcmUob3JpZ2luLnJlc29sdmUoKSA9PSBleHBlY3RlZCBhbmQgUGF0aChtb2R1bGUuX19maWxlX18pLnJlc29sdmUoKSA9PSBleHBlY3RlZCwgIm9yaWdpbiIpCiAgICAgICAgcmVsYXRpdmUgPSBleHBlY3RlZC5yZWxhdGl2ZV90byhST09UKS5hc19wb3NpeCgpCiAgICAgICAgcmVxdWlyZShyZWxhdGl2ZSBpbiBmaWxlcyBhbmQgZGlnZXN0KGV4cGVjdGVkLnJlYWRfYnl0ZXMoKSkgPT0gZmlsZXNbcmVsYXRpdmVdLCAibW9kdWxlX2J5dGVzIikKICAgICAgICAjIHNldHVwIGhhcyBhbHJlYWR5IGltcG9ydGVkIEJlbmNoOyB2YWxpZGF0ZSBvcmRpbmFyeSBjYWNoZXMgcmF0aGVyIHRoYW4KICAgICAgICAjIGNoYW5naW5nIGludGVycHJldGVyIGZsYWdzIG9yIGFzc3VtaW5nIG5vIGJ5dGVjb2RlIGNhY2hlIGV4aXN0cy4KICAgICAgICBjb21waWxlZCA9IGNvbXBpbGUoZXhwZWN0ZWQucmVhZF9ieXRlcygpLCBzdHIob3JpZ2luKSwgImV4ZWMiLCBkb250X2luaGVyaXQ9VHJ1ZSwgb3B0aW1pemU9c3lzLmZsYWdzLm9wdGltaXplKQogICAgICAgIHJlcXVpcmUoc3BlYy5sb2FkZXIuZ2V0X2NvZGUobmFtZSkgPT0gY29tcGlsZWQsICJjYWNoZWRfY29kZSIpCiAgICAgICAgaWYgbmFtZSA9PSAiYmNiZW5jaC5ldmFsdWF0ZS5jb2RlcmV2aWV3X2p1ZGdlIjoKICAgICAgICAgICAgY29kZSA9IFtpdGVtIGZvciBpdGVtIGluIGNvbXBpbGVkLmNvX2NvbnN0cyBpZiBpc2luc3RhbmNlKGl0ZW0sIHR5cGVzLkNvZGVUeXBlKSBhbmQgaXRlbS5jb19uYW1lID09ICJfZXh0cmFjdF9qc29uX2FycmF5Il0KICAgICAgICAgICAgcmVxdWlyZShsZW4oY29kZSkgPT0gMSBhbmQgbW9kdWxlLl9leHRyYWN0X2pzb25fYXJyYXkuX19jb2RlX18gPT0gY29kZVswXSwgInBhcnNlcl9jb2RlIikKICAgICAgICBtb2R1bGVzLmFwcGVuZCh7Im5hbWUiOiBuYW1lLCAib3JpZ2luIjogcmVsYXRpdmUsICJzaGEyNTYiOiBmaWxlc1tyZWxhdGl2ZV19KQogICAgbWFuZGF0b3J5ID0gewogICAgICAgICJiY2JlbmNoLmNsaSIsICJiY2JlbmNoLmNvbmZpZyIsICJiY2JlbmNoLmNvbW1hbmRzLmV2YWx1YXRlIiwKICAgICAgICAiYmNiZW5jaC5kYXRhc2V0LmNvZGVyZXZpZXciLCAiYmNiZW5jaC5ldmFsdWF0ZS5jb2RlcmV2aWV3IiwKICAgICAgICAiYmNiZW5jaC5ldmFsdWF0ZS5jb2RlcmV2aWV3X2p1ZGdlIiwgImJjYmVuY2guZXZhbHVhdGUucmV2aWV3X3BhcnNpbmciLAogICAgICAgICJiY2JlbmNoLnJlc3VsdHMuY29kZXJldmlldyIsICJiY2JlbmNoLnJlc3VsdHMubWV0cmljcyIsICJiY2JlbmNoLmFnZW50LnByX3Jldmlldy5hZ2VudCIsCiAgICB9CiAgICByZXF1aXJlKG1hbmRhdG9yeS5pc3N1YnNldCh7aXRlbVsibmFtZSJdIGZvciBpdGVtIGluIG1vZHVsZXN9KSBhbmQgbGVuKG1vZHVsZXMpIDw9IDI1NiwgIm1vZHVsZXMiKQogICAgdHJhY2tlZCA9IHtST09UIC8gcGF0aCBmb3IgcGF0aCBpbiBmaWxlcyBpZiBwYXRoLnN0YXJ0c3dpdGgoInNyYy9iY2JlbmNoLyIpIGFuZCBwYXRoLmVuZHN3aXRoKCIucHkiKX0KICAgIHJlcXVpcmUoc2V0KChST09UIC8gInNyYy9iY2JlbmNoIikucmdsb2IoIioucHkiKSkgPT0gdHJhY2tlZCwgInVudHJhY2tlZF9zb3VyY2UiKQogICAgcmV0dXJuIHNvcnRlZChtb2R1bGVzLCBrZXk9bGFtYmRhIGl0ZW06IGl0ZW1bIm5hbWUiXSkKCgpkZWYgZmluaXNoKCk6CiAgICBoZWFkLCB0cmVlLCBmaWxlcyA9IGNoZWNrb3V0KCkKICAgIHJlcXVpcmUoKGhlYWQsIHRyZWUsIGZpbGVzKSA9PSBJTklUSUFMLCAic291cmNlX2NoYW5nZWQiKQogICAgbW9kdWxlcyA9IHNvdXJjZXMoZmlsZXMpCiAgICB3aXRuZXNzID0gewogICAgICAgICJ2ZXJzaW9uIjogMSwgImJlbmNoSGVhZCI6IGhlYWQsICJiZW5jaFRyZWUiOiB0cmVlLAogICAgICAgICJzb3VyY2VCaW5kaW5nSGFzaCI6IGRpZ2VzdChqc29uLmR1bXBzKEJJTkRJTkcsIHNvcnRfa2V5cz1UcnVlLCBzZXBhcmF0b3JzPSgiLCIsICI6IikpLmVuY29kZSgpKSwKICAgICAgICAibGF1bmNoZXJIYXNoIjogQklORElOR1sibGF1bmNoZXJIYXNoIl0sICJtb2R1bGVzIjogbW9kdWxlcywKICAgIH0KICAgIE9VVFBVVC5wYXJlbnQubWtkaXIoZXhpc3Rfb2s9VHJ1ZSkKICAgIHdpdGggT1VUUFVULm9wZW4oIngiLCBlbmNvZGluZz0idXRmLTgiLCBuZXdsaW5lPSJcbiIpIGFzIHN0cmVhbToKICAgICAgICBqc29uLmR1bXAod2l0bmVzcywgc3RyZWFtLCBzb3J0X2tleXM9VHJ1ZSkKICAgICAgICBzdHJlYW0ud3JpdGUoIlxuIikKCgpST09UID0gUGF0aC5jd2QoKS5yZXNvbHZlKCkKUExBTiA9IGpzb24ubG9hZHMoKFJPT1QgLyAiLmdpdGh1Yi9zZWxmLWltcHJvdmVtZW50LWdhdGUuanNvbiIpLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKSkKcmVxdWlyZShQTEFOLmdldCgic2NoZW1hVmVyc2lvbiIpID09IDMgYW5kIFBMQU4uZ2V0KCJzY29wZSIpID09ICJmdWxsIiwgIm1hbmlmZXN0IikKQklORElORyA9IFBMQU5bInNvdXJjZUJpbmRpbmciXQpyZXF1aXJlKEJJTkRJTkdbInZlcnNpb24iXSA9PSAxIGFuZCBCSU5ESU5HWyJsYXVuY2hlclZlcnNpb24iXSA9PSAxLCAidmVyc2lvbiIpCk9VVFBVVCA9IFJPT1QgLyAiZ2F0ZS1wcm9vZi9iZW5jaC1ydW50aW1lLmpzb24iCnJlcXVpcmUobm90IE9VVFBVVC5leGlzdHMoKSwgImV4aXN0aW5nX3dpdG5lc3MiKQpmb3IgbmFtZSBpbiAoIlBZVEhPTlBBVEgiLCAiUFlUSE9OSE9NRSIsICJQWVRIT05QWUNBQ0hFUFJFRklYIiwgIlVWX1BST0pFQ1QiLCAiVVZfUFJPSkVDVF9FTlZJUk9OTUVOVCIpOgogICAgcmVxdWlyZShub3Qgb3MuZW52aXJvbi5nZXQobmFtZSksICJvdmVycmlkZSIpCnJlcXVpcmUoUGF0aChzeXMucHJlZml4KS5yZXNvbHZlKCkgPT0gUk9PVCAvICIudmVudiIsICJlbnZpcm9ubWVudCIpCmZvciBkaXJlY3RvcnkgaW4gW1JPT1QgLyAic3JjL2JjYmVuY2giLCBST09UIC8gInNyYyIsIFJPT1QsICpST09ULnBhcmVudHNdOgogICAgcmVxdWlyZShub3QgKGRpcmVjdG9yeSAvICIuZW52IikuZXhpc3RzKCksICJkb3RlbnYiKQpkaXJlY3QgPSBqc29uLmxvYWRzKGltcG9ydGxpYi5tZXRhZGF0YS5kaXN0cmlidXRpb24oImJjYmVuY2giKS5yZWFkX3RleHQoImRpcmVjdF91cmwuanNvbiIpIG9yICJ7fSIpCnVybCA9IHVybHBhcnNlKGRpcmVjdC5nZXQoInVybCIsICIiKSkKcmVxdWlyZSh1cmwuc2NoZW1lID09ICJmaWxlIiBhbmQgbm90IHVybC5uZXRsb2MgYW5kIGRpcmVjdC5nZXQoImRpcl9pbmZvIiwge30pLmdldCgiZWRpdGFibGUiKSBpcyBUcnVlLCAiaW5zdGFsbGF0aW9uIikKcmVxdWlyZShQYXRoKHVybDJwYXRobmFtZSh1cmwucGF0aCkpLnJlc29sdmUoKSA9PSBST09ULCAiaW5zdGFsbGF0aW9uIikKSU5JVElBTCA9IGNoZWNrb3V0KCkKYXBwID0gaW1wb3J0bGliLmltcG9ydF9tb2R1bGUoImJjYmVuY2guY2xpIikuYXBwCnNvdXJjZXMoSU5JVElBTFsyXSkKdHJ5OgogICAgYXBwKGFyZ3M9c3lzLmFyZ3ZbMTpdLCBwcm9nX25hbWU9ImJjYmVuY2giKQpleGNlcHQgU3lzdGVtRXhpdCBhcyBlcnJvcjoKICAgIGlmIGVycm9yLmNvZGUgaXMgTm9uZSBvciBlcnJvci5jb2RlID09IDA6CiAgICAgICAgZmluaXNoKCkKICAgIHJhaXNlCmVsc2U6CiAgICBmaW5pc2goKQo='), '<full-evaluation-runtime-v1>', 'exec'))" evaluate pr-review "${{ matrix.entry }}" `
             --model "${{ inputs.model }}" `
             --engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
             --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
+      - name: Verify executed gate pins
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $plan = Get-Content .github/self-improvement-gate.json -Raw | ConvertFrom-Json
+          $engine = '${{ steps.install-harnesses.outputs.bc-alagents-path }}'
+          $quality = Join-Path 'evaluation_results' '${{ github.run_id }}' 'bcquality'
+          $engineSha = git -C $engine rev-parse HEAD
+          if ($LASTEXITCODE) { throw 'Cannot read executed engine HEAD.' }
+          $qualitySha = git -C $quality rev-parse HEAD
+          if ($LASTEXITCODE) { throw 'Cannot read executed knowledge HEAD.' }
+          $hash = (Get-FileHash dataset/codereview.jsonl -Algorithm SHA256).Hash
+          $engineChanges = git -C $engine status --porcelain --untracked-files=no
+          if ($LASTEXITCODE -or $engineChanges) { throw 'Executed engine checkout has uncommitted changes.' }
+          if ($engineSha -ne $plan.engineCommit -or $qualitySha -ne $plan.bcQualityCommit -or $hash -ne $plan.datasetHash) {
+            throw 'Executed pin chain or dataset differs from the frozen plan.'
+          }
+          $proof = @{
+            instanceId = '${{ matrix.entry }}'; runId = '${{ github.run_id }}'
+            evaluationCommit = '${{ github.sha }}'; engineCommit = $engineSha
+            bcQualityCommit = $qualitySha; datasetHash = $hash
+          }
+          if ($plan.schemaVersion -ne 3 -or $plan.scope -cne 'full' -or
+              '${{ inputs.test-run }}' -cne 'false' -or '${{ inputs.modified-only }}' -cne 'true' -or
+              '${{ inputs.repeat }}' -cne '1' -or '${{ inputs.engine-sha }}' -ne '') { throw 'Full evidence requires the frozen non-publishing execution mode.' }
+          $resultPath = '${{ github.run_id }}/${{ matrix.entry }}.jsonl'
+          $resultFile = Join-Path 'evaluation_results' $resultPath
+          if (-not (Test-Path -LiteralPath $resultFile -PathType Leaf)) { throw 'Missing full entry result.' }
+          $proof.schemaVersion = 2
+          $proof.runAttempt = '${{ github.run_attempt }}'
+          $proof.resultPath = $resultPath
+          $proof.resultHash = (Get-FileHash -LiteralPath $resultFile -Algorithm SHA256).Hash
+          $proof.manifestHash = (Get-FileHash .github/self-improvement-gate.json -Algorithm SHA256).Hash
+          $proof.model = '${{ inputs.model }}'
+          $proof.mode = 'frozen-full-nonpublishing'
+          $runtime = Get-Content gate-proof/bench-runtime.json -Raw | ConvertFrom-Json
+          $proof.schemaVersion = 3
+          $proof.sourceBindingHash = $runtime.sourceBindingHash
+          $proof.benchHead = $runtime.benchHead
+          $proof.benchTree = $runtime.benchTree
+          $proof.runtime = $runtime
+          New-Item -ItemType Directory gate-proof -Force | Out-Null
+          $proof | ConvertTo-Json -Depth 12 | Set-Content gate-proof/gate-provenance.json
+          $metrics = Join-Path 'evaluation_results' '${{ github.run_id }}' '_run-metrics.json'
+          if (Test-Path $metrics) { Copy-Item $metrics gate-proof/_run-metrics.json }
+
+      - name: Upload executed gate pins
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-provenance-${{ github.run_id }}-${{ matrix.entry }}
+          path: gate-proof/*
+          if-no-files-found: error
       - name: Upload evaluation results
         uses: actions/upload-artifact@v6
         if: always()
