@@ -928,6 +928,120 @@ class TestJudge:
 
         assert _parse_judge_results(result_path, num_pairs=1, stdout='```json\n[{"pair": 1, "match": true}]\n```') == [True]
 
+    @pytest.mark.parametrize("source", ["file", "stdout"])
+    def test_parse_patch_with_identical_repeated_array(self, tmp_path, source):
+        verdict = '[{"pair":1,"match":true,"reasoning":"Both identify the unchecked TryFunction result."}]'
+        output = f"*** Begin Patch\n*** Add File: judge_results.json\n+{verdict}\n*** End Patch\n{verdict}"
+        result_path = tmp_path / _config.judge.result_file
+        if source == "file":
+            result_path.write_text(output, encoding="utf-8")
+
+        assert _parse_judge_results(result_path, num_pairs=1, stdout=output) == [True]
+
+    @pytest.mark.parametrize(
+        "wrapper",
+        [
+            "{verdict}",
+            "```json\n{verdict}\n```",
+            "```JSON\n{verdict}\n```",
+            "```\n{verdict}\n```",
+            "The verdict follows:\n{verdict}\nDone.",
+            "```json\n{verdict}\n```\n{verdict}",
+        ],
+    )
+    @pytest.mark.parametrize("source", ["file", "stdout"])
+    def test_parse_complete_arrays_with_quoted_brackets_and_nesting(self, tmp_path, source, wrapper):
+        verdict = json.dumps(
+            [
+                {"pair": 1, "match": True, "reasoning": r'Brackets ][, escaped "quotes", \paths\, and [{"match": false}] inside prose.'},
+                {"pair": 2, "match": False, "reasoning": "Different issues", "details": {"examples": [[], {"pair": 1, "match": False}]}},
+            ]
+        )
+        output = wrapper.format(verdict=verdict)
+        result_path = tmp_path / _config.judge.result_file
+        if source == "file":
+            result_path.write_text(output, encoding="utf-8")
+
+        assert _parse_judge_results(result_path, num_pairs=2, stdout=output) == [True, False]
+
+    def test_parse_accepts_identical_arrays_with_different_json_formatting(self, tmp_path):
+        output = '[{"pair":1,"match":true,"reasoning":"same"}]\n[\n  {"reasoning":"s\\u0061me", "match":true, "pair":1}\n]'
+
+        assert _parse_judge_results(tmp_path / _config.judge.result_file, num_pairs=1, stdout=output) == [True]
+
+    @pytest.mark.parametrize(
+        "other",
+        [
+            '[{"pair":1,"match":false,"reasoning":"same"}]',
+            '[{"pair":1,"match":true,"reasoning":"different"}]',
+            '[{"pair":1,"match":1,"reasoning":"same"}]',
+            "[]",
+        ],
+    )
+    @pytest.mark.parametrize("wrapper", ["{first}\n{other}", "```json\n{first}\n```\n{other}", "{other}\n```json\n{first}\n```"])
+    @pytest.mark.parametrize("source", ["file", "stdout"])
+    def test_parse_rejects_conflicting_arrays(self, tmp_path, source, wrapper, other):
+        output = wrapper.format(first='[{"pair":1,"match":true,"reasoning":"same"}]', other=other)
+        result_path = tmp_path / _config.judge.result_file
+        if source == "file":
+            result_path.write_text(output, encoding="utf-8")
+
+        with pytest.raises(LLMJudgeError, match="conflicting JSON arrays"):
+            _parse_judge_results(result_path, num_pairs=1, stdout=output)
+
+    @pytest.mark.parametrize(
+        "output",
+        [
+            "",
+            " \n ",
+            "No verdict was produced.",
+            '[{"pair":1,"match":true}',
+            '{"verdicts":[{"pair":1,"match":true}]',
+            '"verdicts":[{"pair":1,"match":true}]',
+            '"verdicts" [{"pair":1,"match":true}]',
+            '[{"pair":1,"match":true,"details":[{"pair":2,"match":true}]',
+            '[[{"pair":1,"match":true}]',
+            '[broken [{"pair":1,"match":true}]]',
+            '[{"pair":1,"match":true}] ]',
+            '[{"pair":1,"match":true}]\n[{"pair":1,"match":false}',
+            '```json\n[{"pair":1,"match":true}]\n```\n[{"pair":1,"match":false}',
+            '"unterminated [{\\"pair\\":1,\\"match\\":true}]',
+        ],
+    )
+    @pytest.mark.parametrize("source", ["file", "stdout"])
+    def test_parse_rejects_empty_or_malformed_outer_json(self, tmp_path, source, output):
+        result_path = tmp_path / _config.judge.result_file
+        if source == "file":
+            result_path.write_text(output, encoding="utf-8")
+
+        with pytest.raises(LLMJudgeError):
+            _parse_judge_results(result_path, num_pairs=2, stdout=output)
+
+    @pytest.mark.parametrize(
+        "output",
+        [
+            '{"verdicts":[{"pair":1,"match":true}]}',
+            '"[{\\"pair\\":1,\\"match\\":true}]"',
+        ],
+    )
+    def test_parse_does_not_extract_array_from_non_list_json(self, tmp_path, output):
+        with pytest.raises(LLMJudgeError, match="must be a JSON list"):
+            _parse_judge_results(tmp_path / _config.judge.result_file, num_pairs=1, stdout=output)
+
+    def test_parse_prefers_result_file_over_conflicting_stdout(self, tmp_path):
+        result_path = tmp_path / _config.judge.result_file
+        result_path.write_text('[{"pair":1,"match":false}]', encoding="utf-8")
+
+        assert _parse_judge_results(result_path, num_pairs=1, stdout='[{"pair":1,"match":true}]') == [False]
+
+    @pytest.mark.parametrize("output", ["", "not json", '{"verdicts":[{"pair":1,"match":true}]'])
+    def test_parse_does_not_fall_back_from_invalid_result_file(self, tmp_path, output):
+        result_path = tmp_path / _config.judge.result_file
+        result_path.write_text(output, encoding="utf-8")
+
+        with pytest.raises(LLMJudgeError):
+            _parse_judge_results(result_path, num_pairs=1, stdout='[{"pair":1,"match":true}]')
+
     def test_empty_pairs_skips_judge(self):
         assert judge_verdicts([], work_dir=Path()) == []
 
@@ -975,6 +1089,15 @@ class TestJudge:
             result = judge_verdicts(pairs, work_dir=tmp_path)
 
         assert result == [False, True]
+
+    def test_invalid_response_propagates_without_retry(self, tmp_path):
+        with (
+            patch("bcbench.evaluate.codereview_judge.invoke_copilot", return_value=(None, '{"verdicts":[{"pair":1,"match":true}]')) as mock_invoke,
+            pytest.raises(LLMJudgeError),
+        ):
+            judge_verdicts([self._pair(10)], work_dir=tmp_path)
+
+        mock_invoke.assert_called_once()
 
 
 class TestJudgeExpectedAndIgnored:
