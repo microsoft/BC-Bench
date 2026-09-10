@@ -29,6 +29,8 @@ A gold entry may also declare **`ignored_comments`** — legitimate-but-optional
 
 The judge receives `sum((expected_in_file + ignored_in_file) * generated_in_file)` candidates. This deliberate increase in judge input avoids irreversible location-only pruning; entries without candidates need no judge call. Judge failures propagate rather than falling back to structural matches. Existing published results are not rescored by this change, and historical recall improvements must be measured rather than assumed.
 
+`CodeReviewResult.create` requires explicit expected and ignored match lists from the caller. It only computes metrics from those established matches; it never infers matches from comment locations or invokes the judge itself.
+
 ## Category and runners
 
 `code-review` is the evaluation contract: it owns the dataset, structured `review.json` output, scorer, result schema, and leaderboard schema. A runner is the system under test. The same entries can be evaluated through the generic GitHub Copilot CLI and Claude Code runners, allowing direct cross-system comparisons under one scorer.

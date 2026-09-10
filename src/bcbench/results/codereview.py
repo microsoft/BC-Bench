@@ -118,29 +118,6 @@ def assign_comment_matches(
     )
 
 
-def match_comments(
-    expected_comments: list[ReviewComment],
-    generated_comments: list[ReviewComment],
-) -> list[tuple[ReviewComment, ReviewComment]]:
-    """Structural-only assignment for result creation without judge-validated pairs."""
-    matched, _ = assign_comment_matches(candidate_comment_pairs(expected_comments, generated_comments), [])
-    return matched
-
-
-def unmatched_generated(
-    generated_comments: list[ReviewComment],
-    matched_pairs: list[tuple[ReviewComment, ReviewComment]],
-) -> list[ReviewComment]:
-    """Generated comments not already paired in ``matched_pairs``, preserving order.
-
-    Identity-based so two value-equal comments are treated as distinct; the pairs carry the
-    same ``ReviewComment`` instances that live in ``generated_comments``. Used to feed the
-    leftover findings into ignored-comment matching after expected matching has claimed its own.
-    """
-    matched_ids = {id(generated) for _, generated in matched_pairs}
-    return [generated for generated in generated_comments if id(generated) not in matched_ids]
-
-
 def _severity_mean_absolute_error(matched_pairs: list[tuple[ReviewComment, ReviewComment]]) -> float:
     """Mean absolute difference between expected and generated severity levels over matched pairs.
 
@@ -209,18 +186,11 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
         output: str,
         expected_comments: list[ReviewComment],
         generated_comments: list[ReviewComment],
-        matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
-        ignored_comments: list[ReviewComment] | None = None,
-        ignored_matched_pairs: list[tuple[ReviewComment, ReviewComment]] | None = None,
+        *,
+        matched_pairs: list[tuple[ReviewComment, ReviewComment]],
+        ignored_comments: list[ReviewComment],
+        ignored_matched_pairs: list[tuple[ReviewComment, ReviewComment]],
     ) -> Self:
-        if matched_pairs is None:
-            matched_pairs = match_comments(expected_comments, generated_comments)
-
-        ignored_comments = ignored_comments or []
-        if ignored_matched_pairs is None:
-            unmatched_generated_comments = unmatched_generated(generated_comments, matched_pairs)
-            ignored_matched_pairs = match_comments(ignored_comments, unmatched_generated_comments)
-
         scores = _score_counts(
             matched_count=len(matched_pairs),
             generated_count=len(generated_comments),

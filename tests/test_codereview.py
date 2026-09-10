@@ -1,5 +1,6 @@
 import json
 import subprocess
+from inspect import Parameter, signature
 from itertools import product
 from pathlib import Path
 from unittest.mock import patch
@@ -14,7 +15,7 @@ from bcbench.evaluate.codereview_judge import LLMJudgeError, _parse_judge_result
 from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.exceptions import AgentError
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs, match_comments, unmatched_generated
+from bcbench.results.codereview import CodeReviewResult, CodeReviewResultSummary, _score_counts, assign_comment_matches, candidate_comment_pairs
 from bcbench.types import EvaluationCategory
 from tests.conftest import create_codereview_entry, create_codereview_result, create_evaluation_context
 
@@ -70,69 +71,6 @@ class TestSeverity:
         assert str(comment) == "[unspecified] a.al:1: x"
 
 
-class TestMatchComments:
-    def test_finding_matches_nearest_expected_not_first_listed(self):
-        expected = [
-            ReviewComment(file="a.al", line_start=14, body="RecordRef in loop", severity=Severity.HIGH),
-            ReviewComment(file="a.al", line_start=16, body="Commit in loop", severity=Severity.HIGH),
-        ]
-        generated = [ReviewComment(file="a.al", line_start=16, body="Commit() inside repeat", severity=Severity.HIGH)]
-
-        pairs = match_comments(expected, generated)
-
-        assert len(pairs) == 1
-        matched_expected, matched_generated = pairs[0]
-        assert matched_expected.line_start == 16
-        assert matched_generated.line_start == 16
-
-    def test_maximizes_number_of_matches(self):
-        expected = [
-            ReviewComment(file="a.al", line_start=10, body="issue A", severity=Severity.HIGH),
-            ReviewComment(file="a.al", line_start=11, body="issue B", severity=Severity.HIGH),
-        ]
-        generated = [
-            ReviewComment(file="a.al", line_start=10, body="near both", severity=Severity.HIGH),
-            ReviewComment(file="a.al", line_start=12, body="near A only", severity=Severity.HIGH),
-        ]
-
-        pairs = match_comments(expected, generated)
-
-        assert len(pairs) == 2
-        assert {matched_expected.line_start for matched_expected, _ in pairs} == {10, 11}
-
-    def test_no_match_across_files(self):
-        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
-        generated = [ReviewComment(file="b.al", line_start=10, body="x", severity=Severity.HIGH)]
-
-        assert match_comments(expected, generated) == []
-
-    def test_empty_inputs_return_no_pairs(self):
-        comment = ReviewComment(file="a.al", line_start=1, body="x", severity=Severity.HIGH)
-        assert match_comments([], [comment]) == []
-        assert match_comments([comment], []) == []
-
-    def test_pairs_same_file_regardless_of_distance(self):
-        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
-        generated = [ReviewComment(file="a.al", line_start=900, body="x", severity=Severity.HIGH)]
-
-        pairs = match_comments(expected, generated)
-
-        assert len(pairs) == 1
-
-    def test_uses_distance_as_tiebreak(self):
-        expected = [ReviewComment(file="a.al", line_start=10, body="x", severity=Severity.HIGH)]
-        generated = [
-            ReviewComment(file="a.al", line_start=500, body="far", severity=Severity.HIGH),
-            ReviewComment(file="a.al", line_start=12, body="near", severity=Severity.HIGH),
-        ]
-
-        pairs = match_comments(expected, generated)
-
-        assert len(pairs) == 1
-        _, matched_generated = pairs[0]
-        assert matched_generated.line_start == 12
-
-
 class TestCandidateCommentPairs:
     def test_all_same_file_pairs_preserve_identity_and_order(self):
         comment = ReviewComment(file="src/app.al", line_start=1, body="same")
@@ -169,6 +107,14 @@ class TestCandidateCommentPairs:
 
 
 class TestAssignCommentMatches:
+    def test_distance_only_breaks_ties_between_confirmed_pairs(self):
+        expected = ReviewComment(file="a.al", line_start=10, line_end=20, body="expected")
+        near = ReviewComment(file="a.al", line_start=15, body="same issue nearby")
+        far = ReviewComment(file="a.al", line_start=900, body="same issue far away")
+
+        assert assign_comment_matches([(expected, far), (expected, near)], []) == ([(expected, near)], [])
+        assert assign_comment_matches([(expected, far)], []) == ([(expected, far)], [])
+
     def test_cardinality_beats_total_distance_on_sparse_graph(self):
         expected = [ReviewComment(file="a.al", line_start=line, body="gold") for line in (1, 1001, 2001)]
         generated = [comment.model_copy() for comment in expected]
@@ -300,6 +246,31 @@ class TestCodeReviewEntry:
 
 
 class TestCodeReviewResult:
+    def test_create_requires_explicit_matches_for_both_buckets(self):
+        parameters = signature(CodeReviewResult.create).parameters
+        assert parameters["matched_pairs"].default is Parameter.empty
+        assert parameters["ignored_matched_pairs"].default is Parameter.empty
+
+    def test_create_does_not_infer_same_location_matches(self, tmp_path):
+        expected = ReviewComment(file="a.al", line_start=1, body="expected issue")
+        ignored = ReviewComment(file="a.al", line_start=1, body="optional issue")
+        generated = ReviewComment(file="a.al", line_start=1, body="different issue")
+        entry = create_codereview_entry(expected_comments=[expected], ignored_comments=[ignored])
+        context = create_evaluation_context(tmp_path, entry=entry, category=EvaluationCategory.CODE_REVIEW)
+
+        result = CodeReviewResult.create(
+            context,
+            output=generated.model_dump_json(),
+            expected_comments=entry.expected_comments,
+            generated_comments=[generated],
+            matched_pairs=[],
+            ignored_comments=entry.ignored_comments,
+            ignored_matched_pairs=[],
+        )
+
+        assert result.matched_comment_count == result.ignored_matched_comment_count == 0
+        assert result.missed_comment_count == result.incorrect_comment_count == 1
+
     def test_create_result(self):
         result = create_codereview_result()
         assert result.category == EvaluationCategory.CODE_REVIEW
@@ -380,7 +351,7 @@ class TestCodeReviewResult:
         assert result.generated_comments[0].file == "src/app.al"
         assert result.generated_comments[0].line_start == 42
 
-    def test_metrics_match_expected_comments_structurally(self):
+    def test_metrics_use_explicit_matches(self):
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Fix null check", severity=Severity.MEDIUM),
             ReviewComment(file="src/app.al", line_start=40, body="Validate input", severity=Severity.HIGH),
@@ -402,7 +373,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, matched_indices=((0, 0),))
 
         assert result.matched_comment_count == 1
         assert result.missed_comment_count == 1
@@ -432,6 +403,8 @@ class TestCodeReviewResult:
             output=generated_output,
             expected_comments=expected_comments,
             ignored_comments=ignored_comments,
+            matched_indices=((0, 0),),
+            ignored_matched_indices=((0, 1),),
         )
 
         assert result.matched_comment_count == 1
@@ -442,8 +415,7 @@ class TestCodeReviewResult:
         assert result.recall == 1.0
 
     def test_ignored_comment_does_not_grant_recall(self):
-        # An ignored match must never be credited as finding an expected issue. The expected bug
-        # lives in a file the agent never commented on, so structural matching can't pair them.
+        # A confirmed ignored match must not be credited as finding an expected issue.
         expected_comments = [
             ReviewComment(file="src/real.al", line_start=10, body="Real bug to find", severity=Severity.HIGH),
         ]
@@ -456,6 +428,7 @@ class TestCodeReviewResult:
             output=generated_output,
             expected_comments=expected_comments,
             ignored_comments=ignored_comments,
+            ignored_matched_indices=((0, 0),),
         )
 
         assert result.matched_comment_count == 0
@@ -466,9 +439,7 @@ class TestCodeReviewResult:
         assert result.precision == 1.0
         assert result.recall == 0.0
 
-    def test_expected_takes_precedence_over_ignored(self):
-        # When a generated comment could match both an expected and an ignored comment at the same
-        # location, expected wins so the agent is credited for finding the real issue.
+    def test_expected_assignment_is_not_neutralized_again(self):
         expected_comments = [
             ReviewComment(file="src/app.al", line_start=10, body="Must find this", severity=Severity.HIGH),
         ]
@@ -481,6 +452,7 @@ class TestCodeReviewResult:
             output=generated_output,
             expected_comments=expected_comments,
             ignored_comments=ignored_comments,
+            matched_indices=((0, 0),),
         )
 
         assert result.matched_comment_count == 1
@@ -500,7 +472,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, matched_indices=((0, 0),))
 
         assert result.ignored_matched_comment_count == 0
         assert result.matched_comment_count == 1
@@ -519,7 +491,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, matched_indices=((0, 0), (1, 1)))
 
         assert result.matched_comment_count == 2
         assert result.generated_comments[0].severity is None
@@ -561,7 +533,7 @@ class TestCodeReviewResult:
             ]
         )
 
-        result = create_codereview_result(output=generated_output, expected_comments=expected_comments)
+        result = create_codereview_result(output=generated_output, expected_comments=expected_comments, matched_indices=((0, 0),))
 
         assert result.display_row == {
             "Generated": "2",
@@ -619,6 +591,7 @@ class TestCodeReviewSummary:
                 ]
             ),
             expected_comments=expected_comments,
+            matched_indices=((0, 0),),
         )
         result_2 = create_codereview_result(
             instance_id="test__a-2",
@@ -645,6 +618,7 @@ class TestCodeReviewSummary:
             instance_id="test__ign-1",
             output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"}]),
             expected_comments=expected,
+            matched_indices=((0, 0),),
         )
         with_ignored = create_codereview_result(
             instance_id="test__ign-2",
@@ -656,6 +630,8 @@ class TestCodeReviewSummary:
             ),
             expected_comments=expected,
             ignored_comments=[ReviewComment(file="src/app.al", line_start=40, body="neutral note", severity=Severity.LOW)],
+            matched_indices=((0, 0),),
+            ignored_matched_indices=((0, 1),),
         )
 
         summary = CodeReviewResultSummary.from_results([matched, with_ignored], run_id="run-ignored")
@@ -673,12 +649,14 @@ class TestCodeReviewSummary:
             instance_id="test__ign-3",
             output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "found", "severity": "medium"}]),
             expected_comments=[ReviewComment(file="src/app.al", line_start=10, body="expected", severity=Severity.MEDIUM)],
+            matched_indices=((0, 0),),
         )
         only_ignored = create_codereview_result(
             instance_id="test__ign-4",
             output=json.dumps([{"file": "src/other.al", "line_start": 40, "body": "neutral note", "severity": "low"}]),
             expected_comments=[ReviewComment(file="src/real.al", line_start=10, body="missed bug", severity=Severity.HIGH)],
             ignored_comments=[ReviewComment(file="src/other.al", line_start=40, body="neutral note", severity=Severity.LOW)],
+            ignored_matched_indices=((0, 0),),
         )
 
         summary = CodeReviewResultSummary.from_results([clean, only_ignored], run_id="run-only-ignored")
@@ -695,6 +673,7 @@ class TestCodeReviewSummary:
             instance_id="test__macro-1",
             output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
             expected_comments=expected_comments,
+            matched_indices=((0, 0),),
         )
         silent = create_codereview_result(
             instance_id="test__macro-2",
@@ -776,6 +755,7 @@ class TestCodeReviewSummary:
             instance_id="test__render-1",
             output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
             expected_comments=expected_comments,
+            matched_indices=((0, 0),),
         )
 
         summary = CodeReviewResultSummary.from_results([result], run_id="run-1")
@@ -813,6 +793,7 @@ class TestCodeReviewSummary:
             instance_id="test__render-1",
             output=json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}]),
             expected_comments=expected_comments,
+            matched_indices=((0, 0),),
         )
 
         summary = CodeReviewResultSummary.from_results([result], run_id="run-1")
@@ -844,6 +825,7 @@ class TestCodeReviewLeaderboardAggregate:
             instance_id="test__a-1",
             output=output,
             expected_comments=expected_comments,
+            matched_indices=((0, 0),),
         )
         return CodeReviewResultSummary.from_results([result], run_id=run_id)
 
@@ -872,9 +854,9 @@ class TestCodeReviewLeaderboardAggregate:
         hit = json.dumps([{"file": "src/app.al", "line_start": 10, "body": "Issue A", "severity": "warning"}])
 
         results = [
-            create_codereview_result(instance_id="test__t-1", output=hit, expected_comments=expected),
+            create_codereview_result(instance_id="test__t-1", output=hit, expected_comments=expected, matched_indices=((0, 0),)),
             create_codereview_result(instance_id="test__t-2", output="[]", expected_comments=expected),
-            create_codereview_result(instance_id="test__t-3", output=hit, expected_comments=expected),
+            create_codereview_result(instance_id="test__t-3", output=hit, expected_comments=expected, matched_indices=((0, 0),)),
             create_codereview_result(instance_id="test__t-4", output="[]", expected_comments=expected),
         ]
         run = CodeReviewResultSummary.from_results(results, run_id="run-1")
@@ -1459,38 +1441,6 @@ class TestJudgeExpectedAndIgnored:
             pytest.raises(ValueError, match="zip"),
         ):
             judge_expected_and_ignored(pairs, [], work_dir=tmp_path)
-
-
-class TestUnmatchedGenerated:
-    @staticmethod
-    def _comment(line: int, body: str = "finding") -> ReviewComment:
-        return ReviewComment(file="src/app.al", line_start=line, body=body, severity=Severity.LOW)
-
-    def test_no_pairs_returns_all_in_order(self):
-        generated = [self._comment(1), self._comment(2), self._comment(3)]
-        assert unmatched_generated(generated, []) == generated
-
-    def test_excludes_matched_and_preserves_order(self):
-        g0, g1, g2 = self._comment(1), self._comment(2), self._comment(3)
-        expected = self._comment(2, "expected")
-        assert unmatched_generated([g0, g1, g2], [(expected, g1)]) == [g0, g2]
-
-    def test_all_matched_returns_empty(self):
-        g0, g1 = self._comment(1), self._comment(2)
-        expected = self._comment(1, "expected")
-        assert unmatched_generated([g0, g1], [(expected, g0), (expected, g1)]) == []
-
-    def test_uses_identity_not_value_equality(self):
-        # Two value-equal but DISTINCT instances: matching one must leave the other in the leftovers.
-        first = self._comment(1, "same body")
-        second = self._comment(1, "same body")
-        assert first == second  # pydantic value-equality holds
-        expected = self._comment(1, "expected")
-
-        leftovers = unmatched_generated([first, second], [(expected, first)])
-
-        assert len(leftovers) == 1
-        assert leftovers[0] is second
 
 
 class TestScoreCounts:

@@ -198,6 +198,8 @@ def create_codereview_result(
     metrics: AgentMetrics | None = None,
     domain: str | None = None,
     ignored_comments: list[ReviewComment] | None = None,
+    matched_indices: tuple[tuple[int, int], ...] = (),
+    ignored_matched_indices: tuple[tuple[int, int], ...] = (),
 ) -> CodeReviewResult:
     if expected_comments is None:
         expected_comments = []
@@ -226,7 +228,9 @@ def create_codereview_result(
         output=output,
         expected_comments=expected_comments,
         generated_comments=generated_comments,
+        matched_pairs=[(expected_comments[e], generated_comments[g]) for e, g in matched_indices],
         ignored_comments=entry.ignored_comments,
+        ignored_matched_pairs=[(entry.ignored_comments[e], generated_comments[g]) for e, g in ignored_matched_indices],
     )
 
 
