@@ -1,8 +1,25 @@
 """Tests for project categorization operations."""
 
+from pathlib import Path
+
 import pytest
 
-from bcbench.operations.project_operations import _is_test_project, categorize_projects
+from bcbench.exceptions import ProjectDiscoveryError
+from bcbench.operations.project_operations import (
+    _canonical_project_path,
+    _is_test_project,
+    categorize_projects,
+    find_project_path,
+    is_test_project,
+    order_project_paths,
+)
+
+
+def _create_project(repo_path: Path, relative_path: str) -> Path:
+    project_path = repo_path / relative_path
+    project_path.mkdir(parents=True)
+    (project_path / "app.json").write_text("{}", encoding="utf-8")
+    return project_path
 
 
 class TestIsTestProject:
@@ -25,6 +42,10 @@ class TestIsTestProject:
 
     def test_is_test_project_without_identifier(self):
         assert _is_test_project("src/app", ("test", "tests")) is False
+
+    def test_is_test_project_uses_configured_identifiers(self):
+        assert is_test_project("src/tests") is True
+        assert is_test_project("src/app") is False
 
 
 class TestCategorizeProjects:
@@ -102,3 +123,75 @@ class TestCategorizeProjects:
         project_paths = []
         with pytest.raises(RuntimeError, match="Project categorization failed"):
             categorize_projects(project_paths)
+
+
+class TestFindProjectPath:
+    def test_find_project_path_uses_nearest_app_json(self, tmp_path):
+        repo_path = tmp_path / "repo"
+        project_path = _create_project(repo_path, "App/Layers/W1/Tests/SCM-Manufacturing")
+        test_file = project_path / "ProductionOrder.Codeunit.al"
+        test_file.write_text("codeunit 137310 Tests {}", encoding="utf-8")
+
+        result = find_project_path(repo_path, "App/Layers/W1/Tests/SCM-Manufacturing/ProductionOrder.Codeunit.al")
+
+        assert result == str(project_path.relative_to(repo_path))
+
+    def test_find_project_path_prefers_nested_bcapps_test_project(self, tmp_path):
+        repo_path = tmp_path / "repo"
+        _create_project(repo_path, "src/MyApp")
+        test_project = _create_project(repo_path, "src/MyApp/test")
+        test_file = test_project / "Regression.Codeunit.al"
+        test_file.write_text("codeunit 50100 Tests {}", encoding="utf-8")
+
+        result = find_project_path(repo_path, "src/MyApp/test/Regression.Codeunit.al")
+
+        assert result == str(test_project.relative_to(repo_path))
+
+    def test_find_project_path_rejects_file_without_app_json(self, tmp_path):
+        repo_path = tmp_path / "repo"
+        source_file = repo_path / "App/Unknown/Thing.al"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text("table 50100 Thing {}", encoding="utf-8")
+
+        with pytest.raises(ProjectDiscoveryError, match=r"No owning app\.json.*App/Unknown/Thing\.al"):
+            find_project_path(repo_path, "App/Unknown/Thing.al")
+
+    def test_find_project_path_rejects_repository_escape(self, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+
+        with pytest.raises(ProjectDiscoveryError, match="outside repository"):
+            find_project_path(repo_path, "../outside.al")
+
+
+class TestOrderProjectPaths:
+    def test_canonical_project_path_normalizes_separators_trailing_slash_and_case(self):
+        assert _canonical_project_path("App\\Layers\\W1\\BaseApp\\") == _canonical_project_path("app/layers/w1/baseapp")
+
+    def test_order_project_paths_prefers_dataset_order_then_sorts_new_paths(self):
+        declared = ["App\\Layers\\W1\\BaseApp", "App\\Layers\\W1\\Tests\\SCM"]
+        discovered = [
+            "App/Layers/W1/Tests/SCM-Manufacturing",
+            "App/Layers/W1/BaseApp",
+            "App/Layers/W1/Tests/Assembly",
+        ]
+
+        assert order_project_paths(declared, discovered) == [
+            "App/Layers/W1/BaseApp",
+            "App/Layers/W1/Tests/Assembly",
+            "App/Layers/W1/Tests/SCM-Manufacturing",
+        ]
+
+    def test_order_project_paths_matches_canonically_and_returns_duplicates_once(self):
+        declared = ["APP\\MAIN\\"]
+        discovered = ["app/main", "APP\\MAIN\\", "app/zeta", "App/Alpha"]
+
+        assert order_project_paths(declared, discovered) == ["app/main", "App/Alpha", "app/zeta"]
+
+
+def test_operations_exports_project_discovery_functions():
+    from bcbench import operations
+
+    assert operations.find_project_path is find_project_path
+    assert operations.is_test_project is is_test_project
+    assert operations.order_project_paths is order_project_paths

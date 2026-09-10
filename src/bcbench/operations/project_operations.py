@@ -1,6 +1,10 @@
 """Project path categorization and management operations."""
 
+from collections.abc import Iterable
+from pathlib import Path
+
 from bcbench.config import get_config
+from bcbench.exceptions import ProjectDiscoveryError
 from bcbench.logger import get_logger
 
 logger = get_logger(__name__)
@@ -25,6 +29,52 @@ def _is_test_project(project_path: str, test_identifiers: tuple[str, ...]) -> bo
     return any(f"/{identifier}" in project_lower or f"\\{identifier}" in project_lower for identifier in test_identifiers)
 
 
+def is_test_project(project_path: str) -> bool:
+    """Check if a project path is a test project."""
+    return _is_test_project(project_path, _config.file_patterns.test_project_identifiers)
+
+
+def _canonical_project_path(project_path: str) -> str:
+    """Normalize a project path for comparison."""
+    return project_path.replace("\\", "/").rstrip("/").casefold()
+
+
+def find_project_path(repo_path: Path, file_path: str) -> str:
+    """Find the nearest AL project that owns a changed file."""
+    resolved_repo_path = repo_path.resolve()
+    resolved_file_path = (resolved_repo_path / Path(file_path.replace("\\", "/"))).resolve()
+
+    if not resolved_file_path.is_relative_to(resolved_repo_path):
+        raise ProjectDiscoveryError(f"Changed path is outside repository: {file_path}")
+
+    current_path = resolved_file_path.parent
+    while current_path.is_relative_to(resolved_repo_path):
+        if (current_path / "app.json").is_file():
+            return str(current_path.relative_to(resolved_repo_path))
+        if current_path == resolved_repo_path:
+            break
+        current_path = current_path.parent
+
+    raise ProjectDiscoveryError(f"No owning app.json found for {file_path}")
+
+
+def order_project_paths(preferred_paths: Iterable[str], discovered_paths: Iterable[str]) -> list[str]:
+    """Order discovered projects by preferred order, then canonical path."""
+    discovered_by_canonical_path: dict[str, str] = {}
+    for discovered_path in discovered_paths:
+        discovered_by_canonical_path.setdefault(_canonical_project_path(discovered_path), discovered_path)
+
+    ordered_paths: list[str] = []
+    for preferred_path in preferred_paths:
+        canonical_path = _canonical_project_path(preferred_path)
+        discovered_path = discovered_by_canonical_path.pop(canonical_path, None)
+        if discovered_path is not None:
+            ordered_paths.append(discovered_path)
+
+    ordered_paths.extend(discovered_by_canonical_path[canonical_path] for canonical_path in sorted(discovered_by_canonical_path))
+    return ordered_paths
+
+
 def categorize_projects(project_paths: list[str]) -> tuple[list[str], list[str]]:
     """Categorize project paths into test projects and application projects.
 
@@ -37,8 +87,7 @@ def categorize_projects(project_paths: list[str]) -> tuple[list[str], list[str]]
     Raises:
         RuntimeError: If project categorization fails (no test or app projects found)
     """
-    test_identifiers = _config.file_patterns.test_project_identifiers
-    test_projects: list[str] = [project for project in project_paths if _is_test_project(project, test_identifiers)]
+    test_projects: list[str] = [project for project in project_paths if is_test_project(project)]
     app_projects: list[str] = [project for project in project_paths if project not in test_projects]
 
     if not test_projects or not app_projects:

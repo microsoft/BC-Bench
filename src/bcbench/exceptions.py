@@ -21,6 +21,7 @@ __all__ = [
     "InvalidEntryFormatError",
     "NoEntriesFoundError",
     "PatchApplicationError",
+    "ProjectDiscoveryError",
     "TestExecutionError",
 ]
 
@@ -225,6 +226,10 @@ class AgentTimeoutError(BCBenchError):
 
 class ConfigurationError(BCBenchError):
     """Configuration-related errors."""
+
+
+class ProjectDiscoveryError(BCBenchError):
+    """AL project ownership discovery failed."""
 
 
 class CollectionError(BCBenchError):

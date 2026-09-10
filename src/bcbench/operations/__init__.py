@@ -25,7 +25,7 @@ from bcbench.operations.git_operations import (
     stage_and_get_diff,
 )
 from bcbench.operations.instruction_operations import copy_problem_statement_folder, setup_custom_agent, setup_instructions_from_config
-from bcbench.operations.project_operations import categorize_projects
+from bcbench.operations.project_operations import categorize_projects, find_project_path, is_test_project, order_project_paths
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
 from bcbench.operations.skills_operations import setup_agent_skills
 from bcbench.operations.test_operations import extract_tests_from_patch
@@ -49,8 +49,11 @@ __all__ = [
     "execute_al_query",
     "extract_tests_from_patch",
     "fetch_commit_if_missing",
+    "find_project_path",
     "has_changes",
     "init_repo",
+    "is_test_project",
+    "order_project_paths",
     "prepare_run_dir",
     "remove_tree",
     "resolve_artifact_version_root",
