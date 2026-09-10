@@ -25,8 +25,8 @@ def _is_test_project(project_path: str, test_identifiers: tuple[str, ...]) -> bo
     Returns:
         True if the project path contains a test identifier as a path component
     """
-    project_lower = project_path.lower()
-    return any(f"/{identifier}" in project_lower or f"\\{identifier}" in project_lower for identifier in test_identifiers)
+    project_casefolded = project_path.casefold()
+    return any(f"/{identifier.casefold()}" in project_casefolded or f"\\{identifier.casefold()}" in project_casefolded for identifier in test_identifiers)
 
 
 def is_test_project(project_path: str) -> bool:
@@ -37,6 +37,11 @@ def is_test_project(project_path: str) -> bool:
 def _canonical_project_path(project_path: str) -> str:
     """Normalize a project path for comparison."""
     return project_path.replace("\\", "/").rstrip("/").casefold()
+
+
+def _project_path_representative_key(project_path: str) -> tuple[bool, str, str]:
+    canonical_path = _canonical_project_path(project_path)
+    return project_path != canonical_path, project_path.casefold(), project_path
 
 
 def find_project_path(repo_path: Path, file_path: str) -> str:
@@ -62,7 +67,10 @@ def order_project_paths(preferred_paths: Iterable[str], discovered_paths: Iterab
     """Order discovered projects by preferred order, then canonical path."""
     discovered_by_canonical_path: dict[str, str] = {}
     for discovered_path in discovered_paths:
-        discovered_by_canonical_path.setdefault(_canonical_project_path(discovered_path), discovered_path)
+        canonical_path = _canonical_project_path(discovered_path)
+        representative = discovered_by_canonical_path.get(canonical_path)
+        if representative is None or _project_path_representative_key(discovered_path) < _project_path_representative_key(representative):
+            discovered_by_canonical_path[canonical_path] = discovered_path
 
     ordered_paths: list[str] = []
     for preferred_path in preferred_paths:

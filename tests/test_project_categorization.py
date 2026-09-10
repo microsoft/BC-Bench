@@ -1,5 +1,8 @@
 """Tests for project categorization operations."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -36,6 +39,9 @@ class TestIsTestProject:
 
     def test_is_test_project_case_insensitive(self):
         assert _is_test_project("src/Test", ("test", "tests")) is True
+
+    def test_is_test_project_casefolds_configured_identifiers(self):
+        assert _is_test_project("src/QUALITY", ("Quality",)) is True
 
     def test_is_test_project_substring_not_path_component(self):
         assert _is_test_project("src/contest", ("test", "tests")) is False
@@ -187,6 +193,26 @@ class TestOrderProjectPaths:
         discovered = ["app/main", "APP\\MAIN\\", "app/zeta", "App/Alpha"]
 
         assert order_project_paths(declared, discovered) == ["app/main", "App/Alpha", "app/zeta"]
+
+    def test_order_project_paths_is_deterministic_for_unordered_canonical_duplicates(self):
+        script = """
+from bcbench.operations.project_operations import order_project_paths
+
+print(order_project_paths(
+    ["APP\\\\MAIN\\\\"],
+    {"app/main", "APP\\\\MAIN\\\\", "app/zeta", "App/Alpha"},
+))
+"""
+        outputs = {
+            subprocess.check_output(
+                [sys.executable, "-c", script],
+                env={**os.environ, "PYTHONHASHSEED": seed},
+                text=True,
+            ).strip()
+            for seed in ("1", "3")
+        }
+
+        assert outputs == {"['app/main', 'App/Alpha', 'app/zeta']"}
 
 
 def test_operations_exports_project_discovery_functions():
