@@ -50,5 +50,25 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
         )
 
     @classmethod
+    def create_test_infrastructure_failure(
+        cls,
+        context: "EvaluationContext",
+        output: str,
+        error_message: str,
+        *,
+        pre_patch_failed: bool,
+    ) -> Self:
+        return cls(
+            **cls._base_fields(context),
+            output=output,
+            error_message=error_message,
+            resolved=False,
+            build=True,
+            infrastructure_failure=True,
+            pre_patch_failed=pre_patch_failed,
+            post_patch_passed=False,
+        )
+
+    @classmethod
     def create_no_tests_extracted(cls, context: "EvaluationContext", output: str, error_message: str) -> Self:
         return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=False)

@@ -96,14 +96,14 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
 
         execution_runs: list[ExecutionBasedEvaluationResultSummary] = [r for r in runs if isinstance(r, ExecutionBasedEvaluationResultSummary)]
 
-        per_run_resolution_rates: list[float] = [run.resolved / run.total for run in execution_runs if run.total > 0]
+        per_run_resolution_rates: list[float] = [run.resolved / evaluated for run in execution_runs if (evaluated := run.total - run.infrastructure_failed) > 0]
 
         instance_resolved: dict[str, list[bool]] = defaultdict(list)
         for run in execution_runs:
             for instance_id, outcome in run.instance_results.items():
                 instance_resolved[instance_id].append(outcome)
 
-        pass_hat_5: float | None = _calculate_pass_hat_k(instance_resolved, 5, base.num_runs) if base.num_runs >= 5 else None
+        pass_hat_5 = _calculate_pass_hat_k(instance_resolved, 5)
 
         ci = bootstrap_ci(per_run_resolution_rates)
         return base.model_copy(
@@ -242,13 +242,6 @@ class Leaderboard(BaseModel):
         }
 
 
-def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int, num_trials: int) -> float:
-    if num_trials < k:
-        return 0.0
-
-    total_pass_hat_k: float = 0.0
-    for results in instance_resolved.values():
-        success_count = sum(results[:num_trials])
-        total_pass_hat_k += pass_hat_k(num_trials, success_count, k)
-
-    return round(total_pass_hat_k / len(instance_resolved), 3)
+def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int) -> float | None:
+    instance_pass_hat_k = [pass_hat_k(len(results), sum(results), k) for results in instance_resolved.values() if len(results) >= k]
+    return round(sum(instance_pass_hat_k) / len(instance_pass_hat_k), 3) if instance_pass_hat_k else None

@@ -61,6 +61,7 @@ class TestCategorySerialization:
         result = BaseEvaluationResult.from_json(payload)
 
         assert result.category == EvaluationCategory.BUG_FIX
+        assert result.infrastructure_failure is False
 
     def test_test_generation_category_loads_from_string(self):
         payload = {
@@ -142,6 +143,22 @@ class TestCategorySerialization:
 
         # Pydantic handles the enum conversion automatically
         assert summary.category == EvaluationCategory.TEST_GENERATION
+        assert summary.infrastructure_failed == 0
+
+    def test_infrastructure_failure_round_trips(self, tmp_path):
+        original = create_bugfix_result(
+            instance_id="infrastructure-failure",
+            resolved=False,
+            infrastructure_failure=True,
+            error_message="Test infrastructure failed",
+        )
+
+        original.save(tmp_path, "result.jsonl")
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert payload["infrastructure_failure"] is True
+        assert loaded.infrastructure_failure is True
 
     def test_test_generation_pre_patch_failed_in_jsonl(self, tmp_path):
         result = create_testgen_result(

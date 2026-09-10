@@ -56,6 +56,7 @@ class TestBaseEvaluationResult:
     def test_execution_based_has_resolved_and_build(self):
         assert "resolved" in ExecutionBasedEvaluationResult.model_fields
         assert "build" in ExecutionBasedEvaluationResult.model_fields
+        assert "infrastructure_failure" in ExecutionBasedEvaluationResult.model_fields
 
     def test_bugfix_inherits_execution_based(self):
         assert issubclass(BugFixResult, ExecutionBasedEvaluationResult)
@@ -99,6 +100,7 @@ class TestCategoryMetrics:
         assert result.category_metrics == {
             "resolved": True,
             "build": True,
+            "infrastructure_failure": False,
             "generated_test_pre_patch_failed": True,
             "generated_test_post_patch_passed": True,
             "benchmark_test_passed": True,
@@ -109,6 +111,7 @@ class TestCategoryMetrics:
         assert result.category_metrics == {
             "resolved": False,
             "build": False,
+            "infrastructure_failure": False,
             "generated_test_pre_patch_failed": False,
             "generated_test_post_patch_passed": False,
             "benchmark_test_passed": False,
@@ -119,14 +122,21 @@ class TestCategoryMetrics:
         metrics = result.category_metrics
         assert metrics["resolved"] is True
         assert metrics["build"] is True
+        assert metrics["infrastructure_failure"] is False
         assert metrics["pre_patch_failed"] is True
         assert metrics["post_patch_passed"] is True
 
     def test_testgen_category_metrics_defaults(self):
         result = create_testgen_result()
         metrics = result.category_metrics
+        assert metrics["infrastructure_failure"] is False
         assert metrics["pre_patch_failed"] is False
         assert metrics["post_patch_passed"] is False
+
+    def test_infrastructure_failure_is_machine_readable(self):
+        result = create_bugfix_result(resolved=False, infrastructure_failure=True)
+
+        assert result.category_metrics["infrastructure_failure"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +330,7 @@ class TestMetricsRendering:
 
     def test_execution_based_github_metrics_markdown(self):
         markdown = self._summary().render_github_metrics_markdown()
-        assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Build: 9\n- Pass Rate: 70.0%\n"
+        assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Infrastructure Failed: 0\n- Build: 9\n- Pass Rate: 70.0%\n"
 
     def test_execution_based_console_metrics_renders_nothing(self):
         # execution-based categories intentionally render no console metrics block

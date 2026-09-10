@@ -74,11 +74,34 @@ class TestWriteBcevalResults:
         assert data["metadata"]["completion_tokens"] == 1200
         assert data["metadata"]["latency"] == 120.5
         assert data["metadata"]["resolved"] is True
+        assert data["metadata"]["infrastructure_failure"] is False
         assert data["metadata"]["run_id"] == "test_run_123"
         assert data["metadata"]["project"] == "Shopify"
         assert data["metadata"]["llm_duration"] == 100.0
         assert data["metadata"]["ai_credits"] == 2.5
         assert data["metadata"]["tool_usage"] == {"view_code": 2, "run_tests": 1}
+
+    def test_writes_infrastructure_failure_metric(self, tmp_path, sample_dataset_file, problem_statement_dir):
+        result = create_bugfix_result(
+            resolved=False,
+            infrastructure_failure=True,
+            error_message="Test infrastructure failed",
+        )
+
+        with (
+            patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=sample_dataset_file),
+        ):
+            write_bceval_results(
+                results=[result],
+                out_dir=tmp_path,
+                run_id="test_run_infrastructure",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.BUG_FIX,
+            )
+
+        data = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))
+        assert data["metadata"]["infrastructure_failure"] is True
 
     def test_handles_none_prompt_tokens(self, tmp_path, sample_dataset_file, sample_testgen_result, problem_statement_dir):
         output_dir = tmp_path / "output"

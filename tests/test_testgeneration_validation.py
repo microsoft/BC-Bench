@@ -177,6 +177,7 @@ def test_test_generation_persists_test_infrastructure_failure_without_claiming_t
     result_path = context.result_dir / f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}"
     result = TestGenerationResult.model_validate_json(result_path.read_text(encoding="utf-8"))
     assert result.resolved is False
+    assert result.infrastructure_failure is True
     assert result.pre_patch_failed is pre_patch_failed
     assert result.post_patch_passed is False
     assert result.error_message is not None

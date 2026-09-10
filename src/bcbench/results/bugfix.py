@@ -48,6 +48,7 @@ class BugFixResult(ExecutionBasedEvaluationResult):
         error_message: str,
         *,
         build: bool,
+        infrastructure_failure: bool = False,
         generated_test_pre_patch_failed: bool = False,
         generated_test_post_patch_passed: bool = False,
     ) -> Self:
@@ -57,9 +58,30 @@ class BugFixResult(ExecutionBasedEvaluationResult):
             error_message=error_message,
             resolved=False,
             build=build,
+            infrastructure_failure=infrastructure_failure,
             generated_test_pre_patch_failed=generated_test_pre_patch_failed,
             generated_test_post_patch_passed=generated_test_post_patch_passed,
             benchmark_test_passed=False,
+        )
+
+    @classmethod
+    def create_test_infrastructure_failure(
+        cls,
+        context: "EvaluationContext",
+        output: str,
+        error_message: str,
+        *,
+        generated_test_pre_patch_failed: bool = False,
+        generated_test_post_patch_passed: bool = False,
+    ) -> Self:
+        return cls.create_verification_failure(
+            context,
+            output,
+            error_message,
+            build=True,
+            infrastructure_failure=True,
+            generated_test_pre_patch_failed=generated_test_pre_patch_failed,
+            generated_test_post_patch_passed=generated_test_post_patch_passed,
         )
 
     @classmethod

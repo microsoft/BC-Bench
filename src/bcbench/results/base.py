@@ -111,6 +111,7 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
 
     resolved: bool = False
     build: bool = False
+    infrastructure_failure: bool = False
 
     @classmethod
     def create_success(cls, context: "EvaluationContext", output: str) -> Self:
@@ -133,7 +134,11 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
 
     @property
     def category_metrics(self) -> dict[str, int | float | bool]:
-        return {"resolved": self.resolved, "build": self.build}
+        return {
+            "resolved": self.resolved,
+            "build": self.build,
+            "infrastructure_failure": self.infrastructure_failure,
+        }
 
 
 class JudgeScoredEvaluationResult(BaseEvaluationResult):

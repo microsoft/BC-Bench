@@ -582,6 +582,43 @@ def test_expected_failed_tests_do_not_depend_on_subprocess_failure(tmp_path: Pat
     assert summary.results == (TestCaseResult(TestIdentity(50100, "RegressionTest"), TestOutcome.FAIL),)
 
 
+def test_expectation_failure_preserves_powershell_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    stdout = """\
+BcContainerHelper version 6.1.11
+Codeunit 50100 Regression Tests
+    Testfunction RegressionTest Failure (0.25 seconds)
+      Error:
+        Assert.AreEqual failed. Expected:<1>. Actual:<2>. Values differ.
+"""
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        write_discovery(evidence_path, 50100, ["RegressionTest"])
+        write_results(evidence_path, 50100, '<testcase name="RegressionTest"><failure /></testcase>')
+        return subprocess.CompletedProcess(command, returncode=0, stdout=stdout, stderr="PowerShell diagnostic")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    assert not isinstance(error.value, TestInfrastructureError)
+    assert error.value.reason == "Expected every test to pass, but 1 did not."
+    assert error.value.stdout == stdout
+    assert error.value.stderr == "PowerShell diagnostic"
+    assert error.value.summary is not None
+    assert error.value.summary.results == (TestCaseResult(TestIdentity(50100, "RegressionTest"), TestOutcome.FAIL),)
+    assert "Testfunction RegressionTest Failure" in str(error.value)
+    assert "Assert.AreEqual failed" in str(error.value)
+
+
 def test_nonzero_subprocess_with_valid_partial_summary_is_infrastructure_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

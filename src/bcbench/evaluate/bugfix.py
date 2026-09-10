@@ -151,11 +151,10 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestInfrastructureError as e:
-            result = BugFixResult.create_verification_failure(
+            result = BugFixResult.create_test_infrastructure_failure(
                 context,
                 generated_patch,
                 str(e),
-                build=True,
                 generated_test_pre_patch_failed=generated_test_pre_patch_failed,
                 generated_test_post_patch_passed=generated_test_post_patch_passed,
             )

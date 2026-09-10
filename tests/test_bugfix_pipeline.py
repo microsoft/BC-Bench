@@ -175,6 +175,7 @@ def test_bugfix_persists_test_infrastructure_failure_without_claiming_test_outco
 
     result = _read_result(context)
     assert result.resolved is False
+    assert result.infrastructure_failure is True
     assert result.generated_test_pre_patch_failed is pre_patch_failed
     assert result.generated_test_post_patch_passed is False
     assert result.error_message is not None

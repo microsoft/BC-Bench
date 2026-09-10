@@ -130,10 +130,12 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestInfrastructureError as e:
-            if e.expectation is TestExpectation.ANY_FAIL:
-                result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, str(e))
-            else:
-                result = TestGenerationResult.create_post_patch_failure(context, generated_patch, str(e))
+            result = TestGenerationResult.create_test_infrastructure_failure(
+                context,
+                generated_patch,
+                str(e),
+                pre_patch_failed=e.expectation is not TestExpectation.ANY_FAIL,
+            )
 
             logger.exception(f"Test infrastructure failed during evaluation of {context.entry.instance_id}")
 

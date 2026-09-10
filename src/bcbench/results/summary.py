@@ -158,6 +158,7 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
 
     resolved: int = 0
     failed: int = 0
+    infrastructure_failed: int = 0
     build: int = 0
     percentage: float = 0.0
 
@@ -165,7 +166,9 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     instance_results: dict[str, bool] = Field(default_factory=dict)
 
     def render_github_metrics_markdown(self) -> str:
-        return f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
+        return (
+            f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Infrastructure Failed: {self.infrastructure_failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
+        )
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "ExecutionBasedEvaluationResultSummary":
@@ -175,16 +178,20 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
         assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
         total = summary.total
 
-        resolved = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.resolved)
-        build = sum(1 for r in results if isinstance(r, ExecutionBasedEvaluationResult) and r.build)
-        instance_results = {r.instance_id: (isinstance(r, ExecutionBasedEvaluationResult) and r.resolved) for r in results}
+        execution_results = [r for r in results if isinstance(r, ExecutionBasedEvaluationResult)]
+        infrastructure_failed = sum(1 for r in execution_results if r.infrastructure_failure)
+        evaluated = total - infrastructure_failed
+        resolved = sum(1 for r in execution_results if r.resolved and not r.infrastructure_failure)
+        build = sum(1 for r in execution_results if r.build)
+        instance_results = {r.instance_id: r.resolved for r in execution_results if not r.infrastructure_failure}
 
         return summary.model_copy(
             update={
                 "resolved": resolved,
-                "failed": total - resolved,
+                "failed": evaluated - resolved,
+                "infrastructure_failed": infrastructure_failed,
                 "build": build,
-                "percentage": round(resolved / total * 100, 1) if total else 0.0,
+                "percentage": round(resolved / evaluated * 100, 1) if evaluated else 0.0,
                 "instance_results": instance_results,
             }
         )
