@@ -6,7 +6,7 @@ import yaml
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.testgeneration import TestGenerationPipeline, _get_test_generation_input_mode
-from bcbench.exceptions import TestExecutionError
+from bcbench.exceptions import TestExecutionError, TestInfrastructureError
 from bcbench.operations.test_execution import TestExpectation, TestRunSummary
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import EvaluationCategory
@@ -135,3 +135,54 @@ def test_test_generation_non_any_fail_error_is_classified_as_post_patch(tmp_path
     assert result.post_patch_passed is False
     assert result.error_message is not None
     assert result.error_message.startswith("Generated tests Failed post-patch")
+
+
+@pytest.mark.parametrize(
+    ("failing_expectation", "pre_patch_failed"),
+    [
+        (TestExpectation.ANY_FAIL, False),
+        (TestExpectation.ALL_PASS, True),
+    ],
+)
+def test_test_generation_persists_test_infrastructure_failure_without_claiming_test_outcome(
+    tmp_path,
+    monkeypatch,
+    failing_expectation: TestExpectation,
+    pre_patch_failed: bool,
+):
+    context = create_evaluation_context(tmp_path, category=EvaluationCategory.TEST_GENERATION)
+    generated_tests = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.categorize_projects", lambda _paths: (["test"], ["app"]))
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.clean_project_paths", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.stage_and_get_diff", lambda _repo_path: "generated patch")
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_file_paths_from_patch", lambda _patch: [])
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.extract_tests_from_patch", lambda *_args: generated_tests)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.build_and_publish_projects", lambda *_args: None)
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.apply_patch", lambda *_args: None)
+
+    def run_test_suite(_test_entries, expectation, _container, _repo_path):
+        if expectation is failing_expectation:
+            raise TestInfrastructureError(
+                expectation,
+                reason="PowerShell exited before evidence validation",
+                stdout="test execution output",
+                stderr="pwsh failure detail",
+            )
+
+    monkeypatch.setattr("bcbench.evaluate.testgeneration.run_test_suite", run_test_suite)
+
+    TestGenerationPipeline().evaluate(context)
+
+    result_path = context.result_dir / f"{context.entry.instance_id}{get_config().file_patterns.result_pattern}"
+    result = TestGenerationResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+    assert result.resolved is False
+    assert result.pre_patch_failed is pre_patch_failed
+    assert result.post_patch_passed is False
+    assert result.error_message is not None
+    assert result.error_message.startswith("Test infrastructure failed")
+    assert "PowerShell exited before evidence validation" in result.error_message
+    assert "test execution output" in result.error_message
+    assert "pwsh failure detail" in result.error_message
+    assert "Generated tests Passed" not in result.error_message
+    assert "Generated tests Failed" not in result.error_message

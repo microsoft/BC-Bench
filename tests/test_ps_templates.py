@@ -1,3 +1,5 @@
+import json
+import subprocess
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -225,9 +227,85 @@ def test_app_utils_runs_each_requested_function_and_appends_junit():
     app_utils = (_config.paths.ps_script_path / "AppUtils.psm1").read_text(encoding="utf-8")
 
     assert "foreach ($functionName in $functionsToRun)" in app_utils
-    assert "testFunction            = $functionName" in app_utils
+    assert "[System.Management.Automation.WildcardPattern]::Escape($functionName)" in app_utils
+    assert "testFunction            = $testFunction" in app_utils
     assert "AppendToJUnitResultFile = $appendToResult" in app_utils
     assert "$functionNames -join '|'" not in app_utils
+
+
+def _invoke_bc_test(function_names: list[str] | None, tmp_path: Path) -> dict[str, list[str]]:
+    app_utils_path = bc_operations._escape_ps_string(str(_config.paths.ps_script_path / "AppUtils.psm1"))
+    evidence_path = bc_operations._escape_ps_string(str(tmp_path / "evidence"))
+    function_parameter = ""
+    if function_names is not None:
+        quoted_names = ", ".join(f"'{bc_operations._escape_ps_string(name)}'" for name in function_names)
+        function_parameter = f" -functionNames @({quoted_names})"
+
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:capturedFunctions = [System.Collections.Generic.List[string]]::new()
+function global:Get-TestsFromBcContainer {{
+    param(
+        [string] $containerName,
+        [PSCredential] $credential,
+        [string] $testCodeunitRange,
+        [switch] $ignoreGroups
+    )
+    [PSCustomObject]@{{
+        Id = 50100
+        Tests = @('Literal*Star', 'Literal?Question', 'Literal[Bracket')
+    }}
+}}
+function global:Run-TestsInBcContainer {{
+    param(
+        [string] $containerName,
+        [PSCredential] $credential,
+        [bool] $returnTrueIfAllPassed,
+        [string] $testCodeunitRange,
+        [string] $testFunction,
+        [bool] $detailed,
+        [string] $JUnitResultFileName,
+        [bool] $AppendToJUnitResultFile
+    )
+    $global:capturedFunctions.Add($testFunction)
+    '<testsuite />' | Set-Content -Path $JUnitResultFileName -Encoding UTF8
+    return $true
+}}
+Import-Module '{app_utils_path}' -Force
+$password = ConvertTo-SecureString 'pass' -AsPlainText -Force
+$credential = [PSCredential]::new('admin', $password)
+Invoke-BCTest -containerName 'bc' -credential $credential -codeunitID 50100{function_parameter} -evidenceDirectory '{evidence_path}' | Out-Null
+$discovery = Get-Content -Path (Join-Path '{evidence_path}' 'discovery-50100.json') -Raw | ConvertFrom-Json
+[PSCustomObject]@{{
+    filters = @($global:capturedFunctions)
+    discovery = @($discovery.functionName)
+}} | ConvertTo-Json -Compress
+"""
+    result = subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout.splitlines()[-1])
+
+
+def test_invoke_bc_test_escapes_literal_wildcard_function_names(tmp_path: Path):
+    function_names = ["Literal*Star", "Literal?Question", "Literal[Bracket"]
+
+    evidence = _invoke_bc_test(function_names, tmp_path)
+
+    assert evidence["filters"] == ["Literal`*Star", "Literal`?Question", "Literal`[Bracket"]
+    assert evidence["discovery"] == function_names
+
+
+def test_invoke_bc_test_without_function_names_discovers_all_available_functions(tmp_path: Path):
+    evidence = _invoke_bc_test(None, tmp_path)
+
+    assert evidence["filters"] == ["*"]
+    assert evidence["discovery"] == ["Literal*Star", "Literal?Question", "Literal[Bracket"]
 
 
 def test_verify_build_and_tests_uses_evidence_validation():

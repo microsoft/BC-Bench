@@ -1,3 +1,4 @@
+from bcbench import exceptions
 from bcbench.exceptions import _extract_test_errors
 
 SAMPLE_TEST_OUTPUT = """\
@@ -100,3 +101,27 @@ class TestTestExecutionErrorMessage:
         assert "BcContainerHelper version" not in message
         assert "Using Container" not in message
         assert "TaskScheduler" not in message
+
+
+def test_test_infrastructure_error_preserves_diagnostics():
+    exception_type = getattr(exceptions, "TestInfrastructureError", None)
+
+    assert exception_type is not None
+
+    summary = object()
+    error = exception_type(
+        "all-pass",
+        reason="PowerShell exited before evidence validation",
+        stdout=SAMPLE_TEST_OUTPUT,
+        stderr="pwsh failure detail",
+        summary=summary,
+    )
+
+    assert error.expectation == "all-pass"
+    assert error.reason == "PowerShell exited before evidence validation"
+    assert error.stdout == SAMPLE_TEST_OUTPUT
+    assert error.stderr == "pwsh failure detail"
+    assert error.summary is summary
+    assert "Test infrastructure failed" in str(error)
+    assert "Assert.AreEqual failed" in str(error)
+    assert "pwsh failure detail" in str(error)

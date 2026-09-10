@@ -9,7 +9,7 @@ from xml.etree.ElementTree import ParseError
 import pytest
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import TestExecutionError, TestExecutionTimeoutExpired
+from bcbench.exceptions import TestExecutionError, TestExecutionTimeoutExpired, TestInfrastructureError
 from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestCaseResult, TestExpectation, TestIdentity, TestOutcome, TestRunSummary
 from bcbench.types import ContainerConfig
@@ -599,7 +599,7 @@ def test_nonzero_subprocess_with_valid_partial_summary_is_infrastructure_failure
     monkeypatch.setattr(subprocess, "run", run)
     entries = [TestEntry(codeunitID=50100, functionName=frozenset({"First", "Second"}))]
 
-    with pytest.raises(TestExecutionError) as error:
+    with pytest.raises(TestInfrastructureError) as error:
         bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
 
     assert error.value.reason == "Business Central test execution failed before evidence validation"
@@ -607,6 +607,9 @@ def test_nonzero_subprocess_with_valid_partial_summary_is_infrastructure_failure
     assert error.value.summary.executed == (TestIdentity(50100, "First"),)
     assert error.value.stdout == "partial output"
     assert error.value.stderr == "infrastructure error"
+    assert "Test infrastructure failed" in str(error.value)
+    assert "partial output" in str(error.value)
+    assert "infrastructure error" in str(error.value)
 
 
 @pytest.mark.parametrize("invalid_evidence", ["malformed-json", "malformed-xml", "missing-junit", "os-error"])
@@ -636,7 +639,7 @@ def test_invalid_test_evidence_is_wrapped(
         monkeypatch.setattr(bc_operations, "load_test_run_summary", lambda *_args: (_ for _ in ()).throw(OSError("read failed")), raising=False)
     entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
 
-    with pytest.raises(TestExecutionError) as error:
+    with pytest.raises(TestInfrastructureError) as error:
         bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
 
     assert error.value.reason.startswith("Invalid test evidence: ")
@@ -662,7 +665,7 @@ def test_missing_junit_testcase_name_is_wrapped_as_invalid_evidence(
     monkeypatch.setattr(subprocess, "run", run)
     entries = [TestEntry(codeunitID=50100, functionName=frozenset({"MissingName"}))]
 
-    with pytest.raises(TestExecutionError) as error:
+    with pytest.raises(TestInfrastructureError) as error:
         bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
 
     assert error.value.reason.startswith("Invalid test evidence: JUnit testcase is missing required name attribute")
@@ -681,7 +684,7 @@ def test_subprocess_launch_oserror_is_wrapped_as_infrastructure_failure(
     monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: (_ for _ in ()).throw(launch_error))
     entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
 
-    with pytest.raises(TestExecutionError) as error:
+    with pytest.raises(TestInfrastructureError) as error:
         bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
 
     assert error.value.reason.startswith("Failed to launch Business Central test execution infrastructure: ")

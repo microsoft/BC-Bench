@@ -12,7 +12,7 @@ from typing import Literal
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired
+from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionTimeoutExpired, TestInfrastructureError
 from bcbench.logger import get_logger
 from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.setup_operations import bootstrap_app_json
@@ -272,7 +272,7 @@ def run_test_suite(
             logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
             raise TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution) from None
         except OSError as error:
-            raise TestExecutionError(
+            raise TestInfrastructureError(
                 expectation,
                 reason=f"Failed to launch Business Central test execution infrastructure: {error}",
             ) from error
@@ -283,7 +283,7 @@ def run_test_suite(
         try:
             summary = load_test_run_summary(evidence_path, normalized_entries)
         except (OSError, ValueError, ET.ParseError) as error:
-            raise TestExecutionError(
+            raise TestInfrastructureError(
                 expectation,
                 stderr=result.stderr,
                 stdout=result.stdout,
@@ -291,7 +291,7 @@ def run_test_suite(
             ) from error
 
         if result.returncode != 0:
-            raise TestExecutionError(
+            raise TestInfrastructureError(
                 expectation,
                 stderr=result.stderr,
                 stdout=result.stdout,

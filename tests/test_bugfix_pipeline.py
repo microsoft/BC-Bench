@@ -5,7 +5,7 @@ import pytest
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix import BugFixPipeline
-from bcbench.exceptions import NoTestsExtractedError, TestExecutionError
+from bcbench.exceptions import NoTestsExtractedError, TestExecutionError, TestInfrastructureError
 from bcbench.operations.test_execution import TestExpectation
 from bcbench.results.bugfix import BugFixResult
 from tests.conftest import create_evaluation_context
@@ -142,3 +142,45 @@ def test_bugfix_rejects_fix_when_benchmark_test_fails(tmp_path, monkeypatch):
     assert result.benchmark_test_passed is False
     assert result.error_message is not None
     assert result.error_message.startswith("Benchmark tests failed after the generated fix")
+
+
+@pytest.mark.parametrize(
+    ("failing_expectation", "pre_patch_failed"),
+    [
+        (TestExpectation.ANY_FAIL, False),
+        (TestExpectation.ALL_PASS, True),
+    ],
+)
+def test_bugfix_persists_test_infrastructure_failure_without_claiming_test_outcome(
+    tmp_path,
+    monkeypatch,
+    failing_expectation: TestExpectation,
+    pre_patch_failed: bool,
+):
+    context = create_evaluation_context(tmp_path)
+    _configure_successful_evaluation(monkeypatch)
+
+    def run_generated_tests(_tests, expectation, _container, _repo_path):
+        if expectation is failing_expectation:
+            raise TestInfrastructureError(
+                expectation,
+                reason="PowerShell exited before evidence validation",
+                stdout="test execution output",
+                stderr="pwsh failure detail",
+            )
+
+    monkeypatch.setattr("bcbench.evaluate.bugfix.run_test_suite", run_generated_tests)
+
+    BugFixPipeline().evaluate(context)
+
+    result = _read_result(context)
+    assert result.resolved is False
+    assert result.generated_test_pre_patch_failed is pre_patch_failed
+    assert result.generated_test_post_patch_passed is False
+    assert result.error_message is not None
+    assert result.error_message.startswith("Test infrastructure failed")
+    assert "PowerShell exited before evidence validation" in result.error_message
+    assert "test execution output" in result.error_message
+    assert "pwsh failure detail" in result.error_message
+    assert "Generated tests passed" not in result.error_message
+    assert "Generated tests failed" not in result.error_message

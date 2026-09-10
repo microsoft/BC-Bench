@@ -6,7 +6,7 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
+from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError, TestInfrastructureError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import (
@@ -128,6 +128,14 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
         except BuildError as e:
             result = TestGenerationResult.create_build_failure(context, generated_patch, str(e))
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
+
+        except TestInfrastructureError as e:
+            if e.expectation is TestExpectation.ANY_FAIL:
+                result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, str(e))
+            else:
+                result = TestGenerationResult.create_post_patch_failure(context, generated_patch, str(e))
+
+            logger.exception(f"Test infrastructure failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
             if e.expectation is TestExpectation.ANY_FAIL:

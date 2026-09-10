@@ -25,6 +25,7 @@ __all__ = [
     "PatchApplicationError",
     "ProjectDiscoveryError",
     "TestExecutionError",
+    "TestInfrastructureError",
 ]
 
 
@@ -203,6 +204,32 @@ class TestExecutionError(BCBenchError):
             message += f": {reason}"
         if self.errors:
             message += f"\n{self.errors}"
+        super().__init__(message)
+
+
+class TestInfrastructureError(BCBenchError):
+    """Business Central test infrastructure failed."""
+
+    def __init__(
+        self,
+        expectation: str,
+        reason: str,
+        stdout: str = "",
+        stderr: str = "",
+        summary: TestRunSummary | None = None,
+    ) -> None:
+        self.expectation = expectation
+        self.reason = reason
+        self.stdout = stdout
+        self.stderr = stderr
+        self.summary = summary
+        self.errors = _extract_test_errors(stdout)
+
+        message = f"Test infrastructure failed (expected: {expectation}): {reason}"
+        if self.errors:
+            message += f"\nTest output:\n{self.errors}"
+        if stderr.strip():
+            message += f"\nStandard error:\n{stderr.strip()}"
         super().__init__(message)
 
 

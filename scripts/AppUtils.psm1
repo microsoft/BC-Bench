@@ -173,9 +173,12 @@ function Invoke-BCTest {
             Where-Object { [int]$_.Id -eq $codeunitID } |
             Select-Object -First 1
         [string[]] $availableFunctions = if ($availableCodeunit) { @($availableCodeunit.Tests) } else { @() }
-        [string[]] $discoveredFunctions = @(
-            $functionNames | Where-Object { $availableFunctions -ccontains $_ }
-        )
+        [string[]] $discoveredFunctions = if ($functionNames -and $functionNames.Count -gt 0) {
+            @($functionNames | Where-Object { $availableFunctions -ccontains $_ })
+        }
+        else {
+            $availableFunctions
+        }
 
         [string] $discoveryPath = Join-Path $evidenceDirectory "discovery-$codeunitID.json"
         [PSCustomObject]@{
@@ -187,12 +190,18 @@ function Invoke-BCTest {
         [bool] $allTestsPassed = $true
         [bool] $appendToResult = $false
         foreach ($functionName in $functionsToRun) {
+            [string] $testFunction = if ($functionNames -and $functionNames.Count -gt 0) {
+                [System.Management.Automation.WildcardPattern]::Escape($functionName)
+            }
+            else {
+                $functionName
+            }
             [hashtable] $testParams = @{
                 containerName           = $containerName
                 credential              = $credential
                 returnTrueIfAllPassed   = $true
                 testCodeunitRange       = $codeunitID.ToString()
-                testFunction            = $functionName
+                testFunction            = $testFunction
                 detailed                = $true
                 JUnitResultFileName     = $resultPath
                 AppendToJUnitResultFile = $appendToResult

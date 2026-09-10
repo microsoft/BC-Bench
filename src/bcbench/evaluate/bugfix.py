@@ -4,7 +4,7 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch, separa
 from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, EmptyDiffError, NoTestsExtractedError, TestExecutionError
+from bcbench.exceptions import BuildError, EmptyDiffError, NoTestsExtractedError, TestExecutionError, TestInfrastructureError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import (
@@ -149,6 +149,17 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
                 generated_test_post_patch_passed=generated_test_post_patch_passed,
             )
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
+
+        except TestInfrastructureError as e:
+            result = BugFixResult.create_verification_failure(
+                context,
+                generated_patch,
+                str(e),
+                build=True,
+                generated_test_pre_patch_failed=generated_test_pre_patch_failed,
+                generated_test_post_patch_passed=generated_test_post_patch_passed,
+            )
+            logger.exception(f"Test infrastructure failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
             if not generated_test_pre_patch_failed:
