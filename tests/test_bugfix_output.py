@@ -2,6 +2,7 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
+from unidiff.errors import UnidiffParseError
 
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput, analyze_generated_bugfix_output
@@ -24,6 +25,10 @@ def _write_file(repo_path: Path, file_path: str, content: str) -> None:
 def _patch(file_path: str, old_line: str, added_lines: list[str]) -> str:
     additions = "\n".join(f"+{line}" for line in added_lines)
     return f"diff --git a/{file_path} b/{file_path}\nindex 1111111..2222222 100644\n--- a/{file_path}\n+++ b/{file_path}\n@@ -1,1 +1,{len(added_lines) + 1} @@\n {old_line}\n{additions}\n"
+
+
+def _rename_patch(source_path: str, target_path: str) -> str:
+    return f"diff --git a/{source_path} b/{target_path}\nsimilarity index 100%\nrename from {source_path}\nrename to {target_path}\n"
 
 
 def test_analyzes_base_app_fix_and_scm_manufacturing_test(tmp_path: Path):
@@ -191,3 +196,61 @@ def test_returns_multiple_projects_in_deterministic_order(tmp_path: Path):
         str(test_alpha.relative_to(repo_path)),
         str(test_zeta.relative_to(repo_path)),
     )
+
+
+def test_same_class_cross_project_rename_touches_both_projects(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    source_project = _create_project(repo_path, "src/Source")
+    target_project = _create_project(repo_path, "src/Target")
+    test_project = _create_project(repo_path, "src/Tests")
+    source_file = "src/Source/Feature.Codeunit.al"
+    target_file = "src/Target/Feature.Codeunit.al"
+    test_file = "src/Tests/FeatureTests.Codeunit.al"
+    _write_file(repo_path, target_file, "codeunit 50100 Feature {}\n")
+    _write_file(
+        repo_path,
+        test_file,
+        'codeunit 50101 "Feature Tests"\n{\n    [Test]\n    procedure VerifiesFeature()\n    begin\n    end;\n}\n',
+    )
+    rename_patch = _rename_patch(source_file, target_file)
+    test_patch = _patch(
+        test_file,
+        'codeunit 50101 "Feature Tests"',
+        ["{", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;", "}"],
+    )
+
+    result = analyze_generated_bugfix_output(repo_path, rename_patch + test_patch)
+
+    assert result.fix_patch == rename_patch
+    assert result.test_patch == test_patch
+    assert result.app_projects == (
+        str(source_project.relative_to(repo_path)),
+        str(target_project.relative_to(repo_path)),
+    )
+    assert result.test_projects == (str(test_project.relative_to(repo_path)),)
+
+
+def test_rejects_rename_between_product_and_test_projects(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    source_file = "src/Main/Feature.Codeunit.al"
+    target_file = "src/Tests/Feature.Codeunit.al"
+    _write_file(repo_path, target_file, "codeunit 50100 Feature {}\n")
+
+    with pytest.raises(GeneratedOutputError, match=r"Cannot safely split rename.*src/Main/Feature\.Codeunit\.al.*src/Tests/Feature\.Codeunit\.al"):
+        analyze_generated_bugfix_output(repo_path, _rename_patch(source_file, target_file))
+
+
+def test_rejects_blank_patch(tmp_path: Path):
+    with pytest.raises(GeneratedOutputError, match=r"Generated patch is blank\."):
+        analyze_generated_bugfix_output(tmp_path, " \n\t")
+
+
+def test_wraps_malformed_patch_error(tmp_path: Path):
+    malformed_patch = "diff --git a/Feature.al b/Feature.al\n--- a/Feature.al\n+++ b/Feature.al\n@@ -1,2 +1,1 @@\n-old\n+new\n"
+
+    with pytest.raises(GeneratedOutputError, match=r"Failed to parse generated patch") as exc_info:
+        analyze_generated_bugfix_output(tmp_path, malformed_patch)
+
+    assert isinstance(exc_info.value.__cause__, UnidiffParseError)

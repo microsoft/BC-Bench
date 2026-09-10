@@ -102,6 +102,25 @@ class TestStageAndGetDiff:
         assert "modified app content" in diff
         assert "modified test content" in diff
 
+    def test_stage_and_get_diff_emits_unicode_paths(self, temp_git_repo):
+        unicode_file = temp_git_repo / "app" / "Füle.al"
+        unicode_file.write_text("unicode content", encoding="utf-8")
+
+        diff = stage_and_get_diff(temp_git_repo)
+
+        assert "app/Füle.al" in diff
+
+    @patch("bcbench.operations.git_operations.subprocess.run")
+    def test_stage_and_get_diff_disables_path_quoting(self, mock_run, tmp_path):
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="diff --git a/app/Füle.al b/app/Füle.al\n"),
+        ]
+
+        stage_and_get_diff(tmp_path)
+
+        assert mock_run.call_args_list[1].args[0] == ["git", "-c", "core.quotePath=false", "diff", "--cached", "--", ".", ":!*.docx", ":!**/app.json", ":!*.md"]
+
     def test_stage_and_get_diff_empty_raises_error(self, temp_git_repo):
         # Don't make any changes
         with pytest.raises(EmptyDiffError):

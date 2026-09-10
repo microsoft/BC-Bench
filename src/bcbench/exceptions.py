@@ -213,7 +213,7 @@ class NoTestsExtractedError(BCBenchError):
 
 
 class GeneratedOutputError(BCBenchError):
-    pass
+    """Agent-generated output is invalid."""
 
 
 class AgentError(BCBenchError):
