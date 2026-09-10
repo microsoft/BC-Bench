@@ -110,7 +110,13 @@ def create_bugfix_result(
     error_message: str | None = None,
     metrics: AgentMetrics | None = None,
     experiment: ExperimentConfiguration | None = None,
+    generated_test_pre_patch_failed: bool | None = None,
+    generated_test_post_patch_passed: bool | None = None,
+    benchmark_test_passed: bool | None = None,
 ) -> BugFixResult:
+    generated_test_pre_patch_failed = resolved if generated_test_pre_patch_failed is None else generated_test_pre_patch_failed
+    generated_test_post_patch_passed = resolved if generated_test_post_patch_passed is None else generated_test_post_patch_passed
+    benchmark_test_passed = resolved if benchmark_test_passed is None else benchmark_test_passed
     return BugFixResult(
         instance_id=instance_id,
         project=project,
@@ -123,6 +129,9 @@ def create_bugfix_result(
         error_message=error_message,
         metrics=metrics,
         experiment=experiment,
+        generated_test_pre_patch_failed=generated_test_pre_patch_failed,
+        generated_test_post_patch_passed=generated_test_post_patch_passed,
+        benchmark_test_passed=benchmark_test_passed,
     )
 
 

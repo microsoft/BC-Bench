@@ -4,9 +4,10 @@ These rules apply to every step of `workflow.md`.
 
 ## Hard constraints
 
-1. **Product code only.** Do not create or edit test codeunits, test projects, or any other testing
-   logic. The reproducing test is supplied by the harness after the run, and edits to test projects
-   are reverted before the change is evaluated, so time spent there is wasted.
+1. **A fix and a regression test are both required.** Change the product code and add a focused
+   `[Test]` procedure in an existing test codeunit in the provided test project. The test must
+   reproduce the reported bug: it must fail against the original product code and pass with the
+   fix. Do not weaken, delete, or repurpose existing tests.
 
 2. **W1 only.** Fix the W1 layer. Do not propagate the change to country layers (DK, NL, DE, APAC,
    …) and do not edit files outside W1 to make a localization consistent.
@@ -63,6 +64,7 @@ These rules apply to every step of `workflow.md`.
 13. **Build cost is real.** A BaseApp build can take tens of minutes against a per-run budget that
     also has to cover investigation and implementation. Build the projects you changed, batch your
     edits before building, and do not rebuild to confirm a build you have already seen succeed.
+    Publish the test app last before running the new regression test.
 
 ## Failure handling
 

@@ -1,7 +1,7 @@
 # BC/AL Bug Fix Workflow
 
-You investigate one bug in the checked-out repository, write a fix plan, implement it, and validate
-it. Read `rules.md` before executing this workflow.
+You investigate one bug in the checked-out repository, write a fix plan, add a regression test,
+implement the product-code fix, and validate both. Read `rules.md` before executing this workflow.
 
 **Input**: the issue description and repository path extracted in Step 2 of `fix-bug.agent.md`.
 
@@ -38,7 +38,8 @@ edge cases. `git log --oneline -10 -- <file-path>` shows what changed there rece
 
 **When the expected behavior is unclear**: hover for type information and documentation comments,
 and read the existing test codeunits that exercise the affected procedure - they encode the intended
-contract. Read them only; never edit them (Rule 1).
+contract. Add the regression test to the closest existing test codeunit and follow its setup,
+handler, naming, and assertion patterns.
 
 Issue images, when the task references them, are under `problem/` at the repository root. Read them
 if the described symptom is visual.
@@ -50,8 +51,9 @@ Hold the plan in memory - do not write it to a file (Rule 4). It must cover:
 - **Root cause** - 2-4 sentences naming the file, the procedure, and the line-level logic error.
 - **Confidence** - `high` / `medium` / `low`, plus what remains unverified and every assumption you
   made about the unattended run's missing information.
-- **Proposed fix** - a numbered list of concrete changes, each naming the file and describing the
-  edit ("add a null check before accessing `Rec.Field` in procedure `PostSalesOrder`").
+- **Proposed fix and test** - a numbered list of concrete changes, each naming the file and
+  describing the edit. Include the exact test codeunit, new test procedure, reproduction setup, and
+  assertion that distinguishes the broken behavior from the corrected behavior.
 - **Affected files** - each with a one-line reason.
 - **Acceptance criteria** - the observable behavior that must change, plus "no regressions in
   related workflows".
@@ -67,24 +69,27 @@ the file you intend to edit. Correct the name or path before touching code.
 A self-correcting loop, at most 5 iterations. Complete each iteration to its end before deciding
 anything (Rule 14); stop only between iterations.
 
-### a. Implement or adjust the fix
+### a. Add or adjust the regression test
 
-On the first iteration, implement the plan. On later iterations, read the failure from the previous
-iteration and adjust: if every iteration fails the same way, the approach is wrong rather than
-incomplete, so revisit the root cause instead of patching the symptom.
+On the first iteration, add the focused `[Test]` procedure before changing the product code. Build
+and publish the test project, then run only the new test. It must fail for the expected product
+behavior, not because of missing setup, compilation, permissions, or unrelated infrastructure. If
+it passes against the original code, strengthen the reproduction before implementing the fix.
 
-Make targeted edits to the files named in the plan. Keep the change minimal, respect the existing
-style, and add no bug-reference comments (Rule 6).
+On later iterations, adjust the test only when its setup or assertion is demonstrably incorrect.
+Never weaken it merely to make the fix pass.
 
-### b. Compile
+### b. Implement or adjust the product-code fix
+
+Implement the planned root-cause fix. On later iterations, read the previous failure and adjust the
+fix. If every iteration fails the same way, revisit the root cause instead of patching the symptom.
+Keep the changes targeted, respect the existing style, and add no bug-reference comments (Rule 6).
+
+### c. Compile and publish
 
 Build every project you modified with `al_build`. Inspect failures with `al_getdiagnostics`, correct
 them, and rebuild - a compile fix is not a new iteration. On a missing-symbol error apply Rule 11.
-
-### c. Publish (only when you intend to run tests)
-
-Publish the modified app with `al_publish`. Publishing is only worth its cost if step d follows;
-skip it otherwise.
+Publish the modified product app, then explicitly publish the test app last.
 
 > A dependency-chain publish can reinstall the container's **stock** copy of a dependent app over a
 > locally built one, silently reverting what you just deployed. Version numbers do not expose this,
@@ -92,20 +97,16 @@ skip it otherwise.
 > tests, publish the app the tests live in **last**, as its own explicit call, using the artifact
 > path its build returned.
 
-### d. Run existing tests (optional regression check)
+### d. Run the new and existing tests
 
-Only if the AL tools are advertised and an existing test codeunit covers the affected behavior. Run
-it with `al_run_tests`, passing the integer `codeunitId`. This is a regression check on tests that
-already exist - never write a new test to make this step possible (Rule 1), and never run the full
-suite, which does not fit the run budget.
-
-A test that fails because it asserts behavior the issue says is wrong is information, not a defect
-in your fix: the harness supplies the authoritative test. Weigh it against the plan's acceptance
-criteria rather than editing the test.
+Run the new regression test and require it to pass. Then run the smallest existing test codeunit
+that covers the affected behavior as a regression check when time permits. Never run the full suite,
+which does not fit the run budget.
 
 ### e. Decide
 
-- **Green** (clean build, and tests pass where you ran them): stop iterating and go to Phase 3.
+- **Green** (clean build, the new regression test failed before the fix and passes after it, and
+  related tests pass where you ran them): stop iterating and go to Phase 3.
 - **Red**: analyze the failure, and start the next iteration at step a.
 - **Iteration 5 exhausted**: stop. Leave the best version of the fix in the working tree and report
   what still fails and what you tried. Do not revert your work - the change is collected either way.
@@ -116,9 +117,10 @@ criteria rather than editing the test.
 
 Summarize in a few sentences:
 
-- The root cause and the fix, naming the files and procedures you changed.
-- The validation performed: build result, publish and test results when you ran them, or an explicit
-  statement that the AL tools were unavailable and the change was not built.
+- The root cause, regression test, and fix, naming the files and procedures you changed.
+- The validation performed: whether the new test failed before the fix and passed after it, plus
+  build, publish, and related-test results. If the AL tools were unavailable, state that neither
+  transition was executed and that the evaluator must verify it.
 - Any assumption the plan recorded, and anything left unverified.
 
 Do not commit, push, or open a pull request (Rule 3). The working tree is the deliverable.

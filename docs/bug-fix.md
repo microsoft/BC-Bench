@@ -5,7 +5,7 @@ title: Bug Fixing - BC-Bench
 
 # Bug Fixing
 
-This category follows the [SWE-Bench](https://www.swebench.com/) methodology. The system is tasked with fixing a bug in the Business Central (AL) codebase given an issue description.
+The system is tasked with fixing a bug in the Business Central (AL) codebase and adding a focused regression test from an issue description. A task is resolved only when the generated test fails before the generated fix and passes after it, and the independent benchmark test also passes with the generated fix.
 
 ## Baseline Leaderboard
 

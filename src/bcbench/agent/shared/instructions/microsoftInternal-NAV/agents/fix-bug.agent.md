@@ -6,8 +6,9 @@ description: >
 
 # BC/AL Bug Fix
 
-Fixes one BC/AL bug in the repository that is already checked out: investigate the root cause, plan
-the change, implement it, and validate it with the AL tools when they are available.
+Fixes one BC/AL bug in the repository that is already checked out: investigate the root cause,
+write a regression test, implement the product-code fix, and validate both with the AL tools when
+they are available.
 
 **Scope.** The task, the repository, and the BC environment all come from the harness. This agent
 does not fetch work items, does not create branches, does not commit, and does not open pull
