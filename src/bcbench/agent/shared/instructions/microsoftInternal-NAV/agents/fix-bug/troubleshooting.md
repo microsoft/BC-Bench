@@ -26,15 +26,16 @@ missing `using` is a code error and no symbol download will fix it.
 
 ## Publish timed out
 
-A timeout is not proof of failure - the publish may still have completed - but it is also not a
-reason to fire another one. A second full publish timeout costs more of the run budget than the fix
-itself.
+A timeout does not prove the publish stopped or rolled back. Publishing can take many minutes,
+especially for BaseApp, and interruption can leave the app unpublished and dependent apps
+uninstalled.
 
-Call `al_downloadsymbols` once: it exercises the same developer endpoint in seconds and tells you
-whether a retry has any chance.
+**Do not retry the publish.** A successful `al_downloadsymbols` call only shows that the developer
+endpoint responds; it does not prove the previous publish finished or its state is safe.
 
-- It hangs or fails: the endpoint is dead. Stop, leave the fix in the working tree, and report.
-- It succeeds: retry `al_publish` **once**. If that also times out, stop and report.
+Stop, leave the fix in the working tree, and report that the publishing outcome is unknown. Do not
+run tests against that uncertain deployment or attempt to repair it by changing versions or driving
+the container yourself.
 
 ---
 
@@ -44,8 +45,9 @@ whether a retry has any chance.
 causes. It is not a description of what happened.
 
 **Do not treat it as a hint and do not permute the call.** Not a different `appPath`, not a rebuilt
-package, not a different version, not a different dependency setting. Retry at most once, and if it
-fails again, stop and report - the fix in the working tree is still collected.
+package, not a different version, not a different dependency setting. Treat this as terminal
+infrastructure feedback: do not retry. Stop and report - the fix in the working tree is still
+collected.
 
 ---
 
