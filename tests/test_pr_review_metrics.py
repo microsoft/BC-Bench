@@ -222,12 +222,17 @@ def test_invalid_filter_report_still_raises(tmp_path: Path) -> None:
         build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
 
 
-def test_missing_engine_findings_raises(tmp_path: Path) -> None:
+def test_missing_engine_findings_preserves_other_metrics(tmp_path: Path) -> None:
     _write_run_metrics(tmp_path)
     (tmp_path / "al-code-review-findings.json").unlink()
 
-    with pytest.raises(AgentError, match="findings artifact not found"):
-        build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+    metrics = build_pr_review_metrics(tmp_path, tmp_path, execution_time=1.0)
+
+    assert metrics.prompt_tokens == 150
+    assert metrics.knowledge_used is None
+    assert metrics.knowledge_suppressed is None
+    assert metrics.sub_skills_executed is None
+    assert metrics.sub_skills_skipped is None
 
 
 @pytest.mark.parametrize(
@@ -362,7 +367,7 @@ def test_engine_diagnostics_count_knowledge_and_sub_skills(tmp_path: Path) -> No
     (tmp_path / "community" / "knowledge" / "two.md").write_text("two", encoding="utf-8")
     (tmp_path / "custom" / "skills" / "not-knowledge.md").write_text("skill", encoding="utf-8")
     (tmp_path / FILTER_REPORT_FILE_NAME).write_text(
-        json.dumps({"removed": [{"kind": "knowledge"}, {"kind": "knowledge"}, {"kind": "skill"}]}),
+        json.dumps({"removed": [{"kind": "knowledge"}, {"kind": "knowledge"}, {"kind": "knowledge-sample"}, {"kind": "skill"}]}),
         encoding="utf-8",
     )
     (tmp_path / "al-code-review-findings.json").write_text(

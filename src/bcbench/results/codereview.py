@@ -532,6 +532,7 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
 
         metrics = [result.metrics for result in code_review_results if result.metrics is not None]
         pr_review_metrics = [metric for metric in metrics if isinstance(metric, PRReviewMetrics)]
+        usage_complete_values = [metric.usage_complete for metric in pr_review_metrics if metric.usage_complete is not None]
 
         return summary.model_copy(
             update={
@@ -573,6 +574,6 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "average_sub_skills_skipped": average_metric([metric.sub_skills_skipped for metric in pr_review_metrics]),
                 "token_coverage_rate": sum(metric.total_tokens is not None for metric in metrics) / total_results,
                 "credit_coverage_rate": sum(metric.ai_credits is not None for metric in metrics) / total_results,
-                "usage_complete_rate": sum(metric.usage_complete is True for metric in pr_review_metrics) / len(pr_review_metrics) if pr_review_metrics else None,
+                "usage_complete_rate": sum(usage_complete_values) / len(usage_complete_values) if usage_complete_values else None,
             }
         )

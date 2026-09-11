@@ -22,7 +22,7 @@ _NonNegativeFloat = Annotated[float, Field(ge=0)]
 class _FilterRemoval(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    kind: Literal["knowledge", "skill"]
+    kind: Literal["knowledge", "knowledge-sample", "skill"]
 
 
 class _FilterReport(BaseModel):
@@ -159,7 +159,7 @@ def _normalize_knowledge_reference(path: str) -> str | None:
 
 def _load_engine_diagnostics(path: Path) -> _EngineDiagnostics:
     if not path.exists():
-        raise AgentError(f"Engine findings artifact not found at {path}.")
+        return _EngineDiagnostics(knowledge_used=None, knowledge_suppressed=None, sub_skills_executed=None, sub_skills_skipped=None)
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError) as exc:

@@ -98,6 +98,23 @@ def test_summary_preserves_unavailable_usage_as_none() -> None:
     assert serialized["usage_complete_rate"] is None
 
 
+def test_summary_uses_only_available_usage_completeness_values() -> None:
+    unavailable = _metrics(duration=4.0, scale=1).model_copy(update={"usage_complete": None})
+    complete = _metrics(duration=5.0, scale=1)
+    incomplete = _metrics(duration=6.0, scale=1).model_copy(update={"usage_complete": False})
+
+    summary = CodeReviewResultSummary.from_results(
+        [
+            create_codereview_result(instance_id="proj__review-1", agent_name=AgentHarness.PR_REVIEW, metrics=unavailable),
+            create_codereview_result(instance_id="proj__review-2", agent_name=AgentHarness.PR_REVIEW, metrics=complete),
+            create_codereview_result(instance_id="proj__review-3", agent_name=AgentHarness.PR_REVIEW, metrics=incomplete),
+        ],
+        run_id="run",
+    )
+
+    assert summary.usage_complete_rate == 0.5
+
+
 def test_summary_omits_inconsistent_runtime_provenance(caplog) -> None:
     first = _metrics(duration=4.0, scale=1)
     second = _metrics(duration=6.0, scale=2).model_copy(update={"bcquality_commit": "b" * 40})
