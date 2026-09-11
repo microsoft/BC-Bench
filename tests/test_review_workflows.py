@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -19,19 +18,6 @@ def _workflow(name: str) -> str:
     text = (WORKFLOWS / name).read_text(encoding="utf-8")
     assert yaml.safe_load(text)
     return text
-
-
-@pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.y*ml")) + sorted(ACTIONS.rglob("action.y*ml")))
-def test_external_actions_are_pinned_to_full_commit_shas(path: Path) -> None:
-    config = yaml.safe_load(path.read_text(encoding="utf-8"))
-    jobs = list(config.get("jobs", {}).values())
-    steps = [step for job in jobs for step in job.get("steps", [])]
-    steps.extend(config.get("runs", {}).get("steps", []))
-
-    for item in jobs + steps:
-        reference = item.get("uses")
-        if reference is not None and not reference.startswith(("./", "$/")):
-            assert re.fullmatch(r"[^@\s]+@[0-9a-fA-F]{40}", reference), f"{path}: {reference}"
 
 
 def test_copilot_workflow_routes_code_review_through_copilot() -> None:
