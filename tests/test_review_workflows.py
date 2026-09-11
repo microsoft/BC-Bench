@@ -60,6 +60,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert 'default: "gpt-5.4"' in workflow
     assert 'parallel-leaves:\n        description: "Dispatch isolated domain leaf agents concurrently"\n        required: false\n        default: false' in workflow
     assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
+    assert "COPILOT_REVIEW_REQUIRE_LEAF_MODEL: true" in workflow
     assert "COPILOT_REVIEW_PARALLEL_LEAVES: ${{ inputs.parallel-leaves }}" in workflow
     assert "full' }}-${{ inputs.repetition-id }}" in workflow
     for input_name in (
@@ -83,7 +84,7 @@ def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> No
     install = next(step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if step.get("id") == "install-harnesses")
 
     assert engine_input["required"] is False
-    assert engine_input["default"] == "982663354cc340fb6fd1840fd6c5e65b47e40f9d"
+    assert engine_input["default"] == "f2cb1ca5a1373a7d09313edaa3c62097b390217c"
     assert engine_input["type"] == "string"
     assert install["with"]["engine-sha"] == "${{ inputs.engine-sha }}"
     assert DEFAULT_ENGINE_SHA not in _workflow("pr-review-evaluation.yml")
