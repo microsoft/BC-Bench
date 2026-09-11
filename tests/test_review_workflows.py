@@ -130,6 +130,23 @@ def test_agent_harness_action_pins_published_copilot_version() -> None:
     assert "@github/copilot@1.0.82" in action
 
 
+def test_agent_harness_action_owns_node_setup() -> None:
+    action = yaml.safe_load((ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8"))
+    steps = action["runs"]["steps"]
+    setup_node = next(step for step in steps if step.get("uses", "").startswith("actions/setup-node@"))
+    first_npm_install = next(step for step in steps if step.get("run", "").startswith("npm install"))
+
+    assert setup_node["with"]["node-version"] == 24
+    assert steps.index(setup_node) < steps.index(first_npm_install)
+    for workflow_name in (
+        "claude-evaluation.yml",
+        "contamination.yml",
+        "copilot-evaluation.yml",
+        "pr-review-evaluation.yml",
+    ):
+        assert "actions/setup-node@" not in _workflow(workflow_name)
+
+
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
     config = yaml.safe_load(action)
