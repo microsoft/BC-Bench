@@ -8,7 +8,7 @@ from bcbench.evaluate.review_parsing import parse_review_output
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import apply_patch, fetch_commit_if_missing, setup_repo_prebuild
-from bcbench.results.codereview import CodeReviewResult, match_comments
+from bcbench.results.codereview import CodeReviewResult, candidate_comment_pairs
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
@@ -67,23 +67,11 @@ class CodeReviewPipeline(EvaluationPipeline[CodeReviewEntry]):
             logger.warning(f"Invalid review output for {context.entry.instance_id}")
             result = CodeReviewResult.create_invalid(context, output, context.entry.expected_comments)
         else:
-            expected_structural = match_comments(
-                context.entry.expected_comments,
-                generated_comments,
-            )
-            # Ignored comments are neutral. Match them against ALL generated comments (not only the
-            # ones left over after expected structural matching) so a finding whose expected pair
-            # the judge later rejects can still be neutralized as ignored rather than counting as a
-            # false positive. Both buckets are judged in a SINGLE pass with expected taking
-            # precedence on any overlap: one judge call per evaluation avoids a second LLM round
-            # (less nondeterminism, one calibration target) and cannot reuse a stale verdict file.
-            ignored_structural = match_comments(
-                context.entry.ignored_comments,
-                generated_comments,
-            )
+            expected_candidates = candidate_comment_pairs(context.entry.expected_comments, generated_comments)
+            ignored_candidates = candidate_comment_pairs(context.entry.ignored_comments, generated_comments)
             validated_matches, ignored_matches = judge_expected_and_ignored(
-                expected_structural,
-                ignored_structural,
+                expected_candidates,
+                ignored_candidates,
                 work_dir=context.repo_path,
             )
             result = CodeReviewResult.create(
