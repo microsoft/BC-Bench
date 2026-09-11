@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,6 +26,7 @@ __all__ = [
     "PatchApplicationError",
     "ProjectDiscoveryError",
     "TestExecutionError",
+    "TestExecutionFailureKind",
     "TestInfrastructureError",
 ]
 
@@ -192,6 +194,11 @@ class BuildTimeoutExpired(BCBenchError):
         super().__init__(message)
 
 
+class TestExecutionFailureKind(StrEnum):
+    SELECTION_EVIDENCE = "selection-evidence"
+    OUTCOME = "outcome"
+
+
 class TestExecutionError(BCBenchError):
     """Test execution failures."""
 
@@ -202,12 +209,14 @@ class TestExecutionError(BCBenchError):
         stdout: str = "",
         reason: str = "",
         summary: TestRunSummary | None = None,
+        failure_kind: TestExecutionFailureKind = TestExecutionFailureKind.OUTCOME,
     ) -> None:
         self.expectation = expectation
         self.stderr = stderr
         self.stdout = stdout
         self.reason = reason
         self.summary = summary
+        self.failure_kind = TestExecutionFailureKind(failure_kind)
         self.errors = _extract_test_errors(stdout)
         super().__init__(self.diagnostic_message)
 

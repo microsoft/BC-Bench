@@ -7,7 +7,7 @@ import yaml
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.testgeneration import TestGenerationPipeline, _get_test_generation_input_mode
-from bcbench.exceptions import TestExecutionError, TestInfrastructureError
+from bcbench.exceptions import TestExecutionError, TestExecutionFailureKind, TestInfrastructureError
 from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestExpectation, TestRunSummary
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
@@ -94,7 +94,7 @@ def test_test_generation_any_fail_error_is_classified_as_pre_patch(tmp_path, mon
 
     def run_test_suite(test_entries, expectation, container, repo_path):
         calls.append((test_entries, expectation, container, repo_path))
-        raise TestExecutionError(TestExpectation.ANY_FAIL)
+        raise TestExecutionError(TestExpectation.ANY_FAIL, failure_kind=TestExecutionFailureKind.SELECTION_EVIDENCE)
 
     monkeypatch.setattr("bcbench.evaluate.testgeneration.run_test_suite", run_test_suite)
 
@@ -104,6 +104,7 @@ def test_test_generation_any_fail_error_is_classified_as_pre_patch(tmp_path, mon
     result = TestGenerationResult.model_validate_json(result_path.read_text(encoding="utf-8"))
     assert calls == [(generated_tests, TestExpectation.ANY_FAIL, context.container, context.repo_path)]
     assert result.pre_patch_failed is False
+    assert result.infrastructure_failure is False
     assert result.error_message is not None
     assert result.error_message.startswith("Generated tests Passed pre-patch")
 

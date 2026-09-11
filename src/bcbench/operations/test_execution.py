@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import cast
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import TestExecutionError
+from bcbench.exceptions import TestExecutionError, TestExecutionFailureKind
 
 
 class TestExpectation(StrEnum):
@@ -88,7 +88,12 @@ class TestRunSummary:
         expectation = TestExpectation(expectation)
 
         if not self.requested:
-            raise TestExecutionError(expectation, reason="No tests were requested.", summary=self)
+            raise TestExecutionError(
+                expectation,
+                reason="No tests were requested.",
+                summary=self,
+                failure_kind=TestExecutionFailureKind.SELECTION_EVIDENCE,
+            )
 
         requested = Counter(self.requested)
         discovered = Counter(self.discovered)
@@ -96,19 +101,34 @@ class TestRunSummary:
         unexpected_discovered = sum((discovered - requested).values())
         if missing_discovered or unexpected_discovered:
             reason = f"Discovery evidence mismatch: missing {missing_discovered}, unexpected {unexpected_discovered}."
-            raise TestExecutionError(expectation, reason=reason, summary=self)
+            raise TestExecutionError(
+                expectation,
+                reason=reason,
+                summary=self,
+                failure_kind=TestExecutionFailureKind.SELECTION_EVIDENCE,
+            )
 
         executed = Counter(self.executed)
         missing_executed = sum((requested - executed).values())
         unexpected_executed = sum((executed - requested).values())
         if missing_executed or unexpected_executed:
             reason = f"Execution evidence mismatch: missing {missing_executed}, unexpected {unexpected_executed}."
-            raise TestExecutionError(expectation, reason=reason, summary=self)
+            raise TestExecutionError(
+                expectation,
+                reason=reason,
+                summary=self,
+                failure_kind=TestExecutionFailureKind.SELECTION_EVIDENCE,
+            )
 
         outcomes = tuple(result.outcome for result in self.results)
         skipped_count = outcomes.count(TestOutcome.SKIP)
         if skipped_count:
-            raise TestExecutionError(expectation, reason=f"Skipped tests are not allowed: {skipped_count}.", summary=self)
+            raise TestExecutionError(
+                expectation,
+                reason=f"Skipped tests are not allowed: {skipped_count}.",
+                summary=self,
+                failure_kind=TestExecutionFailureKind.SELECTION_EVIDENCE,
+            )
 
         if expectation is TestExpectation.ALL_PASS:
             unexpected_count = sum(outcome is not TestOutcome.PASS for outcome in outcomes)

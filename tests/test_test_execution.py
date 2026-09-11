@@ -10,7 +10,7 @@ import pytest
 
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import TestExecutionError, TestExecutionTimeoutExpired, TestInfrastructureError
+from bcbench.exceptions import TestExecutionError, TestExecutionFailureKind, TestExecutionTimeoutExpired, TestInfrastructureError
 from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestCaseResult, TestExpectation, TestIdentity, TestOutcome, TestRunSummary
 from bcbench.types import ContainerConfig
@@ -58,6 +58,8 @@ def container(tmp_path: Path) -> ContainerConfig:
 
 
 def test_test_execution_enum_values():
+    assert TestExecutionFailureKind.SELECTION_EVIDENCE == "selection-evidence"
+    assert TestExecutionFailureKind.OUTCOME == "outcome"
     assert TestExpectation.ALL_PASS == "all-pass"
     assert TestExpectation.ALL_FAIL == "all-fail"
     assert TestExpectation.ANY_FAIL == "any-fail"
@@ -138,6 +140,7 @@ def test_mixed_outcomes_reject_all_fail():
         summary.require(TestExpectation.ALL_FAIL)
 
     assert error.value.reason == "Expected every test to fail, but 1 did not."
+    assert error.value.failure_kind is TestExecutionFailureKind.OUTCOME
     assert error.value.summary is summary
 
 
@@ -193,6 +196,7 @@ def test_empty_requested_tests_are_rejected_with_summary_context():
         summary.require(TestExpectation.ALL_PASS)
 
     assert error.value.reason == "No tests were requested."
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
     assert error.value.summary is summary
 
 
@@ -211,6 +215,7 @@ def test_missing_discovery_uses_multiset_counts():
         summary.require(TestExpectation.ALL_PASS)
 
     assert error.value.reason == "Discovery evidence mismatch: missing 1, unexpected 0."
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
 
 
 @pytest.mark.parametrize(
@@ -232,6 +237,7 @@ def test_unexpected_discovery_identity_or_duplicate_is_rejected(unexpected: Test
         summary.require(TestExpectation.ALL_PASS)
 
     assert error.value.reason == "Discovery evidence mismatch: missing 0, unexpected 1."
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
 
 
 def test_missing_execution_is_rejected():
@@ -242,6 +248,7 @@ def test_missing_execution_is_rejected():
         summary.require(TestExpectation.ALL_PASS)
 
     assert error.value.reason == "Execution evidence mismatch: missing 1, unexpected 0."
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
 
 
 def test_extra_execution_is_rejected():
@@ -260,6 +267,7 @@ def test_extra_execution_is_rejected():
         summary.require(TestExpectation.ALL_PASS)
 
     assert error.value.reason == "Execution evidence mismatch: missing 0, unexpected 1."
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
 
 
 def test_duplicate_execution_is_rejected():
@@ -275,6 +283,7 @@ def test_duplicate_execution_is_rejected():
         summary.require(TestExpectation.ALL_PASS)
 
     assert error.value.reason == "Execution evidence mismatch: missing 0, unexpected 1."
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
 
 
 def test_skipped_execution_is_rejected():
@@ -289,6 +298,7 @@ def test_skipped_execution_is_rejected():
         summary.require(TestExpectation.ALL_FAIL)
 
     assert error.value.reason == "Skipped tests are not allowed: 1."
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
 
 
 def test_load_test_run_summary_reads_discovery_and_outcomes(tmp_path: Path):
@@ -611,6 +621,7 @@ Codeunit 50100 Regression Tests
         bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
 
     assert not isinstance(error.value, TestInfrastructureError)
+    assert error.value.failure_kind is TestExecutionFailureKind.OUTCOME
     assert error.value.reason == "Expected every test to pass, but 1 did not."
     assert error.value.stdout == stdout
     assert error.value.stderr == "PowerShell diagnostic"
@@ -618,6 +629,32 @@ Codeunit 50100 Regression Tests
     assert error.value.summary.results == (TestCaseResult(TestIdentity(50100, "RegressionTest"), TestOutcome.FAIL),)
     assert "Testfunction RegressionTest Failure" in str(error.value)
     assert "Assert.AreEqual failed" in str(error.value)
+
+
+def test_selection_failure_preserves_powershell_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        write_discovery(evidence_path, 50100, [])
+        write_results(evidence_path, 50100, "")
+        return subprocess.CompletedProcess(command, returncode=0, stdout="selection output", stderr="selection diagnostic")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_test_suite(entries, TestExpectation.ALL_PASS, container, repo_path)
+
+    assert error.value.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE
+    assert error.value.reason == "Discovery evidence mismatch: missing 1, unexpected 0."
+    assert error.value.stdout == "selection output"
+    assert error.value.stderr == "selection diagnostic"
 
 
 def test_nonzero_subprocess_with_valid_partial_summary_is_infrastructure_failure(
@@ -793,11 +830,72 @@ def test_run_tests_combines_fail_to_pass_and_pass_to_pass_summaries(tmp_path: Pa
     assert summary == TestRunSummary.combine(summaries)
 
 
-def test_run_tests_rejects_empty_benchmark_selection(tmp_path: Path, container: ContainerConfig):
+def test_run_tests_rejects_empty_benchmark_selection_as_infrastructure_failure(tmp_path: Path, container: ContainerConfig):
     entry = SimpleNamespace(fail_to_pass=[], pass_to_pass=[])
 
-    with pytest.raises(TestExecutionError) as error:
+    with pytest.raises(TestInfrastructureError) as error:
         bc_operations.run_tests(entry, container, tmp_path)
 
     assert error.value.reason == "No tests were requested."
     assert error.value.expectation is TestExpectation.ALL_PASS
+
+
+@pytest.mark.parametrize("missing_evidence", ["discovery", "execution"])
+def test_run_tests_treats_missing_hidden_benchmark_evidence_as_infrastructure_failure(
+    missing_evidence: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        write_discovery(evidence_path, 50100, [] if missing_evidence == "discovery" else ["RegressionTest"])
+        write_results(evidence_path, 50100, "")
+        return subprocess.CompletedProcess(command, returncode=0, stdout="hidden output", stderr="hidden diagnostic")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entry = SimpleNamespace(
+        fail_to_pass=[TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))],
+        pass_to_pass=[],
+    )
+
+    with pytest.raises(TestInfrastructureError) as error:
+        bc_operations.run_tests(entry, container, repo_path)
+
+    expected_prefix = "Discovery" if missing_evidence == "discovery" else "Execution"
+    assert error.value.reason.startswith(f"{expected_prefix} evidence mismatch: missing 1")
+    assert error.value.stdout == "hidden output"
+    assert error.value.stderr == "hidden diagnostic"
+    assert error.value.summary is not None
+
+
+def test_run_tests_keeps_hidden_assertion_failure_as_model_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        evidence_path = evidence_path_from_command(command[-1])
+        write_discovery(evidence_path, 50100, ["RegressionTest"])
+        write_results(evidence_path, 50100, '<testcase name="RegressionTest"><failure /></testcase>')
+        return subprocess.CompletedProcess(command, returncode=0, stdout="assertion output", stderr="assertion diagnostic")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entry = SimpleNamespace(
+        fail_to_pass=[TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))],
+        pass_to_pass=[],
+    )
+
+    with pytest.raises(TestExecutionError) as error:
+        bc_operations.run_tests(entry, container, repo_path)
+
+    assert error.value.failure_kind is TestExecutionFailureKind.OUTCOME
+    assert error.value.reason == "Expected every test to pass, but 1 did not."
+    assert error.value.stdout == "assertion output"
+    assert error.value.stderr == "assertion diagnostic"

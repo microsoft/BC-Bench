@@ -12,7 +12,14 @@ from typing import Literal
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestExecutionError, TestExecutionTimeoutExpired, TestInfrastructureError
+from bcbench.exceptions import (
+    BuildError,
+    BuildTimeoutExpired,
+    TestExecutionError,
+    TestExecutionFailureKind,
+    TestExecutionTimeoutExpired,
+    TestInfrastructureError,
+)
 from bcbench.logger import get_logger
 from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.setup_operations import bootstrap_app_json
@@ -212,18 +219,29 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
 
 
 def run_tests(entry: _BugFixTestGenBase, container: ContainerConfig, repo_path: Path) -> TestRunSummary:
-    summaries: list[TestRunSummary] = []
-    if entry.fail_to_pass:
-        logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
-        summaries.append(run_test_suite(entry.fail_to_pass, TestExpectation.ALL_PASS, container, repo_path))
+    try:
+        summaries: list[TestRunSummary] = []
+        if entry.fail_to_pass:
+            logger.info(f"Running {len(entry.fail_to_pass)} fail-to-pass tests")
+            summaries.append(run_test_suite(entry.fail_to_pass, TestExpectation.ALL_PASS, container, repo_path))
 
-    if entry.pass_to_pass:
-        logger.info(f"Running {len(entry.pass_to_pass)} pass-to-pass tests")
-        summaries.append(run_test_suite(entry.pass_to_pass, TestExpectation.ALL_PASS, container, repo_path))
+        if entry.pass_to_pass:
+            logger.info(f"Running {len(entry.pass_to_pass)} pass-to-pass tests")
+            summaries.append(run_test_suite(entry.pass_to_pass, TestExpectation.ALL_PASS, container, repo_path))
 
-    logger.info("All tests completed")
-    combined = TestRunSummary.combine(summaries)
-    combined.require(TestExpectation.ALL_PASS)
+        logger.info("All tests completed")
+        combined = TestRunSummary.combine(summaries)
+        combined.require(TestExpectation.ALL_PASS)
+    except TestExecutionError as error:
+        if error.failure_kind is TestExecutionFailureKind.OUTCOME:
+            raise
+        raise TestInfrastructureError(
+            error.expectation,
+            reason=error.reason,
+            stdout=error.stdout,
+            stderr=error.stderr,
+            summary=error.summary,
+        ) from error
     return combined
 
 
@@ -316,6 +334,7 @@ def run_test_suite(
                 stdout=result.stdout,
                 reason=error.reason,
                 summary=error.summary,
+                failure_kind=error.failure_kind,
             ) from error
         logger.info(f"Test suite completed with expectation met: {expectation}")
         return summary

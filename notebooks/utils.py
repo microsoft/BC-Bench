@@ -14,6 +14,15 @@ DATASET_PATH = NOTEBOOKS_ROOT.parent / "dataset" / "bcbench.jsonl"
 Category = Literal["bug-fix", "test-generation"]
 
 
+def _load_boolean_score(data: dict[str, object], scores: object, score_key: str, legacy_key: str) -> object:
+    if isinstance(scores, dict) and score_key in scores:
+        score = scores[score_key]
+        return pd.NA if score is None else score == 1
+
+    legacy_score = data.get(legacy_key)
+    return pd.NA if legacy_score is None else legacy_score == 1
+
+
 def get_result_folder(category: Category = "bug-fix") -> Path:
     return NOTEBOOKS_ROOT / "result" / category
 
@@ -48,7 +57,7 @@ def load_results_df(setup_folder: Path) -> pd.DataFrame:
             data = json.loads(line)
 
             # Normalize field names (Braintrust uses PascalCase)
-            scores = data.get("scores", {})
+            scores = data.get("scores")
             metrics = data.get("metrics", {}) or {}
             review = data.get("review", {})
             tool_usage = data.get("ToolUsage") or metrics.get("tool_usage")
@@ -59,8 +68,8 @@ def load_results_df(setup_folder: Path) -> pd.DataFrame:
                     # Core fields
                     "instance_id": data.get("InstanceID") or data.get("instance_id"),
                     "project": data.get("Project") or data.get("project"),
-                    "resolved": scores.get("ResolutionRate", 0) == 1 if scores else data.get("resolved", False),
-                    "build": scores.get("BuildRate", 0) == 1 if scores else data.get("build", False),
+                    "resolved": _load_boolean_score(data, scores, "ResolutionRate", "resolved"),
+                    "build": _load_boolean_score(data, scores, "BuildRate", "build"),
                     # Metrics
                     "execution_time": metrics.get("duration") or metrics.get("execution_time"),
                     "llm_duration": metrics.get("llm_duration"),
@@ -75,7 +84,11 @@ def load_results_df(setup_folder: Path) -> pd.DataFrame:
                     "output": data.get("output") or data.get("generated_patch", ""),
                 }
             )
-    return pd.DataFrame(rows)
+    results = pd.DataFrame(rows)
+    for column in ("resolved", "build"):
+        if column in results:
+            results[column] = results[column].astype("boolean")
+    return results
 
 
 def load_all_results(category: Category = "bug-fix") -> dict[str, pd.DataFrame]:
@@ -141,31 +154,25 @@ def compute_pass_metrics(df: pd.DataFrame, k: int | None = None) -> PassMetrics:
     pivot = subset_df.pivot_table(index="instance_id", columns="run_id", values="resolved", aggfunc=lambda x: x.iloc[0])
     n_runs = len(pivot.columns)
     n_instances = len(pivot)
-    runs_resolved = pivot.sum(axis=1)
+    evaluated_resolution_rate = pivot.mean(axis=1)
 
     return {
         "n_runs": n_runs,
         "n_instances": n_instances,
-        "mean_pct": float(runs_resolved.mean() / n_runs * 100),
+        "mean_pct": float(evaluated_resolution_rate.mean() * 100),
         "pass_at_k": _calculate_pass_at_k(pivot, n_runs),
         "pass_hat_k": _calculate_pass_hat_k(pivot, n_runs),
     }
 
 
 def _calculate_pass_at_k(pivot: pd.DataFrame, k: int) -> float:
-    num_samples = len(pivot.columns)
-    if num_samples < k:
-        return 0.0
-    total = sum(pass_at_k(num_samples, int(row.sum()), k) for _, row in pivot.iterrows())
-    return total / len(pivot)
+    scores = [pass_at_k(len(evaluated), int(evaluated.sum()), k) for _, row in pivot.iterrows() if len(evaluated := row.dropna()) >= k]
+    return sum(scores) / len(scores) if scores else 0.0
 
 
 def _calculate_pass_hat_k(pivot: pd.DataFrame, k: int) -> float:
-    num_trials = len(pivot.columns)
-    if num_trials < k:
-        return 0.0
-    total = sum(pass_hat_k(num_trials, int(row.sum()), k) for _, row in pivot.iterrows())
-    return total / len(pivot)
+    scores = [pass_hat_k(len(evaluated), int(evaluated.sum()), k) for _, row in pivot.iterrows() if len(evaluated := row.dropna()) >= k]
+    return sum(scores) / len(scores) if scores else 0.0
 
 
 def count_files_in_patch(patch: str) -> int:

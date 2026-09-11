@@ -6,7 +6,7 @@ import pytest
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix import BugFixPipeline
-from bcbench.exceptions import NoTestsExtractedError, TestExecutionError, TestInfrastructureError
+from bcbench.exceptions import NoTestsExtractedError, TestExecutionError, TestExecutionFailureKind, TestInfrastructureError
 from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestExpectation
 from bcbench.results.bugfix import BugFixResult
@@ -113,7 +113,7 @@ def test_bugfix_rejects_invalid_generated_test_transition(
         nonlocal call_index
         call_index += 1
         if failing_call(expectation, call_index):
-            raise TestExecutionError(expectation)
+            raise TestExecutionError(expectation, failure_kind=TestExecutionFailureKind.SELECTION_EVIDENCE)
 
     monkeypatch.setattr("bcbench.evaluate.bugfix.run_test_suite", run_generated_tests)
 
@@ -124,6 +124,7 @@ def test_bugfix_rejects_invalid_generated_test_transition(
     assert result.generated_test_pre_patch_failed is pre_patch_failed
     assert result.generated_test_post_patch_passed is post_patch_passed
     assert result.benchmark_test_passed is False
+    assert result.infrastructure_failure is False
     assert result.error_message is not None
     assert result.error_message.startswith(error_prefix)
 
