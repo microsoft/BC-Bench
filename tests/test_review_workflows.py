@@ -147,18 +147,17 @@ def test_agent_harness_action_owns_node_setup() -> None:
         assert "actions/setup-node@" not in _workflow(workflow_name)
 
 
-def test_copilot_setup_reuses_python_action_without_pinning_uv() -> None:
+def test_copilot_setup_reuses_python_action() -> None:
     workflow = yaml.safe_load(_workflow("copilot-setup-steps.yml"))
     steps = workflow["jobs"]["copilot-setup-steps"]["steps"]
     setup_python = next(step for step in steps if step.get("uses") == "$/.github/actions/setup-python-uv")
 
-    assert setup_python["with"] == {"all-groups": True, "uv-version": ""}
+    assert setup_python["with"] == {"all-groups": True}
 
     action = yaml.safe_load((ACTIONS / "setup-python-uv" / "action.yml").read_text(encoding="utf-8"))
     setup_uv = next(step for step in action["runs"]["steps"] if step.get("uses", "").startswith("astral-sh/setup-uv@"))
 
-    assert action["inputs"]["uv-version"]["default"] == "0.11.7"
-    assert setup_uv["with"]["version"] == "${{ inputs.uv-version }}"
+    assert setup_uv["with"]["version"] == "0.11.7"
     assert setup_uv["with"]["enable-cache"] is True
 
 
