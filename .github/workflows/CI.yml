@@ -57,7 +57,6 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: microsoft/BCQuality
-          ref: 1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549 # v1.6, pinned by BC-ALAgents
           path: bcquality
 
       - name: Run E2E tests
