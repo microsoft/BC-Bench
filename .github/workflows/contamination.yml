@@ -66,14 +66,10 @@ jobs:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
 
       - name: Install evaluation CLIs
         uses: $/.github/actions/install-agent-harnesses
@@ -92,7 +88,7 @@ jobs:
             --output-dir "${{ env.IDENTIFICATION_RESULTS_DIR }}"
 
       - name: Upload identification result
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
           name: identification-result-${{ github.run_id }}-${{ matrix.entry }}
@@ -105,13 +101,13 @@ jobs:
     needs: identify
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
       - name: Download all identification results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: ${{ env.IDENTIFICATION_RESULTS_DIR }}/
           merge-multiple: true
