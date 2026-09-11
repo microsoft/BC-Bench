@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -31,7 +31,7 @@ jobs:
           all-groups: true
 
       - name: Run pre-commit
-        uses: pre-commit/action@v3.0.1
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
         env:
           # Render ruff lint findings as inline PR annotations (CI-only; local runs stay human-readable)
           RUFF_OUTPUT_FORMAT: github
@@ -48,13 +48,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
       - name: Checkout BCQuality
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: microsoft/BCQuality
           path: bcquality
@@ -70,7 +70,7 @@ jobs:
       category: ${{ steps.random.outputs.category }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -103,7 +103,7 @@ jobs:
     name: Test Run for ${{ matrix.entry }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
@@ -112,7 +112,7 @@ jobs:
         run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ needs.select-category.outputs.category }} --output-dir evaluation_results --run-id ${{ github.run_id }}
 
       - name: Upload mock evaluation results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ${{ matrix.entry }}
           path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
