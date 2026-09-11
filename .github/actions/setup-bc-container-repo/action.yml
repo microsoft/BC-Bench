@@ -69,7 +69,7 @@ runs:
 
     - name: Azure Login with OIDC for cloning internal repository
       if: inputs.skip-repo != 'true'
-      uses: azure/login@v3
+      uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
       with:
         client-id: ${{ inputs.azure-client-id }}
         tenant-id: ${{ inputs.azure-tenant-id }}
@@ -93,7 +93,7 @@ runs:
 
     - name: Cache BC sandbox artifacts
       if: inputs.skip-container != 'true'
-      uses: actions/cache@v5
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         path: C:\bcartifacts.cache
         key: ${{ steps.bcversion.outputs.cache_key }}
