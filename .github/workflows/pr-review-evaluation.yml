@@ -40,7 +40,7 @@ on:
       engine-sha:
         description: "Full BC-ALAgents commit SHA"
         required: false
-        default: "1c8516bf1d2c05fb87db66a96238261c77d290b6"
+        default: "c488f8e810e47cbd3919f81f90b632c8bbe282c7"
         type: string
       test-run:
         description: "Indicate this is a test run (with few entries)"
