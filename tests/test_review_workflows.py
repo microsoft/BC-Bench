@@ -84,7 +84,7 @@ def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> No
     install = next(step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if step.get("id") == "install-harnesses")
 
     assert engine_input["required"] is False
-    assert engine_input["default"] == "f2cb1ca5a1373a7d09313edaa3c62097b390217c"
+    assert engine_input["default"] == "1c8516bf1d2c05fb87db66a96238261c77d290b6"
     assert engine_input["type"] == "string"
     assert install["with"]["engine-sha"] == "${{ inputs.engine-sha }}"
     assert DEFAULT_ENGINE_SHA not in _workflow("pr-review-evaluation.yml")
