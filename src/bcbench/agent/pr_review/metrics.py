@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from bcbench.exceptions import AgentError
-from bcbench.types import AgentMetrics
+from bcbench.types import PRReviewMetrics
 
 RUN_METRICS_FILE_NAME = "_run-metrics.json"
 _NonNegativeInt = Annotated[int, Field(ge=0)]
@@ -76,12 +76,12 @@ def _load_run_metrics(path: Path) -> _RunMetrics:
         raise AgentError(f"Engine run metrics artifact {path} does not satisfy schema version 1: {exc}") from exc
 
 
-def build_pr_review_metrics(output_dir: Path, execution_time: float) -> AgentMetrics:
+def build_pr_review_metrics(output_dir: Path, execution_time: float) -> PRReviewMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
     usage_values_available = run.malformed_records == 0
-    return AgentMetrics(
+    return PRReviewMetrics(
         execution_time=execution_time,
         prompt_tokens=run.prompt_tokens if usage_values_available else None,
         cached_tokens=run.cached_tokens if usage_values_available else None,
@@ -95,7 +95,7 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float) -> AgentMet
         ai_credits=run.ai_credits if usage_values_available else None,
         premium_requests=run.premium_requests if usage_values_available else None,
         models=run.models,
-        cli_version=run.cli_version,
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
+        copilot_cli_version=run.cli_version,
     )

@@ -157,3 +157,20 @@ def test_parse_output_tool_usage_none_when_no_tools():
 
     assert metrics is not None
     assert metrics.tool_usage is None
+
+
+def test_parse_output_logs_readable_transcript(caplog: pytest.LogCaptureFixture):
+    caplog.set_level("INFO")
+
+    parse_output(
+        [
+            _json_line({"type": "assistant.message", "data": {"content": "Inspecting the implementation."}}),
+            _json_line({"type": "tool.execution_start", "data": {"toolCallId": "call-1", "toolName": "rg"}}),
+            _json_line({"type": "assistant.message", "data": {"content": "Done.", "phase": "final_answer"}}),
+        ],
+        log_transcript=True,
+    )
+
+    assert "Copilot: Inspecting the implementation." in caplog.messages
+    assert "Copilot tool: rg" in caplog.messages
+    assert "Copilot: Done." in caplog.messages

@@ -5,7 +5,15 @@ from pathlib import Path
 import yaml
 
 from bcbench.agent.claude.metrics import parse_stream_output
-from bcbench.agent.shared import agent_subprocess_env, build_al_lsp_plugin, build_mcp_config, build_prompt, resolve_config_plugins, start_bc_mcp_gateway
+from bcbench.agent.shared import (
+    agent_subprocess_env,
+    build_al_lsp_plugin,
+    build_mcp_config,
+    build_prompt,
+    resolve_config_plugins,
+    start_bc_mcp_gateway,
+)
+from bcbench.agent.shared.version import get_cli_version
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -15,6 +23,10 @@ from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, Evalua
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+def get_claude_version() -> str:
+    return get_cli_version(shutil.which("claude"), "Claude Code")
 
 
 def run_claude_code(
@@ -130,9 +142,7 @@ def run_claude_code(
         stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
-        metrics, final_response = parse_stream_output(stdout.splitlines())
-        if final_response:
-            logger.info(final_response)
+        metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
     except subprocess.TimeoutExpired:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)

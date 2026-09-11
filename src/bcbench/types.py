@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 if TYPE_CHECKING:
     from bcbench.dataset import BaseDatasetEntry
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 __all__ = [
     "AgentHarness",
     "AgentMetrics",
+    "AgentMetricsContract",
+    "AnyAgentMetrics",
     "BCalLLMBackend",
     "Checklist",
     "ChecklistAssertion",
@@ -30,6 +32,7 @@ __all__ = [
     "ExpectedOutput",
     "ExperimentConfiguration",
     "JudgeCalibrationReport",
+    "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
 ]
@@ -67,6 +70,8 @@ class AgentMetrics(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    kind: Literal["generic"] = "generic"
+
     # Total execution time in seconds
     execution_time: float | None = None
     llm_duration: float | None = None
@@ -78,22 +83,40 @@ class AgentMetrics(BaseModel):
 
     # Token usage from LLM calls
     prompt_tokens: int | None = None
-    cached_tokens: int | None = None
-    cache_creation_tokens: int | None = None
     completion_tokens: int | None = None
-    reasoning_tokens: int | None = None
     total_tokens: int | None = None
-    api_calls: int | None = None
-    failed_api_calls: int | None = None
-    usage_api_calls: int | None = None
-    premium_requests: float | None = None
-    models: list[str] | None = None
-    cli_version: str | None = None
-    usage_complete: bool | None = None
-    malformed_records: int | None = None
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+
+class PRReviewMetrics(AgentMetrics):
+    kind: Literal["pr-review"] = "pr-review"
+
+    cached_tokens: int | None = Field(default=None, ge=0)
+    cache_creation_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    api_calls: int | None = Field(default=None, ge=0)
+    failed_api_calls: int | None = Field(default=None, ge=0)
+    usage_api_calls: int | None = Field(default=None, ge=0)
+    premium_requests: float | None = Field(default=None, ge=0)
+    models: list[str] = Field(default_factory=list)
+    usage_complete: bool | None = None
+    malformed_records: int | None = Field(default=None, ge=0)
+    copilot_cli_version: str | None = None
+
+
+type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]
+
+
+@dataclass(frozen=True)
+class AgentMetricsContract:
+    metrics_type: type[AgentMetrics]
+    required_fields: frozenset[str]
+
+    def __post_init__(self) -> None:
+        if unknown_fields := self.required_fields - self.metrics_type.model_fields.keys():
+            raise ValueError(f"{self.metrics_type.__name__} does not define required fields: {sorted(unknown_fields)}")
 
 
 class ExperimentConfiguration(BaseModel):
@@ -186,15 +209,16 @@ class AgentHarness(StrEnum):
     PR_REVIEW = "BC PR Review"
 
     @property
-    def expected_metrics(self) -> frozenset[str]:
-        """Metrics this agent should always report.
+    def metrics_contract(self) -> AgentMetricsContract:
+        """Metrics schema and fields this harness must populate.
 
-        Only these are warned about when missing, so agents that never collect a metric don't emit a warning for every single instance of a run.
+        The model defines which fields may be reported. The required subset
+        controls which missing values produce warnings.
         """
 
         match self:
             case AgentHarness.COPILOT:
-                expected = AgentMetrics(
+                metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
                     ai_credits=None,
@@ -202,7 +226,7 @@ class AgentHarness(StrEnum):
                     tool_usage=None,
                 )
             case AgentHarness.CLAUDE | AgentHarness.MOCK:
-                expected = AgentMetrics(
+                metrics = AgentMetrics(
                     execution_time=None,
                     llm_duration=None,
                     turn_count=None,
@@ -211,9 +235,9 @@ class AgentHarness(StrEnum):
                     tool_usage=None,
                 )
             case AgentHarness.BCAL:
-                expected = AgentMetrics(execution_time=None)
+                metrics = AgentMetrics(execution_time=None)
             case AgentHarness.PR_REVIEW:
-                expected = AgentMetrics(
+                metrics = PRReviewMetrics(
                     execution_time=None,
                     prompt_tokens=None,
                     completion_tokens=None,
@@ -223,7 +247,7 @@ class AgentHarness(StrEnum):
             case _:
                 raise ValueError(f"Unknown AgentHarness: {self}")
 
-        return frozenset(expected.model_fields_set)
+        return AgentMetricsContract(type(metrics), frozenset(metrics.model_fields_set))
 
     @property
     def instruction_filename(self) -> str:
@@ -598,6 +622,8 @@ class EvaluationContext[E: BaseDatasetEntry]:
 
     # BC Container configuration (optional — not all categories require a container)
     container: ContainerConfig | None = None
+
+    agent_version: str | None = None
 
     # Agent execution metrics
     metrics: AgentMetrics | None = None

@@ -1,16 +1,50 @@
 import json
 from unittest.mock import PropertyMock, patch
 
+import pytest
+
+from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.dataset.dataset_entry import BugFixEntry, _BugFixTestGenBase
 from bcbench.results.bceval_export import write_bceval_results
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result
+from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
+from tests.conftest import VALID_INSTANCE_ID, create_bugfix_result, create_codereview_entry, create_codereview_result
 
 
 class TestWriteBcevalResults:
+    @pytest.mark.parametrize(
+        "metrics",
+        [
+            None,
+            PRReviewMetrics(execution_time=232.257560403),
+            PRReviewMetrics(prompt_tokens=0, completion_tokens=0, total_tokens=0, ai_credits=0.0),
+            PRReviewMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178, ai_credits=1.75),
+            PRReviewMetrics(prompt_tokens=150, completion_tokens=28, total_tokens=178),
+            PRReviewMetrics(ai_credits=1.75),
+            PRReviewMetrics(prompt_tokens=150),
+            PRReviewMetrics(completion_tokens=28),
+        ],
+    )
+    def test_pr_review_credits_preserve_missing_zero_and_observed_values(self, tmp_path, metrics):
+        result = create_codereview_result(agent_name=AgentHarness.PR_REVIEW, metrics=metrics)
+        with patch.object(CodeReviewEntry, "load", return_value=[create_codereview_entry()]):
+            write_bceval_results(
+                results=[result],
+                out_dir=tmp_path,
+                run_id="run",
+                output_filename="results.jsonl",
+                category=EvaluationCategory.CODE_REVIEW,
+            )
+
+        metadata = json.loads((tmp_path / "results.jsonl").read_text(encoding="utf-8"))["metadata"]
+        assert metadata["ai_credits"] == (metrics.ai_credits if metrics is not None else None)
+        # bc-eval 0.3.14 adds these fields before invoking our custom metric callback.
+        assert isinstance(metadata["prompt_tokens"], int)
+        assert isinstance(metadata["completion_tokens"], int)
+
     def test_writes_bceval_results_with_all_fields(self, tmp_path, sample_dataset_file, sample_bugfix_result_with_metrics, problem_statement_dir):
         output_dir = tmp_path / "output"
         output_dir.mkdir()
+        sample_bugfix_result_with_metrics.agent_version = "1.2.3"
 
         with (
             patch.object(_BugFixTestGenBase, "problem_statement_dir", property(lambda self: problem_statement_dir)),
@@ -33,6 +67,7 @@ class TestWriteBcevalResults:
 
         assert data["id"] == VALID_INSTANCE_ID
         assert data["metadata"]["model"] == "gpt-4o"
+        assert data["metadata"]["agent_version"] == "1.2.3"
         # bug-fix is not judge-scored, so no judge model is exported
         assert "judge_model" not in data["metadata"]
         assert data["metadata"]["prompt_tokens"] == 5000

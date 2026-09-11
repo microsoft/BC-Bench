@@ -46,17 +46,22 @@ def _build_judge_prompt(pairs: list[tuple[ReviewComment, ReviewComment]], result
 
 
 def _extract_json_array(text: str) -> str:
-    stripped = text.strip()
-    if not stripped:
-        return ""
-    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", stripped, re.IGNORECASE)
-    if fence:
-        stripped = fence.group(1).strip()
-    start = stripped.find("[")
-    end = stripped.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        return stripped[start : end + 1]
-    return stripped
+    decoder = json.JSONDecoder()
+    result: str | None = None
+    end = 0
+    for token in re.finditer(r'[\[{}\]"]', text):
+        if token.start() < end:
+            continue
+        # Decode whole values; never retry inside a malformed outer value.
+        value, end = decoder.raw_decode(text, token.start())
+        if not isinstance(value, list):
+            raise LLMJudgeError(f"Judge result must be a JSON list, got {type(value).__name__}")
+        # Compare all content, including types, but allow JSON formatting differences.
+        candidate = json.dumps(value, sort_keys=True)
+        if result is not None and candidate != result:
+            raise LLMJudgeError("Judge output contains conflicting JSON arrays")
+        result = candidate
+    return result if result is not None else text.strip()
 
 
 def _parse_judge_results(result_path: Path, num_pairs: int, stdout: str = "") -> list[bool]:

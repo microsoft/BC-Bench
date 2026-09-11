@@ -7,7 +7,7 @@ import pytest
 
 from bcbench.agent.pr_review.agent import _prepare_bcquality_root, _resolve_pr_review_root, _write_review_json, run_pr_review_agent
 from bcbench.exceptions import AgentError
-from bcbench.types import EvaluationCategory
+from bcbench.types import EvaluationCategory, PRReviewMetrics
 from tests.conftest import create_codereview_entry
 
 
@@ -172,12 +172,14 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             engine_path=tmp_path / "engine",
         )
 
-    assert metrics is not None
+    assert isinstance(metrics, PRReviewMetrics)
     assert metrics.execution_time == 2.5
     assert metrics.prompt_tokens == 100
     assert metrics.completion_tokens == 10
     assert metrics.total_tokens == 110
     assert metrics.ai_credits == 0.25
+    assert metrics.api_calls == 2
+    assert metrics.copilot_cli_version == "1.0.81-0"
     assert config.is_empty()
     resolve_engine.assert_called_once_with(tmp_path / "engine")
     prepare_bcquality.assert_called_once_with(tmp_path / "engine", "pwsh", (tmp_path / "output" / "bcquality").resolve())

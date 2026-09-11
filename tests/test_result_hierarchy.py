@@ -11,9 +11,11 @@ Covers:
 """
 
 from datetime import UTC, datetime
+from io import StringIO
 
 import pytest
 from pydantic import ValidationError
+from rich.console import Console
 
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
 from bcbench.results.bugfix import BugFixResult
@@ -25,7 +27,7 @@ from bcbench.results.summary import (
 )
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
-from tests.conftest import create_bugfix_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
+from tests.conftest import create_bugfix_result, create_codereview_result, create_evaluation_context, create_nl2al_entry, create_testgen_result
 
 
 def _make_config_with_summary(summary_path: str):
@@ -371,6 +373,48 @@ class TestSummaryFromJson:
 # ---------------------------------------------------------------------------
 # display.py — console and GitHub summary
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("result_factory", "agent_name", "agent_version"),
+    [
+        pytest.param(create_bugfix_result, "GitHub Copilot", "1.0.82", id="copilot-version"),
+        pytest.param(create_testgen_result, "Claude Code", "2.1.221", id="claude-version"),
+        pytest.param(create_codereview_result, "BC PR Review", "a" * 40, id="pr-review-sha"),
+        pytest.param(create_codereview_result, "BC PR Review", None, id="pr-review-unrecorded"),
+    ],
+)
+class TestAgentVersionDisplay:
+    def test_console_header(self, monkeypatch, result_factory, agent_name, agent_version):
+        result = result_factory()
+        result.agent_name = agent_name
+        result.agent_version = agent_version
+        summary = EvaluationResultSummary.from_results([result], run_id="")
+        output = Console(file=StringIO(), record=True, width=160)
+        monkeypatch.setattr("bcbench.results.display.console", output)
+
+        create_console_summary([result], summary)
+
+        assert f"Agent Version: {agent_version or 'Unrecorded'}" in output.export_text(clear=False)
+        assert "BC-ALAgents/commit/" not in output.export_html()
+        assert result.agent_version == agent_version
+        assert summary.agent_version == agent_version
+
+    def test_github_header(self, monkeypatch, result_factory, agent_name, agent_version):
+        result = result_factory()
+        result.agent_name = agent_name
+        result.agent_version = agent_version
+        summary = EvaluationResultSummary.from_results([result], run_id="")
+        sections = []
+        monkeypatch.setattr("bcbench.results.display._write_github_step_summary", sections.append)
+
+        create_github_job_summary([result], summary)
+
+        content = sections[0]
+        assert f"- Agent Version: {agent_version or 'Unrecorded'}\n" in content
+        assert "BC-ALAgents/commit/" not in content
+        assert result.agent_version == agent_version
+        assert summary.agent_version == agent_version
 
 
 class TestConsoleSummary:

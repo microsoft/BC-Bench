@@ -74,13 +74,13 @@ jobs:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
 
       - name: Azure Login (OIDC) for ADO feed
-        uses: azure/login@v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -155,7 +155,7 @@ jobs:
       # Cache BcContainerHelper's artifact folder (its hardcoded default path) keyed by this entry's BC version
       - name: Cache BC sandbox artifacts
         id: bccache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: C:\bcartifacts.cache
           key: bcartifacts-${{ steps.bcversion.outputs.version }}
@@ -169,7 +169,7 @@ jobs:
 
       - name: Azure Login (OIDC) for CAPI Key Vault
         if: ${{ (inputs.llm-backend || 'external-command') == 'external-command' }}
-        uses: azure/login@v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -220,7 +220,7 @@ jobs:
           uv run bcbench evaluate bcal "${{ matrix.entry }}" --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}

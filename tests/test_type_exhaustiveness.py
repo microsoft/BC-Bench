@@ -1,10 +1,11 @@
 from pathlib import Path
 
 import pytest
+from pydantic import TypeAdapter
 
 from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
-from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory
+from bcbench.types import AgentHarness, AgentMetrics, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, PRReviewMetrics
 
 
 def test_repository_harnesses_have_target_dir():
@@ -30,11 +31,34 @@ def test_other_harnesses_reject_repository_setup(harness: AgentHarness):
         assert harness.instruction_filename
 
 
-def test_all_agent_names_have_expected_metrics():
+def test_all_agent_names_have_metrics_contracts():
     for agent_name in AgentHarness:
-        expected = agent_name.expected_metrics
-        assert expected
-        assert expected <= AgentMetrics.model_fields.keys()
+        contract = agent_name.metrics_contract
+        assert contract.required_fields
+        assert contract.required_fields <= contract.metrics_type.model_fields.keys()
+
+
+def test_agent_metrics_contract_rejects_unknown_required_fields():
+    with pytest.raises(ValueError, match="does not define required fields"):
+        AgentMetricsContract(AgentMetrics, frozenset({"unknown"}))
+
+
+def test_every_harness_metrics_type_round_trips_through_the_union():
+    # Results are persisted and read back through AnyAgentMetrics, so a metrics type missing from that
+    # union, or a subclass that forgot to override `kind`, would serialize fine and then fail to load or
+    # silently downcast and drop its extra fields.
+    adapter = TypeAdapter(AnyAgentMetrics)
+    for agent_name in AgentHarness:
+        metrics_type = agent_name.metrics_contract.metrics_type
+        restored = adapter.validate_python(metrics_type().model_dump(mode="json"))
+        assert type(restored) is metrics_type, f"{metrics_type.__name__} needs a unique `kind` and a place in AnyAgentMetrics"
+
+
+def test_pr_review_metrics_extend_generic_metrics():
+    assert issubclass(PRReviewMetrics, AgentMetrics)
+    assert PRReviewMetrics().kind == "pr-review"
+    assert "api_calls" not in AgentMetrics.model_fields
+    assert AgentHarness.PR_REVIEW.metrics_contract.metrics_type is PRReviewMetrics
 
 
 def test_all_categories_have_pipelines():

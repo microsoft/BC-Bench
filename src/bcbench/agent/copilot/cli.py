@@ -7,19 +7,24 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
 from bcbench.types import AgentMetrics
 
 logger = get_logger(__name__)
 
-__all__ = ["invoke_copilot"]
+__all__ = ["get_copilot_version", "invoke_copilot"]
 
 
 def _find_copilot() -> str | None:
     # Prefer copilot.exe over copilot.bat/copilot.cmd shims on Windows: the .bat shim invokes
     # PowerShell, which re-parses arguments and corrupts prompts containing double quotes.
     return shutil.which("copilot.exe") or shutil.which("copilot.cmd") or shutil.which("copilot")
+
+
+def get_copilot_version() -> str:
+    return get_cli_version(_find_copilot(), "GitHub Copilot CLI")
 
 
 def invoke_copilot(
@@ -73,9 +78,5 @@ def invoke_copilot(
         sys.stderr.write(result.stderr)
         sys.stderr.flush()
 
-    if result.stdout:
-        sys.stdout.write(result.stdout)
-        sys.stdout.flush()
-
-    metrics, final_response = parse_output(result.stdout.splitlines())
+    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
     return metrics, final_response or ""

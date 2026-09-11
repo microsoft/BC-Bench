@@ -25,6 +25,7 @@ def _status_style(status_label: str) -> tuple[str, str]:
 def create_console_summary(results: Sequence[BaseEvaluationResult], summary: EvaluationResultSummary) -> None:
     console.print("\n[bold cyan]Evaluation Results Summary[/bold cyan]")
     console.print(f"Total Processed: [bold]{len(results)}[/bold], using [bold]{results[0].agent_name}({results[0].model})[/bold]")
+    console.print(f"Agent Version: [bold]{results[0].agent_version or 'Unrecorded'}[/bold]")
     console.print(f"Category: [bold]{results[0].category.value}[/bold]")
     console.print(f"MCP Servers: [bold]{', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}[/bold]")
     console.print(f"AL LSP: [bold]{'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}[/bold]")
@@ -93,6 +94,7 @@ def create_github_job_summary(results: Sequence[BaseEvaluationResult], summary: 
     header_section: str = "\n".join(
         [
             f"Total entries processed: {len(results)}, using **{results[0].agent_name} ({results[0].model})**",
+            f"- Agent Version: {results[0].agent_version or 'Unrecorded'}",
             f"- Category: `{results[0].category.value}`",
             f"- MCP Servers used: {', '.join(results[0].experiment.mcp_servers) if results[0].experiment and results[0].experiment.mcp_servers else 'None'}",
             f"- AL LSP: {'Yes' if results[0].experiment and results[0].experiment.al_lsp_enabled else 'No'}",

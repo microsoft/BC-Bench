@@ -12,6 +12,7 @@ to ``review.json`` in the repo root so the existing code-review scorer runs unch
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -28,7 +29,7 @@ from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.logger import get_logger
 from bcbench.operations import commit_changes, has_changes, init_repo
-from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
+from bcbench.types import EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 
 logger = get_logger(__name__)
 _config = get_config()
@@ -51,6 +52,27 @@ def _resolve_pr_review_root(engine_path: Path | None) -> Path:
     if not engine.exists():
         raise AgentError(f"Engine orchestrator not found at {engine}. Check --engine-path points at a BC-ALAgents checkout.")
     return root
+
+
+def get_pr_review_version(engine_path: Path | None) -> str:
+    root = _resolve_pr_review_root(engine_path)
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            check=True,
+        )
+        git_root, commit = result.stdout.strip().splitlines()
+        if Path(git_root).resolve() != root or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+            raise AgentError(f"PR Review engine path must be the root of a Git checkout: {root}")
+        if has_changes(root):
+            raise AgentError("PR Review evaluations require a clean engine checkout. Commit changes first, or use 'bcbench run pr-review' for a smoke test.")
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise AgentError(f"Could not determine PR Review engine version at {root}: {exc}") from exc
+    return commit
 
 
 def _resolve_pwsh() -> str:
@@ -139,7 +161,7 @@ def run_pr_review_agent(
     output_dir: Path,
     engine_path: Path | None = None,
     min_severity: str | None = None,
-) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
+) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
     """Run the engine's complete local review pipeline and write review.json.
 
     Separate from run_copilot_agent by design: this spawns the PROD BC-ALAgents
@@ -148,7 +170,7 @@ def run_pr_review_agent(
     inputs (BC-ALAgents source, min severity) for the code-review category only.
 
     Returns:
-        Tuple of (AgentMetrics, ExperimentConfiguration).
+        Tuple of (PRReviewMetrics, ExperimentConfiguration).
     """
     if category is not EvaluationCategory.CODE_REVIEW:
         raise AgentError(f"The engine agent only supports the code-review category, got {category.value}.")
@@ -204,7 +226,7 @@ def run_pr_review_agent(
         logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
     except subprocess.TimeoutExpired:
         logger.exception(f"Engine review timed out after {_config.timeout.agent_execution} seconds")
-        metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
+        metrics = PRReviewMetrics(execution_time=_config.timeout.agent_execution)
         raise AgentTimeoutError("Engine review timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Engine review failed (exit {e.returncode}):\n{e.stdout}\n{e.stderr}")
