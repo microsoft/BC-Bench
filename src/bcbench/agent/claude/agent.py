@@ -125,12 +125,10 @@ def run_claude_code(
             env=agent_subprocess_env(
                 {
                     "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-                    # BC MCP's first tools/list compiles the tool catalog and can take ~45s on a cold
-                    # container, well past Claude's 30s default MCP startup timeout -> the server is
-                    # marked "failed" and its tools never register. Raise both the connection and tool
-                    # execution timeouts so the slow first response is tolerated.
+                    # A cold BC MCP startup can take ~45s, beyond Claude's 30s default.
                     "MCP_TIMEOUT": "180000",
-                    "MCP_TOOL_TIMEOUT": "180000",
+                    # BaseApp publishing takes many minutes; premature cancellation can leave apps uninstalled.
+                    "MCP_TOOL_TIMEOUT": str(_config.timeout.build_baseapp * 1000) if runtime and runtime.al_mcp else "180000",
                 },
                 pass_bc_credentials=category.pass_on_bc_container_credentials,
             ),

@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from bcbench.collection.patch_utils import extract_file_paths_from_patch, separate_patches
+from bcbench.config import get_config
 from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, TestExecutionError
+from bcbench.exceptions import BuildError, EmptyDiffError, NoTestsExtractedError, TestExecutionError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import (
@@ -11,15 +13,18 @@ from bcbench.operations import (
     categorize_projects,
     clean_project_paths,
     copy_problem_statement_folder,
+    extract_tests_from_patch,
     run_tests,
     set_runtime_version,
     setup_repo_prebuild,
     stage_and_get_diff,
 )
+from bcbench.operations.bc_operations import run_test_suite
 from bcbench.results.bugfix import BugFixResult
 from bcbench.types import EvaluationContext
 
 logger = get_logger(__name__)
+_config = get_config()
 
 __all__ = ["BugFixPipeline"]
 
@@ -51,19 +56,80 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
 
     def evaluate(self, context: EvaluationContext[BugFixEntry]) -> None:
         container = context.get_container()
-        test_projects, _app_projects = categorize_projects(context.entry.project_paths)
-
-        # Clean test projects to revert any unintended agent changes before capturing diff
-        clean_project_paths(context.repo_path, test_projects)
-
-        generated_patch = stage_and_get_diff(context.repo_path)
-        result: BugFixResult | None = None
+        test_projects, app_projects = categorize_projects(context.entry.project_paths)
 
         try:
-            apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} test patch")
+            generated_patch = stage_and_get_diff(context.repo_path)
+        except EmptyDiffError as error:
+            self.save_result(
+                context,
+                BugFixResult.create_verification_failure(context, "", str(error), build=False),
+            )
+            return
+
+        _, generated_fix_patch, generated_test_patch = separate_patches(generated_patch, _config.file_patterns.test_project_identifiers)
+        if not generated_fix_patch.strip():
+            self.save_result(
+                context,
+                BugFixResult.create_verification_failure(
+                    context,
+                    generated_patch,
+                    "Agent produced tests but no product-code fix.",
+                    build=False,
+                ),
+            )
+            return
+
+        file_contents: dict[str, str] = {}
+        for file_path in extract_file_paths_from_patch(generated_test_patch):
+            full_path = context.repo_path / file_path
+            if full_path.exists():
+                file_contents[file_path] = full_path.read_text(encoding="utf-8")
+
+        try:
+            generated_tests = extract_tests_from_patch(generated_test_patch, file_contents)
+        except NoTestsExtractedError as error:
+            self.save_result(
+                context,
+                BugFixResult.create_verification_failure(
+                    context,
+                    generated_patch,
+                    str(error),
+                    build=False,
+                ),
+            )
+            return
+
+        result: BugFixResult | None = None
+        generated_test_pre_patch_failed = False
+        generated_test_post_patch_passed = False
+
+        try:
+            clean_project_paths(context.repo_path, app_projects)
             build_and_publish_projects(
                 context.repo_path,
-                context.entry.project_paths,
+                test_projects,
+                container,
+                context.entry.environment_setup_version,
+            )
+            run_test_suite(generated_tests, "Fail", container)
+            generated_test_pre_patch_failed = True
+
+            apply_patch(context.repo_path, generated_fix_patch, f"{context.entry.instance_id} generated fix patch")
+            build_and_publish_projects(
+                context.repo_path,
+                [*app_projects, *test_projects],
+                container,
+                context.entry.environment_setup_version,
+            )
+            run_test_suite(generated_tests, "Pass", container)
+            generated_test_post_patch_passed = True
+
+            clean_project_paths(context.repo_path, test_projects)
+            apply_patch(context.repo_path, context.entry.test_patch, f"{context.entry.instance_id} benchmark test patch")
+            build_and_publish_projects(
+                context.repo_path,
+                [*app_projects, *test_projects],
                 container,
                 context.entry.environment_setup_version,
             )
@@ -73,11 +139,32 @@ class BugFixPipeline(EvaluationPipeline[BugFixEntry]):
             logger.info(f"Successfully completed {context.entry.instance_id}")
 
         except BuildError as e:
-            result = BugFixResult.create_build_failure(context, generated_patch, str(e))
+            result = BugFixResult.create_verification_failure(
+                context,
+                generated_patch,
+                str(e),
+                build=False,
+                generated_test_pre_patch_failed=generated_test_pre_patch_failed,
+                generated_test_post_patch_passed=generated_test_post_patch_passed,
+            )
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
         except TestExecutionError as e:
-            result = BugFixResult.create_test_failure(context, generated_patch, error_message="Test failed\n" + str(e))
+            if not generated_test_pre_patch_failed:
+                error_message = "Generated tests passed before the product-code fix\n" + str(e)
+            elif not generated_test_post_patch_passed:
+                error_message = "Generated tests failed after the product-code fix\n" + str(e)
+            else:
+                error_message = "Benchmark tests failed after the generated fix\n" + str(e)
+
+            result = BugFixResult.create_verification_failure(
+                context,
+                generated_patch,
+                error_message,
+                build=True,
+                generated_test_pre_patch_failed=generated_test_pre_patch_failed,
+                generated_test_post_patch_passed=generated_test_post_patch_passed,
+            )
             logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}")
 
         finally:

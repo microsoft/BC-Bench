@@ -96,11 +96,23 @@ class TestStatusLabel:
 class TestCategoryMetrics:
     def test_bugfix_category_metrics(self):
         result = create_bugfix_result(resolved=True, build=True)
-        assert result.category_metrics == {"resolved": True, "build": True}
+        assert result.category_metrics == {
+            "resolved": True,
+            "build": True,
+            "generated_test_pre_patch_failed": True,
+            "generated_test_post_patch_passed": True,
+            "benchmark_test_passed": True,
+        }
 
     def test_bugfix_failed_category_metrics(self):
         result = create_bugfix_result(resolved=False, build=False)
-        assert result.category_metrics == {"resolved": False, "build": False}
+        assert result.category_metrics == {
+            "resolved": False,
+            "build": False,
+            "generated_test_pre_patch_failed": False,
+            "generated_test_post_patch_passed": False,
+            "benchmark_test_passed": False,
+        }
 
     def test_testgen_category_metrics_includes_extra_fields(self):
         result = create_testgen_result(resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
@@ -123,9 +135,13 @@ class TestCategoryMetrics:
 
 
 class TestDisplayRow:
-    def test_bugfix_display_row_is_empty(self):
+    def test_bugfix_display_row_includes_verification_gates(self):
         result = create_bugfix_result()
-        assert result.display_row == {}
+        assert result.display_row == {
+            "Generated Test Failed Before Fix": "Yes",
+            "Generated Test Passed After Fix": "Yes",
+            "Benchmark Test Passed": "Yes",
+        }
 
     def test_testgen_display_row_has_columns(self):
         result = create_testgen_result(pre_patch_failed=True, post_patch_passed=False)
