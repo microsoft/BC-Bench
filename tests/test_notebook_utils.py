@@ -78,3 +78,21 @@ def test_pass_at_k_excludes_instances_without_k_evaluated_trials():
 
     assert metrics["pass_at_k"] == 0.0
     assert metrics["pass_hat_k"] == 0.0
+
+
+def test_pass_metrics_preserve_infrastructure_only_selected_run():
+    results = pd.DataFrame(
+        {
+            "run_id": [f"run-{index}" for index in range(1, 6)],
+            "instance_id": ["partial"] * 5,
+            "resolved": pd.array([True, True, True, True, pd.NA], dtype="boolean"),
+        }
+    )
+
+    metrics = compute_pass_metrics(results, k=5)
+
+    assert metrics["n_runs"] == 5
+    assert metrics["n_instances"] == 1
+    assert metrics["mean_pct"] == 100.0
+    assert metrics["pass_at_k"] == 0.0
+    assert metrics["pass_hat_k"] == 0.0

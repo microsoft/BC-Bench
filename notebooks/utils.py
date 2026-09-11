@@ -151,7 +151,7 @@ def compute_pass_metrics(df: pd.DataFrame, k: int | None = None) -> PassMetrics:
         run_ids = run_ids[:k]
     subset_df = df[df["run_id"].isin(run_ids)]
 
-    pivot = subset_df.pivot_table(index="instance_id", columns="run_id", values="resolved", aggfunc=lambda x: x.iloc[0])
+    pivot = subset_df.pivot_table(index="instance_id", columns="run_id", values="resolved", aggfunc=lambda x: x.iloc[0]).reindex(columns=run_ids)
     n_runs = len(pivot.columns)
     n_instances = len(pivot)
     evaluated_resolution_rate = pivot.mean(axis=1)

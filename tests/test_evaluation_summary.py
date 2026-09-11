@@ -151,13 +151,14 @@ class TestFromResults:
         assert summary.resolved == 1
         assert summary.failed == 1
         assert summary.infrastructure_failed == 1
+        assert summary.build == 2
         assert summary.percentage == 50.0
         assert summary.instance_results == {
             "test__success": True,
             "test__model-failure": False,
         }
 
-    def test_only_infrastructure_failures_have_zero_execution_percentage(self):
+    def test_only_infrastructure_failures_have_unscored_execution_percentage(self):
         summary = ExecutionBasedEvaluationResultSummary.from_results(
             [
                 create_bugfix_result(
@@ -174,8 +175,28 @@ class TestFromResults:
         assert summary.resolved == 0
         assert summary.failed == 0
         assert summary.infrastructure_failed == 1
-        assert summary.percentage == 0.0
+        assert summary.build == 0
+        assert summary.percentage is None
+        assert summary.to_dict()["percentage"] is None
+        assert "- Pass Rate: N/A\n" in summary.render_github_metrics_markdown()
         assert summary.instance_results == {}
+
+    def test_all_failed_evaluated_results_have_zero_execution_percentage(self):
+        summary = ExecutionBasedEvaluationResultSummary.from_results(
+            [
+                create_bugfix_result(
+                    instance_id="test__evaluated-failure",
+                    resolved=False,
+                    build=False,
+                    error_message="Tests failed",
+                )
+            ],
+            run_id="test_run_123",
+        )
+
+        assert summary.infrastructure_failed == 0
+        assert summary.percentage == 0.0
+        assert summary.to_dict()["percentage"] == 0.0
 
     def test_from_results_calculates_averages_correctly(self, sample_results):
         summary = ExecutionBasedEvaluationResultSummary.from_results(sample_results, run_id="test_run_123")
@@ -617,10 +638,34 @@ class TestLeaderboardAggregate:
 
         aggregate = ExecutionBasedLeaderboardAggregate.from_runs(runs)
 
-        assert aggregate.average == 0.0
+        assert aggregate.average is None
         assert aggregate.ci_low is None
         assert aggregate.ci_high is None
         assert aggregate.pass_hat_5 is None
+
+    def test_all_failed_evaluated_runs_have_zero_average(self):
+        from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate
+
+        runs = [
+            ExecutionBasedEvaluationResultSummary.from_results(
+                [
+                    create_bugfix_result(
+                        instance_id="test__evaluated-failure",
+                        resolved=False,
+                        build=False,
+                    )
+                ],
+                run_id=f"run_{index}",
+            )
+            for index in range(5)
+        ]
+
+        aggregate = ExecutionBasedLeaderboardAggregate.from_runs(runs)
+
+        assert aggregate.average == 0.0
+        assert aggregate.ci_low is None
+        assert aggregate.ci_high is None
+        assert aggregate.pass_hat_5 == 0.0
 
     def test_pass_hat_5_uses_only_evaluated_trials_per_instance(self):
         from bcbench.results.leaderboard import ExecutionBasedLeaderboardAggregate

@@ -160,15 +160,14 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
     failed: int = 0
     infrastructure_failed: int = 0
     build: int = 0
-    percentage: float = 0.0
+    percentage: float | None = None
 
     # Per-instance pass/fail for aggregate metrics (pass^k, CI)
     instance_results: dict[str, bool] = Field(default_factory=dict)
 
     def render_github_metrics_markdown(self) -> str:
-        return (
-            f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Infrastructure Failed: {self.infrastructure_failed}\n- Build: {self.build}\n- Pass Rate: {self.percentage}%\n"
-        )
+        pass_rate = f"{self.percentage}%" if self.percentage is not None else "N/A"
+        return f"## Result Summary\n- Resolved: {self.resolved}\n- Failed: {self.failed}\n- Infrastructure Failed: {self.infrastructure_failed}\n- Build: {self.build}\n- Pass Rate: {pass_rate}\n"
 
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "ExecutionBasedEvaluationResultSummary":
@@ -182,7 +181,7 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
         infrastructure_failed = sum(1 for r in execution_results if r.infrastructure_failure)
         evaluated = total - infrastructure_failed
         resolved = sum(1 for r in execution_results if r.resolved and not r.infrastructure_failure)
-        build = sum(1 for r in execution_results if r.build)
+        build = sum(1 for r in execution_results if r.build and not r.infrastructure_failure)
         instance_results = {r.instance_id: r.resolved for r in execution_results if not r.infrastructure_failure}
 
         return summary.model_copy(
@@ -191,7 +190,7 @@ class ExecutionBasedEvaluationResultSummary(EvaluationResultSummary):
                 "failed": evaluated - resolved,
                 "infrastructure_failed": infrastructure_failed,
                 "build": build,
-                "percentage": round(resolved / evaluated * 100, 1) if evaluated else 0.0,
+                "percentage": round(resolved / evaluated * 100, 1) if evaluated else None,
                 "instance_results": instance_results,
             }
         )

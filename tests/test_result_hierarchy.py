@@ -332,6 +332,10 @@ class TestMetricsRendering:
         markdown = self._summary().render_github_metrics_markdown()
         assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Infrastructure Failed: 0\n- Build: 9\n- Pass Rate: 70.0%\n"
 
+    def test_execution_based_github_metrics_markdown_renders_unscored_rate(self):
+        markdown = self._summary().model_copy(update={"percentage": None}).render_github_metrics_markdown()
+        assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Infrastructure Failed: 0\n- Build: 9\n- Pass Rate: N/A\n"
+
     def test_execution_based_console_metrics_renders_nothing(self):
         # execution-based categories intentionally render no console metrics block
         assert self._summary().render_console_metrics() is None

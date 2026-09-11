@@ -84,7 +84,7 @@ class LeaderboardAggregate(BaseModel, ABC):
 class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
     """Aggregate for execution-based categories: resolution-rate average with bootstrap CI and pass^5."""
 
-    average: float = 0.0
+    average: float | None = None
     ci_low: float | None = None
     ci_high: float | None = None
     pass_hat_5: float | None = None
@@ -108,7 +108,7 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
         ci = bootstrap_ci(per_run_resolution_rates)
         return base.model_copy(
             update={
-                "average": round(ci["mean"], 3) if ci["mean"] is not None else 0.0,
+                "average": round(ci["mean"], 3) if per_run_resolution_rates and ci["mean"] is not None else None,
                 "ci_low": round(ci["ci_low"], 3) if ci["ci_low"] is not None else None,
                 "ci_high": round(ci["ci_high"], 3) if ci["ci_high"] is not None else None,
                 "pass_hat_5": pass_hat_5,

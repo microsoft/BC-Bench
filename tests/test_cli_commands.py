@@ -1191,6 +1191,61 @@ def test_result_refresh_handles_legacy_runs_without_instance_results(tmp_path):
 
 
 @pytest.mark.integration
+def test_result_refresh_distinguishes_unscored_and_zero_averages(tmp_path):
+    leaderboard_path = tmp_path / "bug-fix.json"
+    common = {
+        "total": 1,
+        "date": "2025-01-10",
+        "model": "gpt-4o",
+        "category": "bug-fix",
+        "average_duration": 100.0,
+        "average_prompt_tokens": 4000.0,
+        "average_completion_tokens": 1200.0,
+        "average_llm_duration": 70.0,
+        "experiment": None,
+        "benchmark_version": "0.1.0",
+        "resolved": 0,
+        "build": 0,
+    }
+    data = {
+        "runs": [
+            {
+                **common,
+                "agent_name": "infrastructure-only",
+                "failed": 0,
+                "infrastructure_failed": 1,
+                "percentage": None,
+                "instance_results": {},
+                "github_run_id": "run_infrastructure",
+            },
+            {
+                **common,
+                "agent_name": "evaluated-failure",
+                "failed": 1,
+                "infrastructure_failed": 0,
+                "percentage": 0.0,
+                "instance_results": {"test__1": False},
+                "github_run_id": "run_evaluated",
+            },
+        ],
+        "aggregate": [],
+    }
+    with leaderboard_path.open("w") as f:
+        json.dump(data, f, indent=2)
+
+    result = runner.invoke(app, ["result", "refresh", "--leaderboard-dir", str(tmp_path)])
+
+    assert result.exit_code == 0
+    with leaderboard_path.open() as f:
+        refreshed = json.load(f)
+    averages = {aggregate["agent_name"]: aggregate["average"] for aggregate in refreshed["aggregate"]}
+    assert averages == {
+        "infrastructure-only": None,
+        "evaluated-failure": 0.0,
+    }
+
+
+@pytest.mark.integration
 def test_result_refresh_separates_runs_by_benchmark_version(tmp_path):
     """Test that runs with different benchmark versions produce separate aggregates."""
     leaderboard_path = tmp_path / "bug-fix.json"
