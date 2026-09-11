@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import NamedTuple, Self
+from typing import Any, NamedTuple, Self
 
 import numpy as np
 from pydantic import Field
@@ -9,10 +9,13 @@ from rich.table import Table
 from scipy.optimize import linear_sum_assignment
 
 from bcbench.dataset import ReviewComment
+from bcbench.logger import get_logger
 from bcbench.results.base import BaseEvaluationResult, JudgeScoredEvaluationResult
 from bcbench.results.metrics import f1_score, f_beta_score, precision_recall
 from bcbench.results.summary import JudgeBasedEvaluationResultSummary
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationContext, PRReviewMetrics
+
+logger = get_logger(__name__)
 
 _METRIC_EXPLANATIONS = """\
 <details>
@@ -314,10 +317,49 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
     valid_review_output_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
     average_total_tokens: float | None = None
+    average_cached_tokens: float | None = None
+    average_cache_creation_tokens: float | None = None
+    average_reasoning_tokens: float | None = None
+    average_api_calls: float | None = None
+    average_failed_api_calls: float | None = None
+    average_usage_api_calls: float | None = None
+    average_malformed_records: float | None = None
+    average_knowledge_files: float | None = None
+    average_knowledge_pruned: float | None = None
+    average_knowledge_used: float | None = None
+    average_knowledge_suppressed: float | None = None
+    average_sub_skills_executed: float | None = None
+    average_sub_skills_skipped: float | None = None
+    token_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    credit_coverage_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    usage_complete_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    copilot_cli_version: str | None = None
+    bcquality_repository: str | None = None
+    bcquality_commit: str | None = None
+    bcquality_version: str | None = None
 
     # Per-task F1 keyed by instance_id, retained so the leaderboard can bootstrap a confidence
     # interval over tasks (meaningful even for a single run) instead of only over runs.
     instance_results: dict[str, float] = Field(default_factory=dict)
+
+    @classmethod
+    def _base_fields(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> dict[str, Any]:
+        pr_review_metrics = [result.metrics for result in results if isinstance(result.metrics, PRReviewMetrics)]
+
+        def consistent_value(values: Sequence[str | None], field_name: str) -> str | None:
+            available = {value for value in values if value is not None}
+            if len(available) > 1:
+                logger.warning(f"Results contain inconsistent {field_name} values; omitting provenance: {available}")
+                return None
+            return next(iter(available), None)
+
+        return {
+            **super()._base_fields(results, run_id),
+            "copilot_cli_version": consistent_value([metrics.copilot_cli_version for metrics in pr_review_metrics], "copilot_cli_version"),
+            "bcquality_repository": consistent_value([metrics.bcquality_repository for metrics in pr_review_metrics], "bcquality_repository"),
+            "bcquality_commit": consistent_value([metrics.bcquality_commit for metrics in pr_review_metrics], "bcquality_commit"),
+            "bcquality_version": consistent_value([metrics.bcquality_version for metrics in pr_review_metrics], "bcquality_version"),
+        }
 
     def _performance_markdown(self) -> str:
         def metric(value: float | None, digits: int = 1) -> str:
@@ -488,6 +530,10 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
             available = [value for value in values if value is not None]
             return sum(available) / len(available) if available else None
 
+        metrics = [result.metrics for result in code_review_results if result.metrics is not None]
+        pr_review_metrics = [metric for metric in metrics if isinstance(metric, PRReviewMetrics)]
+        usage_complete_values = [metric.usage_complete for metric in pr_review_metrics if metric.usage_complete is not None]
+
         return summary.model_copy(
             update={
                 "generated_comment_count": generated_total,
@@ -509,9 +555,25 @@ class CodeReviewResultSummary(JudgeBasedEvaluationResultSummary):
                 "severity_mae": round(severity_mae, 3),
                 "valid_review_output_rate": round(valid_output_rate, 3),
                 "instance_results": {r.instance_id: round(r.f1, 6) for r in code_review_results},
-                "average_prompt_tokens": average_metric([result.metrics.prompt_tokens if result.metrics else None for result in code_review_results]),
-                "average_completion_tokens": average_metric([result.metrics.completion_tokens if result.metrics else None for result in code_review_results]),
-                "average_total_tokens": average_metric([result.metrics.total_tokens if result.metrics else None for result in code_review_results]),
-                "average_ai_credits": average_metric([result.metrics.ai_credits if result.metrics else None for result in code_review_results]),
+                "average_prompt_tokens": average_metric([metric.prompt_tokens for metric in metrics]),
+                "average_completion_tokens": average_metric([metric.completion_tokens for metric in metrics]),
+                "average_total_tokens": average_metric([metric.total_tokens for metric in metrics]),
+                "average_ai_credits": average_metric([metric.ai_credits for metric in metrics]),
+                "average_cached_tokens": average_metric([metric.cached_tokens for metric in pr_review_metrics]),
+                "average_cache_creation_tokens": average_metric([metric.cache_creation_tokens for metric in pr_review_metrics]),
+                "average_reasoning_tokens": average_metric([metric.reasoning_tokens for metric in pr_review_metrics]),
+                "average_api_calls": average_metric([metric.api_calls for metric in pr_review_metrics]),
+                "average_failed_api_calls": average_metric([metric.failed_api_calls for metric in pr_review_metrics]),
+                "average_usage_api_calls": average_metric([metric.usage_api_calls for metric in pr_review_metrics]),
+                "average_malformed_records": average_metric([metric.malformed_records for metric in pr_review_metrics]),
+                "average_knowledge_files": average_metric([metric.knowledge_files for metric in pr_review_metrics]),
+                "average_knowledge_pruned": average_metric([metric.knowledge_pruned for metric in pr_review_metrics]),
+                "average_knowledge_used": average_metric([metric.knowledge_used for metric in pr_review_metrics]),
+                "average_knowledge_suppressed": average_metric([metric.knowledge_suppressed for metric in pr_review_metrics]),
+                "average_sub_skills_executed": average_metric([metric.sub_skills_executed for metric in pr_review_metrics]),
+                "average_sub_skills_skipped": average_metric([metric.sub_skills_skipped for metric in pr_review_metrics]),
+                "token_coverage_rate": sum(metric.total_tokens is not None for metric in metrics) / total_results,
+                "credit_coverage_rate": sum(metric.ai_credits is not None for metric in metrics) / total_results,
+                "usage_complete_rate": sum(usage_complete_values) / len(usage_complete_values) if usage_complete_values else None,
             }
         )

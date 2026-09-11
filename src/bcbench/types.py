@@ -102,7 +102,16 @@ class PRReviewMetrics(AgentMetrics):
     usage_api_calls: int | None = Field(default=None, ge=0)
     usage_complete: bool | None = None
     malformed_records: int | None = Field(default=None, ge=0)
+    knowledge_files: int | None = Field(default=None, ge=0)
+    knowledge_pruned: int | None = Field(default=None, ge=0)
+    knowledge_used: int | None = Field(default=None, ge=0)
+    knowledge_suppressed: int | None = Field(default=None, ge=0)
+    sub_skills_executed: int | None = Field(default=None, ge=0)
+    sub_skills_skipped: int | None = Field(default=None, ge=0)
     copilot_cli_version: str | None = None
+    bcquality_repository: RepoSlug | None = None
+    bcquality_commit: CommitSha | None = None
+    bcquality_version: str | None = None
 
 
 type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]

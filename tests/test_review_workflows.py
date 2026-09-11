@@ -9,8 +9,9 @@ import yaml
 
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
+DOCS = Path(__file__).parents[1] / "docs"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "ecf8e31759d6ddd6d78e3a0b7836b40134368009"
+DEFAULT_ENGINE_SHA = "fdc02d7020632795810057500d62cff2a61513d7"
 PWSH = shutil.which("pwsh")
 
 
@@ -130,7 +131,19 @@ def test_agent_harness_action_pins_published_copilot_version() -> None:
     assert "@github/copilot@1.0.82" in action
 
 
-def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
+def test_code_review_dashboard_data_uses_current_harness_identity() -> None:
+    dashboard_data_path = Path(__file__).parents[1] / "docs" / "_data" / "code-review.json"
+    dashboard_data = dashboard_data_path.read_text(encoding="utf-8")
+    payload = json.loads(dashboard_data)
+    pr_review_rows = [row for section in ("aggregate", "runs") for row in payload[section] if row["agent_name"] == "BC PR Review"]
+
+    assert '"bc_alagents_commit"' not in dashboard_data
+    assert '"bc_alagents_repository"' not in dashboard_data
+    assert pr_review_rows
+    assert all(row["agent_version"] for row in pr_review_rows)
+
+
+def test_agent_harness_action_pins_engine_without_exporting_transitive_identity() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
     config = yaml.safe_load(action)
     validation = next(step for step in config["runs"]["steps"] if step.get("id") == "engine-sha")
@@ -147,6 +160,37 @@ def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:
     assert checkout["with"]["ref"] == "${{ steps.engine-sha.outputs.sha }}"
     assert checkout["with"]["persist-credentials"] is False
     assert set(config["outputs"]) == {"bc-alagents-path"}
+
+
+def test_shared_summary_workflow_has_no_pr_review_provenance_inputs() -> None:
+    workflow = _workflow("pr-review-evaluation.yml")
+    summary_workflow = _workflow("summarize-results.yml")
+
+    for field in (
+        "benchmark-commit",
+        "copilot-cli-version",
+        "bcquality-repository",
+        "bcquality-commit",
+        "bcquality-version",
+    ):
+        assert field not in workflow
+        assert field not in summary_workflow
+    assert "bc-alagents-commit" not in workflow
+    assert "bc-alagents-commit" not in summary_workflow
+
+
+def test_transitive_provenance_is_only_displayed_on_advanced_dashboard() -> None:
+    dashboard = (DOCS / "code-review.md").read_text(encoding="utf-8")
+    advanced = (DOCS / "code-review-details.md").read_text(encoding="utf-8")
+
+    assert "Evaluation Stack" not in dashboard
+    assert "bcquality_commit" not in dashboard
+    assert "copilot_cli_version" not in dashboard
+    assert "<th>Version</th>" in dashboard
+    assert "agent_version" in advanced
+    assert "bcquality_commit" in advanced
+    assert "copilot_cli_version" in advanced
+    assert dashboard.count("{% if agg.experiment == null or agg.experiment.is_experiment == false %}") == 2
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is required to test the composite action script")
