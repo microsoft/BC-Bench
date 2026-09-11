@@ -109,7 +109,7 @@ jobs:
         entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup BC Container and Repository
         id: setup-env
@@ -127,10 +127,6 @@ jobs:
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
 
       - name: Install AL Tool
         if: ${{ inputs.al-mcp || inputs.al-lsp }}
@@ -163,7 +159,7 @@ jobs:
             ${{ inputs.bc-mcp && '--bc-mcp' || '' }}
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}

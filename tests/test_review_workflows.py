@@ -147,7 +147,7 @@ def test_agent_harness_action_pins_engine_without_exporting_transitive_identity(
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
     config = yaml.safe_load(action)
     validation = next(step for step in config["runs"]["steps"] if step.get("id") == "engine-sha")
-    checkout = next(step for step in config["runs"]["steps"] if step.get("uses") == "actions/checkout@v5")
+    checkout = next(step for step in config["runs"]["steps"] if step.get("uses", "").startswith("actions/checkout@"))
 
     assert "repository: microsoft/BC-ALAgents" in action
     assert "bc-alagents-path:" in action
