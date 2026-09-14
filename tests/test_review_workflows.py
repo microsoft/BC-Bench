@@ -58,7 +58,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "mai-code-1-flash-picker" not in workflow
     assert "claude-" not in workflow
     assert "gemini-" not in workflow
-    assert inputs["model"]["default"] == "gpt-5.4"
+    assert inputs["model"]["default"] == "gpt-5.6-sol"
     assert inputs["model"]["options"] == [
         "gpt-5.4",
         "gpt-5.6-sol",
@@ -67,7 +67,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
         "gpt-5.3-codex",
         "mai-code-1.1-flash",
     ]
-    assert inputs["leaf-model"]["default"] == "gpt-5.4"
+    assert inputs["leaf-model"]["default"] == "gpt-5.6-luna"
     assert inputs["leaf-model"]["options"] == ["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
     assert 'leaf-execution:\n        description: "Deterministic leaf scheduling mode"\n        required: false\n        default: "serial"' in workflow
     assert 'max-leaf-concurrency:\n        description: "Maximum simultaneous leaves in parallel mode"' in workflow
