@@ -90,7 +90,6 @@ def _validate(manifest) -> None:
     validate_run_manifest(
         manifest,
         engine_commit=ENGINE_COMMIT,
-        bcquality_commit=BCQUALITY_COMMIT,
         cli_version=CLI_VERSION,
         root_model="claude-sonnet-5",
         leaf_model="gpt-5.4",
@@ -103,12 +102,19 @@ def test_accepts_exact_pinned_runtime(tmp_path: Path) -> None:
     _validate(_load(tmp_path, valid_manifest()))
 
 
+def test_accepts_bcquality_revision_resolved_by_pinned_engine(tmp_path: Path) -> None:
+    payload = valid_manifest()
+    payload["bcquality"]["commit"] = "f" * 40
+
+    _validate(_load(tmp_path, payload))
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
         (lambda data: data.update(status="failed"), "status='failed'"),
         (lambda data: data["engine"].update(commit="f" * 40), "engine.commit"),
-        (lambda data: data["bcquality"].update(commit="f" * 40), "bcquality.commit"),
+        (lambda data: data["bcquality"].update(commit=None), "bcquality.commit is missing"),
         (lambda data: data["configuration"].update(leaf_model="gpt-5.6-luna"), "leaf_model"),
         (lambda data: data["processes"][0].update(observed_models=["gemini-3.6-flash"]), "model telemetry"),
         (lambda data: data["processes"][0]["metrics"].update(usage_complete=False), "process metrics"),

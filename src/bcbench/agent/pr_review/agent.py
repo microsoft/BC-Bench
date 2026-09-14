@@ -210,7 +210,6 @@ def run_pr_review_agent(
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
     bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
     engine_commit = _checkout_commit(engine_root)
-    bcquality_commit = _checkout_commit(bcquality_root)
     leaf_model = os.environ.get("COPILOT_REVIEW_LEAF_MODEL", "").strip()
     if not leaf_model:
         raise AgentError("COPILOT_REVIEW_LEAF_MODEL is required for deterministic PR Review evaluation.")
@@ -234,7 +233,6 @@ def run_pr_review_agent(
         "REVIEW_WORKSPACE": str(trusted_workspace),
         "REVIEW_OUTPUT_DIR": str(output_dir),
         "BCQUALITY_ROOT": str(bcquality_root),
-        "BCQUALITY_SHA": bcquality_commit,
         "GITHUB_REPOSITORY": entry.repo,
         "COPILOT_MODEL": model,
         "COPILOT_REVIEW_CLI_VERSION": _COPILOT_CLI_VERSION,
@@ -265,7 +263,6 @@ def run_pr_review_agent(
         validate_run_manifest(
             manifest,
             engine_commit=engine_commit,
-            bcquality_commit=bcquality_commit,
             cli_version=_COPILOT_CLI_VERSION,
             root_model=model,
             leaf_model=leaf_model,

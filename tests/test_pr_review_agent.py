@@ -215,7 +215,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root) as prepare_bcquality,
-        patch("bcbench.agent.pr_review.agent._checkout_commit", side_effect=["e" * 40, "b" * 40]),
+        patch("bcbench.agent.pr_review.agent._checkout_commit", return_value="e" * 40),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
@@ -252,7 +252,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert engine_env["REVIEW_OUTPUT_DIR"] == str((tmp_path / "output").resolve())
     assert engine_env["REVIEW_WORKSPACE"] == str(tmp_path / "trusted")
     assert engine_env["BCQUALITY_ROOT"] == str(tmp_path / "bcquality")
-    assert engine_env["BCQUALITY_SHA"] == "b" * 40
+    assert "BCQUALITY_SHA" not in engine_env
     assert "BCQUALITY_REF" not in engine_env
     assert engine_env["GITHUB_REPOSITORY"] == "microsoft/BCApps"
     assert engine_env["AGENT_MINIMUM_SEVERITY"] == "Medium"

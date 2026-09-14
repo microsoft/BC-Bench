@@ -113,7 +113,6 @@ def validate_run_manifest(
     manifest: RunManifest,
     *,
     engine_commit: str,
-    bcquality_commit: str,
     cli_version: str,
     root_model: str,
     leaf_model: str,
@@ -134,8 +133,8 @@ def validate_run_manifest(
         mismatches.append(f"status={manifest.status!r} (expected 'completed')")
     if manifest.engine.commit != engine_commit:
         mismatches.append(f"engine.commit={manifest.engine.commit!r} (expected {engine_commit!r})")
-    if manifest.bcquality.commit != bcquality_commit:
-        mismatches.append(f"bcquality.commit={manifest.bcquality.commit!r} (expected {bcquality_commit!r})")
+    if manifest.bcquality.commit is None:
+        mismatches.append("bcquality.commit is missing")
     if manifest.bcquality.source_snapshot is None:
         mismatches.append("bcquality.source_snapshot is missing")
 
