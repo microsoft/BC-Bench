@@ -10,7 +10,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "ecf8e31759d6ddd6d78e3a0b7836b40134368009"
+DEFAULT_ENGINE_SHA = "1200dba45926886d99628f3020afd2a380fe4a60"
 PWSH = shutil.which("pwsh")
 
 
@@ -58,15 +58,18 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "gemini-3.6-flash" not in workflow
     assert 'default: "claude-sonnet-5"' in workflow
     assert 'default: "gpt-5.4"' in workflow
-    assert 'parallel-leaves:\n        description: "Dispatch isolated domain leaf agents concurrently"\n        required: false\n        default: false' in workflow
+    assert 'leaf-execution:\n        description: "Deterministic leaf scheduling mode"\n        required: false\n        default: "serial"' in workflow
+    assert 'max-leaf-concurrency:\n        description: "Maximum simultaneous leaves in parallel mode"' in workflow
+    assert 'COPILOT_REVIEW_CLI_VERSION: "1.0.83"' in workflow
     assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
-    assert "COPILOT_REVIEW_REQUIRE_LEAF_MODEL: true" in workflow
-    assert "COPILOT_REVIEW_PARALLEL_LEAVES: ${{ inputs.parallel-leaves }}" in workflow
+    assert "COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}" in workflow
+    assert "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}" in workflow
     assert "full' }}-${{ inputs.repetition-id }}" in workflow
     for input_name in (
         "model:",
         "leaf-model:",
-        "parallel-leaves:",
+        "leaf-execution:",
+        "max-leaf-concurrency:",
         "engine-sha:",
         "test-run:",
         "modified-only:",
@@ -84,7 +87,7 @@ def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> No
     install = next(step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if step.get("id") == "install-harnesses")
 
     assert engine_input["required"] is False
-    assert engine_input["default"] == "c488f8e810e47cbd3919f81f90b632c8bbe282c7"
+    assert engine_input["default"] == ""
     assert engine_input["type"] == "string"
     assert install["with"]["engine-sha"] == "${{ inputs.engine-sha }}"
     assert DEFAULT_ENGINE_SHA not in _workflow("pr-review-evaluation.yml")

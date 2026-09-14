@@ -1,10 +1,13 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 import pytest
 
 from bcbench.agent.pr_review.metrics import RUN_METRICS_FILE_NAME, build_pr_review_metrics
+from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.dataset.codereview import CodeReviewEntry
 from bcbench.exceptions import AgentError
 from bcbench.results.bceval_export import write_bceval_results
@@ -82,6 +85,28 @@ def test_legal_null_optional_fields_and_multiple_models_are_accepted(tmp_path: P
 
     assert metrics.ai_credits is None
     assert metrics.total_tokens == 178
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"cli_version": "1.0.82"},
+        {"usage_complete": False},
+        {"malformed_records": 1},
+        {"models": ["gpt-5.4-mini", "unexpected-model"]},
+    ],
+)
+def test_validated_manifest_rejects_mismatched_aggregate_metrics(tmp_path: Path, overrides: dict[str, object]) -> None:
+    _write_run_metrics(tmp_path, **overrides)
+    configuration = SimpleNamespace(
+        copilot_cli_version="1.0.81-0",
+        root_model="gpt-5.6-sol",
+        leaf_model="gpt-5.4-mini",
+    )
+    manifest = cast(RunManifest, SimpleNamespace(configuration=configuration))
+
+    with pytest.raises(AgentError, match="aggregate metrics"):
+        build_pr_review_metrics(tmp_path, execution_time=2.0, manifest=manifest)
 
 
 @pytest.mark.parametrize("has_token_usage", [False, True], ids=["no-chat-spans", "chat-without-billing"])

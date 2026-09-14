@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from bcbench.agent.pr_review.run_manifest import RunManifest
 from bcbench.exceptions import AgentError
 from bcbench.types import PRReviewMetrics
 
@@ -76,10 +77,20 @@ def _load_run_metrics(path: Path) -> _RunMetrics:
         raise AgentError(f"Engine run metrics artifact {path} does not satisfy schema version 1: {exc}") from exc
 
 
-def build_pr_review_metrics(output_dir: Path, execution_time: float) -> PRReviewMetrics:
+def build_pr_review_metrics(output_dir: Path, execution_time: float, manifest: RunManifest | None = None) -> PRReviewMetrics:
     run = _load_run_metrics(output_dir / RUN_METRICS_FILE_NAME)
     if run.metrics_source == "not-applicable":
         raise AgentError("Engine metrics were not applicable. BC-Bench code-review entries must contain AL changes.")
+    if manifest:
+        expected_models = {manifest.configuration.root_model, manifest.configuration.leaf_model}
+        if (
+            run.cli_version != manifest.configuration.copilot_cli_version
+            or not run.usage_complete
+            or run.malformed_records != 0
+            or len(run.models) != len(set(run.models))
+            or set(run.models) != expected_models
+        ):
+            raise AgentError("Engine aggregate metrics do not match the validated run manifest.")
     usage_values_available = run.malformed_records == 0
     return PRReviewMetrics(
         execution_time=execution_time,
@@ -98,4 +109,10 @@ def build_pr_review_metrics(output_dir: Path, execution_time: float) -> PRReview
         usage_complete=run.usage_complete,
         malformed_records=run.malformed_records,
         copilot_cli_version=run.cli_version,
+        leaf_model=manifest.configuration.leaf_model if manifest else None,
+        leaf_execution=manifest.configuration.leaf_execution if manifest else None,
+        max_leaf_concurrency=manifest.configuration.max_leaf_concurrency if manifest else None,
+        bcquality_commit=manifest.bcquality.commit if manifest else None,
+        bcquality_source_snapshot=manifest.bcquality.source_snapshot if manifest else None,
+        review_process_count=len(manifest.processes) if manifest else None,
     )

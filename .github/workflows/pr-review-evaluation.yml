@@ -32,15 +32,23 @@ on:
           - "gpt-5.6-luna"
           - "mai-code-1.1-flash"
           - "gemini-3.7-flash"
-      parallel-leaves:
-        description: "Dispatch isolated domain leaf agents concurrently"
+      leaf-execution:
+        description: "Deterministic leaf scheduling mode"
         required: false
-        default: false
-        type: boolean
+        default: "serial"
+        type: choice
+        options:
+          - "serial"
+          - "parallel"
+      max-leaf-concurrency:
+        description: "Maximum simultaneous leaves in parallel mode"
+        required: false
+        default: "4"
+        type: string
       engine-sha:
         description: "Full BC-ALAgents commit SHA"
         required: false
-        default: "c488f8e810e47cbd3919f81f90b632c8bbe282c7"
+        default: ""
         type: string
       test-run:
         description: "Indicate this is a test run (with few entries)"
@@ -155,9 +163,10 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          COPILOT_REVIEW_CLI_VERSION: "1.0.83"
           COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}
-          COPILOT_REVIEW_REQUIRE_LEAF_MODEL: true
-          COPILOT_REVIEW_PARALLEL_LEAVES: ${{ inputs.parallel-leaves }}
+          COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}
+          COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -172,7 +181,9 @@ jobs:
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/_run-manifest.json
           retention-days: ${{ (inputs.test-run || inputs.modified-only) && 1 || 30 }}
 
   summarize-results:
@@ -204,4 +215,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "parallel-leaves": "${{ inputs.parallel-leaves }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "repetition-id": "${{ inputs.repetition-id }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "leaf-execution": "${{ inputs.leaf-execution }}", "max-leaf-concurrency": "${{ inputs.max-leaf-concurrency }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "repetition-id": "${{ inputs.repetition-id }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

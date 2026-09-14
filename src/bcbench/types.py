@@ -104,6 +104,12 @@ class PRReviewMetrics(AgentMetrics):
     usage_complete: bool | None = None
     malformed_records: int | None = Field(default=None, ge=0)
     copilot_cli_version: str | None = None
+    leaf_model: str | None = None
+    leaf_execution: Literal["serial", "parallel"] | None = None
+    max_leaf_concurrency: int | None = Field(default=None, ge=1)
+    bcquality_commit: str | None = None
+    bcquality_source_snapshot: str | None = None
+    review_process_count: int | None = Field(default=None, ge=1)
 
 
 type AnyAgentMetrics = Annotated[AgentMetrics | PRReviewMetrics, Field(discriminator="kind")]
