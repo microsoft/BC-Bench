@@ -67,14 +67,14 @@ jobs:
     with:
       agent: pr-review
       # A modified-only run never requeues, so it must not leave an ephemeral tag behind.
-      test-run: ${{ inputs.test-run || inputs.modified-only }}
+      test-run: true
       repeat: ${{ inputs.repeat }}
 
   get-entries:
     uses: $/.github/workflows/get-entries.yml
     with:
-      modified-only: ${{ inputs.modified-only }}
-      test-run: ${{ inputs.test-run }}
+      modified-only: false
+      test-run: false
       category: code-review
 
   evaluate-with-pr-review:
@@ -95,7 +95,7 @@ jobs:
       fail-fast: false
       max-parallel: 64
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry: ["synthetic__accessibility-setselectionfilter-scope-01","synthetic__breaking-access-modifier-01","synthetic__breaking-event-subscriber-suppress-01","synthetic__breaking-notification-callback-01","synthetic__breaking-protected-var-field-01","synthetic__breaking-relocation-01","synthetic__breaking-scope-creep-unrelated-api-01","synthetic__caption-clean-01","synthetic__currrec-clean-01","synthetic__data-modeling-blocked-validation-skip-01","synthetic__data-modeling-excluded-from-calculation-01","synthetic__data-modeling-tablerelation-restriction-mismatch-01","synthetic__errh-errortype-internal-01","synthetic__errh-tryfunction-swallowed-01","synthetic__error-clean-01","synthetic__error-handling-assistedit-cancel-01","synthetic__error-handling-case-unreachable-else-01","synthetic__error-handling-drilldown-position-01","synthetic__error-handling-errorinfo-actionable-boundary-01","synthetic__error-handling-fieldno-swap-01","synthetic__error-handling-guiallowed-01","synthetic__error-handling-silent-skip-01","synthetic__error-testfield-enabled-01","synthetic__events-ishandled-added-to-shipped-event-01","synthetic__events-ishandled-reset-boundary-01","synthetic__get-clean-01","synthetic__obsolete-clean-01","synthetic__perf-batched-commit-checkpoint-01","synthetic__perf-clean-01","synthetic__perf-progress-dialog-deleteall-01","synthetic__performance-001","synthetic__performance-002","synthetic__performance-003","synthetic__performance-004","synthetic__performance-005","synthetic__performance-006","synthetic__performance-007","synthetic__performance-008","synthetic__performance-009","synthetic__performance-010","synthetic__performance-011","synthetic__performance-012","synthetic__performance-013","synthetic__performance-014","synthetic__performance-015","synthetic__performance-016","synthetic__performance-017","synthetic__performance-018","synthetic__performance-019","synthetic__performance-020","synthetic__performance-021","synthetic__performance-022","synthetic__performance-023","synthetic__performance-024","synthetic__performance-clean-01","synthetic__performance-clean-02","synthetic__performance-clean-03","synthetic__performance-clean-04","synthetic__pkget-clean-01","synthetic__privacy-001","synthetic__privacy-002","synthetic__privacy-003","synthetic__privacy-004","synthetic__privacy-005","synthetic__privacy-006","synthetic__privacy-007","synthetic__privacy-008","synthetic__privacy-009","synthetic__privacy-010","synthetic__privacy-011","synthetic__privacy-012","synthetic__privacy-013","synthetic__privacy-014","synthetic__privacy-015","synthetic__privacy-clean-01","synthetic__privacy-clean-02","synthetic__privacy-clean-03","synthetic__privacy-clean-04","synthetic__privacy-sibling-override-01","synthetic__sec-internal-not-boundary-01","synthetic__security-001","synthetic__security-002","synthetic__security-003","synthetic__security-004","synthetic__security-005","synthetic__security-006","synthetic__security-007","synthetic__security-008","synthetic__security-009","synthetic__security-011","synthetic__security-012","synthetic__security-013","synthetic__security-014","synthetic__security-015","synthetic__security-016","synthetic__security-clean-01","synthetic__security-clean-02","synthetic__security-clean-03","synthetic__security-clean-04","synthetic__style-001","synthetic__style-002","synthetic__style-003","synthetic__style-004","synthetic__style-005","synthetic__style-006","synthetic__style-007","synthetic__style-008","synthetic__style-009","synthetic__style-010","synthetic__style-011","synthetic__style-012","synthetic__style-013","synthetic__style-014","synthetic__style-015","synthetic__style-016","synthetic__style-017","synthetic__style-018","synthetic__style-clean-01","synthetic__style-clean-02","synthetic__style-clean-03","synthetic__style-clean-04","synthetic__style-duplicate-action-01","synthetic__style-field-repurpose-indent-01","synthetic__style-showmandatory-flowfield-01","synthetic__style-this-keyword-01","synthetic__style-tooltip-mismatch-01","synthetic__testing-tolerance-clean-01","synthetic__testing-ui-handler-assert-after-run-01","synthetic__upgrade-001","synthetic__upgrade-002","synthetic__upgrade-003","synthetic__upgrade-004","synthetic__upgrade-005","synthetic__upgrade-006","synthetic__upgrade-007","synthetic__upgrade-008","synthetic__upgrade-009","synthetic__upgrade-alwayslogtable-removal-01","synthetic__upgrade-broken-hook-copyrows-01","synthetic__upgrade-clean-01","synthetic__upgrade-clean-02","synthetic__upgrade-clean-03","synthetic__upgrade-clean-04","synthetic__upgrade-clean-05","synthetic__upgrade-obsolete-caption-01","synthetic__upgrade-transferfields-field-collision-01"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -157,14 +157,14 @@ jobs:
       agent: "BC PR Review"
       # Scores only the modified entries, so publishing it to Braintrust/Kusto or the
       # leaderboard would record a partial corpus as a benchmark result.
-      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}
+      mock: true
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run && !inputs.modified-only }}
+    if: ${{ false }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write
