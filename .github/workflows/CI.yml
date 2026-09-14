@@ -31,7 +31,7 @@ jobs:
           all-groups: true
 
       - name: Run pre-commit
-        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        run: uv run pre-commit run --all-files --show-diff-on-failure --color=always
         env:
           # Render ruff lint findings as inline PR annotations (CI-only; local runs stay human-readable)
           RUFF_OUTPUT_FORMAT: github
