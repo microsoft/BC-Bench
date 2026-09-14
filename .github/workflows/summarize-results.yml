@@ -74,6 +74,7 @@ jobs:
           retention-days: ${{ inputs.mock && 1 || 30 }}
 
       - name: Azure Login with OIDC for bceval package
+        if: ${{ false }}
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -81,10 +82,12 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Resolve bceval evaluator config for category
+        if: ${{ false }}
         id: bceval
         run: uv run bcbench category bceval-config --category "${{ inputs.category }}"
 
       - name: Upload result using bceval
+        if: ${{ false }}
         env:
           BRAINTRUST_PROJECT_ID: ${{ secrets.BRAINTRUST_PROJECT_ID }}
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
@@ -116,7 +119,7 @@ jobs:
             --use-capi ${{ !inputs.mock && '--storage braintrust --storage kusto' || '' }}
 
       - name: Update leaderboard in a new branch
-        if: ${{ !inputs.mock && !inputs.skip-leaderboard }}
+        if: ${{ false }}
         run: |
           git fetch origin main
 
