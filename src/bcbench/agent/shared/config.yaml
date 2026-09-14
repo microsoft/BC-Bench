@@ -91,8 +91,6 @@ prompt:
     {{task}}
 
   code-review-template: |
-    /bcquality-al-review
-
     You are reviewing a Business Central (AL) code repository at {{repo_path}}.
 
     Review only the staged and unstaged dataset changes in the working tree (`git diff HEAD`). Do not compare commits such as HEAD~1..HEAD or origin/main.
