@@ -215,7 +215,6 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
         patch("bcbench.agent.pr_review.agent._commit_patch_as_head"),
         patch("bcbench.agent.pr_review.agent._init_trusted_workspace", return_value=tmp_path / "trusted"),
         patch("bcbench.agent.pr_review.agent._prepare_bcquality_root", return_value=bcquality_root) as prepare_bcquality,
-        patch("bcbench.agent.pr_review.agent._checkout_commit", return_value="e" * 40),
         patch("bcbench.agent.pr_review.agent._write_review_json", return_value=0),
         patch("bcbench.agent.pr_review.agent.time.monotonic", side_effect=[10.0, 12.5]),
         patch("bcbench.agent.pr_review.agent.subprocess.run", return_value=completed) as run_process,
@@ -226,6 +225,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             category=EvaluationCategory.CODE_REVIEW,
             repo_path=tmp_path / "repo",
             output_dir=Path("output"),
+            agent_version="e" * 40,
             engine_path=tmp_path / "engine",
         )
 

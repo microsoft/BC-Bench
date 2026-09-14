@@ -56,7 +56,7 @@ def _resolve_pr_review_root(engine_path: Path | None) -> Path:
     return root
 
 
-def get_pr_review_version(engine_path: Path | None) -> str:
+def get_pr_review_version(engine_path: Path | None, *, require_clean: bool = True) -> str:
     root = _resolve_pr_review_root(engine_path)
     try:
         result = subprocess.run(
@@ -70,7 +70,7 @@ def get_pr_review_version(engine_path: Path | None) -> str:
         git_root, commit = result.stdout.strip().splitlines()
         if Path(git_root).resolve() != root or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
             raise AgentError(f"PR Review engine path must be the root of a Git checkout: {root}")
-        if has_changes(root):
+        if require_clean and has_changes(root):
             raise AgentError("PR Review evaluations require a clean engine checkout. Commit changes first, or use 'bcbench run pr-review' for a smoke test.")
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         raise AgentError(f"Could not determine PR Review engine version at {root}: {exc}") from exc
@@ -82,24 +82,6 @@ def _resolve_pwsh() -> str:
     if not pwsh:
         raise AgentError("PowerShell (pwsh) not found in PATH. The BC-ALAgents engine requires PowerShell 7+.")
     return pwsh
-
-
-def _checkout_commit(path: Path) -> str:
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(path), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=30,
-            check=True,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise AgentError(f"Could not resolve checkout commit at {path}: {exc}") from exc
-    commit = result.stdout.strip()
-    if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
-        raise AgentError(f"Checkout at {path} returned an invalid commit SHA: {commit!r}")
-    return commit
 
 
 def _environment_without_bcquality_overrides() -> dict[str, str]:
@@ -179,6 +161,7 @@ def run_pr_review_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
+    agent_version: str,
     engine_path: Path | None = None,
     min_severity: str | None = None,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
@@ -209,7 +192,6 @@ def run_pr_review_agent(
     _commit_patch_as_head(repo_path)
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
     bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
-    engine_commit = _checkout_commit(engine_root)
     leaf_model = os.environ.get("COPILOT_REVIEW_LEAF_MODEL", "").strip()
     if not leaf_model:
         raise AgentError("COPILOT_REVIEW_LEAF_MODEL is required for deterministic PR Review evaluation.")
@@ -262,7 +244,7 @@ def run_pr_review_agent(
         manifest = load_run_manifest(output_dir / RUN_MANIFEST_FILE_NAME)
         validate_run_manifest(
             manifest,
-            engine_commit=engine_commit,
+            engine_commit=agent_version,
             cli_version=_COPILOT_CLI_VERSION,
             root_model=model,
             leaf_model=leaf_model,
