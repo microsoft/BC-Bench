@@ -40,6 +40,8 @@ def test_claude_workflow_routes_code_review_through_claude() -> None:
 
 def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
+    workflow_data = yaml.safe_load(workflow)
+    inputs = workflow_data[True]["workflow_dispatch"]["inputs"]
     config = yaml.safe_load(AGENT_CONFIG.read_text(encoding="utf-8"))
 
     assert "category: code-review" in workflow
@@ -54,10 +56,19 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert 'agent: "BC PR Review"' in workflow
     assert '"mai-code-1.1-flash"' in workflow
     assert "mai-code-1-flash-picker" not in workflow
-    assert '"gemini-3.7-flash"' in workflow
-    assert "gemini-3.6-flash" not in workflow
-    assert 'default: "claude-sonnet-5"' in workflow
-    assert 'default: "gpt-5.4"' in workflow
+    assert "claude-" not in workflow
+    assert "gemini-" not in workflow
+    assert inputs["model"]["default"] == "gpt-5.4"
+    assert inputs["model"]["options"] == [
+        "gpt-5.4",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.3-codex",
+        "mai-code-1.1-flash",
+    ]
+    assert inputs["leaf-model"]["default"] == "gpt-5.4"
+    assert inputs["leaf-model"]["options"] == ["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
     assert 'leaf-execution:\n        description: "Deterministic leaf scheduling mode"\n        required: false\n        default: "serial"' in workflow
     assert 'max-leaf-concurrency:\n        description: "Maximum simultaneous leaves in parallel mode"' in workflow
     assert 'COPILOT_REVIEW_CLI_VERSION: "1.0.83"' in workflow

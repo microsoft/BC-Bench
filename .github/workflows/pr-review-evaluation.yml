@@ -9,18 +9,15 @@ on:
       model:
         description: "Copilot model used internally by BC PR Review"
         required: false
-        default: "claude-sonnet-5"
+        default: "gpt-5.4"
         type: choice
         options:
-          - "claude-sonnet-5"
-          - "claude-opus-5"
           - "gpt-5.4"
           - "gpt-5.6-sol"
           - "gpt-5.6-terra"
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
-          - "gemini-3.7-flash"
       leaf-model:
         description: "Model requested for domain leaf agents"
         required: false
@@ -28,10 +25,8 @@ on:
         type: choice
         options:
           - "gpt-5.4"
-          - "claude-sonnet-5"
           - "gpt-5.6-luna"
           - "mai-code-1.1-flash"
-          - "gemini-3.7-flash"
       leaf-execution:
         description: "Deterministic leaf scheduling mode"
         required: false
