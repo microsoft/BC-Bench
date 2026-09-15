@@ -93,6 +93,7 @@ def test_pr_review_evaluation_is_fixed_to_runner_and_category(tmp_path: Path) ->
     assert contexts[0].category is EvaluationCategory.CODE_REVIEW
     assert contexts[0].model == "gpt-5.6-luna"
     assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
+    assert agent_runner.call_args.kwargs["agent_version"] == "a" * 40
     get_version.assert_called_once_with(tmp_path)
 
 
@@ -102,6 +103,7 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
         patch.object(CodeReviewEntry, "load", return_value=[entry]),
         patch.object(CodeReviewPipeline, "setup_workspace"),
         patch.object(run_commands, "run_pr_review_agent") as agent_runner,
+        patch.object(run_commands, "get_pr_review_version", return_value="a" * 40) as get_version,
     ):
         result = CliRunner().invoke(
             app,
@@ -123,6 +125,8 @@ def test_pr_review_run_is_fixed_to_code_review(tmp_path: Path) -> None:
     assert agent_runner.call_args.kwargs["category"] is EvaluationCategory.CODE_REVIEW
     assert agent_runner.call_args.kwargs["model"] == "gpt-5.6-luna"
     assert agent_runner.call_args.kwargs["engine_path"] == tmp_path
+    assert agent_runner.call_args.kwargs["agent_version"] == "a" * 40
+    get_version.assert_called_once_with(tmp_path, require_clean=False)
 
 
 def test_pr_review_is_public_command() -> None:
