@@ -14,9 +14,12 @@ from typed container configuration populated at the CLI boundary.
 
 import base64
 import json
+import socket
 import threading
 import time
-from http.client import HTTPConnection
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
+from http.client import HTTPConnection, HTTPException, IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
 from urllib.parse import urlsplit
@@ -57,6 +60,58 @@ _WARMUP_BUDGET_SECONDS = 600
 _WARMUP_RETRY_DELAY_SECONDS = 5
 
 
+class _WarmupStageError(Exception):
+    pass
+
+
+class _ClientDisconnected(Exception):
+    pass
+
+
+def _remaining_seconds(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("warm-up deadline expired")
+    return remaining
+
+
+@contextmanager
+def _probe_connection(host: str, port: int, deadline: float) -> Iterator[HTTPConnection]:
+    connection = HTTPConnection(host, port, timeout=_remaining_seconds(deadline))
+    timer: threading.Timer | None = None
+    expired = threading.Event()
+    try:
+        connection.connect()
+        probe_socket = connection.sock
+        assert probe_socket is not None
+        remaining = _remaining_seconds(deadline)
+        probe_socket.settimeout(remaining)
+
+        def interrupt() -> None:
+            expired.set()
+            with suppress(OSError):  # The response may have already closed the socket.
+                probe_socket.shutdown(socket.SHUT_RDWR)
+
+        # A socket timeout alone is an inactivity timeout: trickled headers, JSON, or an incomplete
+        # SSE line can otherwise keep a blocking read alive indefinitely. Interrupt that same socket
+        # at the absolute deadline, even if HTTPConnection has handed ownership to HTTPResponse.
+        timer = threading.Timer(remaining, interrupt)
+        timer.daemon = True
+        timer.start()
+        try:
+            yield connection
+            _remaining_seconds(deadline)
+        except (OSError, HTTPException) as exc:
+            if expired.is_set() or time.monotonic() >= deadline:
+                raise TimeoutError("warm-up deadline expired") from exc
+            raise
+    finally:
+        if timer is not None:
+            timer.cancel()
+            timer.join()
+        connection.close()
+
+
 def _header_safe(key: str, value: str) -> bool:
     """A header is safe to relay only if neither key nor value contains CR/LF (HTTP response splitting)."""
     return not any(c in key or c in value for c in ("\r", "\n"))
@@ -83,8 +138,10 @@ def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.cli
     """
     content_type = response.getheader("Content-Type", "") or ""
     if "text/event-stream" in content_type:
-        while time.monotonic() < deadline:
+        while True:
+            _remaining_seconds(deadline)
             raw_line = response.readline()
+            _remaining_seconds(deadline)
             if not raw_line:
                 break
             line = raw_line.decode("utf-8", errors="replace").strip()
@@ -96,7 +153,9 @@ def _read_jsonrpc(response, deadline: float) -> dict:  # noqa: ANN001 - http.cli
                 if isinstance(obj, dict) and ("result" in obj or "error" in obj):
                     return obj
         return {}
+    _remaining_seconds(deadline)
     text = response.read().decode("utf-8", errors="replace")
+    _remaining_seconds(deadline)
     try:
         return json.loads(text) if text.strip() else {}
     except json.JSONDecodeError:
@@ -164,8 +223,10 @@ class BcMcpGateway:
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
 
-    def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
-        connection = HTTPConnection(host, port, timeout=_PROBE_TIMEOUT_SECONDS)
+    def _rpc(
+        self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, *, deadline: float, request_id: int | None = None, session_id: str | None = None
+    ) -> tuple[str | None, dict]:
+        started = time.monotonic()
         try:
             payload: dict[str, object] = {"jsonrpc": "2.0", "method": method}
             if request_id is not None:
@@ -175,14 +236,17 @@ class BcMcpGateway:
             headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", **extra_headers}
             if session_id:
                 headers["Mcp-Session-Id"] = session_id
-            connection.request("POST", self._mcp_path, body=json.dumps(payload).encode(), headers=headers)
-            response = connection.getresponse()
-            returned_session = response.getheader("Mcp-Session-Id")
-            return returned_session, _read_jsonrpc(response, deadline=time.monotonic() + _PROBE_TIMEOUT_SECONDS)
-        finally:
-            connection.close()
+            with _probe_connection(host, port, deadline) as connection:
+                connection.request("POST", self._mcp_path, body=json.dumps(payload).encode(), headers=headers)
+                with connection.getresponse() as response:
+                    returned_session = response.getheader("Mcp-Session-Id")
+                    result = _read_jsonrpc(response, deadline=deadline)
+        except Exception as exc:
+            raise _WarmupStageError(f"{method} failed after {time.monotonic() - started:.1f}s ({type(exc).__name__}: {exc})") from exc
+        else:
+            return returned_session, result
 
-    def _handshake_tools(self) -> list[str]:
+    def _handshake_tools(self, deadline: float) -> list[str]:
         """initialize -> notifications/initialized -> tools/list against BC; caches the tools/list result."""
         session_id, _ = self._rpc(
             self._origin_host,
@@ -190,11 +254,12 @@ class BcMcpGateway:
             self._injected_headers,
             "initialize",
             {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bcbench-probe", "version": "1.0"}},
+            deadline=deadline,
             request_id=1,
         )
         if session_id:
-            self._rpc(self._origin_host, self._origin_port, self._injected_headers, "notifications/initialized", None, session_id=session_id)
-        _, listed = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "tools/list", {}, request_id=2, session_id=session_id)
+            self._rpc(self._origin_host, self._origin_port, self._injected_headers, "notifications/initialized", None, deadline=deadline, session_id=session_id)
+        _, listed = self._rpc(self._origin_host, self._origin_port, self._injected_headers, "tools/list", {}, deadline=deadline, request_id=2, session_id=session_id)
         result = listed.get("result")
         tools = [name for t in (result or {}).get("tools", []) if isinstance(t, dict) and isinstance(name := t.get("name"), str)]
         if tools and isinstance(result, dict):
@@ -212,27 +277,64 @@ class BcMcpGateway:
         the budget is spent) so the cache is populated before the agent starts and its tools/list is
         served instantly. Best-effort: never raises -- a failed warm-up must not break a run.
         """
-        deadline = time.monotonic() + _WARMUP_BUDGET_SECONDS
+        started = time.monotonic()
+        deadline = started + _WARMUP_BUDGET_SECONDS
         attempt = 0
-        while True:
+        failure = "tools/list never returned tools"
+        while time.monotonic() < deadline:
             attempt += 1
             try:
-                tools = self._handshake_tools()
-            except Exception as exc:  # noqa: BLE001 - warm-up must never break a run
-                logger.warning(f"BC MCP warm-up attempt {attempt} failed (non-fatal): {exc}")
+                tools = self._handshake_tools(min(deadline, time.monotonic() + _PROBE_TIMEOUT_SECONDS))
+            except Exception as exc:
+                failure = str(exc)
+                cause = exc.__cause__ if isinstance(exc, _WarmupStageError) else exc
+                if not isinstance(cause, (OSError, HTTPException)):
+                    logger.exception(f"BC MCP warm-up attempt {attempt} failed unexpectedly (non-fatal)")
                 tools = []
+            else:
+                failure = "tools/list never returned tools"
             if tools:
-                logger.info(f"BC MCP warm-up: cached {len(tools)} tool(s) on attempt {attempt}: {tools}")
+                logger.info(f"BC MCP warm-up: cached {len(tools)} tool(s) on attempt {attempt} after {time.monotonic() - started:.1f}s: {tools}")
                 return tools
-            if time.monotonic() >= deadline:
-                logger.warning(f"BC MCP warm-up gave up after {attempt} attempt(s); tools/list never returned tools")
-                return []
-            time.sleep(_WARMUP_RETRY_DELAY_SECONDS)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            delay = min(_WARMUP_RETRY_DELAY_SECONDS, remaining)
+            logger.info(f"BC MCP warm-up attempt {attempt} after {time.monotonic() - started:.1f}s: {failure}; retrying in {delay:.1f}s if budget remains")
+            time.sleep(delay)
+        logger.warning(f"BC MCP warm-up gave up after {attempt} attempt(s) and {time.monotonic() - started:.1f}s: {failure}")
+        return []
 
 
 def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
     class _ProxyHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
+
+        def __init__(self, request: socket.socket, client_address: tuple[str, int], server: ThreadingHTTPServer) -> None:
+            try:
+                super().__init__(request, client_address, server)
+            except (ConnectionResetError, BrokenPipeError, _ClientDisconnected) as exc:
+                self.close_connection = True
+                logger.debug(f"BC MCP gateway client disconnected: {exc}")
+
+        def _write(self, data: bytes) -> None:
+            try:
+                self.wfile.write(data)
+            except (ConnectionResetError, BrokenPipeError) as exc:
+                raise _ClientDisconnected(str(exc)) from exc
+
+        def _flush(self) -> None:
+            try:
+                self.wfile.flush()
+            except (ConnectionResetError, BrokenPipeError) as exc:
+                raise _ClientDisconnected(str(exc)) from exc
+
+        def end_headers(self) -> None:
+            self._response_started = True
+            try:
+                super().end_headers()
+            except (ConnectionResetError, BrokenPipeError) as exc:
+                raise _ClientDisconnected(str(exc)) from exc
 
         def log_message(self, format: str, *args: object) -> None:  # match stdlib signature; silence access log
             pass
@@ -268,21 +370,14 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 # initialize reply: BC advertises capabilities.experimental = {"x-ms-headerless": true},
                 # which makes some MCP clients fail the connection; strip it so the client sees a standard
                 # server (BC still works over the normal header-based session the warm-up uses).
-                if rpc_method == "initialize" and response.status == 200 and "text/event-stream" in (response.getheader("Content-Type", "") or ""):
-                    self._relay_initialize(response)
-                else:
-                    self._relay(response)
-            except (ConnectionError, OSError) as error:
-                # The client (agent) closing its side mid-stream is normal; don't misreport it as an
-                # upstream failure, and don't try to send an error once the response has begun.
-                if self._response_started:
-                    logger.debug(f"BC MCP gateway client disconnected during {self.command} {rpc_method or self.path}: {error}")
-                    self.close_connection = True
-                else:
-                    logger.exception(f"BC MCP gateway failed to reach upstream for {self.command} {rpc_method or self.path}")
-                    self.send_error(502, "Bad Gateway")
-            except Exception:
-                logger.exception(f"BC MCP gateway error handling {self.command} {rpc_method or self.path}")
+                with response:
+                    if rpc_method == "initialize" and response.status == 200 and "text/event-stream" in (response.getheader("Content-Type", "") or ""):
+                        self._relay_initialize(response)
+                    else:
+                        self._relay(response)
+            except (OSError, HTTPException):
+                logger.exception(f"BC MCP gateway upstream failure during {self.command} {rpc_method or self.path}")
+                self.close_connection = True
                 if not self._response_started:
                     self.send_error(502, "Bad Gateway")
             finally:
@@ -299,14 +394,13 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             if cached is None:
                 return False
             event = ("event: message\ndata: " + json.dumps({"jsonrpc": "2.0", "id": request_id, "result": cached}) + "\n\n").encode()
-            self._response_started = True
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Content-Length", str(len(event)))
             self.end_headers()
-            self.wfile.write(event)
-            self.wfile.flush()
+            self._write(event)
+            self._flush()
             return True
 
         def _relay_initialize(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
@@ -317,7 +411,6 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             response). Rewrite just that first result event, then keep relaying faithfully so the stream
             behaves exactly like BC's for everything else.
             """
-            self._response_started = True
             forwarded_headers = [(k, v) for k, v in response.getheaders() if k.lower() not in _HOP_BY_HOP and k.lower() not in ("content-length", "content-type") and _header_safe(k, v)]
             self.send_response_only(200)
             for key, value in forwarded_headers:
@@ -345,16 +438,17 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                             capabilities.pop("experimental", None)
                         out_line = ("data: " + json.dumps(obj) + "\n").encode()
                         rewritten = True
-                self.wfile.write(b"%X\r\n" % len(out_line))
-                self.wfile.write(out_line)
-                self.wfile.write(b"\r\n")
-                self.wfile.flush()
+                self._write(b"%X\r\n" % len(out_line))
+                self._write(out_line)
+                self._write(b"\r\n")
+                self._flush()
+            else:
+                raise TimeoutError("upstream initialize stream deadline expired")
             # Keep relaying (holding the stream open) exactly like BC until the upstream or client closes.
-            self.wfile.write(b"0\r\n\r\n")
-            self.wfile.flush()
+            self._write(b"0\r\n\r\n")
+            self._flush()
 
         def _relay(self, response) -> None:  # noqa: ANN001 - http.client.HTTPResponse
-            self._response_started = True
             self.send_response_only(response.status)
             content_length: str | None = None
             for key, value in response.getheaders():
@@ -377,8 +471,8 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 while remaining > 0:
                     chunk = response.read(min(_STREAM_CHUNK_BYTES, remaining))
                     if not chunk:
-                        break
-                    self.wfile.write(chunk)
+                        raise IncompleteRead(b"", remaining)
+                    self._write(chunk)
                     remaining -= len(chunk)
             else:
                 # No content length -> stream (e.g. SSE) with our own chunked framing, flushing each
@@ -391,12 +485,12 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                     chunk = response.read1(_STREAM_CHUNK_BYTES)
                     if not chunk:
                         break
-                    self.wfile.write(b"%X\r\n" % len(chunk))
-                    self.wfile.write(chunk)
-                    self.wfile.write(b"\r\n")
-                    self.wfile.flush()
-                self.wfile.write(b"0\r\n\r\n")
-            self.wfile.flush()
+                    self._write(b"%X\r\n" % len(chunk))
+                    self._write(chunk)
+                    self._write(b"\r\n")
+                    self._flush()
+                self._write(b"0\r\n\r\n")
+            self._flush()
 
         do_GET = _handle
         do_POST = _handle
