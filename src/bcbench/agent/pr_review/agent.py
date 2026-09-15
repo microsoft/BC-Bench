@@ -202,6 +202,7 @@ def run_pr_review_agent(
         "BCQUALITY_ROOT": str(bcquality_root),
         "GITHUB_REPOSITORY": entry.repo,
         "COPILOT_MODEL": model,
+        "MINIMUM_SEVERITY": severity,
         "AGENT_MINIMUM_SEVERITY": severity,
     }
 

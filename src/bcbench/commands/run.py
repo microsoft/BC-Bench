@@ -141,7 +141,7 @@ def run_pr_review(
     repo_path: RepoPath = _config.paths.testbed_path,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     engine_path: PRReviewEnginePath = None,
-    min_severity: Annotated[str | None, typer.Option(help="AGENT_MINIMUM_SEVERITY floor (defaults to config)")] = None,
+    min_severity: Annotated[str | None, typer.Option(help="Minimum severity for knowledge-backed and agent findings (defaults to config)")] = None,
 ) -> None:
     """
     Run BC PR Review on a single code-review entry.
