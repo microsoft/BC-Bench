@@ -174,14 +174,14 @@ plugins:
     revision: "d884ae04edebef577e82ff7c4e143debd0bbec99"
     path: "."
   - name: "BCQuality"
-    enabled: false
+    enabled: true
     # grant_dir_access gives BCQuality's skill --add-dir access to read its own knowledge files at
     # runtime. This is a (hopefully temporary) design that may change once that content is served
     # via skills / an MCP server instead.
-    grant_dir_access: false
+    grant_dir_access: true
     source: github
     repo: "microsoft/BCQuality"
-    revision: "ad8ccde5953fd6ce072e3b59049406783066ed60"
+    revision: "1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
     path: "."
 
 mcp:
