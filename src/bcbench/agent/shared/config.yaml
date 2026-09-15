@@ -181,7 +181,7 @@ plugins:
     grant_dir_access: true
     source: github
     repo: "microsoft/BCQuality"
-    revision: "ad8ccde5953fd6ce072e3b59049406783066ed60"
+    revision: "1a5afdc0ebb6eb3fde1c3c69a13f235275cf4549"
     path: "."
 
 mcp:
