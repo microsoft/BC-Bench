@@ -51,14 +51,16 @@ def test_valid_empty_findings_is_a_clean_review(tmp_path: Path) -> None:
     assert json.loads((repo / "review.json").read_text(encoding="utf-8")) == []
 
 
-def test_findings_are_mapped(tmp_path: Path) -> None:
+@pytest.mark.parametrize("severity", ["Low", "High"])
+def test_findings_are_mapped(tmp_path: Path, severity: str) -> None:
     out, repo = _dirs(tmp_path)
     report = {
         "outcome": "completed",
-        "findings": [{"severity": "High", "filePath": "src/Foo.al", "lineNumber": 42, "issue": "x", "domain": "ui"}],
+        "findings": [{"severity": severity, "filePath": "src/Foo.al", "lineNumber": 42, "issue": "x", "domain": "ui"}],
     }
     _write_output(out, json.dumps(report))
     assert _write_review_json(out, repo) == 1
+    assert json.loads((repo / "review.json").read_text(encoding="utf-8"))[0]["severity"] == severity.lower()
 
 
 def test_missing_agent_output_raises(tmp_path: Path) -> None:
@@ -112,11 +114,19 @@ def test_not_applicable_engine_outcome_raises_instead_of_clean_review(tmp_path: 
     assert not (repo / "review.json").exists()
 
 
-def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("configured_severity", "min_severity", "expected_severity"),
+    [("Low", None, "Low"), ("Medium", None, "Medium"), ("Low", "High", "High")],
+)
+def test_engine_environment_uses_target_repository_and_absolute_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured_severity: str, min_severity: str | None, expected_severity: str
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "microsoft/BC-Bench")
     monkeypatch.setenv("BCQUALITY_REF", "ambient-override")
-    settings = {"min_severity": "Medium"}
+    monkeypatch.setenv("MINIMUM_SEVERITY", "Critical")
+    monkeypatch.setenv("AGENT_MINIMUM_SEVERITY", "Critical")
+    settings = {"min_severity": configured_severity}
     completed = subprocess.CompletedProcess(args=["pwsh"], returncode=0, stdout="✓", stderr="")
     entry = create_codereview_entry(repo="microsoft/BCApps")
     bcquality_root = tmp_path / "bcquality"
@@ -170,6 +180,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
             repo_path=tmp_path / "repo",
             output_dir=Path("output"),
             engine_path=tmp_path / "engine",
+            min_severity=min_severity,
         )
 
     assert isinstance(metrics, PRReviewMetrics)
@@ -192,6 +203,7 @@ def test_engine_environment_uses_target_repository_and_absolute_paths(tmp_path: 
     assert engine_env["BCQUALITY_ROOT"] == str(tmp_path / "bcquality")
     assert "BCQUALITY_REF" not in engine_env
     assert engine_env["GITHUB_REPOSITORY"] == "microsoft/BCApps"
-    assert engine_env["AGENT_MINIMUM_SEVERITY"] == "Medium"
+    assert engine_env["MINIMUM_SEVERITY"] == expected_severity
+    assert engine_env["AGENT_MINIMUM_SEVERITY"] == expected_severity
     assert run_process.call_args.args[0][-1].endswith("Invoke-CopilotPRReview.ps1")
     assert "-GenerateOnly" not in run_process.call_args.args[0]
