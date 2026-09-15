@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "26365d6a41a96fac41df9dcc8339cb71241fcb1f",
+  "datasetHash": "D3F92967ABDE17CF834EFFE7ED69523E42DDDCA8A135B9D8A24A7A0313034A05",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/10255#discussion_r3783811944"
+  ],
+  "entryIds": [
+    "synthetic__privacy-activity-log-lifecycle-01"
+  ],
+  "newEntryIds": [
+    "synthetic__privacy-activity-log-lifecycle-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__privacy-activity-log-lifecycle-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/10255#discussion_r3783811944",
+          "purpose": "false_positive_guard",
+          "file": "src/SamplePostedDocumentHeader.Table.al",
+          "lineStart": 21,
+          "lineEnd": 25,
+          "rationale": "Reproduces the rejected finding's exact shape: an OnDelete trigger on a posted document header cascades deletion of activity-log rows matched by source table number and the document's SystemId, mirroring PostedExpenseReportHeader.OnDelete calling ExpenseActivityLogMgt.DeleteEntriesForSource(Database::\"Posted Expense Report Header\", Rec.SystemId). The developer reply confirms this cascade is by-design lifecycle ownership to avoid orphaned actor/comment/amount personal data, not an audit-trail defect, so expected_comments is empty by omission. Limitation: this guard only covers the cascade-delete-on-OnDelete boundary for activity/audit-style child records; it does not generalize to cases where the child table holds compliance-mandated retention data with no privacy offset, which could still warrant a finding."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "sha256": "8AA90132CFF5EFED8FDE5A5C2E71CC774440D9AB3A17C6F6CD5746F306DCE054",
+      "instanceId": "synthetic__privacy-activity-log-lifecycle-01"
+    }
+  ]
+}
