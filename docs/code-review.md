@@ -47,6 +47,8 @@ The `pr-review` workflow also accepts an `engine-sha` input — a full 40-charac
 
 Either way, hold everything else fixed: the benchmark version, the model, the Copilot CLI version the engine uses internally, and the configured minimum severity. Locally, `bcbench evaluate pr-review --engine-path <checkout>` requires a clean engine checkout and uses the configured severity; use `bcbench run pr-review` for dirty-checkout smoke tests or `--min-severity` overrides.
 
+BC-Bench defaults to `Low` for both knowledge-backed and agent findings so the review scope includes low-severity gold findings. The configured floor is passed explicitly as both `MINIMUM_SEVERITY` and `AGENT_MINIMUM_SEVERITY`, overriding inherited values for the benchmark run without changing the engine's production defaults.
+
 BC PR Review records wall-clock duration, prompt/completion/total tokens, and exact AI credits. Usage values come from the engine's strictly validated schema-v1 `_run-metrics.json`, never from console transcripts. API-call details, knowledge-filter counts, token subcategories, completeness diagnostics, and producer metadata remain in that raw artifact rather than being promoted into BC-Bench result and leaderboard schemas.
 
 Unavailable AI credits remain `null` in bceval exports; observed zero remains zero. The pinned bc-eval 0.3.14 consumer requires numeric prompt/completion tokens, so its existing zero fallbacks for missing tokens remain unchanged. Use the original per-entry result metrics, not bceval token fields, to distinguish unknown usage from measured zero.

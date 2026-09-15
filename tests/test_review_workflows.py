@@ -46,7 +46,7 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert "bcbench evaluate pr-review" in workflow
     assert "Checkout BC-ALAgents review engine" not in workflow
     assert '--engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}"' in workflow
-    assert config["pr_review"] == {"min_severity": "Medium"}
+    assert config["pr_review"] == {"min_severity": "Low"}
     assert "BC_PR_REVIEW_ROOT:" not in workflow
     assert "install-agent-harnesses" in workflow
     assert "install-eval-clis" not in workflow

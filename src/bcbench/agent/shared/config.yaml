@@ -228,4 +228,4 @@ mcp:
 # BC-ALAgents is the harness boundary and its configuration owns the BCQuality version.
 # The evaluation workflow pins BC-ALAgents through install-agent-harnesses.
 pr_review:
-  min_severity: Medium
+  min_severity: Low
