@@ -12,17 +12,34 @@ from unidiff.patch import PatchedFile
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError, TestExtractionError
 from bcbench.operations import (
+    added_lines_belong_to_members,
     extract_executable_member_occurrences_from_content,
     find_project_path,
+    has_only_codeunit_wrapper_outside_members,
     is_test_project,
     normalize_test_occurrences,
     order_project_paths,
     resolve_trusted_commit,
 )
 from bcbench.operations.patch_operations import GitDiffPaths, decode_git_header_path, extract_git_diff_paths, split_git_diff_blocks
-from bcbench.operations.test_operations import TestOccurrence, extract_codeunit_id_from_content
+from bcbench.operations.test_operations import ExecutableMemberOccurrence, TestOccurrence, extract_codeunit_id_from_content
 
 _CONDITIONAL_COMPILATION_DIRECTIVE = re.compile(r"^\s*#\s*(?:if|elif|elseif|else|endif)\b", re.IGNORECASE)
+_TEST_HANDLER_ATTRIBUTES = frozenset(
+    attribute.casefold()
+    for attribute in (
+        "MessageHandler",
+        "ConfirmHandler",
+        "StrMenuHandler",
+        "ModalPageHandler",
+        "PageHandler",
+        "ReportHandler",
+        "RequestPageHandler",
+        "SendNotificationHandler",
+        "RecallNotificationHandler",
+        "HyperlinkHandler",
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -156,7 +173,7 @@ def _parse_patch_files(generated_patch: str) -> tuple[_ParsedPatchFile, ...]:
     return tuple(parsed_files)
 
 
-def _read_trusted_file(repo_path: Path, trusted_commit: str, file_path: str) -> str:
+def _read_trusted_file(repo_path: Path, trusted_commit: str, file_path: str) -> str | None:
     tree_result = subprocess.run(
         ["git", "--no-replace-objects", "ls-tree", "--name-only", trusted_commit, "--", file_path],
         cwd=repo_path,
@@ -166,7 +183,7 @@ def _read_trusted_file(repo_path: Path, trusted_commit: str, file_path: str) -> 
         check=True,
     )
     if not tree_result.stdout.strip():
-        return ""
+        return None
 
     return subprocess.run(
         ["git", "--no-replace-objects", "show", f"{trusted_commit}:{file_path}"],
@@ -178,12 +195,22 @@ def _read_trusted_file(repo_path: Path, trusted_commit: str, file_path: str) -> 
     ).stdout
 
 
+def _is_allowed_new_test_member(member: ExecutableMemberOccurrence) -> bool:
+    attributes = tuple(attribute.casefold() for attribute in member.attributes)
+    if member.kind != "procedure":
+        return False
+    if member.is_test:
+        return attributes == ("test",)
+    return member.access_modifier == "local" and all(attribute in _TEST_HANDLER_ATTRIBUTES for attribute in attributes)
+
+
 def _find_generated_test_occurrences(
     repo_path: Path,
     trusted_commit: str,
     test_files: Iterable[_ParsedPatchFile],
 ) -> tuple[TestOccurrence, ...]:
     generated_occurrences: list[TestOccurrence] = []
+    pending_audits: list[tuple[str, str, bool, set[int], tuple[ExecutableMemberOccurrence, ...]]] = []
     parsed_files_by_target: dict[str, list[_ParsedPatchFile]] = defaultdict(list)
     for parsed_file in test_files:
         parsed_files_by_target[_normalize_repo_path(parsed_file.paths.target)].append(parsed_file)
@@ -193,7 +220,8 @@ def _find_generated_test_occurrences(
         if not file_path.is_file():
             raise GeneratedSubmissionError(f"Test file does not exist after generated changes: {target_path}")
 
-        baseline_content = _read_trusted_file(repo_path, trusted_commit, target_path)
+        trusted_content = _read_trusted_file(repo_path, trusted_commit, target_path)
+        baseline_content = trusted_content or ""
         final_content = file_path.read_text(encoding="utf-8")
         baseline_members = extract_executable_member_occurrences_from_content(baseline_content)
         final_members = extract_executable_member_occurrences_from_content(final_content)
@@ -207,6 +235,10 @@ def _find_generated_test_occurrences(
                 or any(final_member.start_line <= line_number <= final_member.end_line for line_number in added_target_lines)
             ):
                 raise GeneratedSubmissionError(f"Existing test behavior modified: {target_path}")
+
+        baseline_member_identities = {member.identity for member in baseline_members}
+        new_members = tuple(member for member in final_members if member.identity not in baseline_member_identities)
+        pending_audits.append((target_path, final_content, trusted_content is None, added_target_lines, new_members))
 
         baseline_test_identities = {member.identity for member in baseline_members if member.kind == "procedure" and member.is_test}
         final_test_members = tuple(member for member in final_members if member.kind == "procedure" and member.is_test)
@@ -229,6 +261,14 @@ def _find_generated_test_occurrences(
 
     if not generated_occurrences:
         raise NoTestsExtractedError
+    for target_path, final_content, is_new_file, added_target_lines, new_members in pending_audits:
+        if any(not _is_allowed_new_test_member(member) for member in new_members):
+            raise GeneratedSubmissionError(f"Invalid addition to test file: {target_path}")
+        if is_new_file:
+            if not has_only_codeunit_wrapper_outside_members(final_content, new_members):
+                raise GeneratedSubmissionError(f"Invalid addition to test file: {target_path}")
+        elif not added_lines_belong_to_members(final_content, added_target_lines, new_members):
+            raise GeneratedSubmissionError(f"Invalid addition to test file: {target_path}")
     return tuple(generated_occurrences)
 
 

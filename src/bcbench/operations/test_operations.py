@@ -28,6 +28,10 @@ class ExecutableMemberOccurrence:
     end_line: int
     is_test: bool
     semantic_tokens: tuple[str, ...] = field(default=(), repr=False, compare=False)
+    attributes: tuple[str, ...] = field(default=(), compare=False)
+    access_modifier: str | None = field(default=None, compare=False)
+    start_token_index: int | None = field(default=None, repr=False, compare=False)
+    end_token_index: int | None = field(default=None, repr=False, compare=False)
 
     @property
     def identity(self) -> tuple[str, str, tuple[str, ...], int]:
@@ -63,18 +67,24 @@ def _tokenize_al(content: str) -> tuple[_ALToken, ...]:
             line += content[index:token_end].count("\n")
             index = token_end
         elif character == "'":
+            literal: list[str] = []
+            token_line = line
             index += 1
             while index < len(content):
                 if content[index] == "\n":
+                    literal.append(content[index])
                     line += 1
                     index += 1
                 elif content[index] != "'":
+                    literal.append(content[index])
                     index += 1
                 elif index + 1 < len(content) and content[index + 1] == "'":
+                    literal.append("'")
                     index += 2
                 else:
                     index += 1
                     break
+            tokens.append(_ALToken(kind="string_literal", value="".join(literal), line=token_line))
         elif character == '"':
             identifier: list[str] = []
             token_line = line
@@ -198,7 +208,8 @@ def _find_executable_members(tokens: tuple[_ALToken, ...]) -> tuple[ExecutableMe
     occurrence_counts: dict[tuple[str, str, tuple[str, ...]], int] = {}
     member_start_line: int | None = None
     member_start_index: int | None = None
-    has_test_attribute = False
+    attributes: list[str] = []
+    access_modifier: str | None = None
     index = 0
 
     while index < len(tokens):
@@ -209,14 +220,15 @@ def _find_executable_members(tokens: tuple[_ALToken, ...]) -> tuple[ExecutableMe
                 break
             member_start_line = token.line if member_start_line is None else member_start_line
             member_start_index = index if member_start_index is None else member_start_index
-            if index + 1 < attribute_end and _is_keyword(tokens[index + 1], "test"):
-                has_test_attribute = True
+            if index + 1 < attribute_end and _is_identifier(tokens[index + 1]):
+                attributes.append(tokens[index + 1].value)
             index = attribute_end + 1
             continue
 
         if any(_is_keyword(token, modifier) for modifier in ("local", "internal", "public", "protected")):
             member_start_line = token.line if member_start_line is None else member_start_line
             member_start_index = index if member_start_index is None else member_start_index
+            access_modifier = token.value.casefold()
             index += 1
             continue
 
@@ -239,19 +251,25 @@ def _find_executable_members(tokens: tuple[_ALToken, ...]) -> tuple[ExecutableMe
                         occurrence_index=occurrence_index,
                         start_line=member_start_line if member_start_line is not None else token.line,
                         end_line=tokens[member_end].line,
-                        is_test=has_test_attribute,
+                        is_test=any(attribute.casefold() == "test" for attribute in attributes),
                         semantic_tokens=_canonical_tokens(tokens[semantic_start : member_end + 1]),
+                        attributes=tuple(attributes),
+                        access_modifier=access_modifier,
+                        start_token_index=semantic_start,
+                        end_token_index=member_end,
                     )
                 )
             member_start_line = None
             member_start_index = None
-            has_test_attribute = False
+            attributes = []
+            access_modifier = None
             index = member_bounds[1] + 1 if member_bounds is not None else index + 1
             continue
 
         member_start_line = None
         member_start_index = None
-        has_test_attribute = False
+        attributes = []
+        access_modifier = None
         index += 1
 
     return tuple(members)
@@ -259,6 +277,59 @@ def _find_executable_members(tokens: tuple[_ALToken, ...]) -> tuple[ExecutableMe
 
 def extract_executable_member_occurrences_from_content(content: str) -> tuple[ExecutableMemberOccurrence, ...]:
     return _find_executable_members(_tokenize_al(content))
+
+
+def added_lines_belong_to_members(
+    content: str,
+    added_lines: set[int],
+    members: Iterable[ExecutableMemberOccurrence],
+) -> bool:
+    tokens = _tokenize_al(content)
+    member_tuple = tuple(members)
+    occupied_token_indexes = {
+        token_index
+        for member in member_tuple
+        if member.start_token_index is not None and member.end_token_index is not None
+        for token_index in range(member.start_token_index, member.end_token_index + 1)
+    }
+    token_indexes_by_line: dict[int, list[int]] = {}
+    for token_index, token in enumerate(tokens):
+        token_indexes_by_line.setdefault(token.line, []).append(token_index)
+
+    member_lines = {line_number for member in member_tuple for line_number in range(member.start_line, member.end_line + 1)}
+    content_lines = content.splitlines()
+    allowed_lines = set(member_lines)
+    unassigned_blank_lines = {line_number for line_number in added_lines if line_number <= len(content_lines) and not content_lines[line_number - 1].strip() and line_number not in allowed_lines}
+    while adjacent_blank_lines := {line_number for line_number in unassigned_blank_lines if line_number - 1 in allowed_lines or line_number + 1 in allowed_lines}:
+        allowed_lines.update(adjacent_blank_lines)
+        unassigned_blank_lines.difference_update(adjacent_blank_lines)
+
+    for line_number in added_lines:
+        token_indexes = token_indexes_by_line.get(line_number, [])
+        if token_indexes and not all(token_index in occupied_token_indexes for token_index in token_indexes):
+            return False
+        if not token_indexes and line_number not in allowed_lines:
+            return False
+    return True
+
+
+def has_only_codeunit_wrapper_outside_members(
+    content: str,
+    members: Iterable[ExecutableMemberOccurrence],
+) -> bool:
+    tokens = _tokenize_al(content)
+    occupied_token_indexes = {
+        token_index for member in members if member.start_token_index is not None and member.end_token_index is not None for token_index in range(member.start_token_index, member.end_token_index + 1)
+    }
+    wrapper_tokens = tuple(token for token_index, token in enumerate(tokens) if token_index not in occupied_token_indexes)
+    return (
+        len(wrapper_tokens) == 5
+        and _is_keyword(wrapper_tokens[0], "codeunit")
+        and wrapper_tokens[1].kind == "number"
+        and _is_identifier(wrapper_tokens[2])
+        and wrapper_tokens[3].value == "{"
+        and wrapper_tokens[4].value == "}"
+    )
 
 
 def extract_test_occurrences_from_content(content: str, file_path: str) -> tuple[TestOccurrence, ...]:

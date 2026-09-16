@@ -764,11 +764,11 @@ def test_allows_added_lines_in_existing_test_file(tmp_path: Path):
     _write_file(
         repo_path,
         test_file,
-        'codeunit 50101 "Feature Tests"\n{\n    procedure Helper()\n    begin\n    end;\n\n    [Test]\n    procedure VerifiesFeature()\n    begin\n    end;\n}\n',
+        'codeunit 50101 "Feature Tests"\n{\n    local procedure Helper()\n    begin\n    end;\n\n    [Test]\n    procedure VerifiesFeature()\n    begin\n    end;\n}\n',
     )
     generated_patch = _patch(product_file, "codeunit 50100 Feature {}", ["// Fix"]) + _patch(
         test_file,
-        "    procedure Helper()",
+        "    local procedure Helper()",
         ["", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;"],
     )
 

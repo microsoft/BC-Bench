@@ -32,16 +32,19 @@ from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_
 from bcbench.operations.skills_operations import setup_agent_skills
 from bcbench.operations.test_execution import TestExpectation, TestRunSummary
 from bcbench.operations.test_operations import (
+    added_lines_belong_to_members,
     extract_executable_member_occurrences_from_content,
     extract_test_occurrences_from_content,
     extract_test_occurrences_from_patch,
     extract_tests_from_patch,
+    has_only_codeunit_wrapper_outside_members,
     normalize_test_occurrences,
 )
 
 __all__ = [
     "TestExpectation",
     "TestRunSummary",
+    "added_lines_belong_to_members",
     "apply_patch",
     "bootstrap_app_json",
     "build_and_publish_projects",
@@ -65,6 +68,7 @@ __all__ = [
     "fetch_commit_if_missing",
     "find_project_path",
     "has_changes",
+    "has_only_codeunit_wrapper_outside_members",
     "init_repo",
     "is_test_project",
     "normalize_test_occurrences",

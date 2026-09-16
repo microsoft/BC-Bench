@@ -107,6 +107,33 @@ def _real_git_rename_submission(repo_path: Path, product_project: str, decoy_pro
     return _git_diff(repo_path, "--cached", "--find-renames=100%")
 
 
+def _real_git_test_addition_submission(repo_path: Path, added_object_lines: list[str]) -> str:
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text("codeunit 2 FeatureTests\n{\n}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "\n".join(
+            [
+                "codeunit 2 FeatureTests",
+                "{",
+                *added_object_lines,
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return _git_diff(repo_path)
+
+
 def _patch(file_path: str, old_line: str, added_lines: list[str]) -> str:
     additions = "\n".join(f"+{line}" for line in added_lines)
     return f"diff --git a/{file_path} b/{file_path}\nindex 1111111..2222222 100644\n--- a/{file_path}\n+++ b/{file_path}\n@@ -1,1 +1,{len(added_lines) + 1} @@\n {old_line}\n{additions}\n"
@@ -289,14 +316,15 @@ def test_returns_multiple_projects_in_deterministic_order(tmp_path: Path):
         if file_path.endswith("Tests.Codeunit.al"):
             name = "TestsZeta" if "Zeta" in file_path else "TestsAlpha"
             attribute = "    [Test]\n" if "Zeta" in file_path else ""
-            content = f"{first_line}\n{{\n{attribute}    procedure {name}()\n    begin\n    end;\n}}\n"
+            modifier = "" if attribute else "local "
+            content = f"{first_line}\n{{\n{attribute}    {modifier}procedure {name}()\n    begin\n    end;\n}}\n"
         else:
             content = f"{first_line}\n"
         _write_file(repo_path, file_path, content)
     generated_patch = (
         _patch("src/tests/Zeta/ZetaTests.Codeunit.al", files["src/tests/Zeta/ZetaTests.Codeunit.al"], ["{", "    [Test]", "    procedure TestsZeta()", "}"])
         + _patch("src/Zeta/Zeta.Table.al", files["src/Zeta/Zeta.Table.al"], ["// Fix Zeta"])
-        + _patch("src/tests/Alpha/AlphaTests.Codeunit.al", files["src/tests/Alpha/AlphaTests.Codeunit.al"], ["{", "    procedure TestsAlpha()", "}"])
+        + _patch("src/tests/Alpha/AlphaTests.Codeunit.al", files["src/tests/Alpha/AlphaTests.Codeunit.al"], ["{", "    local procedure TestsAlpha()", "}"])
         + _patch("src/Alpha/Alpha.Table.al", files["src/Alpha/Alpha.Table.al"], ["// Fix Alpha"])
     )
 
@@ -1013,6 +1041,155 @@ def test_accepts_new_test_appended_adjacent_to_existing_test(tmp_path: Path):
     result = analyze_generated_bugfix_output(
         repo_path,
         _git_diff(repo_path),
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
+
+
+@pytest.mark.parametrize(
+    ("case_name", "added_object_lines"),
+    [
+        (
+            "TestPermissions property",
+            [
+                "    TestPermissions = Disabled;",
+                "",
+                "    [Test]",
+                "    procedure NewTest()",
+                "    begin",
+                "    end;",
+            ],
+        ),
+        (
+            "global variable",
+            [
+                "    var",
+                "        Counter: Integer;",
+                "",
+                "    [Test]",
+                "    procedure NewTest()",
+                "    begin",
+                "        Counter := 1;",
+                "    end;",
+            ],
+        ),
+        (
+            "EventSubscriber helper",
+            [
+                "    [EventSubscriber(ObjectType::Codeunit, Codeunit::Feature, 'Changed', '', false, false)]",
+                "    local procedure HandleChanged()",
+                "    begin",
+                "    end;",
+                "",
+                "    [Test]",
+                "    procedure NewTest()",
+                "    begin",
+                "    end;",
+            ],
+        ),
+        (
+            "non-local helper",
+            [
+                "    procedure NewHelper()",
+                "    begin",
+                "    end;",
+                "",
+                "    [Test]",
+                "    procedure NewTest()",
+                "    begin",
+                "        NewHelper();",
+                "    end;",
+            ],
+        ),
+        (
+            "unknown attributed helper",
+            [
+                "    [Scope('OnPrem')]",
+                "    local procedure NewHelper()",
+                "    begin",
+                "    end;",
+                "",
+                "    [Test]",
+                "    procedure NewTest()",
+                "    begin",
+                "        NewHelper();",
+                "    end;",
+            ],
+        ),
+        (
+            "new trigger",
+            [
+                "    trigger OnRun()",
+                "    begin",
+                "    end;",
+                "",
+                "    [Test]",
+                "    procedure NewTest()",
+                "    begin",
+                "    end;",
+            ],
+        ),
+    ],
+    ids=lambda value: value if isinstance(value, str) else None,
+)
+def test_rejects_test_object_additions_outside_allowlist(
+    tmp_path: Path,
+    case_name: str,
+    added_object_lines: list[str],
+):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_test_addition_submission(repo_path, added_object_lines)
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Invalid addition to test file"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
+
+
+@pytest.mark.parametrize(
+    "added_object_lines",
+    [
+        [
+            "    local procedure NewHelper()",
+            "    begin",
+            "    end;",
+            "",
+            "    [Test]",
+            "    procedure NewTest()",
+            "    begin",
+            "        NewHelper();",
+            "    end;",
+        ],
+        [
+            "    [messagehandler]",
+            "    local procedure HandleMessage(Message: Text[1024])",
+            "    begin",
+            "    end;",
+            "",
+            "    [Test]",
+            "    procedure NewTest()",
+            "    begin",
+            "    end;",
+        ],
+        [
+            "    [Test]",
+            "    procedure NewTest()",
+            "    begin",
+            "    end;",
+        ],
+    ],
+    ids=["local-helper", "message-handler", "test-only"],
+)
+def test_accepts_allowlisted_test_object_additions(tmp_path: Path, added_object_lines: list[str]):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_test_addition_submission(repo_path, added_object_lines)
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
         allowed_app_projects=["src/Main"],
     )
 
