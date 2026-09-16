@@ -1,5 +1,8 @@
 import os
 import subprocess
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,23 +27,14 @@ _WINDOWS_RESERVED_NAMES = {
 
 
 def _git_environment() -> dict[str, str]:
-    environment = os.environ.copy()
-    for name in tuple(environment):
-        if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
-            environment.pop(name)
-    for name in (
-        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-        "GIT_CONFIG_COUNT",
-        "GIT_DIR",
-        "GIT_INDEX_FILE",
-        "GIT_OBJECT_DIRECTORY",
-        "GIT_REPLACE_REF_BASE",
-        "GIT_WORK_TREE",
-    ):
-        environment.pop(name, None)
-    environment["GIT_CONFIG_GLOBAL"] = os.devnull
-    environment["GIT_CONFIG_NOSYSTEM"] = "1"
-    environment["GIT_NO_REPLACE_OBJECTS"] = "1"
+    environment = {name: value for name, value in os.environ.items() if not name.upper().startswith("GIT_")}
+    environment.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+    )
     return environment
 
 
@@ -73,6 +67,15 @@ class TrustedWorkspaceBuilder:
         self._trusted_source = self._paths.trusted_source
         self._captured_source: TrustedSource | None = None
 
+    @contextmanager
+    def _empty_git_template(self) -> Iterator[Path]:
+        self._protected_root.mkdir(parents=True, exist_ok=True)
+        reject_reparse_components(self._protected_root, self._protected_root)
+        with tempfile.TemporaryDirectory(prefix=".git-template-", dir=self._protected_root) as temporary_directory:
+            template = Path(temporary_directory)
+            reject_reparse_components(template, self._protected_root)
+            yield template
+
     def capture_trusted_source(self, baseline: Path) -> TrustedSource:
         reject_reparse_components(baseline, self._entry_root)
         resolved_baseline = require_strict_descendant(baseline, self._entry_root, "baseline", "entry_root")
@@ -86,17 +89,19 @@ class TrustedWorkspaceBuilder:
         commit = _run_git(["rev-parse", "--verify", "HEAD^{commit}"], cwd=resolved_baseline)
         self._trusted_source.parent.mkdir(parents=True, exist_ok=True)
         reject_reparse_components(self._trusted_source, self._protected_root)
-        _run_git(
-            [
-                "clone",
-                "--bare",
-                "--no-local",
-                "--no-hardlinks",
-                "--no-tags",
-                str(resolved_baseline),
-                str(self._trusted_source),
-            ]
-        )
+        with self._empty_git_template() as template:
+            _run_git(
+                [
+                    "clone",
+                    f"--template={template}",
+                    "--bare",
+                    "--no-local",
+                    "--no-hardlinks",
+                    "--no-tags",
+                    str(resolved_baseline),
+                    str(self._trusted_source),
+                ]
+            )
         _run_git([f"--git-dir={self._trusted_source}", "cat-file", "-e", f"{commit}^{{commit}}"])
         self._captured_source = TrustedSource(repository=self._trusted_source, commit=commit)
         return self._captured_source
@@ -140,16 +145,18 @@ class TrustedWorkspaceBuilder:
 
         destination.parent.mkdir(parents=True, exist_ok=True)
         reject_reparse_components(destination, self._entry_root)
-        _run_git(
-            [
-                "clone",
-                "--no-local",
-                "--no-hardlinks",
-                "--no-checkout",
-                str(repository),
-                str(destination),
-            ]
-        )
+        with self._empty_git_template() as template:
+            _run_git(
+                [
+                    "clone",
+                    f"--template={template}",
+                    "--no-local",
+                    "--no-hardlinks",
+                    "--no-checkout",
+                    str(repository),
+                    str(destination),
+                ]
+            )
         reject_reparse_components(destination, self._entry_root)
         _run_git(["checkout", "--detach", self._captured_source.commit], cwd=destination)
         checked_out_commit = _run_git(["rev-parse", "--verify", "HEAD^{commit}"], cwd=destination)

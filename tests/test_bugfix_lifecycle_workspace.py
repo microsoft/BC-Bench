@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from bcbench.evaluate.bugfix_lifecycle import BugFixLifecyclePaths, TrustedSource, TrustedWorkspaceBuilder
+from bcbench.evaluate.bugfix_lifecycle import workspace as workspace_module
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -30,6 +31,13 @@ def _create_repository(path: Path) -> str:
     _git("add", "tracked.txt", cwd=path)
     _git("commit", "-m", "trusted", cwd=path)
     return _git("--no-replace-objects", "rev-parse", "HEAD", cwd=path)
+
+
+def _create_post_checkout_hook(directory: Path, marker: Path) -> None:
+    directory.mkdir(parents=True)
+    hook = directory / "post-checkout"
+    hook.write_text(f"#!/bin/sh\nprintf ambient > '{marker.as_posix()}'\n", encoding="utf-8")
+    hook.chmod(hook.stat().st_mode | stat.S_IXUSR)
 
 
 def _lifecycle_paths(tmp_path: Path, *, baseline_workspace: Path | None = None) -> BugFixLifecyclePaths:
@@ -123,6 +131,47 @@ def test_capture_ignores_baseline_replace_refs(tmp_path: Path) -> None:
     assert trusted_source.commit == replacement_commit
     assert _git("--git-dir", str(trusted_source.repository), "--no-replace-objects", "cat-file", "-t", trusted_source.commit, cwd=tmp_path) == "commit"
     assert (workspace / "tracked.txt").read_text(encoding="utf-8") == "replacement\n"
+
+
+def test_git_environment_removes_all_inherited_git_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_CONFIG_PARAMETERS", "'core.hooksPath'='ambient'")
+    monkeypatch.setenv("GIT_COMMON_DIR", "ambient-common")
+    monkeypatch.setenv("GIT_TEMPLATE_DIR", "ambient-template")
+    monkeypatch.setenv("git_object_directory", "ambient-objects")
+    monkeypatch.setenv("Git_Replace_Ref_Base", "ambient-replacements")
+
+    environment = workspace_module._git_environment()
+
+    assert {name: value for name, value in environment.items() if name.upper().startswith("GIT_")} == {
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+
+
+def test_capture_and_clone_ignore_ambient_git_controls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    trusted_commit = _create_repository(paths.baseline_workspace)
+    ambient_repository = tmp_path / "ambient-repository"
+    _create_repository(ambient_repository)
+    marker = tmp_path / "ambient-hook-ran"
+    configured_hooks = tmp_path / "configured-hooks"
+    template = tmp_path / "template"
+    _create_post_checkout_hook(configured_hooks, marker)
+    _create_post_checkout_hook(template / "hooks", marker)
+    monkeypatch.setenv("GIT_CONFIG_PARAMETERS", f"'core.hooksPath'='{configured_hooks.as_posix()}'")
+    monkeypatch.setenv("GIT_COMMON_DIR", str(ambient_repository / ".git"))
+    monkeypatch.setenv("GIT_TEMPLATE_DIR", str(template))
+
+    builder = TrustedWorkspaceBuilder(paths)
+    trusted_source = builder.capture_trusted_source(paths.baseline_workspace)
+    workspace = builder.create_evaluator_workspace(trusted_source, "ambient")
+
+    assert trusted_source.commit == trusted_commit
+    assert _git("rev-parse", "HEAD", cwd=workspace) == trusted_commit
+    assert not marker.exists()
+    assert not (trusted_source.repository / "hooks" / "post-checkout").exists()
+    assert not (workspace / ".git" / "hooks" / "post-checkout").exists()
 
 
 def test_builder_rejects_forged_trusted_commit_that_exists(tmp_path: Path) -> None:

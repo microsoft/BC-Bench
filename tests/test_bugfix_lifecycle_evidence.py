@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from bcbench.evaluate.bugfix_lifecycle import BugFixLifecyclePaths, EvidenceStore, TrustedSource, sha256_file, sha256_text
+from bcbench.evaluate.bugfix_lifecycle import evidence as evidence_module
 from bcbench.results.bugfix import BugFixPhaseResult, BugFixPhaseStatus
 
 
@@ -103,6 +104,53 @@ def test_evidence_store_saves_submission_manifest_diagnostic_and_final_result(tm
     assert json.loads(manifest_path.read_text(encoding="utf-8")) == {"files": ["app.app"], "sha256": "abc"}
     assert diagnostic_path.read_text(encoding="utf-8") == "diagnostic"
     assert json.loads(result_path.read_text(encoding="utf-8")) == phase.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    ("method_name", "arguments", "relative_destination"),
+    [
+        ("save_phase", ("test-red", BugFixPhaseResult()), Path("entry/evidence/phases/test-red.json")),
+        ("save_text", ("container.log", "diagnostic"), Path("entry/evidence/diagnostics/container.log")),
+    ],
+)
+def test_evidence_write_propagates_fsync_failure_without_publishing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method_name: str,
+    arguments: tuple[object, ...],
+    relative_destination: Path,
+) -> None:
+    store = EvidenceStore(_lifecycle_paths(tmp_path))
+
+    def fail_fsync(_file_descriptor: int) -> None:
+        raise OSError("fsync failed")
+
+    monkeypatch.setattr(evidence_module.os, "fsync", fail_fsync)
+
+    with pytest.raises(OSError, match="fsync failed"):
+        getattr(store, method_name)(*arguments)
+
+    assert not (tmp_path / relative_destination).exists()
+    assert not list(tmp_path.rglob("*.tmp"))
+
+
+def test_artifact_copy_propagates_fsync_failure_without_publishing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    store = EvidenceStore(paths)
+    source = tmp_path / "checkpoint.zip"
+    source.write_bytes(b"checkpoint")
+    destination = paths.final_results / "artifacts" / "checkpoints" / f"{sha256_file(source)}.zip"
+
+    def fail_fsync(_file_descriptor: int) -> None:
+        raise OSError("fsync failed")
+
+    monkeypatch.setattr(evidence_module.os, "fsync", fail_fsync)
+
+    with pytest.raises(OSError, match="fsync failed"):
+        store.protect_artifact(source, "checkpoints")
+
+    assert not destination.exists()
+    assert not list(tmp_path.rglob("*.tmp"))
 
 
 @pytest.mark.parametrize(

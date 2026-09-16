@@ -2,7 +2,6 @@ import json
 import os
 import shutil
 import tempfile
-from contextlib import suppress
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -79,8 +78,7 @@ def _with_suffix(name: str, suffix: str) -> str:
 
 def _flush_file(file: _FlushableFile) -> None:
     file.flush()
-    with suppress(OSError):
-        os.fsync(file.fileno())
+    os.fsync(file.fileno())
 
 
 class EvidenceStore:
