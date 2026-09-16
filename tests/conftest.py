@@ -17,7 +17,7 @@ from bcbench.dataset import BaseDatasetEntry, BugFixEntry, DataQueryEntry, ExtRe
 from bcbench.dataset.codereview import CodeReviewEntry, CodeReviewEntryMetadata, ReviewComment, Severity
 from bcbench.dataset.dataset_entry import EntryMetadata, _BugFixTestGenBase
 from bcbench.evaluate.review_parsing import parse_review_output
-from bcbench.results.bugfix import BugFixResult
+from bcbench.results.bugfix import BugFixPhaseResult, BugFixPhaseStatus, BugFixResult, RuntimeIsolation
 from bcbench.results.codereview import CodeReviewResult
 from bcbench.results.testgeneration import TestGenerationResult
 from bcbench.types import AgentHarness, AgentMetrics, ChecklistAssertion, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -104,20 +104,56 @@ def create_bugfix_result(
     project: str = "Shopify",
     model: str = "gpt-4o",
     agent_name: str = "copilot-cli",
-    resolved: bool = True,
-    build: bool = True,
+    resolved: bool | None = None,
+    build: bool | None = None,
     output: str = "diff --git a/test.al b/test.al\n+fixed",
     error_message: str | None = None,
     infrastructure_failure: bool = False,
+    timeout: bool = False,
     metrics: AgentMetrics | None = None,
     experiment: ExperimentConfiguration | None = None,
     generated_test_pre_patch_failed: bool | None = None,
     generated_test_post_patch_passed: bool | None = None,
     benchmark_test_passed: bool | None = None,
+    runtime_isolation: RuntimeIsolation = "package-normalized",
+    generated_fix_hash: str | None = None,
+    generated_test_hash: str | None = None,
+    baseline_checkpoint_hash: str | None = None,
+    fixed_checkpoint_hash: str | None = None,
+    test_red: BugFixPhaseResult | None = None,
+    test_gold: BugFixPhaseResult | None = None,
+    fix_build: BugFixPhaseResult | None = None,
+    generated_pair: BugFixPhaseResult | None = None,
+    benchmark_fix: BugFixPhaseResult | None = None,
 ) -> BugFixResult:
-    generated_test_pre_patch_failed = resolved if generated_test_pre_patch_failed is None else generated_test_pre_patch_failed
-    generated_test_post_patch_passed = resolved if generated_test_post_patch_passed is None else generated_test_post_patch_passed
-    benchmark_test_passed = resolved if benchmark_test_passed is None else benchmark_test_passed
+    has_explicit_phases = any(phase is not None for phase in (test_red, test_gold, fix_build, generated_pair, benchmark_fix))
+    test_red = test_red or BugFixPhaseResult()
+    test_gold = test_gold or BugFixPhaseResult()
+    fix_build = fix_build or BugFixPhaseResult()
+    generated_pair = generated_pair or BugFixPhaseResult()
+    benchmark_fix = benchmark_fix or BugFixPhaseResult()
+
+    if has_explicit_phases:
+        resolved = (
+            not timeout
+            and test_red.status is BugFixPhaseStatus.PASSED
+            and test_gold.status is BugFixPhaseStatus.PASSED
+            and generated_pair.status is BugFixPhaseStatus.PASSED
+            and benchmark_fix.status is BugFixPhaseStatus.PASSED
+            if resolved is None
+            else resolved
+        )
+        build = fix_build.status is BugFixPhaseStatus.PASSED if build is None else build
+        generated_test_pre_patch_failed = test_red.status is BugFixPhaseStatus.PASSED if generated_test_pre_patch_failed is None else generated_test_pre_patch_failed
+        generated_test_post_patch_passed = generated_pair.status is BugFixPhaseStatus.PASSED if generated_test_post_patch_passed is None else generated_test_post_patch_passed
+        benchmark_test_passed = benchmark_fix.status is BugFixPhaseStatus.PASSED if benchmark_test_passed is None else benchmark_test_passed
+    else:
+        resolved = True if resolved is None else resolved
+        build = True if build is None else build
+        generated_test_pre_patch_failed = resolved if generated_test_pre_patch_failed is None else generated_test_pre_patch_failed
+        generated_test_post_patch_passed = resolved if generated_test_post_patch_passed is None else generated_test_post_patch_passed
+        benchmark_test_passed = resolved if benchmark_test_passed is None else benchmark_test_passed
+
     return BugFixResult(
         instance_id=instance_id,
         project=project,
@@ -129,11 +165,22 @@ def create_bugfix_result(
         output=output,
         error_message=error_message,
         infrastructure_failure=infrastructure_failure,
+        timeout=timeout,
         metrics=metrics,
         experiment=experiment,
         generated_test_pre_patch_failed=generated_test_pre_patch_failed,
         generated_test_post_patch_passed=generated_test_post_patch_passed,
         benchmark_test_passed=benchmark_test_passed,
+        runtime_isolation=runtime_isolation,
+        generated_fix_hash=generated_fix_hash,
+        generated_test_hash=generated_test_hash,
+        baseline_checkpoint_hash=baseline_checkpoint_hash,
+        fixed_checkpoint_hash=fixed_checkpoint_hash,
+        test_red=test_red,
+        test_gold=test_gold,
+        fix_build=fix_build,
+        generated_pair=generated_pair,
+        benchmark_fix=benchmark_fix,
     )
 
 
