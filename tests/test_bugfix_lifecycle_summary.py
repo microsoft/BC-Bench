@@ -174,24 +174,23 @@ def test_package_normalized_summary_preserves_legacy_headline():
 
 
 def test_legacy_package_normalized_summary_reconstructs_metric_summaries():
-    summary = BugFixResultSummary.model_validate(
-        {
-            "total": 4,
-            "resolved": 1,
-            "failed": 1,
-            "infrastructure_failed": 2,
-            "build": 1,
-            "percentage": 50.0,
-            "date": "2025-01-15",
-            "model": "gpt-4o",
-            "category": "bug-fix",
-            "agent_name": "copilot",
-            "average_duration": 100.0,
-            "average_prompt_tokens": 1000.0,
-            "average_completion_tokens": 500.0,
-            "benchmark_version": "0.1.0",
-        }
-    )
+    legacy_payload = {
+        "total": 4,
+        "resolved": 1,
+        "failed": 1,
+        "infrastructure_failed": 2,
+        "build": 1,
+        "percentage": 50.0,
+        "date": "2025-01-15",
+        "model": "gpt-4o",
+        "category": "bug-fix",
+        "agent_name": "copilot",
+        "average_duration": 100.0,
+        "average_prompt_tokens": 1000.0,
+        "average_completion_tokens": 500.0,
+        "benchmark_version": "0.1.0",
+    }
+    summary = BugFixResultSummary.model_validate(legacy_payload)
 
     expected_reconstructed = BugFixMetricSummary(
         successes=1,
@@ -217,6 +216,12 @@ def test_legacy_package_normalized_summary_reconstructs_metric_summaries():
             rate=None,
             coverage=0.0,
         )
+    assert sum(summary.instance_results.values()) == summary.resolved
+    assert len(summary.instance_results) == summary.resolved + summary.failed
+
+    restored = BugFixResultSummary.model_validate_json(summary.model_dump_json())
+
+    assert restored == summary
 
 
 def test_legacy_package_normalized_summary_aggregates_with_new_summary():
@@ -410,6 +415,85 @@ def test_bugfix_summary_rejects_extra_metric_summaries():
         BugFixResultSummary.model_validate(payload)
 
 
+def test_bugfix_summary_rejects_metric_scheduled_count_different_from_total():
+    summary = BugFixResultSummary.from_results([create_bugfix_result()], run_id="run")
+    payload = summary.model_dump(mode="json")
+    payload["metric_summaries"][BugFixMetricName.FIX_QUALITY] = BugFixMetricSummary.from_statuses([BugFixPhaseStatus.NOT_RUN, BugFixPhaseStatus.NOT_RUN]).model_dump(mode="json")
+
+    with pytest.raises(ValidationError, match="scheduled"):
+        BugFixResultSummary.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("resolved", 0),
+        ("failed", 0),
+        ("infrastructure_failed", 0),
+        ("build", 0),
+        ("percentage", 0.0),
+    ],
+)
+def test_bugfix_summary_rejects_contradictory_headline_projection(field, value):
+    summary = BugFixResultSummary.from_results(
+        [
+            _checkpointed_result(
+                "test__passed",
+                test_red=BugFixPhaseStatus.PASSED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.PASSED,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.PASSED,
+            ),
+            _checkpointed_result(
+                "test__failed",
+                test_red=BugFixPhaseStatus.FAILED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.FAILED,
+                generated_pair=BugFixPhaseStatus.NOT_RUN,
+                benchmark_fix=BugFixPhaseStatus.NOT_RUN,
+            ),
+            _checkpointed_result(
+                "test__infrastructure",
+                test_red=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+                generated_pair=BugFixPhaseStatus.NOT_RUN,
+                benchmark_fix=BugFixPhaseStatus.NOT_RUN,
+            ),
+        ],
+        run_id="run",
+    )
+    payload = summary.model_dump(mode="json")
+    payload[field] = value
+
+    with pytest.raises(ValidationError, match=field):
+        BugFixResultSummary.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "instance_results",
+    [
+        {"test__passed": True, "test__failed": True},
+        {"test__passed": True},
+        {"test__passed": True, "test__failed": False, "test__extra": False},
+    ],
+)
+def test_bugfix_summary_rejects_wrong_instance_result_counts(instance_results):
+    summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__passed", resolved=True),
+            create_bugfix_result(instance_id="test__failed", resolved=False),
+        ],
+        run_id="run",
+    )
+    payload = summary.model_dump(mode="json")
+    payload["instance_results"] = instance_results
+
+    with pytest.raises(ValidationError, match="instance_results"):
+        BugFixResultSummary.model_validate(payload)
+
+
 def test_checkpointed_result_exports_production_status_metadata():
     result = _checkpointed_result(
         "test__metadata",
@@ -500,6 +584,65 @@ def test_bugfix_leaderboard_averages_metric_rates_and_coverages():
     assert aggregate.average == 0.75
     assert aggregate.metric_averages[BugFixMetricName.RESOLUTION] == 0.75
     assert aggregate.metric_coverages[BugFixMetricName.RESOLUTION] == 0.75
+
+
+def test_checkpointed_bugfix_aggregate_round_trips():
+    summary = BugFixResultSummary.from_results(
+        [
+            _checkpointed_result(
+                "test__passed",
+                test_red=BugFixPhaseStatus.PASSED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.PASSED,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.PASSED,
+            ),
+            _checkpointed_result(
+                "test__failed",
+                test_red=BugFixPhaseStatus.FAILED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.FAILED,
+                generated_pair=BugFixPhaseStatus.NOT_RUN,
+                benchmark_fix=BugFixPhaseStatus.NOT_RUN,
+            ),
+        ],
+        run_id="run",
+    )
+    aggregate = BugFixLeaderboardAggregate.from_runs([summary])
+
+    restored = BugFixLeaderboardAggregate.model_validate_json(aggregate.model_dump_json())
+
+    assert restored == aggregate
+
+
+@pytest.mark.parametrize("field", ["metric_averages", "metric_coverages"])
+def test_bugfix_aggregate_rejects_explicit_partial_metric_maps(field):
+    summary = BugFixResultSummary.from_results([create_bugfix_result()], run_id="run")
+    aggregate = BugFixLeaderboardAggregate.from_runs([summary])
+    payload = aggregate.model_dump(mode="json")
+    payload[field].pop(BugFixMetricName.RESOLUTION)
+
+    with pytest.raises(ValidationError, match=field):
+        BugFixLeaderboardAggregate.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("metric_averages", -0.1),
+        ("metric_averages", 1.1),
+        ("metric_coverages", -0.1),
+        ("metric_coverages", 1.1),
+    ],
+)
+def test_bugfix_aggregate_rejects_out_of_range_metric_values(field, value):
+    summary = BugFixResultSummary.from_results([create_bugfix_result()], run_id="run")
+    aggregate = BugFixLeaderboardAggregate.from_runs([summary])
+    payload = aggregate.model_dump(mode="json")
+    payload[field][BugFixMetricName.RESOLUTION] = value
+
+    with pytest.raises(ValidationError, match=field):
+        BugFixLeaderboardAggregate.model_validate(payload)
 
 
 def test_existing_package_normalized_leaderboard_data_loads(tmp_path):

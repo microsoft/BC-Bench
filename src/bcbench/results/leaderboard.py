@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from bcbench.logger import get_logger
 from bcbench.results.bugfix import BugFixMetricName, BugFixResultSummary, RuntimeIsolation
@@ -130,6 +130,27 @@ class BugFixLeaderboardAggregate(ExecutionBasedLeaderboardAggregate):
     metric_averages: dict[str, float | None] = Field(default_factory=_empty_bugfix_metric_averages)
     metric_coverages: dict[str, float] = Field(default_factory=_empty_bugfix_metric_coverages)
 
+    @model_validator(mode="after")
+    def validate_metric_maps(self) -> "BugFixLeaderboardAggregate":
+        expected_metrics = {metric.value for metric in BugFixMetricName}
+        metric_maps = {
+            "metric_averages": self.metric_averages,
+            "metric_coverages": self.metric_coverages,
+        }
+        for field, values in metric_maps.items():
+            actual_metrics = set(values)
+            if actual_metrics != expected_metrics:
+                missing = sorted(expected_metrics - actual_metrics)
+                extra = sorted(actual_metrics - expected_metrics)
+                raise ValueError(f"{field} must contain exactly every BugFixMetricName; missing={missing}, extra={extra}")
+
+        for value in self.metric_averages.values():
+            if value is not None and not 0.0 <= value <= 1.0:
+                raise ValueError("metric_averages values must be None or within [0, 1]")
+        if any(not 0.0 <= value <= 1.0 for value in self.metric_coverages.values()):
+            raise ValueError("metric_coverages values must be within [0, 1]")
+        return self
+
     @classmethod
     def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "BugFixLeaderboardAggregate":
         base = super().from_runs(runs)
@@ -148,8 +169,9 @@ class BugFixLeaderboardAggregate(ExecutionBasedLeaderboardAggregate):
             metric_averages[metric.value] = sum(rates) / len(rates) if rates else None
             metric_coverages[metric.value] = sum(coverages) / len(coverages)
 
-        return base.model_copy(
-            update={
+        return cls.model_validate(
+            {
+                **base.model_dump(),
                 "runtime_isolation": first_run.runtime_isolation,
                 "metric_averages": metric_averages,
                 "metric_coverages": metric_coverages,

@@ -248,9 +248,18 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
             return payload
 
         data: dict[str, Any] = dict(payload)
+        runtime_isolation = data.get("runtime_isolation", "package-normalized")
+        if "instance_results" not in data and runtime_isolation == "package-normalized":
+            resolved = int(data.get("resolved", 0))
+            failed = int(data.get("failed", 0))
+            data["instance_results"] = {
+                **{f"legacy-resolved-{index}": True for index in range(resolved)},
+                **{f"legacy-failed-{index}": False for index in range(failed)},
+            }
+
         if "metric_summaries" in data:
             return data
-        if data.get("runtime_isolation", "package-normalized") != "package-normalized":
+        if runtime_isolation != "package-normalized":
             raise ValueError("metric_summaries is required for checkpointed bug-fix summaries")
 
         total = int(data["total"])
@@ -291,6 +300,29 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
             missing = sorted(metric.value for metric in expected_metrics - actual_metrics)
             extra = sorted(str(metric) for metric in actual_metrics - expected_metrics)
             raise ValueError(f"metric_summaries must contain exactly every BugFixMetricName; missing={missing}, extra={extra}")
+
+        for metric, summary in self.metric_summaries.items():
+            if summary.scheduled != self.total:
+                raise ValueError(f"metric_summaries[{metric.value}].scheduled must equal total")
+
+        resolution = self.metric_summaries[BugFixMetricName.RESOLUTION]
+        fix_build = self.metric_summaries[BugFixMetricName.FIX_BUILD]
+        expected_percentage = round(resolution.rate * 100, 1) if resolution.rate is not None else None
+        projections = {
+            "resolved": (self.resolved, resolution.successes),
+            "failed": (self.failed, resolution.determined_failures),
+            "infrastructure_failed": (self.infrastructure_failed, resolution.unknown),
+            "build": (self.build, fix_build.successes),
+            "percentage": (self.percentage, expected_percentage),
+        }
+        for field, (actual, expected) in projections.items():
+            if actual != expected:
+                raise ValueError(f"{field} must match its metric summary projection")
+
+        true_count = sum(self.instance_results.values())
+        false_count = len(self.instance_results) - true_count
+        if true_count != self.resolved or false_count != self.failed or len(self.instance_results) != self.resolved + self.failed:
+            raise ValueError("instance_results counts must match resolved and failed")
         return self
 
     @classmethod
@@ -316,9 +348,6 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
 
         runtime_isolations = {result.runtime_isolation for result in bugfix_results}
 
-        summary = super().from_results(results, run_id)
-        assert isinstance(summary, BugFixResultSummary)
-
         runtime_isolation = runtime_isolations.pop()
         metric_summaries = {metric: BugFixMetricSummary.from_statuses([result.metric_status(metric) for result in bugfix_results]) for metric in BugFixMetricName}
         resolution_statuses = {result.instance_id: result.metric_status(BugFixMetricName.RESOLUTION) for result in bugfix_results}
@@ -329,10 +358,12 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
             for instance_id, status in resolution_statuses.items()
             if status in (BugFixPhaseStatus.PASSED, BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION)
         }
-        return summary.model_copy(
-            update={
+        return cls.model_validate(
+            {
+                **cls._base_fields(results, run_id),
                 "resolved": resolution.successes,
                 "failed": resolution.determined_failures,
+                "infrastructure_failed": resolution.unknown,
                 "build": fix_build.successes,
                 "percentage": round(resolution.rate * 100, 1) if resolution.rate is not None else None,
                 "instance_results": instance_results,
