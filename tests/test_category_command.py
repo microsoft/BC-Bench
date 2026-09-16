@@ -1,3 +1,4 @@
+import pytest
 from typer.testing import CliRunner
 
 from bcbench.cli import app
@@ -55,6 +56,44 @@ def test_bceval_config_omits_judge_model_for_unjudged_category(tmp_path, monkeyp
     assert "judge_model=" not in output_file.read_text(encoding="utf-8")
 
 
+def test_bceval_config_preserves_legacy_bugfix_evaluators_by_default(tmp_path, monkeypatch):
+    output_file = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    result = runner.invoke(app, ["category", "bceval-config", "--category", "bug-fix"])
+
+    assert result.exit_code == 0
+    contents = output_file.read_text(encoding="utf-8")
+    assert "evaluators=resolution_rate,build_rate" in contents
+    assert "core_score=ResolutionRate" in contents
+
+
+def test_bceval_config_uses_production_bugfix_evaluators_when_requested(tmp_path, monkeypatch):
+    output_file = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    result = runner.invoke(app, ["category", "bceval-config", "--category", "bug-fix", "--production"])
+
+    assert result.exit_code == 0
+    contents = output_file.read_text(encoding="utf-8")
+    assert "evaluators=generated_test_validity,generated_pair_transition,fix_build,fix_quality,resolution" in contents
+    assert "core_score=Resolution" in contents
+
+
+def test_bceval_config_rejects_production_mode_for_other_categories(tmp_path, monkeypatch):
+    output_file = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    result = runner.invoke(app, ["category", "bceval-config", "--category", "test-generation", "--production"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, ValueError)
+    assert "test-generation" in str(result.exception)
+
+
 def test_bceval_config_supports_every_category(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
 
@@ -68,6 +107,25 @@ def test_bceval_config_supports_every_category(tmp_path, monkeypatch):
         contents = output_file.read_text(encoding="utf-8")
         assert f"evaluators={','.join(category.evaluators)}" in contents
         assert f"core_score={category.core_score}" in contents
+
+
+def test_production_scoring_configuration_is_bugfix_only():
+    assert EvaluationCategory.BUG_FIX.production_evaluators == [
+        "generated_test_validity",
+        "generated_pair_transition",
+        "fix_build",
+        "fix_quality",
+        "resolution",
+    ]
+    assert EvaluationCategory.BUG_FIX.production_core_score == "Resolution"
+
+    for category in EvaluationCategory:
+        if category is EvaluationCategory.BUG_FIX:
+            continue
+        with pytest.raises(ValueError, match=category.value):
+            _ = category.production_evaluators
+        with pytest.raises(ValueError, match=category.value):
+            _ = category.production_core_score
 
 
 def test_list_prints_every_category_one_per_line():

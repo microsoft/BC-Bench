@@ -11,7 +11,7 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
     post_patch_passed: bool = False
 
     @property
-    def category_metrics(self) -> dict[str, int | float | bool]:
+    def category_metrics(self) -> dict[str, int | float | bool | str]:
         return {**super().category_metrics, "pre_patch_failed": self.pre_patch_failed, "post_patch_passed": self.post_patch_passed}
 
     @property

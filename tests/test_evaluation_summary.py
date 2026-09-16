@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from bcbench.config import get_config
+from bcbench.results.bugfix import BugFixResultSummary
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
@@ -87,7 +88,9 @@ class TestEvaluationResultSummary:
                 data = json.load(f)
                 # New format: {"runs": [...], "aggregate": [...]}
                 if "runs" in data and "aggregate" in data:
-                    Leaderboard.model_validate(data)
+                    leaderboard = Leaderboard.model_validate(data)
+                    if category is EvaluationCategory.BUG_FIX:
+                        assert all(isinstance(run, BugFixResultSummary) for run in leaderboard.runs)
                 else:
                     # Old format: array of items
                     for item in data:

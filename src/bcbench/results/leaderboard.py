@@ -5,9 +5,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from bcbench.logger import get_logger
+from bcbench.results.bugfix import BugFixMetricName, BugFixResultSummary, RuntimeIsolation
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
@@ -112,6 +113,46 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
                 "ci_low": round(ci["ci_low"], 3) if ci["ci_low"] is not None else None,
                 "ci_high": round(ci["ci_high"], 3) if ci["ci_high"] is not None else None,
                 "pass_hat_5": pass_hat_5,
+            }
+        )
+
+
+def _empty_bugfix_metric_averages() -> dict[str, float | None]:
+    return {metric.value: None for metric in BugFixMetricName}
+
+
+def _empty_bugfix_metric_coverages() -> dict[str, float]:
+    return {metric.value: 0.0 for metric in BugFixMetricName}
+
+
+class BugFixLeaderboardAggregate(ExecutionBasedLeaderboardAggregate):
+    runtime_isolation: RuntimeIsolation = "package-normalized"
+    metric_averages: dict[str, float | None] = Field(default_factory=_empty_bugfix_metric_averages)
+    metric_coverages: dict[str, float] = Field(default_factory=_empty_bugfix_metric_coverages)
+
+    @classmethod
+    def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "BugFixLeaderboardAggregate":
+        base = super().from_runs(runs)
+        assert isinstance(base, BugFixLeaderboardAggregate)
+
+        bugfix_runs = [run for run in runs if isinstance(run, BugFixResultSummary)]
+        if not bugfix_runs:
+            return base
+
+        first_run = bugfix_runs[0]
+        metric_averages: dict[str, float | None] = {}
+        metric_coverages: dict[str, float] = {}
+        for metric in BugFixMetricName:
+            rates = [summary.rate for run in bugfix_runs if (summary := run.metric_summaries[metric]).rate is not None]
+            coverages = [run.metric_summaries[metric].coverage for run in bugfix_runs]
+            metric_averages[metric.value] = sum(rates) / len(rates) if rates else None
+            metric_coverages[metric.value] = sum(coverages) / len(coverages)
+
+        return base.model_copy(
+            update={
+                "runtime_isolation": first_run.runtime_isolation,
+                "metric_averages": metric_averages,
+                "metric_coverages": metric_coverages,
             }
         )
 

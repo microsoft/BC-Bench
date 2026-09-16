@@ -359,12 +359,13 @@ class EvaluationCategory(StrEnum):
     @property
     def summary_class(self) -> type[EvaluationResultSummary]:
         """Returns the EvaluationResultSummary subclass for this category."""
+        from bcbench.results.bugfix import BugFixResultSummary
         from bcbench.results.codereview import CodeReviewResultSummary
         from bcbench.results.summary import ExecutionBasedEvaluationResultSummary, JudgeBasedEvaluationResultSummary
 
         match self:
             case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedEvaluationResultSummary
+                return BugFixResultSummary
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedEvaluationResultSummary
             case EvaluationCategory.CODE_REVIEW:
@@ -385,11 +386,11 @@ class EvaluationCategory(StrEnum):
     @property
     def aggregate_class(self) -> type[LeaderboardAggregate]:
         """Returns the LeaderboardAggregate subclass for this category, used for aggregating multiple runs on the same benchmark/model/agent combination."""
-        from bcbench.results.leaderboard import CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
+        from bcbench.results.leaderboard import BugFixLeaderboardAggregate, CodeReviewLeaderboardAggregate, ExecutionBasedLeaderboardAggregate, JudgeBasedLeaderboardAggregate
 
         match self:
             case EvaluationCategory.BUG_FIX:
-                return ExecutionBasedLeaderboardAggregate
+                return BugFixLeaderboardAggregate
             case EvaluationCategory.TEST_GENERATION:
                 return ExecutionBasedLeaderboardAggregate
             case EvaluationCategory.CODE_REVIEW:
@@ -497,6 +498,18 @@ class EvaluationCategory(StrEnum):
                 return "ResolutionRate"
 
         raise ValueError(f"Unknown evaluation category: {self}")
+
+    @property
+    def production_evaluators(self) -> list[str]:
+        if self is EvaluationCategory.BUG_FIX:
+            return ["generated_test_validity", "generated_pair_transition", "fix_build", "fix_quality", "resolution"]
+        raise ValueError(f"Production evaluators are not defined for {self.value}")
+
+    @property
+    def production_core_score(self) -> str:
+        if self is EvaluationCategory.BUG_FIX:
+            return "Resolution"
+        raise ValueError(f"Production core score is not defined for {self.value}")
 
     @property
     def requires_container(self) -> bool:

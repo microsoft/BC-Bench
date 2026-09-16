@@ -251,7 +251,7 @@ class CodeReviewResult(JudgeScoredEvaluationResult):
         )
 
     @property
-    def category_metrics(self) -> dict[str, int | float | bool]:
+    def category_metrics(self) -> dict[str, int | float | bool | str]:
         return {
             "generated_comment_count": len(self.generated_comments),
             "expected_comment_count": len(self.expected_comments),

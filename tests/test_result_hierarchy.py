@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.results.bugfix import BugFixResult
+from bcbench.results.bugfix import BugFixResult, BugFixResultSummary
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
     EvaluationResultSummary,
@@ -104,6 +104,12 @@ class TestCategoryMetrics:
             "generated_test_pre_patch_failed": True,
             "generated_test_post_patch_passed": True,
             "benchmark_test_passed": True,
+            "generated_test_validity_status": "not_run",
+            "generated_pair_transition_status": "not_run",
+            "fix_build_status": "passed",
+            "fix_quality_status": "passed",
+            "resolution_status": "passed",
+            "runtime_isolation": "package-normalized",
         }
 
     def test_bugfix_failed_category_metrics(self):
@@ -115,6 +121,12 @@ class TestCategoryMetrics:
             "generated_test_pre_patch_failed": False,
             "generated_test_post_patch_passed": False,
             "benchmark_test_passed": False,
+            "generated_test_validity_status": "not_run",
+            "generated_pair_transition_status": "not_run",
+            "fix_build_status": "failed",
+            "fix_quality_status": "failed",
+            "resolution_status": "failed",
+            "runtime_isolation": "package-normalized",
         }
 
     def test_testgen_category_metrics_includes_extra_fields(self):
@@ -241,10 +253,10 @@ class TestCreateAgentTimeout:
 
 
 class TestSummaryFromResults:
-    def test_base_dispatches_to_execution_based_for_bugfix(self):
+    def test_base_dispatches_to_bugfix_summary_for_bugfix(self):
         results = [create_bugfix_result(instance_id="test__1", resolved=True)]
         summary = EvaluationResultSummary.from_results(results, run_id="run1")
-        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        assert isinstance(summary, BugFixResultSummary)
 
     def test_base_dispatches_to_execution_based_for_testgen(self):
         results = [create_testgen_result(instance_id="test__1")]
@@ -364,7 +376,7 @@ class TestMetricsRendering:
 
 
 class TestSummaryFromJson:
-    def test_from_json_returns_execution_based_for_bugfix(self):
+    def test_from_json_returns_bugfix_summary_for_bugfix(self):
         payload = {
             "total": 5,
             "resolved": 3,
@@ -381,7 +393,7 @@ class TestSummaryFromJson:
             "benchmark_version": "0.1.0",
         }
         summary = EvaluationResultSummary.from_json(payload)
-        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        assert isinstance(summary, BugFixResultSummary)
         assert summary.resolved == 3
 
     def test_from_json_unknown_category_raises(self):
@@ -485,7 +497,8 @@ class TestGitHubJobSummary:
         assert "bug-fix" in content
         assert "- Custom Agent: N/A\n" in content
         assert "- Plugins: None\n\n## Result Summary" in content
-        assert "- Pass Rate: 50.0%\n\n## Detailed Results" in content
+        assert "- Pass Rate: 50.0%\n\n## Production Metrics" in content
+        assert "- Resolution: 50.0% (coverage 100.0%, 2/2 determined)\n\n## Detailed Results" in content
 
     def test_github_summary_shows_plugins_when_present(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"

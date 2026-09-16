@@ -1,0 +1,310 @@
+import json
+
+import pytest
+
+from bcbench.results.bugfix import (
+    BugFixMetricName,
+    BugFixMetricSummary,
+    BugFixPhaseResult,
+    BugFixPhaseStatus,
+    BugFixResultSummary,
+)
+from bcbench.results.leaderboard import BugFixLeaderboardAggregate, Leaderboard
+from evaluator.scores import FixBuild, FixQuality, GeneratedPairTransition, GeneratedTestValidity, Resolution
+from tests.conftest import create_bugfix_result
+
+
+def _phase(status: BugFixPhaseStatus) -> BugFixPhaseResult:
+    return BugFixPhaseResult(status=status)
+
+
+def _checkpointed_result(
+    instance_id: str,
+    *,
+    test_red: BugFixPhaseStatus,
+    test_gold: BugFixPhaseStatus,
+    fix_build: BugFixPhaseStatus,
+    generated_pair: BugFixPhaseStatus,
+    benchmark_fix: BugFixPhaseStatus,
+):
+    return create_bugfix_result(
+        instance_id=instance_id,
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=_phase(test_red),
+        test_gold=_phase(test_gold),
+        fix_build=_phase(fix_build),
+        generated_pair=_phase(generated_pair),
+        benchmark_fix=_phase(benchmark_fix),
+    )
+
+
+@pytest.mark.parametrize(
+    ("statuses", "expected"),
+    [
+        (
+            [BugFixPhaseStatus.PASSED, BugFixPhaseStatus.FAILED],
+            {"successes": 1, "determined_failures": 1, "unknown": 0, "scheduled": 2, "rate": 0.5, "coverage": 1.0},
+        ),
+        (
+            [BugFixPhaseStatus.PASSED, BugFixPhaseStatus.INVALID_SUBMISSION, BugFixPhaseStatus.INFRASTRUCTURE_ERROR, BugFixPhaseStatus.NOT_RUN],
+            {"successes": 1, "determined_failures": 1, "unknown": 2, "scheduled": 4, "rate": 0.5, "coverage": 0.5},
+        ),
+        (
+            [BugFixPhaseStatus.INFRASTRUCTURE_ERROR, BugFixPhaseStatus.NOT_RUN],
+            {"successes": 0, "determined_failures": 0, "unknown": 2, "scheduled": 2, "rate": None, "coverage": 0.0},
+        ),
+    ],
+)
+def test_metric_summary_tracks_rate_and_coverage(statuses, expected):
+    assert BugFixMetricSummary.from_statuses(statuses).model_dump() == expected
+
+
+def test_checkpointed_summary_calculates_all_production_metrics():
+    results = [
+        _checkpointed_result(
+            "test__passed",
+            test_red=BugFixPhaseStatus.PASSED,
+            test_gold=BugFixPhaseStatus.PASSED,
+            fix_build=BugFixPhaseStatus.PASSED,
+            generated_pair=BugFixPhaseStatus.PASSED,
+            benchmark_fix=BugFixPhaseStatus.PASSED,
+        ),
+        _checkpointed_result(
+            "test__failed",
+            test_red=BugFixPhaseStatus.FAILED,
+            test_gold=BugFixPhaseStatus.PASSED,
+            fix_build=BugFixPhaseStatus.FAILED,
+            generated_pair=BugFixPhaseStatus.PASSED,
+            benchmark_fix=BugFixPhaseStatus.INVALID_SUBMISSION,
+        ),
+        _checkpointed_result(
+            "test__infrastructure",
+            test_red=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+            test_gold=BugFixPhaseStatus.PASSED,
+            fix_build=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+            generated_pair=BugFixPhaseStatus.PASSED,
+            benchmark_fix=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+        ),
+        _checkpointed_result(
+            "test__not-run",
+            test_red=BugFixPhaseStatus.NOT_RUN,
+            test_gold=BugFixPhaseStatus.PASSED,
+            fix_build=BugFixPhaseStatus.NOT_RUN,
+            generated_pair=BugFixPhaseStatus.PASSED,
+            benchmark_fix=BugFixPhaseStatus.NOT_RUN,
+        ),
+    ]
+
+    summary = BugFixResultSummary.from_results(results, run_id="run")
+
+    assert summary.runtime_isolation == "database-checkpointed-single-container"
+    assert set(summary.metric_summaries) == set(BugFixMetricName)
+    for metric_summary in summary.metric_summaries.values():
+        assert metric_summary == BugFixMetricSummary(
+            successes=1,
+            determined_failures=1,
+            unknown=2,
+            scheduled=4,
+            rate=0.5,
+            coverage=0.5,
+        )
+    markdown = summary.render_github_metrics_markdown()
+    assert "Generated Test Validity: 50.0% (coverage 50.0%, 2/4 determined)" in markdown
+    assert "Resolution: 50.0% (coverage 50.0%, 2/4 determined)" in markdown
+
+
+def test_package_normalized_summary_preserves_legacy_headline():
+    summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__passed", resolved=True, build=True),
+            create_bugfix_result(instance_id="test__failed", resolved=False, build=False),
+            create_bugfix_result(
+                instance_id="test__infrastructure",
+                resolved=False,
+                build=True,
+                infrastructure_failure=True,
+            ),
+        ],
+        run_id="run",
+    )
+
+    assert summary.runtime_isolation == "package-normalized"
+    assert summary.resolved == 1
+    assert summary.failed == 1
+    assert summary.infrastructure_failed == 1
+    assert summary.build == 1
+    assert summary.percentage == 50.0
+    assert summary.metric_summaries[BugFixMetricName.GENERATED_TEST_VALIDITY].rate is None
+    assert summary.metric_summaries[BugFixMetricName.GENERATED_TEST_VALIDITY].coverage == 0.0
+    assert summary.metric_summaries[BugFixMetricName.RESOLUTION].rate == 0.5
+    assert summary.metric_summaries[BugFixMetricName.RESOLUTION].coverage == pytest.approx(2 / 3)
+
+
+def test_checkpointed_result_exports_production_status_metadata():
+    result = _checkpointed_result(
+        "test__metadata",
+        test_red=BugFixPhaseStatus.FAILED,
+        test_gold=BugFixPhaseStatus.PASSED,
+        fix_build=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+        generated_pair=BugFixPhaseStatus.PASSED,
+        benchmark_fix=BugFixPhaseStatus.INVALID_SUBMISSION,
+    )
+
+    assert result.category_metrics["generated_test_validity_status"] == "failed"
+    assert result.category_metrics["generated_pair_transition_status"] == "failed"
+    assert result.category_metrics["fix_build_status"] == "infrastructure_error"
+    assert result.category_metrics["fix_quality_status"] == "invalid_submission"
+    assert result.category_metrics["resolution_status"] == "invalid_submission"
+    assert result.category_metrics["runtime_isolation"] == "database-checkpointed-single-container"
+
+
+def test_runtime_isolation_is_part_of_combination_key():
+    package_summary = BugFixResultSummary.from_results([create_bugfix_result()], run_id="package")
+    checkpointed_summary = BugFixResultSummary.from_results(
+        [
+            _checkpointed_result(
+                "test__1",
+                test_red=BugFixPhaseStatus.PASSED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.PASSED,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.PASSED,
+            )
+        ],
+        run_id="checkpointed",
+    )
+
+    assert package_summary.combination_key()[-1] == "package-normalized"
+    assert checkpointed_summary.combination_key()[-1] == "database-checkpointed-single-container"
+    with pytest.raises(ValueError, match="different combinations"):
+        BugFixLeaderboardAggregate.from_runs([package_summary, checkpointed_summary])
+
+
+def test_bugfix_leaderboard_averages_metric_rates_and_coverages():
+    first = BugFixResultSummary.from_results(
+        [
+            _checkpointed_result(
+                "test__1",
+                test_red=BugFixPhaseStatus.PASSED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.PASSED,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.PASSED,
+            ),
+            _checkpointed_result(
+                "test__2",
+                test_red=BugFixPhaseStatus.FAILED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.FAILED,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.FAILED,
+            ),
+        ],
+        run_id="run-1",
+    )
+    second = BugFixResultSummary.from_results(
+        [
+            _checkpointed_result(
+                "test__1",
+                test_red=BugFixPhaseStatus.PASSED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.PASSED,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.PASSED,
+            ),
+            _checkpointed_result(
+                "test__2",
+                test_red=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+            ),
+        ],
+        run_id="run-2",
+    )
+
+    aggregate = BugFixLeaderboardAggregate.from_runs([first, second])
+
+    assert aggregate.runtime_isolation == "database-checkpointed-single-container"
+    assert aggregate.metric_averages[BugFixMetricName.RESOLUTION] == 0.75
+    assert aggregate.metric_coverages[BugFixMetricName.RESOLUTION] == 0.75
+
+
+def test_existing_package_normalized_leaderboard_data_loads(tmp_path):
+    path = tmp_path / "bug-fix.json"
+    path.write_text(
+        json.dumps(
+            {
+                "runs": [
+                    {
+                        "total": 2,
+                        "resolved": 1,
+                        "failed": 1,
+                        "infrastructure_failed": 0,
+                        "build": 1,
+                        "percentage": 50.0,
+                        "date": "2025-01-15",
+                        "model": "gpt-4o",
+                        "category": "bug-fix",
+                        "agent_name": "copilot",
+                        "average_duration": 100.0,
+                        "average_prompt_tokens": 1000.0,
+                        "average_completion_tokens": 500.0,
+                        "benchmark_version": "0.1.0",
+                    }
+                ],
+                "aggregate": [
+                    {
+                        "model": "gpt-4o",
+                        "agent_name": "copilot",
+                        "category": "bug-fix",
+                        "total": 2,
+                        "num_runs": 1,
+                        "average_duration": 100.0,
+                        "benchmark_version": "0.1.0",
+                        "average": 0.5,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    leaderboard = Leaderboard.load(path)
+
+    assert isinstance(leaderboard.runs[0], BugFixResultSummary)
+    assert leaderboard.runs[0].runtime_isolation == "package-normalized"
+    assert set(leaderboard.runs[0].metric_summaries) == set(BugFixMetricName)
+    assert isinstance(leaderboard.aggregate[0], BugFixLeaderboardAggregate)
+    assert leaderboard.aggregate[0].runtime_isolation == "package-normalized"
+    assert set(leaderboard.aggregate[0].metric_averages) == set(BugFixMetricName)
+    assert set(leaderboard.aggregate[0].metric_coverages) == set(BugFixMetricName)
+
+
+@pytest.mark.parametrize(
+    ("scorer", "metadata_key"),
+    [
+        (GeneratedTestValidity(), "generated_test_validity_status"),
+        (GeneratedPairTransition(), "generated_pair_transition_status"),
+        (FixBuild(), "fix_build_status"),
+        (FixQuality(), "fix_quality_status"),
+        (Resolution(), "resolution_status"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("passed", True),
+        ("failed", False),
+        ("invalid_submission", False),
+        ("infrastructure_error", None),
+        ("not_run", None),
+        ("unknown", None),
+        (None, None),
+    ],
+)
+def test_production_scorers_map_exported_statuses(scorer, metadata_key, status, expected):
+    metadata = {} if status is None else {metadata_key: status}
+
+    assert scorer(metadata=metadata) is expected

@@ -1,10 +1,12 @@
+from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field
 
-from bcbench.results.base import ExecutionBasedEvaluationResult
+from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
+from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationContext
 
 
@@ -22,6 +24,31 @@ class BugFixMetricName(StrEnum):
     FIX_BUILD = "FixBuild"
     FIX_QUALITY = "FixQuality"
     RESOLUTION = "Resolution"
+
+
+class BugFixMetricSummary(BaseModel):
+    successes: int
+    determined_failures: int
+    unknown: int
+    scheduled: int
+    rate: float | None
+    coverage: float
+
+    @classmethod
+    def from_statuses(cls, statuses: Sequence[BugFixPhaseStatus]) -> "BugFixMetricSummary":
+        successes = statuses.count(BugFixPhaseStatus.PASSED)
+        determined_failures = sum(statuses.count(status) for status in (BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION))
+        unknown = sum(statuses.count(status) for status in (BugFixPhaseStatus.INFRASTRUCTURE_ERROR, BugFixPhaseStatus.NOT_RUN))
+        scheduled = len(statuses)
+        determined = successes + determined_failures
+        return cls(
+            successes=successes,
+            determined_failures=determined_failures,
+            unknown=unknown,
+            scheduled=scheduled,
+            rate=successes / determined if determined else None,
+            coverage=determined / scheduled if scheduled else 0.0,
+        )
 
 
 class BugFixPhaseResult(BaseModel):
@@ -100,12 +127,18 @@ class BugFixResult(ExecutionBasedEvaluationResult):
         )
 
     @property
-    def category_metrics(self) -> dict[str, int | float | bool]:
+    def category_metrics(self) -> dict[str, int | float | bool | str]:
         return {
             **super().category_metrics,
             "generated_test_pre_patch_failed": self.generated_test_pre_patch_failed,
             "generated_test_post_patch_passed": self.generated_test_post_patch_passed,
             "benchmark_test_passed": self.benchmark_test_passed,
+            "generated_test_validity_status": self.metric_status(BugFixMetricName.GENERATED_TEST_VALIDITY).value,
+            "generated_pair_transition_status": self.metric_status(BugFixMetricName.GENERATED_PAIR_TRANSITION).value,
+            "fix_build_status": self.metric_status(BugFixMetricName.FIX_BUILD).value,
+            "fix_quality_status": self.metric_status(BugFixMetricName.FIX_QUALITY).value,
+            "resolution_status": self.metric_status(BugFixMetricName.RESOLUTION).value,
+            "runtime_isolation": self.runtime_isolation,
         }
 
     @property
@@ -175,3 +208,50 @@ class BugFixResult(ExecutionBasedEvaluationResult):
     @classmethod
     def create_test_failure(cls, context: "EvaluationContext", output: str, error_message: str = "Tests failed") -> Self:
         return cls.create_verification_failure(context, output, error_message, build=True)
+
+
+def _empty_metric_summaries() -> dict[BugFixMetricName, BugFixMetricSummary]:
+    return {metric: BugFixMetricSummary.from_statuses(()) for metric in BugFixMetricName}
+
+
+class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
+    runtime_isolation: RuntimeIsolation = "package-normalized"
+    metric_summaries: dict[BugFixMetricName, BugFixMetricSummary] = Field(default_factory=_empty_metric_summaries)
+
+    @classmethod
+    def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "BugFixResultSummary":
+        summary = super().from_results(results, run_id)
+        assert isinstance(summary, BugFixResultSummary)
+
+        bugfix_results = [result for result in results if isinstance(result, BugFixResult)]
+        runtime_isolations = {result.runtime_isolation for result in bugfix_results}
+        if len(runtime_isolations) != 1:
+            raise ValueError(f"Cannot summarize bug-fix results with mixed runtime isolation: {runtime_isolations}")
+
+        runtime_isolation = runtime_isolations.pop()
+        metric_summaries = {metric: BugFixMetricSummary.from_statuses([result.metric_status(metric) for result in bugfix_results]) for metric in BugFixMetricName}
+        return summary.model_copy(
+            update={
+                "runtime_isolation": runtime_isolation,
+                "metric_summaries": metric_summaries,
+            }
+        )
+
+    def render_github_metrics_markdown(self) -> str:
+        labels = {
+            BugFixMetricName.GENERATED_TEST_VALIDITY: "Generated Test Validity",
+            BugFixMetricName.GENERATED_PAIR_TRANSITION: "Generated Pair Transition",
+            BugFixMetricName.FIX_BUILD: "Fix Build",
+            BugFixMetricName.FIX_QUALITY: "Fix Quality",
+            BugFixMetricName.RESOLUTION: "Resolution",
+        }
+        production_metrics = ["\n## Production Metrics\n"]
+        for metric in BugFixMetricName:
+            metric_summary = self.metric_summaries[metric]
+            rate = f"{metric_summary.rate * 100:.1f}%" if metric_summary.rate is not None else "N/A"
+            determined = metric_summary.successes + metric_summary.determined_failures
+            production_metrics.append(f"- {labels[metric]}: {rate} (coverage {metric_summary.coverage * 100:.1f}%, {determined}/{metric_summary.scheduled} determined)\n")
+        return super().render_github_metrics_markdown() + "".join(production_metrics)
+
+    def combination_key(self) -> tuple[str | None, ...]:
+        return (*super().combination_key(), self.runtime_isolation)
