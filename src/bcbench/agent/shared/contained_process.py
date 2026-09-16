@@ -81,6 +81,18 @@ def _normalize_newlines(value: str) -> str:
     return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
+def _combine_capture_with_wrapper_output(capture: str, wrapper_output: str | bytes | None) -> str:
+    if isinstance(wrapper_output, bytes):
+        wrapper_output = wrapper_output.decode("utf-8", errors="replace")
+    normalized_wrapper_output = _normalize_newlines(wrapper_output or "")
+    if not capture or capture == normalized_wrapper_output:
+        return normalized_wrapper_output
+    if not normalized_wrapper_output:
+        return capture
+    separator = "" if capture.endswith("\n") or normalized_wrapper_output.startswith("\n") else "\n"
+    return f"{capture}{separator}{normalized_wrapper_output}"
+
+
 def _powershell_executable() -> str:
     executable = shutil.which("pwsh")
     if executable is None:
@@ -149,6 +161,13 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
                 request.timeout_seconds,
                 output=_read_capture(stdout_path),
                 stderr=_read_capture(stderr_path),
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            raise subprocess.CalledProcessError(
+                exc.returncode,
+                exc.cmd,
+                output=_combine_capture_with_wrapper_output(_read_capture(stdout_path), exc.stdout),
+                stderr=_combine_capture_with_wrapper_output(_read_capture(stderr_path), exc.stderr),
             ) from exc
 
         payload = cast(_WrapperResult, json.loads(completed.stdout))

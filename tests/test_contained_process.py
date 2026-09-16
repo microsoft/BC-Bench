@@ -82,6 +82,38 @@ def test_public_models_are_immutable():
         identity.username = "other"
 
 
+def test_powershell_uses_checked_job_object_wrapper_methods():
+    script_path = Path(__file__).parents[1] / "scripts" / "Invoke-ContainedProcess.ps1"
+    source = script_path.read_text(encoding="utf-8")
+    powershell_source = source.split("'@", maxsplit=1)[1]
+
+    assert "public static IntPtr CreateKillOnCloseJob()" in source
+    assert "public static void AssignProcess(IntPtr job, IntPtr process)" in source
+    assert "public static void TerminateJob(IntPtr job, uint exitCode)" in source
+    assert "public static void CloseHandle(IntPtr handle)" in source
+    assert "private static extern IntPtr CreateJobObject(" in source
+    assert "private static extern bool SetInformationJobObject(" in source
+    assert "private static extern bool AssignProcessToJobObject(" in source
+    assert "private static extern bool TerminateJobObject(" in source
+    assert "private static extern bool CloseHandleNative(" in source
+    for operation in (
+        "CreateJobObject",
+        "SetInformationJobObject",
+        "AssignProcessToJobObject",
+        "TerminateJobObject",
+        "CloseHandle",
+    ):
+        assert f'"{operation} failed"' in source
+    assert "$job = [BCBenchJobObject]::CreateKillOnCloseJob()" in powershell_source
+    assert "[BCBenchJobObject]::AssignProcess($job, $process.Handle)" in powershell_source
+    assert "[BCBenchJobObject]::TerminateJob($job, 1)" in powershell_source
+    assert "[BCBenchJobObject]::CloseHandle($job)" in powershell_source
+    assert "[BCBenchJobObject]::CreateJobObject(" not in powershell_source
+    assert "[BCBenchJobObject]::SetInformationJobObject(" not in powershell_source
+    assert "[BCBenchJobObject]::AssignProcessToJobObject(" not in powershell_source
+    assert "[BCBenchJobObject]::TerminateJobObject(" not in powershell_source
+
+
 def test_returns_stdout_stderr_and_returncode(tmp_path):
     result = run_contained_process(
         _request(
@@ -268,3 +300,36 @@ def test_wrapper_launch_failure_raises_called_process_error(tmp_path, monkeypatc
         run_contained_process(_request(tmp_path, "print('never launched')"))
 
     assert exc_info.value.stderr == "assignment failed"
+
+
+def test_wrapper_failure_includes_child_captures_and_wrapper_diagnostics(tmp_path, monkeypatch):
+    script_path = tmp_path / "Invoke-ContainedProcess.ps1"
+    script_path.touch()
+    wrapper_command: list[str] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        wrapper_command.extend(command)
+        stdout_path = Path(command[command.index("-StdoutPath") + 1])
+        stderr_path = Path(command[command.index("-StderrPath") + 1])
+        stdout_path.write_bytes(b"child stdout\r\n")
+        stderr_path.write_bytes(b"child stderr\r\n")
+        raise subprocess.CalledProcessError(
+            23,
+            command,
+            output="wrapper stdout diagnostic\r\n",
+            stderr="wrapper stderr diagnostic\r\n",
+        )
+
+    monkeypatch.setattr(
+        "bcbench.agent.shared.contained_process.get_config",
+        lambda: SimpleNamespace(paths=SimpleNamespace(ps_script_path=tmp_path)),
+    )
+    monkeypatch.setattr("bcbench.agent.shared.contained_process.subprocess.run", fake_run)
+
+    with pytest.raises(subprocess.CalledProcessError) as exc_info:
+        run_contained_process(_request(tmp_path, "print('launched')"))
+
+    assert exc_info.value.returncode == 23
+    assert exc_info.value.cmd == wrapper_command
+    assert exc_info.value.stdout == "child stdout\nwrapper stdout diagnostic\n"
+    assert exc_info.value.stderr == "child stderr\nwrapper stderr diagnostic\n"

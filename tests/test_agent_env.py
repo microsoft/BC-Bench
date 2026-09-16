@@ -1,3 +1,4 @@
+from bcbench.agent.shared import env as env_module
 from bcbench.agent.shared.env import agent_subprocess_env
 
 
@@ -87,3 +88,44 @@ def test_allowlist_applies_overrides_after_filtering(monkeypatch):
 
     assert env["AZURE_CLIENT_SECRET"] == "restricted-secret"
     assert env["BC_SERVER_PASSWORD"] == "restricted-bc-secret"
+
+
+def test_allowlist_exactly_matches_task_5_and_preserves_environment_key_casing(monkeypatch):
+    allowed_names = {
+        "ALLUSERSPROFILE",
+        "APPDATA",
+        "COMSPEC",
+        "COPILOT_GITHUB_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "GH_TOKEN",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOCALAPPDATA",
+        "NODE_PATH",
+        "PATH",
+        "PATHEXT",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+        "WINDIR",
+    }
+    excluded_names = {
+        "OS",
+        "PROGRAMW6432",
+        "PSMODULEPATH",
+        "PUBLIC",
+        "USERDOMAIN",
+        "USERDOMAIN_ROAMINGPROFILE",
+        "USERNAME",
+    }
+    source_environment = {name.lower(): f"value-for-{name}" for name in allowed_names | excluded_names}
+    monkeypatch.setattr(env_module.os, "environ", source_environment)
+
+    env = agent_subprocess_env(allowlist=True)
+
+    assert env == {name.lower(): f"value-for-{name}" for name in allowed_names}

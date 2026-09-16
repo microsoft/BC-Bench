@@ -29,6 +29,7 @@ $ErrorActionPreference = "Stop"
 
 Add-Type -TypeDefinition @'
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 public static class BCBenchJobObject
@@ -72,37 +73,75 @@ public static class BCBenchJobObject
         public UIntPtr PeakJobMemoryUsed;
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern IntPtr CreateJobObject(IntPtr jobAttributes, string name);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "CreateJobObjectW", SetLastError = true)]
+    private static extern IntPtr CreateJobObject(IntPtr jobAttributes, string name);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    [DllImport("kernel32.dll", EntryPoint = "SetInformationJobObject", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool SetInformationJobObject(
+    private static extern bool SetInformationJobObject(
         IntPtr job,
         int informationClass,
         ref JOBOBJECT_EXTENDED_LIMIT_INFORMATION information,
         uint informationLength);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    [DllImport("kernel32.dll", EntryPoint = "AssignProcessToJobObject", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    [DllImport("kernel32.dll", EntryPoint = "TerminateJobObject", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+    private static extern bool TerminateJobObject(IntPtr job, uint exitCode);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    [DllImport("kernel32.dll", EntryPoint = "CloseHandle", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool CloseHandle(IntPtr handle);
+    private static extern bool CloseHandleNative(IntPtr handle);
+
+    public static IntPtr CreateKillOnCloseJob()
+    {
+        IntPtr job = CreateJobObject(IntPtr.Zero, null);
+        if (job == IntPtr.Zero)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateJobObject failed");
+        }
+
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION information = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+        information.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        uint informationLength = (uint)Marshal.SizeOf(information);
+        if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref information, informationLength))
+        {
+            int errorCode = Marshal.GetLastWin32Error();
+            CloseHandleNative(job);
+            throw new Win32Exception(errorCode, "SetInformationJobObject failed");
+        }
+
+        return job;
+    }
+
+    public static void AssignProcess(IntPtr job, IntPtr process)
+    {
+        if (!AssignProcessToJobObject(job, process))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "AssignProcessToJobObject failed");
+        }
+    }
+
+    public static void TerminateJob(IntPtr job, uint exitCode)
+    {
+        if (!TerminateJobObject(job, exitCode))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "TerminateJobObject failed");
+        }
+    }
+
+    public static void CloseHandle(IntPtr handle)
+    {
+        if (!CloseHandleNative(handle))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "CloseHandle failed");
+        }
+    }
 }
 '@
-
-function New-Win32Exception {
-    param([string]$Operation)
-
-    $errorCode = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-    return [ComponentModel.Win32Exception]::new($errorCode, "$Operation failed")
-}
 
 function Grant-WorkerRequestAccess {
     param(
@@ -149,22 +188,7 @@ try {
     }
     $workerRequest | ConvertTo-Json -Compress -Depth 10 | Set-Content -LiteralPath $WorkerRequestPath -Encoding utf8NoBOM
 
-    $job = [BCBenchJobObject]::CreateJobObject([IntPtr]::Zero, $null)
-    if ($job -eq [IntPtr]::Zero) {
-        throw (New-Win32Exception "CreateJobObject")
-    }
-
-    $jobInformation = [BCBenchJobObject+JOBOBJECT_EXTENDED_LIMIT_INFORMATION]::new()
-    $jobInformation.BasicLimitInformation.LimitFlags = [BCBenchJobObject]::JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-    $jobInformationLength = [Runtime.InteropServices.Marshal]::SizeOf($jobInformation)
-    if (-not [BCBenchJobObject]::SetInformationJobObject(
-        $job,
-        [BCBenchJobObject]::JobObjectExtendedLimitInformation,
-        [ref]$jobInformation,
-        $jobInformationLength
-    )) {
-        throw (New-Win32Exception "SetInformationJobObject")
-    }
+    $job = [BCBenchJobObject]::CreateKillOnCloseJob()
 
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $PythonExecutable
@@ -197,9 +221,7 @@ try {
     }
     $processStarted = $true
 
-    if (-not [BCBenchJobObject]::AssignProcessToJobObject($job, $process.Handle)) {
-        throw (New-Win32Exception "AssignProcessToJobObject")
-    }
+    [BCBenchJobObject]::AssignProcess($job, $process.Handle)
     $jobAssigned = $true
 
     $stdoutCopy = $process.StandardOutput.BaseStream.CopyToAsync($stdoutStream)
@@ -209,15 +231,11 @@ try {
     $timeoutMilliseconds = [Math]::Min([int64]$request.timeout_seconds * 1000, [int]::MaxValue)
     $timedOut = -not $process.WaitForExit([int]$timeoutMilliseconds)
     if ($timedOut) {
-        if (-not [BCBenchJobObject]::TerminateJobObject($job, 1)) {
-            throw (New-Win32Exception "TerminateJobObject")
-        }
+        [BCBenchJobObject]::TerminateJob($job, 1)
         $process.WaitForExit()
     }
 
-    if (-not [BCBenchJobObject]::CloseHandle($job)) {
-        throw (New-Win32Exception "CloseHandle")
-    }
+    [BCBenchJobObject]::CloseHandle($job)
     $job = [IntPtr]::Zero
 
     $null = $stdoutCopy.GetAwaiter().GetResult()
@@ -235,16 +253,22 @@ try {
     } | ConvertTo-Json -Compress
 }
 catch {
+    $failure = $_
     if ($processStarted -and -not $process.HasExited) {
         if ($jobAssigned) {
-            [BCBenchJobObject]::TerminateJobObject($job, 1) | Out-Null
+            try {
+                [BCBenchJobObject]::TerminateJob($job, 1)
+            }
+            catch {
+                [Console]::Error.WriteLine($_.Exception.ToString())
+            }
         }
         else {
             $process.Kill()
         }
         $process.WaitForExit()
     }
-    [Console]::Error.WriteLine($_.Exception.ToString())
+    [Console]::Error.WriteLine($failure.Exception.ToString())
     exit 1
 }
 finally {
@@ -255,7 +279,12 @@ finally {
         $stderrStream.Dispose()
     }
     if ($job -ne [IntPtr]::Zero) {
-        [BCBenchJobObject]::CloseHandle($job) | Out-Null
+        try {
+            [BCBenchJobObject]::CloseHandle($job)
+        }
+        catch {
+            [Console]::Error.WriteLine($_.Exception.ToString())
+        }
     }
     if ($null -ne $process) {
         $process.Dispose()
