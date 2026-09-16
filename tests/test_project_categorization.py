@@ -34,8 +34,11 @@ class TestIsTestProject:
     def test_is_test_project_with_tests_identifier(self):
         assert _is_test_project("src/tests", ("test", "tests")) is True
 
+    def test_is_test_project_with_root_identifier(self):
+        assert _is_test_project("Tests", ("test", "tests")) is True
+
     def test_is_test_project_with_windows_separator(self):
-        assert _is_test_project("src\\test", ("test", "tests")) is True
+        assert _is_test_project("src\\Tests", ("test", "tests")) is True
 
     def test_is_test_project_case_insensitive(self):
         assert _is_test_project("src/Test", ("test", "tests")) is True
@@ -43,11 +46,9 @@ class TestIsTestProject:
     def test_is_test_project_casefolds_configured_identifiers(self):
         assert _is_test_project("src/QUALITY", ("Quality",)) is True
 
-    def test_is_test_project_substring_not_path_component(self):
-        assert _is_test_project("src/contest", ("test", "tests")) is False
-
-    def test_is_test_project_without_identifier(self):
-        assert _is_test_project("src/app", ("test", "tests")) is False
+    @pytest.mark.parametrize("project_path", ["testing", "src/testing", "src/test-support", "src/contest", "src/app"])
+    def test_is_test_project_requires_complete_path_component(self, project_path: str):
+        assert _is_test_project(project_path, ("test", "tests")) is False
 
     def test_is_test_project_uses_configured_identifiers(self):
         assert is_test_project("src/tests") is True
@@ -92,12 +93,12 @@ class TestCategorizeProjects:
         assert sorted(test_projects) == ["src/TESTS", "src/Test"]
         assert app_projects == ["src/App"]
 
-    def test_categorize_projects_multiple_test_projects(self):
+    def test_categorize_projects_requires_complete_components(self):
         project_paths = ["src/app1", "src/test1", "src/app2", "src/tests"]
         test_projects, app_projects = categorize_projects(project_paths)
 
-        assert sorted(test_projects) == ["src/test1", "src/tests"]
-        assert sorted(app_projects) == ["src/app1", "src/app2"]
+        assert test_projects == ["src/tests"]
+        assert sorted(app_projects) == ["src/app1", "src/app2", "src/test1"]
 
     def test_categorize_projects_fails_without_test_projects(self):
         project_paths = ["src/app1", "src/app2", "src/lib"]

@@ -39,9 +39,8 @@ def _rename_patch(source_path: str, target_path: str) -> str:
     return f"diff --git a/{source_path} b/{target_path}\nsimilarity index 100%\nrename from {source_path}\nrename to {target_path}\n"
 
 
-def _valid_submission(repo_path: Path) -> tuple[str, str, str]:
+def _valid_submission(repo_path: Path, test_project: str = "src/Tests") -> tuple[str, str, str]:
     product_project = "src/Main"
-    test_project = "src/Tests"
     product_file = f"{product_project}/Feature.Codeunit.al"
     test_file = f"{test_project}/FeatureTests.Codeunit.al"
     _create_project(repo_path, product_project)
@@ -145,6 +144,35 @@ def test_allows_test_project_absent_from_dataset_projects(tmp_path: Path):
 
     assert result.app_projects == (str((repo_path / product_project).relative_to(repo_path)),)
     assert result.test_projects == (str((repo_path / test_project).relative_to(repo_path)),)
+
+
+def test_allows_root_test_project_absent_from_dataset_projects(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    generated_patch, product_project, test_project = _valid_submission(repo_path, test_project="Tests")
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=[product_project],
+    )
+
+    assert result.app_projects == (str((repo_path / product_project).relative_to(repo_path)),)
+    assert result.test_projects == (str((repo_path / test_project).relative_to(repo_path)),)
+
+
+@pytest.mark.parametrize("product_project", ["src/testing", "src/test-support"])
+def test_rejects_product_project_with_test_prefix_outside_allowed_projects(tmp_path: Path, product_project: str):
+    repo_path = tmp_path / "repo"
+    generated_patch, allowed_product_project, _ = _valid_submission(repo_path, test_project=product_project)
+
+    with pytest.raises(GeneratedSubmissionError) as exc_info:
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=[allowed_product_project],
+        )
+
+    assert str(exc_info.value).replace("\\", "/") == f"Product project is not allowed: {product_project}"
 
 
 def test_rejects_deleted_test_file(tmp_path: Path):
