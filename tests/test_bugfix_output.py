@@ -148,13 +148,15 @@ def test_rejects_fix_without_new_test(tmp_path: Path):
     assert isinstance(exc_info.value.__cause__, NoTestsExtractedError)
 
 
-def test_propagates_project_discovery_error_for_file_without_app_json(tmp_path: Path):
+def test_wraps_project_discovery_error_for_file_without_app_json(tmp_path: Path):
     repo_path = tmp_path / "repo"
     _write_file(repo_path, "src/Unknown/Feature.al", "table 50100 Feature {}\n")
     generated_patch = _patch("src/Unknown/Feature.al", "table 50100 Feature {}", ["// Fix"])
 
-    with pytest.raises(ProjectDiscoveryError, match=r"No owning app\.json found"):
+    with pytest.raises(GeneratedSubmissionError, match=r"No owning app\.json found") as exc_info:
         analyze_generated_bugfix_output(repo_path, generated_patch, allowed_app_projects=[])
+
+    assert isinstance(exc_info.value.__cause__, ProjectDiscoveryError)
 
 
 def test_deduplicates_multiple_files_in_one_project(tmp_path: Path):

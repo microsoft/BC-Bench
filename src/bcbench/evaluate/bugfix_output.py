@@ -7,7 +7,7 @@ from unidiff.errors import UnidiffParseError
 from unidiff.patch import PatchedFile
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError
+from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError
 from bcbench.operations import extract_tests_from_patch, find_project_path, is_test_project, order_project_paths
 
 
@@ -87,7 +87,10 @@ def analyze_generated_bugfix_output(
         _validate_al_paths(changed_paths)
         if not patched_file and not _is_complete_rename(patched_file):
             raise GeneratedOutputError(f"Malformed generated patch: {patched_file.path} has no hunks.")
-        project_paths = [find_project_path(repo_path, file_path) for file_path in changed_paths]
+        try:
+            project_paths = [find_project_path(repo_path, file_path) for file_path in changed_paths]
+        except ProjectDiscoveryError as exc:
+            raise GeneratedSubmissionError(str(exc)) from exc
         project_classifications = {is_test_project(project_path) for project_path in project_paths}
         if len(project_classifications) > 1:
             raise GeneratedSubmissionError(f"Cannot safely split rename between product and test projects: {changed_paths[0]} -> {changed_paths[1]}.")
