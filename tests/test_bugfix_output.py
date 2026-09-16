@@ -513,12 +513,12 @@ def test_wraps_missing_codeunit_identity_as_invalid_submission(tmp_path: Path):
     _write_file(
         repo_path,
         test_file,
-        "procedure Helper()\n    [Test]\n    procedure VerifiesFeature()\n",
+        "procedure Helper()\n    [Test]\n    procedure VerifiesFeature()\n    begin\n    end;\n",
     )
     generated_patch = _patch(product_file, "codeunit 1 Feature {}", ["// Fix"]) + _patch(
         test_file,
         "procedure Helper()",
-        ["    [Test]", "    procedure VerifiesFeature()"],
+        ["    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;"],
     )
 
     with pytest.raises(GeneratedSubmissionError, match=r"No codeunit ID found") as exc_info:
@@ -657,6 +657,124 @@ def test_accepts_one_new_test_in_existing_file(tmp_path: Path):
     product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
     test_file.write_text(
         "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n\n    [tEsT]\n    procedure NewTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        _git_diff(repo_path),
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
+
+
+def test_rejects_added_exit_inside_existing_test_with_one_new_test(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n        Assert.IsTrue(true, 'Expected');\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n        exit;\n        Assert.IsTrue(true, 'Expected');\n    end;\n\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Existing test behavior modified"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_rejects_added_attribute_attached_to_existing_test(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [HandlerFunctions('MessageHandler')]\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Existing test behavior modified"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_accepts_new_helper_outside_existing_test_and_one_new_test(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n\n    local procedure NewHelper()\n    begin\n    end;\n\n    [Test]\n    procedure NewTest()\n    begin\n        NewHelper();\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        _git_diff(repo_path),
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
+
+
+def test_accepts_new_test_appended_adjacent_to_existing_test(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}\n",
         encoding="utf-8",
     )
 

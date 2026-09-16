@@ -91,7 +91,7 @@ def test_parses_test_occurrences_from_al_content(declaration: str, attribute: st
 
     result = extract_test_occurrences_from_content(content, "Tests/FeatureTests.Codeunit.al")
 
-    assert result == (TestOccurrence(codeunit_id=2, function_name="VerifiesFeature"),)
+    assert result == (TestOccurrence(codeunit_id=2, function_name="VerifiesFeature", start_line=4, end_line=7),)
 
 
 def test_content_parser_ignores_comments_and_string_literals():
@@ -114,6 +114,42 @@ codeunit 2 FeatureTests
     result = extract_test_occurrences_from_content(content, "Tests/FeatureTests.Codeunit.al")
 
     assert result == ()
+
+
+def test_content_parser_tracks_complete_test_procedure_spans():
+    content = """codeunit 2 FeatureTests
+{
+    [HandlerFunctions('MessageHandler')]
+    [Test]
+    procedure "Quoted Test"()
+    begin
+        if true then begin
+            Message('end; case repeat until');
+        end;
+        case 1 of
+            1:
+                Message('begin');
+        end;
+        repeat
+            Message('end');
+        until true;
+    end;
+
+    [Test]
+    procedure UnquotedTest()
+    begin
+        // begin case repeat
+        /* end; until true; */
+    end;
+}
+"""
+
+    result = extract_test_occurrences_from_content(content, "Tests/FeatureTests.Codeunit.al")
+
+    assert result == (
+        TestOccurrence(codeunit_id=2, function_name="Quoted Test", start_line=3, end_line=17),
+        TestOccurrence(codeunit_id=2, function_name="UnquotedTest", start_line=19, end_line=24),
+    )
 
 
 def test_extracts_test_path_from_git_c_style_quoted_headers():
@@ -193,8 +229,8 @@ index abc..def 100644
     normalized = extract_tests_from_patch(patch, file_contents)
 
     assert occurrences == (
-        TestOccurrence(codeunit_id=2, function_name="SameTest"),
-        TestOccurrence(codeunit_id=2, function_name="SameTest"),
+        TestOccurrence(codeunit_id=2, function_name="SameTest", start_line=3, end_line=4),
+        TestOccurrence(codeunit_id=2, function_name="SameTest", start_line=5, end_line=6),
     )
     assert normalized[0].functionName == {"SameTest"}
 

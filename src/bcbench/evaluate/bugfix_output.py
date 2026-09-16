@@ -1,5 +1,5 @@
 import subprocess
-from collections import Counter
+from collections import Counter, defaultdict, deque
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -175,20 +175,34 @@ def _read_head_file(repo_path: Path, file_path: str) -> str:
 
 def _find_generated_test_occurrences(repo_path: Path, test_files: Iterable[_ParsedPatchFile]) -> tuple[TestOccurrence, ...]:
     generated_occurrences: list[TestOccurrence] = []
-    target_paths = dict.fromkeys(_normalize_repo_path(parsed_file.paths.target) for parsed_file in test_files)
+    parsed_files_by_target: dict[str, list[_ParsedPatchFile]] = defaultdict(list)
+    for parsed_file in test_files:
+        parsed_files_by_target[_normalize_repo_path(parsed_file.paths.target)].append(parsed_file)
 
-    for target_path in target_paths:
+    for target_path, parsed_files in parsed_files_by_target.items():
         file_path = repo_path / Path(target_path)
         if not file_path.is_file():
             raise GeneratedSubmissionError(f"Test file does not exist after generated changes: {target_path}")
 
         baseline_occurrences = extract_test_occurrences_from_content(_read_head_file(repo_path, target_path), target_path)
         final_occurrences = extract_test_occurrences_from_content(file_path.read_text(encoding="utf-8"), target_path)
-        baseline_counter = Counter(baseline_occurrences)
-        final_counter = Counter(final_occurrences)
+        baseline_counter = Counter((occurrence.codeunit_id, occurrence.function_name) for occurrence in baseline_occurrences)
+        final_counter = Counter((occurrence.codeunit_id, occurrence.function_name) for occurrence in final_occurrences)
         if baseline_counter - final_counter:
             raise GeneratedSubmissionError(f"Existing test behavior modified: {target_path}")
-        generated_occurrences.extend((final_counter - baseline_counter).elements())
+
+        added_target_lines = {line.target_line_no for parsed_file in parsed_files for hunk in parsed_file.patched_file for line in hunk if line.is_added and line.target_line_no is not None}
+        unmatched_final_occurrences: dict[tuple[int, str], deque[TestOccurrence]] = defaultdict(deque)
+        for occurrence in final_occurrences:
+            unmatched_final_occurrences[(occurrence.codeunit_id, occurrence.function_name)].append(occurrence)
+
+        for baseline_occurrence in baseline_occurrences:
+            identity = (baseline_occurrence.codeunit_id, baseline_occurrence.function_name)
+            final_occurrence = unmatched_final_occurrences[identity].popleft()
+            if any(final_occurrence.start_line <= line_number <= final_occurrence.end_line for line_number in added_target_lines):
+                raise GeneratedSubmissionError(f"Existing test behavior modified: {target_path}")
+
+        generated_occurrences.extend(occurrence for occurrences in unmatched_final_occurrences.values() for occurrence in occurrences)
 
     if not generated_occurrences:
         raise NoTestsExtractedError
