@@ -97,7 +97,7 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
 
         execution_runs: list[ExecutionBasedEvaluationResultSummary] = [r for r in runs if isinstance(r, ExecutionBasedEvaluationResultSummary)]
 
-        per_run_resolution_rates: list[float] = [run.resolved / evaluated for run in execution_runs if (evaluated := run.total - run.infrastructure_failed) > 0]
+        per_run_resolution_rates: list[float] = [run.resolved / evaluated for run in execution_runs if (evaluated := run.resolved + run.failed) > 0]
 
         instance_resolved: dict[str, list[bool]] = defaultdict(list)
         for run in execution_runs:

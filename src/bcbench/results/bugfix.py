@@ -1,13 +1,13 @@
 from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
-from bcbench.types import EvaluationContext
+from bcbench.types import EvaluationCategory, EvaluationContext
 
 
 class BugFixPhaseStatus(StrEnum):
@@ -40,6 +40,10 @@ class BugFixMetricSummary(BaseModel):
         determined_failures = sum(statuses.count(status) for status in (BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION))
         unknown = sum(statuses.count(status) for status in (BugFixPhaseStatus.INFRASTRUCTURE_ERROR, BugFixPhaseStatus.NOT_RUN))
         scheduled = len(statuses)
+        return cls._from_counts(successes, determined_failures, unknown, scheduled)
+
+    @classmethod
+    def _from_counts(cls, successes: int, determined_failures: int, unknown: int, scheduled: int) -> "BugFixMetricSummary":
         determined = successes + determined_failures
         return cls(
             successes=successes,
@@ -218,20 +222,87 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
     runtime_isolation: RuntimeIsolation = "package-normalized"
     metric_summaries: dict[BugFixMetricName, BugFixMetricSummary] = Field(default_factory=_empty_metric_summaries)
 
+    @model_validator(mode="before")
+    @classmethod
+    def restore_legacy_metric_summaries(cls, payload: object) -> object:
+        if not isinstance(payload, dict) or "metric_summaries" in payload:
+            return payload
+
+        data: dict[str, Any] = dict(payload)
+        if data.get("runtime_isolation", "package-normalized") != "package-normalized":
+            return payload
+
+        total = int(data["total"])
+        resolved = int(data.get("resolved", 0))
+        failed = int(data.get("failed", 0))
+        infrastructure_failed = int(data.get("infrastructure_failed", 0))
+        build = int(data.get("build", 0))
+
+        resolution_unknown = total - resolved - failed
+        fix_build_failures = total - infrastructure_failed - build
+        if resolution_unknown < 0 or fix_build_failures < 0:
+            raise ValueError("Legacy bug-fix summary counts cannot exceed total")
+
+        data["metric_summaries"] = {
+            BugFixMetricName.GENERATED_TEST_VALIDITY: BugFixMetricSummary._from_counts(0, 0, total, total),
+            BugFixMetricName.GENERATED_PAIR_TRANSITION: BugFixMetricSummary._from_counts(0, 0, total, total),
+            BugFixMetricName.FIX_BUILD: BugFixMetricSummary._from_counts(
+                build,
+                fix_build_failures,
+                infrastructure_failed,
+                total,
+            ),
+            BugFixMetricName.FIX_QUALITY: BugFixMetricSummary._from_counts(0, 0, total, total),
+            BugFixMetricName.RESOLUTION: BugFixMetricSummary._from_counts(
+                resolved,
+                failed,
+                resolution_unknown,
+                total,
+            ),
+        }
+        return data
+
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "BugFixResultSummary":
-        summary = super().from_results(results, run_id)
-        assert isinstance(summary, BugFixResultSummary)
+        if not results:
+            raise ValueError("Cannot summarize an empty bug-fix results list")
+
+        non_bugfix_results = [result for result in results if not isinstance(result, BugFixResult)]
+        if non_bugfix_results:
+            result_types = sorted({type(result).__name__ for result in non_bugfix_results})
+            raise ValueError(f"BugFixResultSummary requires only BugFixResult instances, got: {result_types}")
 
         bugfix_results = [result for result in results if isinstance(result, BugFixResult)]
+        categories = {result.category for result in bugfix_results}
+        if len(categories) != 1:
+            raise ValueError(f"Cannot summarize bug-fix results with mixed categories: {categories}")
+        if categories != {EvaluationCategory.BUG_FIX}:
+            raise ValueError(f"BugFixResultSummary requires the bug-fix category, got: {categories}")
+
         runtime_isolations = {result.runtime_isolation for result in bugfix_results}
         if len(runtime_isolations) != 1:
             raise ValueError(f"Cannot summarize bug-fix results with mixed runtime isolation: {runtime_isolations}")
 
+        summary = super().from_results(results, run_id)
+        assert isinstance(summary, BugFixResultSummary)
+
         runtime_isolation = runtime_isolations.pop()
         metric_summaries = {metric: BugFixMetricSummary.from_statuses([result.metric_status(metric) for result in bugfix_results]) for metric in BugFixMetricName}
+        resolution_statuses = {result.instance_id: result.metric_status(BugFixMetricName.RESOLUTION) for result in bugfix_results}
+        resolution = metric_summaries[BugFixMetricName.RESOLUTION]
+        fix_build = metric_summaries[BugFixMetricName.FIX_BUILD]
+        instance_results = {
+            instance_id: status is BugFixPhaseStatus.PASSED
+            for instance_id, status in resolution_statuses.items()
+            if status in (BugFixPhaseStatus.PASSED, BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION)
+        }
         return summary.model_copy(
             update={
+                "resolved": resolution.successes,
+                "failed": resolution.determined_failures,
+                "build": fix_build.successes,
+                "percentage": round(resolution.rate * 100, 1) if resolution.rate is not None else None,
+                "instance_results": instance_results,
                 "runtime_isolation": runtime_isolation,
                 "metric_summaries": metric_summaries,
             }

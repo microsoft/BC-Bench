@@ -10,8 +10,9 @@ from bcbench.results.bugfix import (
     BugFixResultSummary,
 )
 from bcbench.results.leaderboard import BugFixLeaderboardAggregate, Leaderboard
+from bcbench.types import EvaluationCategory
 from evaluator.scores import FixBuild, FixQuality, GeneratedPairTransition, GeneratedTestValidity, Resolution
-from tests.conftest import create_bugfix_result
+from tests.conftest import create_bugfix_result, create_testgen_result
 
 
 def _phase(status: BugFixPhaseStatus) -> BugFixPhaseResult:
@@ -94,10 +95,24 @@ def test_checkpointed_summary_calculates_all_production_metrics():
             benchmark_fix=BugFixPhaseStatus.NOT_RUN,
         ),
     ]
+    results = [
+        results[0].model_copy(update={"resolved": False, "build": False}),
+        results[1].model_copy(update={"resolved": True, "build": True}),
+        results[2].model_copy(update={"resolved": True, "build": True}),
+        results[3].model_copy(update={"resolved": True, "build": True}),
+    ]
 
     summary = BugFixResultSummary.from_results(results, run_id="run")
 
     assert summary.runtime_isolation == "database-checkpointed-single-container"
+    assert summary.resolved == 1
+    assert summary.failed == 1
+    assert summary.build == 1
+    assert summary.percentage == 50.0
+    assert summary.instance_results == {
+        "test__passed": True,
+        "test__failed": False,
+    }
     assert set(summary.metric_summaries) == set(BugFixMetricName)
     for metric_summary in summary.metric_summaries.values():
         assert metric_summary == BugFixMetricSummary(
@@ -138,6 +153,126 @@ def test_package_normalized_summary_preserves_legacy_headline():
     assert summary.metric_summaries[BugFixMetricName.GENERATED_TEST_VALIDITY].coverage == 0.0
     assert summary.metric_summaries[BugFixMetricName.RESOLUTION].rate == 0.5
     assert summary.metric_summaries[BugFixMetricName.RESOLUTION].coverage == pytest.approx(2 / 3)
+
+
+def test_legacy_package_normalized_summary_reconstructs_metric_summaries():
+    summary = BugFixResultSummary.model_validate(
+        {
+            "total": 4,
+            "resolved": 1,
+            "failed": 1,
+            "infrastructure_failed": 2,
+            "build": 1,
+            "percentage": 50.0,
+            "date": "2025-01-15",
+            "model": "gpt-4o",
+            "category": "bug-fix",
+            "agent_name": "copilot",
+            "average_duration": 100.0,
+            "average_prompt_tokens": 1000.0,
+            "average_completion_tokens": 500.0,
+            "benchmark_version": "0.1.0",
+        }
+    )
+
+    expected_reconstructed = BugFixMetricSummary(
+        successes=1,
+        determined_failures=1,
+        unknown=2,
+        scheduled=4,
+        rate=0.5,
+        coverage=0.5,
+    )
+    assert summary.metric_summaries[BugFixMetricName.RESOLUTION] == expected_reconstructed
+    assert summary.metric_summaries[BugFixMetricName.FIX_BUILD] == expected_reconstructed
+
+    for metric in (
+        BugFixMetricName.GENERATED_TEST_VALIDITY,
+        BugFixMetricName.GENERATED_PAIR_TRANSITION,
+        BugFixMetricName.FIX_QUALITY,
+    ):
+        assert summary.metric_summaries[metric] == BugFixMetricSummary(
+            successes=0,
+            determined_failures=0,
+            unknown=4,
+            scheduled=4,
+            rate=None,
+            coverage=0.0,
+        )
+
+
+def test_legacy_package_normalized_summary_aggregates_with_new_summary():
+    new_summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__1", resolved=True, build=True),
+            create_bugfix_result(instance_id="test__2", resolved=True, build=True),
+        ],
+        run_id="new",
+    )
+    legacy_payload = new_summary.model_dump(mode="json")
+    legacy_payload.pop("metric_summaries")
+    legacy_payload.update(
+        {
+            "resolved": 0,
+            "failed": 2,
+            "build": 0,
+            "percentage": 0.0,
+            "instance_results": {
+                "test__1": False,
+                "test__2": False,
+            },
+        }
+    )
+    old_summary = BugFixResultSummary.model_validate(legacy_payload)
+
+    aggregate = BugFixLeaderboardAggregate.from_runs([old_summary, new_summary])
+
+    assert aggregate.metric_averages[BugFixMetricName.RESOLUTION] == 0.5
+    assert aggregate.metric_coverages[BugFixMetricName.RESOLUTION] == 1.0
+
+
+def test_bugfix_summary_rejects_empty_results():
+    with pytest.raises(ValueError, match="empty"):
+        BugFixResultSummary.from_results([], run_id="run")
+
+
+def test_bugfix_summary_rejects_non_bugfix_results():
+    with pytest.raises(ValueError, match="BugFixResult"):
+        BugFixResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__bugfix"),
+                create_testgen_result(instance_id="test__test-generation"),
+            ],
+            run_id="run",
+        )
+
+
+def test_bugfix_summary_rejects_mixed_categories():
+    results = [
+        create_bugfix_result(instance_id="test__bugfix"),
+        create_bugfix_result(instance_id="test__wrong-category").model_copy(update={"category": EvaluationCategory.TEST_GENERATION}),
+    ]
+
+    with pytest.raises(ValueError, match="mixed categories"):
+        BugFixResultSummary.from_results(results, run_id="run")
+
+
+def test_bugfix_summary_rejects_mixed_runtime_isolation_before_aggregation():
+    with pytest.raises(ValueError, match="mixed runtime isolation"):
+        BugFixResultSummary.from_results(
+            [
+                create_bugfix_result(instance_id="test__package"),
+                _checkpointed_result(
+                    "test__checkpointed",
+                    test_red=BugFixPhaseStatus.PASSED,
+                    test_gold=BugFixPhaseStatus.PASSED,
+                    fix_build=BugFixPhaseStatus.PASSED,
+                    generated_pair=BugFixPhaseStatus.PASSED,
+                    benchmark_fix=BugFixPhaseStatus.PASSED,
+                ),
+            ],
+            run_id="run",
+        )
 
 
 def test_checkpointed_result_exports_production_status_metadata():
@@ -227,6 +362,7 @@ def test_bugfix_leaderboard_averages_metric_rates_and_coverages():
     aggregate = BugFixLeaderboardAggregate.from_runs([first, second])
 
     assert aggregate.runtime_isolation == "database-checkpointed-single-container"
+    assert aggregate.average == 0.75
     assert aggregate.metric_averages[BugFixMetricName.RESOLUTION] == 0.75
     assert aggregate.metric_coverages[BugFixMetricName.RESOLUTION] == 0.75
 
