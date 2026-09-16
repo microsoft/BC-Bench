@@ -1,4 +1,5 @@
 import subprocess
+from collections.abc import Iterable
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -6,7 +7,8 @@ import pytest
 from unidiff.errors import UnidiffParseError
 
 from bcbench.dataset import TestEntry
-from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput, analyze_generated_bugfix_output
+from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
+from bcbench.evaluate.bugfix_output import analyze_generated_bugfix_output as _analyze_generated_bugfix_output
 from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError
 
 
@@ -27,6 +29,43 @@ def _init_git_repo(repo_path: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=repo_path, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True)
+
+
+def _trusted_commit(repo_path: Path) -> str:
+    repo_path.mkdir(parents=True, exist_ok=True)
+    head_result = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if head_result.returncode == 0:
+        return head_result.stdout.strip()
+
+    if not (repo_path / ".git").exists():
+        _init_git_repo(repo_path)
+    subprocess.run(["git", "commit", "--allow-empty", "-qm", "Trusted baseline"], cwd=repo_path, check=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def analyze_generated_bugfix_output(
+    repo_path: Path,
+    generated_patch: str,
+    allowed_app_projects: Iterable[str] = (),
+) -> GeneratedBugFixOutput:
+    return _analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        _trusted_commit(repo_path),
+        allowed_app_projects,
+    )
 
 
 def _commit_all(repo_path: Path) -> None:

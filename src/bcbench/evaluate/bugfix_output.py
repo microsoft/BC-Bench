@@ -10,7 +10,14 @@ from unidiff.patch import PatchedFile
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError, TestExtractionError
-from bcbench.operations import extract_executable_member_occurrences_from_content, find_project_path, is_test_project, normalize_test_occurrences, order_project_paths
+from bcbench.operations import (
+    extract_executable_member_occurrences_from_content,
+    find_project_path,
+    is_test_project,
+    normalize_test_occurrences,
+    order_project_paths,
+    resolve_trusted_commit,
+)
 from bcbench.operations.patch_operations import GitDiffPaths, decode_git_header_path, extract_git_diff_paths, split_git_diff_blocks
 from bcbench.operations.test_operations import TestOccurrence, extract_codeunit_id_from_content
 
@@ -141,19 +148,9 @@ def _parse_patch_files(generated_patch: str) -> tuple[_ParsedPatchFile, ...]:
     return tuple(parsed_files)
 
 
-def _read_head_file(repo_path: Path, file_path: str) -> str:
-    head_result = subprocess.run(
-        ["git", "rev-parse", "--verify", "HEAD"],
-        cwd=repo_path,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    if head_result.returncode != 0:
-        return ""
-
+def _read_trusted_file(repo_path: Path, trusted_commit: str, file_path: str) -> str:
     tree_result = subprocess.run(
-        ["git", "ls-tree", "--name-only", "HEAD", "--", file_path],
+        ["git", "ls-tree", "--name-only", trusted_commit, "--", file_path],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",
@@ -164,7 +161,7 @@ def _read_head_file(repo_path: Path, file_path: str) -> str:
         return ""
 
     return subprocess.run(
-        ["git", "show", f"HEAD:{file_path}"],
+        ["git", "show", f"{trusted_commit}:{file_path}"],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",
@@ -173,7 +170,11 @@ def _read_head_file(repo_path: Path, file_path: str) -> str:
     ).stdout
 
 
-def _find_generated_test_occurrences(repo_path: Path, test_files: Iterable[_ParsedPatchFile]) -> tuple[TestOccurrence, ...]:
+def _find_generated_test_occurrences(
+    repo_path: Path,
+    trusted_commit: str,
+    test_files: Iterable[_ParsedPatchFile],
+) -> tuple[TestOccurrence, ...]:
     generated_occurrences: list[TestOccurrence] = []
     parsed_files_by_target: dict[str, list[_ParsedPatchFile]] = defaultdict(list)
     for parsed_file in test_files:
@@ -184,7 +185,7 @@ def _find_generated_test_occurrences(repo_path: Path, test_files: Iterable[_Pars
         if not file_path.is_file():
             raise GeneratedSubmissionError(f"Test file does not exist after generated changes: {target_path}")
 
-        baseline_content = _read_head_file(repo_path, target_path)
+        baseline_content = _read_trusted_file(repo_path, trusted_commit, target_path)
         final_content = file_path.read_text(encoding="utf-8")
         baseline_members = extract_executable_member_occurrences_from_content(baseline_content)
         final_members = extract_executable_member_occurrences_from_content(final_content)
@@ -226,8 +227,10 @@ def _find_generated_test_occurrences(repo_path: Path, test_files: Iterable[_Pars
 def analyze_generated_bugfix_output(
     repo_path: Path,
     generated_patch: str,
+    trusted_commit: str,
     allowed_app_projects: Iterable[str] = (),
 ) -> GeneratedBugFixOutput:
+    resolved_trusted_commit = resolve_trusted_commit(repo_path, trusted_commit)
     if not generated_patch.strip():
         raise GeneratedOutputError("Generated patch is blank.")
 
@@ -271,7 +274,7 @@ def analyze_generated_bugfix_output(
     test_patch = "".join(parsed_file.original_patch for parsed_file in test_files)
 
     try:
-        test_occurrences = _find_generated_test_occurrences(repo_path, test_files)
+        test_occurrences = _find_generated_test_occurrences(repo_path, resolved_trusted_commit, test_files)
     except (NoTestsExtractedError, TestExtractionError) as exc:
         raise GeneratedSubmissionError(str(exc)) from exc
 

@@ -1,10 +1,12 @@
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
 
-from bcbench.evaluate.bugfix_output import analyze_generated_bugfix_output
-from bcbench.exceptions import EmptyDiffError, GeneratedSubmissionError
+from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
+from bcbench.evaluate.bugfix_output import analyze_generated_bugfix_output as _analyze_generated_bugfix_output
+from bcbench.exceptions import EmptyDiffError, GeneratedSubmissionError, GitOperationError
 from bcbench.operations import stage_and_get_complete_diff
 
 
@@ -65,18 +67,171 @@ def _init_git_repo(repo_path: Path) -> None:
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True)
 
 
+def _commit_all(repo_path: Path, message: str) -> str:
+    subprocess.run(["git", "add", "-A"], cwd=repo_path, check=True)
+    subprocess.run(["git", "commit", "--allow-empty", "-qm", message], cwd=repo_path, check=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _trusted_commit(repo_path: Path) -> str:
+    repo_path.mkdir(parents=True, exist_ok=True)
+    head_result = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if head_result.returncode == 0:
+        return head_result.stdout.strip()
+
+    if not (repo_path / ".git").exists():
+        _init_git_repo(repo_path)
+    subprocess.run(["git", "commit", "--allow-empty", "-qm", "Trusted baseline"], cwd=repo_path, check=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def analyze_generated_bugfix_output(
+    repo_path: Path,
+    generated_patch: str,
+    trusted_commit: str | None = None,
+    allowed_app_projects: Iterable[str] = (),
+) -> GeneratedBugFixOutput:
+    return _analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        trusted_commit if trusted_commit is not None else _trusted_commit(repo_path),
+        allowed_app_projects,
+    )
+
+
+def test_complete_diff_includes_committed_and_uncommitted_changes_from_trusted_baseline(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    _write_file(repo_path, "README.md", "Trusted instructions\n")
+    _write_file(repo_path, "src/Main/Feature.Codeunit.al", "codeunit 1 Feature {}\n")
+    _write_file(
+        repo_path,
+        "src/Tests/FeatureTests.Codeunit.al",
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n        Assert.IsTrue(true, 'Expected');\n    end;\n}\n",
+    )
+    trusted_commit = _commit_all(repo_path, "Trusted baseline")
+
+    _write_file(repo_path, "README.md", "Agent instructions\n")
+    _write_file(
+        repo_path,
+        "src/Tests/FeatureTests.Codeunit.al",
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+    )
+    _commit_all(repo_path, "Agent committed forbidden changes")
+
+    _write_file(repo_path, "src/Main/Feature.Codeunit.al", "codeunit 1 Feature {}\n// Fix\n")
+    _write_file(
+        repo_path,
+        "src/Tests/FeatureTests.Codeunit.al",
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}\n",
+    )
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert "README.md" in diff
+    assert "-        Assert.IsTrue(true, 'Expected');" in diff
+    assert "+// Fix" in diff
+    assert "+    procedure NewTest()" in diff
+    with pytest.raises(GeneratedSubmissionError, match=r"Only AL files may be changed: README\.md"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            diff,
+            trusted_commit,
+            allowed_app_projects=["src/Main"],
+        )
+
+
+@pytest.mark.parametrize(
+    "changed_existing_member",
+    [
+        ("    local procedure ExistingHelper()\n    begin\n        Message('Changed');\n    end;\n\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n"),
+        ("    local procedure ExistingHelper()\n    begin\n    end;\n\n    [Test]\n    procedure ExistingTest()\n    begin\n        exit;\n    end;\n"),
+    ],
+)
+def test_rejects_committed_existing_test_member_changes_against_trusted_baseline(tmp_path: Path, changed_existing_member: str):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    _write_file(repo_path, "src/Main/Feature.Codeunit.al", "codeunit 1 Feature {}\n")
+    _write_file(
+        repo_path,
+        "src/Tests/FeatureTests.Codeunit.al",
+        "codeunit 2 FeatureTests\n{\n    local procedure ExistingHelper()\n    begin\n    end;\n\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+    )
+    trusted_commit = _commit_all(repo_path, "Trusted baseline")
+
+    _write_file(repo_path, "src/Main/Feature.Codeunit.al", "codeunit 1 Feature {}\n// Fix\n")
+    _write_file(
+        repo_path,
+        "src/Tests/FeatureTests.Codeunit.al",
+        f"codeunit 2 FeatureTests\n{{\n{changed_existing_member}\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}}\n",
+    )
+    _commit_all(repo_path, "Agent committed submission")
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Existing test behavior modified"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            diff,
+            trusted_commit,
+            allowed_app_projects=["src/Main"],
+        )
+
+
+@pytest.mark.parametrize("trusted_commit", ["", "missing-revision"])
+def test_invalid_trusted_baseline_is_git_configuration_error(tmp_path: Path, trusted_commit: str):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _commit_all(repo_path, "Initial")
+
+    with pytest.raises(GitOperationError, match=r"Trusted baseline revision"):
+        stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    with pytest.raises(GitOperationError, match=r"Trusted baseline revision"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            " ",
+            trusted_commit,
+            allowed_app_projects=[],
+        )
+
+
 def test_complete_diff_captures_al_and_manifest_changes(tmp_path: Path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     _init_git_repo(repo_path)
     _write_file(repo_path, "src/Main/Feature.al", "original\n")
     _write_file(repo_path, "src/Main/app.json", '{"name": "original"}\n')
-    subprocess.run(["git", "add", "-A"], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_path, check=True)
+    trusted_commit = _commit_all(repo_path, "Initial")
     _write_file(repo_path, "src/Main/Feature.al", "modified\n")
     _write_file(repo_path, "src/Main/app.json", '{"name": "modified"}\n')
 
-    diff = stage_and_get_complete_diff(repo_path)
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
 
     assert "src/Main/Feature.al" in diff
     assert "src/Main/app.json" in diff
@@ -89,11 +244,10 @@ def test_complete_diff_rejects_empty_submission(tmp_path: Path):
     repo_path.mkdir()
     _init_git_repo(repo_path)
     _write_file(repo_path, "README.md", "unchanged\n")
-    subprocess.run(["git", "add", "-A"], cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo_path, check=True)
+    trusted_commit = _commit_all(repo_path, "Initial")
 
     with pytest.raises(EmptyDiffError):
-        stage_and_get_complete_diff(repo_path)
+        stage_and_get_complete_diff(repo_path, trusted_commit)
 
 
 @pytest.mark.parametrize(

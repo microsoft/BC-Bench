@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 from bcbench.config import get_config
-from bcbench.exceptions import EmptyDiffError, PatchApplicationError
+from bcbench.exceptions import EmptyDiffError, GitOperationError, PatchApplicationError
 from bcbench.logger import get_logger
 from bcbench.operations.filesystem_operations import remove_tree
 
@@ -182,8 +182,26 @@ def stage_and_get_diff(repo_path: Path) -> str:
     return patch
 
 
-def stage_and_get_complete_diff(repo_path: Path) -> str:
+def resolve_trusted_commit(repo_path: Path, trusted_commit: str) -> str:
+    if not trusted_commit:
+        raise GitOperationError("Trusted baseline revision is missing.")
+
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{trusted_commit}^{{commit}}"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise GitOperationError(f"Trusted baseline revision does not resolve to a commit: {trusted_commit}")
+    return result.stdout.strip()
+
+
+def stage_and_get_complete_diff(repo_path: Path, trusted_commit: str) -> str:
     """Stage every repository change and return the complete binary-safe diff."""
+    resolved_trusted_commit = resolve_trusted_commit(repo_path, trusted_commit)
     logger.info("Staging all changes and getting complete git diff")
     subprocess.run(
         ["git", "add", "-A"],
@@ -193,7 +211,7 @@ def stage_and_get_complete_diff(repo_path: Path) -> str:
         check=True,
     )
     result = subprocess.run(
-        ["git", "-c", "core.quotePath=false", "diff", "--cached", "--binary", "--no-ext-diff"],
+        ["git", "-c", "core.quotePath=false", "diff", "--cached", resolved_trusted_commit, "--binary", "--no-ext-diff"],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",

@@ -22,6 +22,7 @@ from bcbench.operations.git_operations import (
     fetch_commit_if_missing,
     has_changes,
     init_repo,
+    resolve_trusted_commit,
     stage_and_get_complete_diff,
     stage_and_get_diff,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "prepare_run_dir",
     "remove_tree",
     "resolve_artifact_version_root",
+    "resolve_trusted_commit",
     "run_tests",
     "set_runtime_version",
     "setup_agent_skills",
