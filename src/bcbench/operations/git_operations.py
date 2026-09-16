@@ -202,7 +202,7 @@ def _is_reparse_point(path_stat: os.stat_result) -> bool:
     return bool(getattr(path_stat, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
 
 
-def _validate_workspace_for_freeze(repo_path: Path) -> Path:
+def _validate_workspace_for_freeze(repo_path: Path) -> tuple[Path, tuple[tuple[Path, os.stat_result], ...]]:
     try:
         repo_stat = repo_path.lstat()
         if repo_path.is_symlink() or _is_reparse_point(repo_stat):
@@ -212,6 +212,7 @@ def _validate_workspace_for_freeze(repo_path: Path) -> Path:
         raise GeneratedSubmissionError(f"Cannot safely freeze workspace: {repo_path}: {exc}") from exc
 
     pending_directories = [workspace_path]
+    regular_files: list[tuple[Path, os.stat_result]] = []
     while pending_directories:
         directory_path = pending_directories.pop()
         try:
@@ -223,6 +224,8 @@ def _validate_workspace_for_freeze(repo_path: Path) -> Path:
         for entry in entries:
             entry_path = Path(entry.path)
             relative_path = entry_path.relative_to(workspace_path)
+            if len(relative_path.parts) == 1 and entry.name.casefold() == ".git":
+                continue
             try:
                 entry_stat = entry.stat(follow_symlinks=False)
             except OSError as exc:
@@ -242,8 +245,12 @@ def _validate_workspace_for_freeze(repo_path: Path) -> Path:
 
             if entry.is_dir(follow_symlinks=False):
                 pending_directories.append(entry_path)
+            elif stat.S_ISREG(entry_stat.st_mode):
+                regular_files.append((relative_path, entry_stat))
+            else:
+                raise GeneratedSubmissionError(f"Cannot safely freeze unsupported workspace entry: {relative_path}")
 
-    return workspace_path
+    return workspace_path, tuple(regular_files)
 
 
 def _resolve_source_object_directory(repo_path: Path, environment: dict[str, str]) -> Path:
@@ -290,12 +297,105 @@ def resolve_trusted_commit(repo_path: Path, trusted_commit: str, *, environment:
     return result.stdout.strip()
 
 
+def _trusted_tree_modes(repo_path: Path, trusted_commit: str, environment: dict[str, str]) -> dict[bytes, bytes]:
+    result = subprocess.run(
+        ["git", "--no-replace-objects", "ls-tree", "-r", "-z", trusted_commit],
+        cwd=repo_path,
+        env=environment,
+        capture_output=True,
+        check=True,
+    )
+    modes: dict[bytes, bytes] = {}
+    for entry in result.stdout.split(b"\0"):
+        if not entry:
+            continue
+        metadata, path = entry.split(b"\t", maxsplit=1)
+        mode, _object_type, _object_id = metadata.split(b" ", maxsplit=2)
+        modes[path] = mode
+    return modes
+
+
+def _workspace_git_path(relative_path: Path) -> bytes:
+    git_path = os.fsencode(relative_path.as_posix())
+    if b"\n" in git_path or b"\r" in git_path:
+        raise GeneratedSubmissionError(f"Cannot safely snapshot workspace path containing a line break: {relative_path}")
+    return git_path
+
+
+def _new_file_mode(path_stat: os.stat_result) -> bytes:
+    if os.name == "nt" or not path_stat.st_mode & stat.S_IXUSR:
+        return b"100644"
+    return b"100755"
+
+
+def _populate_raw_submission_index(
+    git_command: list[str],
+    workspace_path: Path,
+    regular_files: tuple[tuple[Path, os.stat_result], ...],
+    trusted_modes: dict[bytes, bytes],
+    environment: dict[str, str],
+) -> None:
+    snapshot_files = sorted(
+        ((_workspace_git_path(relative_path), path_stat) for relative_path, path_stat in regular_files),
+        key=lambda item: item[0],
+    )
+    paths_input = b"".join(path + b"\n" for path, _path_stat in snapshot_files)
+    try:
+        hash_result = subprocess.run(
+            [*git_command, "hash-object", "-w", "--no-filters", "--stdin-paths"],
+            cwd=workspace_path,
+            env=environment,
+            input=paths_input,
+            capture_output=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        error = exc.stderr.decode("utf-8", errors="replace").strip()
+        message = "Cannot snapshot generated workspace files as raw Git blobs."
+        if error:
+            message = f"{message} {error}"
+        raise GeneratedSubmissionError(message) from exc
+
+    object_ids = hash_result.stdout.splitlines()
+    if len(object_ids) != len(snapshot_files):
+        raise GeneratedSubmissionError(f"Cannot snapshot generated workspace files as raw Git blobs: expected {len(snapshot_files)} object IDs, received {len(object_ids)}.")
+
+    index_entries = b"".join(
+        (trusted_modes.get(path, _new_file_mode(path_stat)) + b" blob " + object_id + b"\t" + path + b"\0") for (path, path_stat), object_id in zip(snapshot_files, object_ids, strict=True)
+    )
+    subprocess.run(
+        [*git_command, "read-tree", "--empty"],
+        cwd=workspace_path,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    try:
+        subprocess.run(
+            [*git_command, "update-index", "--add", "-z", "--index-info"],
+            cwd=workspace_path,
+            env=environment,
+            input=index_entries,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        error = exc.stderr.decode("utf-8", errors="replace").strip()
+        message = "Cannot construct generated submission index from raw workspace files."
+        if error:
+            message = f"{message} {error}"
+        raise GeneratedSubmissionError(message) from exc
+
+
 def stage_and_get_complete_diff(repo_path: Path, trusted_commit: str) -> str:
     """Freeze every safe workspace change and return the complete binary-safe diff."""
-    workspace_path = _validate_workspace_for_freeze(repo_path)
+    workspace_path, regular_files = _validate_workspace_for_freeze(repo_path)
     git_environment = _sanitized_git_environment()
     source_object_directory = _resolve_source_object_directory(workspace_path, git_environment)
     resolved_trusted_commit = resolve_trusted_commit(workspace_path, trusted_commit, environment=git_environment)
+    trusted_modes = _trusted_tree_modes(workspace_path, resolved_trusted_commit, git_environment)
     logger.info("Staging all changes and getting complete git diff")
     temporary_git_root = Path(tempfile.mkdtemp(prefix="bcbench-submission-freeze-"))
     try:
@@ -331,22 +431,7 @@ def stage_and_get_complete_diff(repo_path: Path, trusted_commit: str) -> str:
             "-c",
             f"core.excludesFile={_NULL_DEVICE}",
         ]
-        subprocess.run(
-            [*git_command, "read-tree", resolved_trusted_commit],
-            cwd=workspace_path,
-            env=git_environment,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
-        subprocess.run(
-            [*git_command, "add", "-f", "-A", "--", "."],
-            cwd=workspace_path,
-            env=git_environment,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
+        _populate_raw_submission_index(git_command, workspace_path, regular_files, trusted_modes, git_environment)
         result = subprocess.run(
             [*git_command, "-c", "core.quotePath=false", "diff", "--cached", resolved_trusted_commit, "--binary", "--no-ext-diff"],
             cwd=workspace_path,

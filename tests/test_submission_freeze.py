@@ -9,7 +9,7 @@ from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
 from bcbench.evaluate.bugfix_output import analyze_generated_bugfix_output as _analyze_generated_bugfix_output
 from bcbench.exceptions import EmptyDiffError, GeneratedSubmissionError, GitOperationError
-from bcbench.operations import stage_and_get_complete_diff
+from bcbench.operations import git_operations, stage_and_get_complete_diff
 
 
 def _create_project(repo_path: Path, project_path: str) -> Path:
@@ -67,6 +67,7 @@ def _init_git_repo(repo_path: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=repo_path, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True)
+    subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=repo_path, check=True)
 
 
 def _commit_all(repo_path: Path, message: str) -> str:
@@ -315,6 +316,111 @@ def test_complete_diff_does_not_execute_agent_clean_filter(tmp_path: Path):
     assert not marker_path.exists()
     assert "-original" in diff
     assert "+modified" in diff
+
+
+@pytest.mark.parametrize(
+    "attribute_rule",
+    [
+        "*.al working-tree-encoding=invalid-agent-encoding\n",
+        "*.al filter=agent-controlled\n",
+        "*.al text eol=lf\n",
+        "*.al export-ignore\n",
+    ],
+    ids=["invalid-working-tree-encoding", "required-clean-filter", "text-and-eol", "export-ignore"],
+)
+def test_complete_diff_includes_agent_attributes_without_applying_them(tmp_path: Path, attribute_rule: str):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_file(repo_path, "src/Main/Feature.al", "original\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+
+    marker_path = tmp_path / "filter-executed"
+    filter_script = tmp_path / "clean_filter.py"
+    filter_script.write_text(
+        "import pathlib\nimport sys\npathlib.Path(sys.argv[1]).write_text('executed', encoding='utf-8')\nsys.stdout.buffer.write(sys.stdin.buffer.read())\n",
+        encoding="utf-8",
+    )
+    filter_command = f'"{Path(sys.executable).as_posix()}" "{filter_script.as_posix()}" "{marker_path.as_posix()}"'
+    subprocess.run(["git", "config", "filter.agent-controlled.clean", filter_command], cwd=repo_path, check=True)
+    subprocess.run(["git", "config", "filter.agent-controlled.required", "true"], cwd=repo_path, check=True)
+    _write_file(repo_path, ".gitattributes", attribute_rule)
+    _write_file(repo_path, "src/Main/Feature.al", "modified\n")
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert not marker_path.exists()
+    assert ".gitattributes" in diff
+    assert f"+{attribute_rule.rstrip()}" in diff
+    assert "src/Main/Feature.al" in diff
+    assert "-original" in diff
+    assert "+modified" in diff
+
+
+def test_complete_diff_rejects_line_break_in_batched_path():
+    with pytest.raises(GeneratedSubmissionError, match=r"path containing a line break"):
+        git_operations._workspace_git_path(Path("src/Main/Injected\nFeature.al"))
+
+
+def test_complete_diff_builds_index_with_raw_git_plumbing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_file(repo_path, "src/Main/Feature.al", "original\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    _write_file(repo_path, "src/Main/Feature.al", "modified\n")
+
+    commands: list[list[str]] = []
+    original_run = subprocess.run
+
+    def record_run(command, *args, **kwargs):
+        commands.append(command)
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(git_operations.subprocess, "run", record_run)
+
+    stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert ["git", "--no-replace-objects", "ls-tree", "-r", "-z", trusted_commit] in commands
+    assert any(command[-4:] == ["hash-object", "-w", "--no-filters", "--stdin-paths"] for command in commands)
+    assert any(command[-4:] == ["update-index", "--add", "-z", "--index-info"] for command in commands)
+    assert not any("add" in command for command in commands)
+
+
+@pytest.mark.parametrize(
+    ("failed_git_operation", "expected_message"),
+    [
+        ("hash-object", "Cannot snapshot generated workspace files as raw Git blobs"),
+        ("update-index", "Cannot construct generated submission index from raw workspace files"),
+    ],
+)
+def test_complete_diff_maps_raw_snapshot_git_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failed_git_operation: str,
+    expected_message: str,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_file(repo_path, "src/Main/Feature.al", "original\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    _write_file(repo_path, "src/Main/Feature.al", "modified\n")
+
+    original_run = subprocess.run
+
+    def fail_raw_snapshot(command, *args, **kwargs):
+        if failed_git_operation in command:
+            raise subprocess.CalledProcessError(128, command, stderr=b"fatal: agent path cannot be represented\n")
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(git_operations.subprocess, "run", fail_raw_snapshot)
+
+    with pytest.raises(GeneratedSubmissionError, match=expected_message) as exc_info:
+        stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert isinstance(exc_info.value.__cause__, subprocess.CalledProcessError)
+    assert "agent path cannot be represented" in str(exc_info.value)
 
 
 def test_complete_diff_includes_ignored_al_and_forbidden_files(tmp_path: Path):
