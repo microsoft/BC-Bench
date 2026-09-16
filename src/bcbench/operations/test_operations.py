@@ -43,7 +43,7 @@ def extract_test_occurrences_from_patch(generated_patch: str, file_contents: dic
         if paths is None or paths.target == "/dev/null":
             continue
 
-        current_file_path = paths.target.replace("\\", "/").removeprefix("b/")
+        current_file_path = paths.target.replace("\\", "/")
         if not current_file_path.lower().endswith(".codeunit.al") or current_file_path not in file_contents:
             continue
 

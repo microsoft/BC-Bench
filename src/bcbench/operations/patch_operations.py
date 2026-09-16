@@ -67,6 +67,13 @@ def decode_git_path(path: str) -> str:
     return _decode_git_quoted_path(path_without_timestamp)
 
 
+def decode_git_header_path(path: str) -> str:
+    decoded_path = decode_git_path(path)
+    if decoded_path.startswith(("a/", "b/")):
+        return decoded_path[2:]
+    return decoded_path
+
+
 def extract_git_diff_paths(diff_block: str) -> GitDiffPaths | None:
     source: str | None = None
     target: str | None = None
@@ -77,9 +84,9 @@ def extract_git_diff_paths(diff_block: str) -> GitDiffPaths | None:
         if line.startswith("@@ "):
             break
         if line.startswith("--- "):
-            source = decode_git_path(line[4:])
+            source = decode_git_header_path(line[4:])
         elif line.startswith("+++ "):
-            target = decode_git_path(line[4:])
+            target = decode_git_header_path(line[4:])
         elif line.startswith(("rename from ", "copy from ")):
             rename_source = decode_git_path(line.split(" ", maxsplit=2)[2])
         elif line.startswith(("rename to ", "copy to ")):

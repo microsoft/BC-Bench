@@ -44,6 +44,30 @@ def _git_diff(repo_path: Path, *args: str) -> str:
     ).stdout
 
 
+def _real_git_rename_submission(repo_path: Path, product_project: str, decoy_project: str | None = None) -> str:
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, product_project)
+    _create_project(repo_path, "Tests")
+    if decoy_project is not None:
+        _create_project(repo_path, decoy_project)
+
+    source_file = repo_path / product_project / "OldFeature.Codeunit.al"
+    target_file = repo_path / product_project / "NewFeature.Codeunit.al"
+    test_file = repo_path / "Tests" / "FeatureTests.Codeunit.al"
+    source_file.write_text("codeunit 50100 Feature {}\n", encoding="utf-8")
+    test_file.write_text("codeunit 50101 FeatureTests\n{\n}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    source_file.rename(target_file)
+    test_file.write_text(
+        "codeunit 50101 FeatureTests\n{\n    [Test]\n    procedure VerifiesFeature()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "-A"], cwd=repo_path, check=True)
+    return _git_diff(repo_path, "--cached", "--find-renames=100%")
+
+
 def _patch(file_path: str, old_line: str, added_lines: list[str]) -> str:
     additions = "\n".join(f"+{line}" for line in added_lines)
     return f"diff --git a/{file_path} b/{file_path}\nindex 1111111..2222222 100644\n--- a/{file_path}\n+++ b/{file_path}\n@@ -1,1 +1,{len(added_lines) + 1} @@\n {old_line}\n{additions}\n"
@@ -395,6 +419,40 @@ def test_accepts_real_git_test_path_with_component_ending_in_b(tmp_path: Path):
     assert result.test_projects == (str(test_project.relative_to(repo_path)),)
     assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"VerifiesFeature"})),)
     assert "Tests/foo b/bar/F.Codeunit.al" in result.test_patch
+
+
+@pytest.mark.parametrize("literal_root", ["a", "b"])
+def test_rejects_real_git_pure_rename_remapped_to_allowlisted_decoy(tmp_path: Path, literal_root: str):
+    repo_path = tmp_path / "repo"
+    product_project = f"{literal_root}/Main"
+    generated_patch = _real_git_rename_submission(repo_path, product_project, decoy_project="Main")
+
+    assert f"rename from {product_project}/OldFeature.Codeunit.al" in generated_patch
+    assert f"rename to {product_project}/NewFeature.Codeunit.al" in generated_patch
+    with pytest.raises(GeneratedSubmissionError, match=rf"Product project is not allowed: {literal_root}.Main"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["Main"],
+        )
+
+
+def test_accepts_real_git_pure_rename_in_allowlisted_project(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    product_project = "src/Main"
+    generated_patch = _real_git_rename_submission(repo_path, product_project)
+
+    assert "rename from src/Main/OldFeature.Codeunit.al" in generated_patch
+    assert "rename to src/Main/NewFeature.Codeunit.al" in generated_patch
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=[product_project],
+    )
+
+    assert result.full_patch == generated_patch
+    assert result.app_projects == (str((repo_path / product_project).relative_to(repo_path)),)
+    assert result.tests == (TestEntry(codeunitID=50101, functionName=frozenset({"VerifiesFeature"})),)
 
 
 def test_rejects_rename_between_product_and_test_projects(tmp_path: Path):

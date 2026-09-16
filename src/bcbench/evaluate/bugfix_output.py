@@ -9,7 +9,7 @@ from unidiff.patch import PatchedFile
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError, TestExtractionError
 from bcbench.operations import extract_test_occurrences_from_patch, find_project_path, is_test_project, normalize_test_occurrences, order_project_paths
-from bcbench.operations.patch_operations import GitDiffPaths, extract_git_diff_paths, split_git_diff_blocks
+from bcbench.operations.patch_operations import GitDiffPaths, decode_git_header_path, extract_git_diff_paths, split_git_diff_blocks
 
 
 @dataclass(frozen=True)
@@ -29,15 +29,12 @@ class _ParsedPatchFile:
     paths: GitDiffPaths
 
 
-def _strip_diff_path_prefix(file_path: str) -> str:
-    normalized_path = file_path.replace("\\", "/")
-    if normalized_path.startswith(("a/", "b/")):
-        return normalized_path[2:]
-    return normalized_path
+def _normalize_repo_path(file_path: str) -> str:
+    return file_path.replace("\\", "/")
 
 
 def _changed_paths(paths: GitDiffPaths) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(_strip_diff_path_prefix(file_path) for file_path in (paths.source, paths.target) if file_path != "/dev/null"))
+    return tuple(dict.fromkeys(_normalize_repo_path(file_path) for file_path in (paths.source, paths.target) if file_path != "/dev/null"))
 
 
 def _is_complete_rename(patched_file: PatchedFile) -> bool:
@@ -82,7 +79,7 @@ def _is_mode_only_change(diff_block: str) -> bool:
 
 
 def _normalize_diff_block(diff_block: str, paths: GitDiffPaths) -> str:
-    same_path = _strip_diff_path_prefix(paths.source) == _strip_diff_path_prefix(paths.target)
+    same_path = _normalize_repo_path(paths.source) == _normalize_repo_path(paths.target)
     source_placeholder = "a/__bcbench_file__.al"
     target_placeholder = "b/__bcbench_file__.al" if same_path else "b/__bcbench_target__.al"
     normalized_lines: list[str] = []
@@ -132,7 +129,10 @@ def _parse_patch_files(generated_patch: str) -> tuple[_ParsedPatchFile, ...]:
 
         patched_file = patch_set[0]
         if paths is None:
-            paths = GitDiffPaths(source=patched_file.source_file, target=patched_file.target_file)
+            paths = GitDiffPaths(
+                source=decode_git_header_path(patched_file.source_file),
+                target=decode_git_header_path(patched_file.target_file),
+            )
         parsed_files.append(_ParsedPatchFile(original_patch=diff_block, patched_file=patched_file, paths=paths))
 
     return tuple(parsed_files)
@@ -186,7 +186,7 @@ def analyze_generated_bugfix_output(
     test_patch = "".join(parsed_file.original_patch for parsed_file in test_files)
     file_contents: dict[str, str] = {}
     for parsed_file in test_files:
-        target_path = _strip_diff_path_prefix(parsed_file.paths.target)
+        target_path = _normalize_repo_path(parsed_file.paths.target)
         file_path = repo_path / Path(target_path)
         if parsed_file.paths.target != "/dev/null" and file_path.is_file():
             file_contents[target_path] = file_path.read_text(encoding="utf-8")
