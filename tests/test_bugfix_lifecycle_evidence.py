@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -10,7 +12,7 @@ from bcbench.results.bugfix import BugFixPhaseResult, BugFixPhaseStatus
 
 def _lifecycle_paths(tmp_path: Path) -> BugFixLifecyclePaths:
     entry_root = tmp_path / "entry"
-    protected_root = entry_root / "protected"
+    protected_root = tmp_path / "protected"
     return BugFixLifecyclePaths(
         entry_root=entry_root,
         baseline_workspace=entry_root / "baseline",
@@ -21,9 +23,23 @@ def _lifecycle_paths(tmp_path: Path) -> BugFixLifecyclePaths:
         evidence=entry_root / "evidence",
         protected_root=protected_root,
         trusted_source=protected_root / "repository.git",
-        checkpoints=entry_root / "checkpoints",
-        final_results=entry_root / "final-results",
+        checkpoints=protected_root / "checkpoints",
+        final_results=protected_root / "final-results",
     )
+
+
+def _create_junction(junction: Path, target: Path) -> None:
+    target.mkdir(parents=True)
+    junction.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(junction), str(target)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        pytest.skip(f"Directory junction creation is unavailable: {result.stderr or result.stdout}")
 
 
 def test_lifecycle_models_are_immutable(tmp_path: Path) -> None:
@@ -120,6 +136,41 @@ def test_protect_artifact_rejects_unsafe_kind(tmp_path: Path, kind: str) -> None
 
 
 def test_evidence_store_accepts_explicit_roots(tmp_path: Path) -> None:
-    store = EvidenceStore(evidence_root=tmp_path / "evidence", protected_root=tmp_path / "final-results")
+    store = EvidenceStore(
+        entry_root=tmp_path / "entry",
+        evidence_root=tmp_path / "entry" / "evidence",
+        protected_root=tmp_path / "protected",
+        final_results=tmp_path / "protected" / "final-results",
+    )
 
-    assert store.save_text("run.log", "ok") == tmp_path / "evidence" / "diagnostics" / "run.log"
+    assert store.save_text("run.log", "ok") == tmp_path / "entry" / "evidence" / "diagnostics" / "run.log"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("final_results", "entry"),
+        ("final_results", "protected"),
+        ("evidence", "protected"),
+    ],
+)
+def test_evidence_store_rejects_roots_outside_trust_boundaries(tmp_path: Path, field: str, value: str) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    replacements = {
+        "entry": paths.entry_root / "exposed",
+        "protected": paths.protected_root,
+    }
+    invalid = BugFixLifecyclePaths(**{**paths.__dict__, field: replacements[value]})
+
+    with pytest.raises(ValueError, match=r"entry_root|protected_root"):
+        EvidenceStore(invalid)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory junction regression")
+def test_evidence_store_rechecks_junctions_before_writing(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    store = EvidenceStore(paths)
+    _create_junction(paths.evidence, tmp_path / "outside")
+
+    with pytest.raises(ValueError, match="reparse point"):
+        store.save_text("run.log", "blocked")

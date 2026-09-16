@@ -4,19 +4,15 @@ from pathlib import Path
 from uuid import uuid4
 
 from bcbench.evaluate.bugfix_lifecycle.models import BugFixLifecyclePaths, TrustedSource
+from bcbench.evaluate.bugfix_lifecycle.path_safety import (
+    ENTRY_MANAGED_PATH_NAMES,
+    absolute_path,
+    reject_reparse_components,
+    require_strict_descendant,
+    validate_lifecycle_paths,
+)
 from bcbench.operations.filesystem_operations import remove_tree
 
-_MANAGED_PATH_NAMES = (
-    "baseline_workspace",
-    "agent_workspace",
-    "agent_logs",
-    "mounted_staging",
-    "evaluator_workspaces",
-    "evidence",
-    "protected_root",
-    "checkpoints",
-    "final_results",
-)
 _WINDOWS_RESERVED_NAMES = {
     "AUX",
     "CON",
@@ -61,37 +57,6 @@ def _run_git(arguments: list[str], *, cwd: Path | None = None) -> str:
     return result.stdout.strip()
 
 
-def _is_reparse_point(path: Path) -> bool:
-    return path.is_symlink() or path.is_junction()
-
-
-def _reject_reparse_components(path: Path, root: Path) -> None:
-    absolute_path = path.absolute()
-    absolute_root = root.absolute()
-    try:
-        relative_path = absolute_path.relative_to(absolute_root)
-    except ValueError:
-        return
-
-    current = absolute_root
-    if _is_reparse_point(current):
-        raise ValueError(f"Refusing symbolic link or reparse point: {current}")
-    for part in relative_path.parts:
-        if part == "..":
-            return
-        current /= part
-        if _is_reparse_point(current):
-            raise ValueError(f"Refusing symbolic link or reparse point: {current}")
-
-
-def _require_strict_child(path: Path, root: Path, root_name: str) -> Path:
-    resolved_path = path.resolve()
-    resolved_root = root.resolve()
-    if resolved_path == resolved_root or not resolved_path.is_relative_to(resolved_root):
-        raise ValueError(f"{path} must resolve below {root_name} {resolved_root}")
-    return resolved_path
-
-
 def _safe_workspace_name(name: str) -> str:
     reserved_stem = name.partition(".")[0].upper()
     if not name or name in {".", ".."} or name.endswith((" ", ".")) or any(character in name for character in ("/", "\\", ":", "\0")) or reserved_stem in _WINDOWS_RESERVED_NAMES:
@@ -101,23 +66,16 @@ def _safe_workspace_name(name: str) -> str:
 
 class TrustedWorkspaceBuilder:
     def __init__(self, paths: BugFixLifecyclePaths) -> None:
-        self._paths = paths
-        _reject_reparse_components(paths.entry_root, paths.entry_root)
-        self._entry_root = paths.entry_root.resolve()
-        if self._entry_root == Path(self._entry_root.anchor):
-            raise ValueError("entry_root cannot be a filesystem root")
-
-        self._managed_paths = {}
-        for name in _MANAGED_PATH_NAMES:
-            managed_path = getattr(paths, name)
-            _reject_reparse_components(managed_path, paths.entry_root)
-            self._managed_paths[name] = _require_strict_child(managed_path, self._entry_root, "entry_root")
-        _reject_reparse_components(paths.trusted_source, paths.protected_root)
-        self._trusted_source = _require_strict_child(paths.trusted_source, self._managed_paths["protected_root"], "protected_root")
+        self._paths = validate_lifecycle_paths(paths)
+        self._entry_root = self._paths.entry_root
+        self._protected_root = self._paths.protected_root
+        self._managed_paths = {name: getattr(self._paths, name) for name in ENTRY_MANAGED_PATH_NAMES}
+        self._trusted_source = self._paths.trusted_source
+        self._captured_source: TrustedSource | None = None
 
     def capture_trusted_source(self, baseline: Path) -> TrustedSource:
-        _reject_reparse_components(baseline, self._paths.entry_root)
-        resolved_baseline = _require_strict_child(baseline, self._entry_root, "entry_root")
+        reject_reparse_components(baseline, self._entry_root)
+        resolved_baseline = require_strict_descendant(baseline, self._entry_root, "baseline", "entry_root")
         if resolved_baseline != self._managed_paths["baseline_workspace"]:
             raise ValueError("Baseline must match the managed baseline_workspace")
         if not resolved_baseline.is_dir():
@@ -127,6 +85,7 @@ class TrustedWorkspaceBuilder:
 
         commit = _run_git(["rev-parse", "--verify", "HEAD^{commit}"], cwd=resolved_baseline)
         self._trusted_source.parent.mkdir(parents=True, exist_ok=True)
+        reject_reparse_components(self._trusted_source, self._protected_root)
         _run_git(
             [
                 "clone",
@@ -139,7 +98,8 @@ class TrustedWorkspaceBuilder:
             ]
         )
         _run_git([f"--git-dir={self._trusted_source}", "cat-file", "-e", f"{commit}^{{commit}}"])
-        return TrustedSource(repository=self._trusted_source, commit=commit)
+        self._captured_source = TrustedSource(repository=self._trusted_source, commit=commit)
+        return self._captured_source
 
     def create_agent_workspace(self, trusted_source: TrustedSource) -> Path:
         destination = self._managed_paths["agent_workspace"]
@@ -150,14 +110,14 @@ class TrustedWorkspaceBuilder:
         safe_name = _safe_workspace_name(name)
         evaluator_root = self._managed_paths["evaluator_workspaces"]
         destination = evaluator_root / f"{safe_name}-{uuid4().hex}"
-        _require_strict_child(destination, evaluator_root, "evaluator_workspaces")
+        require_strict_descendant(destination, evaluator_root, "destination", "evaluator_workspaces")
         self._clone_trusted_commit(trusted_source, destination)
         return destination
 
     def remove_baseline_workspace(self) -> None:
         baseline = self._managed_paths["baseline_workspace"]
-        _reject_reparse_components(baseline, self._entry_root)
-        _require_strict_child(baseline, self._entry_root, "entry_root")
+        reject_reparse_components(baseline, self._entry_root)
+        require_strict_descendant(baseline, self._entry_root, "baseline_workspace", "entry_root")
         if not baseline.exists():
             return
         if not baseline.is_dir():
@@ -165,15 +125,21 @@ class TrustedWorkspaceBuilder:
         remove_tree(baseline)
 
     def _clone_trusted_commit(self, trusted_source: TrustedSource, destination: Path) -> None:
-        repository = trusted_source.repository.resolve()
-        if repository != self._trusted_source:
+        if self._captured_source is None:
+            raise ValueError("Trusted source has not been captured")
+        repository = absolute_path(trusted_source.repository)
+        if repository != self._captured_source.repository:
             raise ValueError("Trusted repository does not match the protected trusted source")
+        if trusted_source.commit != self._captured_source.commit:
+            raise ValueError("Trusted commit does not match the captured trusted source")
+        reject_reparse_components(repository, self._protected_root)
         if destination.exists():
             raise FileExistsError(f"Workspace already exists: {destination}")
-        _reject_reparse_components(destination, self._entry_root)
-        _require_strict_child(destination, self._entry_root, "entry_root")
+        reject_reparse_components(destination, self._entry_root)
+        require_strict_descendant(destination, self._entry_root, "destination", "entry_root")
 
         destination.parent.mkdir(parents=True, exist_ok=True)
+        reject_reparse_components(destination, self._entry_root)
         _run_git(
             [
                 "clone",
@@ -184,7 +150,8 @@ class TrustedWorkspaceBuilder:
                 str(destination),
             ]
         )
-        _run_git(["checkout", "--detach", trusted_source.commit], cwd=destination)
+        reject_reparse_components(destination, self._entry_root)
+        _run_git(["checkout", "--detach", self._captured_source.commit], cwd=destination)
         checked_out_commit = _run_git(["rev-parse", "--verify", "HEAD^{commit}"], cwd=destination)
-        if checked_out_commit != trusted_source.commit:
-            raise ValueError(f"Workspace checkout mismatch: expected {trusted_source.commit}, got {checked_out_commit}")
+        if checked_out_commit != self._captured_source.commit:
+            raise ValueError(f"Workspace checkout mismatch: expected {self._captured_source.commit}, got {checked_out_commit}")

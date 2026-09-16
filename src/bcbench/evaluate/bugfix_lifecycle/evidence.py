@@ -11,6 +11,13 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from bcbench.evaluate.bugfix_lifecycle.models import BugFixLifecyclePaths
+from bcbench.evaluate.bugfix_lifecycle.path_safety import (
+    absolute_path,
+    reject_reparse_components,
+    require_strict_descendant,
+    validate_evidence_roots,
+    validate_lifecycle_paths,
+)
 from bcbench.results.bugfix import BugFixPhaseResult
 
 _HASH_CHUNK_SIZE = 1024 * 1024
@@ -79,49 +86,64 @@ def _flush_file(file: _FlushableFile) -> None:
 class EvidenceStore:
     def __init__(
         self,
-        paths: BugFixLifecyclePaths | Path | None = None,
-        protected_root: Path | None = None,
+        paths: BugFixLifecyclePaths | None = None,
         *,
+        entry_root: Path | None = None,
         evidence_root: Path | None = None,
+        protected_root: Path | None = None,
+        final_results: Path | None = None,
     ) -> None:
         if isinstance(paths, BugFixLifecyclePaths):
-            if evidence_root is not None or protected_root is not None:
+            if any(root is not None for root in (entry_root, evidence_root, protected_root, final_results)):
                 raise ValueError("Explicit roots cannot be combined with lifecycle paths")
-            self._evidence_root = paths.evidence
-            self._protected_root = paths.final_results
+            validated_paths = validate_lifecycle_paths(paths)
+            self._entry_root = validated_paths.entry_root
+            self._evidence_root = validated_paths.evidence
+            self._protected_root = validated_paths.protected_root
+            self._final_results = validated_paths.final_results
         else:
-            if isinstance(paths, Path):
-                if evidence_root is not None:
-                    raise ValueError("Evidence root was provided twice")
-                evidence_root = paths
-            if evidence_root is None or protected_root is None:
-                raise ValueError("Evidence and protected roots are required")
-            self._evidence_root = evidence_root
-            self._protected_root = protected_root
+            if paths is not None:
+                raise TypeError("paths must be BugFixLifecyclePaths")
+            if entry_root is None or evidence_root is None or protected_root is None or final_results is None:
+                raise ValueError("Entry, evidence, protected, and final result roots are required")
+            self._entry_root, self._evidence_root, self._protected_root, self._final_results = validate_evidence_roots(
+                entry_root,
+                evidence_root,
+                protected_root,
+                final_results,
+            )
 
     def save_phase(self, name: str, result: BugFixPhaseResult) -> Path:
-        return self._write_json(self._evidence_root / "phases" / _with_suffix(name, ".json"), result)
+        return self._write_json(self._evidence_root / "phases" / _with_suffix(name, ".json"), result, self._evidence_root, self._entry_root)
 
     def save_submission(self, name: str, content: str) -> Path:
-        return self._write_text(self._evidence_root / "submissions" / _safe_name(name), content)
+        return self._write_text(self._evidence_root / "submissions" / _safe_name(name), content, self._evidence_root, self._entry_root)
 
     def save_checkpoint_manifest(self, name: str, manifest: object) -> Path:
-        return self._write_json(self._evidence_root / "checkpoints" / _with_suffix(name, ".json"), manifest)
+        return self._write_json(
+            self._evidence_root / "checkpoints" / _with_suffix(name, ".json"),
+            manifest,
+            self._evidence_root,
+            self._entry_root,
+        )
 
     def save_text(self, name: str, diagnostic: str) -> Path:
-        return self._write_text(self._evidence_root / "diagnostics" / _safe_name(name), diagnostic)
+        return self._write_text(self._evidence_root / "diagnostics" / _safe_name(name), diagnostic, self._evidence_root, self._entry_root)
 
     def save_final_result(self, result: object) -> Path:
-        return self._write_json(self._protected_root / "final-result.json", result)
+        return self._write_json(self._final_results / "final-result.json", result, self._final_results, self._protected_root)
 
     def protect_artifact(self, source: Path, kind: str) -> Path:
         safe_kind = _safe_kind(kind)
+        self._validate_destination(self._final_results, self._final_results, self._protected_root)
         if not source.is_file() or source.is_symlink():
             raise ValueError(f"Artifact source must be a regular file: {source}")
 
         source_hash = sha256_file(source)
-        destination = self._protected_root / "artifacts" / safe_kind / f"{source_hash}{source.suffix}"
+        destination = self._final_results / "artifacts" / safe_kind / f"{source_hash}{source.suffix}"
+        self._validate_destination(destination, self._final_results, self._protected_root)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        self._validate_destination(destination, self._final_results, self._protected_root)
         if destination.exists():
             if not destination.is_file() or destination.is_symlink() or sha256_file(destination) != source_hash:
                 raise ValueError(f"Protected artifact hash mismatch: {destination}")
@@ -129,6 +151,7 @@ class EvidenceStore:
 
         temporary_path: Path | None = None
         try:
+            self._validate_destination(destination, self._final_results, self._protected_root)
             with tempfile.NamedTemporaryFile(
                 dir=destination.parent,
                 prefix=f".{destination.name}.",
@@ -136,10 +159,14 @@ class EvidenceStore:
                 delete=False,
             ) as temporary:
                 temporary_path = Path(temporary.name)
+                self._validate_destination(temporary_path, self._final_results, self._protected_root)
+                if not source.is_file() or source.is_symlink():
+                    raise ValueError(f"Artifact source must be a regular file: {source}")
                 with source.open("rb") as source_file:
                     shutil.copyfileobj(source_file, temporary)
                 _flush_file(temporary)
 
+            self._validate_destination(destination, self._final_results, self._protected_root)
             if sha256_file(temporary_path) != source_hash:
                 raise ValueError(f"Copied artifact hash mismatch: {source}")
             if destination.exists():
@@ -147,6 +174,7 @@ class EvidenceStore:
                     raise ValueError(f"Protected artifact hash mismatch: {destination}")
                 temporary_path.unlink()
                 return destination
+            self._validate_destination(destination, self._final_results, self._protected_root)
             temporary_path.replace(destination)
             temporary_path = None
         finally:
@@ -157,12 +185,25 @@ class EvidenceStore:
             raise ValueError(f"Protected artifact hash mismatch after replace: {destination}")
         return destination
 
-    def _write_json(self, destination: Path, value: object) -> Path:
-        serialized = json.dumps(_json_serializable(value), indent=2, sort_keys=True) + "\n"
-        return self._write_text(destination, serialized)
+    def _validate_roots(self) -> None:
+        validate_evidence_roots(self._entry_root, self._evidence_root, self._protected_root, self._final_results)
 
-    def _write_text(self, destination: Path, content: str) -> Path:
+    def _validate_destination(self, destination: Path, managed_root: Path, containing_root: Path) -> Path:
+        self._validate_roots()
+        absolute_destination = absolute_path(destination)
+        if absolute_destination != managed_root:
+            require_strict_descendant(absolute_destination, managed_root, "destination", managed_root.name)
+        reject_reparse_components(absolute_destination, containing_root)
+        return absolute_destination
+
+    def _write_json(self, destination: Path, value: object, managed_root: Path, containing_root: Path) -> Path:
+        serialized = json.dumps(_json_serializable(value), indent=2, sort_keys=True) + "\n"
+        return self._write_text(destination, serialized, managed_root, containing_root)
+
+    def _write_text(self, destination: Path, content: str, managed_root: Path, containing_root: Path) -> Path:
+        destination = self._validate_destination(destination, managed_root, containing_root)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        self._validate_destination(destination, managed_root, containing_root)
         temporary_path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -175,8 +216,10 @@ class EvidenceStore:
                 delete=False,
             ) as temporary:
                 temporary_path = Path(temporary.name)
+                self._validate_destination(temporary_path, managed_root, containing_root)
                 temporary.write(content)
                 _flush_file(temporary)
+            self._validate_destination(destination, managed_root, containing_root)
             temporary_path.replace(destination)
             temporary_path = None
         finally:

@@ -1,10 +1,12 @@
 import os
+import stat
 import subprocess
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
-from bcbench.evaluate.bugfix_lifecycle import BugFixLifecyclePaths, TrustedWorkspaceBuilder
+from bcbench.evaluate.bugfix_lifecycle import BugFixLifecyclePaths, TrustedSource, TrustedWorkspaceBuilder
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -32,7 +34,7 @@ def _create_repository(path: Path) -> str:
 
 def _lifecycle_paths(tmp_path: Path, *, baseline_workspace: Path | None = None) -> BugFixLifecyclePaths:
     entry_root = tmp_path / "entry"
-    protected_root = entry_root / "protected"
+    protected_root = tmp_path / "protected"
     return BugFixLifecyclePaths(
         entry_root=entry_root,
         baseline_workspace=baseline_workspace or entry_root / "baseline",
@@ -43,9 +45,28 @@ def _lifecycle_paths(tmp_path: Path, *, baseline_workspace: Path | None = None) 
         evidence=entry_root / "evidence",
         protected_root=protected_root,
         trusted_source=protected_root / "repository.git",
-        checkpoints=entry_root / "checkpoints",
-        final_results=entry_root / "final-results",
+        checkpoints=protected_root / "checkpoints",
+        final_results=protected_root / "final-results",
     )
+
+
+def _object_files(repository: Path) -> dict[str, Path]:
+    objects = repository / "objects"
+    return {sha256(path.read_bytes()).hexdigest(): path for path in objects.rglob("*") if path.is_file()}
+
+
+def _create_junction(junction: Path, target: Path) -> None:
+    target.mkdir(parents=True)
+    junction.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(junction), str(target)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        pytest.skip(f"Directory junction creation is unavailable: {result.stderr or result.stdout}")
 
 
 def test_trusted_workspaces_are_independent_and_ignore_agent_git_state(tmp_path: Path) -> None:
@@ -95,10 +116,60 @@ def test_capture_ignores_baseline_replace_refs(tmp_path: Path) -> None:
     replacement_commit = _git("rev-parse", "HEAD", cwd=paths.baseline_workspace)
     _git("replace", replacement_commit, trusted_commit, cwd=paths.baseline_workspace)
 
-    trusted_source = TrustedWorkspaceBuilder(paths).capture_trusted_source(paths.baseline_workspace)
+    builder = TrustedWorkspaceBuilder(paths)
+    trusted_source = builder.capture_trusted_source(paths.baseline_workspace)
+    workspace = builder.create_evaluator_workspace(trusted_source, "replace-ref")
 
     assert trusted_source.commit == replacement_commit
     assert _git("--git-dir", str(trusted_source.repository), "--no-replace-objects", "cat-file", "-t", trusted_source.commit, cwd=tmp_path) == "commit"
+    assert (workspace / "tracked.txt").read_text(encoding="utf-8") == "replacement\n"
+
+
+def test_builder_rejects_forged_trusted_commit_that_exists(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    earlier_commit = _create_repository(paths.baseline_workspace)
+    (paths.baseline_workspace / "tracked.txt").write_text("latest\n", encoding="utf-8")
+    _git("add", "tracked.txt", cwd=paths.baseline_workspace)
+    _git("commit", "-m", "latest", cwd=paths.baseline_workspace)
+    builder = TrustedWorkspaceBuilder(paths)
+    trusted_source = builder.capture_trusted_source(paths.baseline_workspace)
+    forged_source = TrustedSource(repository=trusted_source.repository, commit=earlier_commit)
+
+    with pytest.raises(ValueError, match="commit"):
+        builder.create_agent_workspace(forged_source)
+
+
+def test_builder_rejects_forged_trusted_repository_containing_commit(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    _create_repository(paths.baseline_workspace)
+    builder = TrustedWorkspaceBuilder(paths)
+    trusted_source = builder.capture_trusted_source(paths.baseline_workspace)
+    forged_repository = paths.protected_root / "forged.git"
+    _git("clone", "--bare", str(trusted_source.repository), str(forged_repository), cwd=tmp_path)
+    forged_source = TrustedSource(repository=forged_repository, commit=trusted_source.commit)
+
+    with pytest.raises(ValueError, match="repository"):
+        builder.create_agent_workspace(forged_source)
+
+
+def test_agent_clone_does_not_hardlink_protected_git_objects(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    _create_repository(paths.baseline_workspace)
+    builder = TrustedWorkspaceBuilder(paths)
+    trusted_source = builder.capture_trusted_source(paths.baseline_workspace)
+    agent_workspace = builder.create_agent_workspace(trusted_source)
+    protected_objects = _object_files(paths.trusted_source)
+    agent_objects = _object_files(agent_workspace / ".git")
+    common_digests = protected_objects.keys() & agent_objects.keys()
+
+    assert common_digests
+    for digest in common_digests:
+        assert not protected_objects[digest].samefile(agent_objects[digest])
+
+    agent_object = agent_objects[next(iter(common_digests))]
+    agent_object.chmod(stat.S_IWRITE)
+    agent_object.unlink()
+    assert _git("--git-dir", str(paths.trusted_source), "fsck", "--no-dangling", cwd=tmp_path) == ""
 
 
 def test_builder_rejects_managed_path_escape(tmp_path: Path) -> None:
@@ -114,6 +185,30 @@ def test_builder_rejects_trusted_source_outside_protected_root(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="protected_root"):
         TrustedWorkspaceBuilder(escaped)
+
+
+def test_builder_rejects_overlapping_baseline_and_protected_root(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    overlapping = BugFixLifecyclePaths(**{**paths.__dict__, "protected_root": paths.baseline_workspace})
+
+    with pytest.raises(ValueError, match="disjoint"):
+        TrustedWorkspaceBuilder(overlapping)
+
+
+def test_builder_rejects_agent_visible_final_results(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    exposed = BugFixLifecyclePaths(**{**paths.__dict__, "final_results": paths.entry_root / "final-results"})
+
+    with pytest.raises(ValueError, match="protected_root"):
+        TrustedWorkspaceBuilder(exposed)
+
+
+def test_builder_rejects_final_results_equal_to_protected_root(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    equal_root = BugFixLifecyclePaths(**{**paths.__dict__, "final_results": paths.protected_root})
+
+    with pytest.raises(ValueError, match="protected_root"):
+        TrustedWorkspaceBuilder(equal_root)
 
 
 def test_remove_baseline_rejects_entry_root_deletion(tmp_path: Path) -> None:
@@ -134,3 +229,14 @@ def test_remove_baseline_rejects_symlinked_workspace(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="symbolic link"):
         TrustedWorkspaceBuilder(paths)
     assert outside.exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory junction regression")
+def test_builder_rejects_junction_intermediate(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    junction = paths.entry_root / "redirect"
+    _create_junction(junction, tmp_path / "outside")
+    redirected = BugFixLifecyclePaths(**{**paths.__dict__, "baseline_workspace": junction / "baseline"})
+
+    with pytest.raises(ValueError, match="reparse point"):
+        TrustedWorkspaceBuilder(redirected)
