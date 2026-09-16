@@ -200,7 +200,9 @@ def _is_allowed_new_test_member(member: ExecutableMemberOccurrence) -> bool:
     if member.kind != "procedure":
         return False
     if member.is_test:
-        return attributes == ("test",)
+        test_attribute_count = attributes.count("test")
+        handler_functions_count = attributes.count("handlerfunctions")
+        return test_attribute_count == 1 and handler_functions_count <= 1 and len(attributes) == test_attribute_count + handler_functions_count
     return member.access_modifier == "local" and all(attribute in _TEST_HANDLER_ATTRIBUTES for attribute in attributes)
 
 

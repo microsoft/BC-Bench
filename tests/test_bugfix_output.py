@@ -1196,6 +1196,83 @@ def test_accepts_allowlisted_test_object_additions(tmp_path: Path, added_object_
     assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
 
 
+@pytest.mark.parametrize(
+    "added_object_lines",
+    [
+        [
+            "    [Test]",
+            "    [HandlerFunctions('HandleMessage')]",
+            "    procedure NewTest()",
+            "    begin",
+            "    end;",
+            "",
+            "    [MessageHandler]",
+            "    local procedure HandleMessage(Message: Text[1024])",
+            "    begin",
+            "    end;",
+        ],
+        [
+            "    [hAnDlErFuNcTiOnS('HandleMessage')]",
+            "    [tEsT]",
+            "    procedure NewTest()",
+            "    begin",
+            "    end;",
+            "",
+            "    [mEsSaGeHaNdLeR]",
+            "    local procedure HandleMessage(Message: Text[1024])",
+            "    begin",
+            "    end;",
+        ],
+    ],
+    ids=["test-handler-functions-message-handler", "mixed-case-metadata"],
+)
+def test_accepts_test_with_handler_functions_metadata(
+    tmp_path: Path,
+    added_object_lines: list[str],
+):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_test_addition_submission(repo_path, added_object_lines)
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
+
+
+@pytest.mark.parametrize(
+    "test_attributes",
+    [
+        ["Test", "Scope('OnPrem')"],
+        ["Test", "EventSubscriber(ObjectType::Codeunit, Codeunit::Feature, 'Changed', '', false, false)"],
+        ["Test", "Test"],
+        ["Test", "HandlerFunctions('HandleMessage')", "HandlerFunctions('HandleMessage')"],
+    ],
+    ids=["unknown", "event-subscriber", "duplicate-test", "duplicate-handler-functions"],
+)
+def test_rejects_invalid_test_procedure_attributes(
+    tmp_path: Path,
+    test_attributes: list[str],
+):
+    repo_path = tmp_path / "repo"
+    added_object_lines = [
+        *(f"    [{attribute}]" for attribute in test_attributes),
+        "    procedure NewTest()",
+        "    begin",
+        "    end;",
+    ]
+    generated_patch = _real_git_test_addition_submission(repo_path, added_object_lines)
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Invalid addition to test file"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
+
+
 def test_accepts_one_test_in_new_file(tmp_path: Path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
