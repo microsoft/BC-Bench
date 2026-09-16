@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
 from bcbench.evaluate.bugfix_output import analyze_generated_bugfix_output as _analyze_generated_bugfix_output
 from bcbench.exceptions import EmptyDiffError, GeneratedSubmissionError, GitOperationError
@@ -160,6 +161,42 @@ def test_complete_diff_includes_committed_and_uncommitted_changes_from_trusted_b
             trusted_commit,
             allowed_app_projects=["src/Main"],
         )
+
+
+def test_trusted_baseline_ignores_git_replacement_refs(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    _write_file(repo_path, "src/Main/Feature.Codeunit.al", "codeunit 1 Feature {}\n")
+    _write_file(
+        repo_path,
+        "src/Tests/FeatureTests.Codeunit.al",
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+    )
+    original_commit = _commit_all(repo_path, "Trusted baseline")
+
+    _write_file(repo_path, "src/Main/Feature.Codeunit.al", "codeunit 1 Feature {}\n// Fix\n")
+    _write_file(
+        repo_path,
+        "src/Tests/FeatureTests.Codeunit.al",
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}\n",
+    )
+    later_commit = _commit_all(repo_path, "Agent submission")
+    subprocess.run(["git", "replace", original_commit, later_commit], cwd=repo_path, check=True)
+
+    diff = stage_and_get_complete_diff(repo_path, original_commit)
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        diff,
+        original_commit,
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert "+// Fix" in diff
+    assert "+    procedure NewTest()" in diff
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
 
 
 @pytest.mark.parametrize(

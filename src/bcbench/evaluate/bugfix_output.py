@@ -150,7 +150,7 @@ def _parse_patch_files(generated_patch: str) -> tuple[_ParsedPatchFile, ...]:
 
 def _read_trusted_file(repo_path: Path, trusted_commit: str, file_path: str) -> str:
     tree_result = subprocess.run(
-        ["git", "ls-tree", "--name-only", trusted_commit, "--", file_path],
+        ["git", "--no-replace-objects", "ls-tree", "--name-only", trusted_commit, "--", file_path],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",
@@ -161,7 +161,7 @@ def _read_trusted_file(repo_path: Path, trusted_commit: str, file_path: str) -> 
         return ""
 
     return subprocess.run(
-        ["git", "show", f"{trusted_commit}:{file_path}"],
+        ["git", "--no-replace-objects", "show", f"{trusted_commit}:{file_path}"],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",

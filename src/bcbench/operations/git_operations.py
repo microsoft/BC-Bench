@@ -187,7 +187,7 @@ def resolve_trusted_commit(repo_path: Path, trusted_commit: str) -> str:
         raise GitOperationError("Trusted baseline revision is missing.")
 
     result = subprocess.run(
-        ["git", "rev-parse", "--verify", "--end-of-options", f"{trusted_commit}^{{commit}}"],
+        ["git", "--no-replace-objects", "rev-parse", "--verify", "--end-of-options", f"{trusted_commit}^{{commit}}"],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",
@@ -211,7 +211,7 @@ def stage_and_get_complete_diff(repo_path: Path, trusted_commit: str) -> str:
         check=True,
     )
     result = subprocess.run(
-        ["git", "-c", "core.quotePath=false", "diff", "--cached", resolved_trusted_commit, "--binary", "--no-ext-diff"],
+        ["git", "--no-replace-objects", "-c", "core.quotePath=false", "diff", "--cached", resolved_trusted_commit, "--binary", "--no-ext-diff"],
         cwd=repo_path,
         capture_output=True,
         encoding="utf-8",
