@@ -27,12 +27,27 @@ class BugFixMetricName(StrEnum):
 
 
 class BugFixMetricSummary(BaseModel):
-    successes: int
-    determined_failures: int
-    unknown: int
-    scheduled: int
-    rate: float | None
-    coverage: float
+    successes: int = Field(ge=0)
+    determined_failures: int = Field(ge=0)
+    unknown: int = Field(ge=0)
+    scheduled: int = Field(ge=0)
+    rate: float | None = Field(ge=0.0, le=1.0)
+    coverage: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_counts_and_rates(self) -> Self:
+        if self.scheduled != self.successes + self.determined_failures + self.unknown:
+            raise ValueError("scheduled must equal successes + determined_failures + unknown")
+
+        determined = self.successes + self.determined_failures
+        expected_rate = self.successes / determined if determined else None
+        if self.rate != expected_rate:
+            raise ValueError("rate must equal successes / (successes + determined_failures), or None when no results are determined")
+
+        expected_coverage = determined / self.scheduled if self.scheduled else 0.0
+        if self.coverage != expected_coverage:
+            raise ValueError("coverage must equal (successes + determined_failures) / scheduled, or 0 when nothing is scheduled")
+        return self
 
     @classmethod
     def from_statuses(cls, statuses: Sequence[BugFixPhaseStatus]) -> "BugFixMetricSummary":
@@ -124,11 +139,15 @@ class BugFixResult(ExecutionBasedEvaluationResult):
             return self.benchmark_fix.status
         if self.timeout:
             return BugFixPhaseStatus.FAILED
-        return _combine_required_statuses(
+        resolution_statuses = [
             self.metric_status(BugFixMetricName.GENERATED_TEST_VALIDITY),
             self.metric_status(BugFixMetricName.GENERATED_PAIR_TRANSITION),
             self.metric_status(BugFixMetricName.FIX_QUALITY),
-        )
+        ]
+        fix_build_status = self.metric_status(BugFixMetricName.FIX_BUILD)
+        if fix_build_status in (BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION):
+            resolution_statuses.append(fix_build_status)
+        return _combine_required_statuses(*resolution_statuses)
 
     @property
     def category_metrics(self) -> dict[str, int | float | bool | str]:
@@ -225,12 +244,14 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
     @model_validator(mode="before")
     @classmethod
     def restore_legacy_metric_summaries(cls, payload: object) -> object:
-        if not isinstance(payload, dict) or "metric_summaries" in payload:
+        if not isinstance(payload, dict):
             return payload
 
         data: dict[str, Any] = dict(payload)
+        if "metric_summaries" in data:
+            return data
         if data.get("runtime_isolation", "package-normalized") != "package-normalized":
-            return payload
+            raise ValueError("metric_summaries is required for checkpointed bug-fix summaries")
 
         total = int(data["total"])
         resolved = int(data.get("resolved", 0))
@@ -262,6 +283,16 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
         }
         return data
 
+    @model_validator(mode="after")
+    def validate_metric_summaries(self) -> Self:
+        expected_metrics = set(BugFixMetricName)
+        actual_metrics = set(self.metric_summaries)
+        if actual_metrics != expected_metrics:
+            missing = sorted(metric.value for metric in expected_metrics - actual_metrics)
+            extra = sorted(str(metric) for metric in actual_metrics - expected_metrics)
+            raise ValueError(f"metric_summaries must contain exactly every BugFixMetricName; missing={missing}, extra={extra}")
+        return self
+
     @classmethod
     def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "BugFixResultSummary":
         if not results:
@@ -273,15 +304,17 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
             raise ValueError(f"BugFixResultSummary requires only BugFixResult instances, got: {result_types}")
 
         bugfix_results = [result for result in results if isinstance(result, BugFixResult)]
+        identity_fields = ("model", "agent_name", "agent_version", "experiment", "category", "runtime_isolation")
+        first_result = bugfix_results[0]
+        inconsistent_fields = [field for field in identity_fields if any(getattr(result, field) != getattr(first_result, field) for result in bugfix_results[1:])]
+        if inconsistent_fields:
+            raise ValueError(f"Cannot summarize bug-fix results with inconsistent run identity fields: {', '.join(inconsistent_fields)}")
+
         categories = {result.category for result in bugfix_results}
-        if len(categories) != 1:
-            raise ValueError(f"Cannot summarize bug-fix results with mixed categories: {categories}")
         if categories != {EvaluationCategory.BUG_FIX}:
             raise ValueError(f"BugFixResultSummary requires the bug-fix category, got: {categories}")
 
         runtime_isolations = {result.runtime_isolation for result in bugfix_results}
-        if len(runtime_isolations) != 1:
-            raise ValueError(f"Cannot summarize bug-fix results with mixed runtime isolation: {runtime_isolations}")
 
         summary = super().from_results(results, run_id)
         assert isinstance(summary, BugFixResultSummary)

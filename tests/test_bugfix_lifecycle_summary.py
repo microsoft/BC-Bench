@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from bcbench.results.bugfix import (
     BugFixMetricName,
@@ -10,7 +11,7 @@ from bcbench.results.bugfix import (
     BugFixResultSummary,
 )
 from bcbench.results.leaderboard import BugFixLeaderboardAggregate, Leaderboard
-from bcbench.types import EvaluationCategory
+from bcbench.types import EvaluationCategory, ExperimentConfiguration
 from evaluator.scores import FixBuild, FixQuality, GeneratedPairTransition, GeneratedTestValidity, Resolution
 from tests.conftest import create_bugfix_result, create_testgen_result
 
@@ -126,6 +127,23 @@ def test_checkpointed_summary_calculates_all_production_metrics():
     markdown = summary.render_github_metrics_markdown()
     assert "Generated Test Validity: 50.0% (coverage 50.0%, 2/4 determined)" in markdown
     assert "Resolution: 50.0% (coverage 50.0%, 2/4 determined)" in markdown
+
+
+def test_failed_fix_build_is_a_determined_resolution_failure():
+    result = _checkpointed_result(
+        "test__failed-build",
+        test_red=BugFixPhaseStatus.PASSED,
+        test_gold=BugFixPhaseStatus.PASSED,
+        fix_build=BugFixPhaseStatus.FAILED,
+        generated_pair=BugFixPhaseStatus.NOT_RUN,
+        benchmark_fix=BugFixPhaseStatus.NOT_RUN,
+    )
+
+    summary = BugFixResultSummary.from_results([result], run_id="run")
+
+    assert summary.failed == 1
+    assert summary.percentage == 0.0
+    assert summary.instance_results == {"test__failed-build": False}
 
 
 def test_package_normalized_summary_preserves_legacy_headline():
@@ -253,12 +271,31 @@ def test_bugfix_summary_rejects_mixed_categories():
         create_bugfix_result(instance_id="test__wrong-category").model_copy(update={"category": EvaluationCategory.TEST_GENERATION}),
     ]
 
-    with pytest.raises(ValueError, match="mixed categories"):
+    with pytest.raises(ValueError, match="category"):
+        BugFixResultSummary.from_results(results, run_id="run")
+
+
+@pytest.mark.parametrize(
+    ("field", "update"),
+    [
+        ("model", {"model": "claude-sonnet-4"}),
+        ("agent_name", {"agent_name": "claude-code"}),
+        ("agent_version", {"agent_version": "2.0.0"}),
+        ("experiment", {"experiment": ExperimentConfiguration(custom_instructions=True)}),
+    ],
+)
+def test_bugfix_summary_rejects_inconsistent_run_identity_fields(field, update):
+    results = [
+        create_bugfix_result(instance_id="test__first"),
+        create_bugfix_result(instance_id="test__second").model_copy(update=update),
+    ]
+
+    with pytest.raises(ValueError, match=field):
         BugFixResultSummary.from_results(results, run_id="run")
 
 
 def test_bugfix_summary_rejects_mixed_runtime_isolation_before_aggregation():
-    with pytest.raises(ValueError, match="mixed runtime isolation"):
+    with pytest.raises(ValueError, match="runtime_isolation"):
         BugFixResultSummary.from_results(
             [
                 create_bugfix_result(instance_id="test__package"),
@@ -273,6 +310,104 @@ def test_bugfix_summary_rejects_mixed_runtime_isolation_before_aggregation():
             ],
             run_id="run",
         )
+
+
+def _valid_metric_summary_payload():
+    return BugFixMetricSummary(
+        successes=1,
+        determined_failures=1,
+        unknown=1,
+        scheduled=3,
+        rate=0.5,
+        coverage=2 / 3,
+    ).model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"successes": -1},
+        {"determined_failures": -1},
+        {"unknown": -1},
+        {"scheduled": -1},
+        {"scheduled": 4},
+        {"rate": 0.25},
+        {"rate": None},
+        {"coverage": 0.5},
+    ],
+)
+def test_metric_summary_rejects_invalid_persisted_values(update):
+    payload = {**_valid_metric_summary_payload(), **update}
+
+    with pytest.raises(ValidationError):
+        BugFixMetricSummary.model_validate(payload)
+
+
+def test_metric_summary_requires_none_rate_when_nothing_is_determined():
+    with pytest.raises(ValidationError):
+        BugFixMetricSummary.model_validate(
+            {
+                "successes": 0,
+                "determined_failures": 0,
+                "unknown": 1,
+                "scheduled": 1,
+                "rate": 0.0,
+                "coverage": 0.0,
+            }
+        )
+
+
+def test_metric_summary_requires_zero_coverage_when_nothing_is_scheduled():
+    with pytest.raises(ValidationError):
+        BugFixMetricSummary.model_validate(
+            {
+                "successes": 0,
+                "determined_failures": 0,
+                "unknown": 0,
+                "scheduled": 0,
+                "rate": None,
+                "coverage": 0.1,
+            }
+        )
+
+
+def test_bugfix_summary_rejects_partial_metric_summaries():
+    summary = BugFixResultSummary.from_results([create_bugfix_result()], run_id="run")
+    payload = summary.model_dump(mode="json")
+    payload["metric_summaries"].pop(BugFixMetricName.RESOLUTION)
+
+    with pytest.raises(ValidationError, match="metric_summaries"):
+        BugFixResultSummary.model_validate(payload)
+
+
+def test_checkpointed_summary_rejects_missing_metric_summaries():
+    summary = BugFixResultSummary.from_results(
+        [
+            _checkpointed_result(
+                "test__checkpointed",
+                test_red=BugFixPhaseStatus.PASSED,
+                test_gold=BugFixPhaseStatus.PASSED,
+                fix_build=BugFixPhaseStatus.PASSED,
+                generated_pair=BugFixPhaseStatus.PASSED,
+                benchmark_fix=BugFixPhaseStatus.PASSED,
+            )
+        ],
+        run_id="run",
+    )
+    payload = summary.model_dump(mode="json")
+    payload.pop("metric_summaries")
+
+    with pytest.raises(ValidationError, match="metric_summaries"):
+        BugFixResultSummary.model_validate(payload)
+
+
+def test_bugfix_summary_rejects_extra_metric_summaries():
+    summary = BugFixResultSummary.from_results([create_bugfix_result()], run_id="run")
+    payload = summary.model_dump(mode="json")
+    payload["metric_summaries"]["UnexpectedMetric"] = _valid_metric_summary_payload()
+
+    with pytest.raises(ValidationError, match="metric_summaries"):
+        BugFixResultSummary.model_validate(payload)
 
 
 def test_checkpointed_result_exports_production_status_metadata():

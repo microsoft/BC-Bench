@@ -1,3 +1,5 @@
+import pytest
+
 from bcbench.results import bugfix as bugfix_results
 from tests.conftest import create_bugfix_result
 
@@ -61,6 +63,42 @@ def test_failed_required_phase_precedes_infrastructure_error() -> None:
     )
 
     assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.FAILED
+
+
+@pytest.mark.parametrize("fix_build_status", [bugfix_results.BugFixPhaseStatus.FAILED, bugfix_results.BugFixPhaseStatus.INVALID_SUBMISSION])
+def test_determined_fix_build_failure_determines_resolution_when_downstream_phases_are_not_run(fix_build_status) -> None:
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+    fix_build = bugfix_results.BugFixPhaseResult(status=fix_build_status)
+    not_run = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=passed,
+        test_gold=passed,
+        fix_build=fix_build,
+        generated_pair=not_run,
+        benchmark_fix=not_run,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is fix_build_status
+
+
+@pytest.mark.parametrize("fix_build_status", [bugfix_results.BugFixPhaseStatus.INFRASTRUCTURE_ERROR, bugfix_results.BugFixPhaseStatus.NOT_RUN])
+def test_unknown_fix_build_status_does_not_determine_resolution(fix_build_status) -> None:
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+    fix_build = bugfix_results.BugFixPhaseResult(status=fix_build_status)
+    not_run = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=passed,
+        test_gold=passed,
+        fix_build=fix_build,
+        generated_pair=not_run,
+        benchmark_fix=not_run,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.NOT_RUN
 
 
 def test_timeout_only_forces_resolution_to_failed() -> None:
