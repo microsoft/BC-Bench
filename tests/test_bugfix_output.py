@@ -510,7 +510,11 @@ def test_wraps_missing_codeunit_identity_as_invalid_submission(tmp_path: Path):
     product_file = "src/Main/Feature.Codeunit.al"
     test_file = "src/Tests/FeatureTests.Codeunit.al"
     _write_file(repo_path, product_file, "codeunit 1 Feature {}\n")
-    _write_file(repo_path, test_file, "procedure Helper()\n")
+    _write_file(
+        repo_path,
+        test_file,
+        "procedure Helper()\n    [Test]\n    procedure VerifiesFeature()\n",
+    )
     generated_patch = _patch(product_file, "codeunit 1 Feature {}", ["// Fix"]) + _patch(
         test_file,
         "procedure Helper()",
@@ -544,7 +548,7 @@ def test_does_not_wrap_unexpected_test_extraction_errors(tmp_path: Path, monkeyp
     def fail_extraction(*_args: object) -> None:
         raise RuntimeError("programmer error")
 
-    monkeypatch.setattr("bcbench.evaluate.bugfix_output.extract_test_occurrences_from_patch", fail_extraction)
+    monkeypatch.setattr("bcbench.evaluate.bugfix_output.extract_test_occurrences_from_content", fail_extraction)
 
     with pytest.raises(RuntimeError, match="programmer error"):
         analyze_generated_bugfix_output(
@@ -552,6 +556,144 @@ def test_does_not_wrap_unexpected_test_extraction_errors(tmp_path: Path, monkeyp
             generated_patch,
             allowed_app_projects=["src/Main"],
         )
+
+
+def test_rejects_test_procedure_text_inside_block_comment(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text("codeunit 2 FeatureTests\n{\n}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    /*\n    [Test]\n    procedure FakeTest()\n    begin\n    end;\n    */\n}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"No tests extracted from the generated patch\."):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_rejects_test_procedure_text_inside_line_comment_and_string(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text("codeunit 2 FeatureTests\n{\n}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    // [Test]\n    // procedure LineCommentTest()\n    procedure Helper()\n    begin\n        Message('[Test] procedure StringTest()');\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"No tests extracted from the generated patch\."):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_rejects_test_attribute_rebinding_to_inserted_procedure(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure InsertedTest()\n    begin\n    end;\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Existing test behavior modified"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_accepts_one_new_test_in_existing_file(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n\n    [tEsT]\n    procedure NewTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        _git_diff(repo_path),
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
+
+
+def test_accepts_one_test_in_new_file(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/NewFeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        'codeunit 3 "New Feature Tests"\n{\n    [Test]\n    procedure NewFileTest()\n    begin\n    end;\n}\n',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "-N", test_file], cwd=repo_path, check=True)
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        _git_diff(repo_path),
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=3, functionName=frozenset({"NewFileTest"})),)
 
 
 def test_rejects_duplicate_identical_test_procedure_occurrences(tmp_path: Path):
@@ -564,7 +706,7 @@ def test_rejects_duplicate_identical_test_procedure_occurrences(tmp_path: Path):
     _write_file(
         repo_path,
         test_file,
-        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure SameTest()\n    begin\n    end;\n}\n",
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure SameTest()\n    begin\n    end;\n\n    [Test]\n    procedure SameTest()\n    begin\n    end;\n}\n",
     )
     generated_patch = _patch(product_file, "codeunit 1 Feature {}", ["// Fix"]) + _patch(
         test_file,

@@ -1,3 +1,5 @@
+import subprocess
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,8 +10,9 @@ from unidiff.patch import PatchedFile
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError, TestExtractionError
-from bcbench.operations import extract_test_occurrences_from_patch, find_project_path, is_test_project, normalize_test_occurrences, order_project_paths
+from bcbench.operations import extract_test_occurrences_from_content, find_project_path, is_test_project, normalize_test_occurrences, order_project_paths
 from bcbench.operations.patch_operations import GitDiffPaths, decode_git_header_path, extract_git_diff_paths, split_git_diff_blocks
+from bcbench.operations.test_operations import TestOccurrence
 
 
 @dataclass(frozen=True)
@@ -138,6 +141,60 @@ def _parse_patch_files(generated_patch: str) -> tuple[_ParsedPatchFile, ...]:
     return tuple(parsed_files)
 
 
+def _read_head_file(repo_path: Path, file_path: str) -> str:
+    head_result = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=repo_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if head_result.returncode != 0:
+        return ""
+
+    tree_result = subprocess.run(
+        ["git", "ls-tree", "--name-only", "HEAD", "--", file_path],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        text=True,
+        check=True,
+    )
+    if not tree_result.stdout.strip():
+        return ""
+
+    return subprocess.run(
+        ["git", "show", f"HEAD:{file_path}"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        text=True,
+        check=True,
+    ).stdout
+
+
+def _find_generated_test_occurrences(repo_path: Path, test_files: Iterable[_ParsedPatchFile]) -> tuple[TestOccurrence, ...]:
+    generated_occurrences: list[TestOccurrence] = []
+    target_paths = dict.fromkeys(_normalize_repo_path(parsed_file.paths.target) for parsed_file in test_files)
+
+    for target_path in target_paths:
+        file_path = repo_path / Path(target_path)
+        if not file_path.is_file():
+            raise GeneratedSubmissionError(f"Test file does not exist after generated changes: {target_path}")
+
+        baseline_occurrences = extract_test_occurrences_from_content(_read_head_file(repo_path, target_path), target_path)
+        final_occurrences = extract_test_occurrences_from_content(file_path.read_text(encoding="utf-8"), target_path)
+        baseline_counter = Counter(baseline_occurrences)
+        final_counter = Counter(final_occurrences)
+        if baseline_counter - final_counter:
+            raise GeneratedSubmissionError(f"Existing test behavior modified: {target_path}")
+        generated_occurrences.extend((final_counter - baseline_counter).elements())
+
+    if not generated_occurrences:
+        raise NoTestsExtractedError
+    return tuple(generated_occurrences)
+
+
 def analyze_generated_bugfix_output(
     repo_path: Path,
     generated_patch: str,
@@ -184,15 +241,9 @@ def analyze_generated_bugfix_output(
 
     fix_patch = "".join(parsed_file.original_patch for parsed_file in fix_files)
     test_patch = "".join(parsed_file.original_patch for parsed_file in test_files)
-    file_contents: dict[str, str] = {}
-    for parsed_file in test_files:
-        target_path = _normalize_repo_path(parsed_file.paths.target)
-        file_path = repo_path / Path(target_path)
-        if parsed_file.paths.target != "/dev/null" and file_path.is_file():
-            file_contents[target_path] = file_path.read_text(encoding="utf-8")
 
     try:
-        test_occurrences = extract_test_occurrences_from_patch(test_patch, file_contents)
+        test_occurrences = _find_generated_test_occurrences(repo_path, test_files)
     except (NoTestsExtractedError, TestExtractionError) as exc:
         raise GeneratedSubmissionError(str(exc)) from exc
 

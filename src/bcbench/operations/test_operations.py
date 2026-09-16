@@ -16,6 +16,111 @@ class TestOccurrence:
     function_name: str
 
 
+@dataclass(frozen=True)
+class _ALToken:
+    kind: str
+    value: str
+
+
+def _tokenize_al(content: str) -> tuple[_ALToken, ...]:
+    tokens: list[_ALToken] = []
+    index = 0
+
+    while index < len(content):
+        character = content[index]
+        next_character = content[index + 1] if index + 1 < len(content) else ""
+
+        if character.isspace():
+            index += 1
+        elif character == "/" and next_character == "/":
+            newline_index = content.find("\n", index + 2)
+            index = len(content) if newline_index == -1 else newline_index + 1
+        elif character == "/" and next_character == "*":
+            comment_end = content.find("*/", index + 2)
+            index = len(content) if comment_end == -1 else comment_end + 2
+        elif character == "'":
+            index += 1
+            while index < len(content):
+                if content[index] != "'":
+                    index += 1
+                elif index + 1 < len(content) and content[index + 1] == "'":
+                    index += 2
+                else:
+                    index += 1
+                    break
+        elif character == '"':
+            identifier: list[str] = []
+            index += 1
+            while index < len(content):
+                if content[index] != '"':
+                    identifier.append(content[index])
+                    index += 1
+                elif index + 1 < len(content) and content[index + 1] == '"':
+                    identifier.append('"')
+                    index += 2
+                else:
+                    index += 1
+                    break
+            tokens.append(_ALToken(kind="identifier", value="".join(identifier)))
+        elif character.isalpha() or character == "_":
+            identifier_end = index + 1
+            while identifier_end < len(content) and (content[identifier_end].isalnum() or content[identifier_end] == "_"):
+                identifier_end += 1
+            tokens.append(_ALToken(kind="identifier", value=content[index:identifier_end]))
+            index = identifier_end
+        elif character.isdigit():
+            number_end = index + 1
+            while number_end < len(content) and content[number_end].isdigit():
+                number_end += 1
+            tokens.append(_ALToken(kind="number", value=content[index:number_end]))
+            index = number_end
+        else:
+            tokens.append(_ALToken(kind="symbol", value=character))
+            index += 1
+
+    return tuple(tokens)
+
+
+def _find_codeunit_id(tokens: tuple[_ALToken, ...], file_path: str) -> int:
+    for index, token in enumerate(tokens[:-2]):
+        id_token = tokens[index + 1]
+        name_token = tokens[index + 2]
+        if token.kind == "identifier" and token.value.casefold() == "codeunit" and id_token.kind == "number" and name_token.kind == "identifier":
+            return int(id_token.value)
+    raise TestExtractionError(f"No codeunit ID found in {file_path}")
+
+
+def _find_test_procedure_names(tokens: tuple[_ALToken, ...]) -> tuple[str, ...]:
+    function_names: list[str] = []
+    found_test_attribute = False
+    index = 0
+
+    while index < len(tokens):
+        if index + 2 < len(tokens) and tokens[index].value == "[" and tokens[index + 1].kind == "identifier" and tokens[index + 1].value.casefold() == "test" and tokens[index + 2].value == "]":
+            found_test_attribute = True
+            index += 3
+            continue
+
+        token = tokens[index]
+        if token.kind == "identifier" and token.value.casefold() == "procedure":
+            if index + 1 < len(tokens) and tokens[index + 1].kind == "identifier" and found_test_attribute:
+                function_names.append(tokens[index + 1].value)
+            found_test_attribute = False
+        index += 1
+
+    return tuple(function_names)
+
+
+def extract_test_occurrences_from_content(content: str, file_path: str) -> tuple[TestOccurrence, ...]:
+    tokens = _tokenize_al(content)
+    function_names = _find_test_procedure_names(tokens)
+    if not function_names:
+        return ()
+
+    codeunit_id = _find_codeunit_id(tokens, file_path)
+    return tuple(TestOccurrence(codeunit_id=codeunit_id, function_name=function_name) for function_name in function_names)
+
+
 def extract_codeunit_id_from_content(content: str, file_path: str) -> int:
     """Extract codeunit ID from AL file content.
 
@@ -26,11 +131,7 @@ def extract_codeunit_id_from_content(content: str, file_path: str) -> int:
     Returns:
         Codeunit ID (always returns int, raises exception if not found)
     """
-    codeunit_pattern = r'\bcodeunit\s+(\d+)\s+(?:"(?:[^"]|"")*"|[^\W\d]\w*)'
-    match = re.search(codeunit_pattern, content, flags=re.IGNORECASE)
-    if match:
-        return int(match.group(1))
-    raise TestExtractionError(f"No codeunit ID found in {file_path}")
+    return _find_codeunit_id(_tokenize_al(content), file_path)
 
 
 def extract_test_occurrences_from_patch(generated_patch: str, file_contents: dict[str, str]) -> tuple[TestOccurrence, ...]:

@@ -1,7 +1,12 @@
 import pytest
 
 from bcbench.exceptions import NoTestsExtractedError
-from bcbench.operations.test_operations import TestOccurrence, extract_test_occurrences_from_patch, extract_tests_from_patch
+from bcbench.operations.test_operations import (
+    TestOccurrence,
+    extract_test_occurrences_from_content,
+    extract_test_occurrences_from_patch,
+    extract_tests_from_patch,
+)
 
 
 def test_single_test_procedure():
@@ -64,6 +69,51 @@ index abc..def 100644
     assert len(result) == 1
     assert result[0].codeunitID == 2
     assert result[0].functionName == {"VerifiesFeature"}
+
+
+@pytest.mark.parametrize(
+    ("declaration", "attribute"),
+    [
+        ('codeunit 2 "Feature Tests"', "[Test]"),
+        ("codeunit 2 FeatureTests", "[tEsT]"),
+    ],
+)
+def test_parses_test_occurrences_from_al_content(declaration: str, attribute: str):
+    content = f"""
+{declaration}
+{{
+    {attribute}
+    procedure VerifiesFeature()
+    begin
+    end;
+}}
+"""
+
+    result = extract_test_occurrences_from_content(content, "Tests/FeatureTests.Codeunit.al")
+
+    assert result == (TestOccurrence(codeunit_id=2, function_name="VerifiesFeature"),)
+
+
+def test_content_parser_ignores_comments_and_string_literals():
+    content = """
+codeunit 2 FeatureTests
+{
+    /*
+    [Test]
+    procedure BlockCommentTest()
+    */
+    // [Test]
+    // procedure LineCommentTest()
+    procedure Helper()
+    begin
+        Message('[Test] procedure StringTest()');
+    end;
+}
+"""
+
+    result = extract_test_occurrences_from_content(content, "Tests/FeatureTests.Codeunit.al")
+
+    assert result == ()
 
 
 def test_extracts_test_path_from_git_c_style_quoted_headers():

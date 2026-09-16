@@ -30,7 +30,12 @@ from bcbench.operations.project_operations import categorize_projects, find_proj
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
 from bcbench.operations.skills_operations import setup_agent_skills
 from bcbench.operations.test_execution import TestExpectation, TestRunSummary
-from bcbench.operations.test_operations import extract_test_occurrences_from_patch, extract_tests_from_patch, normalize_test_occurrences
+from bcbench.operations.test_operations import (
+    extract_test_occurrences_from_content,
+    extract_test_occurrences_from_patch,
+    extract_tests_from_patch,
+    normalize_test_occurrences,
+)
 
 __all__ = [
     "TestExpectation",
@@ -51,6 +56,7 @@ __all__ = [
     "copy_problem_statement_folder",
     "copy_symbol_apps",
     "execute_al_query",
+    "extract_test_occurrences_from_content",
     "extract_test_occurrences_from_patch",
     "extract_tests_from_patch",
     "fetch_commit_if_missing",
