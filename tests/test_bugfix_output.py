@@ -134,6 +134,33 @@ def _real_git_test_addition_submission(repo_path: Path, added_object_lines: list
     return _git_diff(repo_path)
 
 
+def _real_git_new_test_file_submission(repo_path: Path, object_lines: list[str]) -> str:
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/NewFeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "\n".join(
+            [
+                'codeunit 3 "New Feature Tests"',
+                "{",
+                *object_lines,
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "-N", test_file], cwd=repo_path, check=True)
+    return _git_diff(repo_path)
+
+
 def _patch(file_path: str, old_line: str, added_lines: list[str]) -> str:
     additions = "\n".join(f"+{line}" for line in added_lines)
     return f"diff --git a/{file_path} b/{file_path}\nindex 1111111..2222222 100644\n--- a/{file_path}\n+++ b/{file_path}\n@@ -1,1 +1,{len(added_lines) + 1} @@\n {old_line}\n{additions}\n"
@@ -1242,6 +1269,58 @@ def test_accepts_test_with_handler_functions_metadata(
     assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
 
 
+def test_accepts_default_access_handler_procedure(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_test_addition_submission(
+        repo_path,
+        [
+            "    [Test]",
+            "    [HandlerFunctions('HandleMessage')]",
+            "    procedure NewTest()",
+            "    begin",
+            "    end;",
+            "",
+            "    [MessageHandler]",
+            "    procedure HandleMessage(Message: Text[1024])",
+            "    begin",
+            "    end;",
+        ],
+    )
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
+
+
+def test_rejects_default_access_bare_helper_procedure(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_test_addition_submission(
+        repo_path,
+        [
+            "    procedure NewHelper()",
+            "    begin",
+            "    end;",
+            "",
+            "    [Test]",
+            "    procedure NewTest()",
+            "    begin",
+            "        NewHelper();",
+            "    end;",
+        ],
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Invalid addition to test file"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
+
+
 @pytest.mark.parametrize(
     "test_attributes",
     [
@@ -1298,6 +1377,81 @@ def test_accepts_one_test_in_new_file(tmp_path: Path):
     )
 
     assert result.tests == (TestEntry(codeunitID=3, functionName=frozenset({"NewFileTest"})),)
+
+
+def test_accepts_subtype_test_case_insensitively_in_new_file(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_new_test_file_submission(
+        repo_path,
+        [
+            "    sUbTyPe = tEsT;",
+            "",
+            "    [Test]",
+            "    procedure NewFileTest()",
+            "    begin",
+            "    end;",
+        ],
+    )
+
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.tests == (TestEntry(codeunitID=3, functionName=frozenset({"NewFileTest"})),)
+
+
+@pytest.mark.parametrize(
+    "unsafe_property",
+    [
+        "Subtype = Normal;",
+        "TestPermissions = Disabled;",
+    ],
+    ids=["other-subtype-value", "other-property"],
+)
+def test_rejects_unsafe_property_in_new_test_file(tmp_path: Path, unsafe_property: str):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_new_test_file_submission(
+        repo_path,
+        [
+            f"    {unsafe_property}",
+            "",
+            "    [Test]",
+            "    procedure NewFileTest()",
+            "    begin",
+            "    end;",
+        ],
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Invalid addition to test file"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_rejects_subtype_added_to_existing_test_file(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    generated_patch = _real_git_test_addition_submission(
+        repo_path,
+        [
+            "    Subtype = Test;",
+            "",
+            "    [Test]",
+            "    procedure NewTest()",
+            "    begin",
+            "    end;",
+        ],
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Invalid addition to test file"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
 
 
 def test_rejects_duplicate_identical_test_procedure_occurrences(tmp_path: Path):

@@ -316,19 +316,33 @@ def added_lines_belong_to_members(
 def has_only_codeunit_wrapper_outside_members(
     content: str,
     members: Iterable[ExecutableMemberOccurrence],
+    *,
+    allow_test_subtype: bool = False,
 ) -> bool:
     tokens = _tokenize_al(content)
     occupied_token_indexes = {
         token_index for member in members if member.start_token_index is not None and member.end_token_index is not None for token_index in range(member.start_token_index, member.end_token_index + 1)
     }
     wrapper_tokens = tuple(token for token_index, token in enumerate(tokens) if token_index not in occupied_token_indexes)
-    return (
-        len(wrapper_tokens) == 5
+    has_codeunit_wrapper = (
+        len(wrapper_tokens) >= 5
         and _is_keyword(wrapper_tokens[0], "codeunit")
         and wrapper_tokens[1].kind == "number"
         and _is_identifier(wrapper_tokens[2])
         and wrapper_tokens[3].value == "{"
-        and wrapper_tokens[4].value == "}"
+        and wrapper_tokens[-1].value == "}"
+    )
+    if not has_codeunit_wrapper:
+        return False
+    if len(wrapper_tokens) == 5:
+        return True
+    return (
+        allow_test_subtype
+        and len(wrapper_tokens) == 9
+        and _is_keyword(wrapper_tokens[4], "subtype")
+        and wrapper_tokens[5].value == "="
+        and _is_keyword(wrapper_tokens[6], "test")
+        and wrapper_tokens[7].value == ";"
     )
 
 

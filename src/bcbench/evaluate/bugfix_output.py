@@ -203,7 +203,9 @@ def _is_allowed_new_test_member(member: ExecutableMemberOccurrence) -> bool:
         test_attribute_count = attributes.count("test")
         handler_functions_count = attributes.count("handlerfunctions")
         return test_attribute_count == 1 and handler_functions_count <= 1 and len(attributes) == test_attribute_count + handler_functions_count
-    return member.access_modifier == "local" and all(attribute in _TEST_HANDLER_ATTRIBUTES for attribute in attributes)
+    if member.access_modifier not in {None, "local"}:
+        return False
+    return (member.access_modifier == "local" or bool(attributes)) and all(attribute in _TEST_HANDLER_ATTRIBUTES for attribute in attributes)
 
 
 def _find_generated_test_occurrences(
@@ -267,7 +269,7 @@ def _find_generated_test_occurrences(
         if any(not _is_allowed_new_test_member(member) for member in new_members):
             raise GeneratedSubmissionError(f"Invalid addition to test file: {target_path}")
         if is_new_file:
-            if not has_only_codeunit_wrapper_outside_members(final_content, new_members):
+            if not has_only_codeunit_wrapper_outside_members(final_content, new_members, allow_test_subtype=True):
                 raise GeneratedSubmissionError(f"Invalid addition to test file: {target_path}")
         elif not added_lines_belong_to_members(final_content, added_target_lines, new_members):
             raise GeneratedSubmissionError(f"Invalid addition to test file: {target_path}")
