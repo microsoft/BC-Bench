@@ -25,6 +25,18 @@ def _write_file(repo_path: Path, file_path: str, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _write_lf_file(repo_path: Path, file_path: str, content: str) -> None:
+    path = repo_path / file_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content.encode())
+
+
+def _write_crlf_file(repo_path: Path, file_path: str, content: str) -> None:
+    path = repo_path / file_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content.replace("\n", "\r\n").encode())
+
+
 def _patch(file_path: str, old_line: str, added_lines: list[str]) -> str:
     additions = "\n".join(f"+{line}" for line in added_lines)
     return f"diff --git a/{file_path} b/{file_path}\nindex 1111111..2222222 100644\n--- a/{file_path}\n+++ b/{file_path}\n@@ -1,1 +1,{len(added_lines) + 1} @@\n {old_line}\n{additions}\n"
@@ -278,6 +290,82 @@ def test_complete_diff_captures_al_and_manifest_changes(tmp_path: Path):
     assert '+{"name": "modified"}' in diff
 
 
+def test_complete_diff_treats_clean_crlf_checkout_as_empty_with_autocrlf(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_lf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {}\n")
+    _write_lf_file(repo_path, "src/Main/app.json", '{"name": "Main"}\n')
+    _write_lf_file(repo_path, "src/Tests/FeatureTests.al", "codeunit 2 FeatureTests {}\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    subprocess.run(["git", "config", "core.autocrlf", "true"], cwd=repo_path, check=True)
+    _write_crlf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {}\n")
+    _write_crlf_file(repo_path, "src/Main/app.json", '{"name": "Main"}\n')
+    _write_crlf_file(repo_path, "src/Tests/FeatureTests.al", "codeunit 2 FeatureTests {}\n")
+
+    with pytest.raises(EmptyDiffError):
+        stage_and_get_complete_diff(repo_path, trusted_commit)
+
+
+def test_complete_diff_excludes_unchanged_crlf_files_from_real_edit(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_lf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {}\n")
+    _write_lf_file(repo_path, "src/Main/app.json", '{"name": "Main"}\n')
+    _write_lf_file(repo_path, "src/Tests/FeatureTests.al", "codeunit 2 FeatureTests {}\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    subprocess.run(["git", "config", "core.autocrlf", "true"], cwd=repo_path, check=True)
+    _write_crlf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {\n    trigger OnRun()\n    begin\n    end;\n}\n")
+    _write_crlf_file(repo_path, "src/Main/app.json", '{"name": "Main"}\n')
+    _write_crlf_file(repo_path, "src/Tests/FeatureTests.al", "codeunit 2 FeatureTests {}\n")
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert "src/Main/Feature.al" in diff
+    assert "src/Main/app.json" not in diff
+    assert "src/Tests/FeatureTests.al" not in diff
+
+
+def test_complete_diff_uses_trusted_eol_attributes_over_agent_attributes(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_lf_file(repo_path, ".gitattributes", "*.al text eol=lf\n")
+    _write_lf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {}\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    subprocess.run(["git", "config", "core.autocrlf", "true"], cwd=repo_path, check=True)
+    _write_file(repo_path, ".gitattributes", "*.al -text\n")
+    _write_crlf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {}\n")
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert ".gitattributes" in diff
+    assert "+*.al -text" in diff
+    assert "src/Main/Feature.al" not in diff
+
+
+def test_complete_diff_requires_git_attr_source_support(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_lf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {}\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    _write_lf_file(repo_path, "src/Main/Feature.al", "codeunit 1 Feature {\n}\n")
+
+    original_run = subprocess.run
+
+    def ignore_git_attr_source(command, *args, **kwargs):
+        if "check-attr" in command and "GIT_ATTR_SOURCE" in kwargs.get("env", {}):
+            return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(git_operations.subprocess, "run", ignore_git_attr_source)
+
+    with pytest.raises(GitOperationError, match=r"GIT_ATTR_SOURCE"):
+        stage_and_get_complete_diff(repo_path, trusted_commit)
+
+
 def test_complete_diff_rejects_non_utf8_al_content_as_generated_submission_error(tmp_path: Path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
@@ -362,7 +450,7 @@ def test_complete_diff_rejects_line_break_in_batched_path():
         git_operations._workspace_git_path(Path("src/Main/Injected\nFeature.al"))
 
 
-def test_complete_diff_builds_index_with_raw_git_plumbing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_complete_diff_builds_index_with_trusted_attributes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     _init_git_repo(repo_path)
@@ -370,35 +458,32 @@ def test_complete_diff_builds_index_with_raw_git_plumbing(tmp_path: Path, monkey
     trusted_commit = _commit_all(repo_path, "Initial")
     _write_file(repo_path, "src/Main/Feature.al", "modified\n")
 
-    commands: list[list[str]] = []
+    invocations: list[tuple[list[str], dict[str, str]]] = []
     original_run = subprocess.run
 
     def record_run(command, *args, **kwargs):
-        commands.append(command)
+        invocations.append((command, kwargs.get("env", {}).copy()))
         return original_run(command, *args, **kwargs)
 
     monkeypatch.setattr(git_operations.subprocess, "run", record_run)
 
     stage_and_get_complete_diff(repo_path, trusted_commit)
 
-    assert ["git", "--no-replace-objects", "ls-tree", "-r", "-z", trusted_commit] in commands
-    assert any(command[-4:] == ["hash-object", "-w", "--no-filters", "--stdin-paths"] for command in commands)
-    assert any(command[-4:] == ["update-index", "--add", "-z", "--index-info"] for command in commands)
-    assert not any("add" in command for command in commands)
+    commands = [command for command, _environment in invocations]
+    trusted_commands = [(command, environment) for command, environment in invocations if environment.get("GIT_ATTR_SOURCE") == trusted_commit]
+
+    assert any(command[-2:] == ["read-tree", trusted_commit] for command, _environment in trusted_commands)
+    assert any(command[-5:] == ["add", "-f", "-A", "--", "."] for command, _environment in trusted_commands)
+    assert any("diff" in command for command, _environment in trusted_commands)
+    assert not any("hash-object" in command or "update-index" in command for command in commands)
+    assert all(environment["GIT_CONFIG_GLOBAL"] == git_operations._NULL_DEVICE for _command, environment in trusted_commands)
+    assert all(environment["GIT_CONFIG_NOSYSTEM"] == "1" for _command, environment in trusted_commands)
+    assert any("core.hooksPath" in command for command in commands)
 
 
-@pytest.mark.parametrize(
-    ("failed_git_operation", "expected_message"),
-    [
-        ("hash-object", "Cannot snapshot generated workspace files as raw Git blobs"),
-        ("update-index", "Cannot construct generated submission index from raw workspace files"),
-    ],
-)
-def test_complete_diff_maps_raw_snapshot_git_failures(
+def test_complete_diff_maps_trusted_normalization_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    failed_git_operation: str,
-    expected_message: str,
 ):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
@@ -409,14 +494,14 @@ def test_complete_diff_maps_raw_snapshot_git_failures(
 
     original_run = subprocess.run
 
-    def fail_raw_snapshot(command, *args, **kwargs):
-        if failed_git_operation in command:
+    def fail_trusted_normalization(command, *args, **kwargs):
+        if "add" in command:
             raise subprocess.CalledProcessError(128, command, stderr=b"fatal: agent path cannot be represented\n")
         return original_run(command, *args, **kwargs)
 
-    monkeypatch.setattr(git_operations.subprocess, "run", fail_raw_snapshot)
+    monkeypatch.setattr(git_operations.subprocess, "run", fail_trusted_normalization)
 
-    with pytest.raises(GeneratedSubmissionError, match=expected_message) as exc_info:
+    with pytest.raises(GeneratedSubmissionError, match=r"Cannot normalize generated workspace files with trusted Git attributes") as exc_info:
         stage_and_get_complete_diff(repo_path, trusted_commit)
 
     assert isinstance(exc_info.value.__cause__, subprocess.CalledProcessError)
