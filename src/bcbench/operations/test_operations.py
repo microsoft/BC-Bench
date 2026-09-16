@@ -1,10 +1,19 @@
 import re
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import NoTestsExtractedError
+from bcbench.exceptions import NoTestsExtractedError, TestExtractionError
 from bcbench.logger import get_logger
+from bcbench.operations.patch_operations import extract_git_diff_paths, split_git_diff_blocks
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class TestOccurrence:
+    codeunit_id: int
+    function_name: str
 
 
 def extract_codeunit_id_from_content(content: str, file_path: str) -> int:
@@ -17,72 +26,54 @@ def extract_codeunit_id_from_content(content: str, file_path: str) -> int:
     Returns:
         Codeunit ID (always returns int, raises exception if not found)
     """
-    codeunit_pattern = r'codeunit\s+(\d+)\s+"[^"]*"'
-    match = re.search(codeunit_pattern, content)
+    codeunit_pattern = r'\bcodeunit\s+(\d+)\s+(?:"(?:[^"]|"")*"|[^\W\d]\w*)'
+    match = re.search(codeunit_pattern, content, flags=re.IGNORECASE)
     if match:
         return int(match.group(1))
-    raise ValueError(f"No codeunit ID found in {file_path}")
+    raise TestExtractionError(f"No codeunit ID found in {file_path}")
 
 
-def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]) -> list[TestEntry]:
-    """Extract test entries from an AL code patch by finding NEW test procedures.
+def extract_test_occurrences_from_patch(generated_patch: str, file_contents: dict[str, str]) -> tuple[TestOccurrence, ...]:
+    occurrences: list[TestOccurrence] = []
+    procedure_pattern = re.compile(r"^\+\s*procedure\s+(\w+)\s*\(", flags=re.IGNORECASE)
+    test_attribute_pattern = re.compile(r"^\+\s*\[Test\]", flags=re.IGNORECASE)
 
-    Args:
-        generated_patch: A git diff patch containing AL code with test procedures
-        file_contents: Dict mapping file paths to their content
-
-    Returns:
-        List of TestEntry dicts with codeunitID and functionName
-
-    Raises:
-        NoTestsExtractedError: If no test entries are found in the patch
-    """
-    # Accumulator: codeunit_id -> set of function names (mutable during processing)
-    codeunit_functions: dict[int, set[str]] = {}
-    current_codeunit_id: int | None = None
-
-    # Pattern to match test procedure declarations that are ADDED (have + marker)
-    procedure_pattern = r"^\+\s*procedure\s+(\w+)\s*\("
-
-    # Pattern to match [Test] attribute that is ADDED (have + marker)
-    test_attribute_pattern = r"^\+\s*\[Test\]"
-
-    # Pattern to match diff file headers: diff --git a/<path> b/<path>
-    file_header_pattern = r"^diff --git a/(.+) b/(.+)$"
-
-    lines = generated_patch.split("\n")
-    found_test_attribute = False
-
-    for line in lines:
-        file_header_match = re.match(file_header_pattern, line)
-        if file_header_match:
-            current_file_path = file_header_match.group(2)
-            # Only process codeunit files (*.Codeunit.al, case-insensitive)
-            if current_file_path and current_file_path.lower().endswith(".codeunit.al"):
-                if current_file_path in file_contents:
-                    content = file_contents[current_file_path]
-                    current_codeunit_id = extract_codeunit_id_from_content(content, current_file_path)
-            else:
-                # Reset codeunit ID for non-codeunit files
-                current_codeunit_id = None
-
+    for diff_block in split_git_diff_blocks(generated_patch):
+        paths = extract_git_diff_paths(diff_block)
+        if paths is None or paths.target == "/dev/null":
             continue
 
-        if re.match(test_attribute_pattern, line):
-            found_test_attribute = True
+        current_file_path = paths.target.replace("\\", "/").removeprefix("b/")
+        if not current_file_path.lower().endswith(".codeunit.al") or current_file_path not in file_contents:
             continue
 
-        if found_test_attribute and current_codeunit_id is not None:
-            procedure_match = re.match(procedure_pattern, line)
+        current_codeunit_id = extract_codeunit_id_from_content(file_contents[current_file_path], current_file_path)
+        found_test_attribute = False
+        for line in diff_block.splitlines():
+            if test_attribute_pattern.match(line):
+                found_test_attribute = True
+                continue
+            if not found_test_attribute:
+                continue
+            procedure_match = procedure_pattern.match(line)
             if procedure_match:
-                function_name = procedure_match.group(1)
-                codeunit_functions.setdefault(current_codeunit_id, set()).add(function_name)
+                occurrences.append(TestOccurrence(codeunit_id=current_codeunit_id, function_name=procedure_match.group(1)))
                 found_test_attribute = False
             elif not line.startswith("+"):
                 found_test_attribute = False
 
-    if not codeunit_functions:
+    if not occurrences:
         raise NoTestsExtractedError
+    return tuple(occurrences)
 
-    # Convert to immutable TestEntry objects
-    return [TestEntry(codeunitID=codeunit_id, functionName=frozenset(funcs)) for codeunit_id, funcs in codeunit_functions.items()]
+
+def normalize_test_occurrences(occurrences: Iterable[TestOccurrence]) -> list[TestEntry]:
+    codeunit_functions: dict[int, set[str]] = {}
+    for occurrence in occurrences:
+        codeunit_functions.setdefault(occurrence.codeunit_id, set()).add(occurrence.function_name)
+    return [TestEntry(codeunitID=codeunit_id, functionName=frozenset(function_names)) for codeunit_id, function_names in codeunit_functions.items()]
+
+
+def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]) -> list[TestEntry]:
+    occurrences = extract_test_occurrences_from_patch(generated_patch, file_contents)
+    return normalize_test_occurrences(occurrences)

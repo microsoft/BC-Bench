@@ -1,3 +1,4 @@
+import subprocess
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -20,6 +21,27 @@ def _write_file(repo_path: Path, file_path: str, content: str) -> None:
     path = repo_path / file_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def _init_git_repo(repo_path: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=repo_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True)
+
+
+def _commit_all(repo_path: Path) -> None:
+    subprocess.run(["git", "add", "-A"], cwd=repo_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "Initial"], cwd=repo_path, check=True)
+
+
+def _git_diff(repo_path: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "diff", "--no-ext-diff", *args],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
 
 def _patch(file_path: str, old_line: str, added_lines: list[str]) -> str:
@@ -300,6 +322,81 @@ def test_preserves_valid_new_and_deleted_al_text_diffs(tmp_path: Path, fix_patch
     assert result.test_patch == test_patch
 
 
+def test_rejects_real_binary_al_git_diff_as_invalid_submission(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    project_path = _create_project(repo_path, "src/Main")
+    binary_file = project_path / "Binary.Codeunit.al"
+    binary_file.write_bytes(b"\x00\x01\x02\x03")
+    _commit_all(repo_path)
+    binary_file.write_bytes(b"\x00\x01\x02\x04")
+    generated_patch = _git_diff(repo_path, "--binary", "--", "src/Main/Binary.Codeunit.al")
+
+    assert "GIT binary patch" in generated_patch
+    with pytest.raises(GeneratedSubmissionError, match=r"Binary AL changes are not allowed"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
+
+
+@pytest.mark.parametrize(
+    "generated_patch",
+    [
+        (
+            "diff --git a/src/Main/Binary.Codeunit.al b/src/Main/Binary.Codeunit.al\n"
+            "index 1111111..2222222 100644\n"
+            "Binary files a/src/Main/Binary.Codeunit.al and b/src/Main/Binary.Codeunit.al differ\n"
+        ),
+        ("diff --git a/src/Main/Binary.Codeunit.al b/src/Main/Binary.Codeunit.al\nold mode 100644\nnew mode 100755\n"),
+    ],
+)
+def test_rejects_binary_metadata_and_mode_only_entries_before_hunk_validation(tmp_path: Path, generated_patch: str):
+    error_pattern = r"(Binary AL|Mode-only AL) changes are not allowed"
+
+    with pytest.raises(GeneratedSubmissionError, match=error_pattern):
+        analyze_generated_bugfix_output(
+            tmp_path,
+            generated_patch,
+            allowed_app_projects=[],
+        )
+
+
+def test_accepts_real_git_test_path_with_component_ending_in_b(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    app_project = _create_project(repo_path, "src/Main")
+    test_project = _create_project(repo_path, "Tests")
+    product_file = app_project / "Feature.Codeunit.al"
+    test_file = test_project / "foo b" / "bar" / "F.Codeunit.al"
+    test_file.parent.mkdir(parents=True)
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text("codeunit 2 FeatureTests\n{\n}\n", encoding="utf-8")
+    _commit_all(repo_path)
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [tEsT]\n    procedure VerifiesFeature()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    generated_patch = _git_diff(repo_path)
+
+    assert "a/Tests/foo b/bar/F.Codeunit.al b/Tests/foo b/bar/F.Codeunit.al" in generated_patch
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["src/Main"],
+    )
+
+    assert result.full_patch == generated_patch
+    assert result.app_projects == (str(app_project.relative_to(repo_path)),)
+    assert result.test_projects == (str(test_project.relative_to(repo_path)),)
+    assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"VerifiesFeature"})),)
+    assert "Tests/foo b/bar/F.Codeunit.al" in result.test_patch
+
+
 def test_rejects_rename_between_product_and_test_projects(tmp_path: Path):
     repo_path = tmp_path / "repo"
     _create_project(repo_path, "src/Main")
@@ -346,3 +443,92 @@ def test_wraps_malformed_patch_error(tmp_path: Path):
         analyze_generated_bugfix_output(tmp_path, malformed_patch, allowed_app_projects=[])
 
     assert isinstance(exc_info.value.__cause__, UnidiffParseError)
+
+
+def test_wraps_missing_codeunit_identity_as_invalid_submission(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = "src/Main/Feature.Codeunit.al"
+    test_file = "src/Tests/FeatureTests.Codeunit.al"
+    _write_file(repo_path, product_file, "codeunit 1 Feature {}\n")
+    _write_file(repo_path, test_file, "procedure Helper()\n")
+    generated_patch = _patch(product_file, "codeunit 1 Feature {}", ["// Fix"]) + _patch(
+        test_file,
+        "procedure Helper()",
+        ["    [Test]", "    procedure VerifiesFeature()"],
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"No codeunit ID found") as exc_info:
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
+
+    assert isinstance(exc_info.value.__cause__, ValueError)
+
+
+def test_does_not_wrap_unexpected_test_extraction_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    repo_path = tmp_path / "repo"
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = "src/Main/Feature.Codeunit.al"
+    test_file = "src/Tests/FeatureTests.Codeunit.al"
+    _write_file(repo_path, product_file, "codeunit 1 Feature {}\n")
+    _write_file(repo_path, test_file, "codeunit 2 FeatureTests\n")
+    generated_patch = _patch(product_file, "codeunit 1 Feature {}", ["// Fix"]) + _patch(
+        test_file,
+        "codeunit 2 FeatureTests",
+        ["    [Test]", "    procedure VerifiesFeature()"],
+    )
+
+    def fail_extraction(*_args: object) -> None:
+        raise RuntimeError("programmer error")
+
+    monkeypatch.setattr("bcbench.evaluate.bugfix_output.extract_test_occurrences_from_patch", fail_extraction)
+
+    with pytest.raises(RuntimeError, match="programmer error"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_rejects_duplicate_identical_test_procedure_occurrences(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = "src/Main/Feature.Codeunit.al"
+    test_file = "src/Tests/FeatureTests.Codeunit.al"
+    _write_file(repo_path, product_file, "codeunit 1 Feature {}\n")
+    _write_file(
+        repo_path,
+        test_file,
+        "codeunit 2 FeatureTests\n{\n    [Test]\n    procedure SameTest()\n    begin\n    end;\n}\n",
+    )
+    generated_patch = _patch(product_file, "codeunit 1 Feature {}", ["// Fix"]) + _patch(
+        test_file,
+        "codeunit 2 FeatureTests",
+        [
+            "{",
+            "    [Test]",
+            "    procedure SameTest()",
+            "    begin",
+            "    end;",
+            "",
+            "    [Test]",
+            "    procedure SameTest()",
+            "    begin",
+            "    end;",
+            "}",
+        ],
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Expected exactly one new test procedure, found 2\."):
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )

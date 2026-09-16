@@ -28,6 +28,7 @@ __all__ = [
     "ProjectDiscoveryError",
     "TestExecutionError",
     "TestExecutionFailureKind",
+    "TestExtractionError",
     "TestInfrastructureError",
 ]
 
@@ -276,6 +277,10 @@ class NoTestsExtractedError(BCBenchError):
     def __init__(self) -> None:
         message = "No tests extracted from the generated patch."
         super().__init__(message)
+
+
+class TestExtractionError(BCBenchError, ValueError):
+    """Generated test content could not be identified."""
 
 
 class GeneratedOutputError(BCBenchError):

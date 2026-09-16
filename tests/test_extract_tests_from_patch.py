@@ -1,7 +1,7 @@
 import pytest
 
 from bcbench.exceptions import NoTestsExtractedError
-from bcbench.operations.test_operations import extract_tests_from_patch
+from bcbench.operations.test_operations import TestOccurrence, extract_test_occurrences_from_patch, extract_tests_from_patch
 
 
 def test_single_test_procedure():
@@ -32,6 +32,60 @@ index ff9b7640fa2..07bfdfa1233 100644
     assert len(result) == 1
     assert result[0].codeunitID == 148187
     assert result[0].functionName == {"VerifyEmissionFieldsMustBeEnabledWhenEnableValueChainTrackingIsEnabled"}
+
+
+@pytest.mark.parametrize(
+    ("declaration", "attribute"),
+    [
+        ('codeunit 2 "Feature Tests"', "[Test]"),
+        ("codeunit 2 FeatureTests", "[tEsT]"),
+    ],
+)
+def test_extracts_tests_from_quoted_and_unquoted_codeunits_case_insensitively(declaration: str, attribute: str):
+    file_path = "Tests/FeatureTests.Codeunit.al"
+    file_contents = {file_path: f"{declaration}\n{{\n}}\n"}
+    patch = f"""
+diff --git a/{file_path} b/{file_path}
+index abc..def 100644
+--- a/{file_path}
++++ b/{file_path}
+@@ -1,3 +1,8 @@
+ {declaration}
+ {{
++    {attribute}
++    procedure VerifiesFeature()
++    begin
++    end;
+ }}
+"""
+
+    result = extract_tests_from_patch(patch, file_contents)
+
+    assert len(result) == 1
+    assert result[0].codeunitID == 2
+    assert result[0].functionName == {"VerifiesFeature"}
+
+
+def test_extracts_test_path_from_git_c_style_quoted_headers():
+    file_path = "Tests/å/F.Codeunit.al"
+    file_contents = {file_path: "codeunit 2 FeatureTests\n{\n}\n"}
+    patch = r"""
+diff --git "a/Tests/\303\245/F.Codeunit.al" "b/Tests/\303\245/F.Codeunit.al"
+index abc..def 100644
+--- "a/Tests/\303\245/F.Codeunit.al"
++++ "b/Tests/\303\245/F.Codeunit.al"
+@@ -1,3 +1,7 @@
+ codeunit 2 FeatureTests
+ {
++    [Test]
++    procedure VerifiesFeature()
+ }
+"""
+
+    result = extract_tests_from_patch(patch, file_contents)
+
+    assert result[0].codeunitID == 2
+    assert result[0].functionName == {"VerifiesFeature"}
 
 
 def test_multiple_tests_same_codeunit():
@@ -65,6 +119,34 @@ index abc..def 100644
     assert len(result[0].functionName) == 2
     assert "TestOne" in result[0].functionName
     assert "TestTwo" in result[0].functionName
+
+
+def test_raw_occurrences_preserve_duplicate_procedures_before_normalization():
+    file_path = "Tests/FeatureTests.Codeunit.al"
+    file_contents = {file_path: "codeunit 2 FeatureTests\n{\n}\n"}
+    patch = f"""
+diff --git a/{file_path} b/{file_path}
+index abc..def 100644
+--- a/{file_path}
++++ b/{file_path}
+@@ -1,3 +1,9 @@
+ codeunit 2 FeatureTests
+ {{
++    [Test]
++    procedure SameTest()
++    [Test]
++    procedure SameTest()
+ }}
+"""
+
+    occurrences = extract_test_occurrences_from_patch(patch, file_contents)
+    normalized = extract_tests_from_patch(patch, file_contents)
+
+    assert occurrences == (
+        TestOccurrence(codeunit_id=2, function_name="SameTest"),
+        TestOccurrence(codeunit_id=2, function_name="SameTest"),
+    )
+    assert normalized[0].functionName == {"SameTest"}
 
 
 def test_test_with_handler_functions():
