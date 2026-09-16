@@ -76,6 +76,80 @@ def _wait_until_stopped(pid: int, timeout_seconds: float = 5) -> bool:
     return not _pid_is_running(pid)
 
 
+def _run_command_leaving_sleeping_descendants(
+    tmp_path: Path,
+    returncode: int,
+) -> tuple[ContainedProcessResult, int, int]:
+    child_pid_path = tmp_path / "child.pid"
+    grandchild_pid_path = tmp_path / "grandchild.pid"
+    grandchild_code = """
+import os
+import sys
+import time
+from pathlib import Path
+
+pid_path = Path(sys.argv[1])
+pending_pid_path = pid_path.with_suffix(".tmp")
+pending_pid_path.write_text(str(os.getpid()), encoding="utf-8")
+pending_pid_path.replace(pid_path)
+time.sleep(60)
+"""
+    child_code = """
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+pid_path = Path(sys.argv[1])
+pending_pid_path = pid_path.with_suffix(".tmp")
+pending_pid_path.write_text(str(os.getpid()), encoding="utf-8")
+pending_pid_path.replace(pid_path)
+subprocess.Popen([sys.executable, "-c", sys.argv[3], sys.argv[2]])
+time.sleep(60)
+"""
+    command_code = """
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+child_pid_path = Path(sys.argv[1])
+grandchild_pid_path = Path(sys.argv[2])
+subprocess.Popen(
+    [sys.executable, "-c", sys.argv[4], sys.argv[1], sys.argv[2], sys.argv[5]]
+)
+deadline = time.monotonic() + 5
+while time.monotonic() < deadline:
+    if child_pid_path.exists() and grandchild_pid_path.exists():
+        raise SystemExit(int(sys.argv[3]))
+    time.sleep(0.01)
+raise RuntimeError("descendant PIDs were not recorded")
+"""
+    result = run_contained_process(
+        ContainedProcessRequest(
+            command=(
+                sys.executable,
+                "-c",
+                command_code,
+                str(child_pid_path),
+                str(grandchild_pid_path),
+                str(returncode),
+                child_code,
+                grandchild_code,
+            ),
+            cwd=tmp_path,
+            env=agent_subprocess_env(allowlist=True),
+            timeout_seconds=10,
+        )
+    )
+    return (
+        result,
+        int(child_pid_path.read_text(encoding="utf-8")),
+        int(grandchild_pid_path.read_text(encoding="utf-8")),
+    )
+
+
 def _wrapper_command(
     tmp_path: Path,
     *,
@@ -348,6 +422,22 @@ def test_returns_nonzero_result_without_losing_output(tmp_path):
     )
 
     assert result == ContainedProcessResult(7, "failed stdout\n", "failed stderr\n")
+
+
+def test_successful_command_exit_kills_child_and_grandchild(tmp_path):
+    result, child_pid, grandchild_pid = _run_command_leaving_sleeping_descendants(tmp_path, 0)
+
+    assert result.returncode == 0
+    assert _wait_until_stopped(child_pid)
+    assert _wait_until_stopped(grandchild_pid)
+
+
+def test_nonzero_command_exit_kills_child_and_grandchild(tmp_path):
+    result, child_pid, grandchild_pid = _run_command_leaving_sleeping_descendants(tmp_path, 7)
+
+    assert result.returncode == 7
+    assert _wait_until_stopped(child_pid)
+    assert _wait_until_stopped(grandchild_pid)
 
 
 def test_timeout_raises_with_captured_output(tmp_path):
