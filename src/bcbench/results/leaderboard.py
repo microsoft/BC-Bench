@@ -292,7 +292,7 @@ class Leaderboard(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _rebuild_legacy_bugfix_aggregates(cls, payload: object) -> object:
+    def _rebuild_bugfix_aggregates(cls, payload: object) -> object:
         if not isinstance(payload, dict):
             return payload
 
@@ -305,16 +305,19 @@ class Leaderboard(BaseModel):
         aggregates: list[dict[str, Any] | LeaderboardAggregate] = []
         rebuilt = False
         for item in raw_aggregates:
-            is_legacy_bugfix = isinstance(item, dict) and item.get("category") == EvaluationCategory.BUG_FIX and ("metric_averages" not in item or "metric_coverages" not in item)
-            if not is_legacy_bugfix:
+            is_bugfix = (isinstance(item, dict) and item.get("category") == EvaluationCategory.BUG_FIX) or isinstance(item, BugFixLeaderboardAggregate)
+            if not is_bugfix:
                 aggregates.append(item)
                 continue
 
-            legacy_aggregate = BugFixLeaderboardAggregate.model_validate(item)
-            aggregate_key = _bugfix_aggregate_combination_key(legacy_aggregate)
+            if isinstance(item, BugFixLeaderboardAggregate) and not any(isinstance(run, BugFixResultSummary) for run in runs):
+                aggregates.append(item)
+                continue
+
+            aggregate_key = _bugfix_aggregate_combination_key(item)
             matching_runs = [run for run in runs if isinstance(run, BugFixResultSummary) and run.combination_key() == aggregate_key]
             if not matching_runs:
-                raise ValueError(f"Cannot rebuild legacy bug-fix aggregate without matching runs: {aggregate_key}")
+                raise ValueError(f"Cannot rebuild bug-fix aggregate without matching runs: {aggregate_key}")
 
             aggregates.append(BugFixLeaderboardAggregate.from_runs(matching_runs))
             rebuilt = True
@@ -355,15 +358,31 @@ def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int) -> f
     return round(sum(instance_pass_hat_k) / len(instance_pass_hat_k), 3) if instance_pass_hat_k else None
 
 
-def _bugfix_aggregate_combination_key(aggregate: BugFixLeaderboardAggregate) -> tuple[str | None, ...]:
-    experiment_key: str | None = None
-    if aggregate.experiment and not aggregate.experiment.is_empty():
-        experiment_key = json.dumps(aggregate.experiment.model_dump(mode="json"), sort_keys=True)
+def _bugfix_aggregate_combination_key(aggregate: dict[str, Any] | BugFixLeaderboardAggregate) -> tuple[str | None, ...]:
+    if isinstance(aggregate, dict):
+        experiment_payload = aggregate.get("experiment")
+        experiment = ExperimentConfiguration.model_validate(experiment_payload) if isinstance(experiment_payload, dict) else experiment_payload
+        return (
+            aggregate.get("agent_name"),
+            aggregate.get("agent_version"),
+            aggregate.get("model"),
+            _experiment_combination_key(experiment),
+            aggregate.get("benchmark_version"),
+            aggregate.get("runtime_isolation", "package-normalized"),
+        )
+
     return (
         aggregate.agent_name,
         aggregate.agent_version,
         aggregate.model,
-        experiment_key,
+        _experiment_combination_key(aggregate.experiment),
         aggregate.benchmark_version,
         aggregate.runtime_isolation,
     )
+
+
+def _experiment_combination_key(experiment: ExperimentConfiguration | None) -> str | None:
+    experiment_key: str | None = None
+    if experiment and not experiment.is_empty():
+        experiment_key = json.dumps(experiment.model_dump(mode="json"), sort_keys=True)
+    return experiment_key

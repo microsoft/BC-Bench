@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from collections.abc import Sequence
 from datetime import datetime
@@ -238,6 +239,15 @@ def _empty_metric_summaries() -> dict[BugFixMetricName, BugFixMetricSummary]:
     return {metric: BugFixMetricSummary.from_statuses(()) for metric in BugFixMetricName}
 
 
+_LEGACY_SYNTHETIC_INSTANCE_ID = re.compile(r"legacy-(?:resolved|failed)-\d+")
+
+
+def _uses_legacy_synthetic_instance_ids(instance_results: object) -> bool:
+    return (
+        isinstance(instance_results, dict) and bool(instance_results) and all(isinstance(instance_id, str) and _LEGACY_SYNTHETIC_INSTANCE_ID.fullmatch(instance_id) for instance_id in instance_results)
+    )
+
+
 class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
     runtime_isolation: RuntimeIsolation = "package-normalized"
     instance_results_complete: bool = True
@@ -252,6 +262,9 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
         data: dict[str, Any] = dict(payload)
         runtime_isolation = data.get("runtime_isolation", "package-normalized")
         has_instance_results = "instance_results" in data
+        if "instance_results_complete" not in data and _uses_legacy_synthetic_instance_ids(data.get("instance_results")):
+            data["instance_results_complete"] = False
+            data["instance_results"] = {}
         data.setdefault("instance_results_complete", has_instance_results)
         data.setdefault("instance_results", {})
 
@@ -317,6 +330,8 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
             if actual != expected:
                 raise ValueError(f"{field} must match its metric summary projection")
 
+        if self.instance_results_complete and _uses_legacy_synthetic_instance_ids(self.instance_results):
+            raise ValueError("complete instance_results cannot use legacy synthetic instance identities")
         if self.instance_results_complete:
             true_count = sum(self.instance_results.values())
             false_count = len(self.instance_results) - true_count

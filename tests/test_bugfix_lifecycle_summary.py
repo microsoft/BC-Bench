@@ -655,6 +655,69 @@ def test_five_legacy_count_only_runs_do_not_calculate_pass_hat_5():
     assert aggregate.pass_hat_5 is None
 
 
+def test_five_legacy_synthetic_identity_runs_do_not_calculate_pass_hat_5():
+    modern_summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__passed", resolved=True),
+            create_bugfix_result(instance_id="test__failed", resolved=False),
+        ],
+        run_id="modern",
+    )
+    legacy_payload = modern_summary.model_dump(mode="json")
+    legacy_payload.pop("instance_results_complete")
+    legacy_payload["instance_results"] = {
+        "legacy-resolved-0": True,
+        "legacy-failed-0": False,
+    }
+    runs = [
+        BugFixResultSummary.model_validate(
+            {
+                **legacy_payload,
+                "github_run_id": f"legacy-{index}",
+            }
+        )
+        for index in range(5)
+    ]
+
+    aggregate = BugFixLeaderboardAggregate.from_runs(runs)
+
+    assert all(run.instance_results_complete is False for run in runs)
+    assert all(run.instance_results == {} for run in runs)
+    assert aggregate.pass_hat_5 is None
+
+
+def test_bugfix_summary_rejects_explicit_complete_legacy_synthetic_identities():
+    summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__passed", resolved=True),
+            create_bugfix_result(instance_id="test__failed", resolved=False),
+        ],
+        run_id="run",
+    )
+    payload = summary.model_dump(mode="json")
+    payload["instance_results"] = {
+        "legacy-resolved-0": True,
+        "legacy-failed-0": False,
+    }
+
+    with pytest.raises(ValidationError, match="synthetic"):
+        BugFixResultSummary.model_validate(payload)
+
+
+def test_bugfix_summary_preserves_real_identity_containing_legacy_synthetic_text():
+    summary = BugFixResultSummary.from_results(
+        [create_bugfix_result(instance_id="customer__legacy-resolved-0", resolved=True)],
+        run_id="run",
+    )
+    payload = summary.model_dump(mode="json")
+    payload.pop("instance_results_complete")
+
+    restored = BugFixResultSummary.model_validate(payload)
+
+    assert restored.instance_results_complete is True
+    assert restored.instance_results == {"customer__legacy-resolved-0": True}
+
+
 def test_five_modern_runs_with_genuine_identities_calculate_pass_hat_5():
     runs = [
         BugFixResultSummary.from_results(
@@ -668,6 +731,38 @@ def test_five_modern_runs_with_genuine_identities_calculate_pass_hat_5():
 
     assert all(run.instance_results_complete is True for run in runs)
     assert aggregate.pass_hat_5 == 1.0
+
+
+def test_leaderboard_rebuilds_existing_bugfix_aggregate_after_synthetic_identity_migration(tmp_path):
+    runs = [
+        BugFixResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__same", resolved=True)],
+            run_id=f"run-{index}",
+        )
+        for index in range(5)
+    ]
+    aggregate = BugFixLeaderboardAggregate.from_runs(runs)
+    run_payloads = [run.model_dump(mode="json") for run in runs]
+    for payload in run_payloads:
+        payload.pop("instance_results_complete")
+        payload["instance_results"] = {"legacy-resolved-0": True}
+    aggregate_payload = aggregate.model_dump(mode="json")
+    aggregate_payload["pass_hat_5"] = 0.123
+    path = tmp_path / "bug-fix.json"
+    path.write_text(
+        json.dumps(
+            {
+                "runs": run_payloads,
+                "aggregate": [aggregate_payload],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    leaderboard = Leaderboard.load(path)
+
+    assert all(run.instance_results_complete is False for run in leaderboard.runs)
+    assert leaderboard.aggregate[0].pass_hat_5 is None
 
 
 def test_checkpointed_bugfix_aggregate_round_trips():
