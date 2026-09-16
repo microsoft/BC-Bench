@@ -352,20 +352,23 @@ def stage_and_get_complete_diff(repo_path: Path, trusted_commit: str) -> str:
             cwd=workspace_path,
             env=git_environment,
             capture_output=True,
-            encoding="utf-8",
-            text=True,
             check=True,
         )
-        patch: str = result.stdout
+        patch_bytes: bytes = result.stdout
     finally:
         remove_tree(temporary_git_root)
 
-    logger.info("Complete git diff retrieved successfully")
-    logger.debug(f"Generated complete diff:\n{patch}")
-
-    if not patch:
+    if patch_bytes == b"":
         logger.error("Generated complete diff is empty - agent made no changes")
         raise EmptyDiffError
+
+    try:
+        patch = patch_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise GeneratedSubmissionError("Generated submission diff is not valid UTF-8.") from exc
+
+    logger.info("Complete git diff retrieved successfully")
+    logger.debug(f"Generated complete diff:\n{patch}")
 
     return patch
 

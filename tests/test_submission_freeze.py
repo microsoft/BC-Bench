@@ -277,6 +277,21 @@ def test_complete_diff_captures_al_and_manifest_changes(tmp_path: Path):
     assert '+{"name": "modified"}' in diff
 
 
+def test_complete_diff_rejects_non_utf8_al_content_as_generated_submission_error(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    trusted_commit = _commit_all(repo_path, "Initial")
+    invalid_file = repo_path / "src/Main/Invalid.al"
+    invalid_file.parent.mkdir(parents=True)
+    invalid_file.write_bytes(b"codeunit 1 Invalid {}\n\xff\n")
+
+    with pytest.raises(GeneratedSubmissionError, match=r"diff is not valid UTF-8") as exc_info:
+        stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert isinstance(exc_info.value.__cause__, UnicodeDecodeError)
+
+
 def test_complete_diff_does_not_execute_agent_clean_filter(tmp_path: Path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
