@@ -240,6 +240,7 @@ def _empty_metric_summaries() -> dict[BugFixMetricName, BugFixMetricSummary]:
 
 class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
     runtime_isolation: RuntimeIsolation = "package-normalized"
+    instance_results_complete: bool = True
     metric_summaries: dict[BugFixMetricName, BugFixMetricSummary] = Field(default_factory=_empty_metric_summaries)
 
     @model_validator(mode="before")
@@ -250,13 +251,9 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
 
         data: dict[str, Any] = dict(payload)
         runtime_isolation = data.get("runtime_isolation", "package-normalized")
-        if "instance_results" not in data and runtime_isolation == "package-normalized":
-            resolved = int(data.get("resolved", 0))
-            failed = int(data.get("failed", 0))
-            data["instance_results"] = {
-                **{f"legacy-resolved-{index}": True for index in range(resolved)},
-                **{f"legacy-failed-{index}": False for index in range(failed)},
-            }
+        has_instance_results = "instance_results" in data
+        data.setdefault("instance_results_complete", has_instance_results)
+        data.setdefault("instance_results", {})
 
         if "metric_summaries" in data:
             return data
@@ -320,10 +317,13 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
             if actual != expected:
                 raise ValueError(f"{field} must match its metric summary projection")
 
-        true_count = sum(self.instance_results.values())
-        false_count = len(self.instance_results) - true_count
-        if true_count != self.resolved or false_count != self.failed or len(self.instance_results) != self.resolved + self.failed:
-            raise ValueError("instance_results counts must match resolved and failed")
+        if self.instance_results_complete:
+            true_count = sum(self.instance_results.values())
+            false_count = len(self.instance_results) - true_count
+            if true_count != self.resolved or false_count != self.failed or len(self.instance_results) != self.resolved + self.failed:
+                raise ValueError("complete instance_results counts must match resolved and failed")
+        elif self.instance_results:
+            raise ValueError("incomplete instance_results must be empty")
         return self
 
     @classmethod
@@ -372,6 +372,7 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
                 "build": fix_build.successes,
                 "percentage": round(resolution.rate * 100, 1) if resolution.rate is not None else None,
                 "instance_results": instance_results,
+                "instance_results_complete": True,
                 "runtime_isolation": runtime_isolation,
                 "metric_summaries": metric_summaries,
             }

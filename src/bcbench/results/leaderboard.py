@@ -173,9 +173,17 @@ class BugFixLeaderboardAggregate(ExecutionBasedLeaderboardAggregate):
             metric_averages[metric.value] = sum(rates) / len(rates) if rates else None
             metric_coverages[metric.value] = sum(coverages) / len(coverages)
 
+        instance_resolved: dict[str, list[bool]] = defaultdict(list)
+        for run in bugfix_runs:
+            if not run.instance_results_complete:
+                continue
+            for instance_id, outcome in run.instance_results.items():
+                instance_resolved[instance_id].append(outcome)
+
         return cls.model_validate(
             {
                 **base.model_dump(),
+                "pass_hat_5": _calculate_pass_hat_k(instance_resolved, 5),
                 "runtime_isolation": first_run.runtime_isolation,
                 "metric_averages": metric_averages,
                 "metric_coverages": metric_coverages,

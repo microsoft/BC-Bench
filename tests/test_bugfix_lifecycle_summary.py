@@ -216,8 +216,8 @@ def test_legacy_package_normalized_summary_reconstructs_metric_summaries():
             rate=None,
             coverage=0.0,
         )
-    assert sum(summary.instance_results.values()) == summary.resolved
-    assert len(summary.instance_results) == summary.resolved + summary.failed
+    assert summary.instance_results_complete is False
+    assert summary.instance_results == {}
 
     restored = BugFixResultSummary.model_validate_json(summary.model_dump_json())
 
@@ -505,6 +505,36 @@ def test_bugfix_summary_rejects_wrong_instance_result_counts(instance_results):
         BugFixResultSummary.model_validate(payload)
 
 
+def test_bugfix_summary_rejects_nonempty_incomplete_instance_results():
+    summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__passed", resolved=True),
+            create_bugfix_result(instance_id="test__failed", resolved=False),
+        ],
+        run_id="run",
+    )
+    payload = summary.model_dump(mode="json")
+    payload["instance_results_complete"] = False
+
+    with pytest.raises(ValidationError, match="instance_results"):
+        BugFixResultSummary.model_validate(payload)
+
+
+def test_bugfix_summary_rejects_complete_instance_results_with_missing_counts():
+    summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__passed", resolved=True),
+            create_bugfix_result(instance_id="test__failed", resolved=False),
+        ],
+        run_id="run",
+    )
+    payload = summary.model_dump(mode="json")
+    payload["instance_results"] = {"test__passed": True}
+
+    with pytest.raises(ValidationError, match="instance_results"):
+        BugFixResultSummary.model_validate(payload)
+
+
 def test_checkpointed_result_exports_production_status_metadata():
     result = _checkpointed_result(
         "test__metadata",
@@ -595,6 +625,49 @@ def test_bugfix_leaderboard_averages_metric_rates_and_coverages():
     assert aggregate.average == 0.75
     assert aggregate.metric_averages[BugFixMetricName.RESOLUTION] == 0.75
     assert aggregate.metric_coverages[BugFixMetricName.RESOLUTION] == 0.75
+
+
+def test_five_legacy_count_only_runs_do_not_calculate_pass_hat_5():
+    modern_summary = BugFixResultSummary.from_results(
+        [
+            create_bugfix_result(instance_id="test__passed", resolved=True),
+            create_bugfix_result(instance_id="test__failed", resolved=False),
+        ],
+        run_id="modern",
+    )
+    legacy_payload = modern_summary.model_dump(mode="json")
+    legacy_payload.pop("instance_results")
+    legacy_payload.pop("instance_results_complete")
+    legacy_payload.pop("metric_summaries")
+    runs = [
+        BugFixResultSummary.model_validate(
+            {
+                **legacy_payload,
+                "github_run_id": f"legacy-{index}",
+            }
+        )
+        for index in range(5)
+    ]
+
+    aggregate = BugFixLeaderboardAggregate.from_runs(runs)
+
+    assert all(run.instance_results_complete is False for run in runs)
+    assert aggregate.pass_hat_5 is None
+
+
+def test_five_modern_runs_with_genuine_identities_calculate_pass_hat_5():
+    runs = [
+        BugFixResultSummary.from_results(
+            [create_bugfix_result(instance_id="test__same", resolved=True)],
+            run_id=f"modern-{index}",
+        )
+        for index in range(5)
+    ]
+
+    aggregate = BugFixLeaderboardAggregate.from_runs(runs)
+
+    assert all(run.instance_results_complete is True for run in runs)
+    assert aggregate.pass_hat_5 == 1.0
 
 
 def test_checkpointed_bugfix_aggregate_round_trips():
@@ -710,9 +783,12 @@ def test_existing_package_normalized_leaderboard_data_loads(tmp_path):
 
     assert isinstance(leaderboard.runs[0], BugFixResultSummary)
     assert leaderboard.runs[0].runtime_isolation == "package-normalized"
+    assert leaderboard.runs[0].instance_results_complete is False
+    assert leaderboard.runs[0].instance_results == {}
     assert set(leaderboard.runs[0].metric_summaries) == set(BugFixMetricName)
     assert isinstance(leaderboard.aggregate[0], BugFixLeaderboardAggregate)
     assert leaderboard.aggregate[0].runtime_isolation == "package-normalized"
+    assert leaderboard.aggregate[0].pass_hat_5 is None
     assert set(leaderboard.aggregate[0].metric_averages) == set(BugFixMetricName)
     assert set(leaderboard.aggregate[0].metric_coverages) == set(BugFixMetricName)
     assert leaderboard.aggregate[0].metric_averages == {
