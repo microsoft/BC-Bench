@@ -1,6 +1,6 @@
+import ctypes
 import json
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -12,6 +12,7 @@ from bcbench.config import get_config
 
 __all__ = [
     "AgentExecutionPolicy",
+    "ContainedProcessInfrastructureError",
     "ContainedProcessRequest",
     "ContainedProcessResult",
     "WindowsIdentity",
@@ -49,6 +50,29 @@ class ContainedProcessResult:
     stderr: str
 
 
+class ContainedProcessInfrastructureError(RuntimeError):
+    def __init__(
+        self,
+        watchdog_timeout_seconds: int,
+        *,
+        child_stdout: str,
+        child_stderr: str,
+        wrapper_stdout: str,
+        wrapper_stderr: str,
+    ) -> None:
+        super().__init__(f"Contained process wrapper exceeded its {watchdog_timeout_seconds}-second watchdog")
+        self.watchdog_timeout_seconds = watchdog_timeout_seconds
+        self.child_stdout = child_stdout
+        self.child_stderr = child_stderr
+        self.captured_stdout = child_stdout
+        self.captured_stderr = child_stderr
+        self.wrapper_stdout = wrapper_stdout
+        self.wrapper_output = wrapper_stdout
+        self.wrapper_stderr = wrapper_stderr
+        self.output = wrapper_stdout
+        self.stderr = wrapper_stderr
+
+
 class _WrapperResult(TypedDict):
     returncode: int | None
     stdout: str
@@ -70,7 +94,6 @@ def _write_request(path: Path, request: ContainedProcessRequest) -> None:
     }
     with path.open("x", encoding="utf-8") as request_file:
         json.dump(payload, request_file, separators=(",", ":"))
-    path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 def _read_capture(path: Path) -> str:
@@ -93,6 +116,96 @@ def _combine_capture_with_wrapper_output(capture: str, wrapper_output: str | byt
     return f"{capture}{separator}{normalized_wrapper_output}"
 
 
+def _normalized_subprocess_output(output: str | bytes | None) -> str:
+    if isinstance(output, bytes):
+        output = output.decode("utf-8", errors="replace")
+    return _normalize_newlines(output or "")
+
+
+def _current_windows_user_sid() -> str:
+    from ctypes import wintypes
+
+    class SidAndAttributes(ctypes.Structure):
+        _fields_ = [("sid", ctypes.c_void_p), ("attributes", wintypes.DWORD)]
+
+    class TokenUser(ctypes.Structure):
+        _fields_ = [("user", SidAndAttributes)]
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.argtypes = ()
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = (wintypes.HLOCAL,)
+    kernel32.LocalFree.restype = wintypes.HLOCAL
+    advapi32.OpenProcessToken.argtypes = (wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE))
+    advapi32.OpenProcessToken.restype = wintypes.BOOL
+    advapi32.GetTokenInformation.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    advapi32.GetTokenInformation.restype = wintypes.BOOL
+    advapi32.ConvertSidToStringSidW.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))
+    advapi32.ConvertSidToStringSidW.restype = wintypes.BOOL
+    token = wintypes.HANDLE()
+    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    try:
+        required_size = wintypes.DWORD()
+        advapi32.GetTokenInformation(token, 1, None, 0, ctypes.byref(required_size))
+        buffer = ctypes.create_string_buffer(required_size.value)
+        if not advapi32.GetTokenInformation(token, 1, buffer, required_size, ctypes.byref(required_size)):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        token_user = ctypes.cast(buffer, ctypes.POINTER(TokenUser)).contents
+        sid_string_pointer = ctypes.c_void_p()
+        if not advapi32.ConvertSidToStringSidW(token_user.user.sid, ctypes.byref(sid_string_pointer)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            return ctypes.wstring_at(sid_string_pointer)
+        finally:
+            kernel32.LocalFree(sid_string_pointer)
+    finally:
+        kernel32.CloseHandle(token)
+
+
+def _protect_temp_directory(path: Path) -> None:
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.LocalFree.argtypes = (wintypes.HLOCAL,)
+    kernel32.LocalFree.restype = wintypes.HLOCAL
+    advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.restype = wintypes.BOOL
+    advapi32.SetFileSecurityW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p)
+    advapi32.SetFileSecurityW.restype = wintypes.BOOL
+    security_descriptor = ctypes.c_void_p()
+    sddl = f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{_current_windows_user_sid()})"
+    if not advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+        sddl,
+        1,
+        ctypes.byref(security_descriptor),
+        None,
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        if not advapi32.SetFileSecurityW(str(path), 0x80000004, security_descriptor):
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel32.LocalFree(security_descriptor)
+
+
 def _powershell_executable() -> str:
     executable = shutil.which("pwsh")
     if executable is None:
@@ -108,11 +221,11 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
     worker_path = Path(__file__).with_name("contained_process_worker.py")
     with tempfile.TemporaryDirectory(prefix="bcbench-contained-") as temp_dir:
         temp_path = Path(temp_dir)
+        _protect_temp_directory(temp_path)
         private_path = temp_path / "private"
         shared_path = temp_path / "shared"
         private_path.mkdir()
         shared_path.mkdir()
-        private_path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
         request_path = private_path / "request.json"
         worker_request_path = shared_path / "worker-request.json"
@@ -145,6 +258,7 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
             "-WorkerStartupTimeoutSeconds",
             str(_WORKER_STARTUP_TIMEOUT_SECONDS),
         ]
+        watchdog_timeout_seconds = request.timeout_seconds + _WORKER_STARTUP_TIMEOUT_SECONDS + _WRAPPER_SHUTDOWN_GRACE_SECONDS
         try:
             completed = subprocess.run(
                 wrapper_command,
@@ -153,14 +267,15 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
                 encoding="utf-8",
                 errors="replace",
                 check=True,
-                timeout=request.timeout_seconds + _WORKER_STARTUP_TIMEOUT_SECONDS + _WRAPPER_SHUTDOWN_GRACE_SECONDS,
+                timeout=watchdog_timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
-            raise subprocess.TimeoutExpired(
-                request.command,
-                request.timeout_seconds,
-                output=_read_capture(stdout_path),
-                stderr=_read_capture(stderr_path),
+            raise ContainedProcessInfrastructureError(
+                watchdog_timeout_seconds,
+                child_stdout=_read_capture(stdout_path),
+                child_stderr=_read_capture(stderr_path),
+                wrapper_stdout=_normalized_subprocess_output(exc.output),
+                wrapper_stderr=_normalized_subprocess_output(exc.stderr),
             ) from exc
         except subprocess.CalledProcessError as exc:
             raise subprocess.CalledProcessError(
