@@ -24,6 +24,24 @@ def absolute_path(path: Path) -> Path:
     return Path(os.path.abspath(path))  # noqa: PTH100 - resolving could traverse a reparse point before validation
 
 
+def _path_components(path: Path) -> list[Path]:
+    absolute = absolute_path(path)
+    current = Path(absolute.anchor)
+    components = [current]
+    for part in absolute.parts[1:]:
+        current /= part
+        components.append(current)
+    return components
+
+
+def _canonical_path(path: Path) -> Path:
+    absolute = absolute_path(path)
+    for component in _path_components(absolute):
+        if _is_reparse_point(component):
+            raise ValueError(f"Refusing symbolic link or reparse point: {component}")
+    return absolute.resolve()
+
+
 def _is_same_or_ancestor(ancestor: Path, path: Path) -> bool:
     return path == ancestor or path.is_relative_to(ancestor)
 
@@ -33,16 +51,18 @@ def paths_overlap(first: Path, second: Path) -> bool:
 
 
 def require_disjoint(first: Path, second: Path, first_name: str, second_name: str) -> None:
-    if paths_overlap(first, second):
+    canonical_first = _canonical_path(first)
+    canonical_second = _canonical_path(second)
+    if paths_overlap(canonical_first, canonical_second):
         raise ValueError(f"{first_name} and {second_name} must be disjoint")
 
 
 def require_strict_descendant(path: Path, root: Path, path_name: str, root_name: str) -> Path:
-    absolute = absolute_path(path)
-    absolute_root = absolute_path(root)
-    if absolute == absolute_root or not absolute.is_relative_to(absolute_root):
-        raise ValueError(f"{path_name} {absolute} must be a strict descendant of {root_name} {absolute_root}")
-    return absolute
+    canonical_root = _canonical_path(root)
+    canonical = _canonical_path(path)
+    if canonical == canonical_root or not canonical.is_relative_to(canonical_root):
+        raise ValueError(f"{path_name} {canonical} must be a strict descendant of {root_name} {canonical_root}")
+    return canonical
 
 
 def _is_reparse_point(path: Path) -> bool:
@@ -55,20 +75,10 @@ def _is_reparse_point(path: Path) -> bool:
 
 
 def reject_reparse_components(path: Path, root: Path) -> None:
-    absolute = absolute_path(path)
-    absolute_root = absolute_path(root)
-    if absolute != absolute_root and not absolute.is_relative_to(absolute_root):
-        raise ValueError(f"{absolute} must be within {absolute_root}")
-
-    current = absolute_root
-    candidates = [current]
-    if absolute != absolute_root:
-        for part in absolute.relative_to(absolute_root).parts:
-            current /= part
-            candidates.append(current)
-    for candidate in candidates:
-        if _is_reparse_point(candidate):
-            raise ValueError(f"Refusing symbolic link or reparse point: {candidate}")
+    canonical_root = _canonical_path(root)
+    canonical = _canonical_path(path)
+    if canonical != canonical_root and not canonical.is_relative_to(canonical_root):
+        raise ValueError(f"{canonical} must be within {canonical_root}")
 
 
 def _reject_overlaps(paths: dict[str, Path]) -> None:
@@ -90,13 +100,11 @@ def validate_evidence_roots(
     if absolute_protected == Path(absolute_protected.anchor):
         raise ValueError("protected_root cannot be a filesystem root")
     require_disjoint(absolute_entry, absolute_protected, "entry_root", "protected_root")
-    reject_reparse_components(absolute_entry, absolute_entry)
-    reject_reparse_components(absolute_protected, absolute_protected)
-    absolute_evidence = require_strict_descendant(evidence, absolute_entry, "evidence", "entry_root")
-    absolute_final_results = require_strict_descendant(final_results, absolute_protected, "final_results", "protected_root")
-    reject_reparse_components(absolute_evidence, absolute_entry)
-    reject_reparse_components(absolute_final_results, absolute_protected)
-    return absolute_entry, absolute_evidence, absolute_protected, absolute_final_results
+    canonical_entry = _canonical_path(absolute_entry)
+    canonical_protected = _canonical_path(absolute_protected)
+    canonical_evidence = require_strict_descendant(evidence, canonical_entry, "evidence", "entry_root")
+    canonical_final_results = require_strict_descendant(final_results, canonical_protected, "final_results", "protected_root")
+    return canonical_entry, canonical_evidence, canonical_protected, canonical_final_results
 
 
 def validate_lifecycle_paths(paths: BugFixLifecyclePaths) -> BugFixLifecyclePaths:

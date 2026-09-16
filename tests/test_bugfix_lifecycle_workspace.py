@@ -240,3 +240,42 @@ def test_builder_rejects_junction_intermediate(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="reparse point"):
         TrustedWorkspaceBuilder(redirected)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory junction regression")
+def test_builder_rejects_junction_ancestor_aliasing_protected_root_beneath_entry_root(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    alias = tmp_path / "entry-alias"
+    _create_junction(alias, paths.entry_root)
+    protected_root = alias / "protected"
+    aliased = BugFixLifecyclePaths(
+        **{
+            **paths.__dict__,
+            "protected_root": protected_root,
+            "trusted_source": protected_root / "repository.git",
+            "checkpoints": protected_root / "checkpoints",
+            "final_results": protected_root / "final-results",
+        }
+    )
+
+    with pytest.raises(ValueError, match="reparse point"):
+        TrustedWorkspaceBuilder(aliased)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory junction regression")
+@pytest.mark.parametrize(
+    ("field", "root_name", "relative_path"),
+    [
+        ("baseline_workspace", "entry_root", Path("baseline")),
+        ("trusted_source", "protected_root", Path("repository.git")),
+    ],
+)
+def test_builder_rejects_equivalent_target_junction_aliases(tmp_path: Path, field: str, root_name: str, relative_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    root = getattr(paths, root_name)
+    alias = tmp_path / f"{root.name}-alias"
+    _create_junction(alias, root)
+    aliased = BugFixLifecyclePaths(**{**paths.__dict__, field: alias / relative_path})
+
+    with pytest.raises(ValueError, match="reparse point"):
+        TrustedWorkspaceBuilder(aliased)
