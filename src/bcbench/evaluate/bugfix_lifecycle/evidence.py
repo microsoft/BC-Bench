@@ -86,7 +86,7 @@ def _flush_file(file: _FlushableFile) -> None:
 class EvidenceStore:
     def __init__(
         self,
-        paths: BugFixLifecyclePaths | None = None,
+        paths: BugFixLifecyclePaths | Path | None = None,
         *,
         entry_root: Path | None = None,
         evidence_root: Path | None = None,
@@ -101,9 +101,18 @@ class EvidenceStore:
             self._evidence_root = validated_paths.evidence
             self._protected_root = validated_paths.protected_root
             self._final_results = validated_paths.final_results
+        elif isinstance(paths, Path):
+            if any(root is not None for root in (entry_root, evidence_root, protected_root, final_results)):
+                raise ValueError("Explicit roots cannot be combined with a convenience root")
+            self._entry_root, self._evidence_root, self._protected_root, self._final_results = validate_evidence_roots(
+                paths / "entry",
+                paths / "entry" / "evidence",
+                paths / "protected",
+                paths / "protected" / "final-results",
+            )
         else:
             if paths is not None:
-                raise TypeError("paths must be BugFixLifecyclePaths")
+                raise TypeError("paths must be BugFixLifecyclePaths or Path")
             if entry_root is None or evidence_root is None or protected_root is None or final_results is None:
                 raise ValueError("Entry, evidence, protected, and final result roots are required")
             self._entry_root, self._evidence_root, self._protected_root, self._final_results = validate_evidence_roots(

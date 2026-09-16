@@ -723,7 +723,7 @@ class TrustedSource:
 
 - [ ] **Step 5: Implement evidence hashing and atomic writes**
 
-`EvidenceStore.save_phase()` must serialize through Pydantic, write to a same-directory temporary file, flush, close, and replace the destination. Add methods for submission patches, checkpoint manifests, arbitrary text diagnostics, and the final result.
+`EvidenceStore(tmp_path)` uses `tmp_path\entry\evidence` for ordinary evidence and `tmp_path\protected\final-results` for protected output. `EvidenceStore.save_phase()` writes `entry\evidence\phases\<name>.json`; it must serialize through Pydantic, write to a same-directory temporary file, flush, close, and replace the destination. Add methods for submission patches, checkpoint manifests, arbitrary text diagnostics, and the final result.
 
 Add `protect_artifact(source: Path, kind: str) -> Path`. It computes SHA-256, copies the file to `protected-root\final-results\artifacts\<kind>\<sha256><suffix>`, verifies the copied hash, and returns the protected path. Existing content-addressed files are reused only after their hash is reverified.
 

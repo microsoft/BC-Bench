@@ -73,6 +73,20 @@ def test_save_phase_atomically_replaces_complete_json(tmp_path: Path) -> None:
     assert list(phase_path.parent.iterdir()) == [phase_path]
 
 
+def test_evidence_store_accepts_convenience_root(tmp_path: Path) -> None:
+    store = EvidenceStore(tmp_path)
+    phase = BugFixPhaseResult(status=BugFixPhaseStatus.PASSED)
+    source = tmp_path / "checkpoint.zip"
+    source.write_bytes(b"checkpoint")
+
+    phase_path = store.save_phase("test-red", phase)
+    protected = store.protect_artifact(source, "checkpoints")
+
+    assert phase_path == tmp_path / "entry" / "evidence" / "phases" / "test-red.json"
+    assert protected == tmp_path / "protected" / "final-results" / "artifacts" / "checkpoints" / f"{sha256_file(source)}.zip"
+    assert not list(tmp_path.rglob("*.tmp"))
+
+
 def test_evidence_store_saves_submission_manifest_diagnostic_and_final_result(tmp_path: Path) -> None:
     paths = _lifecycle_paths(tmp_path)
     store = EvidenceStore(paths)
