@@ -47,3 +47,43 @@ def test_overrides_are_applied(monkeypatch):
 
     assert env["FLAG"] == "on"
     assert "BC_SERVER_PASSWORD" not in env
+
+
+def test_allowlist_preserves_only_explicit_safe_environment(monkeypatch):
+    monkeypatch.setenv("PATH", r"C:\Windows\System32")
+    monkeypatch.setenv("TEMP", r"C:\Users\runner\AppData\Local\Temp")
+    monkeypatch.setenv("USERPROFILE", r"C:\Users\runner")
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "copilot-token")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "claude-token")
+    monkeypatch.setenv("GH_TOKEN", "gh-token")
+    monkeypatch.setenv("AZURE_CLIENT_SECRET", "azure-secret")
+    monkeypatch.setenv("EVALUATOR_SECRET", "evaluator-secret")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "bc-secret")
+
+    env = agent_subprocess_env(allowlist=True)
+
+    assert env["PATH"] == r"C:\Windows\System32"
+    assert env["TEMP"] == r"C:\Users\runner\AppData\Local\Temp"
+    assert env["USERPROFILE"] == r"C:\Users\runner"
+    assert env["COPILOT_GITHUB_TOKEN"] == "copilot-token"
+    assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "claude-token"
+    assert env["GH_TOKEN"] == "gh-token"
+    assert "AZURE_CLIENT_SECRET" not in env
+    assert "EVALUATOR_SECRET" not in env
+    assert "BC_SERVER_PASSWORD" not in env
+
+
+def test_allowlist_applies_overrides_after_filtering(monkeypatch):
+    monkeypatch.setenv("AZURE_CLIENT_SECRET", "host-secret")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "host-bc-secret")
+
+    env = agent_subprocess_env(
+        {
+            "AZURE_CLIENT_SECRET": "restricted-secret",
+            "BC_SERVER_PASSWORD": "restricted-bc-secret",
+        },
+        allowlist=True,
+    )
+
+    assert env["AZURE_CLIENT_SECRET"] == "restricted-secret"
+    assert env["BC_SERVER_PASSWORD"] == "restricted-bc-secret"

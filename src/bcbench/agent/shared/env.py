@@ -10,11 +10,42 @@ import os
 # the direct-API/direct-DB side-doors without breaking MCP connectivity.
 _WITHHELD_ENV_PREFIXES = ("BC_SERVER_", "BC_MCP_")
 _WITHHELD_ENV_VARS = frozenset({"BC_COMPANY", "BC_CONTAINER_NAME"})
+_AGENT_ENV_ALLOWLIST = frozenset(
+    {
+        "ALLUSERSPROFILE",
+        "APPDATA",
+        "COMSPEC",
+        "COPILOT_GITHUB_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "GH_TOKEN",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOCALAPPDATA",
+        "OS",
+        "PATH",
+        "PATHEXT",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMW6432",
+        "PSMODULEPATH",
+        "PUBLIC",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "USERDOMAIN",
+        "USERDOMAIN_ROAMINGPROFILE",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
+    }
+)
 
 
-def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False) -> dict[str, str]:
-    env = dict(os.environ)
-    if not pass_bc_credentials:
+def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False, allowlist: bool = False) -> dict[str, str]:
+    env = {key: value for key, value in os.environ.items() if key.upper() in _AGENT_ENV_ALLOWLIST} if allowlist else dict(os.environ)
+    if not allowlist and not pass_bc_credentials:
         env = {k: v for k, v in env.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
     if overrides:
         env.update(overrides)
