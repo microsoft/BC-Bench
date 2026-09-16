@@ -708,6 +708,66 @@ def test_accepts_one_new_test_in_existing_file(tmp_path: Path):
     assert result.tests == (TestEntry(codeunitID=2, functionName=frozenset({"NewTest"})),)
 
 
+@pytest.mark.parametrize(
+    "existing_member",
+    [
+        "    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n",
+        "    local procedure ExistingHelper()\n    begin\n    end;\n",
+    ],
+)
+def test_rejects_added_undefined_conditional_wrapping_existing_test_member(tmp_path: Path, existing_member: str):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(f"codeunit 2 FeatureTests\n{{\n{existing_member}}}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        f"codeunit 2 FeatureTests\n{{\n    #if UNDEFINED\n{existing_member}    #endif\n\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Conditional compilation directives may not be added"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+@pytest.mark.parametrize("directive", ["#IF UNDEFINED", "    #elif UNDEFINED", "\t#elseif UNDEFINED", " #Else", "    #ENDIF"])
+def test_rejects_added_conditional_compilation_directive_variant(tmp_path: Path, directive: str):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text("codeunit 2 FeatureTests\n{\n}\n", encoding="utf-8")
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        f"codeunit 2 FeatureTests\n{{\n{directive}\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Conditional compilation directives may not be added"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
 def test_rejects_added_exit_inside_existing_test_with_one_new_test(tmp_path: Path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()

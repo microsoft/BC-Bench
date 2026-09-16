@@ -1,16 +1,19 @@
 """Git repository operations."""
 
+import os
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
 
 from bcbench.config import get_config
-from bcbench.exceptions import EmptyDiffError, GitOperationError, PatchApplicationError
+from bcbench.exceptions import EmptyDiffError, GeneratedSubmissionError, GitOperationError, PatchApplicationError
 from bcbench.logger import get_logger
 from bcbench.operations.filesystem_operations import remove_tree
 
 logger = get_logger(__name__)
 _config = get_config()
+_NULL_DEVICE = "NUL" if os.name == "nt" else "/dev/null"
 
 
 def clean_repo(repo_path: Path) -> None:
@@ -182,13 +185,101 @@ def stage_and_get_diff(repo_path: Path) -> str:
     return patch
 
 
-def resolve_trusted_commit(repo_path: Path, trusted_commit: str) -> str:
+def _sanitized_git_environment() -> dict[str, str]:
+    environment = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+    environment.update(
+        {
+            "GIT_ATTR_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": _NULL_DEVICE,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+    )
+    return environment
+
+
+def _is_reparse_point(path_stat: os.stat_result) -> bool:
+    return bool(getattr(path_stat, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+
+def _validate_workspace_for_freeze(repo_path: Path) -> Path:
+    try:
+        repo_stat = repo_path.lstat()
+        if repo_path.is_symlink() or _is_reparse_point(repo_stat):
+            raise GeneratedSubmissionError(f"Cannot safely freeze workspace symbolic link or reparse point: {repo_path}")
+        workspace_path = repo_path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise GeneratedSubmissionError(f"Cannot safely freeze workspace: {repo_path}: {exc}") from exc
+
+    pending_directories = [workspace_path]
+    while pending_directories:
+        directory_path = pending_directories.pop()
+        try:
+            with os.scandir(directory_path) as directory_entries:
+                entries = tuple(directory_entries)
+        except OSError as exc:
+            raise GeneratedSubmissionError(f"Cannot safely inspect workspace directory: {directory_path}: {exc}") from exc
+
+        for entry in entries:
+            entry_path = Path(entry.path)
+            relative_path = entry_path.relative_to(workspace_path)
+            try:
+                entry_stat = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise GeneratedSubmissionError(f"Cannot safely inspect workspace entry: {relative_path}: {exc}") from exc
+
+            if entry.is_symlink() or _is_reparse_point(entry_stat):
+                raise GeneratedSubmissionError(f"Cannot safely freeze workspace symbolic link or reparse point: {relative_path}")
+            if len(relative_path.parts) > 1 and entry.name.casefold() == ".git":
+                raise GeneratedSubmissionError(f"Cannot safely freeze nested Git administrative entry: {relative_path}")
+
+            try:
+                resolved_entry_path = entry_path.resolve(strict=True)
+            except (OSError, RuntimeError) as exc:
+                raise GeneratedSubmissionError(f"Cannot safely resolve workspace entry: {relative_path}: {exc}") from exc
+            if not resolved_entry_path.is_relative_to(workspace_path):
+                raise GeneratedSubmissionError(f"Cannot safely freeze workspace entry outside workspace: {relative_path}")
+
+            if entry.is_dir(follow_symlinks=False):
+                pending_directories.append(entry_path)
+
+    return workspace_path
+
+
+def _resolve_source_object_directory(repo_path: Path, environment: dict[str, str]) -> Path:
+    result = subprocess.run(
+        ["git", "--no-replace-objects", "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+        cwd=repo_path,
+        env=environment,
+        capture_output=True,
+        encoding="utf-8",
+        text=True,
+        check=True,
+    )
+    unresolved_object_directory = Path(result.stdout.strip())
+    try:
+        object_directory_stat = unresolved_object_directory.lstat()
+    except OSError as exc:
+        raise GitOperationError(f"Cannot inspect Git object directory: {unresolved_object_directory}: {exc}") from exc
+    if unresolved_object_directory.is_symlink() or _is_reparse_point(object_directory_stat):
+        raise GeneratedSubmissionError(f"Cannot safely freeze Git object directory symbolic link or reparse point: {unresolved_object_directory}")
+
+    object_directory = unresolved_object_directory.resolve(strict=True)
+    if not object_directory.is_dir():
+        raise GitOperationError(f"Git object directory is not a directory: {object_directory}")
+    if not object_directory.is_relative_to(repo_path):
+        raise GeneratedSubmissionError(f"Cannot safely freeze Git object directory outside workspace: {object_directory}")
+    return object_directory
+
+
+def resolve_trusted_commit(repo_path: Path, trusted_commit: str, *, environment: dict[str, str] | None = None) -> str:
     if not trusted_commit:
         raise GitOperationError("Trusted baseline revision is missing.")
 
     result = subprocess.run(
         ["git", "--no-replace-objects", "rev-parse", "--verify", "--end-of-options", f"{trusted_commit}^{{commit}}"],
         cwd=repo_path,
+        env=environment or _sanitized_git_environment(),
         capture_output=True,
         encoding="utf-8",
         text=True,
@@ -200,25 +291,75 @@ def resolve_trusted_commit(repo_path: Path, trusted_commit: str) -> str:
 
 
 def stage_and_get_complete_diff(repo_path: Path, trusted_commit: str) -> str:
-    """Stage every repository change and return the complete binary-safe diff."""
-    resolved_trusted_commit = resolve_trusted_commit(repo_path, trusted_commit)
+    """Freeze every safe workspace change and return the complete binary-safe diff."""
+    workspace_path = _validate_workspace_for_freeze(repo_path)
+    git_environment = _sanitized_git_environment()
+    source_object_directory = _resolve_source_object_directory(workspace_path, git_environment)
+    resolved_trusted_commit = resolve_trusted_commit(workspace_path, trusted_commit, environment=git_environment)
     logger.info("Staging all changes and getting complete git diff")
-    subprocess.run(
-        ["git", "add", "-A"],
-        cwd=repo_path,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        check=True,
-    )
-    result = subprocess.run(
-        ["git", "--no-replace-objects", "-c", "core.quotePath=false", "diff", "--cached", resolved_trusted_commit, "--binary", "--no-ext-diff"],
-        cwd=repo_path,
-        capture_output=True,
-        encoding="utf-8",
-        text=True,
-        check=True,
-    )
-    patch: str = result.stdout
+    temporary_git_root = Path(tempfile.mkdtemp(prefix="bcbench-submission-freeze-"))
+    try:
+        git_directory = temporary_git_root / "git"
+        hooks_directory = temporary_git_root / "hooks"
+        template_directory = temporary_git_root / "template"
+        hooks_directory.mkdir()
+        template_directory.mkdir()
+        subprocess.run(
+            ["git", "init", "--bare", "--quiet", f"--template={template_directory}", str(git_directory)],
+            cwd=temporary_git_root,
+            env=git_environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        (git_directory / "objects" / "info" / "alternates").write_bytes(f"{source_object_directory.as_posix()}\n".encode())
+        subprocess.run(
+            ["git", f"--git-dir={git_directory}", "config", "core.hooksPath", str(hooks_directory)],
+            cwd=temporary_git_root,
+            env=git_environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        git_command = [
+            "git",
+            "--no-replace-objects",
+            f"--git-dir={git_directory}",
+            f"--work-tree={workspace_path}",
+            "-c",
+            "core.autocrlf=true",
+            "-c",
+            f"core.excludesFile={_NULL_DEVICE}",
+        ]
+        subprocess.run(
+            [*git_command, "read-tree", resolved_trusted_commit],
+            cwd=workspace_path,
+            env=git_environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        subprocess.run(
+            [*git_command, "add", "-f", "-A", "--", "."],
+            cwd=workspace_path,
+            env=git_environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        result = subprocess.run(
+            [*git_command, "-c", "core.quotePath=false", "diff", "--cached", resolved_trusted_commit, "--binary", "--no-ext-diff"],
+            cwd=workspace_path,
+            env=git_environment,
+            capture_output=True,
+            encoding="utf-8",
+            text=True,
+            check=True,
+        )
+        patch: str = result.stdout
+    finally:
+        remove_tree(temporary_git_root)
+
     logger.info("Complete git diff retrieved successfully")
     logger.debug(f"Generated complete diff:\n{patch}")
 

@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -274,6 +275,131 @@ def test_complete_diff_captures_al_and_manifest_changes(tmp_path: Path):
     assert "src/Main/app.json" in diff
     assert "+modified" in diff
     assert '+{"name": "modified"}' in diff
+
+
+def test_complete_diff_does_not_execute_agent_clean_filter(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_file(repo_path, ".gitattributes", "*.al filter=agent-controlled\n")
+    _write_file(repo_path, "src/Main/Feature.al", "original\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+
+    marker_path = tmp_path / "filter-executed"
+    filter_script = tmp_path / "clean_filter.py"
+    filter_script.write_text(
+        "import pathlib\nimport sys\npathlib.Path(sys.argv[1]).write_text('executed', encoding='utf-8')\nsys.stdout.buffer.write(sys.stdin.buffer.read())\n",
+        encoding="utf-8",
+    )
+    filter_command = f'"{Path(sys.executable).as_posix()}" "{filter_script.as_posix()}" "{marker_path.as_posix()}"'
+    subprocess.run(["git", "config", "filter.agent-controlled.clean", filter_command], cwd=repo_path, check=True)
+    _write_file(repo_path, "src/Main/Feature.al", "modified\n")
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert not marker_path.exists()
+    assert "-original" in diff
+    assert "+modified" in diff
+
+
+def test_complete_diff_includes_ignored_al_and_forbidden_files(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_file(repo_path, ".gitignore", "Generated/\nIgnored.md\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    _write_file(repo_path, "Generated/Injected.al", "codeunit 50100 Injected {}\n")
+    _write_file(repo_path, "Ignored.md", "forbidden\n")
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    assert "Generated/Injected.al" in diff
+    assert "+codeunit 50100 Injected {}" in diff
+    assert "Ignored.md" in diff
+    assert "+forbidden" in diff
+
+
+def test_complete_diff_uses_and_preserves_evaluator_owned_index(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _write_file(repo_path, "src/Main/Feature.al", "original\n")
+    trusted_commit = _commit_all(repo_path, "Initial")
+    _write_file(repo_path, "src/Main/Feature.al", "agent staged\n")
+    subprocess.run(["git", "add", "src/Main/Feature.al"], cwd=repo_path, check=True)
+    staged_diff_before = subprocess.run(
+        ["git", "diff", "--cached"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    _write_file(repo_path, "src/Main/Feature.al", "workspace final\n")
+
+    diff = stage_and_get_complete_diff(repo_path, trusted_commit)
+
+    staged_diff_after = subprocess.run(
+        ["git", "diff", "--cached"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "+workspace final" in diff
+    assert "+agent staged" not in diff
+    assert staged_diff_after == staged_diff_before
+
+
+def test_complete_diff_rejects_nested_git_administrative_entry(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    trusted_commit = _commit_all(repo_path, "Initial")
+    nested_repo_path = repo_path / "Generated"
+    nested_repo_path.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=nested_repo_path, check=True)
+
+    with pytest.raises(GeneratedSubmissionError, match=r"nested Git administrative entry.*Generated[/\\]\.git"):
+        stage_and_get_complete_diff(repo_path, trusted_commit)
+
+
+def test_complete_diff_rejects_symlink_escaping_workspace(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    trusted_commit = _commit_all(repo_path, "Initial")
+    outside_path = tmp_path / "outside"
+    outside_path.mkdir()
+    link_path = repo_path / "Generated"
+    try:
+        link_path.symlink_to(outside_path, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"Symlinks are unavailable: {exc}")
+
+    with pytest.raises(GeneratedSubmissionError, match=r"symbolic link or reparse point.*Generated"):
+        stage_and_get_complete_diff(repo_path, trusted_commit)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows junction regression")
+def test_complete_diff_rejects_junction_escaping_workspace(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    trusted_commit = _commit_all(repo_path, "Initial")
+    outside_path = tmp_path / "outside"
+    outside_path.mkdir()
+    junction_path = repo_path / "Generated"
+    junction_result = subprocess.run(
+        ["cmd.exe", "/c", "mklink", "/J", str(junction_path), str(outside_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if junction_result.returncode != 0:
+        pytest.skip(f"Junctions are unavailable: {junction_result.stderr}")
+
+    with pytest.raises(GeneratedSubmissionError, match=r"symbolic link or reparse point.*Generated"):
+        stage_and_get_complete_diff(repo_path, trusted_commit)
 
 
 def test_complete_diff_rejects_empty_submission(tmp_path: Path):

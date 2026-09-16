@@ -1,3 +1,4 @@
+import re
 import subprocess
 from collections import defaultdict
 from collections.abc import Iterable
@@ -20,6 +21,8 @@ from bcbench.operations import (
 )
 from bcbench.operations.patch_operations import GitDiffPaths, decode_git_header_path, extract_git_diff_paths, split_git_diff_blocks
 from bcbench.operations.test_operations import TestOccurrence, extract_codeunit_id_from_content
+
+_CONDITIONAL_COMPILATION_DIRECTIVE = re.compile(r"^\s*#\s*(?:if|elif|elseif|else|endif)\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,11 @@ def _validate_test_change(patched_file: PatchedFile, changed_paths: tuple[str, .
         raise GeneratedSubmissionError(f"Test files may not be renamed: {changed_paths[0]} -> {changed_paths[1]}")
     if any(line.is_removed for hunk in patched_file for line in hunk):
         raise GeneratedSubmissionError(f"Test changes may not remove lines: {changed_paths[0]}")
+
+
+def _validate_no_added_conditional_compilation_directives(patched_file: PatchedFile, changed_paths: tuple[str, ...]) -> None:
+    if any(line.is_added and _CONDITIONAL_COMPILATION_DIRECTIVE.match(line.value) for hunk in patched_file for line in hunk):
+        raise GeneratedSubmissionError(f"Conditional compilation directives may not be added to test files: {changed_paths[-1]}")
 
 
 def _contains_binary_metadata(diff_block: str) -> bool:
@@ -258,6 +266,7 @@ def analyze_generated_bugfix_output(
 
         if project_classifications == {True}:
             _validate_test_change(patched_file, changed_paths)
+            _validate_no_added_conditional_compilation_directives(patched_file, changed_paths)
             test_files.append(parsed_file)
             test_projects.extend(project_paths)
         else:
