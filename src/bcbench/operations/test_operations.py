@@ -1,6 +1,6 @@
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import NoTestsExtractedError, TestExtractionError
@@ -16,6 +16,22 @@ class TestOccurrence:
     function_name: str
     start_line: int
     end_line: int
+
+
+@dataclass(frozen=True)
+class ExecutableMemberOccurrence:
+    kind: str
+    name: str
+    signature: tuple[str, ...]
+    occurrence_index: int
+    start_line: int
+    end_line: int
+    is_test: bool
+    semantic_tokens: tuple[str, ...] = field(default=(), repr=False, compare=False)
+
+    @property
+    def identity(self) -> tuple[str, str, tuple[str, ...], int]:
+        return (self.kind, self.name.casefold(), self.signature, self.occurrence_index)
 
 
 @dataclass(frozen=True)
@@ -126,10 +142,10 @@ def _find_attribute_end(tokens: tuple[_ALToken, ...], start_index: int) -> int |
     return None
 
 
-def _find_procedure_end(tokens: tuple[_ALToken, ...], procedure_index: int) -> int | None:
+def _find_member_bounds(tokens: tuple[_ALToken, ...], member_index: int) -> tuple[int, int] | None:
     body_start = None
-    for index in range(procedure_index + 2, len(tokens)):
-        if _is_keyword(tokens[index], "procedure"):
+    for index in range(member_index + 2, len(tokens)):
+        if _is_keyword(tokens[index], "procedure") or _is_keyword(tokens[index], "trigger"):
             return None
         if _is_keyword(tokens[index], "begin"):
             body_start = index
@@ -152,14 +168,36 @@ def _find_procedure_end(tokens: tuple[_ALToken, ...], procedure_index: int) -> i
         if not block_stack:
             semicolon_index = index + 1
             if semicolon_index < len(tokens) and tokens[semicolon_index].value == ";":
-                return semicolon_index
-            return index
+                return body_start, semicolon_index
+            return body_start, index
     return None
 
 
-def _find_test_procedures(tokens: tuple[_ALToken, ...]) -> tuple[tuple[str, int, int], ...]:
-    procedures: list[tuple[str, int, int]] = []
-    attribute_start_line: int | None = None
+def _canonical_signature(tokens: tuple[_ALToken, ...], name_index: int, body_start: int) -> tuple[str, ...]:
+    signature_end = body_start
+    parenthesis_depth = 0
+    for index in range(name_index + 1, body_start):
+        token = tokens[index]
+        if token.value == "(":
+            parenthesis_depth += 1
+        elif token.value == ")":
+            parenthesis_depth -= 1
+        elif parenthesis_depth == 0 and _is_keyword(token, "var"):
+            signature_end = index
+            break
+
+    return _canonical_tokens(tokens[name_index + 1 : signature_end])
+
+
+def _canonical_tokens(tokens: tuple[_ALToken, ...]) -> tuple[str, ...]:
+    return tuple(token.value.casefold() if _is_identifier(token) else token.value for token in tokens)
+
+
+def _find_executable_members(tokens: tuple[_ALToken, ...]) -> tuple[ExecutableMemberOccurrence, ...]:
+    members: list[ExecutableMemberOccurrence] = []
+    occurrence_counts: dict[tuple[str, str, tuple[str, ...]], int] = {}
+    member_start_line: int | None = None
+    member_start_index: int | None = None
     has_test_attribute = False
     index = 0
 
@@ -169,38 +207,76 @@ def _find_test_procedures(tokens: tuple[_ALToken, ...]) -> tuple[tuple[str, int,
             attribute_end = _find_attribute_end(tokens, index)
             if attribute_end is None:
                 break
-            attribute_start_line = token.line if attribute_start_line is None else attribute_start_line
+            member_start_line = token.line if member_start_line is None else member_start_line
+            member_start_index = index if member_start_index is None else member_start_index
             if index + 1 < attribute_end and _is_keyword(tokens[index + 1], "test"):
                 has_test_attribute = True
             index = attribute_end + 1
             continue
 
-        if _is_keyword(token, "procedure"):
-            name_index = index + 1
-            procedure_end = _find_procedure_end(tokens, index)
-            if has_test_attribute and attribute_start_line is not None and name_index < len(tokens) and _is_identifier(tokens[name_index]) and procedure_end is not None:
-                procedures.append((tokens[name_index].value, attribute_start_line, tokens[procedure_end].line))
-            attribute_start_line = None
-            has_test_attribute = False
-            index = procedure_end + 1 if procedure_end is not None else index + 1
+        if any(_is_keyword(token, modifier) for modifier in ("local", "internal", "public", "protected")):
+            member_start_line = token.line if member_start_line is None else member_start_line
+            member_start_index = index if member_start_index is None else member_start_index
+            index += 1
             continue
 
-        if attribute_start_line is not None and not (_is_keyword(token, "local") or _is_keyword(token, "internal")):
-            attribute_start_line = None
+        member_kind = next((kind for kind in ("procedure", "trigger") if _is_keyword(token, kind)), None)
+        if member_kind is not None:
+            name_index = index + 1
+            member_bounds = _find_member_bounds(tokens, index)
+            if name_index < len(tokens) and _is_identifier(tokens[name_index]) and member_bounds is not None:
+                body_start, member_end = member_bounds
+                signature = _canonical_signature(tokens, name_index, body_start)
+                identity_without_occurrence = (member_kind, tokens[name_index].value.casefold(), signature)
+                occurrence_index = occurrence_counts.get(identity_without_occurrence, 0)
+                occurrence_counts[identity_without_occurrence] = occurrence_index + 1
+                semantic_start = member_start_index if member_start_index is not None else index
+                members.append(
+                    ExecutableMemberOccurrence(
+                        kind=member_kind,
+                        name=tokens[name_index].value,
+                        signature=signature,
+                        occurrence_index=occurrence_index,
+                        start_line=member_start_line if member_start_line is not None else token.line,
+                        end_line=tokens[member_end].line,
+                        is_test=has_test_attribute,
+                        semantic_tokens=_canonical_tokens(tokens[semantic_start : member_end + 1]),
+                    )
+                )
+            member_start_line = None
+            member_start_index = None
             has_test_attribute = False
+            index = member_bounds[1] + 1 if member_bounds is not None else index + 1
+            continue
+
+        member_start_line = None
+        member_start_index = None
+        has_test_attribute = False
         index += 1
 
-    return tuple(procedures)
+    return tuple(members)
+
+
+def extract_executable_member_occurrences_from_content(content: str) -> tuple[ExecutableMemberOccurrence, ...]:
+    return _find_executable_members(_tokenize_al(content))
 
 
 def extract_test_occurrences_from_content(content: str, file_path: str) -> tuple[TestOccurrence, ...]:
     tokens = _tokenize_al(content)
-    procedures = _find_test_procedures(tokens)
-    if not procedures:
+    test_members = tuple(member for member in _find_executable_members(tokens) if member.kind == "procedure" and member.is_test)
+    if not test_members:
         return ()
 
     codeunit_id = _find_codeunit_id(tokens, file_path)
-    return tuple(TestOccurrence(codeunit_id=codeunit_id, function_name=function_name, start_line=start_line, end_line=end_line) for function_name, start_line, end_line in procedures)
+    return tuple(
+        TestOccurrence(
+            codeunit_id=codeunit_id,
+            function_name=member.name,
+            start_line=member.start_line,
+            end_line=member.end_line,
+        )
+        for member in test_members
+    )
 
 
 def extract_codeunit_id_from_content(content: str, file_path: str) -> int:

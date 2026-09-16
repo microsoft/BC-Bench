@@ -31,6 +31,7 @@ from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_
 from bcbench.operations.skills_operations import setup_agent_skills
 from bcbench.operations.test_execution import TestExpectation, TestRunSummary
 from bcbench.operations.test_operations import (
+    extract_executable_member_occurrences_from_content,
     extract_test_occurrences_from_content,
     extract_test_occurrences_from_patch,
     extract_tests_from_patch,
@@ -56,6 +57,7 @@ __all__ = [
     "copy_problem_statement_folder",
     "copy_symbol_apps",
     "execute_al_query",
+    "extract_executable_member_occurrences_from_content",
     "extract_test_occurrences_from_content",
     "extract_test_occurrences_from_patch",
     "extract_tests_from_patch",

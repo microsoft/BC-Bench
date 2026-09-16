@@ -548,7 +548,7 @@ def test_does_not_wrap_unexpected_test_extraction_errors(tmp_path: Path, monkeyp
     def fail_extraction(*_args: object) -> None:
         raise RuntimeError("programmer error")
 
-    monkeypatch.setattr("bcbench.evaluate.bugfix_output.extract_test_occurrences_from_content", fail_extraction)
+    monkeypatch.setattr("bcbench.evaluate.bugfix_output.extract_executable_member_occurrences_from_content", fail_extraction)
 
     with pytest.raises(RuntimeError, match="programmer error"):
         analyze_generated_bugfix_output(
@@ -716,6 +716,139 @@ def test_rejects_added_attribute_attached_to_existing_test(tmp_path: Path):
     product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
     test_file.write_text(
         "codeunit 2 FeatureTests\n{\n    [HandlerFunctions('MessageHandler')]\n    [Test]\n    procedure ExistingTest()\n    begin\n    end;\n\n    [Test]\n    procedure NewTest()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Existing test behavior modified"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_rejects_added_statement_inside_existing_helper_called_by_new_test(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    local procedure ExistingHelper()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n"
+        "    local procedure ExistingHelper()\n"
+        "    begin\n"
+        "        Message('Changed');\n"
+        "    end;\n"
+        "\n"
+        "    [Test]\n"
+        "    procedure NewTest()\n"
+        "    begin\n"
+        "        ExistingHelper();\n"
+        "    end;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Existing test behavior modified"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+def test_rejects_existing_helper_attribute_rebinding_to_new_helper(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    [Scope('OnPrem')]\n    local procedure ExistingHelper()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n"
+        "    [Scope('OnPrem')]\n"
+        "    local procedure NewHelper()\n"
+        "    begin\n"
+        "    end;\n"
+        "\n"
+        "    local procedure ExistingHelper()\n"
+        "    begin\n"
+        "    end;\n"
+        "\n"
+        "    [Test]\n"
+        "    procedure NewTest()\n"
+        "    begin\n"
+        "        ExistingHelper();\n"
+        "    end;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GeneratedSubmissionError, match=r"Existing test behavior modified"):
+        analyze_generated_bugfix_output(
+            repo_path,
+            _git_diff(repo_path),
+            allowed_app_projects=["src/Main"],
+        )
+
+
+@pytest.mark.parametrize(
+    "trigger_lines",
+    [
+        ["    trigger OnRun()", "    begin", "        Message('Changed');", "    end;"],
+        ["    [TryFunction]", "    trigger OnRun()", "    begin", "    end;"],
+    ],
+)
+def test_rejects_added_statement_or_attribute_on_existing_trigger(tmp_path: Path, trigger_lines: list[str]):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    _init_git_repo(repo_path)
+    _create_project(repo_path, "src/Main")
+    _create_project(repo_path, "src/Tests")
+    product_file = repo_path / "src/Main/Feature.Codeunit.al"
+    test_file = repo_path / "src/Tests/FeatureTests.Codeunit.al"
+    product_file.write_text("codeunit 1 Feature {}\n", encoding="utf-8")
+    test_file.write_text(
+        "codeunit 2 FeatureTests\n{\n    trigger OnRun()\n    begin\n    end;\n}\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo_path)
+
+    product_file.write_text("codeunit 1 Feature {}\n// Fix\n", encoding="utf-8")
+    test_file.write_text(
+        "\n".join(
+            [
+                "codeunit 2 FeatureTests",
+                "{",
+                *trigger_lines,
+                "",
+                "    [Test]",
+                "    procedure NewTest()",
+                "    begin",
+                "    end;",
+                "}",
+                "",
+            ]
+        ),
         encoding="utf-8",
     )
 

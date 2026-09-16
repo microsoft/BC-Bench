@@ -2,7 +2,9 @@ import pytest
 
 from bcbench.exceptions import NoTestsExtractedError
 from bcbench.operations.test_operations import (
+    ExecutableMemberOccurrence,
     TestOccurrence,
+    extract_executable_member_occurrences_from_content,
     extract_test_occurrences_from_content,
     extract_test_occurrences_from_patch,
     extract_tests_from_patch,
@@ -149,6 +151,87 @@ def test_content_parser_tracks_complete_test_procedure_spans():
     assert result == (
         TestOccurrence(codeunit_id=2, function_name="Quoted Test", start_line=3, end_line=17),
         TestOccurrence(codeunit_id=2, function_name="UnquotedTest", start_line=19, end_line=24),
+    )
+
+
+def test_content_parser_tracks_all_executable_member_spans_and_identities():
+    content = """codeunit 2 FeatureTests
+{
+    [Scope('OnPrem')]
+    local procedure Helper(Value: Integer): Boolean
+    var
+        Result: Boolean;
+    begin
+        exit(Result);
+    end;
+
+    internal procedure Overloaded(Value: Integer)
+    begin
+    end;
+
+    public procedure Overloaded(Value: Text)
+    begin
+    end;
+
+    procedure DefaultVisibility()
+    begin
+    end;
+
+    [TryFunction]
+    trigger OnRun()
+    begin
+    end;
+}
+"""
+
+    result = extract_executable_member_occurrences_from_content(content)
+
+    assert result == (
+        ExecutableMemberOccurrence(
+            kind="procedure",
+            name="Helper",
+            signature=("(", "value", ":", "integer", ")", ":", "boolean"),
+            occurrence_index=0,
+            start_line=3,
+            end_line=9,
+            is_test=False,
+        ),
+        ExecutableMemberOccurrence(
+            kind="procedure",
+            name="Overloaded",
+            signature=("(", "value", ":", "integer", ")"),
+            occurrence_index=0,
+            start_line=11,
+            end_line=13,
+            is_test=False,
+        ),
+        ExecutableMemberOccurrence(
+            kind="procedure",
+            name="Overloaded",
+            signature=("(", "value", ":", "text", ")"),
+            occurrence_index=0,
+            start_line=15,
+            end_line=17,
+            is_test=False,
+        ),
+        ExecutableMemberOccurrence(
+            kind="procedure",
+            name="DefaultVisibility",
+            signature=("(", ")"),
+            occurrence_index=0,
+            start_line=19,
+            end_line=21,
+            is_test=False,
+        ),
+        ExecutableMemberOccurrence(
+            kind="trigger",
+            name="OnRun",
+            signature=("(", ")"),
+            occurrence_index=0,
+            start_line=23,
+            end_line=26,
+            is_test=False,
+        ),
     )
 
 

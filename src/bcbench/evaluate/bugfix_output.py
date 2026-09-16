@@ -1,5 +1,5 @@
 import subprocess
-from collections import Counter, defaultdict, deque
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,9 +10,9 @@ from unidiff.patch import PatchedFile
 
 from bcbench.dataset import TestEntry
 from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError, TestExtractionError
-from bcbench.operations import extract_test_occurrences_from_content, find_project_path, is_test_project, normalize_test_occurrences, order_project_paths
+from bcbench.operations import extract_executable_member_occurrences_from_content, find_project_path, is_test_project, normalize_test_occurrences, order_project_paths
 from bcbench.operations.patch_operations import GitDiffPaths, decode_git_header_path, extract_git_diff_paths, split_git_diff_blocks
-from bcbench.operations.test_operations import TestOccurrence
+from bcbench.operations.test_operations import TestOccurrence, extract_codeunit_id_from_content
 
 
 @dataclass(frozen=True)
@@ -184,25 +184,39 @@ def _find_generated_test_occurrences(repo_path: Path, test_files: Iterable[_Pars
         if not file_path.is_file():
             raise GeneratedSubmissionError(f"Test file does not exist after generated changes: {target_path}")
 
-        baseline_occurrences = extract_test_occurrences_from_content(_read_head_file(repo_path, target_path), target_path)
-        final_occurrences = extract_test_occurrences_from_content(file_path.read_text(encoding="utf-8"), target_path)
-        baseline_counter = Counter((occurrence.codeunit_id, occurrence.function_name) for occurrence in baseline_occurrences)
-        final_counter = Counter((occurrence.codeunit_id, occurrence.function_name) for occurrence in final_occurrences)
-        if baseline_counter - final_counter:
-            raise GeneratedSubmissionError(f"Existing test behavior modified: {target_path}")
-
+        baseline_content = _read_head_file(repo_path, target_path)
+        final_content = file_path.read_text(encoding="utf-8")
+        baseline_members = extract_executable_member_occurrences_from_content(baseline_content)
+        final_members = extract_executable_member_occurrences_from_content(final_content)
         added_target_lines = {line.target_line_no for parsed_file in parsed_files for hunk in parsed_file.patched_file for line in hunk if line.is_added and line.target_line_no is not None}
-        unmatched_final_occurrences: dict[tuple[int, str], deque[TestOccurrence]] = defaultdict(deque)
-        for occurrence in final_occurrences:
-            unmatched_final_occurrences[(occurrence.codeunit_id, occurrence.function_name)].append(occurrence)
-
-        for baseline_occurrence in baseline_occurrences:
-            identity = (baseline_occurrence.codeunit_id, baseline_occurrence.function_name)
-            final_occurrence = unmatched_final_occurrences[identity].popleft()
-            if any(final_occurrence.start_line <= line_number <= final_occurrence.end_line for line_number in added_target_lines):
+        final_members_by_identity = {member.identity: member for member in final_members}
+        for baseline_member in baseline_members:
+            final_member = final_members_by_identity.get(baseline_member.identity)
+            if (
+                final_member is None
+                or final_member.semantic_tokens != baseline_member.semantic_tokens
+                or any(final_member.start_line <= line_number <= final_member.end_line for line_number in added_target_lines)
+            ):
                 raise GeneratedSubmissionError(f"Existing test behavior modified: {target_path}")
 
-        generated_occurrences.extend(occurrence for occurrences in unmatched_final_occurrences.values() for occurrence in occurrences)
+        baseline_test_identities = {member.identity for member in baseline_members if member.kind == "procedure" and member.is_test}
+        final_test_members = tuple(member for member in final_members if member.kind == "procedure" and member.is_test)
+        final_test_identities = {member.identity for member in final_test_members}
+        if not baseline_test_identities.issubset(final_test_identities):
+            raise GeneratedSubmissionError(f"Existing test behavior modified: {target_path}")
+
+        new_test_members = tuple(member for member in final_test_members if member.identity not in baseline_test_identities)
+        if new_test_members:
+            codeunit_id = extract_codeunit_id_from_content(final_content, target_path)
+            generated_occurrences.extend(
+                TestOccurrence(
+                    codeunit_id=codeunit_id,
+                    function_name=member.name,
+                    start_line=member.start_line,
+                    end_line=member.end_line,
+                )
+                for member in new_test_members
+            )
 
     if not generated_occurrences:
         raise NoTestsExtractedError
