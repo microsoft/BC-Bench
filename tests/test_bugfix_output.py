@@ -6,7 +6,7 @@ from unidiff.errors import UnidiffParseError
 
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput, analyze_generated_bugfix_output
-from bcbench.exceptions import GeneratedOutputError, NoTestsExtractedError, ProjectDiscoveryError
+from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError, ProjectDiscoveryError
 
 
 def _create_project(repo_path: Path, project_path: str) -> Path:
@@ -120,7 +120,7 @@ def test_rejects_test_only_patch(tmp_path: Path):
         ["{", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;", "}"],
     )
 
-    with pytest.raises(GeneratedOutputError, match=r"Agent produced tests but no product-code fix\."):
+    with pytest.raises(GeneratedSubmissionError, match=r"Agent produced tests but no product-code fix\."):
         analyze_generated_bugfix_output(repo_path, generated_patch, allowed_app_projects=[])
 
 
@@ -138,12 +138,14 @@ def test_rejects_fix_without_new_test(tmp_path: Path):
         ["// Refactor without a new test"],
     )
 
-    with pytest.raises(NoTestsExtractedError):
+    with pytest.raises(GeneratedSubmissionError, match=r"No tests extracted from the generated patch\.") as exc_info:
         analyze_generated_bugfix_output(
             repo_path,
             generated_patch,
             allowed_app_projects=["src/Main"],
         )
+
+    assert isinstance(exc_info.value.__cause__, NoTestsExtractedError)
 
 
 def test_propagates_project_discovery_error_for_file_without_app_json(tmp_path: Path):
@@ -304,7 +306,7 @@ def test_rejects_rename_between_product_and_test_projects(tmp_path: Path):
     target_file = "src/Tests/Feature.Codeunit.al"
     _write_file(repo_path, target_file, "codeunit 50100 Feature {}\n")
 
-    with pytest.raises(GeneratedOutputError, match=r"Cannot safely split rename.*src/Main/Feature\.Codeunit\.al.*src/Tests/Feature\.Codeunit\.al"):
+    with pytest.raises(GeneratedSubmissionError, match=r"Cannot safely split rename.*src/Main/Feature\.Codeunit\.al.*src/Tests/Feature\.Codeunit\.al"):
         analyze_generated_bugfix_output(
             repo_path,
             _rename_patch(source_file, target_file),

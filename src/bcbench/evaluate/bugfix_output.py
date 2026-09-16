@@ -7,7 +7,7 @@ from unidiff.errors import UnidiffParseError
 from unidiff.patch import PatchedFile
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError
+from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError, NoTestsExtractedError
 from bcbench.operations import extract_tests_from_patch, find_project_path, is_test_project, order_project_paths
 
 
@@ -90,7 +90,7 @@ def analyze_generated_bugfix_output(
         project_paths = [find_project_path(repo_path, file_path) for file_path in changed_paths]
         project_classifications = {is_test_project(project_path) for project_path in project_paths}
         if len(project_classifications) > 1:
-            raise GeneratedOutputError(f"Cannot safely split rename between product and test projects: {changed_paths[0]} -> {changed_paths[1]}.")
+            raise GeneratedSubmissionError(f"Cannot safely split rename between product and test projects: {changed_paths[0]} -> {changed_paths[1]}.")
 
         if project_classifications == {True}:
             _validate_test_change(patched_file, changed_paths)
@@ -104,7 +104,7 @@ def analyze_generated_bugfix_output(
             app_projects.extend(project_paths)
 
     if not fix_files:
-        raise GeneratedOutputError("Agent produced tests but no product-code fix.")
+        raise GeneratedSubmissionError("Agent produced tests but no product-code fix.")
 
     fix_patch = "".join(map(str, fix_files))
     test_patch = "".join(map(str, test_files))
@@ -115,9 +115,13 @@ def analyze_generated_bugfix_output(
         if patched_file.target_file != "/dev/null" and file_path.is_file():
             file_contents[target_path] = file_path.read_text(encoding="utf-8")
 
-    tests = extract_tests_from_patch(test_patch, file_contents)
+    try:
+        tests = extract_tests_from_patch(test_patch, file_contents)
+    except NoTestsExtractedError as exc:
+        raise GeneratedSubmissionError(str(exc)) from exc
+
     test_count = sum(len(test.functionName) for test in tests)
-    if test_count > 1:
+    if test_count != 1:
         raise GeneratedSubmissionError(f"Expected exactly one new test procedure, found {test_count}.")
 
     return GeneratedBugFixOutput(
