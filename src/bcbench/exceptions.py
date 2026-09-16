@@ -20,6 +20,7 @@ __all__ = [
     "EmptyGoldResultError",
     "EntryNotFoundError",
     "GeneratedOutputError",
+    "GeneratedSubmissionError",
     "GitOperationError",
     "InvalidEntryFormatError",
     "NoEntriesFoundError",
@@ -279,6 +280,10 @@ class NoTestsExtractedError(BCBenchError):
 
 class GeneratedOutputError(BCBenchError):
     """Agent-generated output is invalid."""
+
+
+class GeneratedSubmissionError(GeneratedOutputError):
+    """Agent-generated submission violates bug-fix constraints."""
 
 
 class AgentError(BCBenchError):

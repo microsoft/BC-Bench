@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from unidiff.errors import UnidiffParseError
 from unidiff.patch import PatchedFile
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import GeneratedOutputError
+from bcbench.exceptions import GeneratedOutputError, GeneratedSubmissionError
 from bcbench.operations import extract_tests_from_patch, find_project_path, is_test_project, order_project_paths
 
 
@@ -36,16 +37,34 @@ def _is_complete_rename(patched_file: PatchedFile) -> bool:
     return patched_file.is_rename and any(line.startswith("rename from ") for line in patch_info_lines) and any(line.startswith("rename to ") for line in patch_info_lines)
 
 
-def _validate_patch_structure(patch_set: PatchSet) -> None:
-    if not patch_set:
-        raise GeneratedOutputError("Malformed generated patch: no patched files found.")
+def _canonical_project_path(repo_path: Path, project_path: str) -> str:
+    resolved_repo_path = repo_path.resolve()
+    resolved_project_path = (resolved_repo_path / Path(project_path.replace("\\", "/"))).resolve()
+    if not resolved_project_path.is_relative_to(resolved_repo_path):
+        raise GeneratedSubmissionError(f"Allowed product project is outside repository: {project_path}")
+    return resolved_project_path.relative_to(resolved_repo_path).as_posix().casefold()
 
-    for patched_file in patch_set:
-        if not patched_file and not _is_complete_rename(patched_file):
-            raise GeneratedOutputError(f"Malformed generated patch: {patched_file.path} has no hunks.")
+
+def _validate_al_paths(changed_paths: tuple[str, ...]) -> None:
+    for changed_path in changed_paths:
+        if not changed_path.casefold().endswith(".al"):
+            raise GeneratedSubmissionError(f"Only AL files may be changed: {changed_path}")
 
 
-def analyze_generated_bugfix_output(repo_path: Path, generated_patch: str) -> GeneratedBugFixOutput:
+def _validate_test_change(patched_file: PatchedFile, changed_paths: tuple[str, ...]) -> None:
+    if patched_file.is_removed_file:
+        raise GeneratedSubmissionError(f"Test files may not be deleted: {changed_paths[0]}")
+    if patched_file.is_rename:
+        raise GeneratedSubmissionError(f"Test files may not be renamed: {changed_paths[0]} -> {changed_paths[1]}")
+    if any(line.is_removed for hunk in patched_file for line in hunk):
+        raise GeneratedSubmissionError(f"Test changes may not remove lines: {changed_paths[0]}")
+
+
+def analyze_generated_bugfix_output(
+    repo_path: Path,
+    generated_patch: str,
+    allowed_app_projects: Iterable[str] = (),
+) -> GeneratedBugFixOutput:
     if not generated_patch.strip():
         raise GeneratedOutputError("Generated patch is blank.")
 
@@ -54,24 +73,33 @@ def analyze_generated_bugfix_output(repo_path: Path, generated_patch: str) -> Ge
     except UnidiffParseError as exc:
         raise GeneratedOutputError(f"Failed to parse generated patch: {exc}") from exc
 
-    _validate_patch_structure(patch_set)
+    if not patch_set:
+        raise GeneratedOutputError("Malformed generated patch: no patched files found.")
 
     fix_files: list[PatchedFile] = []
     test_files: list[PatchedFile] = []
     app_projects: list[str] = []
     test_projects: list[str] = []
+    allowed_project_paths = {_canonical_project_path(repo_path, project_path) for project_path in allowed_app_projects}
 
     for patched_file in patch_set:
         changed_paths = _changed_paths(patched_file)
+        _validate_al_paths(changed_paths)
+        if not patched_file and not _is_complete_rename(patched_file):
+            raise GeneratedOutputError(f"Malformed generated patch: {patched_file.path} has no hunks.")
         project_paths = [find_project_path(repo_path, file_path) for file_path in changed_paths]
         project_classifications = {is_test_project(project_path) for project_path in project_paths}
         if len(project_classifications) > 1:
             raise GeneratedOutputError(f"Cannot safely split rename between product and test projects: {changed_paths[0]} -> {changed_paths[1]}.")
 
         if project_classifications == {True}:
+            _validate_test_change(patched_file, changed_paths)
             test_files.append(patched_file)
             test_projects.extend(project_paths)
         else:
+            for project_path in project_paths:
+                if _canonical_project_path(repo_path, project_path) not in allowed_project_paths:
+                    raise GeneratedSubmissionError(f"Product project is not allowed: {project_path}")
             fix_files.append(patched_file)
             app_projects.extend(project_paths)
 
@@ -88,6 +116,9 @@ def analyze_generated_bugfix_output(repo_path: Path, generated_patch: str) -> Ge
             file_contents[target_path] = file_path.read_text(encoding="utf-8")
 
     tests = extract_tests_from_patch(test_patch, file_contents)
+    test_count = sum(len(test.functionName) for test in tests)
+    if test_count > 1:
+        raise GeneratedSubmissionError(f"Expected exactly one new test procedure, found {test_count}.")
 
     return GeneratedBugFixOutput(
         full_patch=generated_patch,

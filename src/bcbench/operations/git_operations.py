@@ -182,6 +182,35 @@ def stage_and_get_diff(repo_path: Path) -> str:
     return patch
 
 
+def stage_and_get_complete_diff(repo_path: Path) -> str:
+    """Stage every repository change and return the complete binary-safe diff."""
+    logger.info("Staging all changes and getting complete git diff")
+    subprocess.run(
+        ["git", "add", "-A"],
+        cwd=repo_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    result = subprocess.run(
+        ["git", "-c", "core.quotePath=false", "diff", "--cached", "--binary", "--no-ext-diff"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        text=True,
+        check=True,
+    )
+    patch: str = result.stdout
+    logger.info("Complete git diff retrieved successfully")
+    logger.debug(f"Generated complete diff:\n{patch}")
+
+    if not patch:
+        logger.error("Generated complete diff is empty - agent made no changes")
+        raise EmptyDiffError
+
+    return patch
+
+
 def clone_repo_at_revision(repo: str, revision: str, destination: Path) -> None:
     """Shallow-clone `repo` at a specific `revision` into `destination`.
 

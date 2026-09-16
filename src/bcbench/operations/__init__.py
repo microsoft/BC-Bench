@@ -22,6 +22,7 @@ from bcbench.operations.git_operations import (
     fetch_commit_if_missing,
     has_changes,
     init_repo,
+    stage_and_get_complete_diff,
     stage_and_get_diff,
 )
 from bcbench.operations.instruction_operations import copy_problem_statement_folder, setup_custom_agent, setup_instructions_from_config
@@ -66,6 +67,7 @@ __all__ = [
     "setup_custom_agent",
     "setup_instructions_from_config",
     "setup_repo_prebuild",
+    "stage_and_get_complete_diff",
     "stage_and_get_diff",
     "wrap_query_as_api",
 ]

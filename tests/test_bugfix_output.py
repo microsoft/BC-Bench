@@ -59,7 +59,11 @@ def test_analyzes_base_app_fix_and_scm_manufacturing_test(tmp_path: Path):
     )
     generated_patch = fix_patch + test_patch
 
-    result = analyze_generated_bugfix_output(repo_path, generated_patch)
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["App/Layers/W1/BaseApp"],
+    )
 
     assert isinstance(result, GeneratedBugFixOutput)
     assert result.full_patch == generated_patch
@@ -91,7 +95,11 @@ def test_discovers_generated_test_project_without_dataset_paths(tmp_path: Path):
         ["{", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;", "}"],
     )
 
-    result = analyze_generated_bugfix_output(repo_path, generated_patch)
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["src/Main"],
+    )
 
     assert result.app_projects == (str(app_project.relative_to(repo_path)),)
     assert result.test_projects == (str(test_project.relative_to(repo_path)),)
@@ -113,7 +121,7 @@ def test_rejects_test_only_patch(tmp_path: Path):
     )
 
     with pytest.raises(GeneratedOutputError, match=r"Agent produced tests but no product-code fix\."):
-        analyze_generated_bugfix_output(repo_path, generated_patch)
+        analyze_generated_bugfix_output(repo_path, generated_patch, allowed_app_projects=[])
 
 
 def test_rejects_fix_without_new_test(tmp_path: Path):
@@ -131,7 +139,11 @@ def test_rejects_fix_without_new_test(tmp_path: Path):
     )
 
     with pytest.raises(NoTestsExtractedError):
-        analyze_generated_bugfix_output(repo_path, generated_patch)
+        analyze_generated_bugfix_output(
+            repo_path,
+            generated_patch,
+            allowed_app_projects=["src/Main"],
+        )
 
 
 def test_propagates_project_discovery_error_for_file_without_app_json(tmp_path: Path):
@@ -140,7 +152,7 @@ def test_propagates_project_discovery_error_for_file_without_app_json(tmp_path: 
     generated_patch = _patch("src/Unknown/Feature.al", "table 50100 Feature {}", ["// Fix"])
 
     with pytest.raises(ProjectDiscoveryError, match=r"No owning app\.json found"):
-        analyze_generated_bugfix_output(repo_path, generated_patch)
+        analyze_generated_bugfix_output(repo_path, generated_patch, allowed_app_projects=[])
 
 
 def test_deduplicates_multiple_files_in_one_project(tmp_path: Path):
@@ -162,7 +174,11 @@ def test_deduplicates_multiple_files_in_one_project(tmp_path: Path):
         ["{", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;", "}"],
     )
 
-    result = analyze_generated_bugfix_output(repo_path, generated_patch)
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["src/Main"],
+    )
 
     assert result.app_projects == (str(app_project.relative_to(repo_path)),)
     assert result.test_projects == (str(test_project.relative_to(repo_path)),)
@@ -183,18 +199,23 @@ def test_returns_multiple_projects_in_deterministic_order(tmp_path: Path):
     for file_path, first_line in files.items():
         if file_path.endswith("Tests.Codeunit.al"):
             name = "TestsZeta" if "Zeta" in file_path else "TestsAlpha"
-            content = f"{first_line}\n{{\n    [Test]\n    procedure {name}()\n    begin\n    end;\n}}\n"
+            attribute = "    [Test]\n" if "Zeta" in file_path else ""
+            content = f"{first_line}\n{{\n{attribute}    procedure {name}()\n    begin\n    end;\n}}\n"
         else:
             content = f"{first_line}\n"
         _write_file(repo_path, file_path, content)
     generated_patch = (
         _patch("src/tests/Zeta/ZetaTests.Codeunit.al", files["src/tests/Zeta/ZetaTests.Codeunit.al"], ["{", "    [Test]", "    procedure TestsZeta()", "}"])
         + _patch("src/Zeta/Zeta.Table.al", files["src/Zeta/Zeta.Table.al"], ["// Fix Zeta"])
-        + _patch("src/tests/Alpha/AlphaTests.Codeunit.al", files["src/tests/Alpha/AlphaTests.Codeunit.al"], ["{", "    [Test]", "    procedure TestsAlpha()", "}"])
+        + _patch("src/tests/Alpha/AlphaTests.Codeunit.al", files["src/tests/Alpha/AlphaTests.Codeunit.al"], ["{", "    procedure TestsAlpha()", "}"])
         + _patch("src/Alpha/Alpha.Table.al", files["src/Alpha/Alpha.Table.al"], ["// Fix Alpha"])
     )
 
-    result = analyze_generated_bugfix_output(repo_path, generated_patch)
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        generated_patch,
+        allowed_app_projects=["src/Zeta", "src/Alpha"],
+    )
 
     assert result.app_projects == (
         str(app_alpha.relative_to(repo_path)),
@@ -227,7 +248,11 @@ def test_same_class_cross_project_rename_touches_both_projects(tmp_path: Path):
         ["{", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;", "}"],
     )
 
-    result = analyze_generated_bugfix_output(repo_path, rename_patch + test_patch)
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        rename_patch + test_patch,
+        allowed_app_projects=["src/Source", "src/Target"],
+    )
 
     assert result.fix_patch == rename_patch
     assert result.test_patch == test_patch
@@ -261,7 +286,11 @@ def test_preserves_valid_new_and_deleted_al_text_diffs(tmp_path: Path, fix_patch
         ["{", "    [Test]", "    procedure VerifiesFeature()", "    begin", "    end;", "}"],
     )
 
-    result = analyze_generated_bugfix_output(repo_path, fix_patch + test_patch)
+    result = analyze_generated_bugfix_output(
+        repo_path,
+        fix_patch + test_patch,
+        allowed_app_projects=["src/Main"],
+    )
 
     assert mode_line in result.fix_patch
     assert result.test_patch == test_patch
@@ -276,12 +305,16 @@ def test_rejects_rename_between_product_and_test_projects(tmp_path: Path):
     _write_file(repo_path, target_file, "codeunit 50100 Feature {}\n")
 
     with pytest.raises(GeneratedOutputError, match=r"Cannot safely split rename.*src/Main/Feature\.Codeunit\.al.*src/Tests/Feature\.Codeunit\.al"):
-        analyze_generated_bugfix_output(repo_path, _rename_patch(source_file, target_file))
+        analyze_generated_bugfix_output(
+            repo_path,
+            _rename_patch(source_file, target_file),
+            allowed_app_projects=["src/Main"],
+        )
 
 
 def test_rejects_blank_patch(tmp_path: Path):
     with pytest.raises(GeneratedOutputError, match=r"Generated patch is blank\."):
-        analyze_generated_bugfix_output(tmp_path, " \n\t")
+        analyze_generated_bugfix_output(tmp_path, " \n\t", allowed_app_projects=[])
 
 
 def test_rejects_header_only_diff(tmp_path: Path):
@@ -290,18 +323,22 @@ def test_rejects_header_only_diff(tmp_path: Path):
     header_only_patch = "diff --git a/src/Main/Feature.al b/src/Main/Feature.al\n"
 
     with pytest.raises(GeneratedOutputError, match=r"Malformed generated patch:.*no hunks"):
-        analyze_generated_bugfix_output(repo_path, header_only_patch)
+        analyze_generated_bugfix_output(
+            repo_path,
+            header_only_patch,
+            allowed_app_projects=["src/Main"],
+        )
 
 
 def test_rejects_nonblank_text_that_parses_to_no_files(tmp_path: Path):
     with pytest.raises(GeneratedOutputError, match=r"Malformed generated patch:.*no patched files"):
-        analyze_generated_bugfix_output(tmp_path, "not a patch\n")
+        analyze_generated_bugfix_output(tmp_path, "not a patch\n", allowed_app_projects=[])
 
 
 def test_wraps_malformed_patch_error(tmp_path: Path):
     malformed_patch = "diff --git a/Feature.al b/Feature.al\n--- a/Feature.al\n+++ b/Feature.al\n@@ -1,2 +1,1 @@\n-old\n+new\n"
 
     with pytest.raises(GeneratedOutputError, match=r"Failed to parse generated patch") as exc_info:
-        analyze_generated_bugfix_output(tmp_path, malformed_patch)
+        analyze_generated_bugfix_output(tmp_path, malformed_patch, allowed_app_projects=[])
 
     assert isinstance(exc_info.value.__cause__, UnidiffParseError)
