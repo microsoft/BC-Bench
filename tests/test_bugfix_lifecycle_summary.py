@@ -259,6 +259,17 @@ def test_bugfix_summary_rejects_empty_results():
         BugFixResultSummary.from_results([], run_id="run")
 
 
+def test_bugfix_summary_rejects_duplicate_unknown_instance_results():
+    result = create_bugfix_result(
+        instance_id="test__infrastructure",
+        resolved=False,
+        infrastructure_failure=True,
+    )
+
+    with pytest.raises(ValueError, match="duplicate instance_id"):
+        BugFixResultSummary.from_results([result, result], run_id="run")
+
+
 def test_bugfix_summary_rejects_non_bugfix_results():
     with pytest.raises(ValueError, match="BugFixResult"):
         BugFixResultSummary.from_results(
@@ -645,6 +656,16 @@ def test_bugfix_aggregate_rejects_out_of_range_metric_values(field, value):
         BugFixLeaderboardAggregate.model_validate(payload)
 
 
+def test_bugfix_aggregate_rejects_resolution_average_disagreement():
+    summary = BugFixResultSummary.from_results([create_bugfix_result(resolved=True)], run_id="run")
+    aggregate = BugFixLeaderboardAggregate.from_runs([summary])
+    payload = aggregate.model_dump(mode="json")
+    payload["metric_averages"][BugFixMetricName.RESOLUTION] = 0.5
+
+    with pytest.raises(ValidationError, match="Resolution"):
+        BugFixLeaderboardAggregate.model_validate(payload)
+
+
 def test_existing_package_normalized_leaderboard_data_loads(tmp_path):
     path = tmp_path / "bug-fix.json"
     path.write_text(
@@ -694,6 +715,20 @@ def test_existing_package_normalized_leaderboard_data_loads(tmp_path):
     assert leaderboard.aggregate[0].runtime_isolation == "package-normalized"
     assert set(leaderboard.aggregate[0].metric_averages) == set(BugFixMetricName)
     assert set(leaderboard.aggregate[0].metric_coverages) == set(BugFixMetricName)
+    assert leaderboard.aggregate[0].metric_averages == {
+        BugFixMetricName.GENERATED_TEST_VALIDITY: None,
+        BugFixMetricName.GENERATED_PAIR_TRANSITION: None,
+        BugFixMetricName.FIX_BUILD: 0.5,
+        BugFixMetricName.FIX_QUALITY: None,
+        BugFixMetricName.RESOLUTION: 0.5,
+    }
+    assert leaderboard.aggregate[0].metric_coverages == {
+        BugFixMetricName.GENERATED_TEST_VALIDITY: 0.0,
+        BugFixMetricName.GENERATED_PAIR_TRANSITION: 0.0,
+        BugFixMetricName.FIX_BUILD: 1.0,
+        BugFixMetricName.FIX_QUALITY: 0.0,
+        BugFixMetricName.RESOLUTION: 1.0,
+    }
 
 
 @pytest.mark.parametrize(

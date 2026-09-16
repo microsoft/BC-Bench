@@ -4,7 +4,8 @@ from datetime import UTC, date, datetime
 import pytest
 
 from bcbench.config import get_config
-from bcbench.results.bugfix import BugFixResultSummary
+from bcbench.results.bugfix import BugFixMetricName, BugFixResultSummary
+from bcbench.results.leaderboard import BugFixLeaderboardAggregate, Leaderboard
 from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentMetrics, EvaluationCategory, ExperimentConfiguration
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
@@ -77,8 +78,6 @@ class TestEvaluationResultSummary:
         assert output_file.exists()
 
     def test_loading_existing_results(self):
-        from bcbench.results.leaderboard import Leaderboard
-
         for category in EvaluationCategory:
             leaderboard_path = _config.paths.leaderboard_dir / f"{category.value}.json"
             if not leaderboard_path.exists():
@@ -95,6 +94,18 @@ class TestEvaluationResultSummary:
                     # Old format: array of items
                     for item in data:
                         ExecutionBasedEvaluationResultSummary.model_validate(item)
+
+    def test_loading_bugfix_docs_data_rebuilds_complete_consistent_metric_maps(self):
+        leaderboard = Leaderboard.load(_config.paths.leaderboard_dir / "bug-fix.json")
+
+        for aggregate in leaderboard.aggregate:
+            assert isinstance(aggregate, BugFixLeaderboardAggregate)
+            assert set(aggregate.metric_averages) == {metric.value for metric in BugFixMetricName}
+            assert set(aggregate.metric_coverages) == {metric.value for metric in BugFixMetricName}
+            if aggregate.average is not None:
+                resolution_average = aggregate.metric_averages[BugFixMetricName.RESOLUTION]
+                assert resolution_average is not None
+                assert round(resolution_average, 3) == aggregate.average
 
 
 class TestFromResults:

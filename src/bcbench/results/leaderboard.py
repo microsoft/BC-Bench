@@ -149,6 +149,10 @@ class BugFixLeaderboardAggregate(ExecutionBasedLeaderboardAggregate):
                 raise ValueError("metric_averages values must be None or within [0, 1]")
         if any(not 0.0 <= value <= 1.0 for value in self.metric_coverages.values()):
             raise ValueError("metric_coverages values must be within [0, 1]")
+
+        resolution_average = self.metric_averages[BugFixMetricName.RESOLUTION]
+        if self.average is not None and resolution_average is not None and round(self.average, 3) != round(resolution_average, 3):
+            raise ValueError("average must agree with metric_averages[Resolution] after rounding to 3 decimals")
         return self
 
     @classmethod
@@ -278,6 +282,39 @@ class Leaderboard(BaseModel):
     runs: list[EvaluationResultSummary]
     aggregate: list[LeaderboardAggregate]
 
+    @model_validator(mode="before")
+    @classmethod
+    def _rebuild_legacy_bugfix_aggregates(cls, payload: object) -> object:
+        if not isinstance(payload, dict):
+            return payload
+
+        raw_runs = payload.get("runs")
+        raw_aggregates = payload.get("aggregate")
+        if not isinstance(raw_runs, list) or not isinstance(raw_aggregates, list):
+            return payload
+
+        runs = [EvaluationResultSummary.from_json(item) if isinstance(item, dict) else item for item in raw_runs]
+        aggregates: list[dict[str, Any] | LeaderboardAggregate] = []
+        rebuilt = False
+        for item in raw_aggregates:
+            is_legacy_bugfix = isinstance(item, dict) and item.get("category") == EvaluationCategory.BUG_FIX and ("metric_averages" not in item or "metric_coverages" not in item)
+            if not is_legacy_bugfix:
+                aggregates.append(item)
+                continue
+
+            legacy_aggregate = BugFixLeaderboardAggregate.model_validate(item)
+            aggregate_key = _bugfix_aggregate_combination_key(legacy_aggregate)
+            matching_runs = [run for run in runs if isinstance(run, BugFixResultSummary) and run.combination_key() == aggregate_key]
+            if not matching_runs:
+                raise ValueError(f"Cannot rebuild legacy bug-fix aggregate without matching runs: {aggregate_key}")
+
+            aggregates.append(BugFixLeaderboardAggregate.from_runs(matching_runs))
+            rebuilt = True
+
+        if not rebuilt:
+            return payload
+        return {**payload, "runs": runs, "aggregate": aggregates}
+
     @field_validator("runs", mode="before")
     @classmethod
     def _deserialize_runs(cls, value: list[dict[str, Any] | EvaluationResultSummary]) -> list[EvaluationResultSummary]:
@@ -308,3 +345,17 @@ class Leaderboard(BaseModel):
 def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int) -> float | None:
     instance_pass_hat_k = [pass_hat_k(len(results), sum(results), k) for results in instance_resolved.values() if len(results) >= k]
     return round(sum(instance_pass_hat_k) / len(instance_pass_hat_k), 3) if instance_pass_hat_k else None
+
+
+def _bugfix_aggregate_combination_key(aggregate: BugFixLeaderboardAggregate) -> tuple[str | None, ...]:
+    experiment_key: str | None = None
+    if aggregate.experiment and not aggregate.experiment.is_empty():
+        experiment_key = json.dumps(aggregate.experiment.model_dump(mode="json"), sort_keys=True)
+    return (
+        aggregate.agent_name,
+        aggregate.agent_version,
+        aggregate.model,
+        experiment_key,
+        aggregate.benchmark_version,
+        aggregate.runtime_isolation,
+    )

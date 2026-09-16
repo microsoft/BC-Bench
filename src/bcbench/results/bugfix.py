@@ -1,3 +1,4 @@
+from collections import Counter
 from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
@@ -336,6 +337,10 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
             raise ValueError(f"BugFixResultSummary requires only BugFixResult instances, got: {result_types}")
 
         bugfix_results = [result for result in results if isinstance(result, BugFixResult)]
+        duplicate_instance_ids = sorted(instance_id for instance_id, count in Counter(result.instance_id for result in bugfix_results).items() if count > 1)
+        if duplicate_instance_ids:
+            raise ValueError(f"Cannot summarize bug-fix results with duplicate instance_id values: {duplicate_instance_ids}")
+
         identity_fields = ("model", "agent_name", "agent_version", "experiment", "category", "runtime_isolation")
         first_result = bugfix_results[0]
         inconsistent_fields = [field for field in identity_fields if any(getattr(result, field) != getattr(first_result, field) for result in bugfix_results[1:])]
