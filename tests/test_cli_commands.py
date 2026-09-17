@@ -408,6 +408,25 @@ def test_bugfix_lifecycle_help_lists_fixed_category_agent_commands():
     assert "agent-container-config" not in copilot.stdout
 
 
+def test_bugfix_lifecycle_requires_protected_root_when_entry_root_is_supplied(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+):
+    result = runner.invoke(
+        app,
+        [
+            "bugfix-lifecycle",
+            "copilot",
+            lifecycle_cli_fixture.entry.instance_id,
+            "--entry-root",
+            str(lifecycle_cli_fixture.entry_root),
+        ],
+        env={"BCBENCH_LIFECYCLE_PROTECTED_ROOT": None},
+    )
+
+    assert result.exit_code != 0
+    assert "protected-root" in (result.stdout + result.stderr).lower()
+
+
 @pytest.mark.parametrize(
     ("command", "agent_name", "default_model", "version_function", "runner_function"),
     [
