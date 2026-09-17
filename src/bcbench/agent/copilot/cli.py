@@ -78,6 +78,9 @@ def invoke_copilot(
                     env=dict(env) if env is not None else {},
                     timeout_seconds=timeout,
                     identity=execution_policy.restricted_identity,
+                    python_executable=execution_policy.python_executable,
+                    worker_path=execution_policy.worker_path,
+                    worker_sha256=execution_policy.worker_sha256,
                 )
             )
         except subprocess.CalledProcessError as exc:

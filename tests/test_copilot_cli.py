@@ -65,7 +65,16 @@ def test_invoke_copilot_default_path_preserves_subprocess_run_parameters(tmp_pat
 
 def test_invoke_copilot_contained_path_constructs_request_and_parses_stdout(tmp_path: Path):
     identity = WindowsIdentity("restricted", "secret", "DOMAIN")
-    policy = AgentExecutionPolicy(contain_process_tree=True, restricted_identity=identity, allowlist_environment=True)
+    python_executable = tmp_path / "python.exe"
+    worker_path = tmp_path / "agent-tools" / "contained_process_worker.py"
+    policy = AgentExecutionPolicy(
+        contain_process_tree=True,
+        restricted_identity=identity,
+        allowlist_environment=True,
+        python_executable=python_executable,
+        worker_path=worker_path,
+        worker_sha256="a" * 64,
+    )
     env = {"PATH": "agent-path", "COPILOT_GITHUB_TOKEN": "token"}
     output = '{"type":"result","data":{"content":"finished"}}\n'
     with (
@@ -102,6 +111,9 @@ def test_invoke_copilot_contained_path_constructs_request_and_parses_stdout(tmp_
             env=env,
             timeout_seconds=60,
             identity=identity,
+            python_executable=python_executable,
+            worker_path=worker_path,
+            worker_sha256="a" * 64,
         )
     )
     mock_subprocess_run.assert_not_called()

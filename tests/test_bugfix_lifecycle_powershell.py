@@ -4,6 +4,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,9 @@ _MODULE = _ROOT / "scripts" / "BugFixLifecycle.psm1"
 _SETUP = _ROOT / "scripts" / "Setup-BugFixLifecycle.ps1"
 _EXPECTED_EXPORTS = {
     "Assert-BCBenchReadExecuteRoots",
+    "Get-BCBenchContainerState",
     "New-BCBenchAgentIdentity",
+    "New-BCBenchAgentTools",
     "Remove-BCBenchAgentIdentity",
     "Resolve-BCBenchPythonRuntime",
     "Set-BCBenchWorkspaceAcl",
@@ -94,8 +97,36 @@ $metadata | ConvertTo-Json -Compress -Depth 8
     assert any('ValidateSet("bug-fix")' in attribute for attribute in metadata["Category"])
     assert "Import-Module BcContainerHelper -RequiredVersion 6.1.18" in source
     assert "New-BCContainerSync" in source
+    assert 'Join-Path $EntryRoot "agent-tools"' in source
+    assert '"--label"' in source
+    assert '"bcbench.lifecycle.invocation=' in source
     assert "$effectiveToolRoots.Add((Split-Path $PSScriptRoot -Parent))" not in source
     assert 'foreach ($commandName in @("pwsh", "python", "git", "docker", "dotnet"))' not in source
+
+
+def test_agent_tools_stages_exact_worker_hash_outside_benchmark(tmp_path: Path) -> None:
+    entry_root = tmp_path / "entry"
+    source_worker = _ROOT / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$tools = New-BCBenchAgentTools `
+    -EntryRoot {_ps_quote(entry_root)} `
+    -BenchmarkRoot {_ps_quote(_ROOT)} `
+    -SourceWorkerPath {_ps_quote(source_worker)}
+[PSCustomObject]@{{
+    tools = $tools
+    sourceHash = (Get-FileHash -LiteralPath {_ps_quote(source_worker)} -Algorithm SHA256).Hash.ToLowerInvariant()
+}} | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+    worker = Path(payload["tools"]["WorkerPath"])
+
+    assert Path(payload["tools"]["AgentTools"]).resolve() == (entry_root / "agent-tools").resolve()
+    assert worker.resolve() == (entry_root / "agent-tools" / "contained_process_worker.py").resolve()
+    assert not worker.is_relative_to(_ROOT)
+    assert payload["tools"]["WorkerSha256"] == payload["sourceHash"]
+    assert worker.read_bytes() == source_worker.read_bytes()
 
 
 def test_setup_rejects_benchmark_root_as_explicit_tool_root(tmp_path: Path) -> None:
@@ -261,6 +292,7 @@ def test_workspace_acl_uses_exact_checked_icacls_commands_and_runs_access_valida
             "baseline",
             "agent",
             "logs",
+            "agent-tools",
             "staging",
             "evaluators",
             "evidence",
@@ -279,9 +311,14 @@ def test_workspace_acl_uses_exact_checked_icacls_commands_and_runs_access_valida
     runtime_executable = tmp_path / "venv" / "Scripts" / "python.exe"
     runtime_executable.parent.mkdir(parents=True)
     runtime_executable.touch()
-    worker_path = paths["benchmark"] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
-    worker_path.parent.mkdir(parents=True)
-    worker_path.touch()
+    source_worker_path = paths["benchmark"] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    source_worker_path.parent.mkdir(parents=True)
+    (paths["benchmark"] / "src" / "bcbench" / "evaluate").mkdir(parents=True)
+    (paths["benchmark"] / "docs").mkdir()
+    source_worker_path.write_text("print('worker')\n", encoding="utf-8")
+    worker_path = paths["agent-tools"] / "contained_process_worker.py"
+    worker_path.write_bytes(source_worker_path.read_bytes())
+    worker_hash = sha256(source_worker_path.read_bytes()).hexdigest()
     script = f"""
 $ErrorActionPreference = 'Stop'
 $global:icaclsCalls = @()
@@ -301,6 +338,11 @@ $validator = {{
         WorkspaceWriteSucceeded = $true
         ProtectedReadDenied = $true
         ProtectedWriteDenied = $true
+        BenchmarkWriteDenied = $true
+        DatasetReadDenied = $true
+        EvaluatorSourceReadDenied = $true
+        DocsReadDenied = $true
+        AgentToolsWriteDenied = $true
         DockerCliDenied = $true
         DockerPipeDenied = $true
         ProcessId = 1234
@@ -316,6 +358,7 @@ $result = Set-BCBenchWorkspaceAcl `
     -BaselineWorkspace {_ps_quote(paths["baseline"])} `
     -AgentWorkspace {_ps_quote(paths["agent"])} `
     -AgentLogs {_ps_quote(paths["logs"])} `
+    -AgentTools {_ps_quote(paths["agent-tools"])} `
     -MountedStaging {_ps_quote(paths["staging"])} `
     -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
     -Evidence {_ps_quote(paths["evidence"])} `
@@ -325,7 +368,9 @@ $result = Set-BCBenchWorkspaceAcl `
     -ToolRoots @({_ps_quote(paths["tool"])}) `
     -RuntimeExecutablePaths @({_ps_quote(runtime_executable)}) `
     -RuntimeRoots @({_ps_quote(paths["runtime"])}) `
+    -SourceWorkerPath {_ps_quote(source_worker_path)} `
     -WorkerPath {_ps_quote(worker_path)} `
+    -WorkerSha256 '{worker_hash}' `
     -IcaclsRunner $icaclsRunner `
     -AclVerifier $aclVerifier `
     -AccessValidator $validator
@@ -343,6 +388,7 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
     agent = payload["agentAccount"]
     full_control = [f"{evaluator}:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F"]
     expected_calls = [
+        [str(paths["benchmark"]), "/deny", f"{agent}:(OI)(CI)F"],
         [str(paths["entry"]), "/inheritance:r"],
         [str(paths["entry"]), "/grant:r", *full_control, f"{agent}:(X)"],
     ]
@@ -361,13 +407,20 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
                 [str(path), "/grant:r", *full_control, f"{agent}:(OI)(CI)M"],
             ]
         )
+    expected_calls.extend(
+        [
+            [str(paths["agent-tools"]), "/inheritance:r"],
+            [str(paths["agent-tools"]), "/grant:r", *full_control, f"{agent}:(OI)(CI)RX"],
+            [str(worker_path), "/inheritance:r"],
+            [str(worker_path), "/grant:r", f"{evaluator}:F", "*S-1-5-18:F", f"{agent}:RX"],
+        ]
+    )
     expected_calls.append([str(paths["tool"]), "/grant:r", f"{agent}:(OI)(CI)RX"])
     expected_calls.append([str(paths["runtime"]), "/grant:r", f"{agent}:(OI)(CI)RX"])
     expected_calls.append([str(runtime_executable), "/grant:r", f"{agent}:RX"])
-    expected_calls.append([str(worker_path), "/grant:r", f"{agent}:RX"])
 
     assert payload["calls"] == expected_calls
-    assert len(payload["verificationCalls"]) == 12
+    assert len(payload["verificationCalls"]) == 14
     assert all("*" not in call[0] and "?" not in call[0] for call in payload["calls"])
     restricted_agent_grant_paths = {Path(call[0]).resolve() for call in payload["calls"] if "/grant:r" in call and any(agent in value for value in call[2:])}
     assert Path(paths["benchmark"]).resolve() not in restricted_agent_grant_paths
@@ -378,6 +431,7 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
     assert Path(paths["baseline"]).resolve() not in restricted_agent_grant_paths
     assert Path(paths["evaluators"]).resolve() not in restricted_agent_grant_paths
     assert Path(paths["evidence"]).resolve() not in restricted_agent_grant_paths
+    assert worker_path.resolve().is_relative_to(paths["agent-tools"].resolve())
     assert payload["result"]["ProcessId"] == 1234
 
 
@@ -405,6 +459,7 @@ def test_workspace_acl_rejects_malicious_tool_roots(tmp_path: Path, malicious_pa
         "baseline": entry_root / "baseline",
         "agent": entry_root / "agent",
         "logs": entry_root / "logs",
+        "agent-tools": entry_root / "agent-tools",
         "staging": entry_root / "staging",
         "evaluators": entry_root / "evaluators",
         "evidence": entry_root / "evidence",
@@ -413,12 +468,15 @@ def test_workspace_acl_rejects_malicious_tool_roots(tmp_path: Path, malicious_pa
     docs = benchmark / "docs"
     evaluator = benchmark / "src" / "bcbench" / "evaluate"
     unknown_sibling = entry_root / "unknown-sibling"
-    worker = benchmark / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
-    for directory in (*paths.values(), protected, docs, evaluator, unknown_sibling, worker.parent):
+    source_worker = benchmark / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    worker = paths["agent-tools"] / "contained_process_worker.py"
+    for directory in (*paths.values(), protected, docs, evaluator, unknown_sibling, source_worker.parent):
         directory.mkdir(parents=True, exist_ok=True)
     dataset.parent.mkdir(parents=True, exist_ok=True)
     dataset.touch()
-    worker.touch()
+    source_worker.write_text("print('worker')\n", encoding="utf-8")
+    worker.write_bytes(source_worker.read_bytes())
+    worker_hash = sha256(source_worker.read_bytes()).hexdigest()
     malicious_paths = {
         "benchmark": benchmark,
         "benchmark-parent": tmp_path,
@@ -441,6 +499,7 @@ try {{
         -BaselineWorkspace {_ps_quote(paths["baseline"])} `
         -AgentWorkspace {_ps_quote(paths["agent"])} `
         -AgentLogs {_ps_quote(paths["logs"])} `
+        -AgentTools {_ps_quote(paths["agent-tools"])} `
         -MountedStaging {_ps_quote(paths["staging"])} `
         -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
         -Evidence {_ps_quote(paths["evidence"])} `
@@ -450,7 +509,9 @@ try {{
         -ToolRoots @({_ps_quote(malicious_paths[malicious_path_name])}) `
         -RuntimeExecutablePaths @() `
         -RuntimeRoots @() `
+        -SourceWorkerPath {_ps_quote(source_worker)} `
         -WorkerPath {_ps_quote(worker)} `
+        -WorkerSha256 '{worker_hash}' `
         -IcaclsRunner {{ return 0 }} `
         -AclVerifier {{ }} `
         -AccessValidator {{ throw 'must not validate' }} | Out-Null
@@ -473,6 +534,7 @@ def test_workspace_acl_stops_on_icacls_failure(tmp_path: Path) -> None:
             "baseline",
             "agent",
             "logs",
+            "agent-tools",
             "staging",
             "evaluators",
             "evidence",
@@ -489,9 +551,14 @@ def test_workspace_acl_stops_on_icacls_failure(tmp_path: Path) -> None:
     dataset_path.touch()
     runtime_executable = tmp_path / "python.exe"
     runtime_executable.touch()
-    worker_path = paths["benchmark"] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
-    worker_path.parent.mkdir(parents=True)
-    worker_path.touch()
+    source_worker_path = paths["benchmark"] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    source_worker_path.parent.mkdir(parents=True)
+    (paths["benchmark"] / "src" / "bcbench" / "evaluate").mkdir(parents=True)
+    (paths["benchmark"] / "docs").mkdir()
+    source_worker_path.write_text("print('worker')\n", encoding="utf-8")
+    worker_path = paths["agent-tools"] / "contained_process_worker.py"
+    worker_path.write_bytes(source_worker_path.read_bytes())
+    worker_hash = sha256(source_worker_path.read_bytes()).hexdigest()
     script = f"""
 $ErrorActionPreference = 'Stop'
 $global:calls = @()
@@ -516,6 +583,7 @@ try {{
         -BaselineWorkspace {_ps_quote(paths["baseline"])} `
         -AgentWorkspace {_ps_quote(paths["agent"])} `
         -AgentLogs {_ps_quote(paths["logs"])} `
+        -AgentTools {_ps_quote(paths["agent-tools"])} `
         -MountedStaging {_ps_quote(paths["staging"])} `
         -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
         -Evidence {_ps_quote(paths["evidence"])} `
@@ -525,8 +593,11 @@ try {{
         -ToolRoots @({_ps_quote(paths["tool"])}) `
         -RuntimeExecutablePaths @({_ps_quote(runtime_executable)}) `
         -RuntimeRoots @() `
+        -SourceWorkerPath {_ps_quote(source_worker_path)} `
         -WorkerPath {_ps_quote(worker_path)} `
+        -WorkerSha256 '{worker_hash}' `
         -IcaclsRunner $runner `
+        -AclVerifier {{ }} `
         -AccessValidator $validator | Out-Null
 }}
 catch {{
@@ -536,9 +607,10 @@ catch {{
 """
     payload = _last_json(_run_pwsh(script))
 
-    assert len(payload["calls"]) == 3
-    assert payload["calls"][-1][0:2] == [str(paths["entry"]), "/remove:g"]
-    assert payload["calls"][-1][2].endswith("\\bcb-1234567-abcdef")
+    assert len(payload["calls"]) == 4
+    assert payload["calls"][-2][0:2] == [str(paths["entry"]), "/remove:g"]
+    assert payload["calls"][-2][2].endswith("\\bcb-1234567-abcdef")
+    assert payload["calls"][-1][0:2] == [str(paths["benchmark"]), "/remove:d"]
     assert payload["validated"] is False
     assert "icacls failed with exit code 5" in payload["message"]
 
@@ -632,8 +704,16 @@ $secure = ConvertTo-SecureString 'evaluator-secret' -AsPlainText -Force
 $successOps = @{{
     ResolveEntry = {{ [PSCustomObject]@{{ repo = 'owner/repo'; base_commit = 'abc'; environment_setup_version = '28.0' }} }}
     CloneRepository = {{ param($Context) New-Item -ItemType Directory -Path $Context.BaselineWorkspace -Force | Out-Null }}
-    TestContainerExists = {{ $false }}
-    CreateContainer = {{ }}
+    InspectContainer = {{
+        param($Context)
+        $exists = $null -ne $Context.PSObject.Properties['TestContainerPresent'] -and [bool]$Context.TestContainerPresent
+        [PSCustomObject]@{{
+            Exists = $exists
+            Id = if ($exists) {{ 'docker-success' }} else {{ $null }}
+            InvocationId = if ($exists) {{ $Context.ContainerInvocationId }} else {{ $null }}
+        }}
+    }}
+    CreateContainer = {{ param($Context) $Context | Add-Member -NotePropertyName TestContainerPresent -NotePropertyValue $true -Force }}
     CreateCompiler = {{ }}
     InitializeContainer = {{ }}
     GetCompany = {{ 'CRONUS' }}
@@ -657,8 +737,8 @@ $successContext = Invoke-BCBenchBugFixLifecycle `
 $failureOps = @{{
     ResolveEntry = $successOps.ResolveEntry
     CloneRepository = $successOps.CloneRepository
-    TestContainerExists = {{ $false }}
-    CreateContainer = {{ }}
+    InspectContainer = $successOps.InspectContainer
+    CreateContainer = $successOps.CreateContainer
     CreateCompiler = {{ }}
     InitializeContainer = {{ }}
     GetCompany = {{ 'CRONUS' }}
@@ -667,7 +747,11 @@ $failureOps = @{{
     ApplyAcl = {{ throw 'acl failure' }}
     RemoveBcIdentity = {{ param($Context) @{{ action = 'bc-user'; username = $Context.AgentBcIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
     RemoveAgentIdentity = {{ param($Context) @{{ action = 'os-user'; username = $Context.AgentIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
-    RemoveContainer = {{ param($Context) @{{ action = 'container'; name = $Context.ContainerName }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
+    RemoveContainer = {{
+        param($Context)
+        @{{ action = 'container'; name = $Context.ContainerName }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)}
+        $Context.TestContainerPresent = $false
+    }}
 }}
 $failed = $false
 try {{
@@ -706,6 +790,10 @@ catch {{
     agent_config = json.loads(output_values["agent_container_config"])
 
     assert "agent_workspace=" in output_text
+    assert "agent_tools=" in output_text
+    assert "contained_process_worker=" in output_text
+    assert "contained_process_worker_sha256=" in output_text
+    assert "contained_process_python=" in output_text
     assert "protected_root=" in output_text
     assert "agent_os_username=bcb-1234567-abcdef" in output_text
     assert "agent_os_password=os-secret" in output_text
@@ -735,10 +823,18 @@ catch {{
     assert evaluator_config["password"] != agent_config["password"]
     assert payload["containerPreexisted"] is False
     assert payload["containerSuccessfullyCreated"] is True
+    assert output_values["container_id"] == "docker-success"
+    assert output_values["container_observed_invocation_id"] == output_values["container_invocation_id"]
+    assert len(output_values["container_invocation_id"]) == 32
+    assert set(output_values["container_invocation_id"]) <= set("0123456789abcdef")
     assert "::add-mask::evaluator-secret" in raw_output
     assert "::add-mask::bc-secret" in raw_output
     assert "al_tool_dotnet_version=8.0" in output_text
     assert "BCBENCH_AGENT_WORKSPACE=" in env_text
+    assert "BCBENCH_AGENT_TOOLS=" in env_text
+    assert "BCBENCH_CONTAINED_PROCESS_WORKER=" in env_text
+    assert "BCBENCH_CONTAINED_PROCESS_WORKER_SHA256=" in env_text
+    assert "BCBENCH_CONTAINED_PROCESS_PYTHON=" in env_text
     assert "BC_SERVER_PASSWORD=evaluator-secret" in env_text
     assert payload["failed"] is True
     assert {item["action"] for item in payload["cleanup"]} == {"bc-user", "os-user", "container"}
@@ -747,20 +843,24 @@ catch {{
 
 
 @pytest.mark.parametrize(
-    ("preexisting", "creation_appears", "creation_fails", "later_fails", "expected_remove"),
+    ("preexisting", "appearance", "creation_fails", "later_fails", "id_changes", "expected_remove"),
     [
-        (True, False, False, False, False),
-        (False, True, False, True, True),
-        (False, True, True, False, True),
-        (False, False, True, False, False),
+        (True, "none", False, False, False, False),
+        (False, "matching", False, True, False, True),
+        (False, "matching", True, False, False, True),
+        (False, "none", True, False, False, False),
+        (False, "mismatched", True, False, False, False),
+        (False, "missing", True, False, False, False),
+        (False, "matching", True, False, True, False),
     ],
 )
-def test_container_cleanup_only_removes_containers_owned_by_invocation(
+def test_concurrent_container_cleanup_requires_matching_label_and_docker_id(
     tmp_path: Path,
     preexisting: bool,
-    creation_appears: bool,
+    appearance: str,
     creation_fails: bool,
     later_fails: bool,
+    id_changes: bool,
     expected_remove: bool,
 ) -> None:
     entry_root = tmp_path / "entry"
@@ -769,15 +869,34 @@ def test_container_cleanup_only_removes_containers_owned_by_invocation(
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
 $global:containerExists = ${str(preexisting).lower()}
+$global:containerLabel = if ($global:containerExists) {{ 'another-invocation' }} else {{ $null }}
+$global:containerId = if ($global:containerExists) {{ 'preexisting-id' }} else {{ $null }}
+$global:inspectCalls = 0
 $global:createCalls = 0
 $global:removeCalls = 0
 $ops = @{{
     ResolveEntry = {{ [PSCustomObject]@{{ repo = 'owner/repo'; base_commit = 'abc'; environment_setup_version = '28.0' }} }}
     CloneRepository = {{ param($Context) New-Item -ItemType Directory -Path $Context.BaselineWorkspace -Force | Out-Null }}
-    TestContainerExists = {{ return $global:containerExists }}
+    InspectContainer = {{
+        param($Context)
+        $global:inspectCalls++
+        $id = if (${str(id_changes).lower()} -and $global:inspectCalls -ge 3) {{ 'replacement-id' }} else {{ $global:containerId }}
+        [PSCustomObject]@{{
+            Exists = $global:containerExists
+            Id = $id
+            InvocationId = $global:containerLabel
+        }}
+    }}
     CreateContainer = {{
+        param($Context)
         $global:createCalls++
-        $global:containerExists = ${str(creation_appears).lower()}
+        $global:containerExists = {"$true" if appearance != "none" else "$false"}
+        $global:containerId = if ($global:containerExists) {{ 'owned-id' }} else {{ $null }}
+        $global:containerLabel = switch ('{appearance}') {{
+            'matching' {{ $Context.ContainerInvocationId }}
+            'mismatched' {{ 'another-invocation' }}
+            default {{ $null }}
+        }}
         if (${str(creation_fails).lower()}) {{ throw 'create failure' }}
     }}
     CreateCompiler = {{ if (${str(later_fails).lower()}) {{ throw 'later failure' }} }}
@@ -789,6 +908,8 @@ $ops = @{{
     RemoveContainer = {{
         $global:removeCalls++
         $global:containerExists = $false
+        $global:containerId = $null
+        $global:containerLabel = $null
     }}
 }}
 $message = $null
@@ -820,10 +941,14 @@ catch {{
         assert payload["createCalls"] == 0
         assert payload["containerExists"] is True
         assert "already exists" in payload["message"]
+    elif appearance in {"mismatched", "missing"}:
+        assert "missing or different lifecycle invocation label" in payload["message"]
     elif creation_fails:
         assert "create failure" in payload["message"]
     elif later_fails:
         assert "later failure" in payload["message"]
+    if id_changes:
+        assert "Docker ID changed" in payload["message"]
 
 
 @pytest.mark.e2e
@@ -952,8 +1077,26 @@ def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, f
     staging = entry_root / "mounted-staging"
     evaluators = entry_root / "evaluator-workspaces"
     evidence = entry_root / "evidence"
-    for path in (baseline, workspace, logs, staging, evaluators, evidence, protected_root):
+    benchmark_parent = tmp_path / "benchmark-parent"
+    benchmark_root = benchmark_parent / "benchmark"
+    dataset_path = benchmark_root / "dataset" / "bcbench.jsonl"
+    evaluator_source = benchmark_root / "src" / "bcbench" / "evaluate"
+    docs = benchmark_root / "docs"
+    source_worker = benchmark_root / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    for path in (baseline, workspace, logs, staging, evaluators, evidence, protected_root, dataset_path.parent, evaluator_source, docs, source_worker.parent):
         path.mkdir(parents=True, exist_ok=True)
+    dataset_path.write_text("{}\n", encoding="utf-8")
+    (evaluator_source / "__init__.py").write_text("", encoding="utf-8")
+    (docs / "readme.txt").write_text("restricted", encoding="utf-8")
+    source_worker.write_bytes((_ROOT / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py").read_bytes())
+    inherited_acl = subprocess.run(
+        ["icacls.exe", str(benchmark_parent), "/grant", "*S-1-5-32-545:(OI)(CI)RX"],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert inherited_acl.returncode == 0, inherited_acl.stdout + inherited_acl.stderr
     secret_path = protected_root / "secret.txt"
     secret_path.write_text("secret", encoding="utf-8")
     instance_id = f"integration-{secrets.token_hex(3)}"
@@ -967,29 +1110,70 @@ $username = $null
 $access = $null
 $probeError = $null
 $aclGrantRemains = $false
+$benchmarkDenyRemains = $false
+$benchmarkDenyApplied = $false
+$inheritedUsersAllowPresent = $false
+$agentToolsInheritanceProtected = $false
+$workerInheritanceProtected = $false
+$agentWorkerWriteGrantPresent = $false
 try {{
     $identity = New-BCBenchAgentIdentity -InstanceId {_ps_quote(instance_id)}
     $username = $identity.Username
+    $tools = New-BCBenchAgentTools `
+        -EntryRoot {_ps_quote(entry_root)} `
+        -BenchmarkRoot {_ps_quote(benchmark_root)} `
+        -SourceWorkerPath {_ps_quote(source_worker)}
     $parameters = @{{
         Identity = $identity
         EntryRoot = {_ps_quote(entry_root)}
         BaselineWorkspace = {_ps_quote(baseline)}
         AgentWorkspace = {_ps_quote(workspace)}
         AgentLogs = {_ps_quote(logs)}
+        AgentTools = $tools.AgentTools
         MountedStaging = {_ps_quote(staging)}
         EvaluatorWorkspaces = {_ps_quote(evaluators)}
         Evidence = {_ps_quote(evidence)}
         ProtectedRoot = {_ps_quote(protected_root)}
-        BenchmarkRoot = {_ps_quote(_ROOT)}
-        DatasetPath = {_ps_quote(_ROOT / "dataset" / "bcbench.jsonl")}
+        BenchmarkRoot = {_ps_quote(benchmark_root)}
+        DatasetPath = {_ps_quote(dataset_path)}
         ToolRoots = @()
-        RuntimeExecutablePaths = @($runtime.Executable)
+        RuntimeExecutablePaths = @($runtime.BaseExecutable)
         RuntimeRoots = @($runtime.BasePrefix)
-        WorkerPath = {_ps_quote(_ROOT / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py")}
+        SourceWorkerPath = {_ps_quote(source_worker)}
+        WorkerPath = $tools.WorkerPath
+        WorkerSha256 = $tools.WorkerSha256
     }}
     $validator = {access_validator}
     if ($null -ne $validator) {{ $parameters.AccessValidator = $validator }}
     $access = Set-BCBenchWorkspaceAcl @parameters
+    $benchmarkAcl = Get-Acl -LiteralPath {_ps_quote(benchmark_root)}
+    $benchmarkDenyApplied = [bool]($benchmarkAcl.Access | Where-Object {{
+        $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Deny -and
+        $_.IdentityReference.Value -match [regex]::Escape($username)
+    }})
+    $inheritedUsersAllowPresent = [bool]($benchmarkAcl.Access | Where-Object {{
+        if ($_.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or -not $_.IsInherited) {{ return $false }}
+        try {{ return $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-32-545' }}
+        catch {{ return $false }}
+    }})
+    $agentSid = ([Security.Principal.NTAccount]::new([Environment]::MachineName, $username)).Translate([Security.Principal.SecurityIdentifier]).Value
+    $agentToolsAcl = Get-Acl -LiteralPath $tools.AgentTools
+    $workerAcl = Get-Acl -LiteralPath $tools.WorkerPath
+    $agentToolsInheritanceProtected = $agentToolsAcl.AreAccessRulesProtected
+    $workerInheritanceProtected = $workerAcl.AreAccessRulesProtected
+    $writeRights = [Security.AccessControl.FileSystemRights]::WriteData `
+        -bor [Security.AccessControl.FileSystemRights]::AppendData `
+        -bor [Security.AccessControl.FileSystemRights]::WriteAttributes `
+        -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes `
+        -bor [Security.AccessControl.FileSystemRights]::Delete `
+        -bor [Security.AccessControl.FileSystemRights]::ChangePermissions `
+        -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
+    $agentWorkerWriteGrantPresent = [bool]($workerAcl.Access | Where-Object {{
+        if ($_.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) {{ return $false }}
+        try {{ $ruleSid = $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value }}
+        catch {{ return $false }}
+        return $ruleSid -eq $agentSid -and ($_.FileSystemRights -band $writeRights) -ne 0
+    }})
 }}
 catch {{
     $probeError = $_.Exception.Message
@@ -1003,9 +1187,9 @@ finally {{
                 {_ps_quote(entry_root)},
                 {_ps_quote(workspace)},
                 {_ps_quote(logs)},
+                $tools.AgentTools,
                 $runtime.BasePrefix,
-                $runtime.Executable,
-                {_ps_quote(_ROOT / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py")}
+                $runtime.BaseExecutable
             ) | Select-Object -Unique) {{
                 & icacls.exe $path /remove:g "$([Environment]::MachineName)\\$username" | Out-Null
                 if ($LASTEXITCODE -ne 0) {{ throw "ACL cleanup failed for $path" }}
@@ -1016,6 +1200,16 @@ finally {{
                 }}) {{
                     $aclGrantRemains = $true
                 }}
+            }}
+            & icacls.exe {_ps_quote(benchmark_root)} /remove:d "$([Environment]::MachineName)\\$username" | Out-Null
+            if ($LASTEXITCODE -ne 0) {{ throw "ACL deny cleanup failed for benchmark root" }}
+            $benchmarkAcl = Get-Acl -LiteralPath {_ps_quote(benchmark_root)}
+            if ($benchmarkAcl.Access | Where-Object {{
+                if ($_.AccessControlType -ne [Security.AccessControl.AccessControlType]::Deny) {{ return $false }}
+                try {{ return $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $sid }}
+                catch {{ return $false }}
+            }}) {{
+                $benchmarkDenyRemains = $true
             }}
         }}
         finally {{
@@ -1028,6 +1222,12 @@ finally {{
     access = $access
     probeError = $probeError
     aclGrantRemains = $aclGrantRemains
+    benchmarkDenyRemains = $benchmarkDenyRemains
+    benchmarkDenyApplied = $benchmarkDenyApplied
+    inheritedUsersAllowPresent = $inheritedUsersAllowPresent
+    agentToolsInheritanceProtected = $agentToolsInheritanceProtected
+    workerInheritanceProtected = $workerInheritanceProtected
+    agentWorkerWriteGrantPresent = $agentWorkerWriteGrantPresent
     userRemains = if ($null -eq $username) {{ $false }} else {{ $null -ne (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) }}
 }} | ConvertTo-Json -Compress -Depth 8
 """
@@ -1035,14 +1235,25 @@ finally {{
 
     assert payload["username"].startswith("bcb-")
     assert payload["aclGrantRemains"] is False
+    assert payload["benchmarkDenyRemains"] is False
     assert payload["userRemains"] is False
     if force_probe_failure:
         assert "forced probe failure" in payload["probeError"]
     else:
         assert payload["probeError"] is None
+        assert payload["benchmarkDenyApplied"] is True
+        assert payload["inheritedUsersAllowPresent"] is True
+        assert payload["agentToolsInheritanceProtected"] is True
+        assert payload["workerInheritanceProtected"] is True
+        assert payload["agentWorkerWriteGrantPresent"] is False
         assert payload["access"]["WorkspaceWriteSucceeded"] is True
         assert payload["access"]["ProtectedReadDenied"] is True
         assert payload["access"]["ProtectedWriteDenied"] is True
+        assert payload["access"]["BenchmarkWriteDenied"] is True
+        assert payload["access"]["DatasetReadDenied"] is True
+        assert payload["access"]["EvaluatorSourceReadDenied"] is True
+        assert payload["access"]["DocsReadDenied"] is True
+        assert payload["access"]["AgentToolsWriteDenied"] is True
         assert payload["access"]["DockerCliDenied"] is True
         assert payload["access"]["DockerPipeDenied"] is True
         assert payload["access"]["ProcessId"] > 0

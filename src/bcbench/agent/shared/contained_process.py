@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import asdict, dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -32,6 +33,9 @@ class AgentExecutionPolicy:
     contain_process_tree: bool = False
     restricted_identity: WindowsIdentity | None = None
     allowlist_environment: bool = False
+    python_executable: Path | None = None
+    worker_path: Path | None = None
+    worker_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,9 @@ class ContainedProcessRequest:
     env: dict[str, str]
     timeout_seconds: int
     identity: WindowsIdentity | None = None
+    python_executable: Path | None = None
+    worker_path: Path | None = None
+    worker_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -267,12 +274,50 @@ def _powershell_executable() -> str:
     return executable
 
 
+def _worker_digest(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def _resolve_worker_launch(request: ContainedProcessRequest) -> tuple[Path, Path, str]:
+    source_worker_path = Path(__file__).with_name("contained_process_worker.py").resolve()
+    worker_path = (request.worker_path or source_worker_path).resolve()
+    python_executable = Path(request.python_executable or getattr(sys, "_base_executable", sys.executable)).resolve()
+    if not source_worker_path.is_file():
+        raise FileNotFoundError(source_worker_path)
+    if not worker_path.is_file():
+        raise FileNotFoundError(worker_path)
+    if not python_executable.is_file():
+        raise FileNotFoundError(python_executable)
+
+    source_digest = _worker_digest(source_worker_path)
+    expected_digest = (request.worker_sha256 or source_digest).lower()
+    if expected_digest != source_digest:
+        raise ContainedProcessInfrastructureError(
+            None,
+            child_stdout="",
+            child_stderr="",
+            wrapper_stdout="",
+            wrapper_stderr="",
+            reason="Contained process worker hash does not match the evaluator source worker",
+        )
+    if _worker_digest(worker_path) != expected_digest:
+        raise ContainedProcessInfrastructureError(
+            None,
+            child_stdout="",
+            child_stderr="",
+            wrapper_stdout="",
+            wrapper_stderr="",
+            reason="Contained process staged worker hash does not match the evaluator source worker",
+        )
+    return python_executable, worker_path, expected_digest
+
+
 def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessResult:
     script_path = get_config().paths.ps_script_path / "Invoke-ContainedProcess.ps1"
     if not script_path.is_file():
         raise FileNotFoundError(script_path)
 
-    worker_path = Path(__file__).with_name("contained_process_worker.py")
+    python_executable, worker_path, worker_sha256 = _resolve_worker_launch(request)
     with tempfile.TemporaryDirectory(prefix="bcbench-contained-") as temp_dir:
         temp_path = Path(temp_dir)
         _protect_temp_directory(temp_path)
@@ -306,9 +351,11 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
             "-StderrPath",
             str(stderr_path),
             "-PythonExecutable",
-            sys.executable,
+            str(python_executable),
             "-WorkerPath",
             str(worker_path),
+            "-ExpectedWorkerSha256",
+            worker_sha256,
             "-WorkerStartupTimeoutSeconds",
             str(_WORKER_STARTUP_TIMEOUT_SECONDS),
         ]

@@ -123,7 +123,16 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "token")
     monkeypatch.setenv("EVALUATOR_SECRET", "must-not-leak")
     identity = WindowsIdentity("restricted", "secret", "DOMAIN")
-    policy = AgentExecutionPolicy(contain_process_tree=True, restricted_identity=identity, allowlist_environment=True)
+    python_executable = tmp_path / "python.exe"
+    worker_path = tmp_path / "agent-tools" / "contained_process_worker.py"
+    policy = AgentExecutionPolicy(
+        contain_process_tree=True,
+        restricted_identity=identity,
+        allowlist_environment=True,
+        python_executable=python_executable,
+        worker_path=worker_path,
+        worker_sha256="a" * 64,
+    )
     gateway = Mock(base_url="http://127.0.0.1/mcp")
     output = '{"type":"result","result":"finished"}\n'
     with (
@@ -183,6 +192,9 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
             env=expected_env,
             timeout_seconds=claude_agent._config.timeout.agent_execution,
             identity=identity,
+            python_executable=python_executable,
+            worker_path=worker_path,
+            worker_sha256="a" * 64,
         )
     )
     mock_subprocess_run.assert_not_called()

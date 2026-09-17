@@ -69,6 +69,7 @@ if ([string]::IsNullOrEmpty($ProtectedRoot)) {
 
 $benchmarkRoot = Split-Path $PSScriptRoot -Parent
 $workerPath = Join-Path $benchmarkRoot "src\bcbench\agent\shared\contained_process_worker.py"
+$agentTools = Join-Path $EntryRoot "agent-tools"
 $pythonRuntime = Resolve-BCBenchPythonRuntime -PythonExecutable $PythonExecutable
 [System.Collections.Generic.List[string]]$effectiveToolRoots = [System.Collections.Generic.List[string]]::new()
 foreach ($toolRoot in $ToolRoots) {
@@ -88,7 +89,8 @@ Assert-BCBenchReadExecuteRoots `
     -EntryRoot $EntryRoot `
     -AllowedAgentRoots @(
         (Join-Path $EntryRoot "agent-workspace"),
-        (Join-Path $EntryRoot "agent-logs")
+        (Join-Path $EntryRoot "agent-logs"),
+        $agentTools
     ) `
     -RestrictedLifecycleRoots $restrictedLifecycleRoots
 

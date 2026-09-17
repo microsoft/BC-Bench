@@ -21,6 +21,10 @@ param(
     [string]$WorkerPath,
 
     [Parameter(Mandatory = $true)]
+    [ValidatePattern("^[a-fA-F0-9]{64}$")]
+    [string]$ExpectedWorkerSha256,
+
+    [Parameter(Mandatory = $true)]
     [int]$WorkerStartupTimeoutSeconds,
 
     [Parameter(DontShow = $true)]
@@ -719,6 +723,11 @@ try {
     $username = if ($null -eq $request.identity) { $null } else { [string]$request.identity.username }
     $domain = if ($null -eq $request.identity) { $null } else { [string]$request.identity.domain }
     $password = if ($null -eq $request.identity) { $null } else { [string]$request.identity.password }
+
+    $actualWorkerSha256 = (Get-FileHash -LiteralPath $WorkerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualWorkerSha256 -ne $ExpectedWorkerSha256.ToLowerInvariant()) {
+        throw "Contained process worker hash mismatch for '$WorkerPath'."
+    }
 
     $job = [BCBenchJobObject]::CreateKillOnCloseJob()
     $worker = [BCBenchJobObject]::CreateSuspendedWorker(

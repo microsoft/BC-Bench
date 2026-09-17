@@ -147,6 +147,9 @@ def run_claude_code(
                             env=env,
                             timeout_seconds=_config.timeout.agent_execution,
                             identity=execution_policy.restricted_identity,
+                            python_executable=execution_policy.python_executable,
+                            worker_path=execution_policy.worker_path,
+                            worker_sha256=execution_policy.worker_sha256,
                         )
                     )
                 except subprocess.CalledProcessError as exc:

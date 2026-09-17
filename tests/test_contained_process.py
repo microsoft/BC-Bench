@@ -7,6 +7,7 @@ import string
 import subprocess
 import sys
 import time
+from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -47,12 +48,18 @@ def _request(
     *,
     timeout_seconds: int = 10,
     env: dict[str, str] | None = None,
+    python_executable: Path | None = None,
+    worker_path: Path | None = None,
+    worker_sha256: str | None = None,
 ) -> ContainedProcessRequest:
     return ContainedProcessRequest(
         command=(sys.executable, "-c", code),
         cwd=tmp_path,
         env=env or agent_subprocess_env(allowlist=True),
         timeout_seconds=timeout_seconds,
+        python_executable=python_executable,
+        worker_path=worker_path,
+        worker_sha256=worker_sha256,
     )
 
 
@@ -176,6 +183,7 @@ def _wrapper_command(
     tmp_path: Path,
     *,
     worker_path: Path = _WORKER_PATH,
+    worker_sha256: str | None = None,
     extra_arguments: tuple[str, ...] = (),
 ) -> list[str]:
     request_path = tmp_path / "request.json"
@@ -212,6 +220,8 @@ def _wrapper_command(
         sys.executable,
         "-WorkerPath",
         str(worker_path),
+        "-ExpectedWorkerSha256",
+        worker_sha256 or sha256(worker_path.read_bytes()).hexdigest(),
         "-WorkerStartupTimeoutSeconds",
         "5",
         *extra_arguments,
@@ -275,7 +285,14 @@ def test_public_models_are_immutable():
     result = ContainedProcessResult(0, "stdout", "stderr")
 
     assert identity.domain == "."
-    assert policy == AgentExecutionPolicy(contain_process_tree=False, restricted_identity=None, allowlist_environment=False)
+    assert policy == AgentExecutionPolicy(
+        contain_process_tree=False,
+        restricted_identity=None,
+        allowlist_environment=False,
+        python_executable=None,
+        worker_path=None,
+        worker_sha256=None,
+    )
     assert request.identity is identity
     assert result.returncode == 0
     with pytest.raises(AttributeError):
@@ -381,6 +398,31 @@ def test_assignment_failure_terminates_suspended_worker_without_resuming(tmp_pat
     assert _wait_until_stopped(pid)
 
 
+def test_wrapper_rejects_tampered_worker_before_process_creation(tmp_path):
+    marker_path = tmp_path / "worker-started.txt"
+    worker_path = tmp_path / "worker.py"
+    worker_path.write_text(
+        f"from pathlib import Path\nPath({str(marker_path)!r}).touch()\n",
+        encoding="utf-8",
+    )
+    expected_hash = sha256(worker_path.read_bytes()).hexdigest()
+    worker_path.write_text("raise SystemExit('tampered')\n", encoding="utf-8")
+
+    completed = subprocess.run(
+        _wrapper_command(tmp_path, worker_path=worker_path, worker_sha256=expected_hash),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "worker hash mismatch" in completed.stderr.lower()
+    assert not marker_path.exists()
+
+
 def test_wrapper_termination_closes_job_and_kills_resumed_worker(tmp_path):
     worker_pid_path = tmp_path / "worker.pid"
     worker_path = tmp_path / "worker.py"
@@ -433,6 +475,55 @@ def test_returns_stdout_stderr_and_returncode(tmp_path):
     )
 
     assert result == ContainedProcessResult(0, "normal stdout\n", "normal stderr\n")
+
+
+def test_uses_staged_worker_and_base_interpreter(tmp_path):
+    staged_worker = tmp_path / "agent-tools" / "contained_process_worker.py"
+    staged_worker.parent.mkdir()
+    shutil.copy2(_WORKER_PATH, staged_worker)
+    base_python = Path(getattr(sys, "_base_executable", sys.executable))
+    worker_hash = sha256(_WORKER_PATH.read_bytes()).hexdigest()
+
+    result = run_contained_process(
+        _request(
+            tmp_path,
+            "print('staged worker')",
+            python_executable=base_python,
+            worker_path=staged_worker,
+            worker_sha256=worker_hash,
+        )
+    )
+
+    assert result == ContainedProcessResult(0, "staged worker\n", "")
+
+
+def test_rejects_tampered_staged_worker_before_wrapper_launch(tmp_path, monkeypatch):
+    staged_worker = tmp_path / "agent-tools" / "contained_process_worker.py"
+    staged_worker.parent.mkdir()
+    shutil.copy2(_WORKER_PATH, staged_worker)
+    worker_hash = sha256(_WORKER_PATH.read_bytes()).hexdigest()
+    staged_worker.write_text("raise SystemExit('tampered')\n", encoding="utf-8")
+    launched = False
+
+    def fail_if_launched(*_args, **_kwargs):
+        nonlocal launched
+        launched = True
+        raise AssertionError("wrapper must not launch")
+
+    monkeypatch.setattr("bcbench.agent.shared.contained_process.subprocess.run", fail_if_launched)
+
+    with pytest.raises(ContainedProcessInfrastructureError, match="hash"):
+        run_contained_process(
+            _request(
+                tmp_path,
+                "print('never launched')",
+                python_executable=Path(getattr(sys, "_base_executable", sys.executable)),
+                worker_path=staged_worker,
+                worker_sha256=worker_hash,
+            )
+        )
+
+    assert launched is False
 
 
 def test_returns_nonzero_result_without_losing_output(tmp_path):
@@ -631,6 +722,10 @@ def test_serializes_optional_restricted_identity_and_cleans_temp_files(tmp_path,
     )
     monkeypatch.setattr("bcbench.agent.shared.contained_process.subprocess.run", fake_run)
 
+    staged_worker = tmp_path / "staged-worker.py"
+    shutil.copy2(_WORKER_PATH, staged_worker)
+    worker_hash = sha256(_WORKER_PATH.read_bytes()).hexdigest()
+    base_python = Path(getattr(sys, "_base_executable", sys.executable))
     result = run_contained_process(
         ContainedProcessRequest(
             command=("agent", "--run"),
@@ -638,6 +733,9 @@ def test_serializes_optional_restricted_identity_and_cleans_temp_files(tmp_path,
             env={"FLAG": "on"},
             timeout_seconds=30,
             identity=WindowsIdentity("restricted-user", "restricted-password", "RESTRICTED"),
+            python_executable=base_python,
+            worker_path=staged_worker,
+            worker_sha256=worker_hash,
         )
     )
 
@@ -648,7 +746,11 @@ def test_serializes_optional_restricted_identity_and_cleans_temp_files(tmp_path,
         "domain": "RESTRICTED",
     }
     worker_path = Path(captured_command[captured_command.index("-WorkerPath") + 1])
-    assert worker_path == _WORKER_PATH
+    python_executable = Path(captured_command[captured_command.index("-PythonExecutable") + 1])
+    expected_hash = captured_command[captured_command.index("-ExpectedWorkerSha256") + 1]
+    assert worker_path == staged_worker
+    assert python_executable == base_python
+    assert expected_hash == worker_hash
     assert "-m" not in captured_command
     assert all(not path.exists() for path in captured_paths)
 
