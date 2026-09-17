@@ -29,10 +29,10 @@ from bcbench.evaluate.bugfix_lifecycle.models import (
 )
 from bcbench.evaluate.bugfix_lifecycle.path_safety import (
     ENTRY_MANAGED_PATH_NAMES,
+    absolute_path,
     reject_reparse_components,
     require_strict_descendant,
     validate_cleanup_acl_paths,
-    validate_lifecycle_paths,
     validate_owned_lifecycle_roots,
 )
 from bcbench.evaluate.bugfix_lifecycle.phases import (
@@ -169,6 +169,66 @@ class CleanupLease:
 
 
 @dataclass(frozen=True)
+class RawSetupCleanup:
+    instance_id: str
+    container_name: str
+    expected_container_id: str
+    expected_invocation_id: str
+    agent_os_username: str
+    agent_bc_username: str
+    agent_os_sid: str
+    entry_root: Path
+    protected_root: Path
+    staged_worker_path: Path
+    base_python: Path
+    python_base_prefix: Path
+    acl_paths_json: str | None
+    cleanup_tool_roots_json: str | None
+    owned_compiler_helper_roots: tuple[Path, ...]
+
+    def run(self, error: BaseException) -> CleanupInfrastructureError | None:
+        payload = {
+            "status": "quarantined",
+            "reason": "ownership_envelope_parse_failure",
+            "instance_id": self.instance_id,
+            "container_name": self.container_name,
+            "expected_container_id": self.expected_container_id,
+            "expected_invocation_id": self.expected_invocation_id,
+            "agent_os_username": self.agent_os_username,
+            "agent_bc_username": self.agent_bc_username,
+            "agent_os_sid": self.agent_os_sid,
+            "entry_root": str(self.entry_root),
+            "protected_root": str(self.protected_root),
+            "staged_worker_path": str(self.staged_worker_path),
+            "base_python": str(self.base_python),
+            "python_base_prefix": str(self.python_base_prefix),
+            "acl_paths_json": self.acl_paths_json,
+            "cleanup_tool_roots_json": self.cleanup_tool_roots_json,
+            "owned_compiler_helper_roots": [str(path) for path in self.owned_compiler_helper_roots],
+            "original_error": str(error),
+            "created_at_utc": datetime.now(UTC).isoformat(),
+        }
+        try:
+            protected_root = _prepare_raw_quarantine_root(self.protected_root)
+            _atomic_json(protected_root / "quarantine.json", payload)
+        except Exception as quarantine_error:  # noqa: BLE001 - malformed setup must surface quarantine failure
+            return CleanupInfrastructureError(f"Ownership envelope parsing failed and quarantine persistence failed: {quarantine_error}")
+        return None
+
+
+def _prepare_raw_quarantine_root(path: Path) -> Path:
+    protected_root = absolute_path(path)
+    if protected_root == Path(protected_root.anchor):
+        raise ValueError("protected_root cannot be a filesystem root")
+    reject_reparse_components(protected_root, protected_root)
+    if protected_root.exists() and (not protected_root.is_dir() or protected_root.is_symlink()):
+        raise ValueError(f"protected_root must be a directory: {protected_root}")
+    protected_root.mkdir(parents=True, exist_ok=True)
+    reject_reparse_components(protected_root, protected_root)
+    return protected_root
+
+
+@dataclass(frozen=True)
 class LifecycleCleanup:
     resources: ProvisionedLifecycleResources
     ownership_api: LifecycleOwnershipApi
@@ -180,10 +240,9 @@ class LifecycleCleanup:
         *,
         powershell_runner: PowerShellRunner | None = None,
     ) -> LifecycleCleanup:
-        evidence = EvidenceStore(resources.paths)
         ownership = PowerShellLifecycleOwnershipApi(
             resources,
-            evidence,
+            None,
             powershell_runner or _default_cleanup_powershell_runner(),
         )
         return cls(resources, ownership)
@@ -1383,13 +1442,13 @@ class PowerShellLifecycleOwnershipApi:
     def __init__(
         self,
         resources: ProvisionedLifecycleResources,
-        evidence_store: EvidenceStore,
+        evidence_store: EvidenceStore | None,
         powershell_runner: PowerShellRunner,
         *,
         module_path: Path | None = None,
     ) -> None:
         self._resources = resources
-        self._paths = validate_lifecycle_paths(resources.paths)
+        self._paths = resources.paths
         self._evidence_store = evidence_store
         self._runner = powershell_runner
         self._module_path = (module_path or Path(__file__).parents[4] / "scripts" / "BugFixLifecycle.psm1").resolve()
@@ -1586,6 +1645,8 @@ class PowerShellLifecycleOwnershipApi:
         )
         if not persist_evidence:
             return
+        if self._evidence_store is None:
+            raise BugFixLifecycleInfrastructureError("Lifecycle evidence store is unavailable")
         path = self._evidence_store.save_text(
             f"{evidence_name}.json",
             json.dumps(payload, indent=2, sort_keys=True) + "\n",

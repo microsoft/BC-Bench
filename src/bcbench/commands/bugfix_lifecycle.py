@@ -53,6 +53,7 @@ from bcbench.evaluate.bugfix_lifecycle import (
     OwnedLifecycleRoot,
     ProductionBugFixLifecycle,
     ProvisionedLifecycleResources,
+    RawSetupCleanup,
     sha256_file,
 )
 from bcbench.evaluate.bugfix_lifecycle.path_safety import (
@@ -290,6 +291,135 @@ def _run_lifecycle(
     agent_version: Callable[[], str],
     agent_runner: LifecycleAgentInvoker,
 ) -> None:
+    raw_cleanup = RawSetupCleanup(
+        instance_id=entry_id,
+        container_name=container_name,
+        expected_container_id=expected_container_id,
+        expected_invocation_id=expected_invocation_id,
+        agent_os_username=agent_os_username,
+        agent_bc_username=agent_bc_username,
+        agent_os_sid=agent_os_sid,
+        entry_root=entry_root,
+        protected_root=protected_root,
+        staged_worker_path=staged_worker_path,
+        base_python=base_python,
+        python_base_prefix=python_base_prefix,
+        acl_paths_json=acl_paths_json,
+        cleanup_tool_roots_json=cleanup_tool_roots_json,
+        owned_compiler_helper_roots=tuple(owned_compiler_helper_roots or ()),
+    )
+    try:
+        resources = _parse_setup_ownership_envelope(
+            entry_id=entry_id,
+            entry_root=entry_root,
+            protected_root=protected_root,
+            container_name=container_name,
+            expected_container_id=expected_container_id,
+            expected_invocation_id=expected_invocation_id,
+            agent_os_username=agent_os_username,
+            agent_bc_username=agent_bc_username,
+            agent_os_sid=agent_os_sid,
+            staged_worker_path=staged_worker_path,
+            base_python=base_python,
+            python_base_prefix=python_base_prefix,
+            acl_paths_json=acl_paths_json,
+            cleanup_tool_roots_json=cleanup_tool_roots_json,
+            owned_compiler_helper_roots=owned_compiler_helper_roots,
+        )
+    except BaseException as error:
+        cleanup_error = raw_cleanup.run(error)
+        if cleanup_error is not None:
+            raise cleanup_error from error
+        raise
+
+    cleanup_lease = CleanupLease.for_cli(resources)
+    try:
+        _run_lifecycle_after_lease(
+            cleanup_lease=cleanup_lease,
+            entry_id=entry_id,
+            entry_root=entry_root,
+            protected_root=protected_root,
+            replay_patch=replay_patch,
+            agent_os_username=agent_os_username,
+            agent_os_password=agent_os_password,
+            agent_bc_username=agent_bc_username,
+            agent_bc_password=agent_bc_password,
+            expected_container_id=expected_container_id,
+            expected_invocation_id=expected_invocation_id,
+            staged_worker_path=staged_worker_path,
+            staged_worker_sha256=staged_worker_sha256,
+            base_python=base_python,
+            python_base_prefix=python_base_prefix,
+            agent_os_sid=agent_os_sid,
+            acl_paths_json=acl_paths_json,
+            cleanup_tool_roots_json=cleanup_tool_roots_json,
+            owned_compiler_helper_roots=owned_compiler_helper_roots,
+            evaluator_container_config=evaluator_container_config,
+            agent_container_config=agent_container_config,
+            container_name=container_name,
+            username=username,
+            password=password,
+            server_url=server_url,
+            server_instance=server_instance,
+            mcp_url=mcp_url,
+            company=company,
+            model=model,
+            output_dir=output_dir,
+            run_id=run_id,
+            al_mcp=al_mcp,
+            al_lsp=al_lsp,
+            bc_mcp=bc_mcp,
+            agent_name=agent_name,
+            agent_version=agent_version,
+            agent_runner=agent_runner,
+        )
+    except BaseException as error:
+        cleanup_error = cleanup_lease.cleanup_as_cli(lambda: LifecycleCleanup.from_resources(cleanup_lease.resources).run())
+        if cleanup_error is not None:
+            raise cleanup_error from error
+        raise
+
+
+def _run_lifecycle_after_lease(
+    *,
+    cleanup_lease: CleanupLease,
+    entry_id: str,
+    entry_root: Path,
+    protected_root: Path,
+    replay_patch: Path | None,
+    agent_os_username: str,
+    agent_os_password: str,
+    agent_bc_username: str,
+    agent_bc_password: str,
+    expected_container_id: str,
+    expected_invocation_id: str,
+    staged_worker_path: Path,
+    staged_worker_sha256: str,
+    base_python: Path,
+    python_base_prefix: Path,
+    agent_os_sid: str,
+    acl_paths_json: str | None,
+    cleanup_tool_roots_json: str | None,
+    owned_compiler_helper_roots: list[Path] | None,
+    evaluator_container_config: str | None,
+    agent_container_config: str | None,
+    container_name: str,
+    username: str,
+    password: str,
+    server_url: str,
+    server_instance: str,
+    mcp_url: str | None,
+    company: str,
+    model: str,
+    output_dir: Path,
+    run_id: str,
+    al_mcp: bool,
+    al_lsp: bool,
+    bc_mcp: bool,
+    agent_name: AgentHarness,
+    agent_version: Callable[[], str],
+    agent_runner: LifecycleAgentInvoker,
+) -> None:
     paths = _validated_paths(entry_root, protected_root)
     _validate_worker(staged_worker_path, staged_worker_sha256, paths)
     _require_file(base_python, "--base-python")
@@ -382,27 +512,21 @@ def _run_lifecycle(
         )
     except ValueError as error:
         raise typer.BadParameter(str(error)) from error
-    cleanup_lease = CleanupLease.for_cli(resources)
-    try:
-        _run_lifecycle_with_cleanup_lease(
-            cleanup_lease=cleanup_lease,
-            replay_patch=replay_patch,
-            staged_worker_sha256=staged_worker_sha256,
-            agent_os_password=agent_os_password,
-            evaluator_container=evaluator_container,
-            agent_runtime=agent_runtime,
-            model=model,
-            output_dir=output_dir,
-            run_id=run_id,
-            agent_name=agent_name,
-            agent_version=agent_version,
-            agent_runner=agent_runner,
-        )
-    except BaseException as error:
-        cleanup_error = cleanup_lease.cleanup_as_cli(lambda: LifecycleCleanup.from_resources(cleanup_lease.resources).run())
-        if cleanup_error is not None:
-            raise cleanup_error from error
-        raise
+    cleanup_lease.replace_resources(resources)
+    _run_lifecycle_with_cleanup_lease(
+        cleanup_lease=cleanup_lease,
+        replay_patch=replay_patch,
+        staged_worker_sha256=staged_worker_sha256,
+        agent_os_password=agent_os_password,
+        evaluator_container=evaluator_container,
+        agent_runtime=agent_runtime,
+        model=model,
+        output_dir=output_dir,
+        run_id=run_id,
+        agent_name=agent_name,
+        agent_version=agent_version,
+        agent_runner=agent_runner,
+    )
 
 
 def _run_lifecycle_with_cleanup_lease(
@@ -476,10 +600,74 @@ def _run_lifecycle_with_cleanup_lease(
     )
 
 
+def _parse_setup_ownership_envelope(
+    *,
+    entry_id: str,
+    entry_root: Path,
+    protected_root: Path,
+    container_name: str,
+    expected_container_id: str,
+    expected_invocation_id: str,
+    agent_os_username: str,
+    agent_bc_username: str,
+    agent_os_sid: str,
+    staged_worker_path: Path,
+    base_python: Path,
+    python_base_prefix: Path,
+    acl_paths_json: str | None,
+    cleanup_tool_roots_json: str | None,
+    owned_compiler_helper_roots: list[Path] | None,
+) -> ProvisionedLifecycleResources:
+    expected_container_id = _required(expected_container_id, "--expected-container-id")
+    expected_invocation_id = _required(expected_invocation_id, "--expected-invocation-id")
+    agent_os_username = _setup_owned_username(
+        agent_os_username,
+        "--agent-os-username",
+        _SETUP_OS_USERNAME,
+        "OS",
+    )
+    agent_bc_username = _setup_owned_username(
+        agent_bc_username,
+        "--agent-bc-username",
+        _SETUP_BC_USERNAME,
+        "BC",
+    )
+    try:
+        return ProvisionedLifecycleResources(
+            instance_id=_required(entry_id, "ENTRY_ID"),
+            paths=_lifecycle_paths(entry_root, protected_root),
+            container_name=_required(container_name, "--container-name"),
+            expected_container_id=expected_container_id,
+            expected_container_invocation_id=expected_invocation_id,
+            agent_os_username=agent_os_username,
+            agent_bc_username=agent_bc_username,
+            agent_os_sid=agent_os_sid,
+            benchmark_root=Path(__file__).parents[3],
+            staged_worker_path=staged_worker_path,
+            base_python=base_python,
+            python_base_prefix=python_base_prefix,
+            cleanup_tool_roots=_parse_path_list(
+                cleanup_tool_roots_json,
+                "--cleanup-tool-roots-json",
+            ),
+            acl_paths=_parse_path_list(acl_paths_json, "--acl-paths-json"),
+            compiler_helper_roots=tuple(OwnedLifecycleRoot(path, expected_invocation_id) for path in owned_compiler_helper_roots or ()),
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+
 def _validated_paths(entry_root: Path, protected_root: Path) -> BugFixLifecyclePaths:
     _require_directory(entry_root, "--entry-root")
     _require_directory(protected_root, "--protected-root")
-    paths = BugFixLifecyclePaths(
+    try:
+        return validate_lifecycle_paths(_lifecycle_paths(entry_root, protected_root))
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--entry-root/--protected-root") from error
+
+
+def _lifecycle_paths(entry_root: Path, protected_root: Path) -> BugFixLifecyclePaths:
+    return BugFixLifecyclePaths(
         entry_root=entry_root,
         baseline_workspace=entry_root / "baseline-workspace",
         agent_workspace=entry_root / "agent-workspace",
@@ -493,10 +681,6 @@ def _validated_paths(entry_root: Path, protected_root: Path) -> BugFixLifecycleP
         checkpoints=protected_root / "checkpoints",
         final_results=protected_root / "final-results",
     )
-    try:
-        return validate_lifecycle_paths(paths)
-    except ValueError as error:
-        raise typer.BadParameter(str(error), param_hint="--entry-root/--protected-root") from error
 
 
 def _validate_worker(worker_path: Path, worker_sha256: str, paths: BugFixLifecyclePaths) -> None:

@@ -852,6 +852,110 @@ def test_bugfix_lifecycle_preflight_failures_cleanup_exactly_once(
         assert secret not in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("failure_point", "message"),
+    [
+        ("worker", "does not exist"),
+        ("worker_hash", "hash does not match"),
+        ("runtime", "python_base_prefix"),
+        ("credential", "passwords must differ"),
+        ("container_config", "does not match"),
+        ("path", "disjoint"),
+    ],
+)
+def test_bugfix_lifecycle_validation_failures_cleanup_exactly_once_before_collaborators(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    failure_point: str,
+    message: str,
+):
+    args = lifecycle_cli_fixture.args("copilot")
+    if failure_point == "worker":
+        lifecycle_cli_fixture.worker.unlink()
+    elif failure_point == "worker_hash":
+        args[args.index("--staged-worker-sha256") + 1] = "0" * 64
+    elif failure_point == "runtime":
+        args[args.index("--python-base-prefix") + 1] = str(lifecycle_cli_fixture.tool_root)
+    elif failure_point == "credential":
+        args[args.index("--agent-os-password") + 1] = lifecycle_cli_fixture.evaluator_config["password"]
+    elif failure_point == "container_config":
+        evaluator_config = {**lifecycle_cli_fixture.evaluator_config, "name": "unexpected-container"}
+        args[args.index("--evaluator-container-config") + 1] = json.dumps(evaluator_config)
+    else:
+        args[args.index("--protected-root") + 1] = str(lifecycle_cli_fixture.entry_root)
+
+    cleanup_calls: list[object] = []
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version") as get_version,
+        patch.object(bugfix_lifecycle_commands, "prepare_run_dir") as prepare_result_dir,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(
+            bugfix_lifecycle_commands.LifecycleCleanup,
+            "run",
+            autospec=True,
+            side_effect=lambda cleanup: cleanup_calls.append(cleanup.resources),
+        ),
+        patch.object(bugfix_lifecycle_commands.RawSetupCleanup, "run", autospec=True) as raw_cleanup_run,
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert message in (result.stdout + result.stderr).lower()
+    assert len(cleanup_calls) == 1
+    load_entry.assert_not_called()
+    get_version.assert_not_called()
+    prepare_result_dir.assert_not_called()
+    lifecycle_factory.assert_not_called()
+    raw_cleanup_run.assert_not_called()
+
+
+def test_bugfix_lifecycle_malformed_ownership_envelope_quarantines_exactly_once_before_collaborators(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+):
+    args = lifecycle_cli_fixture.args("copilot")
+    args[args.index("--acl-paths-json") + 1] = "{"
+    raw_cleanup_calls: list[object] = []
+    raw_cleanup_run = bugfix_lifecycle_commands.RawSetupCleanup.run
+
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version") as get_version,
+        patch.object(bugfix_lifecycle_commands, "prepare_run_dir") as prepare_result_dir,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True) as cleanup_run,
+        patch.object(
+            bugfix_lifecycle_commands.RawSetupCleanup,
+            "run",
+            autospec=True,
+            side_effect=lambda cleanup, error: (
+                raw_cleanup_calls.append(cleanup),
+                raw_cleanup_run(cleanup, error),
+            )[1],
+        ),
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert "valid json" in (result.stdout + result.stderr).lower()
+    assert len(raw_cleanup_calls) == 1
+    cleanup_run.assert_not_called()
+    load_entry.assert_not_called()
+    get_version.assert_not_called()
+    prepare_result_dir.assert_not_called()
+    lifecycle_factory.assert_not_called()
+    quarantine = json.loads(lifecycle_cli_fixture.protected_root.joinpath("quarantine.json").read_text(encoding="utf-8"))
+    assert quarantine["status"] == "quarantined"
+    assert quarantine["reason"] == "ownership_envelope_parse_failure"
+    assert quarantine["container_name"] == lifecycle_cli_fixture.evaluator_config["name"]
+    assert quarantine["entry_root"] == str(lifecycle_cli_fixture.entry_root)
+    assert quarantine["protected_root"] == str(lifecycle_cli_fixture.protected_root)
+    assert quarantine["staged_worker_path"] == str(lifecycle_cli_fixture.worker)
+    assert quarantine["base_python"] == str(lifecycle_cli_fixture.python)
+    assert quarantine["python_base_prefix"] == str(lifecycle_cli_fixture.python_base_prefix)
+    assert quarantine["cleanup_tool_roots_json"] == json.dumps([str(lifecycle_cli_fixture.tool_root)])
+    assert quarantine["owned_compiler_helper_roots"] == [str(lifecycle_cli_fixture.owned_root)]
+
+
 def test_bugfix_lifecycle_handoff_prevents_duplicate_cleanup_on_lifecycle_start_failure(
     lifecycle_cli_fixture: LifecycleCliFixture,
 ):
@@ -972,6 +1076,7 @@ def test_bugfix_lifecycle_rejects_root_and_worker_junction_aliases_before_collab
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]) as load_entry,
         patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3") as get_version,
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True, return_value=None),
     ):
         result = runner.invoke(app, args)
 

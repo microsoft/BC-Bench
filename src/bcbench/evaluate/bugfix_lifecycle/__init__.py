@@ -9,6 +9,7 @@ from bcbench.evaluate.bugfix_lifecycle.lifecycle import (
     PowerShellLifecycleOwnershipApi,
     ProductionAgentRunner,
     ProductionBugFixLifecycle,
+    RawSetupCleanup,
     analyze_bugfix_submission,
     run_bugfix_production_lifecycle,
 )
@@ -67,6 +68,7 @@ __all__ = [
     "ProjectPublication",
     "ProjectPublisher",
     "ProvisionedLifecycleResources",
+    "RawSetupCleanup",
     "SubmissionAnalysis",
     "TrustedSource",
     "TrustedWorkspaceBuilder",
