@@ -13,6 +13,7 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
+from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessRequest, run_contained_process
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -36,6 +37,7 @@ def run_claude_code(
     repo_path: Path,
     output_dir: Path,
     runtime: AgentRuntimeConfig | None = None,
+    execution_policy: AgentExecutionPolicy | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run Claude Code on a single dataset entry.
 
@@ -119,25 +121,45 @@ def run_claude_code(
 
         logger.debug(f"Claude Code command args: {cmd_args}")
 
-        result = subprocess.run(
-            cmd_args,
-            cwd=str(repo_path),
-            env=agent_subprocess_env(
-                {
-                    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-                    # A cold BC MCP startup can take ~45s, beyond Claude's 30s default.
-                    "MCP_TIMEOUT": "180000",
-                    # BaseApp publishing takes many minutes; premature cancellation can leave apps uninstalled.
-                    "MCP_TOOL_TIMEOUT": str(_config.timeout.build_baseapp * 1000) if runtime and runtime.al_mcp else "180000",
-                },
-                pass_bc_credentials=category.pass_on_bc_container_credentials,
-            ),
-            timeout=_config.timeout.agent_execution,
-            check=True,
-            capture_output=True,
+        env = agent_subprocess_env(
+            {
+                "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+                # A cold BC MCP startup can take ~45s, beyond Claude's 30s default.
+                "MCP_TIMEOUT": "180000",
+                # BaseApp publishing takes many minutes; premature cancellation can leave apps uninstalled.
+                "MCP_TOOL_TIMEOUT": str(_config.timeout.build_baseapp * 1000) if runtime and runtime.al_mcp else "180000",
+            },
+            pass_bc_credentials=category.pass_on_bc_container_credentials,
+            allowlist=bool(execution_policy and execution_policy.contain_process_tree and execution_policy.allowlist_environment),
         )
+        if execution_policy is not None and execution_policy.contain_process_tree:
+            contained_result = run_contained_process(
+                ContainedProcessRequest(
+                    command=tuple(cmd_args),
+                    cwd=repo_path,
+                    env=env,
+                    timeout_seconds=_config.timeout.agent_execution,
+                    identity=execution_policy.restricted_identity,
+                )
+            )
+            result = subprocess.CompletedProcess(
+                args=cmd_args,
+                returncode=contained_result.returncode,
+                stdout=contained_result.stdout,
+                stderr=contained_result.stderr,
+            )
+            result.check_returncode()
+        else:
+            result = subprocess.run(
+                cmd_args,
+                cwd=str(repo_path),
+                env=env,
+                timeout=_config.timeout.agent_execution,
+                check=True,
+                capture_output=True,
+            )
 
-        stdout: str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+        stdout: str = result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, bytes) else result.stdout or ""
         logger.debug(f"Claude Code raw output: {stdout}")
 
         metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)

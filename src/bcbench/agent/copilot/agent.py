@@ -14,6 +14,7 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
+from bcbench.agent.shared.contained_process import AgentExecutionPolicy
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError, AgentTimeoutError
@@ -32,6 +33,7 @@ def run_copilot_agent(
     repo_path: Path,
     output_dir: Path,
     runtime: AgentRuntimeConfig | None = None,
+    execution_policy: AgentExecutionPolicy | None = None,
 ) -> tuple[AgentMetrics | None, ExperimentConfiguration]:
     """Run GitHub Copilot CLI agent on a single dataset entry.
 
@@ -107,7 +109,9 @@ def run_copilot_agent(
                     "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
                 },
                 pass_bc_credentials=category.pass_on_bc_container_credentials,
+                allowlist=bool(execution_policy and execution_policy.contain_process_tree and execution_policy.allowlist_environment),
             ),
+            execution_policy=execution_policy,
         )
         logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
     except subprocess.TimeoutExpired:
@@ -116,7 +120,7 @@ def run_copilot_agent(
         raise AgentTimeoutError("Copilot CLI timed out", metrics=metrics, config=config) from None
     except subprocess.CalledProcessError as e:
         logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
-        raise AgentError(f"Copilot CLI execution failed: {e}") from None
+        raise AgentError(f"Copilot CLI execution failed: {e.stderr or e}") from None
     except Exception:
         logger.exception("Unexpected error running Copilot CLI")
         raise

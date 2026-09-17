@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessRequest, run_contained_process
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
@@ -37,6 +38,7 @@ def invoke_copilot(
     custom_instructions: bool = False,
     extra_args: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
+    execution_policy: AgentExecutionPolicy | None = None,
 ) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
@@ -62,17 +64,35 @@ def invoke_copilot(
     ]
     logger.debug("Copilot command args: %s", cmd_args)
 
-    result = subprocess.run(
-        cmd_args,
-        cwd=str(work_dir),
-        env=dict(env) if env is not None else None,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=True,
-    )
+    if execution_policy is not None and execution_policy.contain_process_tree:
+        contained_result = run_contained_process(
+            ContainedProcessRequest(
+                command=tuple(cmd_args),
+                cwd=work_dir,
+                env=dict(env) if env is not None else {},
+                timeout_seconds=timeout,
+                identity=execution_policy.restricted_identity,
+            )
+        )
+        result = subprocess.CompletedProcess(
+            args=cmd_args,
+            returncode=contained_result.returncode,
+            stdout=contained_result.stdout,
+            stderr=contained_result.stderr,
+        )
+        result.check_returncode()
+    else:
+        result = subprocess.run(
+            cmd_args,
+            cwd=str(work_dir),
+            env=dict(env) if env is not None else None,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=True,
+        )
 
     if result.stderr:
         sys.stderr.write(result.stderr)

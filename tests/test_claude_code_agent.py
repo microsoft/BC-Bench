@@ -2,12 +2,21 @@ import os
 import subprocess
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from bcbench.agent.claude import agent as claude_agent
 from bcbench.agent.claude.agent import run_claude_code
+from bcbench.agent.shared.contained_process import (
+    AgentExecutionPolicy,
+    ContainedProcessInfrastructureError,
+    ContainedProcessRequest,
+    ContainedProcessResult,
+    WindowsIdentity,
+)
+from bcbench.agent.shared.env import agent_subprocess_env
+from bcbench.exceptions import AgentError, AgentTimeoutError
 from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationCategory
 from tests.conftest import create_dataset_entry
 
@@ -107,3 +116,143 @@ def test_bug_fix_publish_failures_are_terminal_in_both_instruction_copies():
     assert "does not prove" in timeout_section
     assert "terminal infrastructure" in " ".join(failure_section.split())
     assert "Retry at most once" not in failure_section
+
+
+def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PATH", "agent-path")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "token")
+    monkeypatch.setenv("EVALUATOR_SECRET", "must-not-leak")
+    identity = WindowsIdentity("restricted", "secret", "DOMAIN")
+    policy = AgentExecutionPolicy(contain_process_tree=True, restricted_identity=identity, allowlist_environment=True)
+    gateway = Mock(base_url="http://127.0.0.1/mcp")
+    output = '{"type":"result","result":"finished"}\n'
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value="line one\nline two"),
+        patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(None, None)),
+        patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=gateway),
+        patch("bcbench.agent.claude.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch(
+            "bcbench.agent.claude.agent.run_contained_process",
+            return_value=ContainedProcessResult(0, output, ""),
+        ) as mock_run,
+        patch("bcbench.agent.claude.agent.parse_stream_output", return_value=(None, "finished")) as mock_parse,
+        patch("bcbench.agent.claude.agent.subprocess.run") as mock_subprocess_run,
+    ):
+        result = run_claude_code(
+            entry=create_dataset_entry(),
+            model="claude-test-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+            execution_policy=policy,
+        )
+
+    command = (
+        "claude",
+        "--output-format=stream-json",
+        "--verbose",
+        "--strict-mcp-config",
+        "--setting-sources=project,local",
+        "--model=claude-test-model",
+        "--permission-mode=bypassPermissions",
+        "--disallowedTools",
+        "WebFetch",
+        "Bash(curl *)",
+        "Bash(wget *)",
+        "--print",
+        "line one line two",
+    )
+    expected_env = agent_subprocess_env(
+        {
+            "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+            "MCP_TIMEOUT": "180000",
+            "MCP_TOOL_TIMEOUT": "180000",
+        },
+        pass_bc_credentials=EvaluationCategory.BUG_FIX.pass_on_bc_container_credentials,
+        allowlist=True,
+    )
+    mock_run.assert_called_once_with(
+        ContainedProcessRequest(
+            command=command,
+            cwd=tmp_path,
+            env=expected_env,
+            timeout_seconds=claude_agent._config.timeout.agent_execution,
+            identity=identity,
+        )
+    )
+    mock_subprocess_run.assert_not_called()
+    mock_parse.assert_called_once_with([output.strip()], log_transcript=True)
+    assert result[0] is None
+    assert "EVALUATOR_SECRET" not in expected_env
+    gateway.stop.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    ("contained_result", "contained_error", "expected_error"),
+    [
+        (ContainedProcessResult(3, "partial", "agent stderr"), None, AgentError),
+        (
+            None,
+            subprocess.TimeoutExpired(("claude",), 60, output="partial", stderr="timed out"),
+            AgentTimeoutError,
+        ),
+        (
+            None,
+            ContainedProcessInfrastructureError(
+                100,
+                child_stdout="child stdout",
+                child_stderr="child stderr",
+                wrapper_stdout="wrapper stdout",
+                wrapper_stderr="wrapper stderr",
+            ),
+            ContainedProcessInfrastructureError,
+        ),
+    ],
+)
+def test_claude_code_contained_errors_preserve_class_and_stop_gateway(
+    tmp_path: Path,
+    contained_result: ContainedProcessResult | None,
+    contained_error: Exception | None,
+    expected_error: type[Exception],
+):
+    gateway = Mock(base_url="http://127.0.0.1/mcp")
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value="prompt"),
+        patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(None, None)),
+        patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=gateway),
+        patch("bcbench.agent.claude.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch(
+            "bcbench.agent.claude.agent.run_contained_process",
+            return_value=contained_result,
+            side_effect=contained_error,
+        ),
+        pytest.raises(expected_error) as error,
+    ):
+        run_claude_code(
+            entry=create_dataset_entry(),
+            model="claude-test-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+            execution_policy=AgentExecutionPolicy(contain_process_tree=True),
+        )
+
+    if expected_error is AgentError:
+        assert "agent stderr" in str(error.value)
+    if expected_error is AgentTimeoutError:
+        assert error.value.metrics.execution_time > 0
+        assert error.value.config is not None
+    if expected_error is ContainedProcessInfrastructureError:
+        assert error.value is contained_error
+        assert not isinstance(error.value, AgentTimeoutError)
+    gateway.stop.assert_called_once_with()
