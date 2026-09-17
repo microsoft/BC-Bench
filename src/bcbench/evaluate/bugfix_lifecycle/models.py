@@ -143,6 +143,16 @@ class CheckpointManifest:
         )
 
 
+@dataclass(frozen=True)
+class ProjectPublication:
+    project_paths: tuple[str, ...]
+    package_paths: tuple[Path, ...]
+
+    def __init__(self, project_paths: tuple[str, ...], package_paths: tuple[Path, ...]) -> None:
+        object.__setattr__(self, "project_paths", tuple(project_paths))
+        object.__setattr__(self, "package_paths", tuple(package_paths))
+
+
 def _required_string(value: Mapping[str, object], name: str) -> str:
     item = value.get(name)
     if not isinstance(item, str) or not item:

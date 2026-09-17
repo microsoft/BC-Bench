@@ -79,6 +79,7 @@ class BugFixPhaseResult(BaseModel):
     error_message: str | None = None
     source_hash: str | None = None
     checkpoint_hash: str | None = None
+    package_hashes: tuple[str, ...] = ()
     requested_tests: tuple[str, ...] = ()
     discovered_tests: tuple[str, ...] = ()
     executed_tests: tuple[str, ...] = ()

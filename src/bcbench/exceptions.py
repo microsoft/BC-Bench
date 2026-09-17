@@ -27,6 +27,7 @@ __all__ = [
     "GitOperationError",
     "InvalidEntryFormatError",
     "NoEntriesFoundError",
+    "PackageInventoryError",
     "PatchApplicationError",
     "ProjectDiscoveryError",
     "TestExecutionError",
@@ -50,6 +51,10 @@ class CheckpointInfrastructureError(BugFixLifecycleInfrastructureError):
 
 class CleanupInfrastructureError(BugFixLifecycleInfrastructureError):
     """Lifecycle cleanup failed."""
+
+
+class PackageInventoryError(BugFixLifecycleInfrastructureError):
+    """Built packages or installed application inventory failed verification."""
 
 
 class DatasetError(BCBenchError):
