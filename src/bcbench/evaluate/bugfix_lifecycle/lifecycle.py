@@ -26,8 +26,11 @@ from bcbench.evaluate.bugfix_lifecycle.models import (
     TrustedSource,
 )
 from bcbench.evaluate.bugfix_lifecycle.path_safety import (
+    ENTRY_MANAGED_PATH_NAMES,
     reject_reparse_components,
     require_strict_descendant,
+    validate_lifecycle_paths,
+    validate_owned_lifecycle_roots,
 )
 from bcbench.evaluate.bugfix_lifecycle.phases import (
     BugFixPhaseRunner,
@@ -102,7 +105,7 @@ class LifecycleOwnershipApi(Protocol):
 
     def remove_roots(self) -> None: ...
 
-    def quarantine(self, errors: tuple[str, ...]) -> None: ...
+    def disable_local_identity(self) -> None: ...
 
 
 def analyze_bugfix_submission(
@@ -279,7 +282,7 @@ def _joined_errors(errors: Sequence[str]) -> str | None:
     return "; ".join(unique) if unique else None
 
 
-class BugFixProductionLifecycle:
+class ProductionBugFixLifecycle:
     def __init__(
         self,
         *,
@@ -315,7 +318,7 @@ class BugFixProductionLifecycle:
         request: BugFixLifecycleRequest,
         *,
         powershell_runner: PowerShellRunner | None = None,
-    ) -> BugFixProductionLifecycle:
+    ) -> ProductionBugFixLifecycle:
         evidence = EvidenceStore(request.paths)
         workspace = TrustedWorkspaceBuilder(request.paths)
         runner = powershell_runner or _default_powershell_runner(request)
@@ -396,6 +399,7 @@ class BugFixProductionLifecycle:
         agent_error: AgentError | None = None
         phases = _empty_phases()
         result_persisted = False
+        barrier_error: BugFixLifecycleInfrastructureError | None = None
 
         try:
             try:
@@ -421,10 +425,7 @@ class BugFixProductionLifecycle:
                 )
 
             if result is None and trusted_source is not None and s0 is not None:
-                if request.replay_patch is not None:
-                    full_patch = self._read_replay_patch(request)
-                    submission_frozen = True
-                else:
+                if request.replay_patch is None:
                     agent_context = replace(
                         request.context,
                         repo_path=request.paths.agent_workspace,
@@ -451,27 +452,26 @@ class BugFixProductionLifecycle:
                     finally:
                         request.context.metrics = agent_context.metrics
                         request.context.experiment = agent_context.experiment
-                        try:
-                            self._ownership_api.close_contained_group()
-                            self._ownership_api.stop_agent_sessions()
-                        except Exception as error:  # noqa: BLE001 - close all agent-owned sessions
-                            self._save_exception("agent-session-cleanup-failure.txt", error)
-                            if propagate is None:
-                                propagate = BugFixLifecycleInfrastructureError(f"Agent session cleanup failed: {error}")
 
-                    try:
-                        full_patch = self._freeze_submission(
-                            request.paths.agent_workspace,
-                            trusted_source.commit,
-                        )
+                barrier_error = self._establish_isolation_barrier()
+                if barrier_error is None:
+                    if request.replay_patch is not None:
+                        full_patch = self._read_replay_patch(request)
                         submission_frozen = True
-                    except EmptyDiffError as error:
-                        submission_frozen = True
-                        self._save_exception("submission-freeze-empty.txt", error)
-                    except Exception as error:  # noqa: BLE001 - freeze diagnostics after any agent outcome
-                        self._save_exception("submission-freeze-failure.txt", error)
-                        if propagate is None and agent_error is None:
-                            propagate = error
+                    else:
+                        try:
+                            full_patch = self._freeze_submission(
+                                request.paths.agent_workspace,
+                                trusted_source.commit,
+                            )
+                            submission_frozen = True
+                        except EmptyDiffError as error:
+                            submission_frozen = True
+                            self._save_exception("submission-freeze-empty.txt", error)
+                        except Exception as error:  # noqa: BLE001 - freeze diagnostics after any agent outcome
+                            self._save_exception("submission-freeze-failure.txt", error)
+                            if propagate is None and agent_error is None:
+                                propagate = error
 
                 if submission_frozen:
                     full_patch_hash = sha256_text(full_patch)
@@ -482,7 +482,25 @@ class BugFixProductionLifecycle:
                         agent_stderr,
                     )
 
-                if propagate is not None:
+                if barrier_error is not None:
+                    phases = _isolation_barrier_phases(str(barrier_error))
+                    self._persist_phase_results(phases)
+                    result = self._create_result(
+                        request,
+                        phases,
+                        full_patch="",
+                        full_patch_hash=None,
+                        trusted_source=trusted_source,
+                        s0=s0,
+                        sf=None,
+                        analysis=None,
+                        execution_mode=execution_mode,
+                        timeout=timeout,
+                        agent_stdout=agent_stdout,
+                        agent_stderr=agent_stderr,
+                        error_message=str(barrier_error),
+                    )
+                elif propagate is not None:
                     phases = _infrastructure_setup_phases(str(propagate))
                     self._persist_phase_results(phases)
                     result = self._create_result(
@@ -605,7 +623,7 @@ class BugFixProductionLifecycle:
                     persistence_error.add_note(f"Primary lifecycle failure: {propagate}")
                     propagate = persistence_error
         finally:
-            cleanup_error = self._cleanup()
+            cleanup_error = self._cleanup(request)
 
         if cleanup_error is not None:
             if propagate is not None:
@@ -865,15 +883,20 @@ class BugFixProductionLifecycle:
             build=phases["fix_build"].status is BugFixPhaseStatus.PASSED,
             benchmark_test_passed=phases["benchmark_fix"].status is BugFixPhaseStatus.PASSED,
         )
+        return self._with_result_projections(result)
+
+    @staticmethod
+    def _with_result_projections(result: BugFixResult) -> BugFixResult:
         resolution = result.metric_status(BugFixMetricName.RESOLUTION)
+        metric_statuses = tuple(result.metric_status(metric) for metric in BugFixMetricName)
+        unknown_statuses = {
+            BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+            BugFixPhaseStatus.NOT_RUN,
+        }
         return result.model_copy(
             update={
                 "resolved": resolution is BugFixPhaseStatus.PASSED,
-                "infrastructure_failure": resolution
-                in (
-                    BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
-                    BugFixPhaseStatus.NOT_RUN,
-                ),
+                "infrastructure_failure": all(status in unknown_statuses for status in metric_statuses),
             }
         )
 
@@ -929,14 +952,58 @@ class BugFixProductionLifecycle:
         except Exception:
             logger.exception(f"Failed to persist lifecycle diagnostic {name}")
 
-    def _cleanup(self) -> CleanupInfrastructureError | None:
+    def _establish_isolation_barrier(self) -> BugFixLifecycleInfrastructureError | None:
+        outcomes: dict[str, dict[str, str]] = {}
         errors: list[str] = []
+        for name, operation in (
+            ("close_process_group", self._ownership_api.close_contained_group),
+            ("stop_agent_sessions", self._ownership_api.stop_agent_sessions),
+        ):
+            try:
+                operation()
+            except Exception as error:  # noqa: BLE001 - every barrier operation must be attempted and recorded
+                errors.append(f"{name}: {error}")
+                outcomes[name] = {
+                    "status": "infrastructure_error",
+                    "error": str(error),
+                }
+            else:
+                outcomes[name] = {"status": "verified"}
+
+        if errors:
+            barrier_error = BugFixLifecycleInfrastructureError("Isolation barrier failed: " + "; ".join(errors))
+            try:
+                self._save_step(
+                    "isolation-barrier-failure.json",
+                    {
+                        "status": "infrastructure_error",
+                        "operations": outcomes,
+                    },
+                )
+            except Exception:
+                logger.exception("Failed to persist isolation barrier diagnostic")
+            return barrier_error
+
+        self._save_step(
+            "10-isolation-barrier.json",
+            {
+                "status": "verified",
+                "operations": outcomes,
+            },
+        )
+        return None
+
+    def _cleanup(self, request: BugFixLifecycleRequest) -> CleanupInfrastructureError | None:
+        errors: list[str] = []
+        completed_operations: list[str] = []
         container_absent = False
+        identity_secured = False
         try:
             self._ownership_api.verify_container_ownership()
         except Exception as error:  # noqa: BLE001 - cleanup aggregates every ownership failure
             errors.append(f"container ownership verification: {error}")
         else:
+            completed_operations.append("container_ownership_verified")
             for name, operation in (
                 ("evaluator process stop", self._ownership_api.stop_evaluator_processes),
                 ("BC user removal", self._ownership_api.remove_bc_user),
@@ -947,25 +1014,65 @@ class BugFixProductionLifecycle:
                 except Exception as error:  # noqa: BLE001 - cleanup must continue to quarantine
                     errors.append(f"{name}: {error}")
                     break
+                completed_operations.append(name.replace(" ", "_"))
             else:
                 container_absent = True
 
         if container_absent:
             for name, operation in (
+                ("owned root removal", self._ownership_api.remove_roots),
                 ("ACL removal", self._ownership_api.remove_acl),
                 ("local identity removal", self._ownership_api.remove_local_identity),
-                ("managed root removal", self._ownership_api.remove_roots),
             ):
                 try:
                     operation()
                 except Exception as error:  # noqa: BLE001 - cleanup must continue to quarantine
                     errors.append(f"{name}: {error}")
                     break
+                completed_operations.append(name.replace(" ", "_"))
+                if name == "local identity removal":
+                    identity_secured = True
+
+        if errors and not identity_secured:
+            try:
+                self._ownership_api.disable_local_identity()
+            except Exception as error:  # noqa: BLE001 - quarantine records disablement failure
+                errors.append(f"local identity disablement/verification: {error}")
+            else:
+                completed_operations.append("local_identity_disabled")
+                identity_secured = True
+
+        cleanup_payload = {
+            "status": "failure" if errors else "success",
+            "instance_id": request.context.entry.instance_id,
+            "container_id": request.expected_container_id,
+            "container_invocation_id": request.expected_container_invocation_id,
+            "completed_operations": completed_operations,
+            "cleanup_errors": errors,
+        }
+        try:
+            request.paths.final_results.mkdir(parents=True, exist_ok=True)
+            reject_reparse_components(request.paths.final_results, request.paths.protected_root)
+            _atomic_json(request.paths.final_results / "cleanup.json", cleanup_payload)
+        except Exception as error:  # noqa: BLE001 - quarantine must capture cleanup record failure
+            errors.append(f"cleanup record persistence: {error}")
 
         if not errors:
             return None
+
+        quarantine_payload = {
+            **cleanup_payload,
+            "status": "quarantined",
+            "cleanup_errors": errors,
+            "entry_root": str(request.paths.entry_root),
+            "protected_root": str(request.paths.protected_root),
+            "local_username": request.agent_os_username,
+            "local_sid": request.agent_os_sid,
+        }
         try:
-            self._ownership_api.quarantine(tuple(errors))
+            request.paths.protected_root.mkdir(parents=True, exist_ok=True)
+            reject_reparse_components(request.paths.protected_root, request.paths.protected_root)
+            _atomic_json(request.paths.protected_root / "quarantine.json", quarantine_payload)
         except Exception as error:  # noqa: BLE001 - cleanup reports quarantine failure too
             errors.append(f"quarantine persistence: {error}")
         return CleanupInfrastructureError("; ".join(errors))
@@ -996,20 +1103,29 @@ def _agent_failure_phases(error: str) -> dict[str, BugFixPhaseResult]:
     return {name: make_not_run_phase(f"Agent execution failed: {error}") for name in _empty_phases()}
 
 
+def _isolation_barrier_phases(error: str) -> dict[str, BugFixPhaseResult]:
+    now = datetime.now(UTC)
+    infrastructure_phase = BugFixPhaseResult(
+        status=BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+        started_at=now,
+        completed_at=now,
+        error_message=error,
+    )
+    return {
+        "test_red": infrastructure_phase,
+        "test_gold": infrastructure_phase,
+        "fix_build": infrastructure_phase,
+        "generated_pair": make_not_run_phase("Isolation barrier prerequisite is unknown."),
+        "benchmark_fix": make_not_run_phase("Isolation barrier prerequisite is unknown."),
+    }
+
+
 def _prerequisite_phase(
     prerequisite: BugFixPhaseResult,
     reason: str,
 ) -> BugFixPhaseResult:
     if prerequisite.status is BugFixPhaseStatus.INVALID_SUBMISSION:
         return make_invalid_submission_phase(reason)
-    if prerequisite.status is BugFixPhaseStatus.FAILED:
-        now = datetime.now(UTC)
-        return BugFixPhaseResult(
-            status=BugFixPhaseStatus.FAILED,
-            started_at=now,
-            completed_at=now,
-            error_message=reason,
-        )
     return make_not_run_phase(reason)
 
 
@@ -1072,6 +1188,7 @@ class PowerShellLifecycleOwnershipApi:
         module_path: Path | None = None,
     ) -> None:
         self._request = request
+        self._paths = validate_lifecycle_paths(request.paths)
         self._evidence_store = evidence_store
         self._runner = powershell_runner
         self._module_path = (module_path or Path(__file__).parents[4] / "scripts" / "BugFixLifecycle.psm1").resolve()
@@ -1186,20 +1303,52 @@ class PowerShellLifecycleOwnershipApi:
         )
 
     def remove_roots(self) -> None:
-        if self._request.paths.entry_root.exists():
-            remove_tree(self._request.paths.entry_root)
+        entry_paths = tuple(getattr(self._paths, name) for name in ENTRY_MANAGED_PATH_NAMES)
+        external_roots = validate_owned_lifecycle_roots(
+            self._request.compiler_helper_roots,
+            self._paths,
+            self._invocation_id,
+        )
 
-    def quarantine(self, errors: tuple[str, ...]) -> None:
-        destination = self._request.paths.final_results / "cleanup-quarantine.json"
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_json(
-            destination,
-            {
-                "cleanup_errors": list(errors),
-                "container_id": self._container_id,
-                "container_invocation_id": self._invocation_id,
-                "instance_id": self._request.context.entry.instance_id,
-            },
+        for path in entry_paths:
+            reject_reparse_components(path, self._paths.entry_root)
+            require_strict_descendant(path, self._paths.entry_root, "managed entry root", "entry_root")
+            if path.exists() and not path.is_dir():
+                raise CleanupInfrastructureError(f"Managed entry root is not a directory: {path}")
+
+        for path in entry_paths:
+            if path.exists():
+                remove_tree(path)
+            if path.exists():
+                raise CleanupInfrastructureError(f"Managed entry root still exists after removal: {path}")
+
+        for owned_root in external_roots:
+            remove_tree(owned_root.path)
+            if owned_root.path.exists():
+                raise CleanupInfrastructureError(f"Compiler/helper root still exists after removal: {owned_root.path}")
+
+        entry_root = self._paths.entry_root
+        reject_reparse_components(entry_root, entry_root)
+        if entry_root.exists():
+            if not entry_root.is_dir():
+                raise CleanupInfrastructureError(f"Entry root is not a directory: {entry_root}")
+            remaining = tuple(entry_root.iterdir())
+            if remaining:
+                raise CleanupInfrastructureError("Entry root contains unowned paths and was preserved: " + ", ".join(str(path) for path in remaining))
+            entry_root.rmdir()
+
+    def disable_local_identity(self) -> None:
+        self._invoke(
+            "\n".join(
+                (
+                    "$ErrorActionPreference = 'Stop'",
+                    f"Import-Module {_ps_quote(self._module_path)} -Force",
+                    "Disable-BCBenchAgentIdentity `",
+                    f"  -Username {_ps_quote(self._request.agent_os_username)}",
+                    "Assert-BCBenchAgentIdentityDisabled `",
+                    f"  -Username {_ps_quote(self._request.agent_os_username)}",
+                )
+            )
         )
 
     @property
@@ -1274,11 +1423,14 @@ def run_bugfix_production_lifecycle(
     *,
     powershell_runner: PowerShellRunner | None = None,
 ) -> BugFixResult:
-    lifecycle = BugFixProductionLifecycle.from_request(
+    lifecycle = ProductionBugFixLifecycle.from_request(
         request,
         powershell_runner=powershell_runner,
     )
     return lifecycle.run(request, agent_runner)
+
+
+BugFixProductionLifecycle = ProductionBugFixLifecycle
 
 
 def _atomic_json(destination: Path, payload: object) -> None:

@@ -19,6 +19,7 @@ class BugFixLifecyclePaths:
     baseline_workspace: Path
     agent_workspace: Path
     agent_logs: Path
+    agent_tools: Path
     mounted_staging: Path
     evaluator_workspaces: Path
     evidence: Path
@@ -26,6 +27,20 @@ class BugFixLifecyclePaths:
     trusted_source: Path
     checkpoints: Path
     final_results: Path
+
+
+@dataclass(frozen=True)
+class OwnedLifecycleRoot:
+    path: Path
+    ownership_token: str
+
+    def __post_init__(self) -> None:
+        if not self.ownership_token.strip():
+            raise ValueError("ownership_token must be a non-empty string")
+
+    @property
+    def marker_path(self) -> Path:
+        return self.path / ".bcbench-owned"
 
 
 @dataclass(frozen=True)
@@ -41,6 +56,7 @@ class BugFixLifecycleRequest:
     agent_bc_username: str
     agent_os_sid: str
     acl_paths: tuple[Path, ...] = ()
+    compiler_helper_roots: tuple[OwnedLifecycleRoot, ...] = ()
     replay_patch: Path | None = None
 
     def __post_init__(self) -> None:
@@ -60,6 +76,18 @@ class BugFixLifecycleRequest:
         if self.agent_execution_policy.restricted_identity is None:
             raise ValueError("Production agent execution requires a restricted identity")
         object.__setattr__(self, "acl_paths", tuple(self.acl_paths))
+        object.__setattr__(self, "compiler_helper_roots", tuple(self.compiler_helper_roots))
+        from bcbench.evaluate.bugfix_lifecycle.path_safety import validate_owned_lifecycle_roots
+
+        object.__setattr__(
+            self,
+            "compiler_helper_roots",
+            validate_owned_lifecycle_roots(
+                self.compiler_helper_roots,
+                self.paths,
+                self.expected_container_invocation_id,
+            ),
+        )
 
 
 @dataclass(frozen=True)

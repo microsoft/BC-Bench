@@ -53,6 +53,7 @@ def _lifecycle_paths(tmp_path: Path, *, baseline_workspace: Path | None = None) 
         baseline_workspace=baseline_workspace or entry_root / "baseline",
         agent_workspace=entry_root / "agent",
         agent_logs=entry_root / "agent-logs",
+        agent_tools=entry_root / "agent-tools",
         mounted_staging=entry_root / "staging",
         evaluator_workspaces=entry_root / "evaluators",
         evidence=entry_root / "evidence",

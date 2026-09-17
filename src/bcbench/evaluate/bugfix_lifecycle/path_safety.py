@@ -3,12 +3,13 @@ import stat
 from itertools import combinations
 from pathlib import Path
 
-from bcbench.evaluate.bugfix_lifecycle.models import BugFixLifecyclePaths
+from bcbench.evaluate.bugfix_lifecycle.models import BugFixLifecyclePaths, OwnedLifecycleRoot
 
 ENTRY_MANAGED_PATH_NAMES = (
     "baseline_workspace",
     "agent_workspace",
     "agent_logs",
+    "agent_tools",
     "mounted_staging",
     "evaluator_workspaces",
     "evidence",
@@ -130,3 +131,40 @@ def validate_lifecycle_paths(paths: BugFixLifecyclePaths) -> BugFixLifecyclePath
         **entry_paths,
         **protected_paths,
     )
+
+
+def validate_owned_lifecycle_roots(
+    roots: tuple[OwnedLifecycleRoot, ...],
+    paths: BugFixLifecyclePaths,
+    expected_ownership_token: str,
+) -> tuple[OwnedLifecycleRoot, ...]:
+    validated_paths = validate_lifecycle_paths(paths)
+    validated: list[OwnedLifecycleRoot] = []
+    for index, owned_root in enumerate(roots):
+        root_name = f"compiler_helper_roots[{index}]"
+        root = absolute_path(owned_root.path)
+        if root == Path(root.anchor):
+            raise ValueError(f"{root_name} cannot be a filesystem root")
+        require_disjoint(root, validated_paths.entry_root, root_name, "entry_root")
+        require_disjoint(root, validated_paths.protected_root, root_name, "protected_root")
+        reject_reparse_components(root, root)
+        if not root.is_dir():
+            raise ValueError(f"{root_name} must be an existing directory: {root}")
+        if owned_root.ownership_token != expected_ownership_token:
+            raise ValueError(f"{root_name} ownership token does not match the lifecycle invocation")
+        marker = owned_root.marker_path
+        reject_reparse_components(marker, root)
+        if not marker.is_file() or marker.is_symlink():
+            raise ValueError(f"{root_name} ownership marker is missing: {marker}")
+        if marker.read_text(encoding="utf-8").strip() != expected_ownership_token:
+            raise ValueError(f"{root_name} ownership marker does not match the lifecycle invocation")
+        validated.append(OwnedLifecycleRoot(root, expected_ownership_token))
+
+    for (first_index, first), (second_index, second) in combinations(enumerate(validated), 2):
+        require_disjoint(
+            first.path,
+            second.path,
+            f"compiler_helper_roots[{first_index}]",
+            f"compiler_helper_roots[{second_index}]",
+        )
+    return tuple(validated)

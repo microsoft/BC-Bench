@@ -143,6 +143,62 @@ def test_timeout_only_forces_resolution_to_failed() -> None:
     assert result.resolved is False
 
 
+def test_coarse_infrastructure_failure_requires_every_production_metric_unknown() -> None:
+    from bcbench.evaluate.bugfix_lifecycle.lifecycle import ProductionBugFixLifecycle
+
+    infrastructure_error = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.INFRASTRUCTURE_ERROR)
+    not_run = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=infrastructure_error,
+        test_gold=not_run,
+        fix_build=infrastructure_error,
+        generated_pair=not_run,
+        benchmark_fix=not_run,
+    )
+    projected = ProductionBugFixLifecycle._with_result_projections(result)
+
+    assert all(
+        projected.metric_status(metric)
+        in (
+            bugfix_results.BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+            bugfix_results.BugFixPhaseStatus.NOT_RUN,
+        )
+        for metric in bugfix_results.BugFixMetricName
+    )
+    assert projected.infrastructure_failure is True
+
+
+@pytest.mark.parametrize(
+    "determined_status",
+    [
+        bugfix_results.BugFixPhaseStatus.PASSED,
+        bugfix_results.BugFixPhaseStatus.FAILED,
+        bugfix_results.BugFixPhaseStatus.INVALID_SUBMISSION,
+    ],
+)
+def test_partial_metric_separability_clears_coarse_infrastructure_failure(
+    determined_status,
+) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.lifecycle import ProductionBugFixLifecycle
+
+    phase = bugfix_results.BugFixPhaseResult(status=determined_status)
+    unknown = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=unknown,
+        test_gold=unknown,
+        fix_build=phase,
+        generated_pair=unknown,
+        benchmark_fix=unknown,
+    )
+
+    projected = ProductionBugFixLifecycle._with_result_projections(result)
+
+    assert projected.infrastructure_failure is False
+
+
 def test_package_normalized_metrics_map_legacy_fields() -> None:
     result = create_bugfix_result(
         build=False,

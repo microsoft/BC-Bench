@@ -3649,6 +3649,8 @@ Export-ModuleMember -Function `
     Get-BCBenchDatabaseTopology, `
     New-BCBenchAgentTools, `
     New-BCBenchAgentIdentity, `
+    Disable-BCBenchAgentIdentity, `
+    Assert-BCBenchAgentIdentityDisabled, `
     Remove-BCBenchContainerAndVerify, `
     Remove-BCBenchAgentAcl, `
     Remove-BCBenchAgentIdentity, `

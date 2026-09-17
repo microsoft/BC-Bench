@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import FrozenInstanceError
 from hashlib import sha256
@@ -14,6 +15,9 @@ from bcbench.evaluate.bugfix_lifecycle import (
     BugFixProductionLifecycle,
     CheckpointManifest,
     ContainerIdentity,
+    OwnedLifecycleRoot,
+    PowerShellLifecycleOwnershipApi,
+    ProductionBugFixLifecycle,
     SubmissionAnalysis,
     TrustedSource,
     analyze_bugfix_submission,
@@ -33,6 +37,7 @@ def _paths(tmp_path: Path) -> BugFixLifecyclePaths:
         baseline_workspace=entry / "baseline",
         agent_workspace=entry / "agent",
         agent_logs=entry / "logs",
+        agent_tools=entry / "agent-tools",
         mounted_staging=entry / "staging",
         evaluator_workspaces=entry / "evaluators",
         evidence=entry / "evidence",
@@ -151,6 +156,11 @@ class FakeOwnership:
         self.calls = calls
         self.cleanup_error: Exception | None = None
         self.ownership_error: Exception | None = None
+        self.close_error: Exception | None = None
+        self.stop_sessions_error: Exception | None = None
+        self.root_error: Exception | None = None
+        self.acl_error: Exception | None = None
+        self.local_error: Exception | None = None
 
     def get_container_identity(self) -> ContainerIdentity:
         self.calls.append("identity")
@@ -162,9 +172,13 @@ class FakeOwnership:
 
     def close_contained_group(self) -> None:
         self.calls.append("close-group")
+        if self.close_error is not None:
+            raise self.close_error
 
     def stop_agent_sessions(self) -> None:
         self.calls.append("stop-agent-sessions")
+        if self.stop_sessions_error is not None:
+            raise self.stop_sessions_error
 
     def verify_container_ownership(self) -> None:
         self.calls.append("verify-ownership")
@@ -184,15 +198,21 @@ class FakeOwnership:
 
     def remove_acl(self) -> None:
         self.calls.append("remove-acl")
+        if self.acl_error is not None:
+            raise self.acl_error
 
     def remove_local_identity(self) -> None:
         self.calls.append("remove-local")
+        if self.local_error is not None:
+            raise self.local_error
 
     def remove_roots(self) -> None:
         self.calls.append("remove-roots")
+        if self.root_error is not None:
+            raise self.root_error
 
-    def quarantine(self, errors: tuple[str, ...]) -> None:
-        self.calls.append("quarantine")
+    def disable_local_identity(self) -> None:
+        self.calls.append("disable-local")
 
 
 class FakePhases:
@@ -425,10 +445,12 @@ def test_success_exact_call_order(tmp_path: Path) -> None:
         "stop-evaluator",
         "remove-bc-user",
         "remove-container",
+        "remove-roots",
         "remove-acl",
         "remove-local",
-        "remove-roots",
     ]
+    cleanup = json.loads((request.paths.final_results / "cleanup.json").read_text(encoding="utf-8"))
+    assert cleanup["status"] == "success"
 
 
 def test_invalid_test_valid_fix_still_runs_benchmark(tmp_path: Path) -> None:
@@ -473,17 +495,86 @@ def test_later_s0_phase_runs_after_earlier_infrastructure_error(tmp_path: Path) 
     assert calls.index("phase:red") < calls.index("phase:gold") < calls.index("phase:fix")
 
 
-def test_fix_failure_determines_pair_and_benchmark_failed(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "fix_status",
+    [
+        BugFixPhaseStatus.FAILED,
+        BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+    ],
+)
+def test_fix_failure_leaves_unexecuted_pair_and_benchmark_not_run(
+    tmp_path: Path,
+    fix_status: BugFixPhaseStatus,
+) -> None:
     request, lifecycle, calls, _, _, phases = _harness(tmp_path)
-    phases.statuses["fix"] = BugFixPhaseStatus.FAILED
+    phases.statuses["fix"] = fix_status
 
     result = lifecycle.run(request, _agent(calls))
 
-    assert result.fix_build.status is BugFixPhaseStatus.FAILED
-    assert result.generated_pair.status is BugFixPhaseStatus.FAILED
-    assert result.benchmark_fix.status is BugFixPhaseStatus.FAILED
+    assert result.fix_build.status is fix_status
+    assert result.generated_pair.status is BugFixPhaseStatus.NOT_RUN
+    assert result.benchmark_fix.status is BugFixPhaseStatus.NOT_RUN
     assert "phase:pair" not in calls
     assert "phase:benchmark" not in calls
+
+
+def test_structurally_invalid_fix_marks_its_own_unexecuted_consumers_invalid(
+    tmp_path: Path,
+) -> None:
+    request, lifecycle, calls, _, _, _ = _harness(tmp_path)
+    lifecycle._analyzer = lambda repo, patch, trusted, allowed: _submission(fix_error="invalid fix")
+
+    result = lifecycle.run(request, _agent(calls))
+
+    assert result.fix_build.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.generated_pair.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.benchmark_fix.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert "phase:fix" not in calls
+    assert "phase:pair" not in calls
+    assert "phase:benchmark" not in calls
+
+
+@pytest.mark.parametrize("failure", ["close", "sessions"])
+def test_isolation_barrier_failure_never_freezes_analyzes_or_runs_phases(
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    request, lifecycle, calls, _, ownership, _ = _harness(tmp_path)
+    analyzer_calls: list[str] = []
+    lifecycle._analyzer = lambda *args: analyzer_calls.append("analyze") or _submission()
+    if failure == "close":
+        ownership.close_error = RuntimeError("job group remains active")
+    else:
+        ownership.stop_sessions_error = RuntimeError("agent sessions remain active")
+
+    result = lifecycle.run(request, _agent(calls))
+
+    assert "freeze" not in calls
+    assert analyzer_calls == []
+    assert not any(call.startswith("phase:") for call in calls)
+    assert result.test_red.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert result.test_gold.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert result.fix_build.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert result.generated_pair.status is BugFixPhaseStatus.NOT_RUN
+    assert result.benchmark_fix.status is BugFixPhaseStatus.NOT_RUN
+    assert any(call == "evidence:isolation-barrier-failure.json" for call in calls)
+
+
+def test_replay_analysis_also_requires_isolation_barrier(tmp_path: Path) -> None:
+    request, lifecycle, calls, _, ownership, _ = _harness(tmp_path)
+    replay = request.paths.protected_root / "replay.patch"
+    replay.parent.mkdir(parents=True)
+    replay.write_text("F+T", encoding="utf-8")
+    request = BugFixLifecycleRequest(**{**request.__dict__, "replay_patch": replay})
+    ownership.close_error = RuntimeError("job group verification failed")
+    analyzer_calls: list[str] = []
+    lifecycle._analyzer = lambda *args: analyzer_calls.append("analyze") or _submission()
+
+    result = lifecycle.run(request, _agent(calls))
+
+    assert analyzer_calls == []
+    assert result.execution_mode == "replay"
+    assert result.generated_patch_hash is None
 
 
 def test_timeout_preserves_diagnostics_and_forces_resolution_failure(tmp_path: Path) -> None:
@@ -561,9 +652,13 @@ def test_cleanup_failure_quarantines_after_result_persistence(tmp_path: Path) ->
         lifecycle.run(request, _agent(calls))
 
     assert calls.index("save-final-result") < calls.index("remove-container")
-    assert calls.index("remove-container") < calls.index("quarantine")
+    assert calls.index("remove-container") < calls.index("disable-local")
     assert "remove-acl" not in calls
     assert "remove-roots" not in calls
+    assert request.paths.protected_root.joinpath("quarantine.json").is_file()
+    assert request.paths.final_results.joinpath("cleanup.json").is_file()
+    assert request.paths.protected_root.joinpath("final-result.json").is_file()
+    assert not request.paths.final_results.joinpath("cleanup-quarantine.json").exists()
 
 
 def test_agent_created_commits_are_frozen_against_trusted_commit(tmp_path: Path) -> None:
@@ -590,4 +685,72 @@ def test_ownership_mismatch_never_attempts_container_cleanup(tmp_path: Path) -> 
 
     assert "remove-bc-user" not in calls
     assert "remove-container" not in calls
-    assert "quarantine" in calls
+    assert "disable-local" in calls
+    assert request.paths.protected_root.joinpath("quarantine.json").is_file()
+
+
+def test_cleanup_removes_owned_entry_and_compiler_helper_roots_before_acl_and_identity(
+    tmp_path: Path,
+) -> None:
+    request, _, _, evidence, _, _ = _harness(tmp_path)
+    token = request.expected_container_invocation_id
+    compiler_root = tmp_path / "compiler-root"
+    helper_root = tmp_path / "helper-root"
+    for root in (compiler_root, helper_root):
+        root.mkdir()
+        (root / ".bcbench-owned").write_text(token, encoding="utf-8")
+        (root / "payload.txt").write_text("owned", encoding="utf-8")
+    request.paths.final_results.mkdir(parents=True)
+    request.paths.final_results.joinpath("evidence.json").write_text("protected", encoding="utf-8")
+    request = BugFixLifecycleRequest(
+        **{
+            **request.__dict__,
+            "compiler_helper_roots": (
+                OwnedLifecycleRoot(compiler_root, token),
+                OwnedLifecycleRoot(helper_root, token),
+            ),
+        }
+    )
+    for path in (
+        request.paths.agent_workspace,
+        request.paths.agent_logs,
+        request.paths.agent_tools,
+        request.paths.mounted_staging,
+        request.paths.evaluator_workspaces,
+        request.paths.evidence,
+    ):
+        path.mkdir(parents=True, exist_ok=True)
+    api = PowerShellLifecycleOwnershipApi(
+        request,
+        evidence,
+        lambda script: subprocess.CompletedProcess([], 0, "{}", ""),
+    )
+
+    api.remove_roots()
+
+    assert not request.paths.entry_root.exists()
+    assert not compiler_root.exists()
+    assert not helper_root.exists()
+    assert request.paths.protected_root.exists()
+    assert request.paths.final_results.joinpath("evidence.json").is_file()
+
+
+def test_cleanup_root_marker_mismatch_preserves_root(tmp_path: Path) -> None:
+    request, _, _, _, _, _ = _harness(tmp_path)
+    root = tmp_path / "compiler-root"
+    root.mkdir()
+    (root / ".bcbench-owned").write_text("wrong-owner", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="ownership marker"):
+        BugFixLifecycleRequest(
+            **{
+                **request.__dict__,
+                "compiler_helper_roots": (OwnedLifecycleRoot(root, request.expected_container_invocation_id),),
+            }
+        )
+
+    assert root.exists()
+
+
+def test_production_lifecycle_public_symbol_and_compatibility_alias() -> None:
+    assert ProductionBugFixLifecycle is BugFixProductionLifecycle

@@ -27,6 +27,7 @@ def _paths(tmp_path: Path) -> BugFixLifecyclePaths:
         baseline_workspace=entry_root / "baseline",
         agent_workspace=entry_root / "agent",
         agent_logs=entry_root / "agent-logs",
+        agent_tools=entry_root / "agent-tools",
         mounted_staging=entry_root / "staging",
         evaluator_workspaces=entry_root / "evaluators",
         evidence=entry_root / "evidence",
