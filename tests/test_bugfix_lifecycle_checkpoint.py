@@ -322,6 +322,133 @@ def test_capture_reports_finalize_and_restart_failures_together(tmp_path: Path, 
         manager.capture("baseline", (app,))
 
 
+@pytest.mark.parametrize(
+    "seam",
+    [
+        "invoke",
+        "validate_service",
+        "parse_manifest",
+        "validate_name",
+        "validate_staging_backup",
+        "validate_hash",
+        "validate_container",
+        "validate_apps",
+        "protect_backup",
+        "persist_manifest",
+    ],
+)
+def test_capture_unexpected_post_staging_failures_cleanup_restart_and_propagate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    seam: str,
+) -> None:
+    manager, runner, paths, app = _manager(tmp_path)
+
+    if seam == "invoke":
+        original = manager._invoke_json
+
+        def fail_after_capture(operation: str, script: str):
+            payload = original(operation, script)
+            if operation == "capture":
+                raise RuntimeError("unexpected capture failure")
+            return payload
+
+        monkeypatch.setattr(manager, "_invoke_json", fail_after_capture)
+    elif seam == "persist_manifest":
+        monkeypatch.setattr(
+            manager._evidence_store,
+            "save_checkpoint_manifest",
+            lambda *_args: (_ for _ in ()).throw(RuntimeError("unexpected capture failure")),
+        )
+    else:
+        attribute = {
+            "validate_service": "_validate_capture_service",
+            "parse_manifest": "_parse_manifest",
+            "validate_name": "_validate_capture_name",
+            "validate_staging_backup": "_validated_staging_backup",
+            "validate_hash": "_validate_hash",
+            "validate_container": "_validate_container_identity",
+            "validate_apps": "_validate_apps",
+            "protect_backup": "_protect_backup",
+        }[seam]
+        original = getattr(manager, attribute)
+        failed = False
+
+        def fail_once(*args, **kwargs):
+            nonlocal failed
+            if not failed:
+                failed = True
+                raise RuntimeError("unexpected capture failure")
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(manager, attribute, fail_once)
+
+    with pytest.raises(RuntimeError, match="unexpected capture failure"):
+        manager.capture("baseline", (app,))
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert any("Start-BCBenchServiceTier" in call for call in runner.calls)
+
+
+def test_capture_aggregates_unexpected_restart_and_cleanup_failures_with_causes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, runner, paths, app = _manager(tmp_path)
+    original_cleanup = manager._cleanup_staging
+    monkeypatch.setattr(manager, "_protect_backup", lambda *_args: (_ for _ in ()).throw(RuntimeError("primary exploded")))
+
+    def cleanup_then_fail(staging_directory: Path, primary_error: CheckpointInfrastructureError | None) -> None:
+        original_cleanup(staging_directory, primary_error)
+        raise RuntimeError("cleanup exploded")
+
+    def fail_restart(script: str) -> subprocess.CompletedProcess[str]:
+        result = runner(script)
+        if "Start-BCBenchServiceTier" in script:
+            return subprocess.CompletedProcess(args=["pwsh"], returncode=29, stdout="", stderr="restart exploded")
+        return result
+
+    monkeypatch.setattr(manager, "_cleanup_staging", cleanup_then_fail)
+    manager._powershell_runner = fail_restart
+
+    with pytest.raises(CheckpointInfrastructureError, match=r"primary exploded.*restart exploded.*cleanup exploded") as caught:
+        manager.capture("baseline", (app,))
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert isinstance(caught.value.__cause__, ExceptionGroup)
+    assert {str(error) for error in caught.value.__cause__.exceptions} >= {"primary exploded", "cleanup exploded"}
+
+
+@pytest.mark.parametrize("seam", ["invoke", "protect"])
+def test_capture_base_exception_cleans_staging_restarts_and_reraises(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    seam: str,
+) -> None:
+    class SimulatedInterrupt(BaseException):
+        pass
+
+    manager, runner, paths, app = _manager(tmp_path)
+    if seam == "invoke":
+        original = manager._invoke_json
+
+        def interrupt_after_capture(operation: str, script: str):
+            payload = original(operation, script)
+            if operation == "capture":
+                raise SimulatedInterrupt
+            return payload
+
+        monkeypatch.setattr(manager, "_invoke_json", interrupt_after_capture)
+    else:
+        monkeypatch.setattr(manager, "_protect_backup", lambda *_args: (_ for _ in ()).throw(SimulatedInterrupt()))
+
+    with pytest.raises(SimulatedInterrupt):
+        manager.capture("baseline", (app,))
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert any("Start-BCBenchServiceTier" in call for call in runner.calls)
+
+
 def test_capture_invalid_manifest_still_restarts_owned_service(tmp_path: Path) -> None:
     manager, runner, _, app = _manager(tmp_path)
     runner.capture_payload = {
@@ -515,6 +642,128 @@ def test_restore_failure_does_not_run_success_callback(tmp_path: Path) -> None:
         manager.restore(manifest, (app,), on_restored=run_phase)
 
     assert phase_calls == 0
+
+
+@pytest.mark.parametrize("seam", ["copy", "staged_hash", "invoke", "validate"])
+def test_restore_unexpected_post_staging_failures_cleanup_recover_and_skip_callback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    seam: str,
+) -> None:
+    manager, runner, paths, app = _manager(tmp_path)
+    manifest = manager.capture("baseline", (app,))
+    runner.calls.clear()
+    restored = False
+
+    def on_restored() -> None:
+        nonlocal restored
+        restored = True
+
+    if seam == "copy":
+        monkeypatch.setattr(
+            "bcbench.evaluate.bugfix_lifecycle.checkpoint.shutil.copyfile",
+            lambda *_args: (_ for _ in ()).throw(RuntimeError("unexpected restore failure")),
+        )
+    elif seam == "staged_hash":
+        original = manager._validate_hash
+
+        def fail_staged_hash(path: Path, expected_hash: str, description: str) -> None:
+            if description == "staged checkpoint":
+                raise RuntimeError("unexpected restore failure")
+            original(path, expected_hash, description)
+
+        monkeypatch.setattr(manager, "_validate_hash", fail_staged_hash)
+    elif seam == "invoke":
+        original = manager._invoke_json
+
+        def fail_after_restore(operation: str, script: str):
+            payload = original(operation, script)
+            if operation == "restore":
+                raise RuntimeError("unexpected restore failure")
+            return payload
+
+        monkeypatch.setattr(manager, "_invoke_json", fail_after_restore)
+    else:
+        monkeypatch.setattr(manager, "_validate_restore", lambda *_args: (_ for _ in ()).throw(RuntimeError("unexpected restore failure")))
+
+    with pytest.raises(RuntimeError, match="unexpected restore failure"):
+        manager.restore(manifest, (app,), on_restored=on_restored)
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert restored is False
+    if seam == "invoke":
+        assert any("Start-BCBenchServiceTier" in call for call in runner.calls)
+
+
+def test_restore_aggregates_unexpected_restart_and_cleanup_failures_and_skips_callback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, runner, paths, app = _manager(tmp_path)
+    manifest = manager.capture("baseline", (app,))
+    runner.calls.clear()
+    original_invoke = manager._invoke_json
+    original_cleanup = manager._cleanup_staging
+    restored = False
+
+    def fail_after_restore(operation: str, script: str):
+        if operation == "restore restart":
+            raise RuntimeError("restart exploded")
+        payload = original_invoke(operation, script)
+        if operation == "restore":
+            raise RuntimeError("primary exploded")
+        return payload
+
+    def cleanup_then_fail(staging_directory: Path, primary_error: CheckpointInfrastructureError | None) -> None:
+        original_cleanup(staging_directory, primary_error)
+        raise RuntimeError("cleanup exploded")
+
+    def on_restored() -> None:
+        nonlocal restored
+        restored = True
+
+    monkeypatch.setattr(manager, "_invoke_json", fail_after_restore)
+    monkeypatch.setattr(manager, "_cleanup_staging", cleanup_then_fail)
+
+    with pytest.raises(CheckpointInfrastructureError, match=r"primary exploded.*restart exploded.*cleanup exploded") as caught:
+        manager.restore(manifest, (app,), on_restored=on_restored)
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert restored is False
+    assert isinstance(caught.value.__cause__, ExceptionGroup)
+
+
+def test_restore_base_exception_cleans_staging_recovers_and_reraises(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SimulatedInterrupt(BaseException):
+        pass
+
+    manager, runner, paths, app = _manager(tmp_path)
+    manifest = manager.capture("baseline", (app,))
+    runner.calls.clear()
+    original = manager._invoke_json
+    restored = False
+
+    def interrupt_after_restore(operation: str, script: str):
+        payload = original(operation, script)
+        if operation == "restore":
+            raise SimulatedInterrupt
+        return payload
+
+    def on_restored() -> None:
+        nonlocal restored
+        restored = True
+
+    monkeypatch.setattr(manager, "_invoke_json", interrupt_after_restore)
+
+    with pytest.raises(SimulatedInterrupt):
+        manager.restore(manifest, (app,), on_restored=on_restored)
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert any("Start-BCBenchServiceTier" in call for call in runner.calls)
+    assert restored is False
 
 
 def test_restore_filesystem_setup_failures_are_classified(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

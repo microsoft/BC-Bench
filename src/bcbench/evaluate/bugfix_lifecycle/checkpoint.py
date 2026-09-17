@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from types import TracebackType
 from typing import Protocol
 
 from bcbench.evaluate.bugfix_lifecycle.evidence import EvidenceStore, sha256_file
@@ -63,14 +64,20 @@ class CheckpointManager:
         safe_name = _safe_name(name)
         expected = _normalized_apps(expected_apps)
         staging_directory: Path | None = None
-        primary_error: CheckpointInfrastructureError | None = None
-        restart_error: CheckpointInfrastructureError | None = None
+        primary_error: Exception | None = None
+        primary_traceback = None
+        restart_error: Exception | None = None
+        cleanup_error: Exception | None = None
         manifest: CheckpointManifest | None = None
         captured: CheckpointManifest | None = None
         service: Mapping[str, object] | None = None
+        service_stopped = False
+        capture_started = False
+        capture_completed = False
         try:
             reject_reparse_components(self._paths.mounted_staging, self._paths.entry_root)
             staging_directory = Path(tempfile.mkdtemp(prefix=f"{safe_name}-capture-", dir=self._paths.mounted_staging))
+            capture_started = True
             payload = self._invoke_json(
                 "capture",
                 self._capture_script(safe_name, staging_directory),
@@ -78,6 +85,7 @@ class CheckpointManager:
             service_value = payload.get("service")
             if isinstance(service_value, Mapping):
                 service = service_value
+                service_stopped = service.get("state") == "Stopped"
             self._validate_capture_service(payload)
             captured = self._parse_manifest(payload, "capture")
             self._validate_capture_name(captured.name, safe_name)
@@ -96,35 +104,39 @@ class CheckpointManager:
                 apps=captured.apps,
             )
             self._evidence_store.save_checkpoint_manifest(safe_name, manifest.to_dict())
-        except CheckpointInfrastructureError as exc:
+            capture_completed = True
+        except Exception as exc:  # noqa: BLE001 - unexpected evaluator defects propagate after finalization
             primary_error = exc
-        except (OSError, ValueError) as exc:
-            primary_error = CheckpointInfrastructureError(f"Checkpoint capture failed: {exc}")
-        if staging_directory is not None:
+            primary_traceback = exc.__traceback__
+        finally:
+            if staging_directory is not None:
+                try:
+                    self._cleanup_staging(staging_directory, _classified_primary_error("capture", primary_error))
+                except Exception as exc:  # noqa: BLE001 - preserve unexpected cleanup failures with the primary error
+                    cleanup_error = exc
             try:
-                self._cleanup_staging(staging_directory, primary_error)
-            except CheckpointInfrastructureError as exc:
-                primary_error = _combine_errors(primary_error, exc)
-            except (OSError, ValueError) as exc:
-                cleanup_error = CheckpointInfrastructureError(f"Checkpoint staging cleanup failed: {exc}")
-                primary_error = _combine_errors(primary_error, cleanup_error)
-        if service is not None:
-            try:
-                if captured is None:
-                    payload = self._invoke_json("capture restart", self._capture_recovery_script(service))
+                if service_stopped and service is not None:
+                    if captured is None:
+                        payload = self._invoke_json("capture restart", self._capture_recovery_script(service))
+                        self._validate_capture_recovery(payload)
+                    else:
+                        payload = self._invoke_json(
+                            "capture restart",
+                            self._capture_completion_script(captured, service),
+                        )
+                        self._validate_restore(payload, captured, expected)
+                elif capture_started and not capture_completed:
+                    payload = self._invoke_json("capture restart", self._service_recovery_script())
                     self._validate_capture_recovery(payload)
-                else:
-                    payload = self._invoke_json(
-                        "capture restart",
-                        self._capture_completion_script(captured, service),
-                    )
-                    self._validate_restore(payload, captured, expected)
-            except CheckpointInfrastructureError as exc:
+            except Exception as exc:  # noqa: BLE001 - preserve unexpected restart failures with the primary error
                 restart_error = exc
-            except (OSError, ValueError) as exc:
-                restart_error = CheckpointInfrastructureError(f"Checkpoint capture restart failed: {exc}")
-        if primary_error is not None or restart_error is not None:
-            raise _combine_errors(primary_error, restart_error)
+        _raise_checkpoint_failures(
+            "capture",
+            primary_error=primary_error,
+            primary_traceback=primary_traceback,
+            restart_error=restart_error,
+            cleanup_error=cleanup_error,
+        )
         if manifest is None:
             raise CheckpointInfrastructureError("Checkpoint capture did not produce a manifest")
         return manifest
@@ -137,7 +149,12 @@ class CheckpointManager:
         on_restored: Callable[[], None] | None = None,
     ) -> None:
         staging_directory: Path | None = None
-        primary_error: CheckpointInfrastructureError | None = None
+        primary_error: Exception | None = None
+        primary_traceback = None
+        restart_error: Exception | None = None
+        cleanup_error: Exception | None = None
+        restore_started = False
+        restore_completed = False
         try:
             expected = _normalized_apps(expected_apps)
             self._validate_apps(manifest.apps, expected, "manifest application inventory")
@@ -158,22 +175,33 @@ class CheckpointManager:
                 container=manifest.container,
                 apps=manifest.apps,
             )
+            restore_started = True
             payload = self._invoke_json("restore", self._restore_script(staged_manifest))
+            restore_completed = payload.get("service_restarted") is True
             self._validate_restore(payload, manifest, expected)
-        except CheckpointInfrastructureError as exc:
+            restore_completed = True
+        except Exception as exc:  # noqa: BLE001 - unexpected evaluator defects propagate after finalization
             primary_error = exc
-        except (OSError, ValueError) as exc:
-            primary_error = CheckpointInfrastructureError(f"Checkpoint restore failed: {exc}")
-        if staging_directory is not None:
+            primary_traceback = exc.__traceback__
+        finally:
+            if staging_directory is not None:
+                try:
+                    self._cleanup_staging(staging_directory, _classified_primary_error("restore", primary_error))
+                except Exception as exc:  # noqa: BLE001 - preserve unexpected cleanup failures with the primary error
+                    cleanup_error = exc
             try:
-                self._cleanup_staging(staging_directory, primary_error)
-            except CheckpointInfrastructureError as exc:
-                primary_error = _combine_errors(primary_error, exc)
-            except (OSError, ValueError) as exc:
-                cleanup_error = CheckpointInfrastructureError(f"Checkpoint staging cleanup failed: {exc}")
-                primary_error = _combine_errors(primary_error, cleanup_error)
-        if primary_error is not None:
-            raise primary_error
+                if restore_started and not restore_completed:
+                    payload = self._invoke_json("restore restart", self._service_recovery_script())
+                    self._validate_capture_recovery(payload)
+            except Exception as exc:  # noqa: BLE001 - preserve unexpected restart failures with the primary error
+                restart_error = exc
+        _raise_checkpoint_failures(
+            "restore",
+            primary_error=primary_error,
+            primary_traceback=primary_traceback,
+            restart_error=restart_error,
+            cleanup_error=cleanup_error,
+        )
         if on_restored is not None:
             on_restored()
 
@@ -284,6 +312,45 @@ class CheckpointManager:
                 f"    -ServerInstance {_ps_quote(server_instance)} `",
                 f"    -PreviousProcessId {previous_process_id}",
                 "[PSCustomObject]@{ service_restarted = [bool]$started.restarted } | ConvertTo-Json -Compress",
+            )
+        )
+
+    def _service_recovery_script(self) -> str:
+        return "\n".join(
+            (
+                "$ErrorActionPreference = 'Stop'",
+                f"Import-Module {_ps_quote(self._module_path)} -Force",
+                "Get-BCBenchContainerIdentity `",
+                f"    -ContainerName {_ps_quote(self._container_name)} `",
+                f"    -ExpectedContainerId {_ps_quote(self._container_id)} `",
+                f"    -ExpectedInvocationId {_ps_quote(self._invocation_id)} | Out-Null",
+                "Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking",
+                (f"$service = Invoke-ScriptInBcContainer -containerName {_ps_quote(self._container_id)} -ScriptBlock {{"),
+                "    $instance = Get-NAVServerInstance | Select-Object -First 1",
+                "    if ($null -eq $instance) { throw 'No Business Central service tier instance was found.' }",
+                '    $serviceName = "MicrosoftDynamicsNavServer`$$($instance.ServerInstance)"',
+                "    $windowsService = Get-CimInstance Win32_Service -Filter \"Name='$serviceName'\"",
+                "    [PSCustomObject]@{",
+                "        server_instance = [string]$instance.ServerInstance",
+                "        previous_process_id = if ($null -eq $windowsService) { 0 } else { [int]$windowsService.ProcessId }",
+                "        state = [string]$instance.State",
+                "    }",
+                "}",
+                "if ([string]$service.state -eq 'Stopped') {",
+                "    $started = Start-BCBenchServiceTier `",
+                f"        -ContainerName {_ps_quote(self._container_name)} `",
+                f"        -ExpectedContainerId {_ps_quote(self._container_id)} `",
+                f"        -ExpectedInvocationId {_ps_quote(self._invocation_id)} `",
+                "        -ServerInstance ([string]$service.server_instance) `",
+                "        -PreviousProcessId ([int]$service.previous_process_id)",
+                "    [PSCustomObject]@{ service_restarted = [bool]$started.restarted } | ConvertTo-Json -Compress",
+                "}",
+                "elseif ([string]$service.state -eq 'Running') {",
+                "    [PSCustomObject]@{ service_restarted = $true } | ConvertTo-Json -Compress",
+                "}",
+                "else {",
+                "    throw \"Business Central service tier has unexpected state '$($service.state)'.\"",
+                "}",
             )
         )
 
@@ -492,17 +559,65 @@ def _required_mapping_int(value: Mapping[str, object], name: str) -> int:
     return item
 
 
-def _combine_errors(
-    first: CheckpointInfrastructureError | None,
-    second: CheckpointInfrastructureError | None,
-) -> CheckpointInfrastructureError:
-    if first is None:
-        if second is None:
-            raise ValueError("At least one checkpoint error is required")
-        return second
-    if second is None:
-        return first
-    return CheckpointInfrastructureError(f"{first}. Recovery failure: {second}")
+def _classified_primary_error(
+    operation: str,
+    error: Exception | None,
+) -> CheckpointInfrastructureError | None:
+    if error is None:
+        return None
+    if isinstance(error, CheckpointInfrastructureError):
+        return error
+    if isinstance(error, (OSError, ValueError)):
+        return CheckpointInfrastructureError(f"Checkpoint {operation} failed: {error}")
+    return None
+
+
+def _raise_checkpoint_failures(
+    operation: str,
+    *,
+    primary_error: Exception | None,
+    primary_traceback: TracebackType | None,
+    restart_error: Exception | None,
+    cleanup_error: Exception | None,
+) -> None:
+    errors = tuple(error for error in (primary_error, restart_error, cleanup_error) if error is not None)
+    if primary_error is not None and restart_error is None and cleanup_error is None:
+        classified = _classified_primary_error(operation, primary_error)
+        if classified is None:
+            raise primary_error.with_traceback(primary_traceback)
+        if classified is primary_error:
+            raise classified.with_traceback(primary_traceback)
+        raise classified from primary_error
+
+    if not errors:
+        return
+
+    messages = []
+    if primary_error is not None:
+        messages.append(_checkpoint_failure_message(operation, primary_error, primary=True))
+    if restart_error is not None:
+        messages.append(_checkpoint_recovery_failure_message(operation, "restart", restart_error))
+    if cleanup_error is not None:
+        messages.append(_checkpoint_recovery_failure_message(operation, "staging cleanup", cleanup_error))
+    combined = CheckpointInfrastructureError(". ".join(messages))
+    if len(errors) == 1:
+        raise combined from errors[0]
+    raise combined from ExceptionGroup(f"Checkpoint {operation} failures", errors)
+
+
+def _checkpoint_failure_message(operation: str, error: Exception, *, primary: bool) -> str:
+    if primary:
+        classified = _classified_primary_error(operation, error)
+        if classified is not None:
+            return str(classified)
+        return f"Checkpoint {operation} failed unexpectedly: {error}"
+    return str(error)
+
+
+def _checkpoint_recovery_failure_message(operation: str, recovery: str, error: Exception) -> str:
+    if isinstance(error, CheckpointInfrastructureError):
+        return str(error)
+    return f"Checkpoint {operation} {recovery} failed: {error}"
 
 
 def _safe_name(name: str) -> str:
