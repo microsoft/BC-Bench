@@ -465,22 +465,17 @@ def test_readiness_retries_until_valid_evidence() -> None:
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
 $global:attempts = 0
-$global:topologyAttempts = 0
 $identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
 $ops = @{{
     InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
     ReadContainerIdentity = {{ $identity }}
-    ReadDatabaseTopology = {{
-        $global:topologyAttempts++
-        [PSCustomObject]@{{
-            database_name = 'BC'
-            database_folder = 'C:\\databases'
-            database_online = $global:topologyAttempts -ge 3
-        }}
-    }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
     ReadAppInventory = {{ @() }}
     TestReadiness = {{
         $global:attempts++
+        if ($global:attempts -lt 3) {{
+            throw [System.Net.Http.HttpRequestException]::new('service is still starting')
+        }}
         [PSCustomObject]@{{ company_endpoint_ready = $true; test_discovery_ready = $true; test_count = 0 }}
     }}
 }}
@@ -500,18 +495,16 @@ $result = Test-BCBenchReadiness `
     -Operations $ops
 [PSCustomObject]@{{
     attempts = $global:attempts
-    topologyAttempts = $global:topologyAttempts
     result = $result
 }} | ConvertTo-Json -Compress -Depth 6
 """
     payload = _last_json(_run_pwsh(script))
 
-    assert payload["topologyAttempts"] == 3
-    assert payload["attempts"] == 1
+    assert payload["attempts"] == 3
     assert payload["result"]["test_count"] == 0
 
 
-def test_readiness_timeout_is_bounded_and_reports_last_failure() -> None:
+def test_readiness_permanent_mismatch_fails_without_retry() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
@@ -537,7 +530,7 @@ try {{
         -ExpectedDatabaseName 'BC' `
         -ExpectedDatabaseFolder 'C:\\databases' `
         -ExpectedAppInventory @() `
-        -TimeoutSeconds 0 `
+        -TimeoutSeconds 5 `
         -PollIntervalSeconds 0 `
         -Operations $ops | Out-Null
 }}
@@ -547,8 +540,8 @@ catch {{ $message = $_.Exception.Message }}
     payload = _last_json(_run_pwsh(script))
 
     assert payload["attempts"] == 1
-    assert "timed out" in payload["message"]
     assert "company mismatch" in payload["message"]
+    assert "timed out" not in payload["message"]
 
 
 def test_readiness_requires_exact_company_and_does_not_select_first() -> None:
@@ -608,15 +601,16 @@ function global:Get-BcContainerIpAddress {{ '127.0.0.1' }}
 function global:Invoke-RestMethod {{
     [PSCustomObject]@{{ value = @([PSCustomObject]@{{ name = 'CRONUS'; displayName = 'CRONUS' }}) }}
 }}
-function global:Get-TestsFromBcContainer {{
-    if ('{discovery_mode}' -eq 'null') {{ return $null }}
-    return ,([object[]]@())
-}}
 $ops = @{{
     InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
     ReadContainerIdentity = {{ $identity }}
     ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
     ReadAppInventory = {{ @() }}
+    DiscoverTests = {{
+        param($context)
+        if ('{discovery_mode}' -eq 'null') {{ return $null }}
+        return ,([object[]]@())
+    }}
 }}
 $credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
 $result = $null
@@ -632,7 +626,7 @@ try {{
         -ExpectedDatabaseName 'BC' `
         -ExpectedDatabaseFolder 'C:\\databases' `
         -ExpectedAppInventory @() `
-        -TimeoutSeconds 0 `
+        -TimeoutSeconds 5 `
         -PollIntervalSeconds 0 `
         -Operations $ops
 }}
@@ -647,6 +641,172 @@ catch {{ $message = $_.Exception.Message }}
     else:
         assert payload["message"] is None
         assert payload["result"]["test_count"] == expected_count
+
+
+def test_readiness_passes_remaining_timeout_to_rest_and_discovery() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{ }}
+$identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
+function global:Get-CompanyInBcContainer {{
+    [PSCustomObject]@{{ CompanyName = 'CRONUS'; Name = 'CRONUS' }}
+}}
+function global:Get-BcContainerIpAddress {{ '127.0.0.1' }}
+$global:connectionTimeout = $null
+$global:operationTimeout = $null
+function global:Invoke-RestMethod {{
+    param(
+        $Method,
+        $Uri,
+        $Authentication,
+        [switch]$AllowUnencryptedAuthentication,
+        $Credential,
+        $ConnectionTimeoutSeconds,
+        $OperationTimeoutSeconds,
+        $ErrorAction
+    )
+    $global:connectionTimeout = $ConnectionTimeoutSeconds
+    $global:operationTimeout = $OperationTimeoutSeconds
+    [PSCustomObject]@{{ value = @([PSCustomObject]@{{ name = 'CRONUS'; displayName = 'CRONUS' }}) }}
+}}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ @() }}
+    DiscoverTests = {{
+        param($context)
+        [PSCustomObject]@{{ remainingTimeoutSeconds = $context.RemainingTimeoutSeconds }}
+    }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$result = Test-BCBenchReadiness `
+    -ContainerName 'bc-owned' `
+    -ExpectedContainerId 'owned-id' `
+    -ExpectedInvocationId 'owned-invocation' `
+    -Credential $credential `
+    -ExpectedCompany 'CRONUS' `
+    -ExpectedContainerIdentity $identity `
+    -ExpectedDatabaseName 'BC' `
+    -ExpectedDatabaseFolder 'C:\\databases' `
+    -ExpectedAppInventory @() `
+    -TimeoutSeconds 5 `
+    -PollIntervalSeconds 0 `
+    -Operations $ops
+[PSCustomObject]@{{
+    connectionTimeout = $global:connectionTimeout
+    operationTimeout = $global:operationTimeout
+    testCount = $result.test_count
+}} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert 1 <= payload["connectionTimeout"] <= 5
+    assert 1 <= payload["operationTimeout"] <= 5
+    assert payload["testCount"] == 1
+
+
+def test_readiness_authentication_failure_does_not_retry() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{ }}
+$identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
+function global:Get-CompanyInBcContainer {{
+    [PSCustomObject]@{{ CompanyName = 'CRONUS'; Name = 'CRONUS' }}
+}}
+function global:Get-BcContainerIpAddress {{ '127.0.0.1' }}
+$global:endpointCalls = 0
+function global:Invoke-RestMethod {{
+    $global:endpointCalls++
+    throw [System.Net.Http.HttpRequestException]::new(
+        'unauthorized',
+        $null,
+        [System.Net.HttpStatusCode]::Unauthorized
+    )
+}}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ @() }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$message = $null
+try {{
+    Test-BCBenchReadiness `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Credential $credential `
+        -ExpectedCompany 'CRONUS' `
+        -ExpectedContainerIdentity $identity `
+        -ExpectedDatabaseName 'BC' `
+        -ExpectedDatabaseFolder 'C:\\databases' `
+        -ExpectedAppInventory @() `
+        -TimeoutSeconds 5 `
+        -PollIntervalSeconds 0 `
+        -Operations $ops | Out-Null
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{ message = $message; endpointCalls = $global:endpointCalls }} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "unauthorized" in payload["message"]
+    assert payload["endpointCalls"] == 1
+
+
+def test_readiness_blocking_discovery_is_stopped_at_deadline() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{ }}
+$identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
+function global:Get-CompanyInBcContainer {{
+    [PSCustomObject]@{{ CompanyName = 'CRONUS'; Name = 'CRONUS' }}
+}}
+function global:Get-BcContainerIpAddress {{ '127.0.0.1' }}
+function global:Invoke-RestMethod {{
+    [PSCustomObject]@{{ value = @([PSCustomObject]@{{ name = 'CRONUS'; displayName = 'CRONUS' }}) }}
+}}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ @() }}
+    DiscoverTests = {{
+        param($context)
+        Start-Sleep -Seconds 10
+        @()
+    }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$stopwatch = [Diagnostics.Stopwatch]::StartNew()
+$message = $null
+try {{
+    Test-BCBenchReadiness `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Credential $credential `
+        -ExpectedCompany 'CRONUS' `
+        -ExpectedContainerIdentity $identity `
+        -ExpectedDatabaseName 'BC' `
+        -ExpectedDatabaseFolder 'C:\\databases' `
+        -ExpectedAppInventory @() `
+        -TimeoutSeconds 1 `
+        -PollIntervalSeconds 0 `
+        -Operations $ops | Out-Null
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{ message = $message; elapsed = $stopwatch.Elapsed.TotalSeconds }} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "timed out" in payload["message"].lower()
+    assert payload["elapsed"] < 4
 
 
 def test_remove_container_verifies_absence_before_downstream_callback() -> None:
@@ -689,6 +849,48 @@ catch {{ $message = $_.Exception.Message }}
     assert "still exists after removal" in payload["message"]
     assert payload["removeCalls"] == 1
     assert payload["callbackCalls"] == 0
+
+
+def test_default_remove_rechecks_ownership_immediately_before_remove() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{ }}
+$global:inspectionCalls = 0
+$global:removeCalls = 0
+function global:Remove-BcContainer {{
+    param($containerName)
+    $global:removeCalls++
+}}
+$ops = @{{
+    InspectContainer = {{
+        $global:inspectionCalls++
+        if ($global:inspectionCalls -eq 1) {{
+            return [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }}
+        }}
+        return [PSCustomObject]@{{ Exists = $true; Id = 'replacement-id'; InvocationId = 'replacement-invocation' }}
+    }}
+}}
+$message = $null
+try {{
+    Remove-BCBenchContainerAndVerify `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Operations $ops
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{
+    message = $message
+    inspectionCalls = $global:inspectionCalls
+    removeCalls = $global:removeCalls
+}} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "Docker ID or lifecycle invocation label does not match" in payload["message"]
+    assert payload["inspectionCalls"] == 2
+    assert payload["removeCalls"] == 0
 
 
 def test_checkpoint_restore_failure_prevents_readiness_callback(tmp_path: Path) -> None:

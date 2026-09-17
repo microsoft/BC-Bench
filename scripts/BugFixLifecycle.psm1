@@ -2403,6 +2403,139 @@ function Backup-BCBenchCheckpoint {
     }
 }
 
+function Get-BCBenchRemainingDeadlineMilliseconds {
+    param([Parameter(Mandatory = $true)][DateTimeOffset]$Deadline)
+
+    return [Math]::Max(0, [int][Math]::Ceiling(($Deadline - [DateTimeOffset]::UtcNow).TotalMilliseconds))
+}
+
+function Get-BCBenchRemainingTimeoutSeconds {
+    param(
+        [Parameter(Mandatory = $true)][DateTimeOffset]$Deadline,
+        [Parameter(Mandatory = $true)][string]$Operation
+    )
+
+    $remainingMilliseconds = Get-BCBenchRemainingDeadlineMilliseconds -Deadline $Deadline
+    if ($remainingMilliseconds -le 0) {
+        throw [TimeoutException]::new("$Operation timed out before it could start.")
+    }
+    return [Math]::Max(1, [int][Math]::Ceiling($remainingMilliseconds / 1000.0))
+}
+
+function Get-BCBenchHttpStatusCode {
+    param([Parameter(Mandatory = $true)][Exception]$Exception)
+
+    $current = $Exception
+    while ($null -ne $current) {
+        if ($null -ne $current.PSObject.Properties["StatusCode"]) {
+            return [int]$current.StatusCode
+        }
+        if (
+            $null -ne $current.PSObject.Properties["Response"] -and
+            $null -ne $current.Response -and
+            $null -ne $current.Response.PSObject.Properties["StatusCode"]
+        ) {
+            return [int]$current.Response.StatusCode
+        }
+        $current = $current.InnerException
+    }
+    return $null
+}
+
+function Test-BCBenchTransientReadinessFailure {
+    param([Parameter(Mandatory = $true)][Exception]$Exception)
+
+    $statusCode = Get-BCBenchHttpStatusCode -Exception $Exception
+    if ($statusCode -in @(401, 403)) {
+        return $false
+    }
+    if ($statusCode -in @(408, 425, 429, 502, 503, 504)) {
+        return $true
+    }
+    $current = $Exception
+    while ($null -ne $current) {
+        if (
+            $current -is [Net.Http.HttpRequestException] -or
+            $current -is [Net.Sockets.SocketException] -or
+            $current -is [TimeoutException]
+        ) {
+            return $true
+        }
+        if ($current -is [Net.WebException]) {
+            return $current.Status -in @(
+                [Net.WebExceptionStatus]::ConnectFailure,
+                [Net.WebExceptionStatus]::ConnectionClosed,
+                [Net.WebExceptionStatus]::KeepAliveFailure,
+                [Net.WebExceptionStatus]::NameResolutionFailure,
+                [Net.WebExceptionStatus]::ProxyNameResolutionFailure,
+                [Net.WebExceptionStatus]::ReceiveFailure,
+                [Net.WebExceptionStatus]::SendFailure,
+                [Net.WebExceptionStatus]::Timeout
+            )
+        }
+        $current = $current.InnerException
+    }
+    return $false
+}
+
+function Invoke-BCBenchReadinessRetryDelay {
+    param(
+        [Parameter(Mandatory = $true)][Exception]$Failure,
+        [Parameter(Mandatory = $true)][DateTimeOffset]$Deadline,
+        [Parameter(Mandatory = $true)][int]$TimeoutSeconds,
+        [Parameter(Mandatory = $true)][int]$PollIntervalSeconds
+    )
+
+    if (-not (Test-BCBenchTransientReadinessFailure -Exception $Failure)) {
+        throw $Failure
+    }
+    $remainingMilliseconds = Get-BCBenchRemainingDeadlineMilliseconds -Deadline $Deadline
+    if ($remainingMilliseconds -le 0) {
+        throw "Business Central readiness timed out after $TimeoutSeconds seconds. Last failure: $($Failure.Message)"
+    }
+    $sleepMilliseconds = [Math]::Min($PollIntervalSeconds * 1000, $remainingMilliseconds)
+    if ($sleepMilliseconds -gt 0) {
+        Start-Sleep -Milliseconds $sleepMilliseconds
+    }
+}
+
+function Invoke-BCBenchBoundedPowerShellOperation {
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Operation,
+        [Parameter(Mandatory = $true)][PSObject]$Context,
+        [Parameter(Mandatory = $true)][DateTimeOffset]$Deadline,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $remainingMilliseconds = Get-BCBenchRemainingDeadlineMilliseconds -Deadline $Deadline
+    if ($remainingMilliseconds -le 0) {
+        throw [TimeoutException]::new("$Description timed out before it could start.")
+    }
+    $powerShell = [PowerShell]::Create()
+    $asyncResult = $null
+    try {
+        [void]$powerShell.AddScript(
+            'param($boundedOperation, $boundedContext) & $boundedOperation $boundedContext'
+        ).AddArgument($Operation).AddArgument($Context)
+        $asyncResult = $powerShell.BeginInvoke()
+        if (-not $asyncResult.AsyncWaitHandle.WaitOne($remainingMilliseconds)) {
+            $powerShell.Stop()
+            throw [TimeoutException]::new("$Description timed out before the readiness deadline.")
+        }
+        $output = $powerShell.EndInvoke($asyncResult)
+        if ($powerShell.Streams.Error.Count -gt 0) {
+            throw $powerShell.Streams.Error[0].Exception
+        }
+        return [PSCustomObject]@{ Output = [object[]]@($output) }
+    }
+    finally {
+        if ($null -ne $asyncResult) {
+            $asyncResult.AsyncWaitHandle.Dispose()
+        }
+        $powerShell.Dispose()
+    }
+}
+
 function Test-BCBenchReadiness {
     [CmdletBinding()]
     param(
@@ -2423,140 +2556,222 @@ function Test-BCBenchReadiness {
     if ([string]::IsNullOrWhiteSpace($ExpectedCompany)) {
         throw "ExpectedCompany is required for readiness verification."
     }
-    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-    $lastFailure = $null
-    do {
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ($true) {
+        $context = Assert-BCBenchContainerOwnership `
+            -ContainerName $ContainerName `
+            -ExpectedContainerId $ExpectedContainerId `
+            -ExpectedInvocationId $ExpectedInvocationId `
+            -Operations $Operations
+        $identity = Get-BCBenchContainerIdentity `
+            -ContainerName $ContainerName `
+            -ExpectedContainerId $ExpectedContainerId `
+            -ExpectedInvocationId $ExpectedInvocationId `
+            -Operations $Operations
+        if (-not (Test-BCBenchContainerIdentityEqual -Actual $identity -Expected $ExpectedContainerIdentity)) {
+            throw "Business Central readiness container identity does not match the checkpoint manifest."
+        }
         try {
-            $identity = Get-BCBenchContainerIdentity `
-                -ContainerName $ContainerName `
-                -ExpectedContainerId $ExpectedContainerId `
-                -ExpectedInvocationId $ExpectedInvocationId `
-                -Operations $Operations
-            if (-not (Test-BCBenchContainerIdentityEqual -Actual $identity -Expected $ExpectedContainerIdentity)) {
-                throw "Business Central readiness container identity does not match the checkpoint manifest."
-            }
             $topology = Get-BCBenchDatabaseTopology `
                 -ContainerName $ContainerName `
                 -ExpectedContainerId $ExpectedContainerId `
                 -ExpectedInvocationId $ExpectedInvocationId `
                 -Operations $Operations
-            if (
-                -not [bool]$topology.database_online -or
-                [string]$topology.database_name -cne $ExpectedDatabaseName -or
-                [string]$topology.database_folder -cne $ExpectedDatabaseFolder
-            ) {
-                throw "Business Central readiness database topology does not match the checkpoint manifest."
-            }
+        }
+        catch {
+            Invoke-BCBenchReadinessRetryDelay `
+                -Failure $_.Exception `
+                -Deadline $deadline `
+                -TimeoutSeconds $TimeoutSeconds `
+                -PollIntervalSeconds $PollIntervalSeconds
+            continue
+        }
+        if (
+            -not [bool]$topology.database_online -or
+            [string]$topology.database_name -cne $ExpectedDatabaseName -or
+            [string]$topology.database_folder -cne $ExpectedDatabaseFolder
+        ) {
+            throw "Business Central readiness database topology does not match the checkpoint manifest."
+        }
+        try {
             $apps = @(Get-BCBenchAppInventory `
                 -ContainerName $ContainerName `
                 -ExpectedContainerId $ExpectedContainerId `
                 -ExpectedInvocationId $ExpectedInvocationId `
                 -Operations $Operations)
-            if (-not (Test-BCBenchAppInventoryEqual -Actual $apps -Expected $ExpectedAppInventory)) {
-                throw "Business Central readiness application inventory does not match the checkpoint manifest."
+        }
+        catch {
+            Invoke-BCBenchReadinessRetryDelay `
+                -Failure $_.Exception `
+                -Deadline $deadline `
+                -TimeoutSeconds $TimeoutSeconds `
+                -PollIntervalSeconds $PollIntervalSeconds
+            continue
+        }
+        if (-not (Test-BCBenchAppInventoryEqual -Actual $apps -Expected $ExpectedAppInventory)) {
+            throw "Business Central readiness application inventory does not match the checkpoint manifest."
+        }
+        $context | Add-Member -NotePropertyName Credential -NotePropertyValue $Credential
+        $context | Add-Member -NotePropertyName ExpectedCompany -NotePropertyValue $ExpectedCompany
+        if ($Operations.ContainsKey("TestReadiness")) {
+            try {
+                $result = & $Operations["TestReadiness"] $context
             }
-            $context = Assert-BCBenchContainerOwnership `
+            catch {
+                Invoke-BCBenchReadinessRetryDelay `
+                    -Failure $_.Exception `
+                    -Deadline $deadline `
+                    -TimeoutSeconds $TimeoutSeconds `
+                    -PollIntervalSeconds $PollIntervalSeconds
+                continue
+            }
+        }
+        else {
+            Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+            $companyContext = Assert-BCBenchContainerOwnership `
                 -ContainerName $ContainerName `
                 -ExpectedContainerId $ExpectedContainerId `
                 -ExpectedInvocationId $ExpectedInvocationId `
                 -Operations $Operations
-            $context | Add-Member -NotePropertyName Credential -NotePropertyValue $Credential
-            $context | Add-Member -NotePropertyName ExpectedCompany -NotePropertyValue $ExpectedCompany
-            if ($Operations.ContainsKey("TestReadiness")) {
-                $result = & $Operations["TestReadiness"] $context
-            }
-            else {
-                Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-                $companyContext = Assert-BCBenchContainerOwnership `
-                    -ContainerName $ContainerName `
-                    -ExpectedContainerId $ExpectedContainerId `
-                    -ExpectedInvocationId $ExpectedInvocationId `
-                    -Operations $Operations
+            try {
                 $companies = @(Get-CompanyInBcContainer -containerName $companyContext.ContainerId)
-                $matchingLocalCompanies = @($companies | Where-Object {
-                    [string]$_.CompanyName -ceq $ExpectedCompany -or [string]$_.Name -ceq $ExpectedCompany
-                })
-                if ($matchingLocalCompanies.Count -ne 1) {
-                    throw "The exact expected Business Central company '$ExpectedCompany' was not available in the container."
-                }
-                $ipContext = Assert-BCBenchContainerOwnership `
-                    -ContainerName $ContainerName `
-                    -ExpectedContainerId $ExpectedContainerId `
-                    -ExpectedInvocationId $ExpectedInvocationId `
-                    -Operations $Operations
+            }
+            catch {
+                Invoke-BCBenchReadinessRetryDelay `
+                    -Failure $_.Exception `
+                    -Deadline $deadline `
+                    -TimeoutSeconds $TimeoutSeconds `
+                    -PollIntervalSeconds $PollIntervalSeconds
+                continue
+            }
+            $matchingLocalCompanies = @($companies | Where-Object {
+                [string]$_.CompanyName -ceq $ExpectedCompany -or [string]$_.Name -ceq $ExpectedCompany
+            })
+            if ($matchingLocalCompanies.Count -ne 1) {
+                throw "The exact expected Business Central company '$ExpectedCompany' was not available in the container."
+            }
+            $ipContext = Assert-BCBenchContainerOwnership `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -Operations $Operations
+            try {
                 $ipAddress = Get-BcContainerIpAddress -containerName $ipContext.ContainerId
-                Assert-BCBenchContainerOwnership `
-                    -ContainerName $ContainerName `
-                    -ExpectedContainerId $ExpectedContainerId `
-                    -ExpectedInvocationId $ExpectedInvocationId `
-                    -Operations $Operations | Out-Null
-                $uri = "http://${ipAddress}:7048/BC/api/v2.0/companies"
+            }
+            catch {
+                Invoke-BCBenchReadinessRetryDelay `
+                    -Failure $_.Exception `
+                    -Deadline $deadline `
+                    -TimeoutSeconds $TimeoutSeconds `
+                    -PollIntervalSeconds $PollIntervalSeconds
+                continue
+            }
+            Assert-BCBenchContainerOwnership `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -Operations $Operations | Out-Null
+            $uri = "http://${ipAddress}:7048/BC/api/v2.0/companies"
+            $restTimeoutSeconds = Get-BCBenchRemainingTimeoutSeconds `
+                -Deadline $deadline `
+                -Operation "Business Central company endpoint"
+            try {
                 $companyResponse = Invoke-RestMethod `
                     -Method Get `
                     -Uri $uri `
                     -Authentication Basic `
                     -AllowUnencryptedAuthentication `
                     -Credential $Credential `
+                    -ConnectionTimeoutSeconds $restTimeoutSeconds `
+                    -OperationTimeoutSeconds $restTimeoutSeconds `
                     -ErrorAction Stop
-                $matchingCompany = @($companyResponse.value) | Where-Object {
-                    [string]$_.name -ceq $ExpectedCompany -or [string]$_.displayName -ceq $ExpectedCompany
-                }
-                if ($matchingCompany.Count -ne 1) {
-                    throw "The exact expected Business Central company '$ExpectedCompany' was not returned by the authenticated API endpoint."
-                }
-                $testsContext = Assert-BCBenchContainerOwnership `
-                    -ContainerName $ContainerName `
-                    -ExpectedContainerId $ExpectedContainerId `
-                    -ExpectedInvocationId $ExpectedInvocationId `
-                    -Operations $Operations
-                $testResponse = Get-TestsFromBcContainer `
-                    -containerName $testsContext.ContainerId `
-                    -credential $Credential `
-                    -companyName $ExpectedCompany `
-                    -ignoreGroups
-                if ($null -eq $testResponse) {
-                    throw "Business Central test discovery returned no response."
-                }
-                $result = [PSCustomObject]@{
-                    company_endpoint_ready = $true
-                    test_discovery_ready    = $true
-                    test_count              = @($testResponse).Count
+            }
+            catch {
+                Invoke-BCBenchReadinessRetryDelay `
+                    -Failure $_.Exception `
+                    -Deadline $deadline `
+                    -TimeoutSeconds $TimeoutSeconds `
+                    -PollIntervalSeconds $PollIntervalSeconds
+                continue
+            }
+            $matchingCompany = @($companyResponse.value) | Where-Object {
+                [string]$_.name -ceq $ExpectedCompany -or [string]$_.displayName -ceq $ExpectedCompany
+            }
+            if ($matchingCompany.Count -ne 1) {
+                throw "The exact expected Business Central company '$ExpectedCompany' was not returned by the authenticated API endpoint."
+            }
+            $testsContext = Assert-BCBenchContainerOwnership `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -Operations $Operations
+            $remainingTimeoutSeconds = Get-BCBenchRemainingTimeoutSeconds `
+                -Deadline $deadline `
+                -Operation "Business Central test discovery"
+            $testsContext | Add-Member -NotePropertyName Credential -NotePropertyValue $Credential
+            $testsContext | Add-Member -NotePropertyName ExpectedCompany -NotePropertyValue $ExpectedCompany
+            $testsContext | Add-Member -NotePropertyName RemainingTimeoutSeconds -NotePropertyValue $remainingTimeoutSeconds
+            if ($Operations.ContainsKey("DiscoverTests")) {
+                $discoveryOperation = $Operations["DiscoverTests"]
+            }
+            else {
+                $discoveryOperation = {
+                    param($operationContext)
+                    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+                    Get-TestsFromBcContainer `
+                        -containerName $operationContext.ContainerId `
+                        -credential $operationContext.Credential `
+                        -companyName $operationContext.ExpectedCompany `
+                        -ignoreGroups
                 }
             }
-            if (
-                -not [bool]$result.company_endpoint_ready -or
-                -not [bool]$result.test_discovery_ready -or
-                $null -eq $result.PSObject.Properties["test_count"] -or
-                [int]$result.test_count -lt 0
-            ) {
-                throw "Business Central readiness evidence was incomplete."
+            try {
+                $discovery = Invoke-BCBenchBoundedPowerShellOperation `
+                    -Operation $discoveryOperation `
+                    -Context $testsContext `
+                    -Deadline $deadline `
+                    -Description "Business Central test discovery"
             }
-            return [PSCustomObject][ordered]@{
-                container              = $identity
-                apps                   = $apps
-                database_name          = [string]$topology.database_name
-                database_folder        = [string]$topology.database_folder
-                database_online        = [bool]$topology.database_online
+            catch {
+                Invoke-BCBenchReadinessRetryDelay `
+                    -Failure $_.Exception `
+                    -Deadline $deadline `
+                    -TimeoutSeconds $TimeoutSeconds `
+                    -PollIntervalSeconds $PollIntervalSeconds
+                continue
+            }
+            [object[]]$testResponse = @($discovery.Output)
+            if ($testResponse.Count -eq 0 -or ($testResponse.Count -eq 1 -and $null -eq $testResponse[0])) {
+                throw "Business Central test discovery returned no response."
+            }
+            if ($testResponse.Count -eq 1 -and $testResponse[0] -is [object[]]) {
+                [object[]]$testResponse = @($testResponse[0])
+            }
+            $result = [PSCustomObject]@{
                 company_endpoint_ready = $true
                 test_discovery_ready    = $true
-                test_count              = [int]$result.test_count
+                test_count              = $testResponse.Count
             }
         }
-        catch {
-            $lastFailure = $_.Exception
+        if (
+            -not [bool]$result.company_endpoint_ready -or
+            -not [bool]$result.test_discovery_ready -or
+            $null -eq $result.PSObject.Properties["test_count"] -or
+            [int]$result.test_count -lt 0
+        ) {
+            throw "Business Central readiness evidence was incomplete."
         }
-        if ($stopwatch.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
-            throw "Business Central readiness timed out after $TimeoutSeconds seconds. Last failure: $($lastFailure.Message)"
+        return [PSCustomObject][ordered]@{
+            container              = $identity
+            apps                   = $apps
+            database_name          = [string]$topology.database_name
+            database_folder        = [string]$topology.database_folder
+            database_online        = [bool]$topology.database_online
+            company_endpoint_ready = $true
+            test_discovery_ready    = $true
+            test_count              = [int]$result.test_count
         }
-        $remainingMilliseconds = [Math]::Max(
-            0,
-            ($TimeoutSeconds * 1000) - [int]$stopwatch.Elapsed.TotalMilliseconds
-        )
-        $sleepMilliseconds = [Math]::Min($PollIntervalSeconds * 1000, $remainingMilliseconds)
-        if ($sleepMilliseconds -gt 0) {
-            Start-Sleep -Milliseconds $sleepMilliseconds
-        }
-    } while ($true)
+    }
 }
 
 function Restore-BCBenchCheckpoint {
@@ -2699,7 +2914,12 @@ function Remove-BCBenchContainerAndVerify {
     Invoke-BCBenchOperation -Operations $Operations -Name RemoveContainer -Context $context -Default {
         param($operationContext)
         Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-        Remove-BcContainer -containerName $operationContext.ContainerId
+        $verifiedContext = Assert-BCBenchContainerOwnership `
+            -ContainerName $operationContext.ContainerName `
+            -ExpectedContainerId $operationContext.ContainerId `
+            -ExpectedInvocationId $operationContext.ContainerInvocationId `
+            -Operations $Operations
+        Remove-BcContainer -containerName $verifiedContext.ContainerId
     } | Out-Null
     Assert-BCBenchContainerAbsent -Operations $Operations -Context $context
     if ($null -ne $OnRemoved) {

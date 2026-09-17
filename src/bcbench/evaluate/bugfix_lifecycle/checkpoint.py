@@ -64,10 +64,10 @@ class CheckpointManager:
         safe_name = _safe_name(name)
         expected = _normalized_apps(expected_apps)
         staging_directory: Path | None = None
-        primary_error: Exception | None = None
+        primary_error: BaseException | None = None
         primary_traceback = None
-        restart_error: Exception | None = None
-        cleanup_error: Exception | None = None
+        restart_error: BaseException | None = None
+        cleanup_error: BaseException | None = None
         manifest: CheckpointManifest | None = None
         captured: CheckpointManifest | None = None
         service: Mapping[str, object] | None = None
@@ -105,31 +105,33 @@ class CheckpointManager:
             )
             self._evidence_store.save_checkpoint_manifest(safe_name, manifest.to_dict())
             capture_completed = True
-        except Exception as exc:  # noqa: BLE001 - unexpected evaluator defects propagate after finalization
+        except BaseException as exc:  # noqa: BLE001 - recovery must run before interrupts propagate
             primary_error = exc
             primary_traceback = exc.__traceback__
         finally:
-            if staging_directory is not None:
-                try:
-                    self._cleanup_staging(staging_directory, _classified_primary_error("capture", primary_error))
-                except Exception as exc:  # noqa: BLE001 - preserve unexpected cleanup failures with the primary error
-                    cleanup_error = exc
             try:
-                if service_stopped and service is not None:
-                    if captured is None:
-                        payload = self._invoke_json("capture restart", self._capture_recovery_script(service))
+                if staging_directory is not None:
+                    try:
+                        self._cleanup_staging(staging_directory, _classified_primary_error("capture", primary_error))
+                    except BaseException as exc:  # noqa: BLE001 - recovery must run after cleanup interrupts
+                        cleanup_error = exc
+            finally:
+                try:
+                    if service_stopped and service is not None:
+                        if captured is None:
+                            payload = self._invoke_json("capture restart", self._capture_recovery_script(service))
+                            self._validate_capture_recovery(payload)
+                        else:
+                            payload = self._invoke_json(
+                                "capture restart",
+                                self._capture_completion_script(captured, service),
+                            )
+                            self._validate_restore(payload, captured, expected)
+                    elif capture_started and not capture_completed:
+                        payload = self._invoke_json("capture restart", self._service_recovery_script())
                         self._validate_capture_recovery(payload)
-                    else:
-                        payload = self._invoke_json(
-                            "capture restart",
-                            self._capture_completion_script(captured, service),
-                        )
-                        self._validate_restore(payload, captured, expected)
-                elif capture_started and not capture_completed:
-                    payload = self._invoke_json("capture restart", self._service_recovery_script())
-                    self._validate_capture_recovery(payload)
-            except Exception as exc:  # noqa: BLE001 - preserve unexpected restart failures with the primary error
-                restart_error = exc
+                except BaseException as exc:  # noqa: BLE001 - aggregate recovery failures with interrupts
+                    restart_error = exc
         _raise_checkpoint_failures(
             "capture",
             primary_error=primary_error,
@@ -149,10 +151,10 @@ class CheckpointManager:
         on_restored: Callable[[], None] | None = None,
     ) -> None:
         staging_directory: Path | None = None
-        primary_error: Exception | None = None
+        primary_error: BaseException | None = None
         primary_traceback = None
-        restart_error: Exception | None = None
-        cleanup_error: Exception | None = None
+        restart_error: BaseException | None = None
+        cleanup_error: BaseException | None = None
         restore_started = False
         restore_completed = False
         try:
@@ -180,21 +182,23 @@ class CheckpointManager:
             restore_completed = payload.get("service_restarted") is True
             self._validate_restore(payload, manifest, expected)
             restore_completed = True
-        except Exception as exc:  # noqa: BLE001 - unexpected evaluator defects propagate after finalization
+        except BaseException as exc:  # noqa: BLE001 - recovery must run before interrupts propagate
             primary_error = exc
             primary_traceback = exc.__traceback__
         finally:
-            if staging_directory is not None:
-                try:
-                    self._cleanup_staging(staging_directory, _classified_primary_error("restore", primary_error))
-                except Exception as exc:  # noqa: BLE001 - preserve unexpected cleanup failures with the primary error
-                    cleanup_error = exc
             try:
-                if restore_started and not restore_completed:
-                    payload = self._invoke_json("restore restart", self._service_recovery_script())
-                    self._validate_capture_recovery(payload)
-            except Exception as exc:  # noqa: BLE001 - preserve unexpected restart failures with the primary error
-                restart_error = exc
+                if staging_directory is not None:
+                    try:
+                        self._cleanup_staging(staging_directory, _classified_primary_error("restore", primary_error))
+                    except BaseException as exc:  # noqa: BLE001 - recovery must run after cleanup interrupts
+                        cleanup_error = exc
+            finally:
+                try:
+                    if restore_started and not restore_completed:
+                        payload = self._invoke_json("restore restart", self._service_recovery_script())
+                        self._validate_capture_recovery(payload)
+                except BaseException as exc:  # noqa: BLE001 - aggregate recovery failures with interrupts
+                    restart_error = exc
         _raise_checkpoint_failures(
             "restore",
             primary_error=primary_error,
@@ -561,7 +565,7 @@ def _required_mapping_int(value: Mapping[str, object], name: str) -> int:
 
 def _classified_primary_error(
     operation: str,
-    error: Exception | None,
+    error: BaseException | None,
 ) -> CheckpointInfrastructureError | None:
     if error is None:
         return None
@@ -575,10 +579,10 @@ def _classified_primary_error(
 def _raise_checkpoint_failures(
     operation: str,
     *,
-    primary_error: Exception | None,
+    primary_error: BaseException | None,
     primary_traceback: TracebackType | None,
-    restart_error: Exception | None,
-    cleanup_error: Exception | None,
+    restart_error: BaseException | None,
+    cleanup_error: BaseException | None,
 ) -> None:
     errors = tuple(error for error in (primary_error, restart_error, cleanup_error) if error is not None)
     if primary_error is not None and restart_error is None and cleanup_error is None:
@@ -601,11 +605,15 @@ def _raise_checkpoint_failures(
         messages.append(_checkpoint_recovery_failure_message(operation, "staging cleanup", cleanup_error))
     combined = CheckpointInfrastructureError(". ".join(messages))
     if len(errors) == 1:
+        if not isinstance(errors[0], Exception):
+            raise errors[0].with_traceback(errors[0].__traceback__)
         raise combined from errors[0]
+    if any(not isinstance(error, Exception) for error in errors):
+        raise BaseExceptionGroup(". ".join(messages), errors)
     raise combined from ExceptionGroup(f"Checkpoint {operation} failures", errors)
 
 
-def _checkpoint_failure_message(operation: str, error: Exception, *, primary: bool) -> str:
+def _checkpoint_failure_message(operation: str, error: BaseException, *, primary: bool) -> str:
     if primary:
         classified = _classified_primary_error(operation, error)
         if classified is not None:
@@ -614,7 +622,7 @@ def _checkpoint_failure_message(operation: str, error: Exception, *, primary: bo
     return str(error)
 
 
-def _checkpoint_recovery_failure_message(operation: str, recovery: str, error: Exception) -> str:
+def _checkpoint_recovery_failure_message(operation: str, recovery: str, error: BaseException) -> str:
     if isinstance(error, CheckpointInfrastructureError):
         return str(error)
     return f"Checkpoint {operation} {recovery} failed: {error}"

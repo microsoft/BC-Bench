@@ -733,6 +733,70 @@ def test_restore_aggregates_unexpected_restart_and_cleanup_failures_and_skips_ca
     assert isinstance(caught.value.__cause__, ExceptionGroup)
 
 
+def test_capture_cleanup_keyboard_interrupt_restarts_before_reraising(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, runner, paths, app = _manager(tmp_path)
+    original_cleanup = manager._cleanup_staging
+
+    def cleanup_then_interrupt(
+        staging_directory: Path,
+        primary_error: CheckpointInfrastructureError | None,
+    ) -> None:
+        original_cleanup(staging_directory, primary_error)
+        raise KeyboardInterrupt("cleanup interrupted")
+
+    monkeypatch.setattr(manager, "_cleanup_staging", cleanup_then_interrupt)
+
+    with pytest.raises(KeyboardInterrupt, match="cleanup interrupted"):
+        manager.capture("baseline", (app,))
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert any("Start-BCBenchServiceTier" in call for call in runner.calls)
+
+
+def test_restore_aggregates_primary_cleanup_interrupt_and_restart_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, runner, paths, app = _manager(tmp_path)
+    manifest = manager.capture("baseline", (app,))
+    runner.calls.clear()
+    original_invoke = manager._invoke_json
+    original_cleanup = manager._cleanup_staging
+    operations: list[str] = []
+
+    def fail_restore_and_restart(operation: str, script: str):
+        operations.append(operation)
+        if operation == "restore restart":
+            raise RuntimeError("restart exploded")
+        payload = original_invoke(operation, script)
+        if operation == "restore":
+            raise RuntimeError("primary exploded")
+        return payload
+
+    def cleanup_then_interrupt(
+        staging_directory: Path,
+        primary_error: CheckpointInfrastructureError | None,
+    ) -> None:
+        original_cleanup(staging_directory, primary_error)
+        raise KeyboardInterrupt("cleanup interrupted")
+
+    monkeypatch.setattr(manager, "_invoke_json", fail_restore_and_restart)
+    monkeypatch.setattr(manager, "_cleanup_staging", cleanup_then_interrupt)
+
+    with pytest.raises(BaseExceptionGroup) as caught:
+        manager.restore(manifest, (app,))
+
+    assert not any(paths.mounted_staging.iterdir())
+    assert operations == ["restore", "restore restart"]
+    diagnostics = str(caught.value)
+    assert "primary exploded" in diagnostics
+    assert "cleanup interrupted" in diagnostics
+    assert "restart exploded" in diagnostics
+
+
 def test_restore_base_exception_cleans_staging_recovers_and_reraises(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
