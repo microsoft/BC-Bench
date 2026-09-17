@@ -1,6 +1,8 @@
 """Integration tests for CLI commands using Typer's CliRunner."""
 
 import json
+from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import PropertyMock, patch
@@ -11,10 +13,12 @@ from typer.testing import CliRunner
 
 from bcbench.cli import _redteam_group_installed, app
 from bcbench.cli_options import resolve_agent_runtime, resolve_evaluation_runtime
+from bcbench.commands import bugfix_lifecycle as bugfix_lifecycle_commands
 from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
+from bcbench.dataset import BugFixEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import AgentMetrics, BCalLLMBackend, EvaluationCategory
+from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -24,6 +28,133 @@ from tests.conftest import (
 )
 
 runner = CliRunner()
+
+
+@dataclass(frozen=True)
+class LifecycleCliFixture:
+    entry: BugFixEntry
+    entry_root: Path
+    protected_root: Path
+    worker: Path
+    python: Path
+    replay_patch: Path
+    owned_root: Path
+    evaluator_config: dict[str, str]
+    agent_config: dict[str, str]
+
+    def args(self, command: str, *, replay: bool = False) -> list[str]:
+        args = [
+            "bugfix-lifecycle",
+            command,
+            self.entry.instance_id,
+            "--entry-root",
+            str(self.entry_root),
+            "--protected-root",
+            str(self.protected_root),
+            "--agent-os-username",
+            "bcb-1234567-abcdef",
+            "--agent-os-password",
+            "os-secret",
+            "--agent-bc-username",
+            self.agent_config["username"],
+            "--agent-bc-password",
+            self.agent_config["password"],
+            "--expected-container-id",
+            "container-id",
+            "--expected-invocation-id",
+            "invocation-id",
+            "--staged-worker-path",
+            str(self.worker),
+            "--staged-worker-sha256",
+            bugfix_lifecycle_commands.sha256_file(self.worker),
+            "--base-python",
+            str(self.python),
+            "--owned-compiler-helper-root",
+            str(self.owned_root),
+            "--evaluator-container-config",
+            json.dumps(self.evaluator_config),
+            "--agent-container-config",
+            json.dumps(self.agent_config),
+            "--container-name",
+            self.evaluator_config["name"],
+            "--username",
+            self.evaluator_config["username"],
+            "--password",
+            self.evaluator_config["password"],
+            "--server-url",
+            self.evaluator_config["server_url"],
+            "--server-instance",
+            self.evaluator_config["server_instance"],
+            "--mcp-url",
+            self.evaluator_config["mcp_url"],
+            "--company",
+            self.evaluator_config["company"],
+            "--output-dir",
+            str(self.protected_root.parent / "evaluation_results"),
+            "--run-id",
+            "lifecycle-run",
+            "--al-mcp",
+            "--al-lsp",
+            "--bc-mcp",
+        ]
+        if replay:
+            args.extend(("--replay-patch", str(self.replay_patch)))
+        return args
+
+
+@pytest.fixture
+def lifecycle_cli_fixture(tmp_path: Path) -> LifecycleCliFixture:
+    entry = create_dataset_entry()
+    entry_root = tmp_path / "entry"
+    protected_root = tmp_path / "protected"
+    for root in (entry_root, protected_root):
+        root.mkdir()
+    worker = entry_root / "agent-tools" / "contained_process_worker.py"
+    worker.parent.mkdir()
+    worker.write_text("print('worker')\n", encoding="utf-8")
+    python = tmp_path / "python.exe"
+    python.write_bytes(b"python")
+    replay_patch = protected_root / "replay.patch"
+    replay_patch.write_text("diff --git a/a.al b/a.al\n", encoding="utf-8")
+    owned_root = tmp_path / "compiler"
+    owned_root.mkdir()
+    (owned_root / ".bcbench-owned").write_text("invocation-id\n", encoding="utf-8")
+    evaluator_config = {
+        "name": "bc-lifecycle",
+        "username": "admin",
+        "password": "evaluator-secret",
+        "company": "CRONUS",
+        "server_url": "http://bc-lifecycle",
+        "server_instance": "BC",
+        "mcp_url": "https://bc-lifecycle/mcp",
+    }
+    agent_config = evaluator_config | {
+        "username": "bca-1234567-abcdef",
+        "password": "bc-secret",
+    }
+    return LifecycleCliFixture(
+        entry=entry,
+        entry_root=entry_root,
+        protected_root=protected_root,
+        worker=worker,
+        python=python,
+        replay_patch=replay_patch,
+        owned_root=owned_root,
+        evaluator_config=evaluator_config,
+        agent_config=agent_config,
+    )
+
+
+def _without_options(args: list[str], *options: str) -> list[str]:
+    filtered: list[str] = []
+    index = 0
+    while index < len(args):
+        if args[index] in options:
+            index += 2
+            continue
+        filtered.append(args[index])
+        index += 1
+    return filtered
 
 
 @patch("bcbench.cli.import_module")
@@ -258,6 +389,273 @@ def test_al_lsp_accepts_resolved_container():
     assert runtime.al_lsp is True
     assert runtime.container.name == "bcbench"
     assert runtime.container.company == "CRONUS"
+
+
+def test_bugfix_lifecycle_help_lists_fixed_category_agent_commands():
+    top_level = runner.invoke(app, ["--help"])
+    group = runner.invoke(app, ["bugfix-lifecycle", "--help"])
+    copilot = runner.invoke(app, ["bugfix-lifecycle", "copilot", "--help"])
+
+    assert top_level.exit_code == 0
+    assert "bugfix-lifecycle" in top_level.stdout
+    assert group.exit_code == 0
+    assert "copilot" in group.stdout
+    assert "claude" in group.stdout
+    assert "production bug-fix lifecycle" in group.stdout.lower()
+    assert copilot.exit_code == 0
+    assert "--category" not in copilot.stdout
+    assert "evaluator-container-config" not in copilot.stdout
+    assert "agent-container-config" not in copilot.stdout
+
+
+@pytest.mark.parametrize(
+    ("command", "agent_name", "default_model", "version_function", "runner_function"),
+    [
+        ("copilot", AgentHarness.COPILOT, "gpt-5.6-luna", "get_copilot_version", "run_copilot_agent"),
+        ("claude", AgentHarness.CLAUDE, "claude-haiku-4-5", "get_claude_version", "run_claude_code"),
+    ],
+)
+def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    command: str,
+    agent_name: AgentHarness,
+    default_model: str,
+    version_function: str,
+    runner_function: str,
+):
+    captured: dict[str, Any] = {}
+
+    class Lifecycle:
+        def run(self, request, agent_runner):
+            captured["request"] = request
+            captured["runner"] = agent_runner
+            agent_runner(request.context, request.agent_execution_policy)
+
+    def from_request(request):
+        captured["constructed_request"] = request
+        return Lifecycle()
+
+    with (
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
+        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", side_effect=from_request),
+        patch.object(bugfix_lifecycle_commands, version_function, return_value="1.2.3"),
+        patch.object(bugfix_lifecycle_commands, runner_function) as run_agent,
+    ):
+        result = runner.invoke(app, lifecycle_cli_fixture.args(command))
+
+    assert result.exit_code == 0, result.stdout
+    request = captured["request"]
+    assert captured["constructed_request"] is request
+    assert request.context.category is EvaluationCategory.BUG_FIX
+    assert request.context.agent_name is agent_name
+    assert request.context.agent_version == "1.2.3"
+    assert request.context.model == default_model
+    assert request.context.result_dir == lifecycle_cli_fixture.protected_root.parent / "evaluation_results" / "lifecycle-run"
+    assert request.paths.baseline_workspace == lifecycle_cli_fixture.entry_root / "baseline-workspace"
+    assert request.paths.final_results == lifecycle_cli_fixture.protected_root / "final-results"
+    assert request.evaluator_container == bugfix_lifecycle_commands.ContainerConfig(**lifecycle_cli_fixture.evaluator_config)
+    assert request.agent_runtime.container == bugfix_lifecycle_commands.ContainerConfig(**lifecycle_cli_fixture.agent_config)
+    assert request.agent_runtime.al_mcp is True
+    assert request.agent_runtime.al_lsp is True
+    assert request.agent_runtime.bc_mcp is True
+    assert request.agent_execution_policy.contain_process_tree is True
+    assert request.agent_execution_policy.allowlist_environment is True
+    assert request.agent_execution_policy.python_executable == lifecycle_cli_fixture.python
+    assert request.agent_execution_policy.worker_path == lifecycle_cli_fixture.worker
+    assert request.compiler_helper_roots[0].path == lifecycle_cli_fixture.owned_root
+    run_agent.assert_called_once()
+    assert run_agent.call_args.kwargs["category"] is EvaluationCategory.BUG_FIX
+    assert run_agent.call_args.kwargs["runtime"] is request.agent_runtime
+    assert run_agent.call_args.kwargs["execution_policy"] is request.agent_execution_policy
+
+
+def test_bugfix_lifecycle_replay_skips_agent_runner_and_hides_secrets(lifecycle_cli_fixture: LifecycleCliFixture):
+    captured: dict[str, Any] = {}
+
+    class Lifecycle:
+        def run(self, request, agent_runner):
+            captured["request"] = request
+            if request.replay_patch is None:
+                agent_runner(request.context, request.agent_execution_policy)
+
+    with (
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
+        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+        patch.object(bugfix_lifecycle_commands, "run_copilot_agent") as run_agent,
+    ):
+        result = runner.invoke(app, lifecycle_cli_fixture.args("copilot", replay=True))
+
+    assert result.exit_code == 0, result.stdout
+    assert captured["request"].replay_patch == lifecycle_cli_fixture.replay_patch
+    run_agent.assert_not_called()
+    for secret in ("os-secret", "bc-secret", "evaluator-secret"):
+        assert secret not in result.stdout
+        assert secret not in result.stderr
+
+
+def test_bugfix_lifecycle_constructs_separate_configs_without_json(lifecycle_cli_fixture: LifecycleCliFixture):
+    captured: dict[str, Any] = {}
+
+    class Lifecycle:
+        def run(self, request, _agent_runner):
+            captured["request"] = request
+
+    args = _without_options(
+        lifecycle_cli_fixture.args("copilot"),
+        "--evaluator-container-config",
+        "--agent-container-config",
+    )
+    with (
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
+        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    request = captured["request"]
+    assert request.evaluator_container.username == lifecycle_cli_fixture.evaluator_config["username"]
+    assert request.agent_runtime.container.username == lifecycle_cli_fixture.agent_config["username"]
+    assert request.evaluator_container.password != request.agent_runtime.container.password
+
+
+def test_bugfix_lifecycle_accepts_prefixed_environment_options(lifecycle_cli_fixture: LifecycleCliFixture):
+    captured: dict[str, Any] = {}
+
+    class Lifecycle:
+        def run(self, request, _agent_runner):
+            captured["request"] = request
+
+    environment = {
+        "BCBENCH_LIFECYCLE_ENTRY_ROOT": str(lifecycle_cli_fixture.entry_root),
+        "BCBENCH_LIFECYCLE_PROTECTED_ROOT": str(lifecycle_cli_fixture.protected_root),
+        "BCBENCH_LIFECYCLE_AGENT_OS_USERNAME": "bcb-1234567-abcdef",
+        "BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD": "os-secret",
+        "BCBENCH_LIFECYCLE_AGENT_BC_USERNAME": lifecycle_cli_fixture.agent_config["username"],
+        "BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD": lifecycle_cli_fixture.agent_config["password"],
+        "BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID": "container-id",
+        "BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID": "invocation-id",
+        "BCBENCH_LIFECYCLE_STAGED_WORKER_PATH": str(lifecycle_cli_fixture.worker),
+        "BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256": bugfix_lifecycle_commands.sha256_file(lifecycle_cli_fixture.worker),
+        "BCBENCH_LIFECYCLE_BASE_PYTHON": str(lifecycle_cli_fixture.python),
+        "BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS": str(lifecycle_cli_fixture.owned_root),
+        "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG": json.dumps(lifecycle_cli_fixture.evaluator_config),
+        "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG": json.dumps(lifecycle_cli_fixture.agent_config),
+        "BCBENCH_LIFECYCLE_AL_MCP": "1",
+        "BCBENCH_LIFECYCLE_AL_LSP": "1",
+        "BCBENCH_LIFECYCLE_BC_MCP": "1",
+        "BC_CONTAINER_NAME": lifecycle_cli_fixture.evaluator_config["name"],
+        "BC_SERVER_USERNAME": lifecycle_cli_fixture.evaluator_config["username"],
+        "BC_SERVER_PASSWORD": lifecycle_cli_fixture.evaluator_config["password"],
+        "BC_SERVER_URL": lifecycle_cli_fixture.evaluator_config["server_url"],
+        "BC_SERVER_INSTANCE": lifecycle_cli_fixture.evaluator_config["server_instance"],
+        "BC_MCP_URL": lifecycle_cli_fixture.evaluator_config["mcp_url"],
+        "BC_COMPANY": lifecycle_cli_fixture.evaluator_config["company"],
+    }
+    with (
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
+        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "bugfix-lifecycle",
+                "copilot",
+                lifecycle_cli_fixture.entry.instance_id,
+                "--output-dir",
+                str(lifecycle_cli_fixture.protected_root.parent / "evaluation_results"),
+                "--run-id",
+                "environment-run",
+            ],
+            env=environment,
+        )
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    request = captured["request"]
+    assert request.context.result_dir.name == "environment-run"
+    assert request.agent_runtime.al_mcp is True
+    assert request.agent_runtime.al_lsp is True
+    assert request.agent_runtime.bc_mcp is True
+
+
+@pytest.mark.parametrize(
+    ("mutate_args", "message"),
+    [
+        (lambda _fixture, args: args, "does not exist"),
+        (
+            lambda fixture, args: ["0" * 64 if value == bugfix_lifecycle_commands.sha256_file(fixture.worker) else value for value in args],
+            "hash does not match",
+        ),
+        (
+            lambda fixture, args: [fixture.evaluator_config["password"] if value == "os-secret" else value for value in args],
+            "passwords must differ",
+        ),
+        (
+            lambda fixture, args: [fixture.evaluator_config["username"] if value == "bcb-1234567-abcdef" else value for value in args],
+            "identities must differ",
+        ),
+        (
+            lambda fixture, args: ["" if value == fixture.evaluator_config["password"] else value for value in args],
+            "missing: password",
+        ),
+        (
+            lambda fixture, args: [str(fixture.entry_root) if value == str(fixture.protected_root) else value for value in args],
+            "disjoint",
+        ),
+    ],
+)
+def test_bugfix_lifecycle_rejects_invalid_boundary_inputs_before_collaborators(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    mutate_args,
+    message: str,
+):
+    args = mutate_args(lifecycle_cli_fixture, lifecycle_cli_fixture.args("copilot"))
+    lifecycle_cli_fixture.worker.unlink(missing_ok=True) if "does not exist" in message else None
+
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert message in (result.stdout + result.stderr).lower()
+    load_entry.assert_not_called()
+    lifecycle_factory.assert_not_called()
+
+
+def test_bugfix_lifecycle_rejects_missing_replay_file_before_collaborators(lifecycle_cli_fixture: LifecycleCliFixture):
+    args = lifecycle_cli_fixture.args("copilot", replay=True)
+    lifecycle_cli_fixture.replay_patch.unlink()
+
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert "--replay-patch" in (result.stdout + result.stderr).lower()
+    load_entry.assert_not_called()
+    lifecycle_factory.assert_not_called()
+
+
+def test_bugfix_lifecycle_category_cannot_be_varied(lifecycle_cli_fixture: LifecycleCliFixture):
+    with patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory:
+        result = runner.invoke(
+            app,
+            [*lifecycle_cli_fixture.args("copilot"), "--category", "test-generation"],
+        )
+
+    assert result.exit_code == 2
+    assert "no such option" in (result.stdout + result.stderr).lower()
+    lifecycle_factory.assert_not_called()
 
 
 @pytest.mark.integration
