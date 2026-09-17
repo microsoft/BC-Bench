@@ -958,7 +958,21 @@ function global:Remove-BcContainerBcUser {{
 }}
 $global:inventedRemoveCalls = 0
 $identity = New-BCBenchAgentBcUser -InstanceId 'entry' -ContainerName 'bc-entry'
-Remove-BCBenchAgentBcUser -ContainerName 'bc-entry' -Username $identity.Username -Password $identity.Password
+$ops = @{{
+    InspectContainer = {{
+        [PSCustomObject]@{{
+            Exists = $true
+            Id = 'owned-id'
+            InvocationId = 'expected-invocation'
+        }}
+    }}
+}}
+Remove-BCBenchAgentBcUser `
+    -ContainerName 'bc-entry' `
+    -Username $identity.Username `
+    -ExpectedContainerId 'owned-id' `
+    -ExpectedInvocationId 'expected-invocation' `
+    -Operations $ops
 [PSCustomObject]@{{
     identity = $identity
     newCall = $global:newCall
@@ -976,7 +990,7 @@ Remove-BCBenchAgentBcUser -ContainerName 'bc-entry' -Username $identity.Username
     assert payload["newCall"]["Password"] == payload["identity"]["Password"]
     assert payload["newCall"]["PermissionSetId"] == "SUPER"
     assert payload["newCall"]["ChangePasswordAtNextLogOn"] is False
-    assert payload["invokedContainer"] == "bc-entry"
+    assert payload["invokedContainer"] == "owned-id"
     assert payload["removeCall"]["ServerInstance"] == "BC"
     assert payload["removeCall"]["Tenant"] == "default"
     assert payload["removeCall"]["Username"] == payload["identity"]["Username"]
@@ -1009,12 +1023,23 @@ function global:Get-NAVServerUser {{
 function global:Remove-NAVServerUser {{
     param([string]$ServerInstance, [string]$Tenant, [string]$UserName, [switch]$Force)
 }}
+$ops = @{{
+    InspectContainer = {{
+        [PSCustomObject]@{{
+            Exists = $true
+            Id = 'owned-id'
+            InvocationId = 'expected-invocation'
+        }}
+    }}
+}}
 $message = $null
 try {{
     Remove-BCBenchAgentBcUser `
         -ContainerName 'bc-entry' `
         -Username 'bca-1234567-abcdef' `
-        -Password 'secret'
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'expected-invocation' `
+        -Operations $ops
 }}
 catch {{
     $message = $_.Exception.Message
@@ -1024,6 +1049,202 @@ $message | ConvertTo-Json -Compress
     message = _last_json(_run_pwsh(script))
 
     assert "still exists after removal" in message
+
+
+def test_remove_bc_user_rejects_ownership_mismatch_before_container_script() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:scriptCalls = 0
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{
+    param([string]$Name, [version]$RequiredVersion, [switch]$Force, [switch]$DisableNameChecking)
+    if ($Name -ne 'BcContainerHelper' -or [string]$RequiredVersion -ne '6.1.18') {{ throw 'wrong module pin' }}
+}}
+function global:Invoke-ScriptInBcContainer {{
+    $global:scriptCalls++
+    throw 'container script must not run'
+}}
+$ops = @{{
+    InspectContainer = {{
+        [PSCustomObject]@{{
+            Exists = $true
+            Id = 'replacement-id'
+            InvocationId = 'expected-invocation'
+        }}
+    }}
+}}
+$message = $null
+try {{
+    Remove-BCBenchAgentBcUser `
+        -ContainerName 'bc-entry' `
+        -Username 'bca-1234567-abcdef' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'expected-invocation' `
+        -Operations $ops
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{
+    message = $message
+    scriptCalls = $global:scriptCalls
+}} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "Docker ID changed" in payload["message"]
+    assert payload["scriptCalls"] == 0
+
+
+@pytest.mark.parametrize("failure_mode", ["ownership_mismatch", "remove_failure", "post_remove_exists", "success"])
+def test_cleanup_preserves_mounted_roots_until_container_absence_is_verified(tmp_path: Path, failure_mode: str) -> None:
+    entry_root = tmp_path / "entry"
+    protected_root = tmp_path / "protected"
+    quarantine_path = tmp_path / "protected.quarantine.json"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:containerExists = $false
+$global:containerId = $null
+$global:containerLabel = $null
+$global:order = @()
+$global:aclCalls = 0
+$global:identityRemoveCalls = 0
+$global:identityDisableCalls = 0
+$ops = @{{
+    ResolveEntry = {{ [PSCustomObject]@{{ repo = 'owner/repo'; base_commit = 'abc'; environment_setup_version = '28.0' }} }}
+    CloneRepository = {{ param($Context) New-Item -ItemType Directory -Path $Context.BaselineWorkspace -Force | Out-Null }}
+    InspectContainer = {{
+        param($Context)
+        $target = if ($null -ne $Context.PSObject.Properties['InspectionTarget']) {{ $Context.InspectionTarget }} else {{ $Context.ContainerName }}
+        $global:order += "inspect:$target"
+        [PSCustomObject]@{{
+            Exists = $global:containerExists
+            Id = $global:containerId
+            InvocationId = $global:containerLabel
+        }}
+    }}
+    InspectContainerById = {{
+        param($Context)
+        $global:order += "inspect-id:$($Context.ContainerId)"
+        [PSCustomObject]@{{
+            Exists = $global:containerExists -and $global:containerId -eq $Context.ContainerId
+            Id = if ($global:containerExists -and $global:containerId -eq $Context.ContainerId) {{ $global:containerId }} else {{ $null }}
+            InvocationId = if ($global:containerExists -and $global:containerId -eq $Context.ContainerId) {{ $global:containerLabel }} else {{ $null }}
+        }}
+    }}
+    CreateContainer = {{
+        param($Context)
+        $global:containerExists = $true
+        $global:containerId = 'owned-id'
+        $global:containerLabel = $Context.ContainerInvocationId
+    }}
+    CreateCompiler = {{ }}
+    InitializeContainer = {{ }}
+    GetCompany = {{ 'CRONUS' }}
+    CreateAgentIdentity = {{
+        [PSCustomObject]@{{
+            Username = 'bcb-1234567-abcdef'
+            Password = 'os-secret'
+            Domain = '.'
+            Sid = 'S-1-5-21-1000-1001-1002-1003'
+        }}
+    }}
+    CreateBcIdentity = {{ [PSCustomObject]@{{ Username = 'bca-1234567-abcdef'; Password = 'bc-secret' }} }}
+    ApplyAcl = {{
+        param($Context)
+        $Context.AclTransaction.ModifiedPaths.Add($Context.EntryRoot)
+        if ('{failure_mode}' -eq 'ownership_mismatch') {{
+            $global:containerId = 'replacement-id'
+            $global:containerLabel = 'replacement-invocation'
+        }}
+        throw 'forced setup failure'
+    }}
+    RemoveBcIdentity = {{ $global:order += 'bc-user' }}
+    RemoveContainer = {{
+        param($Context)
+        $global:order += "remove-container:$($Context.VerifiedContainerId)"
+        if ('{failure_mode}' -eq 'remove_failure') {{ throw 'forced remove failure' }}
+        if ('{failure_mode}' -ne 'post_remove_exists') {{
+            $global:containerExists = $false
+            $global:containerId = $null
+            $global:containerLabel = $null
+        }}
+    }}
+    RemoveAcl = {{
+        $global:aclCalls++
+        $global:order += 'acl'
+    }}
+    RemoveAgentIdentity = {{
+        $global:identityRemoveCalls++
+        $global:order += 'remove-local-user'
+    }}
+    DisableAgentIdentity = {{
+        $global:identityDisableCalls++
+        $global:order += 'disable-local-user'
+    }}
+}}
+$message = $null
+try {{
+    Invoke-BCBenchBugFixLifecycle `
+        -InstanceId 'safe-cleanup' `
+        -DatasetPath 'dataset.jsonl' `
+        -ContainerName 'bc-owned' `
+        -EvaluatorUsername 'admin' `
+        -EvaluatorPassword (ConvertTo-SecureString 'evaluator-secret' -AsPlainText -Force) `
+        -EntryRoot {_ps_quote(entry_root)} `
+        -ProtectedRoot {_ps_quote(protected_root)} `
+        -Operations $ops | Out-Null
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{
+    message = $message
+    order = $global:order
+    aclCalls = $global:aclCalls
+    identityRemoveCalls = $global:identityRemoveCalls
+    identityDisableCalls = $global:identityDisableCalls
+    entryExists = Test-Path -LiteralPath {_ps_quote(entry_root)}
+    protectedExists = Test-Path -LiteralPath {_ps_quote(protected_root)}
+    quarantineExists = Test-Path -LiteralPath {_ps_quote(quarantine_path)}
+    quarantine = if (Test-Path -LiteralPath {_ps_quote(quarantine_path)}) {{
+        Get-Content -LiteralPath {_ps_quote(quarantine_path)} -Raw | ConvertFrom-Json
+    }} else {{ $null }}
+}} | ConvertTo-Json -Compress -Depth 10
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "forced setup failure" in payload["message"]
+    if failure_mode == "success":
+        assert payload["aclCalls"] == 1
+        assert payload["identityRemoveCalls"] == 1
+        assert payload["identityDisableCalls"] == 0
+        assert payload["entryExists"] is False
+        assert payload["protectedExists"] is False
+        assert payload["quarantineExists"] is False
+        assert "inspect-id:owned-id" in payload["order"]
+        assert payload["order"].index("remove-container:owned-id") < payload["order"].index("acl")
+        assert payload["order"].index("inspect-id:owned-id") < payload["order"].index("acl")
+    else:
+        assert payload["aclCalls"] == 0
+        assert payload["identityRemoveCalls"] == 0
+        assert payload["identityDisableCalls"] == 1
+        assert payload["entryExists"] is True
+        assert payload["protectedExists"] is True
+        assert payload["quarantineExists"] is True
+        assert Path(payload["quarantine"]["entry_root"]).resolve() == entry_root.resolve()
+        assert Path(payload["quarantine"]["protected_root"]).resolve() == protected_root.resolve()
+        assert payload["quarantine"]["cleanup_errors"]
+        assert str(quarantine_path) in payload["message"]
+        if failure_mode == "ownership_mismatch":
+            assert not any(item.startswith("remove-container:") for item in payload["order"])
+            assert "Refusing container-scoped cleanup" in payload["message"]
+        elif failure_mode == "remove_failure":
+            assert "forced remove failure" in payload["message"]
+        else:
+            assert "still exists after removal" in payload["message"]
+            assert "inspect-id:owned-id" in payload["order"]
 
 
 def test_setup_orchestrator_writes_outputs_and_cleans_created_resources_on_failure(tmp_path: Path) -> None:
@@ -1295,21 +1516,36 @@ catch {{
         (
             False,
             False,
-            ["verify-bc", "bc-user:owned-id", "acl", "os-user", "verify-container", "container:owned-id"],
+            [
+                "verify-bc",
+                "bc-user:owned-id",
+                "container:owned-id",
+                "verify-container-name",
+                "verify-container-id",
+                "acl",
+                "os-user",
+            ],
             1,
             1,
         ),
         (
             True,
             False,
-            ["verify-bc", "acl", "os-user", "verify-container"],
+            ["verify-bc"],
             0,
             0,
         ),
         (
             False,
             True,
-            ["verify-bc", "bc-user:owned-id", "acl", "verify-container", "container:owned-id"],
+            [
+                "verify-bc",
+                "bc-user:owned-id",
+                "container:owned-id",
+                "verify-container-name",
+                "verify-container-id",
+                "acl",
+            ],
             1,
             1,
         ),
@@ -1343,7 +1579,7 @@ $ops = @{{
         param($Context)
         $global:inspectCalls++
         if ($global:inspectCalls -gt 2) {{
-            $phase = if ($global:inspectCalls -eq 3) {{ 'verify-bc' }} else {{ 'verify-container' }}
+            $phase = if ($global:inspectCalls -eq 3) {{ 'verify-bc' }} else {{ 'verify-container-name' }}
             $global:order += $phase
         }}
         $id = if (${str(replacement).lower()} -and $global:inspectCalls -gt 2) {{ 'replacement-id' }} else {{ $global:containerId }}
@@ -1351,6 +1587,15 @@ $ops = @{{
             Exists = $global:containerExists
             Id = $id
             InvocationId = $global:containerLabel
+        }}
+    }}
+    InspectContainerById = {{
+        param($Context)
+        $global:order += 'verify-container-id'
+        [PSCustomObject]@{{
+            Exists = $global:containerExists -and $global:containerId -eq $Context.ContainerId
+            Id = if ($global:containerExists -and $global:containerId -eq $Context.ContainerId) {{ $global:containerId }} else {{ $null }}
+            InvocationId = if ($global:containerExists -and $global:containerId -eq $Context.ContainerId) {{ $global:containerLabel }} else {{ $null }}
         }}
     }}
     CreateContainer = {{
@@ -1396,6 +1641,8 @@ $ops = @{{
         $global:containerCalls++
         $global:order += "container:$($Context.VerifiedContainerId)"
         $global:containerExists = $false
+        $global:containerId = $null
+        $global:containerLabel = $null
     }}
 }}
 $message = $null
@@ -1431,7 +1678,7 @@ catch {{
         assert "Docker ID changed" in payload["message"]
     elif acl_fails:
         assert "forced ACL cleanup failure" in payload["message"]
-        assert "local user retained" in payload["message"]
+        assert "retained for quarantine" in payload["message"]
         assert payload["osCalls"] == 0
     else:
         assert payload["osCalls"] == 1
@@ -1465,6 +1712,11 @@ def test_disposable_bc_container_user_fallback_lifecycle() -> None:
     )
     if container_exists.returncode != 0:
         pytest.skip(f"requires disposable BC container '{container_name}' to exist")
+    inspect_payload = json.loads(container_exists.stdout)[0]
+    container_id = inspect_payload["Id"]
+    invocation_id = inspect_payload.get("Config", {}).get("Labels", {}).get("bcbench.lifecycle.invocation")
+    if not invocation_id:
+        pytest.skip("requires a lifecycle-owned disposable BC container with an invocation label")
     if os.environ.get("BCBENCH_E2E_OWNS_CONTAINER") == "1":
         setup_output = os.environ.get("BCBENCH_E2E_SETUP_OUTPUT", "").strip()
         if not setup_output:
@@ -1472,7 +1724,6 @@ def test_disposable_bc_container_user_fallback_lifecycle() -> None:
         setup_output_path = Path(setup_output)
         if not setup_output_path.is_file():
             pytest.skip("requires an existing BCBENCH_E2E_SETUP_OUTPUT file when the e2e test owns the container")
-        inspect_payload = json.loads(container_exists.stdout)[0]
         destinations = {mount["Destination"] for mount in inspect_payload["Mounts"]}
         assert {
             r"C:\bcbench\baseline",
@@ -1521,6 +1772,21 @@ function Test-AgentUserExists {{
         $serverInstance = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance
         return $null -ne (Get-NAVServerUser -ServerInstance $serverInstance -Tenant 'default' -UserName $Username)
     }} -ArgumentList $Username)
+}}
+$PSDefaultParameterValues['Remove-BCBenchAgentBcUser:ExpectedContainerId'] = {_ps_quote(container_id)}
+$PSDefaultParameterValues['Remove-BCBenchAgentBcUser:ExpectedInvocationId'] = {_ps_quote(invocation_id)}
+$removeAgentBcUserCommand = Get-Command Remove-BCBenchAgentBcUser -Module BugFixLifecycle
+function Remove-BCBenchAgentBcUser {{
+    param(
+        [string]$ContainerName,
+        [string]$Username,
+        [Alias('Password')][string]$IgnoredCredential
+    )
+    & $removeAgentBcUserCommand `
+        -ContainerName $ContainerName `
+        -Username $Username `
+        -ExpectedContainerId {_ps_quote(container_id)} `
+        -ExpectedInvocationId {_ps_quote(invocation_id)}
 }}
 try {{
     $identity = New-BCBenchAgentBcUser -InstanceId 'e2e-{secrets.token_hex(3)}' -ContainerName {_ps_quote(container_name)}

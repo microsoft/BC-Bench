@@ -147,6 +147,18 @@ function Remove-BCBenchAgentIdentity {
     }
 }
 
+function Disable-BCBenchAgentIdentity {
+    param([Parameter(Mandatory = $true)][string]$Username)
+
+    if ($Username -notmatch "^bcb-[a-f0-9]{7}-[a-f0-9]{6}$") {
+        throw "Refusing to disable unexpected local username '$Username'."
+    }
+    $localUser = Get-LocalUser -Name $Username -ErrorAction SilentlyContinue
+    if ($null -ne $localUser -and [bool]$localUser.Enabled) {
+        Disable-LocalUser -Name $Username -ErrorAction Stop
+    }
+}
+
 function New-BCBenchAgentAclTransaction {
     param([Parameter(Mandatory = $true)][PSObject]$Identity)
 
@@ -1560,19 +1572,13 @@ function New-BCBenchAgentBcUser {
     }
 }
 
-function Remove-BCBenchAgentBcUser {
-    [CmdletBinding()]
+function Invoke-BCBenchAgentBcUserRemoval {
     param(
-        [Parameter(Mandatory = $true)][string]$ContainerName,
-        [Parameter(Mandatory = $true)][string]$Username,
-        [Parameter(Mandatory = $true)][string]$Password
+        [Parameter(Mandatory = $true)][string]$ContainerId,
+        [Parameter(Mandatory = $true)][string]$Username
     )
 
-    if ($Username -notmatch "^bca-[a-f0-9]{7}-[a-f0-9]{6}$") {
-        throw "Refusing to remove unexpected BC username '$Username'."
-    }
-    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-    Invoke-ScriptInBcContainer -containerName $ContainerName -ScriptBlock {
+    Invoke-ScriptInBcContainer -containerName $ContainerId -ScriptBlock {
         param([string]$Username)
 
         $serverInstance = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance
@@ -1585,6 +1591,30 @@ function Remove-BCBenchAgentBcUser {
             throw "BC user '$Username' still exists after removal."
         }
     } -ArgumentList $Username
+}
+
+function Remove-BCBenchAgentBcUser {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$Username,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
+        [Parameter(DontShow = $true)][hashtable]$Operations = @{}
+    )
+
+    if ($Username -notmatch "^bca-[a-f0-9]{7}-[a-f0-9]{6}$") {
+        throw "Refusing to remove unexpected BC username '$Username'."
+    }
+    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+    $context = [PSCustomObject]@{
+        ContainerName         = $ContainerName
+        ContainerId           = $ExpectedContainerId
+        ContainerInvocationId = $ExpectedInvocationId
+        VerifiedContainerId   = $null
+    }
+    $verifiedContainerId = Get-BCBenchVerifiedContainerId -Operations $Operations -Context $context
+    Invoke-BCBenchAgentBcUserRemoval -ContainerId $verifiedContainerId -Username $Username
 }
 
 function Invoke-BCBenchOperation {
@@ -1672,8 +1702,84 @@ function Get-BCBenchVerifiedContainerId {
     return $Context.VerifiedContainerId
 }
 
+function Get-BCBenchContainerStateById {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Operations,
+        [Parameter(Mandatory = $true)][PSObject]$Context
+    )
+
+    $inspectionContext = $Context.PSObject.Copy()
+    $inspectionContext | Add-Member -NotePropertyName InspectionTarget -NotePropertyValue $Context.ContainerId -Force
+    if ($Operations.ContainsKey("InspectContainerById")) {
+        return & $Operations["InspectContainerById"] $inspectionContext
+    }
+    if ($Operations.ContainsKey("InspectContainer")) {
+        $inspectionContext.ContainerName = $Context.ContainerId
+        return & $Operations["InspectContainer"] $inspectionContext
+    }
+    return Get-BCBenchContainerState -ContainerName $Context.ContainerId
+}
+
+function Assert-BCBenchContainerAbsent {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Operations,
+        [Parameter(Mandatory = $true)][PSObject]$Context
+    )
+
+    [System.Collections.Generic.List[string]]$remainingContainers = [System.Collections.Generic.List[string]]::new()
+    $nameState = Invoke-BCBenchOperation -Operations $Operations -Name InspectContainer -Context $Context -Default {
+        param($operationContext)
+        return Get-BCBenchContainerState -ContainerName $operationContext.ContainerName
+    }
+    if ([bool]$nameState.Exists) {
+        $remainingContainers.Add("container name '$($Context.ContainerName)' with Docker ID '$($nameState.Id)'")
+    }
+    if (-not [string]::IsNullOrEmpty([string]$Context.ContainerId)) {
+        $idState = Get-BCBenchContainerStateById -Operations $Operations -Context $Context
+        if ([bool]$idState.Exists) {
+            $remainingContainers.Add("container Docker ID '$($Context.ContainerId)'")
+        }
+    }
+    if ($remainingContainers.Count -gt 0) {
+        throw "$($remainingContainers -join ' and ') still exists after removal."
+    }
+}
+
 function New-BCBenchInvocationId {
     return [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(16)).ToLowerInvariant()
+}
+
+function Get-BCBenchQuarantinePath {
+    param([Parameter(Mandatory = $true)][string]$ProtectedRoot)
+
+    $parent = Split-Path -Parent $ProtectedRoot
+    $leaf = Split-Path -Leaf $ProtectedRoot
+    return Join-Path $parent "$leaf.quarantine.json"
+}
+
+function Write-BCBenchCleanupQuarantine {
+    param(
+        [Parameter(Mandatory = $true)][PSObject]$Context,
+        [Parameter(Mandatory = $true)][string]$OriginalError,
+        [Parameter(Mandatory = $true)][string[]]$CleanupErrors
+    )
+
+    $path = Get-BCBenchQuarantinePath -ProtectedRoot $Context.ProtectedRoot
+    $payload = [ordered]@{
+        instance_id             = $Context.InstanceId
+        container_name          = $Context.ContainerName
+        expected_container_id   = $Context.ContainerId
+        expected_invocation_id  = $Context.ContainerInvocationId
+        entry_root              = $Context.EntryRoot
+        protected_root          = $Context.ProtectedRoot
+        local_username          = if ($null -eq $Context.AgentIdentity) { $null } else { $Context.AgentIdentity.Username }
+        local_sid               = if ($null -eq $Context.AclTransaction) { $null } else { $Context.AclTransaction.Sid }
+        original_error          = $OriginalError
+        cleanup_errors          = @($CleanupErrors)
+        created_at_utc          = [DateTime]::UtcNow.ToString("o")
+    }
+    $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding utf8 -ErrorAction Stop
+    return $path
 }
 
 function Remove-BCBenchCreatedRoot {
@@ -2157,52 +2263,52 @@ function Invoke-BCBenchBugFixLifecycle {
     catch {
         $originalError = $_
         [System.Collections.Generic.List[string]]$cleanupErrors = [System.Collections.Generic.List[string]]::new()
-        if ($createdAgentBcIdentity) {
+        $containerAbsenceVerified = $false
+        $containerOwnershipVerified = $false
+        $preserveRestrictedEvidence = $false
+
+        if (
+            $containerOwnershipChecked -and
+            -not $containerPreexisted -and
+            -not [string]::IsNullOrEmpty([string]$context.ContainerId) -and
+            -not [string]::IsNullOrEmpty([string]$context.ContainerInvocationId)
+        ) {
             try {
                 Get-BCBenchVerifiedContainerId -Operations $Operations -Context $context | Out-Null
-                Invoke-BCBenchOperation -Operations $Operations -Name RemoveBcIdentity -Context $context -Default {
-                    param($operationContext)
-                    Remove-BCBenchAgentBcUser `
-                        -ContainerName $operationContext.ContainerName `
-                        -Username $operationContext.AgentBcIdentity.Username `
-                        -Password $operationContext.AgentBcIdentity.Password
-                } | Out-Null
-            }
-            catch { $cleanupErrors.Add("BC user ownership/cleanup: $($_.Exception.Message)") }
-        }
-        $aclCleanupSucceeded = -not $aclApplicationStarted
-        if ($aclApplicationStarted) {
-            try {
-                Invoke-BCBenchOperation -Operations $Operations -Name RemoveAcl -Context $context -Default {
-                    param($operationContext)
-                    Remove-BCBenchAgentAcl -Transaction $operationContext.AclTransaction
-                } | Out-Null
-                $context.AclTransaction.CleanupComplete = $true
-                $aclCleanupSucceeded = $true
+                $containerOwnershipVerified = $true
             }
             catch {
-                $cleanupErrors.Add("ACL quarantine: $($_.Exception.Message)")
+                $cleanupErrors.Add("container ownership verification: $($_.Exception.Message)")
+                $preserveRestrictedEvidence = $true
             }
         }
-        if ($createdAgentIdentity) {
-            if ($aclCleanupSucceeded) {
+        else {
+            try {
+                Assert-BCBenchContainerAbsent -Operations $Operations -Context $context
+                $containerAbsenceVerified = $true
+            }
+            catch {
+                $cleanupErrors.Add("container absence verification: $($_.Exception.Message)")
+                $preserveRestrictedEvidence = $true
+            }
+        }
+
+        if ($containerOwnershipVerified) {
+            if ($createdAgentBcIdentity) {
                 try {
-                    Invoke-BCBenchOperation -Operations $Operations -Name RemoveAgentIdentity -Context $context -Default {
+                    Invoke-BCBenchOperation -Operations $Operations -Name RemoveBcIdentity -Context $context -Default {
                         param($operationContext)
-                        Remove-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
+                        Remove-BCBenchAgentBcUser `
+                            -ContainerName $operationContext.ContainerName `
+                            -Username $operationContext.AgentBcIdentity.Username `
+                            -ExpectedContainerId $operationContext.ContainerId `
+                            -ExpectedInvocationId $operationContext.ContainerInvocationId `
+                            -Operations $Operations
                     } | Out-Null
                 }
-                catch { $cleanupErrors.Add("local user: $($_.Exception.Message)") }
+                catch { $cleanupErrors.Add("BC user cleanup: $($_.Exception.Message)") }
             }
-            else {
-                $cleanupErrors.Add(
-                    "local user retained for quarantine because ACL cleanup was not verified: $($context.AgentIdentity.Username)"
-                )
-            }
-        }
-        if ($containerOwnershipChecked -and -not $containerPreexisted) {
             try {
-                Get-BCBenchVerifiedContainerId -Operations $Operations -Context $context | Out-Null
                 Invoke-BCBenchOperation -Operations $Operations -Name RemoveContainer -Context $context -Default {
                     param($operationContext)
                     $output = & docker container rm --force $operationContext.VerifiedContainerId 2>&1
@@ -2211,18 +2317,87 @@ function Invoke-BCBenchBugFixLifecycle {
                     }
                 } | Out-Null
             }
-            catch { $cleanupErrors.Add("container ownership: $($_.Exception.Message)") }
+            catch {
+                $cleanupErrors.Add("container removal: $($_.Exception.Message)")
+                $preserveRestrictedEvidence = $true
+            }
+            if (-not $preserveRestrictedEvidence) {
+                try {
+                    Assert-BCBenchContainerAbsent -Operations $Operations -Context $context
+                    $containerAbsenceVerified = $true
+                }
+                catch {
+                    $cleanupErrors.Add("post-removal container verification: $($_.Exception.Message)")
+                    $preserveRestrictedEvidence = $true
+                }
+            }
         }
-        if ($createdProtectedRoot) {
-            try { Remove-BCBenchCreatedRoot -Path $protectedRootPath }
-            catch { $cleanupErrors.Add("protected root: $($_.Exception.Message)") }
+
+        $aclCleanupSucceeded = -not $aclApplicationStarted
+        if ($containerAbsenceVerified) {
+            if ($aclApplicationStarted) {
+                try {
+                    Invoke-BCBenchOperation -Operations $Operations -Name RemoveAcl -Context $context -Default {
+                        param($operationContext)
+                        Remove-BCBenchAgentAcl -Transaction $operationContext.AclTransaction
+                    } | Out-Null
+                    $context.AclTransaction.CleanupComplete = $true
+                    $aclCleanupSucceeded = $true
+                }
+                catch {
+                    $cleanupErrors.Add("ACL cleanup: $($_.Exception.Message)")
+                    $preserveRestrictedEvidence = $true
+                }
+            }
+            if ($createdAgentIdentity -and $aclCleanupSucceeded) {
+                try {
+                    Invoke-BCBenchOperation -Operations $Operations -Name RemoveAgentIdentity -Context $context -Default {
+                        param($operationContext)
+                        Remove-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
+                    } | Out-Null
+                }
+                catch { $cleanupErrors.Add("local user removal: $($_.Exception.Message)") }
+            }
+            if ($aclCleanupSucceeded) {
+                if ($createdEntryRoot) {
+                    try { Remove-BCBenchCreatedRoot -Path $entryRootPath }
+                    catch { $cleanupErrors.Add("entry root removal: $($_.Exception.Message)") }
+                }
+                if ($createdProtectedRoot) {
+                    try { Remove-BCBenchCreatedRoot -Path $protectedRootPath }
+                    catch { $cleanupErrors.Add("protected root removal: $($_.Exception.Message)") }
+                }
+            }
         }
-        if ($createdEntryRoot) {
-            try { Remove-BCBenchCreatedRoot -Path $entryRootPath }
-            catch { $cleanupErrors.Add("entry root: $($_.Exception.Message)") }
+
+        if ($createdAgentIdentity -and (-not $containerAbsenceVerified -or -not $aclCleanupSucceeded)) {
+            try {
+                Invoke-BCBenchOperation -Operations $Operations -Name DisableAgentIdentity -Context $context -Default {
+                    param($operationContext)
+                    Disable-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
+                } | Out-Null
+            }
+            catch { $cleanupErrors.Add("local user disablement: $($_.Exception.Message)") }
+            $cleanupErrors.Add(
+                "restricted identity, SID ACLs, EntryRoot, and ProtectedRoot retained for quarantine because safe cleanup was not verified: $($context.AgentIdentity.Username)"
+            )
+        }
+
+        $quarantinePath = $null
+        if ($cleanupErrors.Count -gt 0) {
+            try {
+                $quarantinePath = Write-BCBenchCleanupQuarantine `
+                    -Context $context `
+                    -OriginalError $originalError.Exception.Message `
+                    -CleanupErrors @($cleanupErrors)
+            }
+            catch {
+                $cleanupErrors.Add("quarantine marker persistence: $($_.Exception.Message)")
+                $quarantinePath = Get-BCBenchQuarantinePath -ProtectedRoot $context.ProtectedRoot
+            }
         }
         $cleanupMessage = if ($cleanupErrors.Count -gt 0) {
-            " Cleanup errors: $($cleanupErrors -join '; ')"
+            " Cleanup errors: $($cleanupErrors -join '; '). Quarantine marker: $quarantinePath"
         }
         else {
             ""
