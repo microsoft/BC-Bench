@@ -179,7 +179,17 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
     identity = WindowsIdentity("restricted", "secret", "DOMAIN")
     python_executable = tmp_path / "python.exe"
     worker_path = tmp_path / "agent-tools" / "contained_process_worker.py"
-    agent_temp = tmp_path / "agent-logs" / "temp"
+    agent_profile = tmp_path / "agent-logs" / "profile"
+    agent_temp = agent_profile / "temp"
+    profile_overrides = {
+        "APPDATA": str(agent_profile / "AppData" / "Roaming"),
+        "LOCALAPPDATA": str(agent_profile / "AppData" / "Local"),
+        "USERPROFILE": str(agent_profile),
+        "HOMEDRIVE": agent_profile.drive,
+        "HOMEPATH": str(agent_profile)[len(agent_profile.drive) :],
+        "TEMP": str(agent_temp),
+        "TMP": str(agent_temp),
+    }
     policy = AgentExecutionPolicy(
         contain_process_tree=True,
         restricted_identity=identity,
@@ -187,7 +197,7 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
         python_executable=python_executable,
         worker_path=worker_path,
         worker_sha256="a" * 64,
-        environment_overrides={"TEMP": str(agent_temp), "TMP": str(agent_temp)},
+        environment_overrides=profile_overrides,
     )
     gateway = Mock(base_url="http://127.0.0.1/mcp")
     output = '{"type":"result","result":"finished"}\n'
@@ -257,8 +267,7 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
     mock_subprocess_run.assert_not_called()
     mock_parse.assert_called_once_with([output.strip()], log_transcript=False)
     assert result[0] is None
-    assert expected_env["TEMP"] == str(agent_temp)
-    assert expected_env["TMP"] == str(agent_temp)
+    assert {name: expected_env[name] for name in profile_overrides} == profile_overrides
     assert "EVALUATOR_SECRET" not in expected_env
     gateway.stop.assert_called_once_with()
 

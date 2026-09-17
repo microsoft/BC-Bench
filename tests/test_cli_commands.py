@@ -511,12 +511,20 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert request.agent_execution_policy.allowlist_environment is True
     assert request.agent_execution_policy.python_executable == lifecycle_cli_fixture.python
     assert request.agent_execution_policy.worker_path == lifecycle_cli_fixture.worker
-    agent_temp = request.paths.agent_logs / "temp"
+    agent_profile = request.paths.agent_logs / "profile"
+    agent_roaming = agent_profile / "AppData" / "Roaming"
+    agent_local = agent_profile / "AppData" / "Local"
+    agent_temp = agent_profile / "temp"
     assert request.agent_execution_policy.environment_overrides == {
+        "APPDATA": str(agent_roaming),
+        "LOCALAPPDATA": str(agent_local),
+        "USERPROFILE": str(agent_profile),
+        "HOMEDRIVE": agent_profile.drive,
+        "HOMEPATH": str(agent_profile)[len(agent_profile.drive) :],
         "TEMP": str(agent_temp),
         "TMP": str(agent_temp),
     }
-    assert agent_temp.is_dir()
+    assert all(path.is_dir() for path in (agent_profile, agent_roaming, agent_local, agent_temp))
     assert request.compiler_helper_roots[0].path == lifecycle_cli_fixture.owned_root
     run_agent.assert_called_once()
     assert run_agent.call_args.kwargs["category"] is EvaluationCategory.BUG_FIX

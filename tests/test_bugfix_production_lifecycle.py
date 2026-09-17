@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
@@ -299,6 +300,12 @@ class FakePhases:
 def _harness(tmp_path: Path):
     calls: list[str] = []
     paths = _paths(tmp_path)
+    agent_profile = paths.agent_logs / "profile"
+    agent_roaming = agent_profile / "AppData" / "Roaming"
+    agent_local = agent_profile / "AppData" / "Local"
+    agent_temp = agent_profile / "temp"
+    for path in (agent_roaming, agent_local, agent_temp):
+        path.mkdir(parents=True, exist_ok=True)
     context = create_evaluation_context(tmp_path)
     evaluator = ContainerConfig("bc", "admin", "evaluator-secret", "CRONUS")
     runtime = AgentRuntimeConfig(container=ContainerConfig("bc", "bca-1234567-123456", "agent-secret", "CRONUS"))
@@ -314,6 +321,15 @@ def _harness(tmp_path: Path):
                 "os-secret",
             ),
             allowlist_environment=True,
+            environment_overrides={
+                "APPDATA": str(agent_roaming),
+                "LOCALAPPDATA": str(agent_local),
+                "USERPROFILE": str(agent_profile),
+                "HOMEDRIVE": agent_profile.drive,
+                "HOMEPATH": str(agent_profile)[len(agent_profile.drive) :],
+                "TEMP": str(agent_temp),
+                "TMP": str(agent_temp),
+            },
         ),
         expected_container_id="container-id",
         expected_container_invocation_id="invocation-id",
@@ -414,32 +430,101 @@ def test_request_rejects_invalid_production_execution_policy_before_collaborator
     assert calls == []
 
 
-def test_request_rejects_environment_overrides_outside_agent_runtime_channels_before_collaborators(
+def test_request_requires_all_production_profile_environment_overrides_before_collaborators(
     tmp_path: Path,
 ) -> None:
     request, _, calls, _, _, _ = _harness(tmp_path)
     policy = replace(
         request.agent_execution_policy,
-        environment_overrides={"BC_SERVER_PASSWORD": "evaluator-secret"},
+        environment_overrides={key: value for key, value in request.agent_execution_policy.environment_overrides.items() if key != "APPDATA"},
     )
 
-    with pytest.raises(ValueError, match="agent runtime channels"):
+    with pytest.raises(ValueError, match="profile environment overrides"):
         replace(request, agent_execution_policy=policy)
 
     assert calls == []
 
 
-def test_request_rejects_agent_temp_outside_agent_logs_before_collaborators(
+@pytest.mark.parametrize("name", ["USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"])
+@pytest.mark.parametrize("location", ["outside", "evaluator"])
+def test_request_rejects_production_profile_paths_outside_agent_logs_before_collaborators(
+    tmp_path: Path,
+    name: str,
+    location: str,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    invalid_root = tmp_path / "outside-profile" if location == "outside" else request.paths.evaluator_workspaces / "profile"
+    policy = replace(
+        request.agent_execution_policy,
+        environment_overrides=request.agent_execution_policy.environment_overrides | {name: str(invalid_root / name.lower())},
+    )
+
+    with pytest.raises(ValueError, match="strict descendant of agent_logs"):
+        replace(request, agent_execution_policy=policy)
+
+    assert calls == []
+
+
+def test_request_rejects_noncanonical_production_profile_path_before_collaborators(
     tmp_path: Path,
 ) -> None:
     request, _, calls, _, _, _ = _harness(tmp_path)
-    outside_temp = tmp_path / "outside-temp"
+    profile = request.paths.agent_logs / "profile"
     policy = replace(
         request.agent_execution_policy,
-        environment_overrides={"TEMP": str(outside_temp), "TMP": str(outside_temp)},
+        environment_overrides=request.agent_execution_policy.environment_overrides | {"USERPROFILE": str(profile / ".." / "profile")},
     )
 
-    with pytest.raises(ValueError, match="agent_logs/temp"):
+    with pytest.raises(ValueError, match="canonical"):
+        replace(request, agent_execution_policy=policy)
+
+    assert calls == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory junction regression")
+def test_request_rejects_reparse_production_profile_path_before_collaborators(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    roaming = Path(request.agent_execution_policy.environment_overrides["APPDATA"])
+    roaming.rmdir()
+    target = tmp_path / "outside-roaming"
+    target.mkdir()
+    result = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(roaming), str(target)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        pytest.skip(f"Directory junction creation is unavailable: {result.stderr or result.stdout}")
+
+    with pytest.raises(ValueError, match="reparse"):
+        replace(request)
+
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("HOMEDRIVE", "Z:"),
+        ("HOMEPATH", r"\wrong\profile"),
+    ],
+)
+def test_request_rejects_mismatched_windows_home_components_before_collaborators(
+    tmp_path: Path,
+    name: str,
+    value: str,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    policy = replace(
+        request.agent_execution_policy,
+        environment_overrides=request.agent_execution_policy.environment_overrides | {name: value},
+    )
+
+    with pytest.raises(ValueError, match="HOMEDRIVE and HOMEPATH"):
         replace(request, agent_execution_policy=policy)
 
     assert calls == []

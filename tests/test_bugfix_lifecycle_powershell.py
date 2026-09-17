@@ -1480,6 +1480,7 @@ $validator = {{
     param($Parameters)
     [PSCustomObject]@{{
         WorkspaceWriteSucceeded = $true
+        ProfilePathsWriteSucceeded = $true
         ProtectedReadDenied = $true
         ProtectedWriteDenied = $true
         BenchmarkWriteDenied = $true
@@ -1763,6 +1764,7 @@ try {{
         -AccessValidator {{
             [PSCustomObject]@{{
                 WorkspaceWriteSucceeded = $true
+                ProfilePathsWriteSucceeded = $true
                 ProtectedReadDenied = $true
                 ProtectedWriteDenied = $true
                 BenchmarkWriteDenied = $true
@@ -2530,7 +2532,12 @@ catch {{
     cleanup = @(Get-Content {_ps_quote(trace)} | ForEach-Object {{ $_ | ConvertFrom-Json }})
     failureEntryExists = Test-Path {_ps_quote(failure_entry)}
     failureProtectedExists = Test-Path {_ps_quote(failure_protected)}
-    agentTempExists = Test-Path (Join-Path (Join-Path {_ps_quote(success_entry)} 'agent-logs') 'temp') -PathType Container
+    agentProfileDirectoriesExist = (
+        (Test-Path -LiteralPath (Join-Path (Join-Path {_ps_quote(success_entry)} 'agent-logs') 'profile') -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path (Join-Path (Join-Path (Join-Path {_ps_quote(success_entry)} 'agent-logs') 'profile') 'AppData') 'Roaming') -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path (Join-Path (Join-Path (Join-Path {_ps_quote(success_entry)} 'agent-logs') 'profile') 'AppData') 'Local') -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path (Join-Path (Join-Path {_ps_quote(success_entry)} 'agent-logs') 'profile') 'temp') -PathType Container)
+    )
     agentLogFiles = @(
         Get-ChildItem -LiteralPath (Join-Path {_ps_quote(success_entry)} 'agent-logs') -File -Recurse
     ).Count
@@ -2545,6 +2552,10 @@ catch {{
     agent_config = json.loads(output_values["agent_container_config"])
 
     assert "agent_workspace=" in output_text
+    assert "agent_profile=" in output_text
+    assert "agent_appdata=" in output_text
+    assert "agent_local_appdata=" in output_text
+    assert "agent_temp=" in output_text
     assert "agent_tools=" in output_text
     assert "contained_process_worker=" in output_text
     assert "contained_process_worker_sha256=" in output_text
@@ -2580,18 +2591,27 @@ catch {{
     assert payload["containerSuccessfullyCreated"] is True
     assert output_values["container_id"] == "docker-success"
     assert output_values["container_observed_invocation_id"] == output_values["container_invocation_id"]
+    profile = success_entry / "agent-logs" / "profile"
+    assert output_values["agent_profile"] == str(profile)
+    assert output_values["agent_appdata"] == str(profile / "AppData" / "Roaming")
+    assert output_values["agent_local_appdata"] == str(profile / "AppData" / "Local")
+    assert output_values["agent_temp"] == str(profile / "temp")
     assert len(output_values["container_invocation_id"]) == 32
     assert set(output_values["container_invocation_id"]) <= set("0123456789abcdef")
     assert "::add-mask::evaluator-secret" in raw_output
     assert "::add-mask::bc-secret" in raw_output
     assert "al_tool_dotnet_version=8.0" in output_text
     assert "BCBENCH_AGENT_WORKSPACE=" in env_text
+    assert f"BCBENCH_AGENT_PROFILE={profile}" in env_text
+    assert f"BCBENCH_AGENT_APPDATA={profile / 'AppData' / 'Roaming'}" in env_text
+    assert f"BCBENCH_AGENT_LOCAL_APPDATA={profile / 'AppData' / 'Local'}" in env_text
+    assert f"BCBENCH_AGENT_TEMP={profile / 'temp'}" in env_text
     assert "BCBENCH_AGENT_TOOLS=" in env_text
     assert "BCBENCH_CONTAINED_PROCESS_WORKER=" in env_text
     assert "BCBENCH_CONTAINED_PROCESS_WORKER_SHA256=" in env_text
     assert "BCBENCH_CONTAINED_PROCESS_PYTHON=" in env_text
     assert "BC_SERVER_PASSWORD=evaluator-secret" in env_text
-    assert payload["agentTempExists"] is True
+    assert payload["agentProfileDirectoriesExist"] is True
     assert payload["agentLogFiles"] == 0
     assert payload["failed"] is True
     assert {item["action"] for item in payload["cleanup"]} == {"bc-user", "acl", "os-user", "container"}
@@ -3187,6 +3207,9 @@ def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, f
     source_worker = benchmark_root / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
     for path in (baseline, workspace, logs, staging, evaluators, evidence, tool_root, protected_root, dataset_path.parent, evaluator_source, docs, source_worker.parent):
         path.mkdir(parents=True, exist_ok=True)
+    profile = logs / "profile"
+    for path in (profile / "AppData" / "Roaming", profile / "AppData" / "Local", profile / "temp"):
+        path.mkdir(parents=True, exist_ok=True)
     dataset_path.write_text("{}\n", encoding="utf-8")
     (evaluator_source / "__init__.py").write_text("", encoding="utf-8")
     (docs / "readme.txt").write_text("restricted", encoding="utf-8")
@@ -3409,6 +3432,7 @@ finally {{
         assert len(payload["readExecuteDenyPaths"]) == 5
         assert {"S-1-5-32-545", "S-1-5-11"} <= set(payload["inheritedModifySids"])
         assert payload["access"]["WorkspaceWriteSucceeded"] is True
+        assert payload["access"]["ProfilePathsWriteSucceeded"] is True
         assert payload["access"]["ProtectedReadDenied"] is True
         assert payload["access"]["ProtectedWriteDenied"] is True
         assert payload["access"]["BenchmarkWriteDenied"] is True

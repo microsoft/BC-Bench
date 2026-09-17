@@ -345,11 +345,21 @@ def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_
     monkeypatch.setenv("TMP", "host-temp")
     monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "token")
     monkeypatch.setenv("EVALUATOR_SECRET", "must-not-leak")
-    agent_temp = tmp_path / "agent-logs" / "temp"
+    agent_profile = tmp_path / "agent-logs" / "profile"
+    agent_temp = agent_profile / "temp"
+    profile_overrides = {
+        "APPDATA": str(agent_profile / "AppData" / "Roaming"),
+        "LOCALAPPDATA": str(agent_profile / "AppData" / "Local"),
+        "USERPROFILE": str(agent_profile),
+        "HOMEDRIVE": agent_profile.drive,
+        "HOMEPATH": str(agent_profile)[len(agent_profile.drive) :],
+        "TEMP": str(agent_temp),
+        "TMP": str(agent_temp),
+    }
     policy = AgentExecutionPolicy(
         contain_process_tree=True,
         allowlist_environment=True,
-        environment_overrides={"TEMP": str(agent_temp), "TMP": str(agent_temp)},
+        environment_overrides=profile_overrides,
     )
     gateway = Mock(base_url="http://127.0.0.1/mcp")
     with (
@@ -379,8 +389,7 @@ def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_
         allowlist=True,
         final_overrides=policy.environment_overrides,
     )
-    assert mock_invoke.call_args.kwargs["env"]["TEMP"] == str(agent_temp)
-    assert mock_invoke.call_args.kwargs["env"]["TMP"] == str(agent_temp)
+    assert {name: mock_invoke.call_args.kwargs["env"][name] for name in profile_overrides} == profile_overrides
     assert "EVALUATOR_SECRET" not in mock_invoke.call_args.kwargs["env"]
     gateway.stop.assert_called_once_with()
 

@@ -92,15 +92,27 @@ def test_allowlist_applies_overrides_after_filtering(monkeypatch):
 
 def test_final_overrides_take_precedence_over_agent_runtime_overrides(monkeypatch):
     monkeypatch.setenv("TEMP", r"C:\host-temp")
+    profile = r"C:\agent-logs\profile"
+    roaming = profile + r"\AppData\Roaming"
+    local = profile + r"\AppData\Local"
+    temp = profile + r"\temp"
+    profile_overrides = {
+        "APPDATA": roaming,
+        "LOCALAPPDATA": local,
+        "USERPROFILE": profile,
+        "HOMEDRIVE": "C:",
+        "HOMEPATH": r"\agent-logs\profile",
+        "TEMP": temp,
+        "TMP": temp,
+    }
 
     env = agent_subprocess_env(
         {"TEMP": r"C:\runtime-temp", "RUNTIME_CHANNEL": "enabled"},
-        final_overrides={"TEMP": r"C:\agent-logs\temp", "TMP": r"C:\agent-logs\temp"},
+        final_overrides=profile_overrides,
         allowlist=True,
     )
 
-    assert env["TEMP"] == r"C:\agent-logs\temp"
-    assert env["TMP"] == r"C:\agent-logs\temp"
+    assert {name: env[name] for name in profile_overrides} == profile_overrides
     assert env["RUNTIME_CHANNEL"] == "enabled"
 
 

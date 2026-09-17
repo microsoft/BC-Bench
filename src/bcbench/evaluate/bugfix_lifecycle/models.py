@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bcbench.agent.shared.contained_process import AgentExecutionPolicy
+from bcbench.agent.shared.env import production_agent_profile_environment
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
 from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationContext
 
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 
 _SETUP_OS_USERNAME = re.compile(r"bcb-[a-f0-9]{7}-[a-f0-9]{6}", re.IGNORECASE)
 _SETUP_BC_USERNAME = re.compile(r"bca-[a-f0-9]{7}-[a-f0-9]{6}", re.IGNORECASE)
-_PRODUCTION_AGENT_ENVIRONMENT_CHANNELS = frozenset({"TEMP", "TMP"})
+_PRODUCTION_AGENT_PROFILE_PATH_CHANNELS = ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP")
 
 
 @dataclass(frozen=True)
@@ -112,13 +113,28 @@ class BugFixLifecycleRequest:
         if self.evaluator_container.password == self.agent_runtime.container.password:
             raise ValueError("Evaluator and agent passwords must differ")
         environment_overrides = dict(self.agent_execution_policy.environment_overrides)
-        if environment_overrides:
-            unexpected_channels = set(environment_overrides) - _PRODUCTION_AGENT_ENVIRONMENT_CHANNELS
-            if unexpected_channels:
-                raise ValueError("Production policy environment overrides may only set explicit agent runtime channels")
-            expected_temp = str(self.paths.agent_logs / "temp")
-            if environment_overrides != {"TEMP": expected_temp, "TMP": expected_temp}:
-                raise ValueError("Production policy TEMP and TMP must both use agent_logs/temp")
+        expected_environment = production_agent_profile_environment(self.paths.agent_logs)
+        if set(environment_overrides) != set(expected_environment):
+            raise ValueError("Production policy must set all and only the agent profile environment overrides")
+        from bcbench.evaluate.bugfix_lifecycle.path_safety import require_strict_descendant
+
+        for name in _PRODUCTION_AGENT_PROFILE_PATH_CHANNELS:
+            raw_path = Path(environment_overrides[name])
+            canonical_path = require_strict_descendant(
+                raw_path,
+                self.paths.agent_logs,
+                f"Production policy {name}",
+                "agent_logs",
+            )
+            if raw_path != canonical_path:
+                raise ValueError(f"Production policy {name} must be canonical: {canonical_path}")
+            if not canonical_path.is_dir() or canonical_path.is_symlink():
+                raise ValueError(f"Production policy {name} must be an existing directory: {canonical_path}")
+        user_profile = environment_overrides["USERPROFILE"]
+        if environment_overrides["HOMEDRIVE"] + environment_overrides["HOMEPATH"] != user_profile:
+            raise ValueError("Production policy HOMEDRIVE and HOMEPATH must reconstruct USERPROFILE")
+        if environment_overrides != expected_environment:
+            raise ValueError("Production policy profile environment overrides must use the agent_logs/profile layout")
         object.__setattr__(self, "acl_paths", tuple(self.acl_paths))
         object.__setattr__(self, "compiler_helper_roots", tuple(self.compiler_helper_roots))
         from bcbench.evaluate.bugfix_lifecycle.path_safety import validate_owned_lifecycle_roots

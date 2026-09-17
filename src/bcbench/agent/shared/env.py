@@ -1,5 +1,8 @@
 import os
+import re
 from collections.abc import Mapping
+from ntpath import splitdrive
+from pathlib import Path
 
 # BC container connection details/credentials the harness uses to build the MCP config and to reach the
 # container. They must NOT leak into a launched agent's own process environment: otherwise the agent can
@@ -36,6 +39,26 @@ _AGENT_ENV_ALLOWLIST = frozenset(
         "WINDIR",
     }
 )
+_WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:$")
+
+
+def production_agent_profile_environment(agent_logs: Path) -> dict[str, str]:
+    profile = agent_logs / "profile"
+    profile_text = str(profile)
+    home_drive, home_path = splitdrive(profile_text)
+    if _WINDOWS_DRIVE.fullmatch(home_drive) is None or not home_path.startswith(("\\", "/")):
+        raise ValueError(f"Production agent profile must use an absolute Windows drive path: {profile}")
+    local_app_data = profile / "AppData" / "Local"
+    temp = profile / "temp"
+    return {
+        "APPDATA": str(profile / "AppData" / "Roaming"),
+        "LOCALAPPDATA": str(local_app_data),
+        "USERPROFILE": profile_text,
+        "HOMEDRIVE": home_drive,
+        "HOMEPATH": home_path,
+        "TEMP": str(temp),
+        "TMP": str(temp),
+    }
 
 
 def agent_subprocess_env(

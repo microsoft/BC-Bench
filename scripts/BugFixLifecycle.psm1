@@ -794,6 +794,15 @@ function Test-BCBenchIdentityAccess {
 
     $probeId = [guid]::NewGuid().ToString("N")
     $workspaceProbe = Join-Path $AgentWorkspace "identity-access-$probeId.txt"
+    $agentProfile = Join-Path $AgentLogs "profile"
+    $agentAppData = Join-Path $agentProfile "AppData\Roaming"
+    $agentLocalAppData = Join-Path $agentProfile "AppData\Local"
+    $agentTemp = Join-Path $agentProfile "temp"
+    foreach ($profileDirectory in @($agentProfile, $agentAppData, $agentLocalAppData, $agentTemp)) {
+        if (-not (Test-Path -LiteralPath $profileDirectory -PathType Container)) {
+            throw "Required agent profile directory does not exist: $profileDirectory"
+        }
+    }
     $protectedProbe = Join-Path $ProtectedRoot "identity-access-$probeId.txt"
     $protectedWriteProbe = Join-Path $ProtectedRoot "forbidden-$probeId.txt"
     $benchmarkWriteProbe = Join-Path $BenchmarkRoot "forbidden-$probeId.txt"
@@ -873,6 +882,7 @@ runtime_executable_results = []
 docker_cli_error = None
 docker_pipe_error = None
 output_file_open_error = None
+profile_path_results = []
 
 try:
     Path(os.environ["BCBENCH_WORKSPACE_PROBE"]).write_text("agent-write", encoding="utf-8")
@@ -880,6 +890,19 @@ try:
 except OSError as error:
     workspace_write_succeeded = False
     workspace_error = str(error)
+
+for name in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"):
+    probe_path = Path(os.environ[name]) / f".bcbench-profile-{name.lower()}.tmp"
+    try:
+        probe_path.write_text("agent-write", encoding="utf-8")
+        probe_path.unlink()
+        profile_path_results.append({"Name": name, "WriteSucceeded": True, "WriteError": None})
+    except OSError as error:
+        profile_path_results.append({"Name": name, "WriteSucceeded": False, "WriteError": str(error)})
+
+home_components_match = (
+    os.environ["HOMEDRIVE"] + os.environ["HOMEPATH"] == os.environ["USERPROFILE"]
+)
 
 try:
     Path(os.environ["BCBENCH_PROTECTED_PROBE"]).read_text(encoding="utf-8")
@@ -1082,6 +1105,12 @@ else:
 print(json.dumps({
     "WorkspaceWriteSucceeded": workspace_write_succeeded,
     "WorkspaceWriteError": workspace_error,
+    "ProfilePathsWriteSucceeded": (
+        home_components_match
+        and all(result["WriteSucceeded"] for result in profile_path_results)
+    ),
+    "ProfilePathsWriteResults": profile_path_results,
+    "HomeComponentsMatch": home_components_match,
     "ProtectedReadDenied": protected_read_denied,
     "ProtectedReadError": protected_read_error,
     "ProtectedWriteDenied": protected_write_denied,
@@ -1157,8 +1186,13 @@ print(json.dumps({
             PATHEXT                         = $env:PATHEXT
             SYSTEMROOT                      = $env:SYSTEMROOT
             COMSPEC                         = $env:COMSPEC
-            TEMP                            = $AgentLogs
-            TMP                             = $AgentLogs
+            APPDATA                         = $agentAppData
+            LOCALAPPDATA                    = $agentLocalAppData
+            USERPROFILE                     = $agentProfile
+            HOMEDRIVE                       = [IO.Path]::GetPathRoot($agentProfile).TrimEnd("\")
+            HOMEPATH                        = $agentProfile.Substring([IO.Path]::GetPathRoot($agentProfile).Length - 1)
+            TEMP                            = $agentTemp
+            TMP                             = $agentTemp
             BCBENCH_WORKSPACE_PROBE         = $workspaceProbe
             BCBENCH_PROTECTED_PROBE         = $protectedProbe
             BCBENCH_PROTECTED_WRITE_PROBE   = $protectedWriteProbe
@@ -1560,6 +1594,7 @@ function Set-BCBenchWorkspaceAcl {
         }
         foreach ($property in @(
             "WorkspaceWriteSucceeded",
+            "ProfilePathsWriteSucceeded",
             "ProtectedReadDenied",
             "ProtectedWriteDenied",
             "BenchmarkWriteDenied",
@@ -3091,6 +3126,10 @@ function Invoke-BCBenchBugFixLifecycle {
         BaselineWorkspace      = $entryPaths.BaselineWorkspace
         AgentWorkspace         = $entryPaths.AgentWorkspace
         AgentLogs              = $entryPaths.AgentLogs
+        AgentProfile           = Join-Path $entryPaths.AgentLogs "profile"
+        AgentAppData           = Join-Path (Join-Path $entryPaths.AgentLogs "profile") "AppData\Roaming"
+        AgentLocalAppData      = Join-Path (Join-Path $entryPaths.AgentLogs "profile") "AppData\Local"
+        AgentTemp              = Join-Path (Join-Path $entryPaths.AgentLogs "profile") "temp"
         AgentTools             = $entryPaths.AgentTools
         MountedStaging         = $entryPaths.MountedStaging
         EvaluatorWorkspaces    = $entryPaths.EvaluatorWorkspaces
@@ -3153,7 +3192,14 @@ function Invoke-BCBenchBugFixLifecycle {
         )) {
             New-Item -ItemType Directory -Path $path | Out-Null
         }
-        New-Item -ItemType Directory -Path (Join-Path $context.AgentLogs "temp") | Out-Null
+        foreach ($profileDirectory in @(
+            $context.AgentProfile,
+            $context.AgentAppData,
+            $context.AgentLocalAppData,
+            $context.AgentTemp
+        )) {
+            New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
+        }
         $agentTools = Invoke-BCBenchOperation -Operations $Operations -Name StageAgentTools -Context $context -Default {
             param($operationContext)
             return New-BCBenchAgentTools `
@@ -3367,6 +3413,10 @@ function Invoke-BCBenchBugFixLifecycle {
             baseline_workspace            = $context.BaselineWorkspace
             agent_workspace               = $context.AgentWorkspace
             agent_logs                    = $context.AgentLogs
+            agent_profile                 = $context.AgentProfile
+            agent_appdata                 = $context.AgentAppData
+            agent_local_appdata           = $context.AgentLocalAppData
+            agent_temp                    = $context.AgentTemp
             agent_tools                   = $context.AgentTools
             contained_process_worker      = $context.WorkerPath
             contained_process_worker_sha256 = $context.WorkerSha256
@@ -3409,6 +3459,10 @@ function Invoke-BCBenchBugFixLifecycle {
             BCBENCH_BASELINE_WORKSPACE     = $context.BaselineWorkspace
             BCBENCH_AGENT_WORKSPACE        = $context.AgentWorkspace
             BCBENCH_AGENT_LOGS             = $context.AgentLogs
+            BCBENCH_AGENT_PROFILE          = $context.AgentProfile
+            BCBENCH_AGENT_APPDATA          = $context.AgentAppData
+            BCBENCH_AGENT_LOCAL_APPDATA    = $context.AgentLocalAppData
+            BCBENCH_AGENT_TEMP             = $context.AgentTemp
             BCBENCH_AGENT_TOOLS            = $context.AgentTools
             BCBENCH_CONTAINED_PROCESS_WORKER = $context.WorkerPath
             BCBENCH_CONTAINED_PROCESS_WORKER_SHA256 = $context.WorkerSha256

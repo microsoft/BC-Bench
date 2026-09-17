@@ -12,6 +12,7 @@ import typer
 
 from bcbench.agent import get_claude_version, get_copilot_version, run_claude_code, run_copilot_agent
 from bcbench.agent.shared.contained_process import AgentExecutionPolicy, WindowsIdentity
+from bcbench.agent.shared.env import production_agent_profile_environment
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -344,7 +345,7 @@ def _run_lifecycle(
             raise typer.BadParameter(str(error), param_hint="--replay-patch") from error
         _require_file(replay_patch, "--replay-patch")
 
-    agent_temp = _prepare_agent_temp(paths)
+    profile_environment = _prepare_agent_profile(paths)
     resolved_sid = _resolve_local_windows_sid(agent_os_username)
     entry = BugFixEntry.load(_CATEGORY.dataset_path, entry_id=entry_id)[0]
     resolved_agent_version = agent_version()
@@ -366,10 +367,7 @@ def _run_lifecycle(
         python_executable=base_python,
         worker_path=staged_worker_path,
         worker_sha256=staged_worker_sha256.lower(),
-        environment_overrides={
-            "TEMP": str(agent_temp),
-            "TMP": str(agent_temp),
-        },
+        environment_overrides=profile_environment,
     )
     try:
         request = BugFixLifecycleRequest(
@@ -474,16 +472,19 @@ def _setup_owned_username(
     return normalized
 
 
-def _prepare_agent_temp(paths: BugFixLifecyclePaths) -> Path:
+def _prepare_agent_profile(paths: BugFixLifecyclePaths) -> dict[str, str]:
     _require_directory(paths.agent_logs, "--entry-root")
-    agent_temp = paths.agent_logs / "temp"
+    profile_environment = production_agent_profile_environment(paths.agent_logs)
+    profile_directories = tuple(dict.fromkeys(Path(profile_environment[name]) for name in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP")))
     try:
-        reject_reparse_components(agent_temp, paths.agent_logs)
-        agent_temp.mkdir(exist_ok=True)
+        for directory in profile_directories:
+            reject_reparse_components(directory, paths.agent_logs)
+            directory.mkdir(parents=True, exist_ok=True)
     except (OSError, ValueError) as error:
-        raise typer.BadParameter(f"Could not prepare agent temp directory: {error}", param_hint="--entry-root") from error
-    _require_directory(agent_temp, "--entry-root")
-    return agent_temp
+        raise typer.BadParameter(f"Could not prepare agent profile directories: {error}", param_hint="--entry-root") from error
+    for directory in profile_directories:
+        _require_directory(directory, "--entry-root")
+    return profile_environment
 
 
 def _safe_run_id(run_id: str) -> str:
