@@ -21,6 +21,7 @@ _EXPECTED_EXPORTS = {
     "Get-BCBenchContainerState",
     "New-BCBenchAgentIdentity",
     "New-BCBenchAgentTools",
+    "Remove-BCBenchAgentAcl",
     "Remove-BCBenchAgentIdentity",
     "Resolve-BCBenchPythonRuntime",
     "Set-BCBenchWorkspaceAcl",
@@ -255,7 +256,7 @@ function global:Get-LocalUser {{
 function global:New-LocalUser {{
     param([string]$Name, [SecureString]$Password, [string]$Description, [switch]$AccountNeverExpires, [switch]$PasswordNeverExpires)
     $global:newUsers += $Name
-    [PSCustomObject]@{{ Name = $Name }}
+    [PSCustomObject]@{{ Name = $Name; Sid = 'S-1-5-21-1000-1001-1002-1003' }}
 }}
 function global:Add-LocalGroupMember {{
     param($SID, $Member)
@@ -276,6 +277,7 @@ $identity = New-BCBenchAgentIdentity -InstanceId 'bug-fix__entry/unsafe'
     assert payload["getCalls"] >= 2
     assert len(payload["newUsers"]) == 1
     assert payload["identity"]["Username"].startswith("bcb-")
+    assert payload["identity"]["Sid"] == "S-1-5-21-1000-1001-1002-1003"
     assert len(payload["identity"]["Username"]) <= 20
     assert payload["identity"]["Password"]
     assert payload["identity"]["Domain"]
@@ -351,7 +353,12 @@ $validator = {{
     }}
 }}
 Import-Module {_ps_quote(_MODULE)} -Force
-$identity = [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'secret'; Domain = '.' }}
+$identity = [PSCustomObject]@{{
+    Username = 'bcb-1234567-abcdef'
+    Password = 'secret'
+    Domain = '.'
+    Sid = 'S-1-5-21-1000-1001-1002-1003'
+}}
 $result = Set-BCBenchWorkspaceAcl `
     -Identity $identity `
     -EntryRoot {_ps_quote(paths["entry"])} `
@@ -433,6 +440,26 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
     assert Path(paths["evidence"]).resolve() not in restricted_agent_grant_paths
     assert worker_path.resolve().is_relative_to(paths["agent-tools"].resolve())
     assert payload["result"]["ProcessId"] == 1234
+    assert payload["result"]["AclTransaction"]["Sid"] == "S-1-5-21-1000-1001-1002-1003"
+    assert {Path(path).resolve() for path in payload["result"]["AclTransaction"]["ModifiedPaths"]} == {
+        Path(path).resolve()
+        for path in (
+            paths["benchmark"],
+            paths["entry"],
+            paths["baseline"],
+            paths["agent"],
+            paths["logs"],
+            paths["agent-tools"],
+            paths["staging"],
+            paths["evaluators"],
+            paths["evidence"],
+            paths["protected"],
+            paths["tool"],
+            paths["runtime"],
+            runtime_executable,
+            worker_path,
+        )
+    }
 
 
 @pytest.mark.parametrize(
@@ -490,7 +517,12 @@ def test_workspace_acl_rejects_malicious_tool_roots(tmp_path: Path, malicious_pa
     script = f"""
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
-$identity = [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'secret'; Domain = '.' }}
+$identity = [PSCustomObject]@{{
+    Username = 'bcb-1234567-abcdef'
+    Password = 'secret'
+    Domain = '.'
+    Sid = 'S-1-5-21-1000-1001-1002-1003'
+}}
 $message = $null
 try {{
     Set-BCBenchWorkspaceAcl `
@@ -574,7 +606,12 @@ $validator = {{
     throw 'validator must not run'
 }}
 Import-Module {_ps_quote(_MODULE)} -Force
-$identity = [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'secret'; Domain = '.' }}
+$identity = [PSCustomObject]@{{
+    Username = 'bcb-1234567-abcdef'
+    Password = 'secret'
+    Domain = '.'
+    Sid = 'S-1-5-21-1000-1001-1002-1003'
+}}
 $message = $null
 try {{
     Set-BCBenchWorkspaceAcl `
@@ -607,12 +644,60 @@ catch {{
 """
     payload = _last_json(_run_pwsh(script))
 
-    assert len(payload["calls"]) == 4
-    assert payload["calls"][-2][0:2] == [str(paths["entry"]), "/remove:g"]
-    assert payload["calls"][-2][2].endswith("\\bcb-1234567-abcdef")
-    assert payload["calls"][-1][0:2] == [str(paths["benchmark"]), "/remove:d"]
+    assert len(payload["calls"]) == 6
+    assert payload["calls"][2:] == [
+        [str(paths["benchmark"]), "/remove:g", "*S-1-5-21-1000-1001-1002-1003"],
+        [str(paths["benchmark"]), "/remove:d", "*S-1-5-21-1000-1001-1002-1003"],
+        [str(paths["entry"]), "/remove:g", "*S-1-5-21-1000-1001-1002-1003"],
+        [str(paths["entry"]), "/remove:d", "*S-1-5-21-1000-1001-1002-1003"],
+    ]
     assert payload["validated"] is False
     assert "icacls failed with exit code 5" in payload["message"]
+
+
+def test_remove_agent_acl_uses_exact_sid_for_all_modified_paths() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:calls = @()
+$global:verification = @()
+Import-Module {_ps_quote(_MODULE)} -Force
+$transaction = [PSCustomObject]@{{
+    Sid = 'S-1-5-21-1000-1001-1002-1003'
+    ModifiedPaths = [System.Collections.Generic.List[string]]::new()
+    CleanupComplete = $false
+}}
+$transaction.ModifiedPaths.Add('C:\\external\\tool')
+$transaction.ModifiedPaths.Add('C:\\external\\python.exe')
+Remove-BCBenchAgentAcl `
+    -Transaction $transaction `
+    -IcaclsRunner {{
+        param([string[]]$Arguments)
+        $global:calls += ,@($Arguments)
+        return 0
+    }} `
+    -AclVerifier {{
+        param($Parameters)
+        $global:verification += $Parameters
+    }}
+[PSCustomObject]@{{
+    calls = $global:calls
+    verification = $global:verification
+    cleanupComplete = $transaction.CleanupComplete
+}} | ConvertTo-Json -Compress -Depth 8
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["calls"] == [
+        ["C:\\external\\tool", "/remove:g", "*S-1-5-21-1000-1001-1002-1003"],
+        ["C:\\external\\tool", "/remove:d", "*S-1-5-21-1000-1001-1002-1003"],
+        ["C:\\external\\python.exe", "/remove:g", "*S-1-5-21-1000-1001-1002-1003"],
+        ["C:\\external\\python.exe", "/remove:d", "*S-1-5-21-1000-1001-1002-1003"],
+    ]
+    assert {(item["Path"], item["Sid"]) for item in payload["verification"]} == {
+        ("C:\\external\\tool", "S-1-5-21-1000-1001-1002-1003"),
+        ("C:\\external\\python.exe", "S-1-5-21-1000-1001-1002-1003"),
+    }
+    assert payload["cleanupComplete"] is True
 
 
 def test_bc_user_uses_distinct_credential_super_and_pinned_helper_fallback_cleanup() -> None:
@@ -717,7 +802,7 @@ $successOps = @{{
     CreateCompiler = {{ }}
     InitializeContainer = {{ }}
     GetCompany = {{ 'CRONUS' }}
-    CreateAgentIdentity = {{ [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'os-secret'; Domain = '.' }} }}
+    CreateAgentIdentity = {{ [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'os-secret'; Domain = '.'; Sid = 'S-1-5-21-1000-1001-1002-1003' }} }}
     CreateBcIdentity = {{ [PSCustomObject]@{{ Username = 'bca-1234567-abcdef'; Password = 'bc-secret' }} }}
     ApplyAcl = {{ [PSCustomObject]@{{ WorkspaceWriteSucceeded = $true }} }}
 }}
@@ -746,6 +831,7 @@ $failureOps = @{{
     CreateBcIdentity = $successOps.CreateBcIdentity
     ApplyAcl = {{ throw 'acl failure' }}
     RemoveBcIdentity = {{ param($Context) @{{ action = 'bc-user'; username = $Context.AgentBcIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
+    RemoveAcl = {{ param($Context) @{{ action = 'acl'; sid = $Context.AgentIdentity.Sid }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
     RemoveAgentIdentity = {{ param($Context) @{{ action = 'os-user'; username = $Context.AgentIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
     RemoveContainer = {{
         param($Context)
@@ -837,7 +923,7 @@ catch {{
     assert "BCBENCH_CONTAINED_PROCESS_PYTHON=" in env_text
     assert "BC_SERVER_PASSWORD=evaluator-secret" in env_text
     assert payload["failed"] is True
-    assert {item["action"] for item in payload["cleanup"]} == {"bc-user", "os-user", "container"}
+    assert {item["action"] for item in payload["cleanup"]} == {"bc-user", "acl", "os-user", "container"}
     assert payload["failureEntryExists"] is False
     assert payload["failureProtectedExists"] is False
 
@@ -949,6 +1035,154 @@ catch {{
         assert "later failure" in payload["message"]
     if id_changes:
         assert "Docker ID changed" in payload["message"]
+
+
+@pytest.mark.parametrize(
+    ("replacement", "acl_fails", "expected_order", "expected_bc_calls", "expected_container_calls"),
+    [
+        (
+            False,
+            False,
+            ["verify-bc", "bc-user:owned-id", "acl", "os-user", "verify-container", "container:owned-id"],
+            1,
+            1,
+        ),
+        (
+            True,
+            False,
+            ["verify-bc", "acl", "os-user", "verify-container"],
+            0,
+            0,
+        ),
+        (
+            False,
+            True,
+            ["verify-bc", "bc-user:owned-id", "acl", "verify-container", "container:owned-id"],
+            1,
+            1,
+        ),
+    ],
+)
+def test_cleanup_is_transactional_and_ownership_verified_per_container_operation(
+    tmp_path: Path,
+    replacement: bool,
+    acl_fails: bool,
+    expected_order: list[str],
+    expected_bc_calls: int,
+    expected_container_calls: int,
+) -> None:
+    entry_root = tmp_path / "entry"
+    protected_root = tmp_path / "protected"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:containerExists = $false
+$global:containerId = $null
+$global:containerLabel = $null
+$global:inspectCalls = 0
+$global:bcCalls = 0
+$global:containerCalls = 0
+$global:osCalls = 0
+$global:order = @()
+$ops = @{{
+    ResolveEntry = {{ [PSCustomObject]@{{ repo = 'owner/repo'; base_commit = 'abc'; environment_setup_version = '28.0' }} }}
+    CloneRepository = {{ param($Context) New-Item -ItemType Directory -Path $Context.BaselineWorkspace -Force | Out-Null }}
+    InspectContainer = {{
+        param($Context)
+        $global:inspectCalls++
+        if ($global:inspectCalls -gt 2) {{
+            $phase = if ($global:inspectCalls -eq 3) {{ 'verify-bc' }} else {{ 'verify-container' }}
+            $global:order += $phase
+        }}
+        $id = if (${str(replacement).lower()} -and $global:inspectCalls -gt 2) {{ 'replacement-id' }} else {{ $global:containerId }}
+        [PSCustomObject]@{{
+            Exists = $global:containerExists
+            Id = $id
+            InvocationId = $global:containerLabel
+        }}
+    }}
+    CreateContainer = {{
+        param($Context)
+        $global:containerExists = $true
+        $global:containerId = 'owned-id'
+        $global:containerLabel = $Context.ContainerInvocationId
+    }}
+    CreateCompiler = {{ }}
+    InitializeContainer = {{ }}
+    GetCompany = {{ 'CRONUS' }}
+    CreateAgentIdentity = {{
+        [PSCustomObject]@{{
+            Username = 'bcb-1234567-abcdef'
+            Password = 'os-secret'
+            Domain = '.'
+            Sid = 'S-1-5-21-1000-1001-1002-1003'
+        }}
+    }}
+    CreateBcIdentity = {{ [PSCustomObject]@{{ Username = 'bca-1234567-abcdef'; Password = 'bc-secret' }} }}
+    ApplyAcl = {{
+        param($Context)
+        $Context.AclTransaction.ModifiedPaths.Add($Context.PythonBaseExecutable)
+        [PSCustomObject]@{{ WorkspaceWriteSucceeded = $true; AclTransaction = $Context.AclTransaction }}
+    }}
+    RemoveBcIdentity = {{
+        param($Context)
+        $global:bcCalls++
+        $global:order += "bc-user:$($Context.VerifiedContainerId)"
+    }}
+    RemoveAcl = {{
+        param($Context)
+        $global:order += 'acl'
+        if (${str(acl_fails).lower()}) {{ throw 'forced ACL cleanup failure' }}
+        $Context.AclTransaction.CleanupComplete = $true
+    }}
+    RemoveAgentIdentity = {{
+        $global:osCalls++
+        $global:order += 'os-user'
+    }}
+    RemoveContainer = {{
+        param($Context)
+        $global:containerCalls++
+        $global:order += "container:$($Context.VerifiedContainerId)"
+        $global:containerExists = $false
+    }}
+}}
+$message = $null
+try {{
+    Invoke-BCBenchBugFixLifecycle `
+        -InstanceId 'transactional-cleanup' `
+        -DatasetPath 'dataset.jsonl' `
+        -ContainerName 'bc-owned' `
+        -EvaluatorUsername 'admin' `
+        -EvaluatorPassword (ConvertTo-SecureString 'evaluator-secret' -AsPlainText -Force) `
+        -EntryRoot {_ps_quote(entry_root)} `
+        -ProtectedRoot {_ps_quote(protected_root)} `
+        -GithubOutput {_ps_quote(protected_root)} `
+        -Operations $ops | Out-Null
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{
+    message = $message
+    order = $global:order
+    bcCalls = $global:bcCalls
+    containerCalls = $global:containerCalls
+    osCalls = $global:osCalls
+}} | ConvertTo-Json -Compress -Depth 8
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["order"] == expected_order
+    assert payload["bcCalls"] == expected_bc_calls
+    assert payload["containerCalls"] == expected_container_calls
+    if replacement:
+        assert "Docker ID changed" in payload["message"]
+    elif acl_fails:
+        assert "forced ACL cleanup failure" in payload["message"]
+        assert "local user retained" in payload["message"]
+        assert payload["osCalls"] == 0
+    else:
+        assert payload["osCalls"] == 1
 
 
 @pytest.mark.e2e
@@ -1077,13 +1311,14 @@ def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, f
     staging = entry_root / "mounted-staging"
     evaluators = entry_root / "evaluator-workspaces"
     evidence = entry_root / "evidence"
+    tool_root = tmp_path / "tool-root"
     benchmark_parent = tmp_path / "benchmark-parent"
     benchmark_root = benchmark_parent / "benchmark"
     dataset_path = benchmark_root / "dataset" / "bcbench.jsonl"
     evaluator_source = benchmark_root / "src" / "bcbench" / "evaluate"
     docs = benchmark_root / "docs"
     source_worker = benchmark_root / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
-    for path in (baseline, workspace, logs, staging, evaluators, evidence, protected_root, dataset_path.parent, evaluator_source, docs, source_worker.parent):
+    for path in (baseline, workspace, logs, staging, evaluators, evidence, tool_root, protected_root, dataset_path.parent, evaluator_source, docs, source_worker.parent):
         path.mkdir(parents=True, exist_ok=True)
     dataset_path.write_text("{}\n", encoding="utf-8")
     (evaluator_source / "__init__.py").write_text("", encoding="utf-8")
@@ -1108,17 +1343,25 @@ $runtime = Resolve-BCBenchPythonRuntime -PythonExecutable {_ps_quote(sys.executa
 $identity = $null
 $username = $null
 $access = $null
+$aclTransaction = $null
 $probeError = $null
-$aclGrantRemains = $false
-$benchmarkDenyRemains = $false
+$agentAclRemains = $false
 $benchmarkDenyApplied = $false
 $inheritedUsersAllowPresent = $false
 $agentToolsInheritanceProtected = $false
 $workerInheritanceProtected = $false
 $agentWorkerWriteGrantPresent = $false
+$baseAclPreserved = $false
+$userPresentBeforeAclCleanup = $false
+$userPresentAfterAclCleanup = $false
 try {{
     $identity = New-BCBenchAgentIdentity -InstanceId {_ps_quote(instance_id)}
     $username = $identity.Username
+    $aclTransaction = [PSCustomObject]@{{
+        Sid = $identity.Sid
+        ModifiedPaths = [System.Collections.Generic.List[string]]::new()
+        CleanupComplete = $false
+    }}
     $tools = New-BCBenchAgentTools `
         -EntryRoot {_ps_quote(entry_root)} `
         -BenchmarkRoot {_ps_quote(benchmark_root)} `
@@ -1136,12 +1379,13 @@ try {{
         ProtectedRoot = {_ps_quote(protected_root)}
         BenchmarkRoot = {_ps_quote(benchmark_root)}
         DatasetPath = {_ps_quote(dataset_path)}
-        ToolRoots = @()
+        ToolRoots = @({_ps_quote(tool_root)})
         RuntimeExecutablePaths = @($runtime.BaseExecutable)
         RuntimeRoots = @($runtime.BasePrefix)
         SourceWorkerPath = {_ps_quote(source_worker)}
         WorkerPath = $tools.WorkerPath
         WorkerSha256 = $tools.WorkerSha256
+        AclTransaction = $aclTransaction
     }}
     $validator = {access_validator}
     if ($null -ne $validator) {{ $parameters.AccessValidator = $validator }}
@@ -1180,40 +1424,43 @@ catch {{
 }}
 finally {{
     if ($null -ne $username) {{
-        $account = [Security.Principal.NTAccount]::new([Environment]::MachineName, $username)
-        $sid = $account.Translate([Security.Principal.SecurityIdentifier]).Value
+        $aclCleanupSucceeded = $false
         try {{
-            foreach ($path in @(
-                {_ps_quote(entry_root)},
-                {_ps_quote(workspace)},
-                {_ps_quote(logs)},
-                $tools.AgentTools,
-                $runtime.BasePrefix,
-                $runtime.BaseExecutable
-            ) | Select-Object -Unique) {{
-                & icacls.exe $path /remove:g "$([Environment]::MachineName)\\$username" | Out-Null
-                if ($LASTEXITCODE -ne 0) {{ throw "ACL cleanup failed for $path" }}
+            $userPresentBeforeAclCleanup = $null -ne (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)
+            Remove-BCBenchAgentAcl -Transaction $aclTransaction
+            $userPresentAfterAclCleanup = $null -ne (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)
+            foreach ($path in $aclTransaction.ModifiedPaths | Select-Object -Unique) {{
+                if (-not (Test-Path -LiteralPath $path)) {{ continue }}
                 $acl = Get-Acl -LiteralPath $path
                 if ($acl.Access | Where-Object {{
-                    try {{ $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $sid }}
-                    catch {{ $_.IdentityReference.Value -eq $sid }}
+                    try {{ $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $identity.Sid }}
+                    catch {{ $_.IdentityReference.Value -eq $identity.Sid }}
                 }}) {{
-                    $aclGrantRemains = $true
+                    $agentAclRemains = $true
                 }}
             }}
-            & icacls.exe {_ps_quote(benchmark_root)} /remove:d "$([Environment]::MachineName)\\$username" | Out-Null
-            if ($LASTEXITCODE -ne 0) {{ throw "ACL deny cleanup failed for benchmark root" }}
-            $benchmarkAcl = Get-Acl -LiteralPath {_ps_quote(benchmark_root)}
-            if ($benchmarkAcl.Access | Where-Object {{
-                if ($_.AccessControlType -ne [Security.AccessControl.AccessControlType]::Deny) {{ return $false }}
-                try {{ return $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $sid }}
-                catch {{ return $false }}
-            }}) {{
-                $benchmarkDenyRemains = $true
+            $evaluatorSid = ([Security.Principal.WindowsIdentity]::GetCurrent()).User.Value
+            $baseAclPreserved = @({_ps_quote(workspace)}, {_ps_quote(protected_root)}, $tools.AgentTools, $tools.WorkerPath) |
+                ForEach-Object {{
+                    $acl = Get-Acl -LiteralPath $_
+                    $aclSids = @($acl.Access | ForEach-Object {{
+                        try {{ $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value }}
+                        catch {{ $_.IdentityReference.Value }}
+                    }})
+                    $aclSids -contains $evaluatorSid -and $aclSids -contains 'S-1-5-18'
+                }} |
+                Where-Object {{ -not $_ }} |
+                Measure-Object |
+                Select-Object -ExpandProperty Count
+            $baseAclPreserved = $baseAclPreserved -eq 0
+            if (-not $agentAclRemains) {{
+                $aclCleanupSucceeded = $true
             }}
         }}
         finally {{
-            Remove-BCBenchAgentIdentity -Username $username
+            if ($aclCleanupSucceeded) {{
+                Remove-BCBenchAgentIdentity -Username $username
+            }}
         }}
     }}
 }}
@@ -1221,21 +1468,27 @@ finally {{
     username = $username
     access = $access
     probeError = $probeError
-    aclGrantRemains = $aclGrantRemains
-    benchmarkDenyRemains = $benchmarkDenyRemains
+    agentAclRemains = $agentAclRemains
     benchmarkDenyApplied = $benchmarkDenyApplied
     inheritedUsersAllowPresent = $inheritedUsersAllowPresent
     agentToolsInheritanceProtected = $agentToolsInheritanceProtected
     workerInheritanceProtected = $workerInheritanceProtected
     agentWorkerWriteGrantPresent = $agentWorkerWriteGrantPresent
+    trackedPathCount = $aclTransaction.ModifiedPaths.Count
+    baseAclPreserved = $baseAclPreserved
+    userPresentBeforeAclCleanup = $userPresentBeforeAclCleanup
+    userPresentAfterAclCleanup = $userPresentAfterAclCleanup
     userRemains = if ($null -eq $username) {{ $false }} else {{ $null -ne (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) }}
 }} | ConvertTo-Json -Compress -Depth 8
 """
     payload = _last_json(_run_pwsh(script))
 
     assert payload["username"].startswith("bcb-")
-    assert payload["aclGrantRemains"] is False
-    assert payload["benchmarkDenyRemains"] is False
+    assert payload["agentAclRemains"] is False
+    assert payload["trackedPathCount"] == 14
+    assert payload["baseAclPreserved"] is True
+    assert payload["userPresentBeforeAclCleanup"] is True
+    assert payload["userPresentAfterAclCleanup"] is True
     assert payload["userRemains"] is False
     if force_probe_failure:
         assert "forced probe failure" in payload["probeError"]

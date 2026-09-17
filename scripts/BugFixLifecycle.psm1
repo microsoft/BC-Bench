@@ -91,16 +91,26 @@ function New-BCBenchAgentIdentity {
         $password = New-BCBenchPassword
         $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
         $createdUser = $false
+        $localUser = $null
+        $sid = $null
         try {
-            New-LocalUser `
+            $localUser = New-LocalUser `
                 -Name $username `
                 -Password $securePassword `
                 -Description "BC-Bench restricted agent for $InstanceId" `
                 -AccountNeverExpires `
-                -PasswordNeverExpires | Out-Null
+                -PasswordNeverExpires
             $createdUser = $true
             Add-LocalGroupMember -SID $script:UsersGroupSid -Member $username
             Assert-BCBenchAgentNotPrivileged -Username $username
+            $sidProperty = $localUser.PSObject.Properties["Sid"]
+            $sid = if ($null -eq $sidProperty) { $null } else { [string]$sidProperty.Value }
+            if ([string]::IsNullOrEmpty($sid)) {
+                $sid = ([Security.Principal.NTAccount]::new(
+                    [Environment]::MachineName,
+                    $username
+                )).Translate([Security.Principal.SecurityIdentifier]).Value
+            }
         }
         catch {
             if ($createdUser) {
@@ -114,6 +124,7 @@ function New-BCBenchAgentIdentity {
             Username = $username
             Password = $password
             Domain   = [Environment]::MachineName
+            Sid      = $sid
         }
     }
 
@@ -130,6 +141,104 @@ function Remove-BCBenchAgentIdentity {
     if ($null -ne (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
         Remove-LocalUser -Name $Username -ErrorAction Stop
     }
+}
+
+function New-BCBenchAgentAclTransaction {
+    param([Parameter(Mandatory = $true)][PSObject]$Identity)
+
+    $sidProperty = $Identity.PSObject.Properties["Sid"]
+    $sid = if ($null -eq $sidProperty) { $null } else { [string]$sidProperty.Value }
+    if ([string]::IsNullOrEmpty($sid)) {
+        $domain = if ([string]$Identity.Domain -eq ".") {
+            [Environment]::MachineName
+        }
+        else {
+            [string]$Identity.Domain
+        }
+        $sid = ([Security.Principal.NTAccount]::new(
+            $domain,
+            [string]$Identity.Username
+        )).Translate([Security.Principal.SecurityIdentifier]).Value
+    }
+    if ($sid -notmatch "^S-\d(-\d+)+$") {
+        throw "Restricted identity has an invalid SID '$sid'."
+    }
+
+    return [PSCustomObject]@{
+        Sid             = $sid
+        ModifiedPaths   = [System.Collections.Generic.List[string]]::new()
+        CleanupComplete = $false
+    }
+}
+
+function Add-BCBenchAgentAclPath {
+    param(
+        [Parameter(Mandatory = $true)][PSObject]$Transaction,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $absolute = Resolve-BCBenchAbsolutePath -Path $Path
+    if (-not $Transaction.ModifiedPaths.Contains($absolute)) {
+        $Transaction.ModifiedPaths.Add($absolute)
+    }
+}
+
+function Assert-BCBenchAgentAclAbsent {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Sid
+    )
+
+    $acl = Get-Acl -LiteralPath $Path
+    $remaining = @($acl.Access | Where-Object {
+        Test-BCBenchAclIdentity -Actual $_.IdentityReference -Expected $Sid
+    })
+    if ($remaining.Count -gt 0) {
+        throw "ACL cleanup verification failed for '$Path': $($remaining.Count) ACE(s) remain for SID '$Sid'."
+    }
+}
+
+function Remove-BCBenchAgentAcl {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][PSObject]$Transaction,
+        [Parameter(DontShow = $true)][scriptblock]$IcaclsRunner,
+        [Parameter(DontShow = $true)][scriptblock]$AclVerifier
+    )
+
+    $sid = [string]$Transaction.Sid
+    if ($sid -notmatch "^S-\d(-\d+)+$") {
+        throw "Refusing ACL cleanup for invalid restricted identity SID '$sid'."
+    }
+
+    [System.Collections.Generic.List[string]]$cleanupErrors = [System.Collections.Generic.List[string]]::new()
+    foreach ($path in $Transaction.ModifiedPaths | Select-Object -Unique) {
+        if ($null -eq $IcaclsRunner -and -not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+        try {
+            Invoke-BCBenchIcacls -Arguments @($path, "/remove:g", "*$sid") -Runner $IcaclsRunner
+            Invoke-BCBenchIcacls -Arguments @($path, "/remove:d", "*$sid") -Runner $IcaclsRunner
+            $verification = [PSCustomObject]@{
+                Path = $path
+                Sid  = $sid
+            }
+            if ($null -ne $AclVerifier) {
+                & $AclVerifier $verification
+            }
+            else {
+                Assert-BCBenchAgentAclAbsent -Path $path -Sid $sid
+            }
+        }
+        catch {
+            $cleanupErrors.Add("$path`: $($_.Exception.Message)")
+        }
+    }
+    if ($cleanupErrors.Count -gt 0) {
+        $Transaction.CleanupComplete = $false
+        throw "Restricted identity ACL cleanup failed: $($cleanupErrors -join '; ')"
+    }
+    $Transaction.CleanupComplete = $true
 }
 
 function Resolve-BCBenchAbsolutePath {
@@ -781,6 +890,7 @@ function Set-BCBenchWorkspaceAcl {
         [Parameter(Mandatory = $true)][ValidatePattern("^[a-fA-F0-9]{64}$")][string]$WorkerSha256,
         [string[]]$WorkerRequestPaths = @(),
         [string[]]$WorkerOutputPaths = @(),
+        [Parameter(DontShow = $true)][PSObject]$AclTransaction,
         [Parameter(DontShow = $true)][scriptblock]$IcaclsRunner,
         [Parameter(DontShow = $true)][scriptblock]$AclVerifier,
         [Parameter(DontShow = $true)][scriptblock]$AccessValidator
@@ -915,17 +1025,18 @@ function Set-BCBenchWorkspaceAcl {
     )
     $agentTraverse = [PSCustomObject]@{ Identity = $agentAccount; Rights = "Traverse" }
     $agentModify = [PSCustomObject]@{ Identity = $agentAccount; Rights = "Modify" }
-    [System.Collections.Generic.List[string]]$agentGrantPaths = [System.Collections.Generic.List[string]]::new()
-    [System.Collections.Generic.List[string]]$agentDenyPaths = [System.Collections.Generic.List[string]]::new()
+    if ($null -eq $AclTransaction) {
+        $AclTransaction = New-BCBenchAgentAclTransaction -Identity $Identity
+    }
 
     try {
-        $agentDenyPaths.Add($BenchmarkRoot)
+        Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $BenchmarkRoot
         Set-BCBenchIdentityDeny `
             -Path $BenchmarkRoot `
             -AgentAccount $agentAccount `
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
-        $agentGrantPaths.Add($EntryRoot)
+        Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $EntryRoot
         Set-BCBenchExplicitAcl `
             -Path $EntryRoot `
             -Rules ($baseRules + $agentTraverse) `
@@ -933,6 +1044,7 @@ function Set-BCBenchWorkspaceAcl {
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
         foreach ($privatePath in @($BaselineWorkspace, $MountedStaging, $EvaluatorWorkspaces, $Evidence, $ProtectedRoot)) {
+            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $privatePath
             Set-BCBenchExplicitAcl `
                 -Path $privatePath `
                 -Rules $baseRules `
@@ -941,14 +1053,14 @@ function Set-BCBenchWorkspaceAcl {
                 -IcaclsRunner $IcaclsRunner `
                 -AclVerifier $AclVerifier
         }
-        $agentGrantPaths.Add($AgentWorkspace)
+        Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $AgentWorkspace
         Set-BCBenchExplicitAcl `
             -Path $AgentWorkspace `
             -Rules ($baseRules + $agentModify) `
             -AgentAccount $agentAccount `
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
-        $agentGrantPaths.Add($AgentLogs)
+        Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $AgentLogs
         Set-BCBenchExplicitAcl `
             -Path $AgentLogs `
             -Rules ($baseRules + $agentModify) `
@@ -956,14 +1068,14 @@ function Set-BCBenchWorkspaceAcl {
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
         $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
-        $agentGrantPaths.Add($AgentTools)
+        Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $AgentTools
         Set-BCBenchExplicitAcl `
             -Path $AgentTools `
             -Rules ($baseRules + $agentRead) `
             -AgentAccount $agentAccount `
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
-        $agentGrantPaths.Add($WorkerPath)
+        Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $WorkerPath
         Set-BCBenchExplicitAcl `
             -Path $WorkerPath `
             -Rules ($baseRules + $agentRead) `
@@ -973,7 +1085,7 @@ function Set-BCBenchWorkspaceAcl {
             -AclVerifier $AclVerifier
         foreach ($toolRoot in $ToolRoots | Select-Object -Unique) {
             $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
-            $agentGrantPaths.Add($toolRoot)
+            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $toolRoot
             Set-BCBenchExplicitAcl `
                 -Path $toolRoot `
                 -Rules @($agentRead) `
@@ -984,7 +1096,7 @@ function Set-BCBenchWorkspaceAcl {
         }
         foreach ($runtimeRoot in $RuntimeRoots | Select-Object -Unique) {
             $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
-            $agentGrantPaths.Add($runtimeRoot)
+            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $runtimeRoot
             Set-BCBenchExplicitAcl `
                 -Path $runtimeRoot `
                 -Rules @($agentRead) `
@@ -995,7 +1107,7 @@ function Set-BCBenchWorkspaceAcl {
         }
         foreach ($runtimeExecutablePath in $RuntimeExecutablePaths | Select-Object -Unique) {
             $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
-            $agentGrantPaths.Add($runtimeExecutablePath)
+            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $runtimeExecutablePath
             Set-BCBenchExplicitAcl `
                 -Path $runtimeExecutablePath `
                 -Rules @($agentRead) `
@@ -1006,7 +1118,7 @@ function Set-BCBenchWorkspaceAcl {
                 -AclVerifier $AclVerifier
         }
         if ($WorkerRequestPaths.Count -gt 0 -or $WorkerOutputPaths.Count -gt 0) {
-            $agentGrantPaths.Add($MountedStaging)
+            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $MountedStaging
             Set-BCBenchExplicitAcl `
                 -Path $MountedStaging `
                 -Rules ($baseRules + $agentTraverse) `
@@ -1016,7 +1128,7 @@ function Set-BCBenchWorkspaceAcl {
         }
         foreach ($requestPath in $WorkerRequestPaths) {
             $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
-            $agentGrantPaths.Add($requestPath)
+            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $requestPath
             Set-BCBenchExplicitAcl `
                 -Path $requestPath `
                 -Rules ($baseRules + $agentRead) `
@@ -1026,7 +1138,7 @@ function Set-BCBenchWorkspaceAcl {
                 -AclVerifier $AclVerifier
         }
         foreach ($outputPath in $WorkerOutputPaths) {
-            $agentGrantPaths.Add($outputPath)
+            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $outputPath
             Set-BCBenchExplicitAcl `
                 -Path $outputPath `
                 -Rules ($baseRules + $agentModify) `
@@ -1071,29 +1183,21 @@ function Set-BCBenchWorkspaceAcl {
                 throw "Restricted identity access verification failed: $property was false."
             }
         }
+        $result | Add-Member -NotePropertyName AclTransaction -NotePropertyValue $AclTransaction -Force
         return $result
     }
     catch {
         $originalError = $_
-        [System.Collections.Generic.List[string]]$rollbackErrors = [System.Collections.Generic.List[string]]::new()
-        foreach ($grantedPath in $agentGrantPaths | Select-Object -Unique) {
-            try {
-                Invoke-BCBenchIcacls -Arguments @($grantedPath, "/remove:g", $agentAccount) -Runner $IcaclsRunner
-            }
-            catch {
-                $rollbackErrors.Add("$grantedPath`: $($_.Exception.Message)")
-            }
+        try {
+            Remove-BCBenchAgentAcl `
+                -Transaction $AclTransaction `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
         }
-        foreach ($deniedPath in $agentDenyPaths | Select-Object -Unique) {
-            try {
-                Invoke-BCBenchIcacls -Arguments @($deniedPath, "/remove:d", $agentAccount) -Runner $IcaclsRunner
-            }
-            catch {
-                $rollbackErrors.Add("$deniedPath`: $($_.Exception.Message)")
-            }
+        catch {
+            throw "$($originalError.Exception.Message) ACL rollback errors: $($_.Exception.Message)"
         }
-        $rollbackMessage = if ($rollbackErrors.Count -eq 0) { "" } else { " ACL rollback errors: $($rollbackErrors -join '; ')" }
-        throw "$($originalError.Exception.Message)$rollbackMessage"
+        throw $originalError
     }
 }
 
@@ -1197,6 +1301,39 @@ function Get-BCBenchContainerState {
         Id           = [string]$container.Id
         InvocationId = $invocationId
     }
+}
+
+function Get-BCBenchVerifiedContainerId {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Operations,
+        [Parameter(Mandatory = $true)][PSObject]$Context
+    )
+
+    if (
+        [string]::IsNullOrEmpty([string]$Context.ContainerId) -or
+        [string]::IsNullOrEmpty([string]$Context.ContainerInvocationId)
+    ) {
+        throw "Refusing container-scoped cleanup because recorded ownership is incomplete."
+    }
+    $state = Invoke-BCBenchOperation -Operations $Operations -Name InspectContainer -Context $Context -Default {
+        param($operationContext)
+        return Get-BCBenchContainerState -ContainerName $operationContext.ContainerName
+    }
+    if (-not [bool]$state.Exists) {
+        throw "Refusing container-scoped cleanup because owned container '$($Context.ContainerName)' is missing."
+    }
+    if ([string]$state.InvocationId -ne [string]$Context.ContainerInvocationId) {
+        throw "Refusing container-scoped cleanup for container '$($Context.ContainerName)' with a missing or different lifecycle invocation label."
+    }
+    if ([string]::IsNullOrEmpty([string]$state.Id)) {
+        throw "Refusing container-scoped cleanup for container '$($Context.ContainerName)' without a Docker ID."
+    }
+    if ([string]$state.Id -ne [string]$Context.ContainerId) {
+        throw "Refusing container-scoped cleanup for container '$($Context.ContainerName)' because its Docker ID changed."
+    }
+
+    $Context.VerifiedContainerId = [string]$state.Id
+    return $Context.VerifiedContainerId
 }
 
 function New-BCBenchInvocationId {
@@ -1345,10 +1482,12 @@ function Invoke-BCBenchBugFixLifecycle {
         EvaluatorCredential    = $null
         AgentIdentity          = $null
         AgentBcIdentity        = $null
+        AclTransaction         = $null
         EvaluatorContainerConfig = $null
         AgentContainerConfig     = $null
         ContainerInvocationId    = New-BCBenchInvocationId
         ContainerId              = $null
+        VerifiedContainerId      = $null
         ObservedContainerInvocationId = $null
         ContainerPreexisted      = $null
         ContainerSuccessfullyCreated = $false
@@ -1363,6 +1502,7 @@ function Invoke-BCBenchBugFixLifecycle {
     $ownedContainerObserved = $false
     $createdAgentIdentity = $false
     $createdAgentBcIdentity = $false
+    $aclApplicationStarted = $false
     $oldGithubToken = $env:GITHUB_TOKEN
     $oldAdoToken = $env:ADO_TOKEN
 
@@ -1540,12 +1680,14 @@ function Invoke-BCBenchBugFixLifecycle {
             return New-BCBenchAgentIdentity -InstanceId $operationContext.InstanceId
         }
         $createdAgentIdentity = $true
+        $context.AclTransaction = New-BCBenchAgentAclTransaction -Identity $context.AgentIdentity
         $context.AgentBcIdentity = Invoke-BCBenchOperation -Operations $Operations -Name CreateBcIdentity -Context $context -Default {
             param($operationContext)
             return New-BCBenchAgentBcUser -InstanceId $operationContext.InstanceId -ContainerName $operationContext.ContainerName
         }
         $createdAgentBcIdentity = $true
-        Invoke-BCBenchOperation -Operations $Operations -Name ApplyAcl -Context $context -Default {
+        $aclApplicationStarted = $true
+        $aclResult = Invoke-BCBenchOperation -Operations $Operations -Name ApplyAcl -Context $context -Default {
             param($operationContext)
             return Set-BCBenchWorkspaceAcl `
                 -Identity $operationContext.AgentIdentity `
@@ -1565,8 +1707,12 @@ function Invoke-BCBenchBugFixLifecycle {
                 -RuntimeRoots @($operationContext.PythonBasePrefix) `
                 -SourceWorkerPath $operationContext.SourceWorkerPath `
                 -WorkerPath $operationContext.WorkerPath `
-                -WorkerSha256 $operationContext.WorkerSha256
-        } | Out-Null
+                -WorkerSha256 $operationContext.WorkerSha256 `
+                -AclTransaction $operationContext.AclTransaction
+        }
+        if ($null -ne $aclResult -and $null -ne $aclResult.PSObject.Properties["AclTransaction"]) {
+            $context.AclTransaction = $aclResult.AclTransaction
+        }
 
         $evaluatorPasswordText = ConvertFrom-BCBenchSecureString -SecureString $EvaluatorPassword
         Write-BCBenchSecretMask -Secret $evaluatorPasswordText
@@ -1677,6 +1823,7 @@ function Invoke-BCBenchBugFixLifecycle {
         [System.Collections.Generic.List[string]]$cleanupErrors = [System.Collections.Generic.List[string]]::new()
         if ($createdAgentBcIdentity) {
             try {
+                Get-BCBenchVerifiedContainerId -Operations $Operations -Context $context | Out-Null
                 Invoke-BCBenchOperation -Operations $Operations -Name RemoveBcIdentity -Context $context -Default {
                     param($operationContext)
                     Remove-BCBenchAgentBcUser `
@@ -1685,45 +1832,48 @@ function Invoke-BCBenchBugFixLifecycle {
                         -Password $operationContext.AgentBcIdentity.Password
                 } | Out-Null
             }
-            catch { $cleanupErrors.Add("BC user: $($_.Exception.Message)") }
+            catch { $cleanupErrors.Add("BC user ownership/cleanup: $($_.Exception.Message)") }
+        }
+        $aclCleanupSucceeded = -not $aclApplicationStarted
+        if ($aclApplicationStarted) {
+            try {
+                Invoke-BCBenchOperation -Operations $Operations -Name RemoveAcl -Context $context -Default {
+                    param($operationContext)
+                    Remove-BCBenchAgentAcl -Transaction $operationContext.AclTransaction
+                } | Out-Null
+                $context.AclTransaction.CleanupComplete = $true
+                $aclCleanupSucceeded = $true
+            }
+            catch {
+                $cleanupErrors.Add("ACL quarantine: $($_.Exception.Message)")
+            }
         }
         if ($createdAgentIdentity) {
-            try {
-                Invoke-BCBenchOperation -Operations $Operations -Name RemoveAgentIdentity -Context $context -Default {
-                    param($operationContext)
-                    Remove-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
-                } | Out-Null
+            if ($aclCleanupSucceeded) {
+                try {
+                    Invoke-BCBenchOperation -Operations $Operations -Name RemoveAgentIdentity -Context $context -Default {
+                        param($operationContext)
+                        Remove-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
+                    } | Out-Null
+                }
+                catch { $cleanupErrors.Add("local user: $($_.Exception.Message)") }
             }
-            catch { $cleanupErrors.Add("local user: $($_.Exception.Message)") }
+            else {
+                $cleanupErrors.Add(
+                    "local user retained for quarantine because ACL cleanup was not verified: $($context.AgentIdentity.Username)"
+                )
+            }
         }
         if ($containerOwnershipChecked -and -not $containerPreexisted) {
             try {
-                $cleanupContainerState = Invoke-BCBenchOperation -Operations $Operations -Name InspectContainer -Context $context -Default {
+                Get-BCBenchVerifiedContainerId -Operations $Operations -Context $context | Out-Null
+                Invoke-BCBenchOperation -Operations $Operations -Name RemoveContainer -Context $context -Default {
                     param($operationContext)
-                    return Get-BCBenchContainerState -ContainerName $operationContext.ContainerName
-                }
-                if ([bool]$cleanupContainerState.Exists) {
-                    if ([string]$cleanupContainerState.InvocationId -ne $context.ContainerInvocationId) {
-                        throw "Refusing to remove container '$($context.ContainerName)' with a missing or different lifecycle invocation label."
+                    $output = & docker container rm --force $operationContext.VerifiedContainerId 2>&1
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Docker removal failed for owned container ID '$($operationContext.VerifiedContainerId)': $(@($output) -join [Environment]::NewLine)"
                     }
-                    if ([string]::IsNullOrEmpty([string]$cleanupContainerState.Id)) {
-                        throw "Refusing to remove container '$($context.ContainerName)' without a Docker ID."
-                    }
-                    if (
-                        -not [string]::IsNullOrEmpty($context.ContainerId) -and
-                        [string]$cleanupContainerState.Id -ne $context.ContainerId
-                    ) {
-                        throw "Refusing to remove container '$($context.ContainerName)' because its Docker ID changed."
-                    }
-                    $context.ContainerId = [string]$cleanupContainerState.Id
-                    Invoke-BCBenchOperation -Operations $Operations -Name RemoveContainer -Context $context -Default {
-                        param($operationContext)
-                        $output = & docker container rm --force $operationContext.ContainerId 2>&1
-                        if ($LASTEXITCODE -ne 0) {
-                            throw "Docker removal failed for owned container ID '$($operationContext.ContainerId)': $(@($output) -join [Environment]::NewLine)"
-                        }
-                    } | Out-Null
-                }
+                } | Out-Null
             }
             catch { $cleanupErrors.Add("container ownership: $($_.Exception.Message)") }
         }
@@ -1753,6 +1903,7 @@ Export-ModuleMember -Function `
     Get-BCBenchContainerState, `
     New-BCBenchAgentTools, `
     New-BCBenchAgentIdentity, `
+    Remove-BCBenchAgentAcl, `
     Remove-BCBenchAgentIdentity, `
     Assert-BCBenchReadExecuteRoots, `
     Resolve-BCBenchPythonRuntime, `
