@@ -98,7 +98,8 @@ def test_requeue_workflow_reads_inputs_from_environment() -> None:
 
     assert requeue["env"]["INPUTS_JSON"] == "${{ inputs.workflow-inputs }}"
     assert "${{ inputs.workflow-inputs }}" not in requeue["run"]
-    assert 'echo "${INPUTS_JSON}" | jq' in requeue["run"]
+    assert """printf '%s' "${INPUTS_JSON}" | jq""" in requeue["run"]
+    assert "select(.value != null)" in requeue["run"]
     assert '"${ARGS[@]}"' in requeue["run"]
 
 

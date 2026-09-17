@@ -59,7 +59,7 @@ jobs:
             key="${line%%=*}"
             value="${line#*=}"
             ARGS+=("-f" "${key}=${value}")
-          done < <(echo "${INPUTS_JSON}" | jq -r 'to_entries[] | "\(.key)=\(.value)"')
+          done < <(printf '%s' "${INPUTS_JSON}" | jq -r 'to_entries[] | select(.value != null) | "\(.key)=\(.value)"')
 
           # Trigger the workflow using the tag as ref
           gh workflow run ${{ inputs.workflow-file }} \
