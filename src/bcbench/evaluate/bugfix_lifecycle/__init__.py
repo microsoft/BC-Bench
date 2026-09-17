@@ -20,7 +20,7 @@ from bcbench.evaluate.bugfix_lifecycle.phases import (
     make_not_run_phase,
     not_run_phase,
 )
-from bcbench.evaluate.bugfix_lifecycle.workspace import TrustedWorkspaceBuilder
+from bcbench.evaluate.bugfix_lifecycle.workspace import TrustedWorkspaceBuilder, materialized_workspace_tree_hash
 
 __all__ = [
     "AppInventoryEntry",
@@ -43,6 +43,7 @@ __all__ = [
     "invalid_submission_phase",
     "make_invalid_submission_phase",
     "make_not_run_phase",
+    "materialized_workspace_tree_hash",
     "not_run_phase",
     "sha256_file",
     "sha256_text",

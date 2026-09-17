@@ -51,6 +51,69 @@ def _run_git(arguments: list[str], *, cwd: Path | None = None) -> str:
     return result.stdout.strip()
 
 
+def materialized_workspace_tree_hash(workspace: Path) -> str:
+    resolved_workspace = workspace.resolve()
+    git_directory = resolved_workspace / ".git"
+    if not resolved_workspace.is_dir() or not git_directory.is_dir():
+        raise ValueError(f"Evaluator workspace must be a Git repository: {workspace}")
+
+    with tempfile.NamedTemporaryFile(
+        prefix="bcbench-index-",
+        dir=git_directory,
+        delete=False,
+    ) as temporary_index:
+        index_path = Path(temporary_index.name)
+    index_path.unlink()
+    environment = _git_environment()
+    environment["GIT_INDEX_FILE"] = str(index_path)
+    git_prefix = [
+        "git",
+        "--no-replace-objects",
+        "-c",
+        f"core.attributesFile={os.devnull}",
+        "-c",
+        "core.autocrlf=false",
+        "-c",
+        "core.safecrlf=false",
+    ]
+    excluded_paths = (
+        ":(exclude,glob)**/output/**",
+        ":(exclude,glob)**/.alpackages/**",
+        ":(exclude,glob)**/evidence/**",
+    )
+    try:
+        subprocess.run(
+            [*git_prefix, "read-tree", "--empty"],
+            cwd=resolved_workspace,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        subprocess.run(
+            [*git_prefix, "add", "--all", "--force", "--", ".", *excluded_paths],
+            cwd=resolved_workspace,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [*git_prefix, "write-tree"],
+            cwd=resolved_workspace,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        return result.stdout.strip()
+    finally:
+        index_path.unlink(missing_ok=True)
+
+
 def _safe_workspace_name(name: str) -> str:
     reserved_stem = name.partition(".")[0].upper()
     if not name or name in {".", ".."} or name.endswith((" ", ".")) or any(character in name for character in ("/", "\\", ":", "\0")) or reserved_stem in _WINDOWS_RESERVED_NAMES:

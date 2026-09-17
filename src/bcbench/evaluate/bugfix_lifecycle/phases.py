@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import traceback
 import xml.etree.ElementTree as ET
 import zipfile
@@ -25,7 +26,7 @@ from bcbench.evaluate.bugfix_lifecycle.models import (
     ProjectPublication,
     TrustedSource,
 )
-from bcbench.evaluate.bugfix_lifecycle.workspace import TrustedWorkspaceBuilder
+from bcbench.evaluate.bugfix_lifecycle.workspace import TrustedWorkspaceBuilder, materialized_workspace_tree_hash
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
 from bcbench.exceptions import (
     BugFixLifecycleInfrastructureError,
@@ -55,6 +56,7 @@ from bcbench.types import ContainerConfig
 
 PatchApplier = Callable[[Path, str, str], None]
 WorkspaceCleaner = Callable[[Path], None]
+WorkspaceHasher = Callable[[Path], str]
 
 
 class ProjectPublisher(Protocol):
@@ -148,8 +150,21 @@ class DefaultExactTestRunner:
 class _PhaseState:
     name: str
     source_description: str
-    source_hash: str
+    submission: GeneratedBugFixOutput
+    trusted_source_commit: str
+    container_id: str
+    image_id: str
+    hostname: str
+    mounts: tuple[str, ...]
     checkpoint_hash: str | None
+    generated_fix_patch_hash: str | None = None
+    generated_test_patch_hash: str | None = None
+    gold_patch_hash: str | None = None
+    benchmark_patch_hash: str | None = None
+    trusted_patches: tuple[tuple[str, str, str], ...] = ()
+    trusted_source_hash: str | None = None
+    materialized_source_hash: str | None = None
+    prebuild_source_hashes: list[str] = field(default_factory=list)
     workspace: Path | None = None
     packages: list[Path] = field(default_factory=list)
     package_hashes: dict[Path, str] = field(default_factory=dict)
@@ -205,6 +220,7 @@ class BugFixPhaseRunner:
         test_runner: ExactTestRunner | None = None,
         patch_applier: PatchApplier = apply_patch,
         workspace_cleaner: WorkspaceCleaner = remove_tree,
+        workspace_hasher: WorkspaceHasher = materialized_workspace_tree_hash,
         inventory_reader: InventoryReader | None = None,
         inventory_verifier: InventoryVerifier | None = None,
     ) -> None:
@@ -225,6 +241,7 @@ class BugFixPhaseRunner:
         self._test_runner = test_runner or DefaultExactTestRunner()
         self._patch_applier = patch_applier
         self._workspace_cleaner = workspace_cleaner
+        self._workspace_hasher = workspace_hasher
         if inventory_verifier is not None:
             self._inventory_verifier = inventory_verifier
         else:
@@ -243,12 +260,14 @@ class BugFixPhaseRunner:
         def action(state: _PhaseState) -> None:
             self._restore_and_verify(state, s0)
             self._require_single_generated_test(submission)
-            state.workspace = self._create_workspace(state.name)
+            self._create_phase_workspace(state)
             self._apply_generated(
-                state.workspace,
+                state,
                 submission.test_patch,
+                submission.test_patch_hash,
                 "test-red generated test patch",
             )
+            self._capture_materialized_source(state)
             self._publish_batch(
                 state,
                 self._product_projects(submission),
@@ -270,7 +289,14 @@ class BugFixPhaseRunner:
                 state.workspace,
             )
 
-        return self._execute_phase("test-red", s0, source_description, action)
+        return self._execute_phase(
+            "test-red",
+            s0,
+            source_description,
+            submission,
+            action,
+            generated_test_patch_hash=submission.test_patch_hash,
+        )
 
     def run_test_gold(
         self,
@@ -278,6 +304,7 @@ class BugFixPhaseRunner:
         s0: CheckpointManifest,
         gold_patch: str,
     ) -> BugFixPhaseResult:
+        gold_patch_hash = sha256_text(gold_patch)
         source_description = self._source_description(
             trusted_gold_patch=gold_patch,
             generated_test_patch=submission.test_patch,
@@ -285,18 +312,22 @@ class BugFixPhaseRunner:
         product_source_description = self._source_description(
             trusted_gold_patch=gold_patch,
         )
-        product_source_hash = sha256_text(product_source_description)
 
         def action(state: _PhaseState) -> None:
             self._restore_and_verify(state, s0)
             self._require_single_generated_test(submission)
-            state.workspace = self._create_workspace(state.name)
+            self._create_phase_workspace(state)
             self._apply_trusted(
-                state.workspace,
+                state,
                 gold_patch,
+                gold_patch_hash,
                 "test-gold trusted gold patch",
             )
             state.additional_sources["gold_product_source"] = product_source_description
+            self._capture_materialized_source(state)
+            product_source_hash = state.materialized_source_hash
+            if product_source_hash is None:
+                raise BugFixLifecycleInfrastructureError("Gold product source hash was not captured")
             product_packages = self._publish_batch(
                 state,
                 self._product_projects(submission),
@@ -309,10 +340,12 @@ class BugFixPhaseRunner:
                 f"gold-product-{product_source_hash}",
             )
             self._apply_generated(
-                state.workspace,
+                state,
                 submission.test_patch,
+                submission.test_patch_hash,
                 "test-gold generated test patch",
             )
+            self._capture_materialized_source(state)
             test_packages = self._publish_batch(
                 state,
                 submission.test_projects,
@@ -328,7 +361,15 @@ class BugFixPhaseRunner:
                 state.workspace,
             )
 
-        return self._execute_phase("test-gold", s0, source_description, action)
+        return self._execute_phase(
+            "test-gold",
+            s0,
+            source_description,
+            submission,
+            action,
+            generated_test_patch_hash=submission.test_patch_hash,
+            gold_patch=(gold_patch, gold_patch_hash),
+        )
 
     def run_fix_build(
         self,
@@ -341,12 +382,14 @@ class BugFixPhaseRunner:
         def action(state: _PhaseState) -> None:
             nonlocal fixed_manifest
             self._restore_and_verify(state, s0)
-            state.workspace = self._create_workspace(state.name)
+            self._create_phase_workspace(state)
             self._apply_generated(
-                state.workspace,
+                state,
                 submission.fix_patch,
+                submission.fix_patch_hash,
                 "fix-build generated fix patch",
             )
+            self._capture_materialized_source(state)
             self._assert_projects_have_no_packages(
                 state.workspace,
                 submission.test_projects,
@@ -367,7 +410,14 @@ class BugFixPhaseRunner:
             state.checkpoint_hash = fixed_manifest.sha256
             state.evidence["fixed_checkpoint"] = self._relative_protected_path(fixed_manifest.backup_path)
 
-        result = self._execute_phase("fix-build", s0, source_description, action)
+        result = self._execute_phase(
+            "fix-build",
+            s0,
+            source_description,
+            submission,
+            action,
+            generated_fix_patch_hash=submission.fix_patch_hash,
+        )
         if result.status is not BugFixPhaseStatus.PASSED:
             fixed_manifest = None
         return result, fixed_manifest
@@ -404,17 +454,20 @@ class BugFixPhaseRunner:
         def action(state: _PhaseState) -> None:
             self._verify_checkpoint_inventory(state, sf)
             self._require_single_generated_test(submission)
-            state.workspace = self._create_workspace(state.name)
+            self._create_phase_workspace(state)
             self._apply_generated(
-                state.workspace,
+                state,
                 submission.fix_patch,
+                submission.fix_patch_hash,
                 "generated-pair generated fix patch",
             )
             self._apply_generated(
-                state.workspace,
+                state,
                 submission.test_patch,
+                submission.test_patch_hash,
                 "generated-pair generated test patch",
             )
+            self._capture_materialized_source(state)
             test_packages = self._publish_batch(
                 state,
                 submission.test_projects,
@@ -430,7 +483,15 @@ class BugFixPhaseRunner:
                 state.workspace,
             )
 
-        return self._execute_phase("generated-pair", sf, source_description, action)
+        return self._execute_phase(
+            "generated-pair",
+            sf,
+            source_description,
+            submission,
+            action,
+            generated_fix_patch_hash=submission.fix_patch_hash,
+            generated_test_patch_hash=submission.test_patch_hash,
+        )
 
     def run_benchmark_fix(
         self,
@@ -440,6 +501,7 @@ class BugFixPhaseRunner:
         fail_to_pass: Sequence[TestEntry],
         pass_to_pass: Sequence[TestEntry],
     ) -> BugFixPhaseResult:
+        benchmark_patch_hash = sha256_text(benchmark_patch)
         benchmark_tests = (*fail_to_pass, *pass_to_pass)
         source_description = self._source_description(
             generated_fix_patch=submission.fix_patch,
@@ -448,22 +510,25 @@ class BugFixPhaseRunner:
 
         def action(state: _PhaseState) -> None:
             self._restore_and_verify(state, sf)
-            state.workspace = self._create_workspace(state.name)
+            self._create_phase_workspace(state)
             self._assert_projects_have_no_packages(
                 state.workspace,
                 submission.test_projects,
                 "generated test",
             )
             self._apply_generated(
-                state.workspace,
+                state,
                 submission.fix_patch,
+                submission.fix_patch_hash,
                 "benchmark-fix generated fix patch",
             )
             self._apply_trusted(
-                state.workspace,
+                state,
                 benchmark_patch,
+                benchmark_patch_hash,
                 "benchmark-fix trusted benchmark patch",
             )
+            self._capture_materialized_source(state)
             self._assert_projects_have_no_packages(
                 state.workspace,
                 submission.test_projects,
@@ -484,21 +549,52 @@ class BugFixPhaseRunner:
                 state.workspace,
             )
 
-        return self._execute_phase("benchmark-fix", sf, source_description, action)
+        return self._execute_phase(
+            "benchmark-fix",
+            sf,
+            source_description,
+            submission,
+            action,
+            generated_fix_patch_hash=submission.fix_patch_hash,
+            benchmark_patch=(benchmark_patch, benchmark_patch_hash),
+        )
 
     def _execute_phase(
         self,
         name: str,
         checkpoint: CheckpointManifest,
         source_description: str,
+        submission: GeneratedBugFixOutput,
         action: Callable[[_PhaseState], None],
+        *,
+        generated_fix_patch_hash: str | None = None,
+        generated_test_patch_hash: str | None = None,
+        gold_patch: tuple[str, str] | None = None,
+        benchmark_patch: tuple[str, str] | None = None,
     ) -> BugFixPhaseResult:
         started_at = datetime.now(UTC)
         state = _PhaseState(
             name=name,
             source_description=source_description,
-            source_hash=sha256_text(source_description),
+            submission=submission,
+            trusted_source_commit=self._trusted_source.commit,
+            container_id=checkpoint.container.container_id,
+            image_id=checkpoint.container.image_id,
+            hostname=checkpoint.container.hostname,
+            mounts=checkpoint.container.mounts,
             checkpoint_hash=checkpoint.sha256,
+            generated_fix_patch_hash=generated_fix_patch_hash,
+            generated_test_patch_hash=generated_test_patch_hash,
+            gold_patch_hash=gold_patch[1] if gold_patch is not None else None,
+            benchmark_patch_hash=benchmark_patch[1] if benchmark_patch is not None else None,
+            trusted_patches=tuple(
+                patch
+                for patch in (
+                    ("gold patch", *gold_patch) if gold_patch is not None else None,
+                    ("benchmark patch", *benchmark_patch) if benchmark_patch is not None else None,
+                )
+                if patch is not None
+            ),
             expected_apps=checkpoint.apps,
         )
         status = BugFixPhaseStatus.PASSED
@@ -574,15 +670,89 @@ class BugFixPhaseRunner:
         except (OSError, ValueError) as error:
             raise BugFixLifecycleInfrastructureError(f"Failed to create evaluator workspace for {name}: {error}") from error
 
-    def _apply_generated(self, workspace: Path, patch: str, patch_name: str) -> None:
+    def _create_phase_workspace(self, state: _PhaseState) -> None:
+        self._verify_phase_patch_hashes(state)
+        state.workspace = self._create_workspace(state.name)
+        state.trusted_source_hash = self._hash_workspace(state.workspace)
+
+    def _hash_workspace(self, workspace: Path) -> str:
         try:
-            self._patch_applier(workspace, patch, patch_name)
+            tree_hash = self._workspace_hasher(workspace)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            raise BugFixLifecycleInfrastructureError(f"Failed to hash evaluator workspace tree: {error}") from error
+        if not tree_hash:
+            raise BugFixLifecycleInfrastructureError("Evaluator workspace tree hash is empty")
+        return tree_hash
+
+    def _capture_materialized_source(self, state: _PhaseState) -> None:
+        if state.workspace is None:
+            raise BugFixLifecycleInfrastructureError("Evaluator workspace is unavailable")
+        self._verify_phase_patch_hashes(state)
+        state.materialized_source_hash = self._hash_workspace(state.workspace)
+
+    def _verify_materialized_source(self, state: _PhaseState) -> None:
+        if state.workspace is None or state.materialized_source_hash is None:
+            raise BugFixLifecycleInfrastructureError("Expected evaluator source state has not been captured")
+        self._verify_phase_patch_hashes(state)
+        actual_hash = self._hash_workspace(state.workspace)
+        state.prebuild_source_hashes.append(actual_hash)
+        if actual_hash != state.materialized_source_hash:
+            raise BugFixLifecycleInfrastructureError(f"Evaluator workspace tree hash mismatch before build: expected {state.materialized_source_hash}, got {actual_hash}")
+
+    def _verify_phase_patch_hashes(self, state: _PhaseState) -> None:
+        generated_patches = (
+            ("generated full patch", state.submission.full_patch, state.submission.full_patch_hash),
+            ("generated fix patch", state.submission.fix_patch, state.submission.fix_patch_hash),
+            ("generated test patch", state.submission.test_patch, state.submission.test_patch_hash),
+        )
+        for label, patch, expected_hash in generated_patches:
+            self._verify_patch_hash(patch, expected_hash, label, generated=True)
+        for label, patch, expected_hash in state.trusted_patches:
+            self._verify_patch_hash(patch, expected_hash, label, generated=False)
+
+    def _verify_patch_hash(
+        self,
+        patch: str,
+        expected_hash: str,
+        label: str,
+        *,
+        generated: bool,
+    ) -> None:
+        actual_hash = sha256_text(patch)
+        if actual_hash == expected_hash:
+            return
+        message = f"{label} SHA-256 mismatch: expected {expected_hash}, got {actual_hash}"
+        if generated:
+            raise GeneratedSubmissionError(message)
+        raise BugFixLifecycleInfrastructureError(message)
+
+    def _apply_generated(
+        self,
+        state: _PhaseState,
+        patch: str,
+        expected_hash: str,
+        patch_name: str,
+    ) -> None:
+        if state.workspace is None:
+            raise BugFixLifecycleInfrastructureError("Evaluator workspace is unavailable")
+        self._verify_patch_hash(patch, expected_hash, patch_name, generated=True)
+        try:
+            self._patch_applier(state.workspace, patch, patch_name)
         except PatchApplicationError as error:
             raise GeneratedSubmissionError(str(error)) from error
 
-    def _apply_trusted(self, workspace: Path, patch: str, patch_name: str) -> None:
+    def _apply_trusted(
+        self,
+        state: _PhaseState,
+        patch: str,
+        expected_hash: str,
+        patch_name: str,
+    ) -> None:
+        if state.workspace is None:
+            raise BugFixLifecycleInfrastructureError("Evaluator workspace is unavailable")
+        self._verify_patch_hash(patch, expected_hash, patch_name, generated=False)
         try:
-            self._patch_applier(workspace, patch, patch_name)
+            self._patch_applier(state.workspace, patch, patch_name)
         except PatchApplicationError as error:
             raise BugFixLifecycleInfrastructureError(f"Trusted patch application failed: {error}") from error
 
@@ -599,6 +769,7 @@ class BugFixPhaseRunner:
         if state.workspace is None:
             raise BugFixLifecycleInfrastructureError("Evaluator workspace is unavailable")
         evidence_directory = self._operation_evidence_directory(state, "publication")
+        self._verify_materialized_source(state)
         try:
             publish = getattr(self._publisher, "publish", self._publisher)
             returned = publish(
@@ -745,13 +916,16 @@ class BugFixPhaseRunner:
     ) -> TestRunSummary:
         evidence_directory = self._operation_evidence_directory(state, "tests")
         run = getattr(self._test_runner, "run", self._test_runner)
-        returned = run(
-            tuple(tests),
-            expectation,
-            self._container,
-            workspace,
-            evidence_directory,
-        )
+        try:
+            returned = run(
+                tuple(tests),
+                expectation,
+                self._container,
+                workspace,
+                evidence_directory,
+            )
+        except (OSError, ValueError, ET.ParseError) as error:
+            raise BugFixLifecycleInfrastructureError(f"Invalid exact test evidence: {error}") from error
         if not isinstance(returned, TestSuiteEvidence):
             raise BugFixLifecycleInfrastructureError("Exact test runner must return typed test evidence")
         summary = returned.summary
@@ -777,6 +951,30 @@ class BugFixPhaseRunner:
                 f"{state.name}-{key.replace('_', '-')}.txt",
                 content,
             )
+        state.evidence_sources["provenance"] = self._evidence_store.save_text(
+            f"{state.name}-provenance.json",
+            json.dumps(
+                {
+                    "benchmark_patch_hash": state.benchmark_patch_hash,
+                    "checkpoint_hash": state.checkpoint_hash,
+                    "container_id": state.container_id,
+                    "generated_fix_patch_hash": state.generated_fix_patch_hash,
+                    "generated_full_patch_hash": state.submission.full_patch_hash,
+                    "generated_test_patch_hash": state.generated_test_patch_hash,
+                    "gold_patch_hash": state.gold_patch_hash,
+                    "hostname": state.hostname,
+                    "image_id": state.image_id,
+                    "materialized_source_hash": state.materialized_source_hash,
+                    "mounts": list(state.mounts),
+                    "prebuild_source_hashes": state.prebuild_source_hashes,
+                    "trusted_source_commit": state.trusted_source_commit,
+                    "trusted_source_hash": state.trusted_source_hash,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+        )
 
         for root in state.raw_evidence_roots:
             if root.is_dir():
@@ -877,7 +1075,18 @@ class BugFixPhaseRunner:
             started_at=started_at,
             completed_at=datetime.now(UTC),
             error_message=error_message,
-            source_hash=state.source_hash,
+            source_hash=state.materialized_source_hash,
+            materialized_source_hash=state.materialized_source_hash,
+            trusted_source_commit=state.trusted_source_commit,
+            trusted_source_hash=state.trusted_source_hash,
+            generated_fix_patch_hash=state.generated_fix_patch_hash,
+            generated_test_patch_hash=state.generated_test_patch_hash,
+            gold_patch_hash=state.gold_patch_hash,
+            benchmark_patch_hash=state.benchmark_patch_hash,
+            container_id=state.container_id,
+            image_id=state.image_id,
+            hostname=state.hostname,
+            mounts=state.mounts,
             checkpoint_hash=state.checkpoint_hash,
             package_hashes=tuple(sorted(state.package_hashes.values())),
             requested_tests=(_canonical_identities(summary.requested) if summary is not None else ()),

@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.evaluate.bugfix_lifecycle import BugFixLifecyclePaths, TrustedSource, TrustedWorkspaceBuilder
+from bcbench.evaluate.bugfix_lifecycle import (
+    BugFixLifecyclePaths,
+    TrustedSource,
+    TrustedWorkspaceBuilder,
+    materialized_workspace_tree_hash,
+)
 from bcbench.evaluate.bugfix_lifecycle import workspace as workspace_module
 
 
@@ -172,6 +177,42 @@ def test_capture_and_clone_ignore_ambient_git_controls(tmp_path: Path, monkeypat
     assert not marker.exists()
     assert not (trusted_source.repository / "hooks" / "post-checkout").exists()
     assert not (workspace / ".git" / "hooks" / "post-checkout").exists()
+
+
+def test_materialized_tree_hash_includes_relevant_files_and_excludes_ephemeral_outputs(tmp_path: Path) -> None:
+    repository = tmp_path / "repo"
+    _create_repository(repository)
+    (repository / ".gitignore").write_text("ignored.al\n", encoding="utf-8")
+    (repository / "ignored.al").write_text("codeunit 1 Ignored {}\n", encoding="utf-8")
+    (repository / "untracked.al").write_text("codeunit 2 Untracked {}\n", encoding="utf-8")
+    (repository / "src" / "output").mkdir(parents=True)
+    (repository / "src" / "output" / "App.app").write_bytes(b"package")
+    (repository / "src" / ".alpackages").mkdir()
+    (repository / "src" / ".alpackages" / "Dependency.app").write_bytes(b"dependency")
+    (repository / "evidence").mkdir()
+    (repository / "evidence" / "stdout.txt").write_text("output", encoding="utf-8")
+
+    initial_hash = materialized_workspace_tree_hash(repository)
+
+    (repository / "src" / "output" / "App.app").write_bytes(b"changed package")
+    (repository / "src" / ".alpackages" / "Dependency.app").write_bytes(b"changed dependency")
+    (repository / "evidence" / "stdout.txt").write_text("changed output", encoding="utf-8")
+    assert materialized_workspace_tree_hash(repository) == initial_hash
+
+    (repository / "ignored.al").write_text("codeunit 1 Ignored { trigger OnRun() begin end; }\n", encoding="utf-8")
+    assert materialized_workspace_tree_hash(repository) != initial_hash
+
+
+def test_materialized_tree_hash_detects_missing_files_and_rejects_non_repository(tmp_path: Path) -> None:
+    repository = tmp_path / "repo"
+    _create_repository(repository)
+    expected_hash = materialized_workspace_tree_hash(repository)
+
+    (repository / "tracked.txt").unlink()
+
+    assert materialized_workspace_tree_hash(repository) != expected_hash
+    with pytest.raises(ValueError, match="Git repository"):
+        materialized_workspace_tree_hash(tmp_path / "missing")
 
 
 def test_builder_rejects_forged_trusted_commit_that_exists(tmp_path: Path) -> None:

@@ -1,7 +1,30 @@
 import pytest
+from pydantic import TypeAdapter
 
 from bcbench.results import bugfix as bugfix_results
 from tests.conftest import create_bugfix_result
+
+
+def test_phase_result_provenance_fields_preserve_legacy_defaults() -> None:
+    phase = TypeAdapter(bugfix_results.BugFixPhaseResult).validate_python(
+        {
+            "status": "passed",
+            "source_hash": "legacy-source",
+        }
+    )
+
+    assert phase.source_hash == "legacy-source"
+    assert phase.materialized_source_hash is None
+    assert phase.trusted_source_commit is None
+    assert phase.trusted_source_hash is None
+    assert phase.generated_fix_patch_hash is None
+    assert phase.generated_test_patch_hash is None
+    assert phase.gold_patch_hash is None
+    assert phase.benchmark_patch_hash is None
+    assert phase.container_id is None
+    assert phase.image_id is None
+    assert phase.hostname is None
+    assert phase.mounts == ()
 
 
 def test_checkpointed_full_success_passes_all_metrics() -> None:

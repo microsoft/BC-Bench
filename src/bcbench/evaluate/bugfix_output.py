@@ -2,7 +2,8 @@ import re
 import subprocess
 from collections import defaultdict
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from hashlib import sha256
 from pathlib import Path
 
 from unidiff import PatchSet
@@ -50,6 +51,18 @@ class GeneratedBugFixOutput:
     app_projects: tuple[str, ...]
     test_projects: tuple[str, ...]
     tests: tuple[TestEntry, ...]
+    full_patch_hash: str = field(init=False)
+    fix_patch_hash: str = field(init=False)
+    test_patch_hash: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        patch_hashes = {
+            "full_patch_hash": _sha256_text(self.full_patch),
+            "fix_patch_hash": _sha256_text(self.fix_patch),
+            "test_patch_hash": _sha256_text(self.test_patch),
+        }
+        for field_name, patch_hash in patch_hashes.items():
+            object.__setattr__(self, field_name, patch_hash)
 
 
 @dataclass(frozen=True)
@@ -57,6 +70,10 @@ class _ParsedPatchFile:
     original_patch: str
     patched_file: PatchedFile
     paths: GitDiffPaths
+
+
+def _sha256_text(text: str) -> str:
+    return sha256(text.encode("utf-8")).hexdigest()
 
 
 def _normalize_repo_path(file_path: str) -> str:

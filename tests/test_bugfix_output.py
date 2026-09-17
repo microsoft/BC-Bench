@@ -1,6 +1,7 @@
 import subprocess
 from collections.abc import Iterable
 from dataclasses import FrozenInstanceError
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -208,6 +209,9 @@ def test_analyzes_base_app_fix_and_scm_manufacturing_test(tmp_path: Path):
     assert result.full_patch == generated_patch
     assert result.fix_patch == fix_patch
     assert result.test_patch == test_patch
+    assert result.full_patch_hash == sha256(generated_patch.encode()).hexdigest()
+    assert result.fix_patch_hash == sha256(fix_patch.encode()).hexdigest()
+    assert result.test_patch_hash == sha256(test_patch.encode()).hexdigest()
     assert result.app_projects == (str(app_project.relative_to(repo_path)),)
     assert result.test_projects == (str(test_project.relative_to(repo_path)),)
     assert result.tests == (TestEntry(codeunitID=137310, functionName=frozenset({"ReplansProductionOrder"})),)

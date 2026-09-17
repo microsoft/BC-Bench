@@ -78,6 +78,17 @@ class BugFixPhaseResult(BaseModel):
     completed_at: datetime | None = None
     error_message: str | None = None
     source_hash: str | None = None
+    materialized_source_hash: str | None = None
+    trusted_source_commit: str | None = None
+    trusted_source_hash: str | None = None
+    generated_fix_patch_hash: str | None = None
+    generated_test_patch_hash: str | None = None
+    gold_patch_hash: str | None = None
+    benchmark_patch_hash: str | None = None
+    container_id: str | None = None
+    image_id: str | None = None
+    hostname: str | None = None
+    mounts: tuple[str, ...] = ()
     checkpoint_hash: str | None = None
     package_hashes: tuple[str, ...] = ()
     requested_tests: tuple[str, ...] = ()

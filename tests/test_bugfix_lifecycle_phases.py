@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import zipfile
 from collections.abc import Sequence
+from hashlib import sha256
 from pathlib import Path
 from shutil import rmtree
 
@@ -83,6 +84,10 @@ def _submission(*, tests: tuple[TestEntry, ...] | None = None) -> GeneratedBugFi
     )
 
 
+def _sha256(value: str) -> str:
+    return sha256(value.encode()).hexdigest()
+
+
 def _summary(
     tests: Sequence[TestEntry],
     outcome: TestOutcome,
@@ -112,6 +117,7 @@ class FakeWorkspaceBuilder:
         workspace = self.root / f"{name}-{self.index}"
         for project in ("src/App", "src/Tests", "src/Benchmark/tests"):
             (workspace / project).mkdir(parents=True, exist_ok=True)
+            (workspace / project / "source.al").write_text(project, encoding="utf-8")
         return workspace
 
 
@@ -219,7 +225,8 @@ class FakePublisher:
         packages = []
         apps = []
         for project in project_paths:
-            package = repo_path / project / f"{Path(project).name}.app"
+            package = repo_path / project / "output" / f"{Path(project).name}.app"
+            package.parent.mkdir(parents=True, exist_ok=True)
             package.write_bytes(project.encode())
             packages.append(package)
             name = Path(project).name
@@ -295,8 +302,27 @@ def harness(tmp_path: Path):
     def apply_patch(_workspace: Path, patch: str, patch_name: str) -> None:
         patch_calls.append((patch, patch_name))
         calls.append(("patch", patch, patch_name))
+        (_workspace / f"declared-{patch}.al").write_text(patch, encoding="utf-8")
 
     cleanup_calls: list[Path] = []
+    hash_calls: list[tuple[Path, str]] = []
+
+    def hash_workspace(workspace: Path) -> str:
+        relevant_files = tuple(
+            sorted(
+                (path for path in workspace.rglob("*") if path.is_file() and not {"output", ".alpackages", "evidence"}.intersection(part.casefold() for part in path.relative_to(workspace).parts)),
+                key=lambda path: path.relative_to(workspace).as_posix(),
+            )
+        )
+        digest = sha256()
+        for path in relevant_files:
+            digest.update(path.relative_to(workspace).as_posix().encode())
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+        value = digest.hexdigest()
+        hash_calls.append((workspace, value))
+        return value
 
     def cleanup(workspace: Path) -> None:
         cleanup_calls.append(workspace)
@@ -314,6 +340,7 @@ def harness(tmp_path: Path):
         test_runner=test_runner,
         patch_applier=apply_patch,
         workspace_cleaner=cleanup,
+        workspace_hasher=hash_workspace,
         inventory_reader=lambda: tuple(runtime_inventory),
     )
     return {
@@ -328,6 +355,7 @@ def harness(tmp_path: Path):
         "test_runner": test_runner,
         "patch_calls": patch_calls,
         "cleanup_calls": cleanup_calls,
+        "hash_calls": hash_calls,
         "runtime_inventory": runtime_inventory,
         "runner": runner,
     }
@@ -339,6 +367,17 @@ def test_run_test_red_restores_builds_test_last_and_requires_one_genuine_failure
     result = harness["runner"].run_test_red(_submission(), harness["s0"])
 
     assert result.status is BugFixPhaseStatus.PASSED
+    assert result.trusted_source_commit == harness["source"].commit
+    assert result.trusted_source_hash == harness["hash_calls"][0][1]
+    assert result.generated_fix_patch_hash is None
+    assert result.generated_test_patch_hash == _sha256("T")
+    assert result.gold_patch_hash is None
+    assert result.benchmark_patch_hash is None
+    assert result.materialized_source_hash == result.source_hash
+    assert result.container_id == "container-id"
+    assert result.image_id == "image-id"
+    assert result.hostname == "bc"
+    assert result.mounts == ()
     assert result.checkpoint_hash == harness["s0"].sha256
     assert result.requested_tests == ("50100:Regression",)
     assert result.discovered_tests == ("50100:Regression",)
@@ -363,6 +402,8 @@ def test_run_test_gold_restores_s0_applies_gold_before_test_and_content_addresse
     result = harness["runner"].run_test_gold(_submission(), harness["s0"], "G")
 
     assert result.status is BugFixPhaseStatus.PASSED
+    assert result.gold_patch_hash == _sha256("G")
+    assert result.generated_test_patch_hash == _sha256("T")
     assert harness["patch_calls"] == [
         ("G", "test-gold trusted gold patch"),
         ("T", "test-gold generated test patch"),
@@ -376,6 +417,168 @@ def test_run_test_gold_restores_s0_applies_gold_before_test_and_content_addresse
     assert harness["calls"].index(product_protection) < harness["calls"].index(("publish", ("src/Tests",)))
     assert ("test", TestExpectation.ALL_PASS, _submission().tests) in harness["calls"]
     assert "gold_product_source" in result.evidence
+
+
+def test_gold_verifies_product_and_test_tree_immediately_before_each_build(harness) -> None:
+    events: list[tuple[str, str | tuple[str, ...]]] = []
+    original_hasher = harness["runner"]._workspace_hasher
+    original_publisher = harness["runner"]._publisher
+
+    def hash_workspace(workspace: Path) -> str:
+        value = original_hasher(workspace)
+        events.append(("hash", value))
+        return value
+
+    def publish(*args, **kwargs):
+        events.append(("publish", tuple(args[1])))
+        return original_publisher(*args, **kwargs)
+
+    harness["runner"]._workspace_hasher = hash_workspace
+    harness["runner"]._publisher = publish
+
+    result = harness["runner"].run_test_gold(_submission(), harness["s0"], "G")
+
+    assert result.status is BugFixPhaseStatus.PASSED
+    product_hash = next(value for kind, value in events if kind == "hash" and value != events[0][1])
+    test_hash = result.materialized_source_hash
+    assert events == [
+        ("hash", events[0][1]),
+        ("hash", product_hash),
+        ("hash", product_hash),
+        ("publish", ("src/App",)),
+        ("hash", test_hash),
+        ("hash", test_hash),
+        ("publish", ("src/Tests",)),
+    ]
+
+
+def test_workspace_mutation_after_apply_blocks_publisher_as_infrastructure_error(harness) -> None:
+    hashes = iter(("baseline", "expected", "mutated"))
+    harness["runner"]._workspace_hasher = lambda _workspace: next(hashes)
+
+    result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "tree hash" in result.error_message.lower()
+    assert not [call for call in harness["calls"] if call[0] == "publish"]
+
+
+def test_generated_patch_hash_is_rechecked_before_apply(harness) -> None:
+    submission = _submission()
+    object.__setattr__(submission, "fix_patch", "tampered")
+
+    result = harness["runner"].run_fix_build(submission, harness["s0"])[0]
+
+    assert result.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert not harness["patch_calls"]
+    assert not [call for call in harness["calls"] if call[0] == "publish"]
+
+
+@pytest.mark.parametrize(
+    ("phase_name", "expected_hashes"),
+    [
+        ("test-red", (None, _sha256("T"), None, None)),
+        ("test-gold", (None, _sha256("T"), _sha256("G"), None)),
+        ("fix-build", (_sha256("F"), None, None, None)),
+        ("generated-pair", (_sha256("F"), _sha256("T"), None, None)),
+        ("benchmark-fix", (_sha256("F"), None, None, _sha256("H"))),
+    ],
+)
+def test_each_phase_persists_only_its_patch_hashes_and_checkpoint_container(
+    harness,
+    phase_name: str,
+    expected_hashes: tuple[str | None, str | None, str | None, str | None],
+) -> None:
+    submission = _submission()
+    checkpoint = harness["s0"]
+    if phase_name == "test-red":
+        harness["test_runner"].outcome = TestOutcome.FAIL
+        result = harness["runner"].run_test_red(submission, checkpoint)
+    elif phase_name == "test-gold":
+        result = harness["runner"].run_test_gold(submission, checkpoint, "G")
+    elif phase_name == "fix-build":
+        result = harness["runner"].run_fix_build(submission, checkpoint)[0]
+    elif phase_name == "generated-pair":
+        fixed_identity = ContainerIdentity(
+            container_id="fixed-container-id",
+            image_id="fixed-image-id",
+            hostname="fixed-host",
+            mounts=(r"C:\fixed:C:\database",),
+        )
+        checkpoint = CheckpointManifest(
+            name=harness["sf"].name,
+            backup_path=harness["sf"].backup_path,
+            sha256=harness["sf"].sha256,
+            database_name=harness["sf"].database_name,
+            database_folder=harness["sf"].database_folder,
+            container=fixed_identity,
+            apps=harness["sf"].apps,
+        )
+        red = make_not_run_phase("red").model_copy(update={"executed_tests": ("50100:Regression",)})
+        result = harness["runner"].run_generated_pair(submission, checkpoint, red)
+    else:
+        result = harness["runner"].run_benchmark_fix(
+            submission,
+            checkpoint,
+            "H",
+            [TestEntry(codeunitID=10, functionName=frozenset({"FailsBefore"}))],
+            [],
+        )
+
+    assert result.status is BugFixPhaseStatus.PASSED
+    assert (
+        result.generated_fix_patch_hash,
+        result.generated_test_patch_hash,
+        result.gold_patch_hash,
+        result.benchmark_patch_hash,
+    ) == expected_hashes
+    assert result.container_id == checkpoint.container.container_id
+    assert result.image_id == checkpoint.container.image_id
+    assert result.hostname == checkpoint.container.hostname
+    assert result.mounts == checkpoint.container.mounts
+    assert result.trusted_source_commit == harness["source"].commit
+    assert result.trusted_source_hash is not None
+    assert result.materialized_source_hash == result.source_hash
+    provenance_path = harness["evidence"].root / result.evidence["provenance"]
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    assert provenance["materialized_source_hash"] == result.materialized_source_hash
+    assert provenance["container_id"] == result.container_id
+    assert provenance["generated_fix_patch_hash"] == result.generated_fix_patch_hash
+    assert provenance["generated_test_patch_hash"] == result.generated_test_patch_hash
+    assert provenance["gold_patch_hash"] == result.gold_patch_hash
+    assert provenance["benchmark_patch_hash"] == result.benchmark_patch_hash
+
+
+def test_missing_junit_through_phase_runner_is_infrastructure_error_with_evidence(harness) -> None:
+    harness["test_runner"].outcome = TestOutcome.FAIL
+    harness["test_runner"].error = FileNotFoundError("Missing JUnit results for codeunit 50100")
+
+    result = harness["runner"].run_test_red(_submission(), harness["s0"])
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "Missing JUnit results" in result.error_message
+    assert "provenance" in result.evidence
+    assert any(call[0] == "save-phase" and call[1] == "test-red" for call in harness["calls"])
+
+
+def test_missing_source_after_expected_hash_capture_blocks_build(harness) -> None:
+    original_hasher = harness["runner"]._workspace_hasher
+    call_count = 0
+
+    def delete_source_before_verification(workspace: Path) -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 3:
+            (workspace / "src" / "App" / "source.al").unlink()
+        return original_hasher(workspace)
+
+    harness["runner"]._workspace_hasher = delete_source_before_verification
+
+    result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "tree hash mismatch" in result.error_message
+    assert not [call for call in harness["calls"] if call[0] == "publish"]
 
 
 def test_phase_runner_requires_inventory_reader(harness) -> None:
