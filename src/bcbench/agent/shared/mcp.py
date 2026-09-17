@@ -47,7 +47,7 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
                 stdio_entry["env"] = env
             return server_name, stdio_entry
         case _:
-            logger.error(f"Unsupported MCP server type: {server_type}, {server}")
+            logger.error("Unsupported MCP server type: name=%s type=%s", server_name, server_type)
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
@@ -121,14 +121,19 @@ def build_mcp_config(
         }
         if forwarded:
             al_server["env"] = forwarded
-            logger.info(f"Forwarding env vars to altool MCP: {list(forwarded.keys())}")
+            logger.info("Forwarding %d connection environment variables to altool MCP", len(forwarded))
 
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
+    mcp_server_types = {name: entry["type"] for name, entry in mcp_config["mcpServers"].items()}
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
-    # The BC container password (if forwarded to altool) is already masked in CI logs via ::add-mask::,
-    # and the bcmcp entry is credential-free (the gateway injects auth upstream), so no extra redaction.
-    logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
+    logger.debug(
+        "MCP configuration summary: servers=%s types=%s al_mcp=%s bc_mcp=%s",
+        mcp_server_names,
+        mcp_server_types,
+        bool(runtime and runtime.al_mcp),
+        bool(runtime and runtime.bc_mcp),
+    )
 
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names

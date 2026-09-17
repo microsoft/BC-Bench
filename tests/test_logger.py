@@ -1,10 +1,13 @@
 """Tests for logger module, focusing on sensitive data filtering."""
 
+import io
 import logging
+import subprocess
+import sys
 
 import pytest
 
-from bcbench.logger import GitHubActionsHandler, GitHubActionsSkipFilter, SensitiveDataFilter
+from bcbench.logger import GitHubActionsHandler, GitHubActionsSkipFilter, SensitiveDataFilter, _CredentialSafeStreamHandler
 
 
 class TestSensitiveDataFilter:
@@ -123,3 +126,22 @@ class TestGitHubActionsSkipFilter:
     def test_skips_handled_records(self, filter_instance, log_record):
         log_record.gh_actions_handled = True
         assert filter_instance.filter(log_record) is False
+
+
+def test_logging_handler_failure_does_not_render_active_exception(monkeypatch):
+    secret = "distinctive-logging-handler-secret"
+    fallback = io.StringIO()
+    closed_stream = io.StringIO()
+    closed_stream.close()
+    handler = _CredentialSafeStreamHandler(closed_stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    record = logging.LogRecord("test.logger", logging.ERROR, "test.py", 1, "safe message", (), None)
+    monkeypatch.setattr(sys, "__stderr__", fallback)
+
+    try:
+        raise subprocess.CalledProcessError(3, ("agent", secret), stderr=secret)  # noqa: TRY301 - active exception is the security boundary under test
+    except subprocess.CalledProcessError:
+        logging.StreamHandler.emit(handler, record)
+
+    assert secret not in fallback.getvalue()
+    assert "log record suppressed" in fallback.getvalue()

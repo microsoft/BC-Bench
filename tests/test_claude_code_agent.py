@@ -1,3 +1,5 @@
+import json
+import logging
 import os
 import subprocess
 from dataclasses import replace
@@ -104,6 +106,56 @@ def test_claude_code_excludes_user_settings_and_auto_memory(tmp_path: Path, monk
     assert env["MCP_TOOL_TIMEOUT"] == expected_tool_timeout
     assert mock_run.call_args.kwargs["timeout"] == config.timeout.agent_execution
     assert "CLAUDE_CODE_DISABLE_AUTO_MEMORY" not in os.environ
+
+
+def test_claude_code_debug_output_excludes_credentials_prompt_and_raw_output(tmp_path: Path, caplog, capsys):
+    secret = "distinctive-claude-agent-secret"
+    mcp_config = json.dumps(
+        {
+            "mcpServers": {
+                "altool": {
+                    "command": "al",
+                    "env": {"BC_SERVER_PASSWORD": secret},
+                }
+            }
+        }
+    )
+    caplog.set_level(logging.DEBUG, logger="bcbench.agent.claude.agent")
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value=f"prompt containing {secret}"),
+        patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(mcp_config, ["altool"])),
+        patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=None),
+        patch("bcbench.agent.claude.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch(
+            "bcbench.agent.claude.agent.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=f'{{"type":"result","credential":"{secret}"}}\n'.encode(),
+                stderr=b"",
+            ),
+        ),
+        patch("bcbench.agent.claude.agent.parse_stream_output", return_value=(None, "done")),
+    ):
+        run_claude_code(
+            entry=create_dataset_entry(),
+            model="safe-claude-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+        )
+
+    captured = capsys.readouterr()
+    combined_output = caplog.text + captured.out + captured.err
+    assert secret not in combined_output
+    assert "BC_SERVER_PASSWORD" not in combined_output
+    assert "safe-claude-model" in caplog.text
+    assert "altool" in caplog.text
 
 
 def test_bug_fix_publish_failures_are_terminal_in_both_instruction_copies():
@@ -292,13 +344,14 @@ def test_claude_code_contained_errors_preserve_class_and_stop_gateway(
         )
 
     if expected_error is AgentError:
-        assert "agent stderr" in str(error.value)
+        assert "status 3" in str(error.value)
+        assert "agent stderr" not in str(error.value)
     if expected_error is AgentTimeoutError:
         assert error.value.metrics.execution_time > 0
         assert error.value.config is not None
         assert error.value.stdout == "partial \ufffd"
         assert error.value.stderr == "timed out \ufffd"
-        assert error.value.__cause__ is contained_error
+        assert error.value.__cause__ is None
     if expected_error is ContainedProcessInfrastructureError:
         if isinstance(contained_error, subprocess.CalledProcessError):
             assert error.value.__cause__ is contained_error
@@ -334,5 +387,42 @@ def test_claude_code_default_called_process_error_remains_agent_error(tmp_path: 
             output_dir=tmp_path / "output",
         )
 
-    assert error.value.__cause__ is failure
-    assert "agent stderr" in str(error.value)
+    assert error.value.__cause__ is None
+    assert "status 3" in str(error.value)
+    assert "agent stderr" not in str(error.value)
+
+
+def test_claude_code_failure_excludes_credentials_from_exception_and_logs(tmp_path: Path, caplog, capsys):
+    secret = "distinctive-claude-failure-secret"
+    mcp_config = json.dumps({"mcpServers": {"altool": {"env": {"BC_SERVER_PASSWORD": secret}}}})
+    failure = subprocess.CalledProcessError(
+        3,
+        ("claude", f"--mcp-config={mcp_config}", secret),
+        stderr=f"agent failure containing {secret}",
+    )
+    caplog.set_level(logging.DEBUG, logger="bcbench.agent.claude.agent")
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value=f"prompt containing {secret}"),
+        patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(mcp_config, ["altool"])),
+        patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=None),
+        patch("bcbench.agent.claude.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch("bcbench.agent.claude.agent.subprocess.run", side_effect=failure),
+        pytest.raises(AgentError) as error,
+    ):
+        run_claude_code(
+            entry=create_dataset_entry(),
+            model="safe-claude-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+        )
+
+    captured = capsys.readouterr()
+    assert secret not in str(error.value)
+    assert secret not in caplog.text + captured.out + captured.err
+    assert "BC_SERVER_PASSWORD" not in caplog.text

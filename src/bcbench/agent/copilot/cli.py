@@ -2,7 +2,6 @@
 
 import shutil
 import subprocess
-import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -42,6 +41,7 @@ def invoke_copilot(
     allow_all_tools: bool = False,
     custom_instructions: bool = False,
     extra_args: Sequence[str] = (),
+    mcp_server_names: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
     execution_policy: AgentExecutionPolicy | None = None,
 ) -> tuple[AgentMetrics | None, str]:
@@ -67,7 +67,19 @@ def invoke_copilot(
         *extra_args,
         f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
     ]
-    logger.debug("Copilot command args: %s", cmd_args)
+    logger.debug(
+        "Copilot invocation: executable=%s model=%s tool_access=%s custom_instructions=%s mcp_servers=%s plugins=%d additional_dirs=%d custom_agent=%s extra_args=%d prompt_chars=%d",
+        copilot_cmd,
+        model,
+        "all" if allow_all_tools else "none",
+        custom_instructions,
+        list(mcp_server_names),
+        sum(arg.startswith("--plugin-dir") for arg in extra_args),
+        sum(arg.startswith("--add-dir") for arg in extra_args),
+        any(arg.startswith("--agent") for arg in extra_args),
+        len(extra_args),
+        len(prompt),
+    )
 
     if execution_policy is not None and execution_policy.contain_process_tree:
         try:
@@ -86,28 +98,35 @@ def invoke_copilot(
         except subprocess.CalledProcessError as exc:
             raise ContainedProcessInfrastructureError.from_called_process_error(exc) from exc
         result = subprocess.CompletedProcess(
-            args=cmd_args,
+            args=(copilot_cmd,),
             returncode=contained_result.returncode,
             stdout=contained_result.stdout,
             stderr=contained_result.stderr,
         )
         result.check_returncode()
     else:
-        result = subprocess.run(
-            cmd_args,
-            cwd=str(work_dir),
-            env=dict(env) if env is not None else None,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            check=True,
-        )
+        try:
+            result = subprocess.run(
+                cmd_args,
+                cwd=str(work_dir),
+                env=dict(env) if env is not None else None,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise subprocess.CalledProcessError(
+                exc.returncode,
+                (copilot_cmd,),
+                output=exc.output,
+                stderr=exc.stderr,
+            ) from None
 
     if result.stderr:
-        sys.stderr.write(result.stderr)
-        sys.stderr.flush()
+        logger.debug("Copilot CLI stderr suppressed: character_count=%d", len(result.stderr))
 
     metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
     return metrics, final_response or ""

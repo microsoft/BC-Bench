@@ -77,7 +77,7 @@ def run_copilot_agent(
         )
 
         logger.info(f"Executing Copilot CLI in directory: {repo_path}")
-        logger.debug(f"Using prompt:\n{prompt}")
+        logger.debug("Copilot prompt prepared: character_count=%d", len(prompt))
 
         try:
             extra_args = [
@@ -105,6 +105,7 @@ def run_copilot_agent(
                 allow_all_tools=True,
                 custom_instructions=instructions_enabled,
                 extra_args=extra_args,
+                mcp_server_names=mcp_server_names or (),
                 env=agent_subprocess_env(
                     {
                         "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true",
@@ -116,7 +117,12 @@ def run_copilot_agent(
             )
             logger.info(f"Copilot CLI run complete for: {entry.instance_id}")
         except subprocess.TimeoutExpired as exc:
-            logger.exception(f"Copilot CLI timed out after {_config.timeout.agent_execution} seconds")
+            logger.error(  # noqa: TRY400 - traceback can expose sensitive command arguments
+                "Copilot CLI timed out after %d seconds; stdout_chars=%d stderr_chars=%d",
+                _config.timeout.agent_execution,
+                len(exc.output or b""),
+                len(exc.stderr or b""),
+            )
             metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
             raise AgentTimeoutError(
                 "Copilot CLI timed out",
@@ -124,10 +130,15 @@ def run_copilot_agent(
                 config=config,
                 stdout=exc.output,
                 stderr=exc.stderr,
-            ) from exc
+            ) from None
         except subprocess.CalledProcessError as e:
-            logger.exception(f"Copilot CLI execution failed with error {e.stderr}")
-            raise AgentError(f"Copilot CLI execution failed: {e.stderr or e}") from None
+            logger.error(  # noqa: TRY400 - traceback can expose sensitive command arguments
+                "Copilot CLI exited with status %d; stdout_chars=%d stderr_chars=%d",
+                e.returncode,
+                len(e.output or b""),
+                len(e.stderr or b""),
+            )
+            raise AgentError(f"Copilot CLI exited with status {e.returncode}") from None
         except Exception:
             logger.exception("Unexpected error running Copilot CLI")
             raise

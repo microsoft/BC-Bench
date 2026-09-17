@@ -90,7 +90,7 @@ def run_claude_code(
         )
 
         logger.info(f"Executing Claude Code in directory: {repo_path}")
-        logger.debug(f"Using prompt:\n{prompt}")
+        logger.debug("Claude Code prompt prepared: character_count=%d", len(prompt))
 
         try:
             cmd_args = [
@@ -125,7 +125,19 @@ def run_claude_code(
                 ]
             )
 
-            logger.debug(f"Claude Code command args: {cmd_args}")
+            logger.debug(
+                "Claude Code invocation: executable=%s model=%s mcp_servers=%s al_lsp=%s custom_instructions=%s skills=%s plugins=%d additional_dirs=%d custom_agent=%s prompt_chars=%d",
+                claude_cmd,
+                model,
+                mcp_server_names or [],
+                lsp_plugin_dir is not None,
+                instructions_enabled,
+                skills_enabled,
+                len(plugins),
+                sum(plugin.grant_dir_access for plugin, _ in plugins),
+                custom_agent is not None,
+                len(prompt),
+            )
 
             env = agent_subprocess_env(
                 {
@@ -172,11 +184,16 @@ def run_claude_code(
                 )
 
             stdout: str = result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, bytes) else result.stdout or ""
-            logger.debug(f"Claude Code raw output: {stdout}")
+            logger.debug("Claude Code output received: character_count=%d line_count=%d", len(stdout), len(stdout.splitlines()))
 
             metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
         except subprocess.TimeoutExpired as exc:
-            logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
+            logger.error(  # noqa: TRY400 - traceback can expose sensitive command arguments
+                "Claude Code timed out after %d seconds; stdout_chars=%d stderr_chars=%d",
+                _config.timeout.agent_execution,
+                len(exc.output or b""),
+                len(exc.stderr or b""),
+            )
             metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
             raise AgentTimeoutError(
                 "Claude Code timed out",
@@ -184,10 +201,15 @@ def run_claude_code(
                 config=config,
                 stdout=exc.output,
                 stderr=exc.stderr,
-            ) from exc
+            ) from None
         except subprocess.CalledProcessError as e:
-            logger.exception(f"Claude Code execution failed with error {e.stderr}")
-            raise AgentError(f"Claude Code execution failed: {e.stderr}") from e
+            logger.error(  # noqa: TRY400 - traceback can expose sensitive command arguments
+                "Claude Code exited with status %d; stdout_chars=%d stderr_chars=%d",
+                e.returncode,
+                len(e.output or b""),
+                len(e.stderr or b""),
+            )
+            raise AgentError(f"Claude Code exited with status {e.returncode}") from None
         except Exception:
             logger.exception("Unexpected error running Claude Code")
             raise

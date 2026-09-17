@@ -583,8 +583,10 @@ class ContainerConfig:
         company = self.company.strip()
         if not company:
             raise ValueError("Company must not be empty")
+        mcp_url = self.mcp_url.strip() or None if self.mcp_url is not None else None
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "company", company)
+        object.__setattr__(self, "mcp_url", mcp_url)
 
 
 @dataclass(frozen=True)

@@ -18,7 +18,7 @@ from bcbench.commands import evaluate as evaluate_commands
 from bcbench.commands import run as run_commands
 from bcbench.dataset import BugFixEntry
 from bcbench.dataset.dataset_entry import _BugFixTestGenBase
-from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, EvaluationCategory
+from bcbench.types import AgentHarness, AgentMetrics, BCalLLMBackend, ContainerConfig, EvaluationCategory
 from tests.conftest import (
     create_bugfix_result,
     create_dataset_entry,
@@ -391,6 +391,19 @@ def test_al_lsp_accepts_resolved_container():
     assert runtime.container.company == "CRONUS"
 
 
+@pytest.mark.parametrize(
+    ("mcp_url", "expected"),
+    [
+        (None, None),
+        ("", None),
+        ("   ", None),
+        (" https://bc.example/mcp ", "https://bc.example/mcp"),
+    ],
+)
+def test_container_config_normalizes_mcp_url(mcp_url, expected):
+    assert ContainerConfig("bcbench", "admin", "secret", "CRONUS", mcp_url=mcp_url).mcp_url == expected
+
+
 def test_bugfix_lifecycle_help_lists_fixed_category_agent_commands():
     top_level = runner.invoke(app, ["--help"])
     group = runner.invoke(app, ["bugfix-lifecycle", "--help"])
@@ -505,11 +518,80 @@ def test_bugfix_lifecycle_replay_skips_agent_runner_and_hides_secrets(lifecycle_
         patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
         patch.object(bugfix_lifecycle_commands, "run_copilot_agent") as run_agent,
     ):
-        result = runner.invoke(app, lifecycle_cli_fixture.args("copilot", replay=True))
+        result = runner.invoke(app, ["--verbose", *lifecycle_cli_fixture.args("copilot", replay=True)])
 
     assert result.exit_code == 0, result.stdout
     assert captured["request"].replay_patch == lifecycle_cli_fixture.replay_patch
     run_agent.assert_not_called()
+    for secret in ("os-secret", "bc-secret", "evaluator-secret"):
+        assert secret not in result.stdout
+        assert secret not in result.stderr
+
+
+@pytest.mark.parametrize("mcp_env", [None, ""])
+def test_bugfix_lifecycle_environment_only_accepts_blank_mcp_url_when_bc_mcp_disabled(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    mcp_env: str | None,
+):
+    captured: dict[str, Any] = {}
+    evaluator_config = lifecycle_cli_fixture.evaluator_config | {"mcp_url": ""}
+    agent_config = lifecycle_cli_fixture.agent_config | {"mcp_url": ""}
+
+    class Lifecycle:
+        def run(self, request, _agent_runner):
+            captured["request"] = request
+
+    environment = {
+        "BCBENCH_LIFECYCLE_ENTRY_ROOT": str(lifecycle_cli_fixture.entry_root),
+        "BCBENCH_LIFECYCLE_PROTECTED_ROOT": str(lifecycle_cli_fixture.protected_root),
+        "BCBENCH_LIFECYCLE_AGENT_OS_USERNAME": "bcb-1234567-abcdef",
+        "BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD": "os-secret",
+        "BCBENCH_LIFECYCLE_AGENT_BC_USERNAME": agent_config["username"],
+        "BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD": agent_config["password"],
+        "BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID": "container-id",
+        "BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID": "invocation-id",
+        "BCBENCH_LIFECYCLE_STAGED_WORKER_PATH": str(lifecycle_cli_fixture.worker),
+        "BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256": bugfix_lifecycle_commands.sha256_file(lifecycle_cli_fixture.worker),
+        "BCBENCH_LIFECYCLE_BASE_PYTHON": str(lifecycle_cli_fixture.python),
+        "BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS": str(lifecycle_cli_fixture.owned_root),
+        "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG": json.dumps(evaluator_config),
+        "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG": json.dumps(agent_config),
+        "BC_CONTAINER_NAME": evaluator_config["name"],
+        "BC_SERVER_USERNAME": evaluator_config["username"],
+        "BC_SERVER_PASSWORD": evaluator_config["password"],
+        "BC_SERVER_URL": evaluator_config["server_url"],
+        "BC_SERVER_INSTANCE": evaluator_config["server_instance"],
+        "BC_COMPANY": evaluator_config["company"],
+    }
+    if mcp_env is not None:
+        environment["BC_MCP_URL"] = mcp_env
+
+    with (
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
+        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "--verbose",
+                "bugfix-lifecycle",
+                "copilot",
+                lifecycle_cli_fixture.entry.instance_id,
+                "--output-dir",
+                str(lifecycle_cli_fixture.protected_root.parent / "evaluation_results"),
+                "--run-id",
+                "environment-run",
+            ],
+            env=environment,
+        )
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    request = captured["request"]
+    assert request.evaluator_container.mcp_url is None
+    assert request.agent_runtime.container.mcp_url is None
+    assert request.agent_runtime.bc_mcp is False
     for secret in ("os-secret", "bc-secret", "evaluator-secret"):
         assert secret not in result.stdout
         assert secret not in result.stderr

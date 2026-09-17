@@ -1,3 +1,5 @@
+import json
+import logging
 import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -61,6 +63,49 @@ def test_invoke_copilot_default_path_preserves_subprocess_run_parameters(tmp_pat
         timeout=60,
         check=True,
     )
+
+
+def test_invoke_copilot_debug_output_excludes_credentials_prompt_and_stderr(tmp_path: Path, caplog, capsys):
+    secret = "distinctive-copilot-agent-secret"
+    mcp_config = json.dumps(
+        {
+            "mcpServers": {
+                "altool": {
+                    "command": "al",
+                    "env": {"BC_SERVER_PASSWORD": secret},
+                }
+            }
+        }
+    )
+    caplog.set_level(logging.DEBUG, logger="bcbench.agent.copilot.cli")
+    with (
+        patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.copilot.cli.parse_output", return_value=(None, "done")),
+        patch(
+            "bcbench.agent.copilot.cli.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout='{"type":"result"}\n',
+                stderr=f"diagnostic containing {secret}",
+            ),
+        ),
+    ):
+        invoke_copilot(
+            prompt=f"do not expose {secret}",
+            model="safe-copilot-model",
+            work_dir=tmp_path,
+            timeout=60,
+            extra_args=(f"--additional-mcp-config={mcp_config}",),
+            mcp_server_names=("altool",),
+        )
+
+    captured = capsys.readouterr()
+    combined_output = caplog.text + captured.out + captured.err
+    assert secret not in combined_output
+    assert "BC_SERVER_PASSWORD" not in combined_output
+    assert "safe-copilot-model" in caplog.text
+    assert "altool" in caplog.text
 
 
 def test_invoke_copilot_contained_path_constructs_request_and_parses_stdout(tmp_path: Path):
@@ -328,11 +373,46 @@ def test_run_copilot_agent_preserves_error_class_and_stops_gateway(
         )
 
     if isinstance(agent_failure, subprocess.CalledProcessError):
-        assert "agent stderr" in str(error.value)
+        assert "status 3" in str(error.value)
+        assert "agent stderr" not in str(error.value)
     if isinstance(agent_failure, subprocess.TimeoutExpired):
         assert error.value.metrics.execution_time > 0
         assert error.value.config is not None
         assert error.value.stdout == "partial \ufffd"
         assert error.value.stderr == "timed out \ufffd"
-        assert error.value.__cause__ is agent_failure
+        assert error.value.__cause__ is None
     gateway.stop.assert_called_once_with()
+
+
+def test_run_copilot_agent_failure_excludes_credentials_from_exception_and_logs(tmp_path: Path, caplog):
+    secret = "distinctive-copilot-failure-secret"
+    mcp_config = json.dumps({"mcpServers": {"altool": {"env": {"BC_SERVER_PASSWORD": secret}}}})
+    failure = subprocess.CalledProcessError(
+        3,
+        ("copilot", f"--additional-mcp-config={mcp_config}", f"--prompt={secret}"),
+        stderr=f"agent failure containing {secret}",
+    )
+    caplog.set_level(logging.DEBUG, logger="bcbench.agent.copilot")
+    with (
+        patch("bcbench.agent.copilot.agent.build_prompt", return_value=f"prompt containing {secret}"),
+        patch("bcbench.agent.copilot.agent.build_mcp_config", return_value=(mcp_config, ["altool"])),
+        patch("bcbench.agent.copilot.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.copilot.agent.start_bc_mcp_gateway", return_value=None),
+        patch("bcbench.agent.copilot.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.copilot.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.copilot.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.copilot.agent.resolve_config_plugins", return_value=[]),
+        patch("bcbench.agent.copilot.agent.invoke_copilot", side_effect=failure),
+        pytest.raises(AgentError) as error,
+    ):
+        run_copilot_agent(
+            entry=create_dataset_entry(),
+            model="safe-copilot-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+        )
+
+    assert secret not in str(error.value)
+    assert secret not in caplog.text
+    assert "BC_SERVER_PASSWORD" not in caplog.text

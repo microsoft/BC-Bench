@@ -1,4 +1,5 @@
 import json
+import logging
 from copy import deepcopy
 from pathlib import Path
 
@@ -216,6 +217,36 @@ class TestAltoolEnvForwarding:
             "BC_SERVER_PASSWORD": "secret",
             "BC_SERVER_USERNAME": "admin",
         }
+
+    def test_debug_logging_contains_only_safe_mcp_metadata(self, entry, repo_path, caplog):
+        secret = "distinctive-agent-bc-secret"
+        container = ContainerConfig("bcbench", "admin", secret, "CRONUS")
+        caplog.set_level(logging.DEBUG, logger="bcbench.agent.shared.mcp")
+
+        build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, runtime=_runtime(container, al_mcp=True))
+
+        assert secret not in caplog.text
+        assert "BC_SERVER_PASSWORD" not in caplog.text
+        assert "altool" in caplog.text
+
+
+def test_unsupported_server_logging_excludes_server_payload(entry, repo_path, caplog):
+    secret = "distinctive-invalid-server-secret"
+    caplog.set_level(logging.DEBUG, logger="bcbench.agent.shared.mcp")
+    config = _make_config(
+        {
+            "name": "unsafe-server",
+            "type": "invalid",
+            "env": {"BC_SERVER_PASSWORD": secret},
+        }
+    )
+
+    with pytest.raises(AgentError, match="Unsupported MCP server type"):
+        build_mcp_config(config, entry, repo_path)
+
+    assert secret not in caplog.text
+    assert "BC_SERVER_PASSWORD" not in caplog.text
+    assert "unsafe-server" in caplog.text
 
 
 class TestBuildAssemblyProbingPaths:
