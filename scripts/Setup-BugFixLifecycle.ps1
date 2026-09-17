@@ -23,6 +23,8 @@ param(
 
     [string]$ProtectedRoot,
 
+    [string]$PythonExecutable = (Get-Command python -ErrorAction Stop).Source,
+
     [string[]]$ToolRoots = @(),
 
     [switch]$AlMcp,
@@ -65,17 +67,30 @@ if ([string]::IsNullOrEmpty($ProtectedRoot)) {
     $ProtectedRoot = Join-Path "C:\bcbench-protected" $safeInstanceName
 }
 
+$benchmarkRoot = Split-Path $PSScriptRoot -Parent
+$workerPath = Join-Path $benchmarkRoot "src\bcbench\agent\shared\contained_process_worker.py"
+$pythonRuntime = Resolve-BCBenchPythonRuntime -PythonExecutable $PythonExecutable
 [System.Collections.Generic.List[string]]$effectiveToolRoots = [System.Collections.Generic.List[string]]::new()
-$effectiveToolRoots.Add((Split-Path $PSScriptRoot -Parent))
-foreach ($commandName in @("pwsh", "python", "git", "docker", "dotnet")) {
-    $command = Get-Command $commandName -ErrorAction SilentlyContinue
-    if ($null -ne $command -and -not [string]::IsNullOrEmpty($command.Source)) {
-        $effectiveToolRoots.Add((Split-Path $command.Source -Parent))
-    }
-}
 foreach ($toolRoot in $ToolRoots) {
     $effectiveToolRoots.Add($toolRoot)
 }
+$restrictedLifecycleRoots = @(
+    (Join-Path $EntryRoot "baseline-workspace"),
+    (Join-Path $EntryRoot "mounted-staging"),
+    (Join-Path $EntryRoot "evaluator-workspaces"),
+    (Join-Path $EntryRoot "evidence")
+)
+Assert-BCBenchReadExecuteRoots `
+    -ReadExecuteRoots (@($effectiveToolRoots) + @($pythonRuntime.BasePrefix)) `
+    -BenchmarkRoot $benchmarkRoot `
+    -DatasetPath $DatasetPath `
+    -ProtectedRoot $ProtectedRoot `
+    -EntryRoot $EntryRoot `
+    -AllowedAgentRoots @(
+        (Join-Path $EntryRoot "agent-workspace"),
+        (Join-Path $EntryRoot "agent-logs")
+    ) `
+    -RestrictedLifecycleRoots $restrictedLifecycleRoots
 
 try {
     Invoke-BCBenchBugFixLifecycle `
@@ -89,6 +104,12 @@ try {
         -EvaluatorPassword $EvaluatorPassword `
         -EntryRoot $EntryRoot `
         -ProtectedRoot $ProtectedRoot `
+        -BenchmarkRoot $benchmarkRoot `
+        -PythonExecutable $pythonRuntime.Executable `
+        -PythonBaseExecutable $pythonRuntime.BaseExecutable `
+        -PythonBasePrefix $pythonRuntime.BasePrefix `
+        -PythonPrefix $pythonRuntime.Prefix `
+        -WorkerPath $workerPath `
         -ToolRoots @($effectiveToolRoots | Select-Object -Unique) `
         -AlMcp:$AlMcp `
         -BcMcp:$BcMcp `

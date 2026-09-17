@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from bcbench.agent.shared.contained_process import WindowsIdentity
 from bcbench.types import ContainerConfig
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows PowerShell lifecycle")
@@ -17,8 +16,10 @@ _ROOT = Path(__file__).parents[1]
 _MODULE = _ROOT / "scripts" / "BugFixLifecycle.psm1"
 _SETUP = _ROOT / "scripts" / "Setup-BugFixLifecycle.ps1"
 _EXPECTED_EXPORTS = {
+    "Assert-BCBenchReadExecuteRoots",
     "New-BCBenchAgentIdentity",
     "Remove-BCBenchAgentIdentity",
+    "Resolve-BCBenchPythonRuntime",
     "Set-BCBenchWorkspaceAcl",
     "Test-BCBenchIdentityAccess",
     "New-BCBenchAgentBcUser",
@@ -85,12 +86,127 @@ $metadata | ConvertTo-Json -Compress -Depth 8
         "EvaluatorPassword",
         "EntryRoot",
         "ProtectedRoot",
+        "PythonExecutable",
+        "ToolRoots",
         "AlMcp",
         "BcMcp",
     } <= metadata.keys()
     assert any('ValidateSet("bug-fix")' in attribute for attribute in metadata["Category"])
     assert "Import-Module BcContainerHelper -RequiredVersion 6.1.18" in source
     assert "New-BCContainerSync" in source
+    assert "$effectiveToolRoots.Add((Split-Path $PSScriptRoot -Parent))" not in source
+    assert 'foreach ($commandName in @("pwsh", "python", "git", "docker", "dotnet"))' not in source
+
+
+def test_setup_rejects_benchmark_root_as_explicit_tool_root(tmp_path: Path) -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$message = $null
+try {{
+    & {_ps_quote(_SETUP)} `
+        -InstanceId 'malicious-tool-root' `
+        -DatasetPath {_ps_quote(_ROOT / "dataset" / "bcbench.jsonl")} `
+        -EvaluatorUsername 'admin' `
+        -EvaluatorPassword (ConvertTo-SecureString 'secret' -AsPlainText -Force) `
+        -EntryRoot {_ps_quote(tmp_path / "entry")} `
+        -ProtectedRoot {_ps_quote(tmp_path / "protected")} `
+        -PythonExecutable {_ps_quote(sys.executable)} `
+        -ToolRoots @({_ps_quote(_ROOT)})
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+$message | ConvertTo-Json -Compress
+"""
+    message = _last_json(_run_pwsh(script))
+
+    assert "must not overlap restricted benchmark or lifecycle paths" in message
+    assert not (tmp_path / "entry").exists()
+    assert not (tmp_path / "protected").exists()
+
+
+def test_python_runtime_resolution_uses_uv_base_interpreter() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+Resolve-BCBenchPythonRuntime -PythonExecutable {_ps_quote(sys.executable)} | ConvertTo-Json -Compress -Depth 6
+"""
+    runtime = _last_json(_run_pwsh(script))
+
+    assert Path(runtime["Executable"]).resolve() == Path(sys.executable).resolve()
+    assert Path(runtime["BaseExecutable"]).is_file()
+    assert Path(runtime["BasePrefix"]).is_dir()
+    assert Path(runtime["Prefix"]).resolve() == Path(sys.prefix).resolve()
+    assert Path(runtime["BaseExecutable"]).resolve() != Path(runtime["Executable"]).resolve()
+    assert Path(runtime["BasePrefix"]).resolve() != Path(runtime["Prefix"]).resolve()
+
+
+def test_python_runtime_resolution_honors_reported_base_executable(tmp_path: Path) -> None:
+    launcher = tmp_path / "fake-python.ps1"
+    executable = tmp_path / "venv" / "Scripts" / "python.exe"
+    base_prefix = tmp_path / "base-runtime"
+    prefix = tmp_path / "venv"
+    executable.parent.mkdir(parents=True)
+    base_prefix.mkdir()
+    executable.touch()
+    base_executable = base_prefix / "python.exe"
+    base_executable.touch()
+    launcher.write_text(
+        f"""@{{
+    executable = '{str(executable).replace("'", "''")}'
+    base_executable = '{str(base_executable).replace("'", "''")}'
+    base_prefix = '{str(base_prefix).replace("'", "''")}'
+    prefix = '{str(prefix).replace("'", "''")}'
+}} | ConvertTo-Json -Compress
+""",
+        encoding="utf-8",
+    )
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+Resolve-BCBenchPythonRuntime -PythonExecutable {_ps_quote(launcher)} | ConvertTo-Json -Compress -Depth 6
+"""
+    runtime = _last_json(_run_pwsh(script))
+
+    assert Path(runtime["Executable"]).resolve() == executable.resolve()
+    assert Path(runtime["BaseExecutable"]).resolve() == base_executable.resolve()
+    assert Path(runtime["BasePrefix"]).resolve() == base_prefix.resolve()
+    assert Path(runtime["Prefix"]).resolve() == prefix.resolve()
+
+
+@pytest.mark.parametrize("restricted_name", ["benchmark", "protected"])
+def test_runtime_root_rejects_restricted_storage(tmp_path: Path, restricted_name: str) -> None:
+    benchmark = tmp_path / "benchmark"
+    dataset = benchmark / "dataset" / "bcbench.jsonl"
+    protected = tmp_path / "protected"
+    entry = tmp_path / "entry"
+    dataset.parent.mkdir(parents=True)
+    dataset.touch()
+    protected.mkdir()
+    entry.mkdir()
+    restricted_root = {"benchmark": benchmark, "protected": protected}[restricted_name]
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$message = $null
+try {{
+    Assert-BCBenchReadExecuteRoots `
+        -ReadExecuteRoots @({_ps_quote(restricted_root)}) `
+        -BenchmarkRoot {_ps_quote(benchmark)} `
+        -DatasetPath {_ps_quote(dataset)} `
+        -ProtectedRoot {_ps_quote(protected)} `
+        -EntryRoot {_ps_quote(entry)} `
+        -AllowedAgentRoots @() `
+        -RestrictedLifecycleRoots @()
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+$message | ConvertTo-Json -Compress
+"""
+    message = _last_json(_run_pwsh(script))
+
+    assert "must not overlap restricted benchmark or lifecycle paths" in message
 
 
 def test_new_agent_identity_retries_collision_and_never_adds_privileged_groups() -> None:
@@ -153,8 +269,19 @@ def test_workspace_acl_uses_exact_checked_icacls_commands_and_runs_access_valida
     paths["entry"] = entry_root
     paths["protected"] = tmp_path / "protected"
     paths["tool"] = tmp_path / "tool"
+    paths["runtime"] = tmp_path / "runtime"
+    paths["benchmark"] = tmp_path / "benchmark"
     for path in paths.values():
         path.mkdir(parents=True, exist_ok=True)
+    dataset_path = paths["benchmark"] / "dataset" / "bcbench.jsonl"
+    dataset_path.parent.mkdir()
+    dataset_path.touch()
+    runtime_executable = tmp_path / "venv" / "Scripts" / "python.exe"
+    runtime_executable.parent.mkdir(parents=True)
+    runtime_executable.touch()
+    worker_path = paths["benchmark"] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    worker_path.parent.mkdir(parents=True)
+    worker_path.touch()
     script = f"""
 $ErrorActionPreference = 'Stop'
 $global:icaclsCalls = @()
@@ -193,7 +320,12 @@ $result = Set-BCBenchWorkspaceAcl `
     -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
     -Evidence {_ps_quote(paths["evidence"])} `
     -ProtectedRoot {_ps_quote(paths["protected"])} `
+    -BenchmarkRoot {_ps_quote(paths["benchmark"])} `
+    -DatasetPath {_ps_quote(dataset_path)} `
     -ToolRoots @({_ps_quote(paths["tool"])}) `
+    -RuntimeExecutablePaths @({_ps_quote(runtime_executable)}) `
+    -RuntimeRoots @({_ps_quote(paths["runtime"])}) `
+    -WorkerPath {_ps_quote(worker_path)} `
     -IcaclsRunner $icaclsRunner `
     -AclVerifier $aclVerifier `
     -AccessValidator $validator
@@ -230,11 +362,107 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
             ]
         )
     expected_calls.append([str(paths["tool"]), "/grant:r", f"{agent}:(OI)(CI)RX"])
+    expected_calls.append([str(paths["runtime"]), "/grant:r", f"{agent}:(OI)(CI)RX"])
+    expected_calls.append([str(runtime_executable), "/grant:r", f"{agent}:RX"])
+    expected_calls.append([str(worker_path), "/grant:r", f"{agent}:RX"])
 
     assert payload["calls"] == expected_calls
-    assert len(payload["verificationCalls"]) == 9
+    assert len(payload["verificationCalls"]) == 12
     assert all("*" not in call[0] and "?" not in call[0] for call in payload["calls"])
+    restricted_agent_grant_paths = {Path(call[0]).resolve() for call in payload["calls"] if "/grant:r" in call and any(agent in value for value in call[2:])}
+    assert Path(paths["benchmark"]).resolve() not in restricted_agent_grant_paths
+    assert dataset_path.resolve() not in restricted_agent_grant_paths
+    assert (paths["benchmark"] / "docs").resolve() not in restricted_agent_grant_paths
+    assert (paths["benchmark"] / "src" / "bcbench" / "evaluate").resolve() not in restricted_agent_grant_paths
+    assert Path(paths["protected"]).resolve() not in restricted_agent_grant_paths
+    assert Path(paths["baseline"]).resolve() not in restricted_agent_grant_paths
+    assert Path(paths["evaluators"]).resolve() not in restricted_agent_grant_paths
+    assert Path(paths["evidence"]).resolve() not in restricted_agent_grant_paths
     assert payload["result"]["ProcessId"] == 1234
+
+
+@pytest.mark.parametrize(
+    "malicious_path_name",
+    [
+        "benchmark",
+        "benchmark-parent",
+        "dataset",
+        "docs",
+        "evaluator",
+        "protected",
+        "baseline",
+        "staging",
+        "evaluators",
+        "evidence",
+        "unknown-sibling",
+    ],
+)
+def test_workspace_acl_rejects_malicious_tool_roots(tmp_path: Path, malicious_path_name: str) -> None:
+    benchmark = tmp_path / "benchmark"
+    entry_root = tmp_path / "entry"
+    protected = tmp_path / "protected"
+    paths = {
+        "baseline": entry_root / "baseline",
+        "agent": entry_root / "agent",
+        "logs": entry_root / "logs",
+        "staging": entry_root / "staging",
+        "evaluators": entry_root / "evaluators",
+        "evidence": entry_root / "evidence",
+    }
+    dataset = benchmark / "dataset" / "bcbench.jsonl"
+    docs = benchmark / "docs"
+    evaluator = benchmark / "src" / "bcbench" / "evaluate"
+    unknown_sibling = entry_root / "unknown-sibling"
+    worker = benchmark / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    for directory in (*paths.values(), protected, docs, evaluator, unknown_sibling, worker.parent):
+        directory.mkdir(parents=True, exist_ok=True)
+    dataset.parent.mkdir(parents=True, exist_ok=True)
+    dataset.touch()
+    worker.touch()
+    malicious_paths = {
+        "benchmark": benchmark,
+        "benchmark-parent": tmp_path,
+        "dataset": dataset.parent,
+        "docs": docs,
+        "evaluator": evaluator,
+        "protected": protected,
+        "unknown-sibling": unknown_sibling,
+        **paths,
+    }
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$identity = [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'secret'; Domain = '.' }}
+$message = $null
+try {{
+    Set-BCBenchWorkspaceAcl `
+        -Identity $identity `
+        -EntryRoot {_ps_quote(entry_root)} `
+        -BaselineWorkspace {_ps_quote(paths["baseline"])} `
+        -AgentWorkspace {_ps_quote(paths["agent"])} `
+        -AgentLogs {_ps_quote(paths["logs"])} `
+        -MountedStaging {_ps_quote(paths["staging"])} `
+        -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
+        -Evidence {_ps_quote(paths["evidence"])} `
+        -ProtectedRoot {_ps_quote(protected)} `
+        -BenchmarkRoot {_ps_quote(benchmark)} `
+        -DatasetPath {_ps_quote(dataset)} `
+        -ToolRoots @({_ps_quote(malicious_paths[malicious_path_name])}) `
+        -RuntimeExecutablePaths @() `
+        -RuntimeRoots @() `
+        -WorkerPath {_ps_quote(worker)} `
+        -IcaclsRunner {{ return 0 }} `
+        -AclVerifier {{ }} `
+        -AccessValidator {{ throw 'must not validate' }} | Out-Null
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+$message | ConvertTo-Json -Compress
+"""
+    message = _last_json(_run_pwsh(script))
+
+    assert "must not overlap restricted benchmark or lifecycle paths" in message
 
 
 def test_workspace_acl_stops_on_icacls_failure(tmp_path: Path) -> None:
@@ -253,8 +481,17 @@ def test_workspace_acl_stops_on_icacls_failure(tmp_path: Path) -> None:
     paths["entry"] = entry_root
     paths["protected"] = tmp_path / "protected"
     paths["tool"] = tmp_path / "tool"
+    paths["benchmark"] = tmp_path / "benchmark"
     for path in paths.values():
         path.mkdir(parents=True, exist_ok=True)
+    dataset_path = paths["benchmark"] / "dataset" / "bcbench.jsonl"
+    dataset_path.parent.mkdir()
+    dataset_path.touch()
+    runtime_executable = tmp_path / "python.exe"
+    runtime_executable.touch()
+    worker_path = paths["benchmark"] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    worker_path.parent.mkdir(parents=True)
+    worker_path.touch()
     script = f"""
 $ErrorActionPreference = 'Stop'
 $global:calls = @()
@@ -283,7 +520,12 @@ try {{
         -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
         -Evidence {_ps_quote(paths["evidence"])} `
         -ProtectedRoot {_ps_quote(paths["protected"])} `
+        -BenchmarkRoot {_ps_quote(paths["benchmark"])} `
+        -DatasetPath {_ps_quote(dataset_path)} `
         -ToolRoots @({_ps_quote(paths["tool"])}) `
+        -RuntimeExecutablePaths @({_ps_quote(runtime_executable)}) `
+        -RuntimeRoots @() `
+        -WorkerPath {_ps_quote(worker_path)} `
         -IcaclsRunner $runner `
         -AccessValidator $validator | Out-Null
 }}
@@ -294,7 +536,9 @@ catch {{
 """
     payload = _last_json(_run_pwsh(script))
 
-    assert len(payload["calls"]) == 2
+    assert len(payload["calls"]) == 3
+    assert payload["calls"][-1][0:2] == [str(paths["entry"]), "/remove:g"]
+    assert payload["calls"][-1][2].endswith("\\bcb-1234567-abcdef")
     assert payload["validated"] is False
     assert "icacls failed with exit code 5" in payload["message"]
 
@@ -691,8 +935,9 @@ finally {{
     assert payload["absentAfterRemove"] is True
 
 
-@pytest.mark.e2e
-def test_elevated_disposable_identity_access_uses_contained_process(tmp_path: Path) -> None:
+@pytest.mark.integration
+@pytest.mark.parametrize("force_probe_failure", [False, True])
+def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, force_probe_failure: bool) -> None:
     if shutil.which("docker") is None:
         pytest.skip("requires Docker CLI")
     elevated = _run_pwsh("([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)")
@@ -707,43 +952,97 @@ def test_elevated_disposable_identity_access_uses_contained_process(tmp_path: Pa
     staging = entry_root / "mounted-staging"
     evaluators = entry_root / "evaluator-workspaces"
     evidence = entry_root / "evidence"
-    tool_root = Path(sys.executable).parent
     for path in (baseline, workspace, logs, staging, evaluators, evidence, protected_root):
         path.mkdir(parents=True, exist_ok=True)
     secret_path = protected_root / "secret.txt"
     secret_path.write_text("secret", encoding="utf-8")
-    identity: WindowsIdentity | None = None
-    try:
-        script = f"""
+    instance_id = f"integration-{secrets.token_hex(3)}"
+    access_validator = "{ throw 'forced probe failure' }" if force_probe_failure else "$null"
+    script = f"""
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
-$identity = New-BCBenchAgentIdentity -InstanceId 'e2e-{secrets.token_hex(3)}'
-$access = Set-BCBenchWorkspaceAcl `
-    -Identity $identity `
-    -EntryRoot {_ps_quote(entry_root)} `
-    -BaselineWorkspace {_ps_quote(baseline)} `
-    -AgentWorkspace {_ps_quote(workspace)} `
-    -AgentLogs {_ps_quote(logs)} `
-    -MountedStaging {_ps_quote(staging)} `
-    -EvaluatorWorkspaces {_ps_quote(evaluators)} `
-    -Evidence {_ps_quote(evidence)} `
-    -ProtectedRoot {_ps_quote(protected_root)} `
-    -ToolRoots @({_ps_quote(tool_root)})
-[PSCustomObject]@{{ identity = $identity; access = $access }} | ConvertTo-Json -Compress -Depth 8
+$runtime = Resolve-BCBenchPythonRuntime -PythonExecutable {_ps_quote(sys.executable)}
+$identity = $null
+$username = $null
+$access = $null
+$probeError = $null
+$aclGrantRemains = $false
+try {{
+    $identity = New-BCBenchAgentIdentity -InstanceId {_ps_quote(instance_id)}
+    $username = $identity.Username
+    $parameters = @{{
+        Identity = $identity
+        EntryRoot = {_ps_quote(entry_root)}
+        BaselineWorkspace = {_ps_quote(baseline)}
+        AgentWorkspace = {_ps_quote(workspace)}
+        AgentLogs = {_ps_quote(logs)}
+        MountedStaging = {_ps_quote(staging)}
+        EvaluatorWorkspaces = {_ps_quote(evaluators)}
+        Evidence = {_ps_quote(evidence)}
+        ProtectedRoot = {_ps_quote(protected_root)}
+        BenchmarkRoot = {_ps_quote(_ROOT)}
+        DatasetPath = {_ps_quote(_ROOT / "dataset" / "bcbench.jsonl")}
+        ToolRoots = @()
+        RuntimeExecutablePaths = @($runtime.Executable)
+        RuntimeRoots = @($runtime.BasePrefix)
+        WorkerPath = {_ps_quote(_ROOT / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py")}
+    }}
+    $validator = {access_validator}
+    if ($null -ne $validator) {{ $parameters.AccessValidator = $validator }}
+    $access = Set-BCBenchWorkspaceAcl @parameters
+}}
+catch {{
+    $probeError = $_.Exception.Message
+}}
+finally {{
+    if ($null -ne $username) {{
+        $account = [Security.Principal.NTAccount]::new([Environment]::MachineName, $username)
+        $sid = $account.Translate([Security.Principal.SecurityIdentifier]).Value
+        try {{
+            foreach ($path in @(
+                {_ps_quote(entry_root)},
+                {_ps_quote(workspace)},
+                {_ps_quote(logs)},
+                $runtime.BasePrefix,
+                $runtime.Executable,
+                {_ps_quote(_ROOT / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py")}
+            ) | Select-Object -Unique) {{
+                & icacls.exe $path /remove:g "$([Environment]::MachineName)\\$username" | Out-Null
+                if ($LASTEXITCODE -ne 0) {{ throw "ACL cleanup failed for $path" }}
+                $acl = Get-Acl -LiteralPath $path
+                if ($acl.Access | Where-Object {{
+                    try {{ $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $sid }}
+                    catch {{ $_.IdentityReference.Value -eq $sid }}
+                }}) {{
+                    $aclGrantRemains = $true
+                }}
+            }}
+        }}
+        finally {{
+            Remove-BCBenchAgentIdentity -Username $username
+        }}
+    }}
+}}
+[PSCustomObject]@{{
+    username = $username
+    access = $access
+    probeError = $probeError
+    aclGrantRemains = $aclGrantRemains
+    userRemains = if ($null -eq $username) {{ $false }} else {{ $null -ne (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) }}
+}} | ConvertTo-Json -Compress -Depth 8
 """
-        payload = _last_json(_run_pwsh(script))
-        identity = WindowsIdentity(
-            payload["identity"]["Username"],
-            payload["identity"]["Password"],
-            payload["identity"]["Domain"],
-        )
+    payload = _last_json(_run_pwsh(script))
 
+    assert payload["username"].startswith("bcb-")
+    assert payload["aclGrantRemains"] is False
+    assert payload["userRemains"] is False
+    if force_probe_failure:
+        assert "forced probe failure" in payload["probeError"]
+    else:
+        assert payload["probeError"] is None
         assert payload["access"]["WorkspaceWriteSucceeded"] is True
         assert payload["access"]["ProtectedReadDenied"] is True
         assert payload["access"]["ProtectedWriteDenied"] is True
         assert payload["access"]["DockerCliDenied"] is True
         assert payload["access"]["DockerPipeDenied"] is True
         assert payload["access"]["ProcessId"] > 0
-    finally:
-        if identity is not None:
-            _run_pwsh(f"Import-Module {_ps_quote(_MODULE)} -Force; Remove-BCBenchAgentIdentity -Username {_ps_quote(identity.username)}")

@@ -33,6 +33,14 @@ _SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "Invoke-ContainedProcess.
 _WORKER_PATH = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
 
 
+def test_wrapper_launches_worker_file_from_requested_workspace() -> None:
+    source = _SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "$workerArguments = @(\n        $WorkerPath," in source
+    assert "[string]$request.cwd" in source
+    assert "(Split-Path -Parent $WorkerPath)" not in source
+
+
 def _request(
     tmp_path: Path,
     code: str,
@@ -560,8 +568,7 @@ def test_worker_does_not_launch_command_before_gate(tmp_path):
     worker = subprocess.Popen(
         [
             sys.executable,
-            "-m",
-            "bcbench.agent.shared.contained_process_worker",
+            str(_WORKER_PATH),
             str(request_path),
             str(gate_path),
             "5",
@@ -604,8 +611,10 @@ def test_serializes_optional_restricted_identity_and_cleans_temp_files(tmp_path,
     script_path.touch()
     captured_spec: dict[str, object] = {}
     captured_paths: list[Path] = []
+    captured_command: list[str] = []
 
     def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured_command.extend(command)
         request_path = Path(command[command.index("-RequestPath") + 1])
         worker_request_path = Path(command[command.index("-WorkerRequestPath") + 1])
         gate_path = Path(command[command.index("-GatePath") + 1])
@@ -638,6 +647,9 @@ def test_serializes_optional_restricted_identity_and_cleans_temp_files(tmp_path,
         "password": "restricted-password",
         "domain": "RESTRICTED",
     }
+    worker_path = Path(captured_command[captured_command.index("-WorkerPath") + 1])
+    assert worker_path == _WORKER_PATH
+    assert "-m" not in captured_command
     assert all(not path.exists() for path in captured_paths)
 
 

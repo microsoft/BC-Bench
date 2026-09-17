@@ -154,6 +154,106 @@ function Test-BCBenchPathContains {
     )
 }
 
+function Test-BCBenchPathsOverlap {
+    param(
+        [Parameter(Mandatory = $true)][string]$First,
+        [Parameter(Mandatory = $true)][string]$Second
+    )
+
+    return (Test-BCBenchPathContains -Ancestor $First -Path $Second) -or
+        (Test-BCBenchPathContains -Ancestor $Second -Path $First)
+}
+
+function Resolve-BCBenchPythonRuntime {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$PythonExecutable)
+
+    $runtimeProbe = @'
+import json
+import sys
+
+print(json.dumps({
+    "executable": sys.executable,
+    "base_executable": getattr(sys, "_base_executable", sys.executable),
+    "base_prefix": sys.base_prefix,
+    "prefix": sys.prefix,
+}))
+'@
+    $global:LASTEXITCODE = 0
+    $output = & $PythonExecutable -c $runtimeProbe
+    if (-not $?) {
+        throw "Python runtime probe failed for '$PythonExecutable'."
+    }
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        throw "Python runtime probe failed for '$PythonExecutable' with exit code $LASTEXITCODE."
+    }
+    try {
+        $runtime = (@($output)[-1] | ConvertFrom-Json -ErrorAction Stop)
+    }
+    catch {
+        throw "Python runtime probe returned invalid JSON for '$PythonExecutable': $($_.Exception.Message)"
+    }
+
+    $paths = [ordered]@{
+        Executable     = Resolve-BCBenchAbsolutePath -Path ([string]$runtime.executable)
+        BaseExecutable = Resolve-BCBenchAbsolutePath -Path ([string]$runtime.base_executable)
+        BasePrefix     = Resolve-BCBenchAbsolutePath -Path ([string]$runtime.base_prefix)
+        Prefix         = Resolve-BCBenchAbsolutePath -Path ([string]$runtime.prefix)
+    }
+    foreach ($name in @("Executable", "BaseExecutable")) {
+        if (-not (Test-Path -LiteralPath $paths[$name] -PathType Leaf)) {
+            throw "Python runtime $name does not exist: $($paths[$name])"
+        }
+    }
+    foreach ($name in @("BasePrefix", "Prefix")) {
+        if (-not (Test-Path -LiteralPath $paths[$name] -PathType Container)) {
+            throw "Python runtime $name does not exist: $($paths[$name])"
+        }
+    }
+    if (-not (Test-BCBenchPathContains -Ancestor $paths.BasePrefix -Path $paths.BaseExecutable)) {
+        throw "Python BaseExecutable must be contained by BasePrefix."
+    }
+    if (-not (Test-BCBenchPathContains -Ancestor $paths.Prefix -Path $paths.Executable)) {
+        throw "Python Executable must be contained by Prefix."
+    }
+
+    return [PSCustomObject]$paths
+}
+
+function Assert-BCBenchReadExecuteRoots {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ReadExecuteRoots,
+        [Parameter(Mandatory = $true)][string]$BenchmarkRoot,
+        [Parameter(Mandatory = $true)][string]$DatasetPath,
+        [Parameter(Mandatory = $true)][string]$ProtectedRoot,
+        [Parameter(Mandatory = $true)][string]$EntryRoot,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$AllowedAgentRoots,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$RestrictedLifecycleRoots
+    )
+
+    $restrictedPaths = @($BenchmarkRoot, $DatasetPath, $ProtectedRoot) + @($RestrictedLifecycleRoots)
+    foreach ($readExecuteRoot in $ReadExecuteRoots | Select-Object -Unique) {
+        if (-not (Test-Path -LiteralPath $readExecuteRoot -PathType Container)) {
+            throw "Read/execute root does not exist: $readExecuteRoot"
+        }
+        Assert-BCBenchNoReparseComponents -Path $readExecuteRoot
+        if (Test-BCBenchPathsOverlap -First $readExecuteRoot -Second $EntryRoot) {
+            $isAllowedAgentRoot = @($AllowedAgentRoots | Where-Object {
+                Test-BCBenchPathContains -Ancestor $_ -Path $readExecuteRoot
+            }).Count -gt 0
+            if (-not $isAllowedAgentRoot) {
+                throw "Read/execute root '$readExecuteRoot' must not overlap restricted benchmark or lifecycle paths outside agent workspace or logs."
+            }
+        }
+        foreach ($restrictedPath in $restrictedPaths) {
+            if (Test-BCBenchPathsOverlap -First $readExecuteRoot -Second $restrictedPath) {
+                throw "Read/execute root '$readExecuteRoot' must not overlap restricted benchmark or lifecycle paths."
+            }
+        }
+    }
+}
+
 function Assert-BCBenchNoReparseComponents {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -367,78 +467,86 @@ function Test-BCBenchIdentityAccess {
     New-Item -ItemType Directory -Path $probeRoot | Out-Null
 
     $probeScript = @'
-$ErrorActionPreference = "Stop"
-$workspaceWriteSucceeded = $false
-$protectedReadDenied = $false
-$protectedWriteDenied = $false
-$dockerCliDenied = $false
-$dockerPipeDenied = $false
-$protectedReadError = $null
-$protectedWriteError = $null
-$dockerCliError = $null
-$dockerPipeError = $null
-try {
-    [IO.File]::WriteAllText($env:BCBENCH_WORKSPACE_PROBE, "agent-write")
-    $workspaceWriteSucceeded = $true
-}
-catch {
-    $workspaceWriteError = $_.Exception.Message
-}
-try {
-    [void][IO.File]::ReadAllText($env:BCBENCH_PROTECTED_PROBE)
-}
-catch {
-    $protectedReadDenied = $true
-    $protectedReadError = $_.Exception.Message
-}
-try {
-    [IO.File]::WriteAllText($env:BCBENCH_PROTECTED_WRITE_PROBE, "forbidden")
-}
-catch {
-    $protectedWriteDenied = $true
-    $protectedWriteError = $_.Exception.Message
-}
-try {
-    $dockerOutput = & docker version 2>&1 | Out-String
-    $dockerCliDenied = $LASTEXITCODE -ne 0
-    if ($dockerCliDenied) { $dockerCliError = $dockerOutput.Trim() }
-}
-catch {
-    $dockerCliDenied = $true
-    $dockerCliError = $_.Exception.Message
-}
-try {
-    $pipe = [IO.Pipes.NamedPipeClientStream]::new(".", "docker_engine", [IO.Pipes.PipeDirection]::InOut)
-    try {
-        $pipe.Connect(1500)
-        $dockerPipeDenied = -not $pipe.IsConnected
-        if (-not $dockerPipeDenied) { $dockerPipeError = "Connection unexpectedly succeeded" }
-    }
-    finally {
-        $pipe.Dispose()
-    }
-}
-catch {
-    $dockerPipeDenied = $true
-    $dockerPipeError = $_.Exception.Message
-}
-[PSCustomObject]@{
-    WorkspaceWriteSucceeded = $workspaceWriteSucceeded
-    WorkspaceWriteError = $workspaceWriteError
-    ProtectedReadDenied = $protectedReadDenied
-    ProtectedReadError = $protectedReadError
-    ProtectedWriteDenied = $protectedWriteDenied
-    ProtectedWriteError = $protectedWriteError
-    DockerCliDenied = $dockerCliDenied
-    DockerCliError = $dockerCliError
-    DockerPipeDenied = $dockerPipeDenied
-    DockerPipeError = $dockerPipeError
-    ProcessId = $PID
-    WorkspaceProbePath = $env:BCBENCH_WORKSPACE_PROBE
-    ProtectedProbePath = $env:BCBENCH_PROTECTED_PROBE
-} | ConvertTo-Json -Compress
+import ctypes
+import json
+import os
+import subprocess
+from pathlib import Path
+
+workspace_error = None
+protected_read_error = None
+protected_write_error = None
+docker_cli_error = None
+docker_pipe_error = None
+
+try:
+    Path(os.environ["BCBENCH_WORKSPACE_PROBE"]).write_text("agent-write", encoding="utf-8")
+    workspace_write_succeeded = True
+except OSError as error:
+    workspace_write_succeeded = False
+    workspace_error = str(error)
+
+try:
+    Path(os.environ["BCBENCH_PROTECTED_PROBE"]).read_text(encoding="utf-8")
+    protected_read_denied = False
+except PermissionError as error:
+    protected_read_denied = True
+    protected_read_error = str(error)
+
+try:
+    Path(os.environ["BCBENCH_PROTECTED_WRITE_PROBE"]).write_text("forbidden", encoding="utf-8")
+    protected_write_denied = False
+except PermissionError as error:
+    protected_write_denied = True
+    protected_write_error = str(error)
+
+try:
+    docker = subprocess.run(["docker", "version"], capture_output=True, text=True, timeout=15, check=False)
+    docker_cli_denied = docker.returncode != 0
+    if docker_cli_denied:
+        docker_cli_error = (docker.stdout + docker.stderr).strip()
+except (OSError, subprocess.SubprocessError) as error:
+    docker_cli_denied = True
+    docker_cli_error = str(error)
+
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32.CreateFileW.argtypes = (
+    ctypes.c_wchar_p,
+    ctypes.c_ulong,
+    ctypes.c_ulong,
+    ctypes.c_void_p,
+    ctypes.c_ulong,
+    ctypes.c_ulong,
+    ctypes.c_void_p,
+)
+kernel32.CreateFileW.restype = ctypes.c_void_p
+kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+kernel32.CloseHandle.restype = ctypes.c_int
+pipe_handle = kernel32.CreateFileW(r"\\.\pipe\docker_engine", 0xC0000000, 0, None, 3, 0, None)
+if pipe_handle == ctypes.c_void_p(-1).value:
+    docker_pipe_denied = True
+    docker_pipe_error = f"CreateFileW failed with error {ctypes.get_last_error()}"
+else:
+    docker_pipe_denied = False
+    docker_pipe_error = "Connection unexpectedly succeeded"
+    kernel32.CloseHandle(pipe_handle)
+
+print(json.dumps({
+    "WorkspaceWriteSucceeded": workspace_write_succeeded,
+    "WorkspaceWriteError": workspace_error,
+    "ProtectedReadDenied": protected_read_denied,
+    "ProtectedReadError": protected_read_error,
+    "ProtectedWriteDenied": protected_write_denied,
+    "ProtectedWriteError": protected_write_error,
+    "DockerCliDenied": docker_cli_denied,
+    "DockerCliError": docker_cli_error,
+    "DockerPipeDenied": docker_pipe_denied,
+    "DockerPipeError": docker_pipe_error,
+    "ProcessId": os.getpid(),
+    "WorkspaceProbePath": os.environ["BCBENCH_WORKSPACE_PROBE"],
+    "ProtectedProbePath": os.environ["BCBENCH_PROTECTED_PROBE"],
+}, separators=(",", ":")))
 '@
-    $encodedProbe = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probeScript))
     $powershellExecutable = (Get-Process -Id $PID).Path
     $requestPath = Join-Path $probeRoot "request.json"
     $sharedPath = Join-Path $probeRoot "shared"
@@ -448,7 +556,7 @@ catch {
     $stdoutPath = Join-Path $sharedPath "stdout.txt"
     $stderrPath = Join-Path $sharedPath "stderr.txt"
     $request = @{
-        command         = @($powershellExecutable, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", $encodedProbe)
+        command         = @($PythonExecutable, "-c", $probeScript)
         cwd             = $AgentWorkspace
         env             = @{
             PATH                            = $env:PATH
@@ -511,7 +619,12 @@ function Set-BCBenchWorkspaceAcl {
         [Parameter(Mandatory = $true)][string]$EvaluatorWorkspaces,
         [Parameter(Mandatory = $true)][string]$Evidence,
         [Parameter(Mandatory = $true)][string]$ProtectedRoot,
-        [Parameter(Mandatory = $true)][string[]]$ToolRoots,
+        [Parameter(Mandatory = $true)][string]$BenchmarkRoot,
+        [Parameter(Mandatory = $true)][string]$DatasetPath,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ToolRoots,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$RuntimeExecutablePaths,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$RuntimeRoots,
+        [Parameter(Mandatory = $true)][string]$WorkerPath,
         [string[]]$WorkerRequestPaths = @(),
         [string[]]$WorkerOutputPaths = @(),
         [Parameter(DontShow = $true)][scriptblock]$IcaclsRunner,
@@ -537,16 +650,60 @@ function Set-BCBenchWorkspaceAcl {
             throw "Required ACL directory does not exist: $requiredDirectory"
         }
     }
-    foreach ($toolRoot in $ToolRoots | Select-Object -Unique) {
-        if (-not (Test-Path -LiteralPath $toolRoot -PathType Container)) {
-            throw "Tool root does not exist: $toolRoot"
+    if (-not (Test-Path -LiteralPath $BenchmarkRoot -PathType Container)) {
+        throw "Benchmark root does not exist: $BenchmarkRoot"
+    }
+    if (-not (Test-Path -LiteralPath $DatasetPath -PathType Leaf)) {
+        throw "Dataset path does not exist: $DatasetPath"
+    }
+    $benchmarkRootPath = Resolve-BCBenchAbsolutePath -Path $BenchmarkRoot
+    $datasetPathValue = Resolve-BCBenchAbsolutePath -Path $DatasetPath
+    if (-not (Test-BCBenchPathContains -Ancestor $benchmarkRootPath -Path $datasetPathValue)) {
+        throw "Dataset path must be contained by the benchmark root."
+    }
+    $expectedWorkerPath = Join-Path $benchmarkRootPath "src\bcbench\agent\shared\contained_process_worker.py"
+    if (-not (Test-Path -LiteralPath $WorkerPath -PathType Leaf)) {
+        throw "Contained process worker does not exist: $WorkerPath"
+    }
+    if (-not (Resolve-BCBenchAbsolutePath -Path $WorkerPath).Equals(
+        (Resolve-BCBenchAbsolutePath -Path $expectedWorkerPath),
+        [StringComparison]::OrdinalIgnoreCase
+    )) {
+        throw "Contained process worker must use the benchmark's exact worker file path."
+    }
+
+    $restrictedLifecycleRoots = @(
+        $BaselineWorkspace,
+        $MountedStaging,
+        $EvaluatorWorkspaces,
+        $Evidence
+    )
+    Assert-BCBenchReadExecuteRoots `
+        -ReadExecuteRoots (@($ToolRoots) + @($RuntimeRoots)) `
+        -BenchmarkRoot $benchmarkRootPath `
+        -DatasetPath $datasetPathValue `
+        -ProtectedRoot $ProtectedRoot `
+        -EntryRoot $EntryRoot `
+        -AllowedAgentRoots @($AgentWorkspace, $AgentLogs) `
+        -RestrictedLifecycleRoots $restrictedLifecycleRoots
+    foreach ($runtimeExecutablePath in $RuntimeExecutablePaths | Select-Object -Unique) {
+        if (-not (Test-Path -LiteralPath $runtimeExecutablePath -PathType Leaf)) {
+            throw "Runtime executable does not exist: $runtimeExecutablePath"
         }
-        foreach ($managedRoot in @($EntryRoot, $ProtectedRoot)) {
-            if ((Test-BCBenchPathContains -Ancestor $managedRoot -Path $toolRoot) -or (Test-BCBenchPathContains -Ancestor $toolRoot -Path $managedRoot)) {
-                throw "Tool root '$toolRoot' must not overlap lifecycle storage '$managedRoot'."
+        Assert-BCBenchNoReparseComponents -Path $runtimeExecutablePath
+        foreach ($restrictedPath in @($ProtectedRoot, $BaselineWorkspace, $MountedStaging, $EvaluatorWorkspaces, $Evidence, $datasetPathValue)) {
+            if (Test-BCBenchPathsOverlap -First $runtimeExecutablePath -Second $restrictedPath) {
+                throw "Runtime executable '$runtimeExecutablePath' must not overlap protected lifecycle paths."
+            }
+        }
+        if (Test-BCBenchPathContains -Ancestor $benchmarkRootPath -Path $runtimeExecutablePath) {
+            $benchmarkVenvRoot = Join-Path $benchmarkRootPath ".venv"
+            if (-not (Test-BCBenchPathContains -Ancestor $benchmarkVenvRoot -Path $runtimeExecutablePath)) {
+                throw "Runtime executable inside the benchmark must be the evaluator virtual-environment launcher."
             }
         }
     }
+    Assert-BCBenchNoReparseComponents -Path $WorkerPath
     foreach ($workerPath in @($WorkerRequestPaths) + @($WorkerOutputPaths)) {
         if (-not (Test-Path -LiteralPath $workerPath -PathType Leaf)) {
             throw "Worker access path must be an existing file: $workerPath"
@@ -573,96 +730,155 @@ function Set-BCBenchWorkspaceAcl {
     )
     $agentTraverse = [PSCustomObject]@{ Identity = $agentAccount; Rights = "Traverse" }
     $agentModify = [PSCustomObject]@{ Identity = $agentAccount; Rights = "Modify" }
+    [System.Collections.Generic.List[string]]$agentGrantPaths = [System.Collections.Generic.List[string]]::new()
 
-    Set-BCBenchExplicitAcl `
-        -Path $EntryRoot `
-        -Rules ($baseRules + $agentTraverse) `
-        -AgentAccount $agentAccount `
-        -IcaclsRunner $IcaclsRunner `
-        -AclVerifier $AclVerifier
-    foreach ($privatePath in @($BaselineWorkspace, $MountedStaging, $EvaluatorWorkspaces, $Evidence, $ProtectedRoot)) {
+    try {
+        $agentGrantPaths.Add($EntryRoot)
         Set-BCBenchExplicitAcl `
-            -Path $privatePath `
-            -Rules $baseRules `
-            -AgentAccount $agentAccount `
-            -RemoveAgent `
-            -IcaclsRunner $IcaclsRunner `
-            -AclVerifier $AclVerifier
-    }
-    Set-BCBenchExplicitAcl `
-        -Path $AgentWorkspace `
-        -Rules ($baseRules + $agentModify) `
-        -AgentAccount $agentAccount `
-        -IcaclsRunner $IcaclsRunner `
-        -AclVerifier $AclVerifier
-    Set-BCBenchExplicitAcl `
-        -Path $AgentLogs `
-        -Rules ($baseRules + $agentModify) `
-        -AgentAccount $agentAccount `
-        -IcaclsRunner $IcaclsRunner `
-        -AclVerifier $AclVerifier
-    foreach ($toolRoot in $ToolRoots | Select-Object -Unique) {
-        $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
-        Set-BCBenchExplicitAcl `
-            -Path $toolRoot `
-            -Rules @($agentRead) `
-            -AgentAccount $agentAccount `
-            -PreserveInheritance `
-            -IcaclsRunner $IcaclsRunner `
-            -AclVerifier $AclVerifier
-    }
-    if ($WorkerRequestPaths.Count -gt 0 -or $WorkerOutputPaths.Count -gt 0) {
-        Set-BCBenchExplicitAcl `
-            -Path $MountedStaging `
+            -Path $EntryRoot `
             -Rules ($baseRules + $agentTraverse) `
             -AgentAccount $agentAccount `
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
-    }
-    foreach ($requestPath in $WorkerRequestPaths) {
-        $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+        foreach ($privatePath in @($BaselineWorkspace, $MountedStaging, $EvaluatorWorkspaces, $Evidence, $ProtectedRoot)) {
+            Set-BCBenchExplicitAcl `
+                -Path $privatePath `
+                -Rules $baseRules `
+                -AgentAccount $agentAccount `
+                -RemoveAgent `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+        }
+        $agentGrantPaths.Add($AgentWorkspace)
         Set-BCBenchExplicitAcl `
-            -Path $requestPath `
-            -Rules ($baseRules + $agentRead) `
-            -AgentAccount $agentAccount `
-            -IsFile `
-            -IcaclsRunner $IcaclsRunner `
-            -AclVerifier $AclVerifier
-    }
-    foreach ($outputPath in $WorkerOutputPaths) {
-        Set-BCBenchExplicitAcl `
-            -Path $outputPath `
+            -Path $AgentWorkspace `
             -Rules ($baseRules + $agentModify) `
             -AgentAccount $agentAccount `
-            -IsFile `
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
-    }
-
-    $validationParameters = @{
-        Identity        = $Identity
-        AgentWorkspace  = $AgentWorkspace
-        AgentLogs       = $AgentLogs
-        ProtectedRoot   = $ProtectedRoot
-    }
-    $result = if ($null -ne $AccessValidator) {
-        & $AccessValidator $validationParameters
-    }
-    else {
-        Test-BCBenchIdentityAccess @validationParameters
-    }
-    foreach ($property in @(
-        "WorkspaceWriteSucceeded",
-        "ProtectedReadDenied",
-        "ProtectedWriteDenied",
-        "DockerCliDenied",
-        "DockerPipeDenied"
-    )) {
-        if (-not [bool]$result.$property) {
-            throw "Restricted identity access verification failed: $property was false."
+        $agentGrantPaths.Add($AgentLogs)
+        Set-BCBenchExplicitAcl `
+            -Path $AgentLogs `
+            -Rules ($baseRules + $agentModify) `
+            -AgentAccount $agentAccount `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
+        foreach ($toolRoot in $ToolRoots | Select-Object -Unique) {
+            $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+            $agentGrantPaths.Add($toolRoot)
+            Set-BCBenchExplicitAcl `
+                -Path $toolRoot `
+                -Rules @($agentRead) `
+                -AgentAccount $agentAccount `
+                -PreserveInheritance `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
         }
+        foreach ($runtimeRoot in $RuntimeRoots | Select-Object -Unique) {
+            $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+            $agentGrantPaths.Add($runtimeRoot)
+            Set-BCBenchExplicitAcl `
+                -Path $runtimeRoot `
+                -Rules @($agentRead) `
+                -AgentAccount $agentAccount `
+                -PreserveInheritance `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+        }
+        foreach ($runtimeExecutablePath in $RuntimeExecutablePaths | Select-Object -Unique) {
+            $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+            $agentGrantPaths.Add($runtimeExecutablePath)
+            Set-BCBenchExplicitAcl `
+                -Path $runtimeExecutablePath `
+                -Rules @($agentRead) `
+                -AgentAccount $agentAccount `
+                -IsFile `
+                -PreserveInheritance `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+        }
+        $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+        $agentGrantPaths.Add($WorkerPath)
+        Set-BCBenchExplicitAcl `
+            -Path $WorkerPath `
+            -Rules @($agentRead) `
+            -AgentAccount $agentAccount `
+            -IsFile `
+            -PreserveInheritance `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
+        if ($WorkerRequestPaths.Count -gt 0 -or $WorkerOutputPaths.Count -gt 0) {
+            $agentGrantPaths.Add($MountedStaging)
+            Set-BCBenchExplicitAcl `
+                -Path $MountedStaging `
+                -Rules ($baseRules + $agentTraverse) `
+                -AgentAccount $agentAccount `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+        }
+        foreach ($requestPath in $WorkerRequestPaths) {
+            $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+            $agentGrantPaths.Add($requestPath)
+            Set-BCBenchExplicitAcl `
+                -Path $requestPath `
+                -Rules ($baseRules + $agentRead) `
+                -AgentAccount $agentAccount `
+                -IsFile `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+        }
+        foreach ($outputPath in $WorkerOutputPaths) {
+            $agentGrantPaths.Add($outputPath)
+            Set-BCBenchExplicitAcl `
+                -Path $outputPath `
+                -Rules ($baseRules + $agentModify) `
+                -AgentAccount $agentAccount `
+                -IsFile `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+        }
+
+        $validationParameters = @{
+            Identity                     = $Identity
+            AgentWorkspace               = $AgentWorkspace
+            AgentLogs                    = $AgentLogs
+            ProtectedRoot                = $ProtectedRoot
+            PythonExecutable             = @($RuntimeExecutablePaths)[0]
+            ContainedProcessWorkerPath   = $WorkerPath
+        }
+        $result = if ($null -ne $AccessValidator) {
+            & $AccessValidator $validationParameters
+        }
+        else {
+            Test-BCBenchIdentityAccess @validationParameters
+        }
+        foreach ($property in @(
+            "WorkspaceWriteSucceeded",
+            "ProtectedReadDenied",
+            "ProtectedWriteDenied",
+            "DockerCliDenied",
+            "DockerPipeDenied"
+        )) {
+            if (-not [bool]$result.$property) {
+                throw "Restricted identity access verification failed: $property was false."
+            }
+        }
+        return $result
     }
-    return $result
+    catch {
+        $originalError = $_
+        [System.Collections.Generic.List[string]]$rollbackErrors = [System.Collections.Generic.List[string]]::new()
+        foreach ($grantedPath in $agentGrantPaths | Select-Object -Unique) {
+            try {
+                Invoke-BCBenchIcacls -Arguments @($grantedPath, "/remove:g", $agentAccount) -Runner $IcaclsRunner
+            }
+            catch {
+                $rollbackErrors.Add("$grantedPath`: $($_.Exception.Message)")
+            }
+        }
+        $rollbackMessage = if ($rollbackErrors.Count -eq 0) { "" } else { " ACL rollback errors: $($rollbackErrors -join '; ')" }
+        throw "$($originalError.Exception.Message)$rollbackMessage"
+    }
 }
 
 function New-BCBenchAgentBcUser {
@@ -781,6 +997,12 @@ function Invoke-BCBenchBugFixLifecycle {
         [Parameter(Mandatory = $true)][SecureString]$EvaluatorPassword,
         [Parameter(Mandatory = $true)][string]$EntryRoot,
         [Parameter(Mandatory = $true)][string]$ProtectedRoot,
+        [string]$BenchmarkRoot = (Split-Path $PSScriptRoot -Parent),
+        [string]$PythonExecutable = (Get-Command python -ErrorAction Stop).Source,
+        [string]$PythonBaseExecutable,
+        [string]$PythonBasePrefix,
+        [string]$PythonPrefix,
+        [string]$WorkerPath = (Join-Path (Split-Path $PSScriptRoot -Parent) "src\bcbench\agent\shared\contained_process_worker.py"),
         [string[]]$ToolRoots = @(),
         [switch]$AlMcp,
         [switch]$BcMcp,
@@ -793,6 +1015,18 @@ function Invoke-BCBenchBugFixLifecycle {
 
     $entryRootPath = Resolve-BCBenchAbsolutePath -Path $EntryRoot
     $protectedRootPath = Resolve-BCBenchAbsolutePath -Path $ProtectedRoot
+    $benchmarkRootPath = Resolve-BCBenchAbsolutePath -Path $BenchmarkRoot
+    if (
+        [string]::IsNullOrEmpty($PythonBaseExecutable) -or
+        [string]::IsNullOrEmpty($PythonBasePrefix) -or
+        [string]::IsNullOrEmpty($PythonPrefix)
+    ) {
+        $pythonRuntime = Resolve-BCBenchPythonRuntime -PythonExecutable $PythonExecutable
+        $PythonExecutable = $pythonRuntime.Executable
+        $PythonBaseExecutable = $pythonRuntime.BaseExecutable
+        $PythonBasePrefix = $pythonRuntime.BasePrefix
+        $PythonPrefix = $pythonRuntime.Prefix
+    }
     $entryPaths = @{
         BaselineWorkspace   = Join-Path $entryRootPath "baseline-workspace"
         AgentWorkspace      = Join-Path $entryRootPath "agent-workspace"
@@ -826,6 +1060,12 @@ function Invoke-BCBenchBugFixLifecycle {
         EvaluatorPassword      = $EvaluatorPassword
         EntryRoot              = $entryRootPath
         ProtectedRoot          = $protectedRootPath
+        BenchmarkRoot          = $benchmarkRootPath
+        PythonExecutable       = Resolve-BCBenchAbsolutePath -Path $PythonExecutable
+        PythonBaseExecutable   = Resolve-BCBenchAbsolutePath -Path $PythonBaseExecutable
+        PythonBasePrefix       = Resolve-BCBenchAbsolutePath -Path $PythonBasePrefix
+        PythonPrefix           = Resolve-BCBenchAbsolutePath -Path $PythonPrefix
+        WorkerPath             = Resolve-BCBenchAbsolutePath -Path $WorkerPath
         BaselineWorkspace      = $entryPaths.BaselineWorkspace
         AgentWorkspace         = $entryPaths.AgentWorkspace
         AgentLogs              = $entryPaths.AgentLogs
@@ -1014,7 +1254,12 @@ function Invoke-BCBenchBugFixLifecycle {
                 -EvaluatorWorkspaces $operationContext.EvaluatorWorkspaces `
                 -Evidence $operationContext.Evidence `
                 -ProtectedRoot $operationContext.ProtectedRoot `
-                -ToolRoots $operationContext.ToolRoots
+                -BenchmarkRoot $operationContext.BenchmarkRoot `
+                -DatasetPath $operationContext.DatasetPath `
+                -ToolRoots $operationContext.ToolRoots `
+                -RuntimeExecutablePaths @($operationContext.PythonExecutable) `
+                -RuntimeRoots @($operationContext.PythonBasePrefix) `
+                -WorkerPath $operationContext.WorkerPath
         } | Out-Null
 
         $evaluatorPasswordText = ConvertFrom-BCBenchSecureString -SecureString $EvaluatorPassword
@@ -1182,6 +1427,8 @@ function Invoke-BCBenchBugFixLifecycle {
 Export-ModuleMember -Function `
     New-BCBenchAgentIdentity, `
     Remove-BCBenchAgentIdentity, `
+    Assert-BCBenchReadExecuteRoots, `
+    Resolve-BCBenchPythonRuntime, `
     Set-BCBenchWorkspaceAcl, `
     Test-BCBenchIdentityAccess, `
     New-BCBenchAgentBcUser, `

@@ -724,7 +724,7 @@ try {
     $worker = [BCBenchJobObject]::CreateSuspendedWorker(
         $PythonExecutable,
         $workerArguments,
-        (Split-Path -Parent $WorkerPath),
+        [string]$request.cwd,
         $environmentEntries,
         $StdoutPath,
         $StderrPath,
