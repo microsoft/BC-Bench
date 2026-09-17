@@ -28,7 +28,10 @@ from bcbench.cli_options import (
     LifecycleAgentOsPassword,
     LifecycleAgentOsSid,
     LifecycleAgentOsUsername,
+    LifecycleAlLsp,
+    LifecycleAlMcp,
     LifecycleBasePython,
+    LifecycleBcMcp,
     LifecycleCleanupToolRootsJson,
     LifecycleEntryRoot,
     LifecycleEvaluatorContainerConfig,
@@ -114,9 +117,9 @@ def bugfix_lifecycle_copilot(
     model: CopilotModel = "gpt-5.6-luna",
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_lifecycle_run",
-    al_mcp: Annotated[bool, typer.Option("--al-mcp", envvar="BCBENCH_LIFECYCLE_AL_MCP", help="Enable AL MCP server")] = False,
-    al_lsp: Annotated[bool, typer.Option("--al-lsp", envvar="BCBENCH_LIFECYCLE_AL_LSP", help="Enable AL LSP server")] = False,
-    bc_mcp: Annotated[bool, typer.Option("--bc-mcp", envvar="BCBENCH_LIFECYCLE_BC_MCP", help="Enable the Business Central MCP server")] = False,
+    al_mcp: LifecycleAlMcp = False,
+    al_lsp: LifecycleAlLsp = False,
+    bc_mcp: LifecycleBcMcp = False,
 ) -> None:
     """Run GitHub Copilot CLI through the checkpointed single-container bug-fix lifecycle."""
     _run_lifecycle(
@@ -199,9 +202,9 @@ def bugfix_lifecycle_claude(
     model: ClaudeCodeModel = "claude-haiku-4-5",
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_lifecycle_run",
-    al_mcp: Annotated[bool, typer.Option("--al-mcp", envvar="BCBENCH_LIFECYCLE_AL_MCP", help="Enable AL MCP server")] = False,
-    al_lsp: Annotated[bool, typer.Option("--al-lsp", envvar="BCBENCH_LIFECYCLE_AL_LSP", help="Enable AL LSP server")] = False,
-    bc_mcp: Annotated[bool, typer.Option("--bc-mcp", envvar="BCBENCH_LIFECYCLE_BC_MCP", help="Enable the Business Central MCP server")] = False,
+    al_mcp: LifecycleAlMcp = False,
+    al_lsp: LifecycleAlLsp = False,
+    bc_mcp: LifecycleBcMcp = False,
 ) -> None:
     """Run Claude Code through the checkpointed single-container bug-fix lifecycle."""
     _run_lifecycle(

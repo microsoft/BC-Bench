@@ -7,16 +7,59 @@ import subprocess
 import sys
 from hashlib import sha256
 from pathlib import Path
+from typing import get_args
+from unittest.mock import patch
 
 import pytest
+from typer.models import OptionInfo
+from typer.testing import CliRunner
 
+from bcbench import cli_options
+from bcbench.cli import app
+from bcbench.commands import bugfix_lifecycle as bugfix_lifecycle_commands
+from bcbench.dataset import BugFixEntry
 from bcbench.types import ContainerConfig
+from tests.conftest import create_dataset_entry
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows PowerShell lifecycle")
 
 _ROOT = Path(__file__).parents[1]
 _MODULE = _ROOT / "scripts" / "BugFixLifecycle.psm1"
 _SETUP = _ROOT / "scripts" / "Setup-BugFixLifecycle.ps1"
+_RUNNER = CliRunner()
+_CANONICAL_LIFECYCLE_ENVVARS = {
+    "BCBENCH_LIFECYCLE_ACL_PATHS_JSON",
+    "BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD",
+    "BCBENCH_LIFECYCLE_AGENT_BC_USERNAME",
+    "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG",
+    "BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD",
+    "BCBENCH_LIFECYCLE_AGENT_OS_SID",
+    "BCBENCH_LIFECYCLE_AGENT_OS_USERNAME",
+    "BCBENCH_LIFECYCLE_AL_LSP",
+    "BCBENCH_LIFECYCLE_AL_MCP",
+    "BCBENCH_LIFECYCLE_BASE_PYTHON",
+    "BCBENCH_LIFECYCLE_BC_MCP",
+    "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON",
+    "BCBENCH_LIFECYCLE_ENTRY_ROOT",
+    "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG",
+    "BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID",
+    "BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID",
+    "BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS",
+    "BCBENCH_LIFECYCLE_PROTECTED_ROOT",
+    "BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX",
+    "BCBENCH_LIFECYCLE_REPLAY_PATCH",
+    "BCBENCH_LIFECYCLE_STAGED_WORKER_PATH",
+    "BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256",
+}
+_EVALUATOR_ENVVARS = {
+    "BC_COMPANY",
+    "BC_CONTAINER_NAME",
+    "BC_MCP_URL",
+    "BC_SERVER_INSTANCE",
+    "BC_SERVER_PASSWORD",
+    "BC_SERVER_URL",
+    "BC_SERVER_USERNAME",
+}
 _EXPECTED_EXPORTS = {
     "Assert-BCBenchReadExecuteRoots",
     "Backup-BCBenchCheckpoint",
@@ -40,6 +83,16 @@ _EXPECTED_EXPORTS = {
     "Remove-BCBenchAgentBcUser",
     "Invoke-BCBenchBugFixLifecycle",
 }
+
+
+def _declared_lifecycle_envvars() -> set[str]:
+    return {
+        metadata.envvar
+        for name, annotation in vars(cli_options).items()
+        if name.startswith("Lifecycle")
+        for metadata in get_args(annotation)
+        if isinstance(metadata, OptionInfo) and isinstance(metadata.envvar, str)
+    }
 
 
 def _ps_quote(value: str | Path) -> str:
@@ -100,12 +153,15 @@ $metadata | ConvertTo-Json -Compress -Depth 8
         "EvaluatorPassword",
         "EntryRoot",
         "ProtectedRoot",
+        "ReplayPatch",
         "PythonExecutable",
         "ToolRoots",
         "AlMcp",
+        "AlLsp",
         "BcMcp",
     } <= metadata.keys()
     assert any('ValidateSet("bug-fix")' in attribute for attribute in metadata["Category"])
+    assert not any("Mandatory" in attribute for attribute in metadata["ReplayPatch"])
     assert "Import-Module BcContainerHelper -RequiredVersion 6.1.18" in source
     assert "New-BCContainerSync" in source
     assert 'Join-Path $EntryRoot "agent-tools"' in source
@@ -2440,11 +2496,14 @@ catch {{
             assert "inspect-id:owned-id" in payload["order"]
 
 
-def test_setup_orchestrator_writes_outputs_and_cleans_created_resources_on_failure(tmp_path: Path) -> None:
+def test_setup_orchestrator_exports_exact_cli_contract_and_cleans_created_resources_on_failure(tmp_path: Path) -> None:
     success_entry = tmp_path / "entry-success"
     success_protected = tmp_path / "protected-success"
     output = tmp_path / "output.txt"
     env_file = tmp_path / "env.txt"
+    replay_patch_source = tmp_path / "replay.patch"
+    replay_patch_source.write_text("diff --git a/a.al b/a.al\n", encoding="utf-8")
+    replay_patch = success_protected / "replay.patch"
     failure_entry = tmp_path / "entry-failure"
     failure_protected = tmp_path / "protected-failure"
     trace = tmp_path / "cleanup.jsonl"
@@ -2454,6 +2513,7 @@ def test_setup_orchestrator_writes_outputs_and_cleans_created_resources_on_failu
     python_base_executable.write_bytes(b"python")
     tool_root = tmp_path / "tool"
     tool_root.mkdir()
+    compiler_root = tmp_path / "compiler"
     script = f"""
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
@@ -2471,9 +2531,16 @@ $successOps = @{{
         }}
     }}
     CreateContainer = {{ param($Context) $Context | Add-Member -NotePropertyName TestContainerPresent -NotePropertyValue $true -Force }}
-    CreateCompiler = {{ }}
+    CreateCompiler = {{
+        param($Context)
+        New-Item -ItemType Directory -Path {_ps_quote(compiler_root)} -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path {_ps_quote(compiler_root)} '.bcbench-owned') -Value $Context.ContainerInvocationId
+        return {_ps_quote(compiler_root)}
+    }}
     InitializeContainer = {{ }}
     GetCompany = {{ 'CRONUS' }}
+    PublishMcp = {{ }}
+    GetMcpInfo = {{ [PSCustomObject]@{{ BaseUrl = 'https://bc-success/mcp' }} }}
     CreateAgentIdentity = {{ [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'os-secret'; Domain = '.'; Sid = 'S-1-5-21-1000-1001-1002-1003' }} }}
     CreateBcIdentity = {{ [PSCustomObject]@{{ Username = 'bca-1234567-abcdef'; Password = 'bc-secret' }} }}
     ApplyAcl = {{
@@ -2503,7 +2570,7 @@ $successOps = @{{
 }}
 $env:GITHUB_ACTIONS = 'true'
 $successContext = Invoke-BCBenchBugFixLifecycle `
-    -InstanceId 'entry-success' `
+    -InstanceId 'owner__repo-11' `
     -DatasetPath 'dataset.jsonl' `
     -ContainerName 'bc-success' `
     -EvaluatorUsername 'admin' `
@@ -2515,6 +2582,10 @@ $successContext = Invoke-BCBenchBugFixLifecycle `
     -PythonBasePrefix {_ps_quote(python_base_prefix)} `
     -PythonPrefix {_ps_quote(python_base_prefix)} `
     -ToolRoots @({_ps_quote(tool_root)}) `
+    -ReplayPatch {_ps_quote(replay_patch_source)} `
+    -AlMcp `
+    -AlLsp `
+    -BcMcp `
     -GithubOutput {_ps_quote(output)} `
     -GithubEnv {_ps_quote(env_file)} `
     -Operations $successOps
@@ -2561,6 +2632,7 @@ catch {{
     environment = @(Get-Content {_ps_quote(env_file)})
     evaluatorConfig = $successContext.EvaluatorContainerConfig
     agentConfig = $successContext.AgentContainerConfig
+    invocationId = $successContext.ContainerInvocationId
     containerPreexisted = $successContext.ContainerPreexisted
     containerSuccessfullyCreated = $successContext.ContainerSuccessfullyCreated
     cleanup = @(Get-Content {_ps_quote(trace)} | ForEach-Object {{ $_ | ConvertFrom-Json }})
@@ -2579,29 +2651,16 @@ catch {{
 """
     raw_output = _run_pwsh(script)
     payload = _last_json(raw_output)
-    output_text = "\n".join(payload["output"])
-    env_text = "\n".join(payload["environment"])
     output_values = dict(line.split("=", maxsplit=1) for line in payload["output"])
-    evaluator_config = json.loads(output_values["evaluator_container_config"])
-    agent_config = json.loads(output_values["agent_container_config"])
+    environment = dict(line.split("=", maxsplit=1) for line in payload["environment"])
+    expected_envvars = _CANONICAL_LIFECYCLE_ENVVARS | _EVALUATOR_ENVVARS
 
-    assert "agent_workspace=" in output_text
-    assert "agent_profile=" in output_text
-    assert "agent_appdata=" in output_text
-    assert "agent_local_appdata=" in output_text
-    assert "agent_temp=" in output_text
-    assert "agent_tools=" in output_text
-    assert "contained_process_worker=" in output_text
-    assert "contained_process_worker_sha256=" in output_text
-    assert "contained_process_python=" in output_text
-    assert "python_base_prefix=" in output_text
-    assert "agent_os_sid=" in output_text
-    assert "acl_paths_json=" in output_text
-    assert "cleanup_tool_roots_json=" in output_text
-    assert "protected_root=" in output_text
-    assert "agent_os_username=bcb-1234567-abcdef" in output_text
-    assert "agent_os_password=os-secret" in output_text
-    assert "agent_bc_password=bc-secret" in output_text
+    assert _declared_lifecycle_envvars() == _CANONICAL_LIFECYCLE_ENVVARS
+    assert set(output_values) == expected_envvars
+    assert environment == output_values
+
+    evaluator_config = json.loads(output_values["BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG"])
+    agent_config = json.loads(output_values["BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG"])
     assert evaluator_config == {
         "name": "bc-success",
         "username": "admin",
@@ -2609,7 +2668,7 @@ catch {{
         "company": "CRONUS",
         "server_url": "http://bc-success",
         "server_instance": "BC",
-        "mcp_url": "",
+        "mcp_url": "https://bc-success/mcp",
     }
     assert agent_config == {
         "name": "bc-success",
@@ -2618,7 +2677,7 @@ catch {{
         "company": "CRONUS",
         "server_url": "http://bc-success",
         "server_instance": "BC",
-        "mcp_url": "",
+        "mcp_url": "https://bc-success/mcp",
     }
     assert payload["evaluatorConfig"] == evaluator_config
     assert payload["agentConfig"] == agent_config
@@ -2627,39 +2686,73 @@ catch {{
     assert evaluator_config["password"] != agent_config["password"]
     assert payload["containerPreexisted"] is False
     assert payload["containerSuccessfullyCreated"] is True
-    assert output_values["container_id"] == "docker-success"
-    assert output_values["container_observed_invocation_id"] == output_values["container_invocation_id"]
-    assert output_values["python_base_prefix"] == str(python_base_prefix)
-    assert output_values["agent_os_sid"] == "S-1-5-21-1000-1001-1002-1003"
-    assert json.loads(output_values["cleanup_tool_roots_json"]) == [str(tool_root)]
-    acl_paths = tuple(Path(path) for path in json.loads(output_values["acl_paths_json"]))
+    assert output_values["BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID"] == "docker-success"
+    assert output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"] == payload["invocationId"]
+    assert output_values["BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX"] == str(python_base_prefix)
+    assert output_values["BCBENCH_LIFECYCLE_AGENT_OS_SID"] == "S-1-5-21-1000-1001-1002-1003"
+    assert json.loads(output_values["BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON"]) == [str(tool_root)]
+    acl_paths = tuple(Path(path) for path in json.loads(output_values["BCBENCH_LIFECYCLE_ACL_PATHS_JSON"]))
     assert python_base_prefix in acl_paths
     assert python_base_executable in acl_paths
     assert python_base_executable.parent not in acl_paths
-    profile = success_entry / "agent-logs" / "profile"
-    assert output_values["agent_profile"] == str(profile)
-    assert output_values["agent_appdata"] == str(profile / "AppData" / "Roaming")
-    assert output_values["agent_local_appdata"] == str(profile / "AppData" / "Local")
-    assert output_values["agent_temp"] == str(profile / "temp")
-    assert len(output_values["container_invocation_id"]) == 32
-    assert set(output_values["container_invocation_id"]) <= set("0123456789abcdef")
+    assert output_values["BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS"] == str(compiler_root)
+    assert len(output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"]) == 32
+    assert set(output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"]) <= set("0123456789abcdef")
     assert "::add-mask::evaluator-secret" in raw_output
+    assert "::add-mask::os-secret" in raw_output
     assert "::add-mask::bc-secret" in raw_output
-    assert "al_tool_dotnet_version=8.0" in output_text
-    assert "BCBENCH_AGENT_WORKSPACE=" in env_text
-    assert f"BCBENCH_AGENT_PROFILE={profile}" in env_text
-    assert f"BCBENCH_AGENT_APPDATA={profile / 'AppData' / 'Roaming'}" in env_text
-    assert f"BCBENCH_AGENT_LOCAL_APPDATA={profile / 'AppData' / 'Local'}" in env_text
-    assert f"BCBENCH_AGENT_TEMP={profile / 'temp'}" in env_text
-    assert "BCBENCH_AGENT_TOOLS=" in env_text
-    assert "BCBENCH_CONTAINED_PROCESS_WORKER=" in env_text
-    assert "BCBENCH_CONTAINED_PROCESS_WORKER_SHA256=" in env_text
-    assert "BCBENCH_CONTAINED_PROCESS_PYTHON=" in env_text
-    assert f"BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX={python_base_prefix}" in env_text
-    assert "BCBENCH_LIFECYCLE_AGENT_OS_SID=S-1-5-21-1000-1001-1002-1003" in env_text
-    assert "BCBENCH_LIFECYCLE_ACL_PATHS_JSON=" in env_text
-    assert "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON=" in env_text
-    assert "BC_SERVER_PASSWORD=evaluator-secret" in env_text
+    assert f"::add-mask::{output_values['BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG']}" in raw_output
+    assert f"::add-mask::{output_values['BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG']}" in raw_output
+
+    captured: dict[str, object] = {}
+    entry = create_dataset_entry(instance_id="owner__repo-11")
+
+    class Lifecycle:
+        def run(self, request, _agent_runner, cleanup_lease):
+            captured["request"] = request
+            captured["cleanup_lease"] = cleanup_lease
+
+    with (
+        patch.object(BugFixEntry, "load", return_value=[entry]),
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+    ):
+        cli_result = _RUNNER.invoke(
+            app,
+            [
+                "bugfix-lifecycle",
+                "copilot",
+                entry.instance_id,
+                "--output-dir",
+                str(tmp_path / "results"),
+                "--run-id",
+                "setup-contract",
+            ],
+            env=environment,
+        )
+
+    assert cli_result.exit_code == 0, cli_result.stdout + cli_result.stderr
+    request = captured["request"]
+    cleanup_lease = captured["cleanup_lease"]
+    assert cleanup_lease.is_lifecycle_owner
+    assert request.replay_patch == replay_patch
+    assert request.agent_runtime.al_mcp is True
+    assert request.agent_runtime.al_lsp is True
+    assert request.agent_runtime.bc_mcp is True
+    assert request.compiler_helper_roots[0].path == compiler_root
+
+    non_mask_output = "\n".join(line for line in raw_output.splitlines()[:-1] if not line.startswith("::add-mask::"))
+    for secret in (
+        "evaluator-secret",
+        "os-secret",
+        "bc-secret",
+        output_values["BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG"],
+        output_values["BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG"],
+    ):
+        assert secret not in non_mask_output
+        assert secret not in cli_result.stdout
+        assert secret not in cli_result.stderr
+
     assert payload["agentProfileDirectoriesExist"] is True
     assert payload["agentLogFiles"] == 0
     assert payload["failed"] is True
@@ -3149,7 +3242,10 @@ def test_disposable_bc_container_user_fallback_lifecycle() -> None:
             r"C:\bcbench\staging",
         } <= destinations
         setup_values = dict(line.split("=", maxsplit=1) for line in setup_output_path.read_text(encoding="utf-8-sig").splitlines() if "=" in line)
-        for output_name in ("evaluator_container_config", "agent_container_config"):
+        for output_name in (
+            "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG",
+            "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG",
+        ):
             config = json.loads(setup_values[output_name])
             assert set(config) == {
                 "name",

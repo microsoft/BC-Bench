@@ -232,6 +232,33 @@ LifecycleAgentContainerConfig = Annotated[
     ),
 ]
 
+LifecycleAlMcp = Annotated[
+    bool,
+    typer.Option(
+        "--al-mcp",
+        envvar="BCBENCH_LIFECYCLE_AL_MCP",
+        help="Enable AL MCP server",
+    ),
+]
+
+LifecycleAlLsp = Annotated[
+    bool,
+    typer.Option(
+        "--al-lsp",
+        envvar="BCBENCH_LIFECYCLE_AL_LSP",
+        help="Enable AL LSP server",
+    ),
+]
+
+LifecycleBcMcp = Annotated[
+    bool,
+    typer.Option(
+        "--bc-mcp",
+        envvar="BCBENCH_LIFECYCLE_BC_MCP",
+        help="Enable the Business Central MCP server",
+    ),
+]
+
 
 def resolve_agent_runtime(
     *,

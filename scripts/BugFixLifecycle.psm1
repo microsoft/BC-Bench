@@ -3051,6 +3051,7 @@ function Invoke-BCBenchBugFixLifecycle {
         [Parameter(Mandatory = $true)][SecureString]$EvaluatorPassword,
         [Parameter(Mandatory = $true)][string]$EntryRoot,
         [Parameter(Mandatory = $true)][string]$ProtectedRoot,
+        [string]$ReplayPatch,
         [string]$BenchmarkRoot = (Split-Path $PSScriptRoot -Parent),
         [string]$PythonExecutable = (Get-Command python -ErrorAction Stop).Source,
         [string]$PythonBaseExecutable,
@@ -3059,6 +3060,7 @@ function Invoke-BCBenchBugFixLifecycle {
         [string]$WorkerPath = (Join-Path (Split-Path $PSScriptRoot -Parent) "src\bcbench\agent\shared\contained_process_worker.py"),
         [string[]]$ToolRoots = @(),
         [switch]$AlMcp,
+        [switch]$AlLsp,
         [switch]$BcMcp,
         [string]$GithubToken,
         [string]$AdoToken,
@@ -3070,6 +3072,13 @@ function Invoke-BCBenchBugFixLifecycle {
     $entryRootPath = Resolve-BCBenchAbsolutePath -Path $EntryRoot
     $protectedRootPath = Resolve-BCBenchAbsolutePath -Path $ProtectedRoot
     $benchmarkRootPath = Resolve-BCBenchAbsolutePath -Path $BenchmarkRoot
+    $replayPatchSource = $null
+    if (-not [string]::IsNullOrEmpty($ReplayPatch)) {
+        $replayPatchSource = Resolve-BCBenchAbsolutePath -Path $ReplayPatch
+        if (-not (Test-Path -LiteralPath $replayPatchSource -PathType Leaf)) {
+            throw "ReplayPatch must be an existing file: $replayPatchSource"
+        }
+    }
     if (
         [string]::IsNullOrEmpty($PythonBaseExecutable) -or
         [string]::IsNullOrEmpty($PythonBasePrefix) -or
@@ -3137,13 +3146,16 @@ function Invoke-BCBenchBugFixLifecycle {
         TrustedSource          = $protectedPaths.TrustedSource
         Checkpoints            = $protectedPaths.Checkpoints
         FinalResults           = $protectedPaths.FinalResults
+        ReplayPatch            = $null
         ToolRoots              = @(
             $ToolRoots |
                 ForEach-Object { Resolve-BCBenchAbsolutePath -Path $_ } |
                 Select-Object -Unique
         )
         AlMcp                  = [bool]$AlMcp
+        AlLsp                  = [bool]$AlLsp
         BcMcp                  = [bool]$BcMcp
+        OwnedCompilerHelperRoots = @()
         Entry                  = $null
         ArtifactUrl            = $null
         EvaluatorCredential    = $null
@@ -3203,6 +3215,10 @@ function Invoke-BCBenchBugFixLifecycle {
             $context.AgentTemp
         )) {
             New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
+        }
+        if ($null -ne $replayPatchSource) {
+            $context.ReplayPatch = Join-Path $context.ProtectedRoot "replay.patch"
+            Copy-Item -LiteralPath $replayPatchSource -Destination $context.ReplayPatch
         }
         $agentTools = Invoke-BCBenchOperation -Operations $Operations -Name StageAgentTools -Context $context -Default {
             param($operationContext)
@@ -3313,14 +3329,25 @@ function Invoke-BCBenchBugFixLifecycle {
         }
         $context.ContainerSuccessfullyCreated = $true
 
-        Invoke-BCBenchOperation -Operations $Operations -Name CreateCompiler -Context $context -Default {
+        $compilerRoot = Invoke-BCBenchOperation -Operations $Operations -Name CreateCompiler -Context $context -Default {
             param($operationContext)
             Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
             if ([string]::IsNullOrEmpty($operationContext.ArtifactUrl)) {
                 throw "ArtifactUrl was not set by container creation."
             }
-            New-BcCompilerFolder -artifactUrl $operationContext.ArtifactUrl -containerName $operationContext.ContainerName | Out-Null
-        } | Out-Null
+            return New-BcCompilerFolder -artifactUrl $operationContext.ArtifactUrl -containerName $operationContext.ContainerName
+        }
+        if (-not [string]::IsNullOrEmpty([string]$compilerRoot)) {
+            $ownedCompilerRoot = Resolve-BCBenchAbsolutePath -Path ([string]$compilerRoot)
+            if (-not (Test-Path -LiteralPath $ownedCompilerRoot -PathType Container)) {
+                throw "Compiler/helper root must be an existing directory: $ownedCompilerRoot"
+            }
+            Set-Content `
+                -LiteralPath (Join-Path $ownedCompilerRoot ".bcbench-owned") `
+                -Value $context.ContainerInvocationId `
+                -Encoding utf8
+            $context.OwnedCompilerHelperRoots = @($ownedCompilerRoot)
+        }
         Invoke-BCBenchOperation -Operations $Operations -Name InitializeContainer -Context $context -Default {
             param($operationContext)
             Import-Module (Join-Path $PSScriptRoot "BCContainerManagement.psm1") -Force -DisableNameChecking
@@ -3391,6 +3418,7 @@ function Invoke-BCBenchBugFixLifecycle {
 
         $evaluatorPasswordText = ConvertFrom-BCBenchSecureString -SecureString $EvaluatorPassword
         Write-BCBenchSecretMask -Secret $evaluatorPasswordText
+        Write-BCBenchSecretMask -Secret $context.AgentIdentity.Password
         Write-BCBenchSecretMask -Secret $context.AgentBcIdentity.Password
         $serverUrl = "http://$($context.ContainerName)"
         $serverInstance = "BC"
@@ -3418,99 +3446,49 @@ function Invoke-BCBenchBugFixLifecycle {
         $cleanupToolRootsJson = ConvertTo-Json `
             -InputObject ([object[]]@($context.ToolRoots)) `
             -Compress
-        $outputs = [ordered]@{
-            entry_root                    = $context.EntryRoot
-            baseline_workspace            = $context.BaselineWorkspace
-            agent_workspace               = $context.AgentWorkspace
-            agent_logs                    = $context.AgentLogs
-            agent_profile                 = $context.AgentProfile
-            agent_appdata                 = $context.AgentAppData
-            agent_local_appdata           = $context.AgentLocalAppData
-            agent_temp                    = $context.AgentTemp
-            agent_tools                   = $context.AgentTools
-            contained_process_worker      = $context.WorkerPath
-            contained_process_worker_sha256 = $context.WorkerSha256
-            contained_process_python      = $context.PythonBaseExecutable
-            python_base_prefix            = $context.PythonBasePrefix
-            agent_os_sid                  = $context.AclTransaction.Sid
-            acl_paths_json                = $aclPathsJson
-            cleanup_tool_roots_json       = $cleanupToolRootsJson
-            mounted_staging               = $context.MountedStaging
-            evaluator_workspaces          = $context.EvaluatorWorkspaces
-            evidence                      = $context.Evidence
-            protected_root                = $context.ProtectedRoot
-            trusted_source                = $context.TrustedSource
-            checkpoints                   = $context.Checkpoints
-            final_results                 = $context.FinalResults
-            container_name                = $context.ContainerName
-            container_invocation_id       = $context.ContainerInvocationId
-            container_id                  = $context.ContainerId
-            container_observed_invocation_id = $context.ObservedContainerInvocationId
-            bc_version                    = $context.Version
-            bc_country                    = $context.Country
-            bc_server_url                 = $serverUrl
-            bc_server_instance            = $serverInstance
-            bc_mcp_url                    = [string]$context.BcMcpUrl
-            evaluator_username            = $context.EvaluatorUsername
-            evaluator_password            = $evaluatorPasswordText
-            agent_os_username             = $context.AgentIdentity.Username
-            agent_os_password             = $context.AgentIdentity.Password
-            agent_os_domain               = $context.AgentIdentity.Domain
-            agent_bc_username             = $context.AgentBcIdentity.Username
-            agent_bc_password             = $context.AgentBcIdentity.Password
-            bc_company                    = [string]$context.Company
-            evaluator_container_config    = ($context.EvaluatorContainerConfig | ConvertTo-Json -Compress)
-            agent_container_config        = ($context.AgentContainerConfig | ConvertTo-Json -Compress)
-            al_tool_dotnet_version         = $context.AlToolDotNetVersion
-            al_mcp                         = ([bool]$context.AlMcp).ToString().ToLowerInvariant()
-            bc_mcp                         = ([bool]$context.BcMcp).ToString().ToLowerInvariant()
-        }
-        foreach ($item in $outputs.GetEnumerator()) {
-            Add-BCBenchOutput -Path $GithubOutput -Name $item.Key -Value ([string]$item.Value)
-        }
+        $ownedCompilerHelperRoots = [string]::Join(
+            [IO.Path]::PathSeparator,
+            [string[]]@($context.OwnedCompilerHelperRoots)
+        )
+        $evaluatorContainerConfigJson = $context.EvaluatorContainerConfig | ConvertTo-Json -Compress
+        $agentContainerConfigJson = $context.AgentContainerConfig | ConvertTo-Json -Compress
+        Write-BCBenchSecretMask -Secret $evaluatorContainerConfigJson
+        Write-BCBenchSecretMask -Secret $agentContainerConfigJson
         $environment = [ordered]@{
-            BCBENCH_ENTRY_ROOT             = $context.EntryRoot
-            BCBENCH_BASELINE_WORKSPACE     = $context.BaselineWorkspace
-            BCBENCH_AGENT_WORKSPACE        = $context.AgentWorkspace
-            BCBENCH_AGENT_LOGS             = $context.AgentLogs
-            BCBENCH_AGENT_PROFILE          = $context.AgentProfile
-            BCBENCH_AGENT_APPDATA          = $context.AgentAppData
-            BCBENCH_AGENT_LOCAL_APPDATA    = $context.AgentLocalAppData
-            BCBENCH_AGENT_TEMP             = $context.AgentTemp
-            BCBENCH_AGENT_TOOLS            = $context.AgentTools
-            BCBENCH_CONTAINED_PROCESS_WORKER = $context.WorkerPath
-            BCBENCH_CONTAINED_PROCESS_WORKER_SHA256 = $context.WorkerSha256
-            BCBENCH_CONTAINED_PROCESS_PYTHON = $context.PythonBaseExecutable
+            BCBENCH_LIFECYCLE_ENTRY_ROOT = $context.EntryRoot
+            BCBENCH_LIFECYCLE_PROTECTED_ROOT = $context.ProtectedRoot
+            BCBENCH_LIFECYCLE_AGENT_OS_USERNAME = $context.AgentIdentity.Username
+            BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD = $context.AgentIdentity.Password
+            BCBENCH_LIFECYCLE_AGENT_BC_USERNAME = $context.AgentBcIdentity.Username
+            BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD = $context.AgentBcIdentity.Password
+            BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID = $context.ContainerId
+            BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID = $context.ContainerInvocationId
+            BCBENCH_LIFECYCLE_STAGED_WORKER_PATH = $context.WorkerPath
+            BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256 = $context.WorkerSha256
+            BCBENCH_LIFECYCLE_BASE_PYTHON = $context.PythonBaseExecutable
             BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX = $context.PythonBasePrefix
             BCBENCH_LIFECYCLE_AGENT_OS_SID = $context.AclTransaction.Sid
             BCBENCH_LIFECYCLE_ACL_PATHS_JSON = $aclPathsJson
             BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON = $cleanupToolRootsJson
-            BCBENCH_MOUNTED_STAGING        = $context.MountedStaging
-            BCBENCH_EVALUATOR_WORKSPACES   = $context.EvaluatorWorkspaces
-            BCBENCH_EVIDENCE               = $context.Evidence
-            BCBENCH_PROTECTED_ROOT         = $context.ProtectedRoot
-            BCBENCH_TRUSTED_SOURCE         = $context.TrustedSource
-            BCBENCH_CHECKPOINTS            = $context.Checkpoints
-            BCBENCH_FINAL_RESULTS          = $context.FinalResults
-            BCBENCH_AGENT_OS_USERNAME      = $context.AgentIdentity.Username
-            BCBENCH_AGENT_OS_PASSWORD      = $context.AgentIdentity.Password
-            BCBENCH_AGENT_OS_DOMAIN        = $context.AgentIdentity.Domain
-            BCBENCH_AGENT_BC_USERNAME      = $context.AgentBcIdentity.Username
-            BCBENCH_AGENT_BC_PASSWORD      = $context.AgentBcIdentity.Password
-            BC_CONTAINER_NAME              = $context.ContainerName
-            BCBENCH_CONTAINER_INVOCATION_ID = $context.ContainerInvocationId
-            BCBENCH_CONTAINER_ID            = $context.ContainerId
-            BC_SERVER_URL                  = $serverUrl
-            BC_SERVER_INSTANCE             = $serverInstance
-            BC_SERVER_USERNAME             = $context.EvaluatorUsername
-            BC_SERVER_PASSWORD             = $evaluatorPasswordText
-            BC_COMPANY                     = [string]$context.Company
-            BC_MCP_URL                     = [string]$context.BcMcpUrl
-            AL_TOOL_DOTNET_VERSION         = $context.AlToolDotNetVersion
-            BCBENCH_AL_MCP                 = ([bool]$context.AlMcp).ToString().ToLowerInvariant()
-            BCBENCH_BC_MCP                 = ([bool]$context.BcMcp).ToString().ToLowerInvariant()
+            BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS = $ownedCompilerHelperRoots
+            BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG = $evaluatorContainerConfigJson
+            BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG = $agentContainerConfigJson
+            BCBENCH_LIFECYCLE_AL_MCP = ([bool]$context.AlMcp).ToString().ToLowerInvariant()
+            BCBENCH_LIFECYCLE_AL_LSP = ([bool]$context.AlLsp).ToString().ToLowerInvariant()
+            BCBENCH_LIFECYCLE_BC_MCP = ([bool]$context.BcMcp).ToString().ToLowerInvariant()
+            BC_CONTAINER_NAME = $context.ContainerName
+            BC_SERVER_URL = $serverUrl
+            BC_SERVER_INSTANCE = $serverInstance
+            BC_SERVER_USERNAME = $context.EvaluatorUsername
+            BC_SERVER_PASSWORD = $evaluatorPasswordText
+            BC_COMPANY = [string]$context.Company
+            BC_MCP_URL = [string]$context.BcMcpUrl
+        }
+        if (-not [string]::IsNullOrEmpty([string]$context.ReplayPatch)) {
+            $environment["BCBENCH_LIFECYCLE_REPLAY_PATCH"] = $context.ReplayPatch
         }
         foreach ($item in $environment.GetEnumerator()) {
+            Add-BCBenchOutput -Path $GithubOutput -Name $item.Key -Value ([string]$item.Value)
             Add-BCBenchOutput -Path $GithubEnv -Name $item.Key -Value ([string]$item.Value)
         }
         return $context

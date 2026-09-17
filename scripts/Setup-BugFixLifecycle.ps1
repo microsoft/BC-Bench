@@ -23,11 +23,15 @@ param(
 
     [string]$ProtectedRoot,
 
+    [string]$ReplayPatch,
+
     [string]$PythonExecutable = (Get-Command python -ErrorAction Stop).Source,
 
     [string[]]$ToolRoots = @(),
 
     [switch]$AlMcp,
+
+    [switch]$AlLsp,
 
     [switch]$BcMcp,
 
@@ -106,6 +110,7 @@ try {
         -EvaluatorPassword $EvaluatorPassword `
         -EntryRoot $EntryRoot `
         -ProtectedRoot $ProtectedRoot `
+        -ReplayPatch $ReplayPatch `
         -BenchmarkRoot $benchmarkRoot `
         -PythonExecutable $pythonRuntime.Executable `
         -PythonBaseExecutable $pythonRuntime.BaseExecutable `
@@ -114,6 +119,7 @@ try {
         -WorkerPath $workerPath `
         -ToolRoots @($effectiveToolRoots | Select-Object -Unique) `
         -AlMcp:$AlMcp `
+        -AlLsp:$AlLsp `
         -BcMcp:$BcMcp `
         -GithubToken $GithubToken `
         -AdoToken $AdoToken | Out-Null
