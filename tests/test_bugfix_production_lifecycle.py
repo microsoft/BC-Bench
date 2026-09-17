@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
 from pathlib import Path
 
@@ -301,7 +301,7 @@ def _harness(tmp_path: Path):
     paths = _paths(tmp_path)
     context = create_evaluation_context(tmp_path)
     evaluator = ContainerConfig("bc", "admin", "evaluator-secret", "CRONUS")
-    runtime = AgentRuntimeConfig(container=ContainerConfig("bc", "agent", "agent-secret", "CRONUS"))
+    runtime = AgentRuntimeConfig(container=ContainerConfig("bc", "bca-1234567-123456", "agent-secret", "CRONUS"))
     request = BugFixLifecycleRequest(
         context=context,
         paths=paths,
@@ -313,6 +313,7 @@ def _harness(tmp_path: Path):
                 "bcb-1234567-123456",
                 "os-secret",
             ),
+            allowlist_environment=True,
         ),
         expected_container_id="container-id",
         expected_container_invocation_id="invocation-id",
@@ -369,6 +370,153 @@ def _agent(calls: list[str]):
         return AgentMetrics(execution_time=1), ExperimentConfiguration()
 
     return run
+
+
+@pytest.mark.parametrize(
+    ("execution_policy", "message"),
+    [
+        (
+            AgentExecutionPolicy(
+                contain_process_tree=False,
+                restricted_identity=WindowsIdentity("bcb-1234567-123456", "os-secret"),
+                allowlist_environment=True,
+            ),
+            "contain the process tree",
+        ),
+        (
+            AgentExecutionPolicy(
+                contain_process_tree=True,
+                restricted_identity=None,
+                allowlist_environment=True,
+            ),
+            "requires a restricted identity",
+        ),
+        (
+            AgentExecutionPolicy(
+                contain_process_tree=True,
+                restricted_identity=WindowsIdentity("bcb-1234567-123456", "os-secret"),
+                allowlist_environment=False,
+            ),
+            "allowlist the environment",
+        ),
+    ],
+)
+def test_request_rejects_invalid_production_execution_policy_before_collaborators(
+    tmp_path: Path,
+    execution_policy: AgentExecutionPolicy,
+    message: str,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+
+    with pytest.raises(ValueError, match=message):
+        replace(request, agent_execution_policy=execution_policy)
+
+    assert calls == []
+
+
+def test_request_rejects_restricted_windows_username_mismatch_before_collaborators(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    policy = replace(
+        request.agent_execution_policy,
+        restricted_identity=WindowsIdentity("other-user", "os-secret"),
+    )
+
+    with pytest.raises(ValueError, match="restricted identity username must match agent_os_username"):
+        replace(request, agent_execution_policy=policy)
+
+    assert calls == []
+
+
+@pytest.mark.parametrize("domain", ["CONTOSO", "localhost"])
+def test_request_rejects_nonlocal_restricted_windows_domain_before_collaborators(
+    tmp_path: Path,
+    domain: str,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    policy = replace(
+        request.agent_execution_policy,
+        restricted_identity=WindowsIdentity(request.agent_os_username, "os-secret", domain),
+    )
+
+    with pytest.raises(ValueError, match="local Windows domain"):
+        replace(request, agent_execution_policy=policy)
+
+    assert calls == []
+
+
+def test_request_rejects_agent_runtime_bc_username_mismatch_before_collaborators(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    runtime = replace(
+        request.agent_runtime,
+        container=replace(request.agent_runtime.container, username="other-agent"),
+    )
+
+    with pytest.raises(ValueError, match="agent runtime BC username must match agent_bc_username"):
+        replace(request, agent_runtime=runtime)
+
+    assert calls == []
+
+
+def test_request_rejects_shared_evaluator_and_agent_bc_username_before_collaborators(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    evaluator = replace(request.evaluator_container, username=f" {request.agent_bc_username.upper()} ")
+
+    with pytest.raises(ValueError, match="Evaluator and agent BC usernames must differ"):
+        replace(request, evaluator_container=evaluator)
+
+    assert calls == []
+
+
+def test_request_rejects_shared_evaluator_and_agent_password_before_collaborators(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    evaluator = replace(
+        request.evaluator_container,
+        password=request.agent_runtime.container.password,
+    )
+
+    with pytest.raises(ValueError, match="Evaluator and agent passwords must differ"):
+        replace(request, evaluator_container=evaluator)
+
+    assert calls == []
+
+
+def test_request_accepts_normalized_case_insensitive_execution_identities(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    policy = replace(
+        request.agent_execution_policy,
+        restricted_identity=WindowsIdentity(
+            f" {request.agent_os_username.upper()} ",
+            "os-secret",
+            " . ",
+        ),
+    )
+    runtime = replace(
+        request.agent_runtime,
+        container=replace(
+            request.agent_runtime.container,
+            username=f" {request.agent_bc_username.upper()} ",
+        ),
+    )
+
+    validated = replace(
+        request,
+        agent_execution_policy=policy,
+        agent_runtime=runtime,
+    )
+
+    assert validated.agent_execution_policy is policy
+    assert validated.agent_runtime is runtime
+    assert calls == []
 
 
 def _init_submission_repo(tmp_path: Path) -> tuple[Path, str]:

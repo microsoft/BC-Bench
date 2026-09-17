@@ -73,8 +73,32 @@ class BugFixLifecycleRequest:
             raise ValueError("Evaluator and agent runtime containers must refer to the same container")
         if not self.agent_execution_policy.contain_process_tree:
             raise ValueError("Production agent execution must contain the process tree")
-        if self.agent_execution_policy.restricted_identity is None:
+        restricted_identity = self.agent_execution_policy.restricted_identity
+        if restricted_identity is None:
             raise ValueError("Production agent execution requires a restricted identity")
+        if not self.agent_execution_policy.allowlist_environment:
+            raise ValueError("Production agent execution must allowlist the environment")
+        if restricted_identity.domain.strip() != ".":
+            raise ValueError("Production restricted identity must use the local Windows domain '.'")
+        restricted_username = _normalized_windows_local_username(
+            restricted_identity.username,
+            "restricted identity username",
+        )
+        agent_os_username = _normalized_windows_local_username(
+            self.agent_os_username,
+            "agent_os_username",
+        )
+        if restricted_username != agent_os_username:
+            raise ValueError("Production restricted identity username must match agent_os_username")
+        agent_bc_username = _normalized_bc_username(self.agent_bc_username)
+        runtime_bc_username = _normalized_bc_username(self.agent_runtime.container.username)
+        if runtime_bc_username != agent_bc_username:
+            raise ValueError("Production agent runtime BC username must match agent_bc_username")
+        evaluator_bc_username = _normalized_bc_username(self.evaluator_container.username)
+        if evaluator_bc_username == agent_bc_username:
+            raise ValueError("Evaluator and agent BC usernames must differ")
+        if self.evaluator_container.password == self.agent_runtime.container.password:
+            raise ValueError("Evaluator and agent passwords must differ")
         object.__setattr__(self, "acl_paths", tuple(self.acl_paths))
         object.__setattr__(self, "compiler_helper_roots", tuple(self.compiler_helper_roots))
         from bcbench.evaluate.bugfix_lifecycle.path_safety import validate_owned_lifecycle_roots
@@ -271,6 +295,17 @@ def _optional_string(value: Mapping[str, object], name: str) -> str | None:
     if not isinstance(item, str) or not item:
         raise ValueError(f"{name} must be null or a non-empty string")
     return item
+
+
+def _normalized_windows_local_username(username: str, field_name: str) -> str:
+    normalized = username.strip()
+    if "\\" in normalized or "@" in normalized:
+        raise ValueError(f"{field_name} must be an unqualified local Windows username")
+    return normalized.casefold()
+
+
+def _normalized_bc_username(username: str) -> str:
+    return username.strip().casefold()
 
 
 def _app_sort_key(app: AppInventoryEntry) -> tuple[object, ...]:
