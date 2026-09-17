@@ -18,13 +18,22 @@ _MODULE = _ROOT / "scripts" / "BugFixLifecycle.psm1"
 _SETUP = _ROOT / "scripts" / "Setup-BugFixLifecycle.ps1"
 _EXPECTED_EXPORTS = {
     "Assert-BCBenchReadExecuteRoots",
+    "Backup-BCBenchCheckpoint",
+    "Get-BCBenchAppInventory",
+    "Get-BCBenchContainerIdentity",
     "Get-BCBenchContainerState",
+    "Get-BCBenchDatabaseTopology",
     "New-BCBenchAgentIdentity",
     "New-BCBenchAgentTools",
+    "Remove-BCBenchContainerAndVerify",
     "Remove-BCBenchAgentAcl",
     "Remove-BCBenchAgentIdentity",
     "Resolve-BCBenchPythonRuntime",
+    "Restore-BCBenchCheckpoint",
     "Set-BCBenchWorkspaceAcl",
+    "Start-BCBenchServiceTier",
+    "Stop-BCBenchServiceTier",
+    "Test-BCBenchReadiness",
     "Test-BCBenchIdentityAccess",
     "New-BCBenchAgentBcUser",
     "Remove-BCBenchAgentBcUser",
@@ -103,6 +112,245 @@ $metadata | ConvertTo-Json -Compress -Depth 8
     assert '"bcbench.lifecycle.invocation=' in source
     assert "$effectiveToolRoots.Add((Split-Path $PSScriptRoot -Parent))" not in source
     assert 'foreach ($commandName in @("pwsh", "python", "git", "docker", "dotnet"))' not in source
+
+
+def test_checkpoint_commands_use_pinned_helper_and_required_apis() -> None:
+    source = _MODULE.read_text(encoding="utf-8")
+
+    assert "Backup-BcContainerDatabases" in source
+    assert "Restore-DatabasesInBcContainer" in source
+    assert "Get-BcContainerAppInfo" in source
+    assert "-publishedOnly" in source
+    assert "-tenantSpecificProperties" in source
+    assert "-bakFile $operationContext.BackupPath" in source
+    assert "-databaseName $Manifest.database_name" in source
+    assert "-databaseFolder $Manifest.database_folder" in source
+    assert "-sqlTimeout $TimeoutSeconds" in source
+    assert "RESTORE VERIFYONLY" in source
+    assert "RESTORE HEADERONLY" in source
+    assert "package-cleanup" not in source.lower()
+
+
+def test_checkpoint_capture_uses_fresh_staging_and_verified_order(tmp_path: Path) -> None:
+    staging = tmp_path / "staging" / "baseline-capture"
+    staging.mkdir(parents=True)
+    (staging / "stale.txt").write_text("stale", encoding="utf-8")
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:order = @()
+$identity = [PSCustomObject]@{{
+    container_id = 'owned-id'
+    image_id = 'image-id'
+    hostname = 'bc-owned'
+    mounts = @('C:\\host:C:\\container')
+}}
+$app = [PSCustomObject]@{{
+    app_id = '11111111-1111-1111-1111-111111111111'
+    name = 'Library'
+    publisher = 'Microsoft'
+    version = '1.2.3.4'
+    package_id = '22222222-2222-2222-2222-222222222222'
+    scope = 'Global'
+    installed = $true
+    synchronized = $true
+    content_hash = '{"a" * 64}'
+}}
+$ops = @{{
+    InspectContainer = {{
+        $global:order += 'inspect'
+        [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }}
+    }}
+    ReadContainerIdentity = {{ $global:order += 'identity'; $identity }}
+    ReadDatabaseTopology = {{
+        $global:order += 'topology'
+        [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }}
+    }}
+    ReadAppInventory = {{ $global:order += 'apps'; @($app) }}
+    StopServiceTier = {{
+        $global:order += 'stop'
+        [PSCustomObject]@{{ server_instance = 'BC'; previous_process_id = 100; state = 'Stopped' }}
+    }}
+    BackupDatabases = {{
+        param($Context)
+        $global:order += 'backup'
+        if (Test-Path -LiteralPath (Join-Path $Context.StagingDirectory 'stale.txt')) {{ throw 'staging was not fresh' }}
+        Set-Content -LiteralPath (Join-Path $Context.StagingDirectory 'database.bak') -Value 'backup' -NoNewline
+    }}
+    VerifyBackup = {{ $global:order += 'verify' }}
+    StartServiceTier = {{
+        $global:order += 'start'
+        [PSCustomObject]@{{ server_instance = 'BC'; process_id = 200; state = 'Running'; restarted = $true }}
+    }}
+}}
+$result = Backup-BCBenchCheckpoint `
+    -Name 'baseline' `
+    -ContainerName 'bc-owned' `
+    -ExpectedContainerId 'owned-id' `
+    -ExpectedInvocationId 'owned-invocation' `
+    -StagingDirectory {_ps_quote(staging)} `
+    -Operations $ops
+[PSCustomObject]@{{
+    order = $global:order
+    result = $result
+}} | ConvertTo-Json -Compress -Depth 10
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["order"] == ["inspect", "identity", "topology", "apps", "stop", "backup", "verify", "start"]
+    assert payload["result"]["name"] == "baseline"
+    assert Path(payload["result"]["backup_path"]).name == "database.bak"
+    assert payload["result"]["container"]["container_id"] == "owned-id"
+    assert payload["result"]["apps"][0]["content_hash"] == "a" * 64
+
+
+def test_container_identity_rejects_ownership_mismatch_before_operations() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:operationCalls = 0
+$ops = @{{
+    InspectContainer = {{
+        [PSCustomObject]@{{
+            Exists = $true
+            Id = 'replacement-id'
+            InvocationId = 'replacement-invocation'
+        }}
+    }}
+    ReadContainerIdentity = {{ $global:operationCalls++; throw 'must not run' }}
+}}
+$message = $null
+try {{
+    Get-BCBenchContainerIdentity `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Operations $ops | Out-Null
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{ message = $message; operationCalls = $global:operationCalls }} |
+    ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "Refusing container-scoped operation" in payload["message"]
+    assert payload["operationCalls"] == 0
+
+
+def test_remove_container_verifies_absence_before_downstream_callback() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{
+    param([string]$Name, [version]$RequiredVersion, [switch]$Force, [switch]$DisableNameChecking)
+    if ($Name -ne 'BcContainerHelper' -or [string]$RequiredVersion -ne '6.1.18') {{ throw 'wrong module pin' }}
+}}
+$global:removeCalls = 0
+$global:callbackCalls = 0
+$ops = @{{
+    InspectContainer = {{
+        [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }}
+    }}
+    RemoveContainer = {{ $global:removeCalls++ }}
+    InspectContainerById = {{
+        [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }}
+    }}
+}}
+$message = $null
+try {{
+    Remove-BCBenchContainerAndVerify `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Operations $ops `
+        -OnRemoved {{ $global:callbackCalls++ }}
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{
+    message = $message
+    removeCalls = $global:removeCalls
+    callbackCalls = $global:callbackCalls
+}} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "still exists after removal" in payload["message"]
+    assert payload["removeCalls"] == 1
+    assert payload["callbackCalls"] == 0
+
+
+def test_checkpoint_restore_failure_prevents_readiness_callback(tmp_path: Path) -> None:
+    backup = tmp_path / "database.bak"
+    backup.write_bytes(b"checkpoint")
+    backup_hash = sha256(backup.read_bytes()).hexdigest()
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{
+    param([string]$Name, [version]$RequiredVersion, [switch]$Force, [switch]$DisableNameChecking)
+    if ($Name -ne 'BcContainerHelper' -or [string]$RequiredVersion -ne '6.1.18') {{ throw 'wrong module pin' }}
+}}
+$global:restoreCalls = 0
+$global:startCalls = 0
+$global:readinessCalls = 0
+$identity = [PSCustomObject][ordered]@{{
+    container_id = 'owned-id'
+    image_id = 'image-id'
+    hostname = 'bc-owned'
+    mounts = @('C:\\host:C:\\container')
+}}
+$manifest = [PSCustomObject]@{{
+    backup_path = {_ps_quote(backup)}
+    sha256 = '{backup_hash}'
+    database_name = 'BC'
+    database_folder = 'C:\\databases'
+    container = $identity
+    apps = @()
+}}
+$ops = @{{
+    InspectContainer = {{
+        [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }}
+    }}
+    ReadContainerIdentity = {{ $identity }}
+    StopServiceTier = {{
+        [PSCustomObject]@{{ server_instance = 'BC'; previous_process_id = 100; state = 'Stopped' }}
+    }}
+    RestoreDatabases = {{
+        $global:restoreCalls++
+        throw 'forced restore failure'
+    }}
+    StartServiceTier = {{
+        $global:startCalls++
+        [PSCustomObject]@{{ server_instance = 'BC'; process_id = 200; state = 'Running'; restarted = $true }}
+    }}
+    TestReadiness = {{
+        $global:readinessCalls++
+        throw 'readiness must not run'
+    }}
+}}
+$message = $null
+try {{
+    Restore-BCBenchCheckpoint `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Manifest $manifest `
+        -Operations $ops | Out-Null
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{
+    message = $message
+    restoreCalls = $global:restoreCalls
+    startCalls = $global:startCalls
+    readinessCalls = $global:readinessCalls
+}} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "forced restore failure" in payload["message"]
+    assert payload["restoreCalls"] == 1
+    assert payload["startCalls"] == 1
+    assert payload["readinessCalls"] == 0
 
 
 def test_agent_tools_stages_exact_worker_hash_outside_benchmark(tmp_path: Path) -> None:

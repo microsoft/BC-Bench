@@ -12,7 +12,10 @@ if TYPE_CHECKING:
 __all__ = [
     "AgentError",
     "BCBenchError",
+    "BugFixLifecycleInfrastructureError",
     "BuildError",
+    "CheckpointInfrastructureError",
+    "CleanupInfrastructureError",
     "CollectionError",
     "ConfigurationError",
     "DatasetError",
@@ -35,6 +38,18 @@ __all__ = [
 
 class BCBenchError(Exception):
     """Base exception for all BC-Bench operations."""
+
+
+class BugFixLifecycleInfrastructureError(BCBenchError):
+    """Bug-fix lifecycle infrastructure failed."""
+
+
+class CheckpointInfrastructureError(BugFixLifecycleInfrastructureError):
+    """Checkpoint capture or restore failed."""
+
+
+class CleanupInfrastructureError(BugFixLifecycleInfrastructureError):
+    """Lifecycle cleanup failed."""
 
 
 class DatasetError(BCBenchError):
