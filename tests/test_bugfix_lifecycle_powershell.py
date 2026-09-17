@@ -321,6 +321,14 @@ def test_workspace_acl_uses_exact_checked_icacls_commands_and_runs_access_valida
     worker_path = paths["agent-tools"] / "contained_process_worker.py"
     worker_path.write_bytes(source_worker_path.read_bytes())
     worker_hash = sha256(source_worker_path.read_bytes()).hexdigest()
+    worker_request_path = paths["staging"] / "worker-request.json"
+    gate_path = paths["staging"] / "launch.gate"
+    output_parent = paths["staging"] / "output"
+    output_parent.mkdir()
+    stdout_path = output_parent / "stdout.txt"
+    stderr_path = output_parent / "stderr.txt"
+    for path in (worker_request_path, gate_path, stdout_path, stderr_path):
+        path.touch()
     script = f"""
 $ErrorActionPreference = 'Stop'
 $global:icaclsCalls = @()
@@ -354,6 +362,14 @@ $validator = {{
         RuntimeExecutableExecutionSucceeded = $true
         DockerCliDenied = $true
         DockerPipeDenied = $true
+        MountedStagingCreateDenied = $true
+        MountedStagingWriteDenied = $true
+        MountedStagingDeleteDenied = $true
+        OutputParentCreateDenied = $true
+        OutputParentWriteDenied = $true
+        OutputParentDeleteDenied = $true
+        OutputFileOpenDenied = $true
+        OutputHandleCaptureSucceeded = $true
         ProcessId = 1234
         WorkspaceProbePath = 'probe'
         ProtectedProbePath = 'secret'
@@ -385,6 +401,7 @@ $result = Set-BCBenchWorkspaceAcl `
     -SourceWorkerPath {_ps_quote(source_worker_path)} `
     -WorkerPath {_ps_quote(worker_path)} `
     -WorkerSha256 '{worker_hash}' `
+    -WorkerRequestPaths @({_ps_quote(worker_request_path)}, {_ps_quote(gate_path)}) `
     -IcaclsRunner $icaclsRunner `
     -AclVerifier $aclVerifier `
     -AccessValidator $validator
@@ -459,11 +476,29 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
             ],
         ]
     )
+    expected_calls.extend(
+        [
+            [str(paths["staging"]), "/inheritance:r"],
+            [str(paths["staging"]), "/grant:r", *full_control, f"{agent}:(X)"],
+            [str(worker_request_path), "/grant:r", f"{agent}:R"],
+            [
+                str(worker_request_path),
+                "/deny",
+                "*S-1-5-21-1000-1001-1002-1003:(WD,AD,WEA,WA,DE,WDAC,WO)",
+            ],
+            [str(gate_path), "/grant:r", f"{agent}:R"],
+            [
+                str(gate_path),
+                "/deny",
+                "*S-1-5-21-1000-1001-1002-1003:(WD,AD,WEA,WA,DE,WDAC,WO)",
+            ],
+        ]
+    )
 
     assert payload["calls"] == expected_calls
-    assert len(payload["verificationCalls"]) == 19
+    assert len(payload["verificationCalls"]) == 24
     deny_verifications = [item for item in payload["verificationCalls"] if item["ExpectedRules"][0].get("AccessControlType") == "Deny" and item["Path"] != str(paths["benchmark"])]
-    assert len(deny_verifications) == 5
+    assert len(deny_verifications) == 7
     assert {item["ExpectedRules"][0]["Identity"] for item in deny_verifications} == {"S-1-5-21-1000-1001-1002-1003"}
     assert {item["ExpectedRules"][0]["Rights"] for item in deny_verifications} == {
         "WriteData, AppendData, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership",
@@ -479,6 +514,8 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
     assert Path(paths["baseline"]).resolve() not in restricted_agent_grant_paths
     assert Path(paths["evaluators"]).resolve() not in restricted_agent_grant_paths
     assert Path(paths["evidence"]).resolve() not in restricted_agent_grant_paths
+    assert stdout_path.resolve() not in restricted_agent_grant_paths
+    assert stderr_path.resolve() not in restricted_agent_grant_paths
     assert worker_path.resolve().is_relative_to(paths["agent-tools"].resolve())
     assert payload["result"]["ProcessId"] == 1234
     assert payload["result"]["AclTransaction"]["Sid"] == "S-1-5-21-1000-1001-1002-1003"
@@ -499,7 +536,23 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
             paths["runtime"],
             runtime_executable,
             worker_path,
+            worker_request_path,
+            gate_path,
         )
+    }
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$parameters = (Get-Command Set-BCBenchWorkspaceAcl).Parameters.Keys
+[PSCustomObject]@{{
+    hasWorkerOutputPaths = $parameters -contains 'WorkerOutputPaths'
+    sourceUsesWorkerOutputPaths = [IO.File]::ReadAllText({_ps_quote(_MODULE)}).Contains('WorkerOutputPaths')
+}} | ConvertTo-Json -Compress
+"""
+    output_contract = _last_json(_run_pwsh(script))
+    assert output_contract == {
+        "hasWorkerOutputPaths": False,
+        "sourceUsesWorkerOutputPaths": False,
     }
 
 
@@ -592,6 +645,14 @@ try {{
                 RuntimeExecutableExecutionSucceeded = $true
                 DockerCliDenied = $true
                 DockerPipeDenied = $true
+                MountedStagingCreateDenied = $true
+                MountedStagingWriteDenied = $true
+                MountedStagingDeleteDenied = $true
+                OutputParentCreateDenied = $true
+                OutputParentWriteDenied = $true
+                OutputParentDeleteDenied = $true
+                OutputFileOpenDenied = $true
+                OutputHandleCaptureSucceeded = $true
             }}
         }} | Out-Null
 }}
@@ -891,6 +952,11 @@ function global:Remove-NAVServerUser {{
     }}
     $global:userPresent = $false
 }}
+function global:Remove-BcContainerBcUser {{
+    $global:inventedRemoveCalls++
+    throw 'invented helper command must not be used'
+}}
+$global:inventedRemoveCalls = 0
 $identity = New-BCBenchAgentBcUser -InstanceId 'entry' -ContainerName 'bc-entry'
 Remove-BCBenchAgentBcUser -ContainerName 'bc-entry' -Username $identity.Username -Password $identity.Password
 [PSCustomObject]@{{
@@ -900,6 +966,7 @@ Remove-BCBenchAgentBcUser -ContainerName 'bc-entry' -Username $identity.Username
     invokedContainer = $global:invokedContainer
     getUserCalls = $global:getUserCalls
     userPresent = $global:userPresent
+    inventedRemoveCalls = $global:inventedRemoveCalls
 }} | ConvertTo-Json -Compress -Depth 6
 """
     payload = _last_json(_run_pwsh(script))
@@ -916,7 +983,47 @@ Remove-BCBenchAgentBcUser -ContainerName 'bc-entry' -Username $identity.Username
     assert payload["removeCall"]["Force"] is True
     assert payload["getUserCalls"] == 2
     assert payload["userPresent"] is False
+    assert payload["inventedRemoveCalls"] == 0
     assert payload["identity"]["Username"] != "admin"
+
+
+def test_bc_user_fallback_requires_post_removal_absence() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{
+    param([string]$Name, [version]$RequiredVersion, [switch]$Force, [switch]$DisableNameChecking)
+    if ($Name -ne 'BcContainerHelper' -or [string]$RequiredVersion -ne '6.1.18') {{ throw 'wrong module pin' }}
+}}
+function global:Invoke-ScriptInBcContainer {{
+    param([string]$containerName, [scriptblock]$ScriptBlock, [object[]]$ArgumentList)
+    & $ScriptBlock @ArgumentList
+}}
+function global:Get-NAVServerInstance {{
+    [PSCustomObject]@{{ ServerInstance = 'BC' }}
+}}
+function global:Get-NAVServerUser {{
+    param([string]$ServerInstance, [string]$Tenant, [string]$UserName)
+    [PSCustomObject]@{{ UserName = $UserName }}
+}}
+function global:Remove-NAVServerUser {{
+    param([string]$ServerInstance, [string]$Tenant, [string]$UserName, [switch]$Force)
+}}
+$message = $null
+try {{
+    Remove-BCBenchAgentBcUser `
+        -ContainerName 'bc-entry' `
+        -Username 'bca-1234567-abcdef' `
+        -Password 'secret'
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+$message | ConvertTo-Json -Compress
+"""
+    message = _last_json(_run_pwsh(script))
+
+    assert "still exists after removal" in message
 
 
 def test_setup_orchestrator_writes_outputs_and_cleans_created_resources_on_failure(tmp_path: Path) -> None:
@@ -1702,6 +1809,14 @@ finally {{
         assert payload["access"]["ReadExecuteFileReadSucceeded"] is True
         assert payload["access"]["ReadExecuteFileModifyDenied"] is True
         assert payload["access"]["RuntimeExecutableExecutionSucceeded"] is True
+        assert payload["access"]["MountedStagingCreateDenied"] is True
+        assert payload["access"]["MountedStagingWriteDenied"] is True
+        assert payload["access"]["MountedStagingDeleteDenied"] is True
+        assert payload["access"]["OutputParentCreateDenied"] is True
+        assert payload["access"]["OutputParentWriteDenied"] is True
+        assert payload["access"]["OutputParentDeleteDenied"] is True
+        assert payload["access"]["OutputFileOpenDenied"] is True
+        assert payload["access"]["OutputHandleCaptureSucceeded"] is True
         assert {Path(item["Path"]).resolve() for item in payload["access"]["ReadExecuteDirectoryResults"]} == {
             (entry_root / "agent-tools").resolve(),
             tool_root.resolve(),

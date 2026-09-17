@@ -342,6 +342,25 @@ def test_powershell_uses_checked_job_object_wrapper_methods():
     assert "[BCBenchJobObject]::TerminateJobObject(" not in powershell_source
 
 
+def test_restricted_launch_uses_evaluator_output_handles_and_minimal_file_rights() -> None:
+    source = _SCRIPT_PATH.read_text(encoding="utf-8")
+    create_worker = source.split("public static BCBenchSuspendedProcess CreateSuspendedWorker(", maxsplit=1)[1].split(
+        "public static void AssignProcess(",
+        maxsplit=1,
+    )[0]
+    powershell_source = source.split("'@", maxsplit=1)[1]
+
+    assert "inheritableAttributes.bInheritHandle = true;" in create_worker
+    assert create_worker.index("stdoutPath,") < create_worker.index("CreateProcessWithLogon(")
+    assert create_worker.index("stderrPath,") < create_worker.index("CreateProcessWithLogon(")
+    assert "startupInfo.hStdOutput = standardOutput.DangerousGetHandle();" in create_worker
+    assert "startupInfo.hStdError = standardError.DangerousGetHandle();" in create_worker
+    assert "-Rights ([Security.AccessControl.FileSystemRights]::Traverse)" in powershell_source
+    assert powershell_source.count("-Rights ([Security.AccessControl.FileSystemRights]::Read)") == 2
+    assert "-Path ([IO.FileInfo]::new($StdoutPath))" not in powershell_source
+    assert "-Path ([IO.FileInfo]::new($StderrPath))" not in powershell_source
+
+
 def test_assign_resume_and_gate_creation_are_strictly_ordered(tmp_path):
     trace_path = tmp_path / "lifecycle.txt"
     completed = subprocess.run(

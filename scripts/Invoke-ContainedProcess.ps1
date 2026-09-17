@@ -691,12 +691,12 @@ try {
         Add-RestrictedAccess `
             -Path $tempDirectory `
             -Account $account `
-            -Rights ([Security.AccessControl.FileSystemRights]::ReadAndExecute) `
+            -Rights ([Security.AccessControl.FileSystemRights]::Traverse) `
             -InheritanceFlags ([Security.AccessControl.InheritanceFlags]::None)
         Add-RestrictedAccess `
             -Path $sharedDirectory `
             -Account $account `
-            -Rights ([Security.AccessControl.FileSystemRights]::ReadAndExecute) `
+            -Rights ([Security.AccessControl.FileSystemRights]::Traverse) `
             -InheritanceFlags ([Security.AccessControl.InheritanceFlags]::None)
     }
 
@@ -705,7 +705,7 @@ try {
         Add-RestrictedAccess `
             -Path ([IO.FileInfo]::new($WorkerRequestPath)) `
             -Account $account `
-            -Rights ([Security.AccessControl.FileSystemRights]::ReadAndExecute) `
+            -Rights ([Security.AccessControl.FileSystemRights]::Read) `
             -InheritanceFlags ([Security.AccessControl.InheritanceFlags]::None)
     }
 
@@ -752,7 +752,7 @@ try {
         Add-RestrictedAccess `
             -Path ([IO.FileInfo]::new($GatePath)) `
             -Account $account `
-            -Rights ([Security.AccessControl.FileSystemRights]::ReadAndExecute) `
+            -Rights ([Security.AccessControl.FileSystemRights]::Read) `
             -InheritanceFlags ([Security.AccessControl.InheritanceFlags]::None)
     }
     Write-TestLifecycleEvent "GateCreated"

@@ -1131,7 +1131,9 @@ Use explicit ACL replacement through `icacls` and verify effective access with a
 
 Use `New-BcContainerBcUser` with an entry-scoped credential and `-PermissionSetId SUPER`. `SUPER` is required for the current development-endpoint and AL MCP publication behavior; isolation is provided by the separate BC credential, restricted Windows identity, protected evaluator storage, and lack of Docker access.
 
-Use `Remove-BcContainerBcUser` during cleanup. The agent BC user must:
+BcContainerHelper 6.1.18 does not provide `Remove-BcContainerBcUser`. During cleanup, first verify the lifecycle invocation label and recorded Docker ID still own the named container. Then use `Invoke-ScriptInBcContainer` to find the server instance, call `Remove-NAVServerUser -Tenant default -Force`, and verify `Get-NAVServerUser` no longer returns the agent user. This pinned-version equivalent must be implemented by `Remove-BCBenchAgentBcUser`; do not invent or call an unavailable BcContainerHelper command.
+
+The agent BC user must:
 
 - differ from evaluator admin;
 - have only the permissions required by the selected MCP/tooling configuration;

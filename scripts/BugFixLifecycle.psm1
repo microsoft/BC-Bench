@@ -514,6 +514,7 @@ function Get-BCBenchIcaclsGrant {
     $permission = switch ([string]$Rule.Rights) {
         "FullControl" { "F" }
         "Modify" { "M" }
+        "Read" { "R" }
         "ReadAndExecute" { "RX" }
         "Traverse" { "(X)" }
         default { throw "Unsupported icacls permission '$($Rule.Rights)'." }
@@ -706,6 +707,7 @@ function Test-BCBenchIdentityAccess {
         [Parameter(Mandatory = $true)][PSObject]$Identity,
         [Parameter(Mandatory = $true)][string]$AgentWorkspace,
         [Parameter(Mandatory = $true)][string]$AgentLogs,
+        [Parameter(Mandatory = $true)][string]$MountedStaging,
         [Parameter(Mandatory = $true)][string]$ProtectedRoot,
         [Parameter(Mandatory = $true)][string]$BenchmarkRoot,
         [Parameter(Mandatory = $true)][string]$DatasetPath,
@@ -726,8 +728,25 @@ function Test-BCBenchIdentityAccess {
     $protectedWriteProbe = Join-Path $ProtectedRoot "forbidden-$probeId.txt"
     $benchmarkWriteProbe = Join-Path $BenchmarkRoot "forbidden-$probeId.txt"
     $directoryProbes = [System.Collections.Generic.List[object]]::new()
+    $probeRoot = Join-Path $MountedStaging ".identity-access-$probeId"
+    $sharedPath = Join-Path $probeRoot "shared"
+    New-Item -ItemType Directory -Path $sharedPath -Force | Out-Null
+    $stagingProbe = [PSCustomObject]@{
+        CreatePath = Join-Path $MountedStaging ".bcbench-create-$probeId.tmp"
+        WritePath  = Join-Path $MountedStaging ".bcbench-write-$probeId.tmp"
+        DeletePath = Join-Path $MountedStaging ".bcbench-delete-$probeId.tmp"
+    }
+    $outputParentProbe = [PSCustomObject]@{
+        CreatePath = Join-Path $sharedPath ".bcbench-create-$probeId.tmp"
+        WritePath  = Join-Path $sharedPath ".bcbench-write-$probeId.tmp"
+        DeletePath = Join-Path $sharedPath ".bcbench-delete-$probeId.tmp"
+    }
     try {
         [IO.File]::WriteAllText($protectedProbe, "evaluator-only", [Text.UTF8Encoding]::new($false))
+        foreach ($probe in @($stagingProbe, $outputParentProbe)) {
+            [IO.File]::WriteAllText($probe.WritePath, "write-probe", [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($probe.DeletePath, "delete-probe", [Text.UTF8Encoding]::new($false))
+        }
         foreach ($path in $ReadExecuteDirectoryPaths | Select-Object -Unique) {
             $directory = Resolve-BCBenchAbsolutePath -Path $path
             $probe = [PSCustomObject]@{
@@ -743,11 +762,17 @@ function Test-BCBenchIdentityAccess {
     }
     catch {
         Remove-Item -LiteralPath $protectedProbe -Force -ErrorAction SilentlyContinue
+        foreach ($probe in @($stagingProbe, $outputParentProbe)) {
+            Remove-Item -LiteralPath $probe.CreatePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.WritePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.DeletePath -Force -ErrorAction SilentlyContinue
+        }
         foreach ($probe in $directoryProbes) {
             Remove-Item -LiteralPath $probe.CreatePath -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $probe.WritePath -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $probe.DeletePath -Force -ErrorAction SilentlyContinue
         }
+        Remove-Item -LiteralPath $probeRoot -Recurse -Force -ErrorAction SilentlyContinue
         throw
     }
     $readExecuteFiles = @($ReadExecuteFilePaths | Select-Object -Unique | ForEach-Object {
@@ -756,8 +781,6 @@ function Test-BCBenchIdentityAccess {
     $runtimeExecutables = @($RuntimeExecutablePaths | Select-Object -Unique | ForEach-Object {
         Resolve-BCBenchAbsolutePath -Path $_
     })
-    $probeRoot = Join-Path $ProtectedRoot ".identity-access-$probeId"
-    New-Item -ItemType Directory -Path $probeRoot | Out-Null
 
     $probeScript = @'
 import ctypes
@@ -779,6 +802,7 @@ read_execute_file_results = []
 runtime_executable_results = []
 docker_cli_error = None
 docker_pipe_error = None
+output_file_open_error = None
 
 try:
     Path(os.environ["BCBENCH_WORKSPACE_PROBE"]).write_text("agent-write", encoding="utf-8")
@@ -812,9 +836,47 @@ def denied_read(path):
     except OSError as error:
         return True, str(error)
 
+def denied_staging_operations(probe):
+    result = {}
+    try:
+        Path(probe["CreatePath"]).write_text("forbidden", encoding="utf-8")
+        result["CreateDenied"] = False
+        result["CreateError"] = None
+    except OSError as error:
+        result["CreateDenied"] = True
+        result["CreateError"] = str(error)
+
+    try:
+        with Path(probe["WritePath"]).open("ab") as probe_file:
+            probe_file.write(b"forbidden")
+        result["WriteDenied"] = False
+        result["WriteError"] = None
+    except OSError as error:
+        result["WriteDenied"] = True
+        result["WriteError"] = str(error)
+
+    try:
+        Path(probe["DeletePath"]).unlink()
+        result["DeleteDenied"] = False
+        result["DeleteError"] = None
+    except OSError as error:
+        result["DeleteDenied"] = True
+        result["DeleteError"] = str(error)
+    return result
+
 dataset_read_denied, dataset_read_error = denied_read(os.environ["BCBENCH_DATASET_PROBE"])
 evaluator_source_read_denied, evaluator_source_read_error = denied_read(os.environ["BCBENCH_EVALUATOR_SOURCE_PROBE"])
 docs_read_denied, docs_read_error = denied_read(os.environ["BCBENCH_DOCS_PROBE"])
+mounted_staging_result = denied_staging_operations(json.loads(os.environ["BCBENCH_MOUNTED_STAGING_PROBE"]))
+output_parent_result = denied_staging_operations(json.loads(os.environ["BCBENCH_OUTPUT_PARENT_PROBE"]))
+
+try:
+    with Path(os.environ["BCBENCH_OUTPUT_FILE_PROBE"]).open("ab"):
+        pass
+    output_file_open_denied = False
+except OSError as error:
+    output_file_open_denied = True
+    output_file_open_error = str(error)
 
 try:
     Path(os.environ["BCBENCH_BENCHMARK_WRITE_PROBE"]).write_text("forbidden", encoding="utf-8")
@@ -988,6 +1050,20 @@ print(json.dumps({
     "ReadExecuteDirectoryResults": read_execute_directory_results,
     "ReadExecuteFileResults": read_execute_file_results,
     "RuntimeExecutableResults": runtime_executable_results,
+    "MountedStagingCreateDenied": mounted_staging_result["CreateDenied"],
+    "MountedStagingCreateError": mounted_staging_result["CreateError"],
+    "MountedStagingWriteDenied": mounted_staging_result["WriteDenied"],
+    "MountedStagingWriteError": mounted_staging_result["WriteError"],
+    "MountedStagingDeleteDenied": mounted_staging_result["DeleteDenied"],
+    "MountedStagingDeleteError": mounted_staging_result["DeleteError"],
+    "OutputParentCreateDenied": output_parent_result["CreateDenied"],
+    "OutputParentCreateError": output_parent_result["CreateError"],
+    "OutputParentWriteDenied": output_parent_result["WriteDenied"],
+    "OutputParentWriteError": output_parent_result["WriteError"],
+    "OutputParentDeleteDenied": output_parent_result["DeleteDenied"],
+    "OutputParentDeleteError": output_parent_result["DeleteError"],
+    "OutputFileOpenDenied": output_file_open_denied,
+    "OutputFileOpenError": output_file_open_error,
     "DockerCliDenied": docker_cli_denied,
     "DockerCliError": docker_cli_error,
     "DockerPipeDenied": docker_pipe_denied,
@@ -999,8 +1075,6 @@ print(json.dumps({
 '@
     $powershellExecutable = (Get-Process -Id $PID).Path
     $requestPath = Join-Path $probeRoot "request.json"
-    $sharedPath = Join-Path $probeRoot "shared"
-    New-Item -ItemType Directory -Path $sharedPath | Out-Null
     $workerRequestPath = Join-Path $sharedPath "worker-request.json"
     $gatePath = Join-Path $sharedPath "launch.gate"
     $stdoutPath = Join-Path $sharedPath "stdout.txt"
@@ -1023,6 +1097,9 @@ print(json.dumps({
             BCBENCH_EVALUATOR_SOURCE_PROBE   = $EvaluatorSourcePath
             BCBENCH_DOCS_PROBE               = $DocsPath
             BCBENCH_WORKER_PROBE             = $ContainedProcessWorkerPath
+            BCBENCH_MOUNTED_STAGING_PROBE    = ($stagingProbe | ConvertTo-Json -Compress)
+            BCBENCH_OUTPUT_PARENT_PROBE      = ($outputParentProbe | ConvertTo-Json -Compress)
+            BCBENCH_OUTPUT_FILE_PROBE        = $stdoutPath
             BCBENCH_READ_EXECUTE_DIRECTORY_PROBES = ($directoryProbes | ConvertTo-Json -AsArray -Compress -Depth 4)
             BCBENCH_READ_EXECUTE_FILES       = ($readExecuteFiles | ConvertTo-Json -AsArray -Compress)
             BCBENCH_RUNTIME_EXECUTABLES      = ($runtimeExecutables | ConvertTo-Json -AsArray -Compress)
@@ -1058,13 +1135,20 @@ print(json.dumps({
         if ($wrapperResult.timed_out -or $wrapperResult.returncode -ne 0) {
             throw "Contained identity probe child failed: $($wrapperResult.stderr)"
         }
-        return ([string]$wrapperResult.stdout).Trim() | ConvertFrom-Json
+        $probeResult = ([string]$wrapperResult.stdout).Trim() | ConvertFrom-Json
+        $probeResult | Add-Member -NotePropertyName OutputHandleCaptureSucceeded -NotePropertyValue $true
+        return $probeResult
     }
     finally {
         Remove-Item -LiteralPath $workspaceProbe -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $protectedProbe -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $protectedWriteProbe -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $benchmarkWriteProbe -Force -ErrorAction SilentlyContinue
+        foreach ($probe in @($stagingProbe, $outputParentProbe)) {
+            Remove-Item -LiteralPath $probe.CreatePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.WritePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.DeletePath -Force -ErrorAction SilentlyContinue
+        }
         foreach ($probe in $directoryProbes) {
             Remove-Item -LiteralPath $probe.CreatePath -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $probe.WritePath -Force -ErrorAction SilentlyContinue
@@ -1096,7 +1180,6 @@ function Set-BCBenchWorkspaceAcl {
         [Parameter(Mandatory = $true)][string]$WorkerPath,
         [Parameter(Mandatory = $true)][ValidatePattern("^[a-fA-F0-9]{64}$")][string]$WorkerSha256,
         [string[]]$WorkerRequestPaths = @(),
-        [string[]]$WorkerOutputPaths = @(),
         [Parameter(DontShow = $true)][PSObject]$AclTransaction,
         [Parameter(DontShow = $true)][scriptblock]$IcaclsRunner,
         [Parameter(DontShow = $true)][scriptblock]$AclVerifier,
@@ -1206,17 +1289,17 @@ function Set-BCBenchWorkspaceAcl {
         }
     }
     Assert-BCBenchNoReparseComponents -Path $WorkerPath
-    foreach ($workerPath in @($WorkerRequestPaths) + @($WorkerOutputPaths)) {
-        if (-not (Test-Path -LiteralPath $workerPath -PathType Leaf)) {
-            throw "Worker access path must be an existing file: $workerPath"
+    foreach ($workerAccessPath in $WorkerRequestPaths) {
+        if (-not (Test-Path -LiteralPath $workerAccessPath -PathType Leaf)) {
+            throw "Worker access path must be an existing file: $workerAccessPath"
         }
-        if ((Resolve-BCBenchAbsolutePath -Path $workerPath).Equals(
+        if ((Resolve-BCBenchAbsolutePath -Path $workerAccessPath).Equals(
             (Resolve-BCBenchAbsolutePath -Path $MountedStaging),
             [StringComparison]::OrdinalIgnoreCase
-        ) -or -not (Test-BCBenchPathContains -Ancestor $MountedStaging -Path $workerPath)) {
-            throw "Worker access path must be a strict descendant of MountedStaging: $workerPath"
+        ) -or -not (Test-BCBenchPathContains -Ancestor $MountedStaging -Path $workerAccessPath)) {
+            throw "Worker access path must be a strict descendant of MountedStaging: $workerAccessPath"
         }
-        Assert-BCBenchNoReparseComponents -Path $workerPath
+        Assert-BCBenchNoReparseComponents -Path $workerAccessPath
     }
 
     $agentAccount = if ([string]$Identity.Domain -eq ".") {
@@ -1354,7 +1437,7 @@ function Set-BCBenchWorkspaceAcl {
                 -IcaclsRunner $IcaclsRunner `
                 -AclVerifier $AclVerifier
         }
-        if ($WorkerRequestPaths.Count -gt 0 -or $WorkerOutputPaths.Count -gt 0) {
+        if ($WorkerRequestPaths.Count -gt 0) {
             Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $MountedStaging
             Set-BCBenchExplicitAcl `
                 -Path $MountedStaging `
@@ -1364,7 +1447,7 @@ function Set-BCBenchWorkspaceAcl {
                 -AclVerifier $AclVerifier
         }
         foreach ($requestPath in $WorkerRequestPaths) {
-            $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+            $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "Read" }
             Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $requestPath
             Set-BCBenchExplicitAcl `
                 -Path $requestPath `
@@ -1381,21 +1464,12 @@ function Set-BCBenchWorkspaceAcl {
                 -IcaclsRunner $IcaclsRunner `
                 -AclVerifier $AclVerifier
         }
-        foreach ($outputPath in $WorkerOutputPaths) {
-            Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $outputPath
-            Set-BCBenchExplicitAcl `
-                -Path $outputPath `
-                -Rules ($baseRules + $agentModify) `
-                -AgentAccount $agentAccount `
-                -IsFile `
-                -IcaclsRunner $IcaclsRunner `
-                -AclVerifier $AclVerifier
-        }
 
         $validationParameters = @{
             Identity                     = $Identity
             AgentWorkspace               = $AgentWorkspace
             AgentLogs                    = $AgentLogs
+            MountedStaging               = $MountedStaging
             ProtectedRoot                = $ProtectedRoot
             BenchmarkRoot                = $BenchmarkRoot
             DatasetPath                  = $DatasetPath
@@ -1430,6 +1504,14 @@ function Set-BCBenchWorkspaceAcl {
             "ReadExecuteFileReadSucceeded",
             "ReadExecuteFileModifyDenied",
             "RuntimeExecutableExecutionSucceeded",
+            "MountedStagingCreateDenied",
+            "MountedStagingWriteDenied",
+            "MountedStagingDeleteDenied",
+            "OutputParentCreateDenied",
+            "OutputParentWriteDenied",
+            "OutputParentDeleteDenied",
+            "OutputFileOpenDenied",
+            "OutputHandleCaptureSucceeded",
             "DockerCliDenied",
             "DockerPipeDenied"
         )) {
