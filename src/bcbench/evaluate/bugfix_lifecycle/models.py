@@ -61,11 +61,15 @@ class AppInventoryEntry:
     name: str
     publisher: str
     version: str
-    package_id: str
+    package_id: str | None
     scope: str
     installed: bool
     synchronized: bool
-    content_hash: str
+    content_hash: str | None
+
+    def __post_init__(self) -> None:
+        if self.content_hash is not None:
+            object.__setattr__(self, "content_hash", self.content_hash.lower())
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -87,11 +91,11 @@ class AppInventoryEntry:
             name=_required_string(value, "name"),
             publisher=_required_string(value, "publisher"),
             version=_required_string(value, "version"),
-            package_id=_required_string(value, "package_id"),
+            package_id=_optional_string(value, "package_id"),
             scope=_required_string(value, "scope"),
             installed=_required_bool(value, "installed"),
             synchronized=_required_bool(value, "synchronized"),
-            content_hash=_required_string(value, "content_hash").lower(),
+            content_hash=_optional_string(value, "content_hash"),
         )
 
 
@@ -101,7 +105,7 @@ class CheckpointManifest:
     backup_path: Path
     sha256: str
     database_name: str
-    database_folder: Path
+    database_folder: str
     container: ContainerIdentity
     apps: tuple[AppInventoryEntry, ...]
 
@@ -115,7 +119,7 @@ class CheckpointManifest:
             "backup_path": str(self.backup_path),
             "sha256": self.sha256,
             "database_name": self.database_name,
-            "database_folder": str(self.database_folder),
+            "database_folder": self.database_folder,
             "container": self.container.to_dict(),
             "apps": [app.to_dict() for app in self.apps],
         }
@@ -133,7 +137,7 @@ class CheckpointManifest:
             backup_path=Path(_required_string(value, "backup_path")),
             sha256=_required_string(value, "sha256"),
             database_name=_required_string(value, "database_name"),
-            database_folder=Path(_required_string(value, "database_folder")),
+            database_folder=_required_string(value, "database_folder"),
             container=ContainerIdentity.from_dict(container),
             apps=tuple(AppInventoryEntry.from_dict(app) for app in apps),
         )
@@ -153,15 +157,24 @@ def _required_bool(value: Mapping[str, object], name: str) -> bool:
     return item
 
 
+def _optional_string(value: Mapping[str, object], name: str) -> str | None:
+    item = value.get(name)
+    if item is None:
+        return None
+    if not isinstance(item, str) or not item:
+        raise ValueError(f"{name} must be null or a non-empty string")
+    return item
+
+
 def _app_sort_key(app: AppInventoryEntry) -> tuple[object, ...]:
     return (
-        app.app_id.casefold(),
-        app.publisher.casefold(),
-        app.name.casefold(),
+        app.app_id,
+        app.publisher,
+        app.name,
         app.version,
-        app.package_id.casefold(),
-        app.scope.casefold(),
+        "" if app.package_id is None else app.package_id,
+        app.scope,
         app.installed,
         app.synchronized,
-        app.content_hash,
+        "" if app.content_hash is None else app.content_hash,
     )

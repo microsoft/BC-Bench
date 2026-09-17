@@ -1847,12 +1847,129 @@ function Assert-BCBenchContainerOwnership {
     }
     if (
         -not [bool]$state.Exists -or
-        [string]$state.Id -ne $ExpectedContainerId -or
-        [string]$state.InvocationId -ne $ExpectedInvocationId
+        [string]$state.Id -cne $ExpectedContainerId -or
+        [string]$state.InvocationId -cne $ExpectedInvocationId
     ) {
         throw "Refusing container-scoped operation for '$ContainerName' because its Docker ID or lifecycle invocation label does not match."
     }
     return $context
+}
+
+function ConvertTo-BCBenchNullableString {
+    param(
+        [AllowNull()]$Value,
+        [switch]$Lowercase
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $null
+    }
+    $text = [string]$Value
+    if ($Lowercase) {
+        return $text.ToLowerInvariant()
+    }
+    return $text
+}
+
+function ConvertTo-BCBenchAppInventoryRows {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Apps)
+
+    [object[]]$rows = @(
+        $Apps |
+            ForEach-Object {
+                [PSCustomObject][ordered]@{
+                    app_id       = [string]$_.app_id
+                    name         = [string]$_.name
+                    publisher    = [string]$_.publisher
+                    version      = [string]$_.version
+                    package_id   = ConvertTo-BCBenchNullableString -Value $_.package_id
+                    scope        = [string]$_.scope
+                    installed    = [bool]$_.installed
+                    synchronized = [bool]$_.synchronized
+                    content_hash = ConvertTo-BCBenchNullableString -Value $_.content_hash -Lowercase
+                }
+            }
+    )
+    [Array]::Sort($rows, [Comparison[object]]{
+        param($left, $right)
+
+        foreach ($field in @("app_id", "publisher", "name", "version", "package_id", "scope")) {
+            $comparison = [StringComparer]::Ordinal.Compare([string]$left.$field, [string]$right.$field)
+            if ($comparison -ne 0) {
+                return $comparison
+            }
+        }
+        $installedComparison = ([bool]$left.installed).CompareTo([bool]$right.installed)
+        if ($installedComparison -ne 0) {
+            return $installedComparison
+        }
+        $synchronizedComparison = ([bool]$left.synchronized).CompareTo([bool]$right.synchronized)
+        if ($synchronizedComparison -ne 0) {
+            return $synchronizedComparison
+        }
+        return [StringComparer]::Ordinal.Compare([string]$left.content_hash, [string]$right.content_hash)
+    })
+    return $rows
+}
+
+function Test-BCBenchContainerIdentityEqual {
+    param(
+        [Parameter(Mandatory = $true)][PSObject]$Actual,
+        [Parameter(Mandatory = $true)][PSObject]$Expected
+    )
+
+    if (
+        [string]$Actual.container_id -cne [string]$Expected.container_id -or
+        [string]$Actual.image_id -cne [string]$Expected.image_id -or
+        [string]$Actual.hostname -cne [string]$Expected.hostname
+    ) {
+        return $false
+    }
+    [string[]]$actualMounts = @($Actual.mounts | ForEach-Object { [string]$_ })
+    [string[]]$expectedMounts = @($Expected.mounts | ForEach-Object { [string]$_ })
+    [Array]::Sort($actualMounts, [StringComparer]::Ordinal)
+    [Array]::Sort($expectedMounts, [StringComparer]::Ordinal)
+    if ($actualMounts.Count -ne $expectedMounts.Count) {
+        return $false
+    }
+    for ($index = 0; $index -lt $actualMounts.Count; $index++) {
+        if ($actualMounts[$index] -cne $expectedMounts[$index]) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Test-BCBenchAppInventoryEqual {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Actual,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Expected
+    )
+
+    $actualRows = @(ConvertTo-BCBenchAppInventoryRows -Apps $Actual)
+    $expectedRows = @(ConvertTo-BCBenchAppInventoryRows -Apps $Expected)
+    if ($actualRows.Count -ne $expectedRows.Count) {
+        return $false
+    }
+    $fields = @(
+        "app_id",
+        "name",
+        "publisher",
+        "version",
+        "package_id",
+        "scope",
+        "installed",
+        "synchronized",
+        "content_hash"
+    )
+    for ($index = 0; $index -lt $actualRows.Count; $index++) {
+        foreach ($field in $fields) {
+            if ($actualRows[$index].$field -cne $expectedRows[$index].$field) {
+                return $false
+            }
+        }
+    }
+    return $true
 }
 
 function Get-BCBenchContainerIdentity {
@@ -1896,7 +2013,7 @@ function Get-BCBenchContainerIdentity {
             mounts       = $mounts
         }
     }
-    if ([string]$identity.container_id -ne $ExpectedContainerId) {
+    if ([string]$identity.container_id -cne $ExpectedContainerId) {
         throw "Container identity changed during inspection."
     }
     [string[]]$normalizedMounts = @($identity.mounts | ForEach-Object { [string]$_ })
@@ -1912,15 +2029,28 @@ function Get-BCBenchContainerIdentity {
 function Stop-BCBenchServiceTier {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)][string]$ContainerId,
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
-    $context = [PSCustomObject]@{ ContainerId = $ContainerId }
+    $context = Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
+    $verifiedContainerId = [string]$context.ContainerId
+    $context.ContainerId = $verifiedContainerId
     return Invoke-BCBenchOperation -Operations $Operations -Name StopServiceTier -Context $context -Default {
         param($operationContext)
         Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-        Invoke-ScriptInBcContainer -containerName $operationContext.ContainerId -ScriptBlock {
+        $recheckedContext = Assert-BCBenchContainerOwnership `
+            -ContainerName $operationContext.ContainerName `
+            -ExpectedContainerId $operationContext.ContainerId `
+            -ExpectedInvocationId $operationContext.ContainerInvocationId `
+            -Operations $Operations
+        Invoke-ScriptInBcContainer -containerName $recheckedContext.ContainerId -ScriptBlock {
             $instance = Get-NAVServerInstance | Select-Object -First 1
             if ($null -eq $instance) {
                 throw "No Business Central service tier instance was found."
@@ -1945,21 +2075,32 @@ function Stop-BCBenchServiceTier {
 function Start-BCBenchServiceTier {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)][string]$ContainerId,
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
         [Parameter(Mandatory = $true)][string]$ServerInstance,
         [int]$PreviousProcessId = 0,
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
-    $context = [PSCustomObject]@{
-        ContainerId       = $ContainerId
-        ServerInstance    = $ServerInstance
-        PreviousProcessId = $PreviousProcessId
-    }
+    $context = Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
+    $verifiedContainerId = [string]$context.ContainerId
+    $context | Add-Member -NotePropertyName ContainerId -NotePropertyValue $verifiedContainerId -Force
+    $context | Add-Member -NotePropertyName ServerInstance -NotePropertyValue $ServerInstance
+    $context | Add-Member -NotePropertyName PreviousProcessId -NotePropertyValue $PreviousProcessId
     return Invoke-BCBenchOperation -Operations $Operations -Name StartServiceTier -Context $context -Default {
         param($operationContext)
         Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-        Invoke-ScriptInBcContainer -containerName $operationContext.ContainerId -ScriptBlock {
+        $recheckedContext = Assert-BCBenchContainerOwnership `
+            -ContainerName $operationContext.ContainerName `
+            -ExpectedContainerId $operationContext.ContainerId `
+            -ExpectedInvocationId $operationContext.ContainerInvocationId `
+            -Operations $Operations
+        Invoke-ScriptInBcContainer -containerName $recheckedContext.ContainerId -ScriptBlock {
             param([string]$ServerInstance, [int]$PreviousProcessId)
             Start-NAVServerInstance -ServerInstance $ServerInstance
             $started = Get-NAVServerInstance -ServerInstance $ServerInstance
@@ -1985,15 +2126,28 @@ function Start-BCBenchServiceTier {
 function Get-BCBenchDatabaseTopology {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)][string]$ContainerId,
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
-    $context = [PSCustomObject]@{ ContainerId = $ContainerId }
+    $context = Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
+    $verifiedContainerId = [string]$context.ContainerId
+    $context.ContainerId = $verifiedContainerId
     return Invoke-BCBenchOperation -Operations $Operations -Name ReadDatabaseTopology -Context $context -Default {
         param($operationContext)
         Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-        Invoke-ScriptInBcContainer -containerName $operationContext.ContainerId -ScriptBlock {
+        $recheckedContext = Assert-BCBenchContainerOwnership `
+            -ContainerName $operationContext.ContainerName `
+            -ExpectedContainerId $operationContext.ContainerId `
+            -ExpectedInvocationId $operationContext.ContainerInvocationId `
+            -Operations $Operations
+        Invoke-ScriptInBcContainer -containerName $recheckedContext.ContainerId -ScriptBlock {
             $instance = Get-NAVServerInstance | Select-Object -First 1
             $configuration = Get-NAVServerConfiguration -ServerInstance $instance.ServerInstance
             $databaseName = [string]($configuration | Where-Object KeyName -eq "DatabaseName").KeyValue
@@ -2031,31 +2185,41 @@ WHERE d.name = N'$escapedName'
 function Get-BCBenchAppInventory {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)][string]$ContainerId,
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
-    $context = [PSCustomObject]@{ ContainerId = $ContainerId }
+    $context = Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
+    $verifiedContainerId = [string]$context.ContainerId
+    $context.ContainerId = $verifiedContainerId
     if ($Operations.ContainsKey("ReadAppInventory")) {
-        $normalizedApps = @(& $Operations["ReadAppInventory"] $context)
-        return @($normalizedApps | Sort-Object app_id, publisher, name, version, package_id, scope, content_hash)
+        return @(ConvertTo-BCBenchAppInventoryRows -Apps @(& $Operations["ReadAppInventory"] $context))
     }
-    $inventory = Invoke-BCBenchOperation -Operations $Operations -Name ReadAppInventory -Context $context -Default {
-        param($operationContext)
-        Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-        [PSCustomObject]@{
-            Published = @(Get-BcContainerAppInfo -containerName $operationContext.ContainerId -publishedOnly)
-            Installed = @(
-                Get-BcContainerAppInfo `
-                    -containerName $operationContext.ContainerId `
-                    -tenant default `
-                    -tenantSpecificProperties
-            )
-        }
-    }
-    $publishedApps = @($inventory.Published)
-    $installedApps = @($inventory.Installed)
-    return @(
+    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+    $publishedContext = Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $verifiedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
+    $publishedApps = @(Get-BcContainerAppInfo -containerName $publishedContext.ContainerId -publishedOnly)
+    $installedContext = Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $verifiedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
+    $installedApps = @(
+        Get-BcContainerAppInfo `
+            -containerName $installedContext.ContainerId `
+            -tenant default `
+            -tenantSpecificProperties
+    )
+    $rows = @(
         $publishedApps |
             ForEach-Object {
                 $publishedApp = $_
@@ -2063,13 +2227,10 @@ function Get-BCBenchAppInventory {
                     Where-Object {
                         [string]$_.AppId -eq [string]$publishedApp.AppId -and
                         [string]$_.Version -eq [string]$publishedApp.Version -and
-                        [string]$_.PackageId -eq [string]$publishedApp.PackageId
+                        (ConvertTo-BCBenchNullableString -Value $_.PackageId) -ceq
+                            (ConvertTo-BCBenchNullableString -Value $publishedApp.PackageId)
                     } |
                     Select-Object -First 1
-                $contentHash = [string]$publishedApp.ContentHash
-                if ([string]::IsNullOrWhiteSpace($contentHash)) {
-                    throw "Published app '$($publishedApp.Publisher)/$($publishedApp.Name)/$($publishedApp.Version)' did not expose a content hash."
-                }
                 $synchronized = if ($null -eq $installedApp) {
                     $false
                 }
@@ -2084,34 +2245,43 @@ function Get-BCBenchAppInventory {
                     name         = [string]$publishedApp.Name
                     publisher    = [string]$publishedApp.Publisher
                     version      = [string]$publishedApp.Version
-                    package_id   = [string]$publishedApp.PackageId
+                    package_id   = ConvertTo-BCBenchNullableString -Value $publishedApp.PackageId
                     scope        = [string]$publishedApp.Scope
                     installed    = $null -ne $installedApp -and [bool]$installedApp.IsInstalled
                     synchronized = $synchronized
-                    content_hash = $contentHash.ToLowerInvariant()
+                    content_hash = ConvertTo-BCBenchNullableString -Value $publishedApp.ContentHash -Lowercase
                 }
-            } |
-            Sort-Object app_id, publisher, name, version, package_id, scope, content_hash
+            }
     )
+    return @(ConvertTo-BCBenchAppInventoryRows -Apps $rows)
 }
 
 function Test-BCBenchBackupHeader {
     param(
-        [Parameter(Mandatory = $true)][string]$ContainerId,
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
         [Parameter(Mandatory = $true)][string]$BackupPath,
         [Parameter(Mandatory = $true)][string]$DatabaseName,
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
-    $context = [PSCustomObject]@{
-        ContainerId  = $ContainerId
-        BackupPath   = $BackupPath
-        DatabaseName = $DatabaseName
-    }
+    $context = Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
+    $context | Add-Member -NotePropertyName BackupPath -NotePropertyValue $BackupPath
+    $context | Add-Member -NotePropertyName DatabaseName -NotePropertyValue $DatabaseName
     Invoke-BCBenchOperation -Operations $Operations -Name VerifyBackup -Context $context -Default {
         param($operationContext)
         Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-        Invoke-ScriptInBcContainer -containerName $operationContext.ContainerId -ScriptBlock {
+        $recheckedContext = Assert-BCBenchContainerOwnership `
+            -ContainerName $operationContext.ContainerName `
+            -ExpectedContainerId $operationContext.ContainerId `
+            -ExpectedInvocationId $operationContext.ContainerInvocationId `
+            -Operations $Operations
+        Invoke-ScriptInBcContainer -containerName $recheckedContext.ContainerId -ScriptBlock {
             param([string]$BackupPath, [string]$DatabaseName)
             $escapedPath = $BackupPath.Replace("'", "''")
             Invoke-Sqlcmd -ServerInstance "localhost\SQLEXPRESS" -Database master -Query "RESTORE VERIFYONLY FROM DISK = N'$escapedPath'" -ErrorAction Stop | Out-Null
@@ -2135,35 +2305,58 @@ function Backup-BCBenchCheckpoint {
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
+    Assert-BCBenchContainerOwnership `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations | Out-Null
     $identity = Get-BCBenchContainerIdentity `
         -ContainerName $ContainerName `
         -ExpectedContainerId $ExpectedContainerId `
         -ExpectedInvocationId $ExpectedInvocationId `
         -Operations $Operations
-    $topology = Get-BCBenchDatabaseTopology -ContainerId $ExpectedContainerId -Operations $Operations
+    $topology = Get-BCBenchDatabaseTopology `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
     if (-not [bool]$topology.database_online) {
         throw "Cannot capture checkpoint because the Business Central database is not online."
     }
-    $apps = @(Get-BCBenchAppInventory -ContainerId $ExpectedContainerId -Operations $Operations)
+    $apps = @(Get-BCBenchAppInventory `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations)
     $stagingParent = Split-Path -Parent $StagingDirectory
     if ([string]::IsNullOrWhiteSpace($stagingParent) -or -not (Test-Path -LiteralPath $stagingParent -PathType Container)) {
         throw "Checkpoint staging parent does not exist: $stagingParent"
     }
-    if (Test-Path -LiteralPath $StagingDirectory) {
-        Remove-Item -LiteralPath $StagingDirectory -Recurse -Force -ErrorAction Stop
+    if (-not (Test-Path -LiteralPath $StagingDirectory -PathType Container)) {
+        throw "Checkpoint staging directory does not exist: $StagingDirectory"
     }
-    New-Item -ItemType Directory -Path $StagingDirectory -ErrorAction Stop | Out-Null
-    $service = Stop-BCBenchServiceTier -ContainerId $ExpectedContainerId -Operations $Operations
+    $service = Stop-BCBenchServiceTier `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
+        -Operations $Operations
     try {
-        $context = [PSCustomObject]@{
-            ContainerId      = $ExpectedContainerId
-            StagingDirectory = $StagingDirectory
-        }
+        $context = Assert-BCBenchContainerOwnership `
+            -ContainerName $ContainerName `
+            -ExpectedContainerId $ExpectedContainerId `
+            -ExpectedInvocationId $ExpectedInvocationId `
+            -Operations $Operations
+        $context | Add-Member -NotePropertyName StagingDirectory -NotePropertyValue $StagingDirectory
         Invoke-BCBenchOperation -Operations $Operations -Name BackupDatabases -Context $context -Default {
             param($operationContext)
             Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+            $recheckedContext = Assert-BCBenchContainerOwnership `
+                -ContainerName $operationContext.ContainerName `
+                -ExpectedContainerId $operationContext.ContainerId `
+                -ExpectedInvocationId $operationContext.ContainerInvocationId `
+                -Operations $Operations
             Backup-BcContainerDatabases `
-                -containerName $operationContext.ContainerId `
+                -containerName $recheckedContext.ContainerId `
                 -bakFolder $operationContext.StagingDirectory
         } | Out-Null
         $backups = @(Get-ChildItem -LiteralPath $StagingDirectory -Filter "*.bak" -File)
@@ -2172,7 +2365,9 @@ function Backup-BCBenchCheckpoint {
         }
         $containerBackupPath = Join-Path (Join-Path $ContainerStagingRoot (Split-Path -Leaf $StagingDirectory)) $backups[0].Name
         Test-BCBenchBackupHeader `
-            -ContainerId $ExpectedContainerId `
+            -ContainerName $ContainerName `
+            -ExpectedContainerId $ExpectedContainerId `
+            -ExpectedInvocationId $ExpectedInvocationId `
             -BackupPath $containerBackupPath `
             -DatabaseName ([string]$topology.database_name) `
             -Operations $Operations
@@ -2184,73 +2379,184 @@ function Backup-BCBenchCheckpoint {
             database_folder = [string]$topology.database_folder
             container       = $identity
             apps            = $apps
+            service         = $service
         }
     }
-    finally {
-        Start-BCBenchServiceTier `
-            -ContainerId $ExpectedContainerId `
-            -ServerInstance ([string]$service.server_instance) `
-            -PreviousProcessId ([int]$service.previous_process_id) `
-            -Operations $Operations | Out-Null
+    catch {
+        $captureFailure = $_.Exception
+        try {
+            Start-BCBenchServiceTier `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -ServerInstance ([string]$service.server_instance) `
+                -PreviousProcessId ([int]$service.previous_process_id) `
+                -Operations $Operations | Out-Null
+        }
+        catch {
+            throw [AggregateException]::new(
+                "Checkpoint capture failed and service recovery also failed.",
+                [Exception[]]@($captureFailure, $_.Exception)
+            )
+        }
+        throw $captureFailure
     }
 }
 
 function Test-BCBenchReadiness {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)][string]$ContainerId,
-        [PSCredential]$Credential,
-        [string]$Company,
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
+        [Parameter(Mandatory = $true)][PSCredential]$Credential,
+        [Parameter(Mandatory = $true)][string]$ExpectedCompany,
+        [Parameter(Mandatory = $true)][PSObject]$ExpectedContainerIdentity,
+        [Parameter(Mandatory = $true)][string]$ExpectedDatabaseName,
+        [Parameter(Mandatory = $true)][string]$ExpectedDatabaseFolder,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$ExpectedAppInventory,
+        [ValidateRange(0, 86400)][int]$TimeoutSeconds = 900,
+        [ValidateRange(0, 3600)][int]$PollIntervalSeconds = 5,
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
-    $context = [PSCustomObject]@{
-        ContainerId = $ContainerId
-        Credential  = $Credential
-        Company     = $Company
+    if ([string]::IsNullOrWhiteSpace($ExpectedCompany)) {
+        throw "ExpectedCompany is required for readiness verification."
     }
-    return Invoke-BCBenchOperation -Operations $Operations -Name TestReadiness -Context $context -Default {
-        param($operationContext)
-        Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-        if ($null -eq $operationContext.Credential) {
-            throw "A credential is required to verify the company/auth endpoint and test discovery."
-        }
-        $companies = @(Get-CompanyInBcContainer -containerName $operationContext.ContainerId)
-        $companyName = [string]$operationContext.Company
-        if ([string]::IsNullOrWhiteSpace($companyName)) {
-            $companyName = [string]($companies | Select-Object -First 1).CompanyName
-            if ([string]::IsNullOrWhiteSpace($companyName)) {
-                $companyName = [string]($companies | Select-Object -First 1).Name
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $lastFailure = $null
+    do {
+        try {
+            $identity = Get-BCBenchContainerIdentity `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -Operations $Operations
+            if (-not (Test-BCBenchContainerIdentityEqual -Actual $identity -Expected $ExpectedContainerIdentity)) {
+                throw "Business Central readiness container identity does not match the checkpoint manifest."
+            }
+            $topology = Get-BCBenchDatabaseTopology `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -Operations $Operations
+            if (
+                -not [bool]$topology.database_online -or
+                [string]$topology.database_name -cne $ExpectedDatabaseName -or
+                [string]$topology.database_folder -cne $ExpectedDatabaseFolder
+            ) {
+                throw "Business Central readiness database topology does not match the checkpoint manifest."
+            }
+            $apps = @(Get-BCBenchAppInventory `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -Operations $Operations)
+            if (-not (Test-BCBenchAppInventoryEqual -Actual $apps -Expected $ExpectedAppInventory)) {
+                throw "Business Central readiness application inventory does not match the checkpoint manifest."
+            }
+            $context = Assert-BCBenchContainerOwnership `
+                -ContainerName $ContainerName `
+                -ExpectedContainerId $ExpectedContainerId `
+                -ExpectedInvocationId $ExpectedInvocationId `
+                -Operations $Operations
+            $context | Add-Member -NotePropertyName Credential -NotePropertyValue $Credential
+            $context | Add-Member -NotePropertyName ExpectedCompany -NotePropertyValue $ExpectedCompany
+            if ($Operations.ContainsKey("TestReadiness")) {
+                $result = & $Operations["TestReadiness"] $context
+            }
+            else {
+                Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+                $companyContext = Assert-BCBenchContainerOwnership `
+                    -ContainerName $ContainerName `
+                    -ExpectedContainerId $ExpectedContainerId `
+                    -ExpectedInvocationId $ExpectedInvocationId `
+                    -Operations $Operations
+                $companies = @(Get-CompanyInBcContainer -containerName $companyContext.ContainerId)
+                $matchingLocalCompanies = @($companies | Where-Object {
+                    [string]$_.CompanyName -ceq $ExpectedCompany -or [string]$_.Name -ceq $ExpectedCompany
+                })
+                if ($matchingLocalCompanies.Count -ne 1) {
+                    throw "The exact expected Business Central company '$ExpectedCompany' was not available in the container."
+                }
+                $ipContext = Assert-BCBenchContainerOwnership `
+                    -ContainerName $ContainerName `
+                    -ExpectedContainerId $ExpectedContainerId `
+                    -ExpectedInvocationId $ExpectedInvocationId `
+                    -Operations $Operations
+                $ipAddress = Get-BcContainerIpAddress -containerName $ipContext.ContainerId
+                Assert-BCBenchContainerOwnership `
+                    -ContainerName $ContainerName `
+                    -ExpectedContainerId $ExpectedContainerId `
+                    -ExpectedInvocationId $ExpectedInvocationId `
+                    -Operations $Operations | Out-Null
+                $uri = "http://${ipAddress}:7048/BC/api/v2.0/companies"
+                $companyResponse = Invoke-RestMethod `
+                    -Method Get `
+                    -Uri $uri `
+                    -Authentication Basic `
+                    -AllowUnencryptedAuthentication `
+                    -Credential $Credential `
+                    -ErrorAction Stop
+                $matchingCompany = @($companyResponse.value) | Where-Object {
+                    [string]$_.name -ceq $ExpectedCompany -or [string]$_.displayName -ceq $ExpectedCompany
+                }
+                if ($matchingCompany.Count -ne 1) {
+                    throw "The exact expected Business Central company '$ExpectedCompany' was not returned by the authenticated API endpoint."
+                }
+                $testsContext = Assert-BCBenchContainerOwnership `
+                    -ContainerName $ContainerName `
+                    -ExpectedContainerId $ExpectedContainerId `
+                    -ExpectedInvocationId $ExpectedInvocationId `
+                    -Operations $Operations
+                $testResponse = Get-TestsFromBcContainer `
+                    -containerName $testsContext.ContainerId `
+                    -credential $Credential `
+                    -companyName $ExpectedCompany `
+                    -ignoreGroups
+                if ($null -eq $testResponse) {
+                    throw "Business Central test discovery returned no response."
+                }
+                $result = [PSCustomObject]@{
+                    company_endpoint_ready = $true
+                    test_discovery_ready    = $true
+                    test_count              = @($testResponse).Count
+                }
+            }
+            if (
+                -not [bool]$result.company_endpoint_ready -or
+                -not [bool]$result.test_discovery_ready -or
+                $null -eq $result.PSObject.Properties["test_count"] -or
+                [int]$result.test_count -lt 0
+            ) {
+                throw "Business Central readiness evidence was incomplete."
+            }
+            return [PSCustomObject][ordered]@{
+                container              = $identity
+                apps                   = $apps
+                database_name          = [string]$topology.database_name
+                database_folder        = [string]$topology.database_folder
+                database_online        = [bool]$topology.database_online
+                company_endpoint_ready = $true
+                test_discovery_ready    = $true
+                test_count              = [int]$result.test_count
             }
         }
-        if ([string]::IsNullOrWhiteSpace($companyName)) {
-            throw "No Business Central company was available for readiness verification."
+        catch {
+            $lastFailure = $_.Exception
         }
-        $ipAddress = Get-BcContainerIpAddress -containerName $operationContext.ContainerId
-        $uri = "http://${ipAddress}:7048/BC/api/v2.0/companies"
-        $companyResponse = Invoke-RestMethod `
-            -Method Get `
-            -Uri $uri `
-            -Authentication Basic `
-            -AllowUnencryptedAuthentication `
-            -Credential $operationContext.Credential `
-            -ErrorAction Stop
-        $matchingCompany = @($companyResponse.value) | Where-Object {
-            [string]$_.name -eq $companyName -or [string]$_.displayName -eq $companyName
+        if ($stopwatch.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+            throw "Business Central readiness timed out after $TimeoutSeconds seconds. Last failure: $($lastFailure.Message)"
         }
-        if ($matchingCompany.Count -ne 1) {
-            throw "The expected Business Central company '$companyName' was not returned by the authenticated API endpoint."
+        $remainingMilliseconds = [Math]::Max(
+            0,
+            ($TimeoutSeconds * 1000) - [int]$stopwatch.Elapsed.TotalMilliseconds
+        )
+        $sleepMilliseconds = [Math]::Min($PollIntervalSeconds * 1000, $remainingMilliseconds)
+        if ($sleepMilliseconds -gt 0) {
+            Start-Sleep -Milliseconds $sleepMilliseconds
         }
-        @(Get-TestsFromBcContainer `
-            -containerName $operationContext.ContainerId `
-            -credential $operationContext.Credential `
-            -companyName $companyName `
-            -ignoreGroups) | Out-Null
-        [PSCustomObject]@{
-            company_endpoint_ready = $true
-            test_discovery_ready    = $true
-        }
-    }
+    } while ($true)
 }
 
 function Restore-BCBenchCheckpoint {
@@ -2260,9 +2566,10 @@ function Restore-BCBenchCheckpoint {
         [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
         [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
         [Parameter(Mandatory = $true)][PSObject]$Manifest,
-        [PSCredential]$Credential,
-        [string]$Company,
+        [Parameter(Mandatory = $true)][PSCredential]$Credential,
+        [Parameter(Mandatory = $true)][string]$ExpectedCompany,
         [int]$TimeoutSeconds = 900,
+        [int]$PollIntervalSeconds = 5,
         [Parameter(DontShow = $true)][hashtable]$Operations = @{}
     )
 
@@ -2271,7 +2578,7 @@ function Restore-BCBenchCheckpoint {
         -ExpectedContainerId $ExpectedContainerId `
         -ExpectedInvocationId $ExpectedInvocationId `
         -Operations $Operations
-    if (($beforeIdentity | ConvertTo-Json -Compress -Depth 8) -cne ($Manifest.container | ConvertTo-Json -Compress -Depth 8)) {
+    if (-not (Test-BCBenchContainerIdentityEqual -Actual $beforeIdentity -Expected $Manifest.container)) {
         throw "Checkpoint manifest container identity does not match the owned container."
     }
     $backupPath = [string]$Manifest.backup_path
@@ -2282,74 +2589,95 @@ function Restore-BCBenchCheckpoint {
     if ($actualHash -cne [string]$Manifest.sha256) {
         throw "Staged checkpoint backup hash mismatch."
     }
-    $service = Stop-BCBenchServiceTier -ContainerId $ExpectedContainerId -Operations $Operations
-    $started = $null
-    try {
-        $context = [PSCustomObject]@{
-            ContainerId = $ExpectedContainerId
-            Manifest    = $Manifest
-            BackupPath  = $backupPath
-            Timeout     = $TimeoutSeconds
-        }
-        Invoke-BCBenchOperation -Operations $Operations -Name RestoreDatabases -Context $context -Default {
-            param($operationContext)
-            Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-            Restore-DatabasesInBcContainer `
-                -containerName $operationContext.ContainerId `
-                -bakFile $operationContext.BackupPath `
-                -databaseName $Manifest.database_name `
-                -databaseFolder $Manifest.database_folder `
-                -sqlTimeout $TimeoutSeconds
-        } | Out-Null
-    }
-    finally {
-        $started = Start-BCBenchServiceTier `
-            -ContainerId $ExpectedContainerId `
-            -ServerInstance ([string]$service.server_instance) `
-            -PreviousProcessId ([int]$service.previous_process_id) `
-            -Operations $Operations
-    }
-    $afterIdentity = Get-BCBenchContainerIdentity `
+    $service = Stop-BCBenchServiceTier `
         -ContainerName $ContainerName `
         -ExpectedContainerId $ExpectedContainerId `
         -ExpectedInvocationId $ExpectedInvocationId `
         -Operations $Operations
-    if (($afterIdentity | ConvertTo-Json -Compress -Depth 8) -cne ($beforeIdentity | ConvertTo-Json -Compress -Depth 8)) {
-        throw "Container identity changed during checkpoint restore."
+    $started = $null
+    $restoreFailure = $null
+    $startFailure = $null
+    try {
+        $context = Assert-BCBenchContainerOwnership `
+            -ContainerName $ContainerName `
+            -ExpectedContainerId $ExpectedContainerId `
+            -ExpectedInvocationId $ExpectedInvocationId `
+            -Operations $Operations
+        $context | Add-Member -NotePropertyName Manifest -NotePropertyValue $Manifest
+        $context | Add-Member -NotePropertyName BackupPath -NotePropertyValue $backupPath
+        $context | Add-Member -NotePropertyName Timeout -NotePropertyValue $TimeoutSeconds
+        Invoke-BCBenchOperation -Operations $Operations -Name RestoreDatabases -Context $context -Default {
+            param($operationContext)
+            Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+            $recheckedContext = Assert-BCBenchContainerOwnership `
+                -ContainerName $operationContext.ContainerName `
+                -ExpectedContainerId $operationContext.ContainerId `
+                -ExpectedInvocationId $operationContext.ContainerInvocationId `
+                -Operations $Operations
+            Restore-DatabasesInBcContainer `
+                -containerName $recheckedContext.ContainerId `
+                -bakFile $operationContext.BackupPath `
+                -databaseName $operationContext.Manifest.database_name `
+                -databaseFolder $operationContext.Manifest.database_folder `
+                -sqlTimeout $operationContext.Timeout
+        } | Out-Null
     }
-    $topology = Get-BCBenchDatabaseTopology -ContainerId $ExpectedContainerId -Operations $Operations
-    if (
-        -not [bool]$topology.database_online -or
-        [string]$topology.database_name -cne [string]$Manifest.database_name -or
-        [string]$topology.database_folder -cne [string]$Manifest.database_folder
-    ) {
-        throw "Restored database is offline or its topology does not match the checkpoint manifest."
+    catch {
+        $restoreFailure = $_.Exception
+    }
+    try {
+        $started = Start-BCBenchServiceTier `
+            -ContainerName $ContainerName `
+            -ExpectedContainerId $ExpectedContainerId `
+            -ExpectedInvocationId $ExpectedInvocationId `
+            -ServerInstance ([string]$service.server_instance) `
+            -PreviousProcessId ([int]$service.previous_process_id) `
+            -Operations $Operations
+    }
+    catch {
+        $startFailure = $_.Exception
+    }
+    if ($null -ne $restoreFailure -and $null -ne $startFailure) {
+        throw [AggregateException]::new(
+            "Checkpoint restore failed and service recovery also failed.",
+            [Exception[]]@($restoreFailure, $startFailure)
+        )
+    }
+    if ($null -ne $restoreFailure) {
+        throw $restoreFailure
+    }
+    if ($null -ne $startFailure) {
+        throw $startFailure
     }
     if (-not [bool]$started.restarted) {
         throw "Business Central service tier was not genuinely restarted."
     }
-    $apps = @(Get-BCBenchAppInventory -ContainerId $ExpectedContainerId -Operations $Operations)
-    $expectedApps = @($Manifest.apps | Sort-Object app_id, publisher, name, version, package_id, scope, content_hash)
-    if (($apps | ConvertTo-Json -Compress -Depth 8) -cne ($expectedApps | ConvertTo-Json -Compress -Depth 8)) {
-        throw "Restored application inventory does not exactly match the checkpoint manifest."
-    }
     $readiness = Test-BCBenchReadiness `
-        -ContainerId $ExpectedContainerId `
+        -ContainerName $ContainerName `
+        -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId `
         -Credential $Credential `
-        -Company $Company `
+        -ExpectedCompany $ExpectedCompany `
+        -ExpectedContainerIdentity $beforeIdentity `
+        -ExpectedDatabaseName ([string]$Manifest.database_name) `
+        -ExpectedDatabaseFolder ([string]$Manifest.database_folder) `
+        -ExpectedAppInventory @($Manifest.apps) `
+        -TimeoutSeconds $TimeoutSeconds `
+        -PollIntervalSeconds $PollIntervalSeconds `
         -Operations $Operations
     if (-not [bool]$readiness.company_endpoint_ready -or -not [bool]$readiness.test_discovery_ready) {
         throw "Business Central readiness verification did not confirm the company endpoint and test discovery."
     }
     return [PSCustomObject][ordered]@{
-        container              = $afterIdentity
-        apps                   = $apps
-        database_name          = [string]$topology.database_name
-        database_folder        = [string]$topology.database_folder
-        database_online        = [bool]$topology.database_online
+        container              = $readiness.container
+        apps                   = $readiness.apps
+        database_name          = [string]$readiness.database_name
+        database_folder        = [string]$readiness.database_folder
+        database_online        = [bool]$readiness.database_online
         service_restarted      = [bool]$started.restarted
         company_endpoint_ready = [bool]$readiness.company_endpoint_ready
         test_discovery_ready   = [bool]$readiness.test_discovery_ready
+        test_count             = [int]$readiness.test_count
     }
 }
 

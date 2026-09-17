@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from dataclasses import FrozenInstanceError
 from pathlib import Path
@@ -38,13 +39,18 @@ def _paths(tmp_path: Path) -> BugFixLifecyclePaths:
     return paths
 
 
-def _app(*, content_hash: str = "a" * 64, name: str = "Library") -> AppInventoryEntry:
+def _app(
+    *,
+    content_hash: str | None = "a" * 64,
+    name: str = "Library",
+    package_id: str | None = "22222222-2222-2222-2222-222222222222",
+) -> AppInventoryEntry:
     return AppInventoryEntry(
         app_id="11111111-1111-1111-1111-111111111111",
         name=name,
         publisher="Microsoft",
         version="1.2.3.4",
-        package_id="22222222-2222-2222-2222-222222222222",
+        package_id=package_id,
         scope="Global",
         installed=True,
         synchronized=True,
@@ -69,14 +75,16 @@ class FakePowerShellRunner:
         self.calls: list[str] = []
         self.capture_payload: dict[str, object] | None = None
         self.restore_payload: dict[str, object] | None = None
+        self.capture_completion_payload: dict[str, object] | None = None
         self.returncode = 0
         self.stderr = ""
 
     def __call__(self, script: str) -> subprocess.CompletedProcess[str]:
         self.calls.append(script)
         if "Backup-BCBenchCheckpoint" in script:
-            staging = self.paths.mounted_staging / "baseline-capture"
-            staging.mkdir()
+            match = re.search(r"-StagingDirectory '([^']+)'", script)
+            assert match is not None
+            staging = Path(match.group(1).replace("''", "'"))
             backup = staging / "database.bak"
             backup.write_bytes(b"verified database backup")
             payload = self.capture_payload or {
@@ -87,8 +95,13 @@ class FakePowerShellRunner:
                 "database_folder": "C:\\databases",
                 "container": self.identity.to_dict(),
                 "apps": [self.app.to_dict()],
+                "service": {
+                    "server_instance": "BC",
+                    "previous_process_id": 100,
+                    "state": "Stopped",
+                },
             }
-        else:
+        elif "Restore-BCBenchCheckpoint" in script:
             payload = self.restore_payload or {
                 "container": self.identity.to_dict(),
                 "apps": [self.app.to_dict()],
@@ -98,6 +111,19 @@ class FakePowerShellRunner:
                 "service_restarted": True,
                 "company_endpoint_ready": True,
                 "test_discovery_ready": True,
+                "test_count": 0,
+            }
+        else:
+            payload = self.capture_completion_payload or {
+                "container": self.identity.to_dict(),
+                "apps": [self.app.to_dict()],
+                "database_name": "BC",
+                "database_folder": "C:\\databases",
+                "database_online": True,
+                "service_restarted": True,
+                "company_endpoint_ready": True,
+                "test_discovery_ready": True,
+                "test_count": 0,
             }
         return subprocess.CompletedProcess(
             args=["pwsh"],
@@ -118,6 +144,7 @@ def _manager(tmp_path: Path) -> tuple[CheckpointManager, FakePowerShellRunner, B
         container_name="bc-checkpoint",
         container_id="container-id",
         invocation_id="invocation-id",
+        expected_company="CRONUS",
     )
     return manager, runner, paths, app
 
@@ -130,7 +157,7 @@ def test_checkpoint_models_are_immutable_and_json_paths_are_explicit(tmp_path: P
         backup_path=backup,
         sha256="a" * 64,
         database_name="BC",
-        database_folder=Path("C:\\databases"),
+        database_folder="C:\\databases",
         container=identity,
         apps=(_app(),),
     )
@@ -147,6 +174,24 @@ def test_checkpoint_models_are_immutable_and_json_paths_are_explicit(tmp_path: P
     assert CheckpointManifest.from_dict(payload) == manifest
 
 
+def test_checkpoint_models_preserve_nullable_app_fields_and_string_database_folder(tmp_path: Path) -> None:
+    app = _app(package_id=None, content_hash=None)
+    manifest = CheckpointManifest(
+        name="baseline",
+        backup_path=tmp_path / "checkpoint.bak",
+        sha256="A" * 64,
+        database_name="BC",
+        database_folder="C:\\databases",
+        container=_identity(),
+        apps=(app,),
+    )
+
+    assert manifest.database_folder == "C:\\databases"
+    assert manifest.apps[0].package_id is None
+    assert manifest.apps[0].content_hash is None
+    assert CheckpointManifest.from_dict(manifest.to_dict()) == manifest
+
+
 def test_capture_protects_backup_persists_manifest_and_removes_staging(tmp_path: Path) -> None:
     manager, runner, paths, app = _manager(tmp_path)
 
@@ -158,9 +203,139 @@ def test_capture_protects_backup_persists_manifest_and_removes_staging(tmp_path:
     assert not any(paths.mounted_staging.iterdir())
     persisted = json.loads((paths.evidence / "checkpoints" / "baseline.json").read_text(encoding="utf-8"))
     assert persisted == manifest.to_dict()
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == 2
     assert "Backup-BCBenchCheckpoint" in runner.calls[0]
+    assert "Start-BCBenchServiceTier" in runner.calls[1]
+    assert "Test-BCBenchReadiness" in runner.calls[1]
     assert "invocation-id" in runner.calls[0]
+
+
+def test_capture_uses_unique_staging_without_deleting_preexisting_named_path(tmp_path: Path) -> None:
+    manager, runner, paths, app = _manager(tmp_path)
+    preexisting = paths.mounted_staging / "baseline-capture"
+    preexisting.mkdir()
+    marker = preexisting / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    first = manager.capture("baseline", (app,))
+    second = manager.capture("baseline", (app,))
+
+    staging_paths = [
+        re.search(r"-StagingDirectory '([^']+)'", call).group(1)  # type: ignore[union-attr]
+        for call in runner.calls
+        if "Backup-BCBenchCheckpoint" in call
+    ]
+    assert len(set(staging_paths)) == 2
+    assert marker.read_text(encoding="utf-8") == "keep"
+    assert first == second
+
+
+def test_capture_orders_protection_cleanup_restart_and_readiness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager, runner, _, app = _manager(tmp_path)
+    order: list[str] = []
+    original_runner = runner.__call__
+    original_protect = manager._protect_backup
+    original_cleanup = manager._cleanup_staging
+
+    def ordered_runner(script: str) -> subprocess.CompletedProcess[str]:
+        if "Backup-BCBenchCheckpoint" in script:
+            order.extend(("stop", "backup"))
+        else:
+            order.extend(("start", "ready"))
+        return original_runner(script)
+
+    def ordered_protect(name: str, source: Path, expected_hash: str) -> Path:
+        order.append("protect")
+        return original_protect(name, source, expected_hash)
+
+    def ordered_cleanup(staging_directory: Path, primary_error: CheckpointInfrastructureError | None) -> None:
+        order.append("clean")
+        original_cleanup(staging_directory, primary_error)
+
+    manager._powershell_runner = ordered_runner
+    monkeypatch.setattr(manager, "_protect_backup", ordered_protect)
+    monkeypatch.setattr(manager, "_cleanup_staging", ordered_cleanup)
+
+    manager.capture("baseline", (app,))
+
+    assert order == ["stop", "backup", "protect", "clean", "start", "ready"]
+
+
+@pytest.mark.parametrize("failure", ["protect", "hash", "persist", "cleanup"])
+def test_capture_finalize_failures_restart_and_are_classified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    manager, runner, _, app = _manager(tmp_path)
+    original_validate_hash = manager._validate_hash
+    original_cleanup = manager._cleanup_staging
+
+    if failure == "protect":
+        monkeypatch.setattr(manager, "_protect_backup", lambda *_args: (_ for _ in ()).throw(OSError("copy denied")))
+    elif failure == "hash":
+        calls = 0
+
+        def fail_second_hash(path: Path, expected_hash: str, description: str) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("hash denied")
+            original_validate_hash(path, expected_hash, description)
+
+        monkeypatch.setattr(manager, "_validate_hash", fail_second_hash)
+    elif failure == "persist":
+        monkeypatch.setattr(
+            manager._evidence_store,
+            "save_checkpoint_manifest",
+            lambda *_args: (_ for _ in ()).throw(OSError("persist denied")),
+        )
+    else:
+        monkeypatch.setattr(
+            manager,
+            "_cleanup_staging",
+            lambda staging, error: (
+                original_cleanup(staging, error),
+                (_ for _ in ()).throw(OSError("cleanup denied")),
+            )[-1],
+        )
+
+    with pytest.raises(CheckpointInfrastructureError, match="denied"):
+        manager.capture("baseline", (app,))
+
+    assert any("Start-BCBenchServiceTier" in call for call in runner.calls)
+
+
+def test_capture_reports_finalize_and_restart_failures_together(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager, runner, _, app = _manager(tmp_path)
+    monkeypatch.setattr(manager, "_protect_backup", lambda *_args: (_ for _ in ()).throw(OSError("copy denied")))
+
+    def fail_restart(script: str) -> subprocess.CompletedProcess[str]:
+        result = runner(script)
+        if "Start-BCBenchServiceTier" in script:
+            return subprocess.CompletedProcess(args=["pwsh"], returncode=23, stdout="", stderr="restart denied")
+        return result
+
+    manager._powershell_runner = fail_restart
+
+    with pytest.raises(CheckpointInfrastructureError, match=r"copy denied.*restart denied"):
+        manager.capture("baseline", (app,))
+
+
+def test_capture_invalid_manifest_still_restarts_owned_service(tmp_path: Path) -> None:
+    manager, runner, _, app = _manager(tmp_path)
+    runner.capture_payload = {
+        "service": {
+            "server_instance": "BC",
+            "previous_process_id": 100,
+            "state": "Stopped",
+        }
+    }
+
+    with pytest.raises(CheckpointInfrastructureError, match="invalid manifest"):
+        manager.capture("baseline", (app,))
+
+    assert any("Start-BCBenchServiceTier" in call for call in runner.calls)
 
 
 def test_capture_rejects_app_mismatch_and_cleans_staging(tmp_path: Path) -> None:
@@ -171,6 +346,14 @@ def test_capture_rejects_app_mismatch_and_cleans_staging(tmp_path: Path) -> None
 
     assert not any(paths.mounted_staging.iterdir())
     assert not list(paths.checkpoints.rglob("*.bak"))
+
+
+def test_capture_treats_null_and_available_hash_as_different_manifest_values(tmp_path: Path) -> None:
+    manager, runner, _, _ = _manager(tmp_path)
+    runner.app = _app(content_hash=None, package_id=None)
+
+    with pytest.raises(CheckpointInfrastructureError, match="application inventory"):
+        manager.capture("baseline", (_app(content_hash="a" * 64, package_id=None),))
 
 
 def test_capture_rejects_container_identity_mismatch(tmp_path: Path) -> None:
@@ -215,9 +398,9 @@ def test_restore_stages_verified_copy_and_cleans_staging(tmp_path: Path) -> None
 
     manager.restore(manifest, (app,))
 
-    assert len(runner.calls) == 2
-    assert "Restore-BCBenchCheckpoint" in runner.calls[1]
-    assert str(manifest.backup_path) not in runner.calls[1]
+    assert len(runner.calls) == 3
+    assert "Restore-BCBenchCheckpoint" in runner.calls[2]
+    assert str(manifest.backup_path) not in runner.calls[2]
     assert not any(paths.mounted_staging.iterdir())
 
 
@@ -229,7 +412,7 @@ def test_restore_rejects_tampered_protected_checkpoint_before_powershell(tmp_pat
     with pytest.raises(CheckpointInfrastructureError, match="hash"):
         manager.restore(manifest, (app,))
 
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == 2
 
 
 @pytest.mark.parametrize(
@@ -249,7 +432,7 @@ def test_restore_reports_nonzero_and_malformed_json_and_cleans_staging(
     manifest = manager.capture("baseline", (app,))
 
     def failed_restore(script: str) -> subprocess.CompletedProcess[str]:
-        if "Backup-BCBenchCheckpoint" in script:
+        if "Restore-BCBenchCheckpoint" not in script:
             return runner(script)
         stdout = "not-json" if payload is None else json.dumps(payload)
         return subprocess.CompletedProcess(args=["pwsh"], returncode=returncode, stdout=stdout, stderr="restore failed")
@@ -285,7 +468,7 @@ def test_restore_rejects_verification_mismatch(
         "container": manifest.container.to_dict(),
         "apps": [entry.to_dict() for entry in manifest.apps],
         "database_name": manifest.database_name,
-        "database_folder": str(manifest.database_folder),
+        "database_folder": manifest.database_folder,
         "database_online": True,
         "service_restarted": True,
         "company_endpoint_ready": True,
@@ -307,7 +490,7 @@ def test_restore_rejects_checkpoint_outside_protected_root(tmp_path: Path) -> No
         backup_path=outside,
         sha256=sha256_file(outside),
         database_name="BC",
-        database_folder=Path("C:\\databases"),
+        database_folder="C:\\databases",
         container=_identity(),
         apps=(app,),
     )
@@ -316,6 +499,31 @@ def test_restore_rejects_checkpoint_outside_protected_root(tmp_path: Path) -> No
         manager.restore(manifest, (app,))
 
     assert runner.calls == []
+
+
+def test_restore_failure_does_not_run_success_callback(tmp_path: Path) -> None:
+    manager, runner, _, app = _manager(tmp_path)
+    manifest = manager.capture("baseline", (app,))
+    runner.returncode = 17
+    phase_calls = 0
+
+    def run_phase() -> None:
+        nonlocal phase_calls
+        phase_calls += 1
+
+    with pytest.raises(CheckpointInfrastructureError):
+        manager.restore(manifest, (app,), on_restored=run_phase)
+
+    assert phase_calls == 0
+
+
+def test_restore_filesystem_setup_failures_are_classified(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manager, _, _, app = _manager(tmp_path)
+    manifest = manager.capture("baseline", (app,))
+    monkeypatch.setattr("bcbench.evaluate.bugfix_lifecycle.checkpoint.tempfile.mkdtemp", lambda **_kwargs: (_ for _ in ()).throw(OSError("mkdtemp denied")))
+
+    with pytest.raises(CheckpointInfrastructureError, match="mkdtemp denied"):
+        manager.restore(manifest, (app,))
 
 
 def test_cleanup_failure_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

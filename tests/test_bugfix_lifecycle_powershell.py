@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import secrets
@@ -123,18 +124,17 @@ def test_checkpoint_commands_use_pinned_helper_and_required_apis() -> None:
     assert "-publishedOnly" in source
     assert "-tenantSpecificProperties" in source
     assert "-bakFile $operationContext.BackupPath" in source
-    assert "-databaseName $Manifest.database_name" in source
-    assert "-databaseFolder $Manifest.database_folder" in source
-    assert "-sqlTimeout $TimeoutSeconds" in source
+    assert "-databaseName $operationContext.Manifest.database_name" in source
+    assert "-databaseFolder $operationContext.Manifest.database_folder" in source
+    assert "-sqlTimeout $operationContext.Timeout" in source
     assert "RESTORE VERIFYONLY" in source
     assert "RESTORE HEADERONLY" in source
     assert "package-cleanup" not in source.lower()
 
 
 def test_checkpoint_capture_uses_fresh_staging_and_verified_order(tmp_path: Path) -> None:
-    staging = tmp_path / "staging" / "baseline-capture"
+    staging = tmp_path / "staging" / f"baseline-capture-{secrets.token_hex(8)}"
     staging.mkdir(parents=True)
-    (staging / "stale.txt").write_text("stale", encoding="utf-8")
     script = f"""
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
@@ -174,14 +174,9 @@ $ops = @{{
     BackupDatabases = {{
         param($Context)
         $global:order += 'backup'
-        if (Test-Path -LiteralPath (Join-Path $Context.StagingDirectory 'stale.txt')) {{ throw 'staging was not fresh' }}
         Set-Content -LiteralPath (Join-Path $Context.StagingDirectory 'database.bak') -Value 'backup' -NoNewline
     }}
     VerifyBackup = {{ $global:order += 'verify' }}
-    StartServiceTier = {{
-        $global:order += 'start'
-        [PSCustomObject]@{{ server_instance = 'BC'; process_id = 200; state = 'Running'; restarted = $true }}
-    }}
 }}
 $result = Backup-BCBenchCheckpoint `
     -Name 'baseline' `
@@ -197,11 +192,12 @@ $result = Backup-BCBenchCheckpoint `
 """
     payload = _last_json(_run_pwsh(script))
 
-    assert payload["order"] == ["inspect", "identity", "topology", "apps", "stop", "backup", "verify", "start"]
+    assert [item for item in payload["order"] if item != "inspect"] == ["identity", "topology", "apps", "stop", "backup", "verify"]
     assert payload["result"]["name"] == "baseline"
     assert Path(payload["result"]["backup_path"]).name == "database.bak"
     assert payload["result"]["container"]["container_id"] == "owned-id"
     assert payload["result"]["apps"][0]["content_hash"] == "a" * 64
+    assert payload["result"]["service"]["state"] == "Stopped"
 
 
 def test_container_identity_rejects_ownership_mismatch_before_operations() -> None:
@@ -235,6 +231,422 @@ catch {{ $message = $_.Exception.Message }}
 
     assert "Refusing container-scoped operation" in payload["message"]
     assert payload["operationCalls"] == 0
+
+
+@pytest.mark.parametrize(
+    ("command", "operation_name"),
+    [
+        (
+            "Stop-BCBenchServiceTier -ContainerName 'bc-owned' -ExpectedContainerId 'owned-id' -ExpectedInvocationId 'owned-invocation' -Operations $ops",
+            "StopServiceTier",
+        ),
+        (
+            "Start-BCBenchServiceTier -ContainerName 'bc-owned' -ExpectedContainerId 'owned-id' -ExpectedInvocationId 'owned-invocation' -ServerInstance 'BC' -Operations $ops",
+            "StartServiceTier",
+        ),
+        (
+            "Get-BCBenchDatabaseTopology -ContainerName 'bc-owned' -ExpectedContainerId 'owned-id' -ExpectedInvocationId 'owned-invocation' -Operations $ops",
+            "ReadDatabaseTopology",
+        ),
+        (
+            "Get-BCBenchAppInventory -ContainerName 'bc-owned' -ExpectedContainerId 'owned-id' -ExpectedInvocationId 'owned-invocation' -Operations $ops",
+            "ReadAppInventory",
+        ),
+        (
+            (
+                "Test-BCBenchReadiness -ContainerName 'bc-owned' -ExpectedContainerId 'owned-id' "
+                "-ExpectedInvocationId 'owned-invocation' -Credential $credential -ExpectedCompany 'CRONUS' "
+                "-ExpectedContainerIdentity $manifest.container -ExpectedDatabaseName 'BC' "
+                "-ExpectedDatabaseFolder 'C:\\databases' -ExpectedAppInventory @($manifest.apps) "
+                "-TimeoutSeconds 0 -PollIntervalSeconds 0 -Operations $ops"
+            ),
+            "TestReadiness",
+        ),
+        (
+            "Backup-BCBenchCheckpoint -Name 'baseline' -ContainerName 'bc-owned' -ExpectedContainerId 'owned-id' -ExpectedInvocationId 'owned-invocation' -StagingDirectory $staging -Operations $ops",
+            "BackupDatabases",
+        ),
+        (
+            (
+                "Restore-BCBenchCheckpoint -ContainerName 'bc-owned' -ExpectedContainerId 'owned-id' "
+                "-ExpectedInvocationId 'owned-invocation' -Manifest $manifest -Credential $credential "
+                "-ExpectedCompany 'CRONUS' -TimeoutSeconds 0 -PollIntervalSeconds 0 -Operations $ops"
+            ),
+            "RestoreDatabases",
+        ),
+    ],
+)
+def test_exported_checkpoint_operations_reject_ownership_mismatch_before_underlying_call(
+    tmp_path: Path,
+    command: str,
+    operation_name: str,
+) -> None:
+    backup = tmp_path / "database.bak"
+    backup.write_bytes(b"checkpoint")
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:operationCalls = 0
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$staging = {_ps_quote(staging)}
+$manifest = [PSCustomObject]@{{
+    backup_path = {_ps_quote(backup)}
+    sha256 = '{sha256(backup.read_bytes()).hexdigest()}'
+    database_name = 'BC'
+    database_folder = 'C:\\databases'
+    container = [PSCustomObject]@{{
+        container_id = 'owned-id'
+        image_id = 'image-id'
+        hostname = 'bc-owned'
+        mounts = @()
+    }}
+    apps = @()
+}}
+$ops = @{{
+    InspectContainer = {{
+        [PSCustomObject]@{{ Exists = $true; Id = 'replacement-id'; InvocationId = 'replacement-invocation' }}
+    }}
+    {operation_name} = {{ $global:operationCalls++; throw 'must not run' }}
+}}
+$message = $null
+try {{ {command} | Out-Null }} catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{ message = $message; operationCalls = $global:operationCalls }} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "Refusing container-scoped operation" in payload["message"]
+    assert payload["operationCalls"] == 0
+
+
+def test_python_sorted_manifest_round_trips_through_powershell_field_comparison(tmp_path: Path) -> None:
+    backup = tmp_path / "database.bak"
+    backup.write_bytes(b"checkpoint")
+    manifest = {
+        "apps": [
+            {
+                "app_id": "11111111-1111-1111-1111-111111111111",
+                "content_hash": None,
+                "installed": True,
+                "name": "Alpha",
+                "package_id": None,
+                "publisher": "Microsoft",
+                "scope": "Global",
+                "synchronized": True,
+                "version": "1.0.0.0",
+            },
+            {
+                "app_id": "22222222-2222-2222-2222-222222222222",
+                "content_hash": "b" * 64,
+                "installed": True,
+                "name": "Beta",
+                "package_id": "33333333-3333-3333-3333-333333333333",
+                "publisher": "Microsoft",
+                "scope": "Global",
+                "synchronized": True,
+                "version": "2.0.0.0",
+            },
+        ],
+        "backup_path": str(backup),
+        "container": {
+            "container_id": "owned-id",
+            "hostname": "bc-owned",
+            "image_id": "image-id",
+            "mounts": ["C:\\host-a:C:\\container-a", "C:\\host-b:C:\\container-b"],
+        },
+        "database_folder": "C:\\databases",
+        "database_name": "BC",
+        "name": "baseline",
+        "sha256": sha256(backup.read_bytes()).hexdigest(),
+    }
+    encoded = base64.b64encode(json.dumps(manifest, sort_keys=True).encode()).decode()
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$manifest = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}')) | ConvertFrom-Json -Depth 12
+$identity = [PSCustomObject][ordered]@{{
+    mounts = @('C:\\host-b:C:\\container-b', 'C:\\host-a:C:\\container-a')
+    hostname = 'bc-owned'
+    image_id = 'image-id'
+    container_id = 'owned-id'
+}}
+$apps = @(
+    [PSCustomObject][ordered]@{{
+        synchronized = $true; installed = $true; scope = 'Global'; package_id = '33333333-3333-3333-3333-333333333333'
+        version = '2.0.0.0'; publisher = 'Microsoft'; name = 'Beta'
+        content_hash = '{"b" * 64}'; app_id = '22222222-2222-2222-2222-222222222222'
+    }},
+    [PSCustomObject][ordered]@{{
+        synchronized = $true; installed = $true; scope = 'Global'; package_id = $null
+        version = '1.0.0.0'; publisher = 'Microsoft'; name = 'Alpha'
+        content_hash = $null; app_id = '11111111-1111-1111-1111-111111111111'
+    }}
+)
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    StopServiceTier = {{ [PSCustomObject]@{{ server_instance = 'BC'; previous_process_id = 100; state = 'Stopped' }} }}
+    RestoreDatabases = {{ }}
+    StartServiceTier = {{ [PSCustomObject]@{{ server_instance = 'BC'; process_id = 200; state = 'Running'; restarted = $true }} }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ $apps }}
+    TestReadiness = {{ [PSCustomObject]@{{ company_endpoint_ready = $true; test_discovery_ready = $true; test_count = 0 }} }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+Restore-BCBenchCheckpoint `
+    -ContainerName 'bc-owned' `
+    -ExpectedContainerId 'owned-id' `
+    -ExpectedInvocationId 'owned-invocation' `
+    -Manifest $manifest `
+    -Credential $credential `
+    -ExpectedCompany 'CRONUS' `
+    -TimeoutSeconds 1 `
+    -PollIntervalSeconds 0 `
+    -Operations $ops | ConvertTo-Json -Compress -Depth 12
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["container"]["mounts"] == manifest["container"]["mounts"]
+    assert payload["apps"] == manifest["apps"]
+    assert payload["test_count"] == 0
+
+
+def test_published_app_inventory_allows_unavailable_package_and_content_hash() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{ }}
+function global:Get-BcContainerAppInfo {{
+    param(
+        [string]$containerName,
+        [switch]$publishedOnly,
+        [string]$tenant,
+        [switch]$tenantSpecificProperties
+    )
+    if ($publishedOnly) {{
+        return [PSCustomObject]@{{
+            AppId = '11111111-1111-1111-1111-111111111111'
+            Name = 'Library'
+            Publisher = 'Microsoft'
+            Version = '1.2.3.4'
+            PackageId = $null
+            Scope = 'Global'
+            ContentHash = $null
+        }}
+    }}
+    return [PSCustomObject]@{{
+        AppId = '11111111-1111-1111-1111-111111111111'
+        Version = '1.2.3.4'
+        PackageId = $null
+        IsInstalled = $true
+        IsSynchronized = $true
+    }}
+}}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+}}
+Get-BCBenchAppInventory `
+    -ContainerName 'bc-owned' `
+    -ExpectedContainerId 'owned-id' `
+    -ExpectedInvocationId 'owned-invocation' `
+    -Operations $ops | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["package_id"] is None
+    assert payload["content_hash"] is None
+    assert payload["installed"] is True
+    assert payload["synchronized"] is True
+
+
+def test_readiness_retries_until_valid_evidence() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:attempts = 0
+$global:topologyAttempts = 0
+$identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{
+        $global:topologyAttempts++
+        [PSCustomObject]@{{
+            database_name = 'BC'
+            database_folder = 'C:\\databases'
+            database_online = $global:topologyAttempts -ge 3
+        }}
+    }}
+    ReadAppInventory = {{ @() }}
+    TestReadiness = {{
+        $global:attempts++
+        [PSCustomObject]@{{ company_endpoint_ready = $true; test_discovery_ready = $true; test_count = 0 }}
+    }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$result = Test-BCBenchReadiness `
+    -ContainerName 'bc-owned' `
+    -ExpectedContainerId 'owned-id' `
+    -ExpectedInvocationId 'owned-invocation' `
+    -Credential $credential `
+    -ExpectedCompany 'CRONUS' `
+    -ExpectedContainerIdentity $identity `
+    -ExpectedDatabaseName 'BC' `
+    -ExpectedDatabaseFolder 'C:\\databases' `
+    -ExpectedAppInventory @() `
+    -TimeoutSeconds 5 `
+    -PollIntervalSeconds 0 `
+    -Operations $ops
+[PSCustomObject]@{{
+    attempts = $global:attempts
+    topologyAttempts = $global:topologyAttempts
+    result = $result
+}} | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["topologyAttempts"] == 3
+    assert payload["attempts"] == 1
+    assert payload["result"]["test_count"] == 0
+
+
+def test_readiness_timeout_is_bounded_and_reports_last_failure() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:attempts = 0
+$identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ @() }}
+    TestReadiness = {{ $global:attempts++; throw 'company mismatch' }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$message = $null
+try {{
+    Test-BCBenchReadiness `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Credential $credential `
+        -ExpectedCompany 'CRONUS' `
+        -ExpectedContainerIdentity $identity `
+        -ExpectedDatabaseName 'BC' `
+        -ExpectedDatabaseFolder 'C:\\databases' `
+        -ExpectedAppInventory @() `
+        -TimeoutSeconds 0 `
+        -PollIntervalSeconds 0 `
+        -Operations $ops | Out-Null
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{ attempts = $global:attempts; message = $message }} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["attempts"] == 1
+    assert "timed out" in payload["message"]
+    assert "company mismatch" in payload["message"]
+
+
+def test_readiness_requires_exact_company_and_does_not_select_first() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{ }}
+$identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
+function global:Get-CompanyInBcContainer {{
+    [PSCustomObject]@{{ CompanyName = 'FIRST'; Name = 'FIRST' }}
+}}
+$global:endpointCalls = 0
+function global:Invoke-RestMethod {{ $global:endpointCalls++; throw 'endpoint must not run' }}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ @() }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$message = $null
+try {{
+    Test-BCBenchReadiness `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Credential $credential `
+        -ExpectedCompany 'CRONUS' `
+        -ExpectedContainerIdentity $identity `
+        -ExpectedDatabaseName 'BC' `
+        -ExpectedDatabaseFolder 'C:\\databases' `
+        -ExpectedAppInventory @() `
+        -TimeoutSeconds 0 `
+        -PollIntervalSeconds 0 `
+        -Operations $ops | Out-Null
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{ message = $message; endpointCalls = $global:endpointCalls }} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "exact expected Business Central company 'CRONUS'" in payload["message"]
+    assert payload["endpointCalls"] == 0
+
+
+@pytest.mark.parametrize(("discovery_mode", "expected_count"), [("null", None), ("empty", 0)])
+def test_readiness_requires_non_null_discovery_evidence(discovery_mode: str, expected_count: int | None) -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{ }}
+$identity = [PSCustomObject]@{{ container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @() }}
+function global:Get-CompanyInBcContainer {{
+    [PSCustomObject]@{{ CompanyName = 'CRONUS'; Name = 'CRONUS' }}
+}}
+function global:Get-BcContainerIpAddress {{ '127.0.0.1' }}
+function global:Invoke-RestMethod {{
+    [PSCustomObject]@{{ value = @([PSCustomObject]@{{ name = 'CRONUS'; displayName = 'CRONUS' }}) }}
+}}
+function global:Get-TestsFromBcContainer {{
+    if ('{discovery_mode}' -eq 'null') {{ return $null }}
+    return ,([object[]]@())
+}}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ @() }}
+}}
+$credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+$result = $null
+$message = $null
+try {{
+    $result = Test-BCBenchReadiness `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -Credential $credential `
+        -ExpectedCompany 'CRONUS' `
+        -ExpectedContainerIdentity $identity `
+        -ExpectedDatabaseName 'BC' `
+        -ExpectedDatabaseFolder 'C:\\databases' `
+        -ExpectedAppInventory @() `
+        -TimeoutSeconds 0 `
+        -PollIntervalSeconds 0 `
+        -Operations $ops
+}}
+catch {{ $message = $_.Exception.Message }}
+[PSCustomObject]@{{ result = $result; message = $message }} | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    if expected_count is None:
+        assert "test discovery returned no response" in payload["message"]
+        assert payload["result"] is None
+    else:
+        assert payload["message"] is None
+        assert payload["result"]["test_count"] == expected_count
 
 
 def test_remove_container_verifies_absence_before_downstream_callback() -> None:
@@ -335,6 +747,10 @@ try {{
         -ExpectedContainerId 'owned-id' `
         -ExpectedInvocationId 'owned-invocation' `
         -Manifest $manifest `
+        -Credential ([PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))) `
+        -ExpectedCompany 'CRONUS' `
+        -TimeoutSeconds 0 `
+        -PollIntervalSeconds 0 `
         -Operations $ops | Out-Null
 }}
 catch {{ $message = $_.Exception.Message }}
@@ -351,6 +767,51 @@ catch {{ $message = $_.Exception.Message }}
     assert payload["restoreCalls"] == 1
     assert payload["startCalls"] == 1
     assert payload["readinessCalls"] == 0
+
+
+@pytest.mark.parametrize("start_fails", [False, True])
+def test_checkpoint_backup_failure_restarts_and_aggregates_recovery_failure(tmp_path: Path, start_fails: bool) -> None:
+    staging = tmp_path / "staging" / "capture"
+    staging.mkdir(parents=True)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:startCalls = 0
+$identity = [PSCustomObject]@{{
+    container_id = 'owned-id'; image_id = 'image-id'; hostname = 'bc-owned'; mounts = @()
+}}
+$ops = @{{
+    InspectContainer = {{ [PSCustomObject]@{{ Exists = $true; Id = 'owned-id'; InvocationId = 'owned-invocation' }} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [PSCustomObject]@{{ database_name = 'BC'; database_folder = 'C:\\databases'; database_online = $true }} }}
+    ReadAppInventory = {{ @() }}
+    StopServiceTier = {{ [PSCustomObject]@{{ server_instance = 'BC'; previous_process_id = 100; state = 'Stopped' }} }}
+    BackupDatabases = {{ throw 'backup denied' }}
+    StartServiceTier = {{
+        $global:startCalls++
+        if (${str(start_fails).lower()}) {{ throw 'restart denied' }}
+        [PSCustomObject]@{{ server_instance = 'BC'; process_id = 200; state = 'Running'; restarted = $true }}
+    }}
+}}
+$message = $null
+try {{
+    Backup-BCBenchCheckpoint `
+        -Name 'baseline' `
+        -ContainerName 'bc-owned' `
+        -ExpectedContainerId 'owned-id' `
+        -ExpectedInvocationId 'owned-invocation' `
+        -StagingDirectory {_ps_quote(staging)} `
+        -Operations $ops | Out-Null
+}}
+catch {{ $message = $_.Exception.ToString() }}
+[PSCustomObject]@{{ message = $message; startCalls = $global:startCalls }} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "backup denied" in payload["message"]
+    assert payload["startCalls"] == 1
+    if start_fails:
+        assert "restart denied" in payload["message"]
 
 
 def test_agent_tools_stages_exact_worker_hash_outside_benchmark(tmp_path: Path) -> None:
