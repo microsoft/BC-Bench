@@ -13,7 +13,12 @@ from bcbench.agent.shared import (
     resolve_config_plugins,
     start_bc_mcp_gateway,
 )
-from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessRequest, run_contained_process
+from bcbench.agent.shared.contained_process import (
+    AgentExecutionPolicy,
+    ContainedProcessInfrastructureError,
+    ContainedProcessRequest,
+    run_contained_process,
+)
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
@@ -133,15 +138,18 @@ def run_claude_code(
             allowlist=bool(execution_policy and execution_policy.contain_process_tree and execution_policy.allowlist_environment),
         )
         if execution_policy is not None and execution_policy.contain_process_tree:
-            contained_result = run_contained_process(
-                ContainedProcessRequest(
-                    command=tuple(cmd_args),
-                    cwd=repo_path,
-                    env=env,
-                    timeout_seconds=_config.timeout.agent_execution,
-                    identity=execution_policy.restricted_identity,
+            try:
+                contained_result = run_contained_process(
+                    ContainedProcessRequest(
+                        command=tuple(cmd_args),
+                        cwd=repo_path,
+                        env=env,
+                        timeout_seconds=_config.timeout.agent_execution,
+                        identity=execution_policy.restricted_identity,
+                    )
                 )
-            )
+            except subprocess.CalledProcessError as exc:
+                raise ContainedProcessInfrastructureError.from_called_process_error(exc) from exc
             result = subprocess.CompletedProcess(
                 args=cmd_args,
                 returncode=contained_result.returncode,
@@ -163,10 +171,16 @@ def run_claude_code(
         logger.debug(f"Claude Code raw output: {stdout}")
 
         metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         logger.exception(f"Claude Code timed out after {_config.timeout.agent_execution} seconds")
         metrics = AgentMetrics(execution_time=_config.timeout.agent_execution)
-        raise AgentTimeoutError("Claude Code timed out", metrics=metrics, config=config) from None
+        raise AgentTimeoutError(
+            "Claude Code timed out",
+            metrics=metrics,
+            config=config,
+            stdout=exc.output,
+            stderr=exc.stderr,
+        ) from exc
     except subprocess.CalledProcessError as e:
         logger.exception(f"Claude Code execution failed with error {e.stderr}")
         raise AgentError(f"Claude Code execution failed: {e.stderr}") from e

@@ -651,7 +651,7 @@ def test_missing_wrapper_script_is_explicit(tmp_path, monkeypatch):
         run_contained_process(_request(tmp_path, "print('never launched')"))
 
 
-def test_wrapper_launch_failure_raises_called_process_error(tmp_path, monkeypatch):
+def test_wrapper_launch_failure_raises_infrastructure_error(tmp_path, monkeypatch):
     script_path = tmp_path / "Invoke-ContainedProcess.ps1"
     script_path.touch()
     failure = subprocess.CalledProcessError(1, ["pwsh"], output="", stderr="assignment failed")
@@ -661,11 +661,14 @@ def test_wrapper_launch_failure_raises_called_process_error(tmp_path, monkeypatc
     )
     with (
         patch("bcbench.agent.shared.contained_process.subprocess.run", side_effect=failure),
-        pytest.raises(subprocess.CalledProcessError) as exc_info,
+        pytest.raises(ContainedProcessInfrastructureError) as exc_info,
     ):
         run_contained_process(_request(tmp_path, "print('never launched')"))
 
-    assert exc_info.value.stderr == "assignment failed"
+    assert exc_info.value.__cause__ is failure
+    assert exc_info.value.wrapper_returncode == 1
+    assert exc_info.value.wrapper_stdout == ""
+    assert exc_info.value.wrapper_stderr == "assignment failed"
 
 
 def test_wrapper_failure_includes_child_captures_and_wrapper_diagnostics(tmp_path, monkeypatch):
@@ -692,13 +695,15 @@ def test_wrapper_failure_includes_child_captures_and_wrapper_diagnostics(tmp_pat
     )
     monkeypatch.setattr("bcbench.agent.shared.contained_process.subprocess.run", fake_run)
 
-    with pytest.raises(subprocess.CalledProcessError) as exc_info:
+    with pytest.raises(ContainedProcessInfrastructureError) as exc_info:
         run_contained_process(_request(tmp_path, "print('launched')"))
 
-    assert exc_info.value.returncode == 23
-    assert exc_info.value.cmd == wrapper_command
-    assert exc_info.value.stdout == "child stdout\nwrapper stdout diagnostic\n"
-    assert exc_info.value.stderr == "child stderr\nwrapper stderr diagnostic\n"
+    assert isinstance(exc_info.value.__cause__, subprocess.CalledProcessError)
+    assert exc_info.value.wrapper_returncode == 23
+    assert exc_info.value.child_stdout == "child stdout\n"
+    assert exc_info.value.child_stderr == "child stderr\n"
+    assert exc_info.value.wrapper_stdout == "wrapper stdout diagnostic\n"
+    assert exc_info.value.wrapper_stderr == "wrapper stderr diagnostic\n"
 
 
 def test_wrapper_watchdog_timeout_raises_infrastructure_error_with_all_captures(tmp_path, monkeypatch):

@@ -198,8 +198,18 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
         (ContainedProcessResult(3, "partial", "agent stderr"), None, AgentError),
         (
             None,
-            subprocess.TimeoutExpired(("claude",), 60, output="partial", stderr="timed out"),
+            subprocess.TimeoutExpired(("claude",), 60, output=b"partial \xff", stderr=b"timed out \xfe"),
             AgentTimeoutError,
+        ),
+        (
+            None,
+            subprocess.CalledProcessError(
+                17,
+                ("pwsh",),
+                output=b"wrapper stdout \xff",
+                stderr=b"wrapper stderr \xfe",
+            ),
+            ContainedProcessInfrastructureError,
         ),
         (
             None,
@@ -252,7 +262,43 @@ def test_claude_code_contained_errors_preserve_class_and_stop_gateway(
     if expected_error is AgentTimeoutError:
         assert error.value.metrics.execution_time > 0
         assert error.value.config is not None
+        assert error.value.stdout == "partial \ufffd"
+        assert error.value.stderr == "timed out \ufffd"
+        assert error.value.__cause__ is contained_error
     if expected_error is ContainedProcessInfrastructureError:
-        assert error.value is contained_error
+        if isinstance(contained_error, subprocess.CalledProcessError):
+            assert error.value.__cause__ is contained_error
+            assert error.value.wrapper_returncode == 17
+            assert error.value.wrapper_stdout == "wrapper stdout \ufffd"
+            assert error.value.wrapper_stderr == "wrapper stderr \ufffd"
+        else:
+            assert error.value is contained_error
         assert not isinstance(error.value, AgentTimeoutError)
     gateway.stop.assert_called_once_with()
+
+
+def test_claude_code_default_called_process_error_remains_agent_error(tmp_path: Path):
+    failure = subprocess.CalledProcessError(3, ("claude",), output=b"partial", stderr=b"agent stderr")
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value="prompt"),
+        patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(None, None)),
+        patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=None),
+        patch("bcbench.agent.claude.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch("bcbench.agent.claude.agent.subprocess.run", side_effect=failure),
+        pytest.raises(AgentError) as error,
+    ):
+        run_claude_code(
+            entry=create_dataset_entry(),
+            model="claude-test-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+        )
+
+    assert error.value.__cause__ is failure
+    assert "agent stderr" in str(error.value)

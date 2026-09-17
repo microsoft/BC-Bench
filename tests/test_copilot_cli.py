@@ -176,6 +176,34 @@ def test_invoke_copilot_contained_infrastructure_error_remains_distinguishable(t
     assert not isinstance(error.value, AgentTimeoutError)
 
 
+def test_invoke_copilot_contained_wrapper_called_process_error_is_infrastructure(tmp_path: Path):
+    wrapper_error = subprocess.CalledProcessError(
+        17,
+        ("pwsh",),
+        output=b"wrapper stdout \xff",
+        stderr=b"wrapper stderr \xfe",
+    )
+    with (
+        patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch("bcbench.agent.copilot.cli.run_contained_process", side_effect=wrapper_error),
+        pytest.raises(ContainedProcessInfrastructureError) as error,
+    ):
+        invoke_copilot(
+            prompt="do the task",
+            model="test-model",
+            work_dir=tmp_path,
+            timeout=60,
+            env={},
+            execution_policy=AgentExecutionPolicy(contain_process_tree=True),
+        )
+
+    assert error.value.__cause__ is wrapper_error
+    assert error.value.wrapper_returncode == 17
+    assert error.value.wrapper_stdout == "wrapper stdout \ufffd"
+    assert error.value.wrapper_stderr == "wrapper stderr \ufffd"
+    assert not isinstance(error.value, (AgentError, AgentTimeoutError))
+
+
 def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("PATH", "agent-path")
     monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "token")
@@ -213,14 +241,16 @@ def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_
 
 
 @pytest.mark.parametrize(
-    ("agent_failure", "expected_error"),
+    ("agent_failure", "execution_policy", "expected_error"),
     [
         (
-            subprocess.TimeoutExpired(("copilot",), 60, output="partial", stderr="timed out"),
+            subprocess.TimeoutExpired(("copilot",), 60, output=b"partial \xff", stderr=b"timed out \xfe"),
+            AgentExecutionPolicy(contain_process_tree=True),
             AgentTimeoutError,
         ),
         (
             subprocess.CalledProcessError(3, ("copilot",), output="partial", stderr="agent stderr"),
+            None,
             AgentError,
         ),
         (
@@ -231,6 +261,7 @@ def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_
                 wrapper_stdout="wrapper stdout",
                 wrapper_stderr="wrapper stderr",
             ),
+            AgentExecutionPolicy(contain_process_tree=True),
             ContainedProcessInfrastructureError,
         ),
     ],
@@ -238,6 +269,7 @@ def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_
 def test_run_copilot_agent_preserves_error_class_and_stops_gateway(
     tmp_path: Path,
     agent_failure: Exception,
+    execution_policy: AgentExecutionPolicy | None,
     expected_error: type[Exception],
 ):
     gateway = Mock(base_url="http://127.0.0.1/mcp")
@@ -259,7 +291,7 @@ def test_run_copilot_agent_preserves_error_class_and_stops_gateway(
             category=EvaluationCategory.BUG_FIX,
             repo_path=tmp_path,
             output_dir=tmp_path / "output",
-            execution_policy=AgentExecutionPolicy(contain_process_tree=True),
+            execution_policy=execution_policy,
         )
 
     if isinstance(agent_failure, subprocess.CalledProcessError):
@@ -267,4 +299,7 @@ def test_run_copilot_agent_preserves_error_class_and_stops_gateway(
     if isinstance(agent_failure, subprocess.TimeoutExpired):
         assert error.value.metrics.execution_time > 0
         assert error.value.config is not None
+        assert error.value.stdout == "partial \ufffd"
+        assert error.value.stderr == "timed out \ufffd"
+        assert error.value.__cause__ is agent_failure
     gateway.stop.assert_called_once_with()

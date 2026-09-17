@@ -7,7 +7,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from bcbench.agent.copilot.metrics import parse_output
-from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessRequest, run_contained_process
+from bcbench.agent.shared.contained_process import (
+    AgentExecutionPolicy,
+    ContainedProcessInfrastructureError,
+    ContainedProcessRequest,
+    run_contained_process,
+)
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
@@ -65,15 +70,18 @@ def invoke_copilot(
     logger.debug("Copilot command args: %s", cmd_args)
 
     if execution_policy is not None and execution_policy.contain_process_tree:
-        contained_result = run_contained_process(
-            ContainedProcessRequest(
-                command=tuple(cmd_args),
-                cwd=work_dir,
-                env=dict(env) if env is not None else {},
-                timeout_seconds=timeout,
-                identity=execution_policy.restricted_identity,
+        try:
+            contained_result = run_contained_process(
+                ContainedProcessRequest(
+                    command=tuple(cmd_args),
+                    cwd=work_dir,
+                    env=dict(env) if env is not None else {},
+                    timeout_seconds=timeout,
+                    identity=execution_policy.restricted_identity,
+                )
             )
-        )
+        except subprocess.CalledProcessError as exc:
+            raise ContainedProcessInfrastructureError.from_called_process_error(exc) from exc
         result = subprocess.CompletedProcess(
             args=cmd_args,
             returncode=contained_result.returncode,

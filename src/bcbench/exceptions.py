@@ -298,9 +298,18 @@ class AgentError(BCBenchError):
 class AgentTimeoutError(BCBenchError):
     """Agent execution timeout errors."""
 
-    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        metrics: AgentMetrics | None = None,
+        config: ExperimentConfiguration | None = None,
+        stdout: str | bytes | None = None,
+        stderr: str | bytes | None = None,
+    ) -> None:
         self.metrics = metrics
         self.config = config
+        self.stdout = stdout.decode("utf-8", errors="replace") if isinstance(stdout, bytes) else stdout
+        self.stderr = stderr.decode("utf-8", errors="replace") if isinstance(stderr, bytes) else stderr
         super().__init__(message)
 
 
