@@ -4,9 +4,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from dataclasses import asdict, dataclass
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 from pathlib import Path
+from types import MappingProxyType
 from typing import TypedDict, cast
 
 from bcbench.config import get_config
@@ -37,6 +39,15 @@ class AgentExecutionPolicy:
     python_executable: Path | None = None
     worker_path: Path | None = None
     worker_sha256: str | None = None
+    environment_overrides: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        overrides = dict(self.environment_overrides)
+        if not all(isinstance(key, str) and key for key in overrides):
+            raise TypeError("Agent environment override names must be non-empty strings")
+        if not all(isinstance(value, str) for value in overrides.values()):
+            raise TypeError("Agent environment override values must be strings")
+        object.__setattr__(self, "environment_overrides", MappingProxyType(overrides))
 
 
 def should_log_transcript(execution_policy: AgentExecutionPolicy | None) -> bool:

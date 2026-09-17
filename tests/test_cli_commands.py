@@ -111,6 +111,7 @@ def lifecycle_cli_fixture(tmp_path: Path) -> LifecycleCliFixture:
     protected_root = tmp_path / "protected"
     for root in (entry_root, protected_root):
         root.mkdir()
+    (entry_root / "agent-logs").mkdir()
     worker = entry_root / "agent-tools" / "contained_process_worker.py"
     worker.parent.mkdir()
     worker.write_text("print('worker')\n", encoding="utf-8")
@@ -498,6 +499,7 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert request.context.agent_version == "1.2.3"
     assert request.context.model == default_model
     assert request.context.result_dir == lifecycle_cli_fixture.protected_root.parent / "evaluation_results" / "lifecycle-run"
+    assert request.context.result_dir != request.paths.agent_logs
     assert request.paths.baseline_workspace == lifecycle_cli_fixture.entry_root / "baseline-workspace"
     assert request.paths.final_results == lifecycle_cli_fixture.protected_root / "final-results"
     assert request.evaluator_container == bugfix_lifecycle_commands.ContainerConfig(**lifecycle_cli_fixture.evaluator_config)
@@ -509,9 +511,16 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert request.agent_execution_policy.allowlist_environment is True
     assert request.agent_execution_policy.python_executable == lifecycle_cli_fixture.python
     assert request.agent_execution_policy.worker_path == lifecycle_cli_fixture.worker
+    agent_temp = request.paths.agent_logs / "temp"
+    assert request.agent_execution_policy.environment_overrides == {
+        "TEMP": str(agent_temp),
+        "TMP": str(agent_temp),
+    }
+    assert agent_temp.is_dir()
     assert request.compiler_helper_roots[0].path == lifecycle_cli_fixture.owned_root
     run_agent.assert_called_once()
     assert run_agent.call_args.kwargs["category"] is EvaluationCategory.BUG_FIX
+    assert run_agent.call_args.kwargs["output_dir"] == request.paths.agent_logs
     assert run_agent.call_args.kwargs["runtime"] is request.agent_runtime
     assert run_agent.call_args.kwargs["execution_policy"] is request.agent_execution_policy
 
@@ -713,7 +722,7 @@ def test_bugfix_lifecycle_accepts_prefixed_environment_options(lifecycle_cli_fix
         ),
         (
             lambda fixture, args: [fixture.evaluator_config["username"] if value == "bcb-1234567-abcdef" else value for value in args],
-            "identities must differ",
+            "setup-owned os username",
         ),
         (
             lambda fixture, args: ["" if value == fixture.evaluator_config["password"] else value for value in args],
@@ -742,6 +751,40 @@ def test_bugfix_lifecycle_rejects_invalid_boundary_inputs_before_collaborators(
     assert result.exit_code == 2
     assert message in (result.stdout + result.stderr).lower()
     load_entry.assert_not_called()
+    lifecycle_factory.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("option", "value", "message"),
+    [
+        ("--agent-os-username", "runner", "setup-owned os username"),
+        ("--agent-os-username", "bcb-123456-abcdef", "setup-owned os username"),
+        ("--agent-bc-username", "admin", "setup-owned bc username"),
+        ("--agent-bc-username", "bca-1234567-abcdeg", "setup-owned bc username"),
+    ],
+)
+def test_bugfix_lifecycle_rejects_substituted_identity_names_before_collaborators(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    option: str,
+    value: str,
+    message: str,
+):
+    args = lifecycle_cli_fixture.args("copilot")
+    args[args.index(option) + 1] = value
+
+    with (
+        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid") as resolve_sid,
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version") as get_version,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert message in (result.stdout + result.stderr).lower()
+    resolve_sid.assert_not_called()
+    load_entry.assert_not_called()
+    get_version.assert_not_called()
     lifecycle_factory.assert_not_called()
 
 

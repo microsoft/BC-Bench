@@ -2530,6 +2530,10 @@ catch {{
     cleanup = @(Get-Content {_ps_quote(trace)} | ForEach-Object {{ $_ | ConvertFrom-Json }})
     failureEntryExists = Test-Path {_ps_quote(failure_entry)}
     failureProtectedExists = Test-Path {_ps_quote(failure_protected)}
+    agentTempExists = Test-Path (Join-Path (Join-Path {_ps_quote(success_entry)} 'agent-logs') 'temp') -PathType Container
+    agentLogFiles = @(
+        Get-ChildItem -LiteralPath (Join-Path {_ps_quote(success_entry)} 'agent-logs') -File -Recurse
+    ).Count
 }} | ConvertTo-Json -Compress -Depth 8
 """
     raw_output = _run_pwsh(script)
@@ -2587,6 +2591,8 @@ catch {{
     assert "BCBENCH_CONTAINED_PROCESS_WORKER_SHA256=" in env_text
     assert "BCBENCH_CONTAINED_PROCESS_PYTHON=" in env_text
     assert "BC_SERVER_PASSWORD=evaluator-secret" in env_text
+    assert payload["agentTempExists"] is True
+    assert payload["agentLogFiles"] == 0
     assert payload["failed"] is True
     assert {item["action"] for item in payload["cleanup"]} == {"bc-user", "acl", "os-user", "container"}
     assert payload["failureEntryExists"] is False

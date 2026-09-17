@@ -280,10 +280,12 @@ def _run_powershell(script: str, env: dict[str, str]) -> subprocess.CompletedPro
 
 def test_public_models_are_immutable():
     identity = WindowsIdentity("runner", "secret")
-    policy = AgentExecutionPolicy()
+    source_overrides = {"TEMP": r"C:\agent-logs\temp"}
+    policy = AgentExecutionPolicy(environment_overrides=source_overrides)
     request = ContainedProcessRequest(("agent", "--run"), Path.cwd(), {"FLAG": "on"}, 30, identity)
     result = ContainedProcessResult(0, "stdout", "stderr")
 
+    source_overrides["TEMP"] = r"C:\other"
     assert identity.domain == "."
     assert policy == AgentExecutionPolicy(
         contain_process_tree=False,
@@ -292,11 +294,15 @@ def test_public_models_are_immutable():
         python_executable=None,
         worker_path=None,
         worker_sha256=None,
+        environment_overrides={"TEMP": r"C:\agent-logs\temp"},
     )
+    assert policy.environment_overrides == {"TEMP": r"C:\agent-logs\temp"}
     assert request.identity is identity
     assert result.returncode == 0
     with pytest.raises(AttributeError):
         identity.username = "other"
+    with pytest.raises(TypeError):
+        policy.environment_overrides["TMP"] = r"C:\agent-logs\temp"
 
 
 def test_powershell_uses_checked_job_object_wrapper_methods():

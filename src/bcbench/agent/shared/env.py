@@ -1,4 +1,5 @@
 import os
+from collections.abc import Mapping
 
 # BC container connection details/credentials the harness uses to build the MCP config and to reach the
 # container. They must NOT leak into a launched agent's own process environment: otherwise the agent can
@@ -37,10 +38,18 @@ _AGENT_ENV_ALLOWLIST = frozenset(
 )
 
 
-def agent_subprocess_env(overrides: dict[str, str] | None = None, *, pass_bc_credentials: bool = False, allowlist: bool = False) -> dict[str, str]:
+def agent_subprocess_env(
+    overrides: Mapping[str, str] | None = None,
+    *,
+    pass_bc_credentials: bool = False,
+    allowlist: bool = False,
+    final_overrides: Mapping[str, str] | None = None,
+) -> dict[str, str]:
     env = {key: value for key, value in os.environ.items() if key.upper() in _AGENT_ENV_ALLOWLIST} if allowlist else dict(os.environ)
     if not allowlist and not pass_bc_credentials:
         env = {k: v for k, v in env.items() if not k.startswith(_WITHHELD_ENV_PREFIXES) and k not in _WITHHELD_ENV_VARS}
     if overrides:
         env.update(overrides)
+    if final_overrides:
+        env.update(final_overrides)
     return env

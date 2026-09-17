@@ -3153,6 +3153,7 @@ function Invoke-BCBenchBugFixLifecycle {
         )) {
             New-Item -ItemType Directory -Path $path | Out-Null
         }
+        New-Item -ItemType Directory -Path (Join-Path $context.AgentLogs "temp") | Out-Null
         $agentTools = Invoke-BCBenchOperation -Operations $Operations -Name StageAgentTools -Context $context -Default {
             param($operationContext)
             return New-BCBenchAgentTools `

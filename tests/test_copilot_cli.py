@@ -341,9 +341,16 @@ def test_invoke_copilot_contained_wrapper_called_process_error_is_infrastructure
 
 def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("PATH", "agent-path")
+    monkeypatch.setenv("TEMP", "host-temp")
+    monkeypatch.setenv("TMP", "host-temp")
     monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "token")
     monkeypatch.setenv("EVALUATOR_SECRET", "must-not-leak")
-    policy = AgentExecutionPolicy(contain_process_tree=True, allowlist_environment=True)
+    agent_temp = tmp_path / "agent-logs" / "temp"
+    policy = AgentExecutionPolicy(
+        contain_process_tree=True,
+        allowlist_environment=True,
+        environment_overrides={"TEMP": str(agent_temp), "TMP": str(agent_temp)},
+    )
     gateway = Mock(base_url="http://127.0.0.1/mcp")
     with (
         patch("bcbench.agent.copilot.agent.build_prompt", return_value="prompt"),
@@ -370,7 +377,10 @@ def test_run_copilot_agent_forwards_policy_and_uses_allowlisted_environment(tmp_
         {"GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": "true"},
         pass_bc_credentials=EvaluationCategory.BUG_FIX.pass_on_bc_container_credentials,
         allowlist=True,
+        final_overrides=policy.environment_overrides,
     )
+    assert mock_invoke.call_args.kwargs["env"]["TEMP"] == str(agent_temp)
+    assert mock_invoke.call_args.kwargs["env"]["TMP"] == str(agent_temp)
     assert "EVALUATOR_SECRET" not in mock_invoke.call_args.kwargs["env"]
     gateway.stop.assert_called_once_with()
 

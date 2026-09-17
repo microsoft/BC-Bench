@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -62,9 +63,11 @@ from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, Contai
 _config = get_config()
 _CATEGORY = EvaluationCategory.BUG_FIX
 LifecycleAgentInvoker = Callable[
-    [EvaluationContext[BugFixEntry], AgentExecutionPolicy, AgentRuntimeConfig],
+    [EvaluationContext[BugFixEntry], AgentExecutionPolicy, AgentRuntimeConfig, Path],
     tuple[AgentMetrics | None, ExperimentConfiguration | None],
 ]
+_SETUP_OS_USERNAME = re.compile(r"bcb-[a-f0-9]{7}-[a-f0-9]{6}", re.IGNORECASE)
+_SETUP_BC_USERNAME = re.compile(r"bca-[a-f0-9]{7}-[a-f0-9]{6}", re.IGNORECASE)
 
 bugfix_lifecycle_app = typer.Typer(
     help="Run the production bug-fix lifecycle with isolated agent and evaluator identities",
@@ -137,12 +140,12 @@ def bugfix_lifecycle_copilot(
         bc_mcp=bc_mcp,
         agent_name=AgentHarness.COPILOT,
         agent_version=get_copilot_version,
-        agent_runner=lambda context, execution_policy, runtime: run_copilot_agent(
+        agent_runner=lambda context, execution_policy, runtime, agent_output_dir: run_copilot_agent(
             entry=context.entry,
             repo_path=context.repo_path,
             category=_CATEGORY,
             model=context.model,
-            output_dir=context.result_dir,
+            output_dir=agent_output_dir,
             runtime=runtime,
             execution_policy=execution_policy,
         ),
@@ -214,12 +217,12 @@ def bugfix_lifecycle_claude(
         bc_mcp=bc_mcp,
         agent_name=AgentHarness.CLAUDE,
         agent_version=get_claude_version,
-        agent_runner=lambda context, execution_policy, runtime: run_claude_code(
+        agent_runner=lambda context, execution_policy, runtime, agent_output_dir: run_claude_code(
             entry=context.entry,
             repo_path=context.repo_path,
             category=_CATEGORY,
             model=context.model,
-            output_dir=context.result_dir,
+            output_dir=agent_output_dir,
             runtime=runtime,
             execution_policy=execution_policy,
         ),
@@ -273,9 +276,19 @@ def _run_lifecycle(
         raise typer.BadParameter(str(error), param_hint="--output-dir/--run-id") from error
     expected_container_id = _required(expected_container_id, "--expected-container-id")
     expected_invocation_id = _required(expected_invocation_id, "--expected-invocation-id")
-    agent_os_username = _local_username(agent_os_username, "--agent-os-username")
+    agent_os_username = _setup_owned_username(
+        agent_os_username,
+        "--agent-os-username",
+        _SETUP_OS_USERNAME,
+        "OS",
+    )
     agent_os_password = _required(agent_os_password, "--agent-os-password")
-    agent_bc_username = _required(agent_bc_username, "--agent-bc-username")
+    agent_bc_username = _setup_owned_username(
+        agent_bc_username,
+        "--agent-bc-username",
+        _SETUP_BC_USERNAME,
+        "BC",
+    )
     agent_bc_password = _required(agent_bc_password, "--agent-bc-password")
 
     evaluator_fallback = _container_from_options(
@@ -331,6 +344,7 @@ def _run_lifecycle(
             raise typer.BadParameter(str(error), param_hint="--replay-patch") from error
         _require_file(replay_patch, "--replay-patch")
 
+    agent_temp = _prepare_agent_temp(paths)
     resolved_sid = _resolve_local_windows_sid(agent_os_username)
     entry = BugFixEntry.load(_CATEGORY.dataset_path, entry_id=entry_id)[0]
     resolved_agent_version = agent_version()
@@ -352,6 +366,10 @@ def _run_lifecycle(
         python_executable=base_python,
         worker_path=staged_worker_path,
         worker_sha256=staged_worker_sha256.lower(),
+        environment_overrides={
+            "TEMP": str(agent_temp),
+            "TMP": str(agent_temp),
+        },
     )
     try:
         request = BugFixLifecycleRequest(
@@ -373,7 +391,7 @@ def _run_lifecycle(
         raise typer.BadParameter(str(error)) from error
     ProductionBugFixLifecycle.from_request(request).run(
         request,
-        lambda agent_context, policy: agent_runner(agent_context, policy, agent_runtime),
+        lambda agent_context, policy: agent_runner(agent_context, policy, agent_runtime, paths.agent_logs),
     )
 
 
@@ -441,11 +459,31 @@ def _required(value: str | None, param_hint: str) -> str:
     return normalized
 
 
-def _local_username(username: str, param_hint: str) -> str:
+def _setup_owned_username(
+    username: str,
+    param_hint: str,
+    pattern: re.Pattern[str],
+    identity_kind: str,
+) -> str:
     normalized = _required(username, param_hint)
-    if "\\" in normalized or "@" in normalized:
-        raise typer.BadParameter("Agent OS username must be an unqualified local Windows username", param_hint=param_hint)
+    if pattern.fullmatch(normalized) is None:
+        raise typer.BadParameter(
+            f"Agent {identity_kind} username must be a setup-owned {identity_kind} username",
+            param_hint=param_hint,
+        )
     return normalized
+
+
+def _prepare_agent_temp(paths: BugFixLifecyclePaths) -> Path:
+    _require_directory(paths.agent_logs, "--entry-root")
+    agent_temp = paths.agent_logs / "temp"
+    try:
+        reject_reparse_components(agent_temp, paths.agent_logs)
+        agent_temp.mkdir(exist_ok=True)
+    except (OSError, ValueError) as error:
+        raise typer.BadParameter(f"Could not prepare agent temp directory: {error}", param_hint="--entry-root") from error
+    _require_directory(agent_temp, "--entry-root")
+    return agent_temp
 
 
 def _safe_run_id(run_id: str) -> str:

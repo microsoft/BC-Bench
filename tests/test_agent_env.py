@@ -90,6 +90,20 @@ def test_allowlist_applies_overrides_after_filtering(monkeypatch):
     assert env["BC_SERVER_PASSWORD"] == "restricted-bc-secret"
 
 
+def test_final_overrides_take_precedence_over_agent_runtime_overrides(monkeypatch):
+    monkeypatch.setenv("TEMP", r"C:\host-temp")
+
+    env = agent_subprocess_env(
+        {"TEMP": r"C:\runtime-temp", "RUNTIME_CHANNEL": "enabled"},
+        final_overrides={"TEMP": r"C:\agent-logs\temp", "TMP": r"C:\agent-logs\temp"},
+        allowlist=True,
+    )
+
+    assert env["TEMP"] == r"C:\agent-logs\temp"
+    assert env["TMP"] == r"C:\agent-logs\temp"
+    assert env["RUNTIME_CHANNEL"] == "enabled"
+
+
 def test_allowlist_exactly_matches_task_5_and_preserves_environment_key_casing(monkeypatch):
     allowed_names = {
         "ALLUSERSPROFILE",

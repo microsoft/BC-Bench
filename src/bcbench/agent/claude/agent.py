@@ -150,6 +150,7 @@ def run_claude_code(
                 },
                 pass_bc_credentials=category.pass_on_bc_container_credentials,
                 allowlist=bool(execution_policy and execution_policy.contain_process_tree and execution_policy.allowlist_environment),
+                final_overrides=execution_policy.environment_overrides if execution_policy is not None else None,
             )
             if execution_policy is not None and execution_policy.contain_process_tree:
                 try:

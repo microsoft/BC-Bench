@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +13,10 @@ from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationContext
 
 if TYPE_CHECKING:
     from bcbench.dataset import BugFixEntry
+
+_SETUP_OS_USERNAME = re.compile(r"bcb-[a-f0-9]{7}-[a-f0-9]{6}", re.IGNORECASE)
+_SETUP_BC_USERNAME = re.compile(r"bca-[a-f0-9]{7}-[a-f0-9]{6}", re.IGNORECASE)
+_PRODUCTION_AGENT_ENVIRONMENT_CHANNELS = frozenset({"TEMP", "TMP"})
 
 
 @dataclass(frozen=True)
@@ -78,8 +84,14 @@ class BugFixLifecycleRequest:
             raise ValueError("Production agent execution requires a restricted identity")
         if not self.agent_execution_policy.allowlist_environment:
             raise ValueError("Production agent execution must allowlist the environment")
-        if restricted_identity.domain.strip() != ".":
-            raise ValueError("Production restricted identity must use the local Windows domain '.'")
+        local_machine = os.environ.get("COMPUTERNAME", "").strip().casefold()
+        local_domains = {".", *([local_machine] if local_machine else [])}
+        if restricted_identity.domain.strip().casefold() not in local_domains:
+            raise ValueError("Production restricted identity must use local Windows domain '.' or the local machine name")
+        if _SETUP_OS_USERNAME.fullmatch(self.agent_os_username.strip()) is None:
+            raise ValueError("Production agent_os_username must be a setup-owned OS username")
+        if _SETUP_BC_USERNAME.fullmatch(self.agent_bc_username.strip()) is None:
+            raise ValueError("Production agent_bc_username must be a setup-owned BC username")
         restricted_username = _normalized_windows_local_username(
             restricted_identity.username,
             "restricted identity username",
@@ -99,6 +111,14 @@ class BugFixLifecycleRequest:
             raise ValueError("Evaluator and agent BC usernames must differ")
         if self.evaluator_container.password == self.agent_runtime.container.password:
             raise ValueError("Evaluator and agent passwords must differ")
+        environment_overrides = dict(self.agent_execution_policy.environment_overrides)
+        if environment_overrides:
+            unexpected_channels = set(environment_overrides) - _PRODUCTION_AGENT_ENVIRONMENT_CHANNELS
+            if unexpected_channels:
+                raise ValueError("Production policy environment overrides may only set explicit agent runtime channels")
+            expected_temp = str(self.paths.agent_logs / "temp")
+            if environment_overrides != {"TEMP": expected_temp, "TMP": expected_temp}:
+                raise ValueError("Production policy TEMP and TMP must both use agent_logs/temp")
         object.__setattr__(self, "acl_paths", tuple(self.acl_paths))
         object.__setattr__(self, "compiler_helper_roots", tuple(self.compiler_helper_roots))
         from bcbench.evaluate.bugfix_lifecycle.path_safety import validate_owned_lifecycle_roots

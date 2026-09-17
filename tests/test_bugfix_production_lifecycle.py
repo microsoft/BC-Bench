@@ -414,6 +414,37 @@ def test_request_rejects_invalid_production_execution_policy_before_collaborator
     assert calls == []
 
 
+def test_request_rejects_environment_overrides_outside_agent_runtime_channels_before_collaborators(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    policy = replace(
+        request.agent_execution_policy,
+        environment_overrides={"BC_SERVER_PASSWORD": "evaluator-secret"},
+    )
+
+    with pytest.raises(ValueError, match="agent runtime channels"):
+        replace(request, agent_execution_policy=policy)
+
+    assert calls == []
+
+
+def test_request_rejects_agent_temp_outside_agent_logs_before_collaborators(
+    tmp_path: Path,
+) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    outside_temp = tmp_path / "outside-temp"
+    policy = replace(
+        request.agent_execution_policy,
+        environment_overrides={"TEMP": str(outside_temp), "TMP": str(outside_temp)},
+    )
+
+    with pytest.raises(ValueError, match="agent_logs/temp"):
+        replace(request, agent_execution_policy=policy)
+
+    assert calls == []
+
+
 def test_request_rejects_restricted_windows_username_mismatch_before_collaborators(
     tmp_path: Path,
 ) -> None:
@@ -426,6 +457,23 @@ def test_request_rejects_restricted_windows_username_mismatch_before_collaborato
     with pytest.raises(ValueError, match="restricted identity username must match agent_os_username"):
         replace(request, agent_execution_policy=policy)
 
+    assert calls == []
+
+
+def test_request_accepts_local_machine_restricted_windows_domain(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("COMPUTERNAME", "BCBENCH-HOST")
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    policy = replace(
+        request.agent_execution_policy,
+        restricted_identity=WindowsIdentity(request.agent_os_username, "os-secret", "bcbench-host"),
+    )
+
+    updated = replace(request, agent_execution_policy=policy)
+
+    assert updated.agent_execution_policy.restricted_identity is policy.restricted_identity
     assert calls == []
 
 
