@@ -250,10 +250,119 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
         )
     )
     mock_subprocess_run.assert_not_called()
-    mock_parse.assert_called_once_with([output.strip()], log_transcript=True)
+    mock_parse.assert_called_once_with([output.strip()], log_transcript=False)
     assert result[0] is None
     assert "EVALUATOR_SECRET" not in expected_env
     gateway.stop.assert_called_once_with()
+
+
+def test_claude_code_contained_path_does_not_log_credential_transcript(tmp_path: Path, caplog):
+    agent_bc_password = "agent-bc-password-value"
+    agent_os_password = "agent-os-password-value"
+    token = "agent-token-value"
+    assistant_content = f"Credentials: {agent_bc_password} {agent_os_password} {token}"
+    final_response = "Completed safely."
+    output = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": assistant_content},
+                            {"type": "tool_use", "name": "Bash", "input": {}},
+                        ]
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "result",
+                    "duration_ms": 1500,
+                    "duration_api_ms": 750,
+                    "num_turns": 2,
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                    "result": final_response,
+                }
+            ),
+        ]
+    )
+    policy = AgentExecutionPolicy(contain_process_tree=True, allowlist_environment=True)
+    caplog.set_level(logging.INFO)
+
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value="prompt"),
+        patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(None, None)),
+        patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=None),
+        patch("bcbench.agent.claude.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch(
+            "bcbench.agent.claude.agent.run_contained_process",
+            return_value=ContainedProcessResult(0, output, ""),
+        ),
+    ):
+        metrics, _ = run_claude_code(
+            entry=create_dataset_entry(),
+            model="test-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+            execution_policy=policy,
+        )
+
+    assert metrics is not None
+    assert metrics.execution_time == 1.5
+    assert metrics.llm_duration == 0.75
+    assert metrics.turn_count == 2
+    assert metrics.prompt_tokens == 10
+    assert metrics.completion_tokens == 5
+    assert metrics.tool_usage == {"Bash": 1}
+    assert agent_bc_password not in caplog.text
+    assert agent_os_password not in caplog.text
+    assert token not in caplog.text
+
+
+def test_claude_code_default_path_logs_transcript(tmp_path: Path, caplog):
+    assistant_content = "Ordinary Claude transcript remains visible."
+    output = json.dumps(
+        {
+            "type": "result",
+            "duration_ms": 1000,
+            "result": assistant_content,
+        }
+    ).encode()
+    caplog.set_level(logging.INFO)
+
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value="prompt"),
+        patch("bcbench.agent.claude.agent.build_mcp_config", return_value=(None, None)),
+        patch("bcbench.agent.claude.agent.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=None),
+        patch("bcbench.agent.claude.agent.setup_instructions_from_config", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_agent_skills", return_value=False),
+        patch("bcbench.agent.claude.agent.setup_custom_agent", return_value=None),
+        patch("bcbench.agent.claude.agent.resolve_config_plugins", return_value=[]),
+        patch(
+            "bcbench.agent.claude.agent.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output, stderr=b""),
+        ),
+    ):
+        metrics, _ = run_claude_code(
+            entry=create_dataset_entry(),
+            model="test-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+        )
+
+    assert metrics is not None
+    assert metrics.execution_time == 1.0
+    assert f"Claude Code: {assistant_content}" in caplog.messages
 
 
 def test_claude_code_stops_gateway_when_mcp_config_setup_fails(tmp_path: Path):

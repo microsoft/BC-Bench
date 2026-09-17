@@ -18,6 +18,7 @@ from bcbench.agent.shared.contained_process import (
     ContainedProcessInfrastructureError,
     ContainedProcessRequest,
     run_contained_process,
+    should_log_transcript,
 )
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.config import get_config
@@ -186,7 +187,10 @@ def run_claude_code(
             stdout: str = result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, bytes) else result.stdout or ""
             logger.debug("Claude Code output received: character_count=%d line_count=%d", len(stdout), len(stdout.splitlines()))
 
-            metrics, _ = parse_stream_output(stdout.splitlines(), log_transcript=True)
+            metrics, _ = parse_stream_output(
+                stdout.splitlines(),
+                log_transcript=should_log_transcript(execution_policy),
+            )
         except subprocess.TimeoutExpired as exc:
             logger.error(  # noqa: TRY400 - traceback can expose sensitive command arguments
                 "Claude Code timed out after %d seconds; stdout_chars=%d stderr_chars=%d",

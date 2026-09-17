@@ -162,7 +162,85 @@ def test_invoke_copilot_contained_path_constructs_request_and_parses_stdout(tmp_
         )
     )
     mock_subprocess_run.assert_not_called()
-    mock_parse.assert_called_once_with([output.strip()], log_transcript=True)
+    mock_parse.assert_called_once_with([output.strip()], log_transcript=False)
+
+
+def test_invoke_copilot_contained_path_does_not_log_credential_transcript(tmp_path: Path, caplog):
+    agent_bc_password = "agent-bc-password-value"
+    agent_os_password = "agent-os-password-value"
+    token = "agent-token-value"
+    assistant_content = f"Credentials: {agent_bc_password} {agent_os_password} {token}"
+    expected_final_response = "Completed safely."
+    output = "\n".join(
+        [
+            json.dumps({"type": "model.call_start"}),
+            json.dumps({"type": "assistant.message", "data": {"content": assistant_content}}),
+            json.dumps({"type": "tool.execution_start", "data": {"toolName": "powershell"}}),
+            json.dumps(
+                {
+                    "type": "assistant.message",
+                    "data": {"content": expected_final_response, "phase": "final_answer"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "result",
+                    "usage": {"sessionDurationMs": 1500, "totalApiDurationMs": 750},
+                }
+            ),
+        ]
+    )
+    policy = AgentExecutionPolicy(contain_process_tree=True, allowlist_environment=True)
+    caplog.set_level(logging.INFO)
+
+    with (
+        patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch(
+            "bcbench.agent.copilot.cli.run_contained_process",
+            return_value=ContainedProcessResult(0, output, ""),
+        ),
+    ):
+        metrics, final_response = invoke_copilot(
+            prompt="do the task",
+            model="test-model",
+            work_dir=tmp_path,
+            timeout=60,
+            env={},
+            execution_policy=policy,
+        )
+
+    assert metrics is not None
+    assert metrics.execution_time == 1.5
+    assert metrics.llm_duration == 0.75
+    assert metrics.turn_count == 1
+    assert metrics.tool_usage == {"powershell": 1}
+    assert final_response == expected_final_response
+    assert agent_bc_password not in caplog.text
+    assert agent_os_password not in caplog.text
+    assert token not in caplog.text
+
+
+def test_invoke_copilot_default_path_logs_transcript(tmp_path: Path, caplog):
+    assistant_content = "Ordinary Copilot transcript remains visible."
+    output = json.dumps({"type": "assistant.message", "data": {"content": assistant_content, "phase": "final_answer"}})
+    caplog.set_level(logging.INFO)
+
+    with (
+        patch("bcbench.agent.copilot.cli._find_copilot", return_value="copilot"),
+        patch(
+            "bcbench.agent.copilot.cli.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output, stderr=""),
+        ),
+    ):
+        _, final_response = invoke_copilot(
+            prompt="do the task",
+            model="test-model",
+            work_dir=tmp_path,
+            timeout=60,
+        )
+
+    assert final_response == assistant_content
+    assert f"Copilot: {assistant_content}" in caplog.messages
 
 
 def test_invoke_copilot_contained_nonzero_exit_preserves_stderr(tmp_path: Path):

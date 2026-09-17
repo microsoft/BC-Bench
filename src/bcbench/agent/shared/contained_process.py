@@ -18,6 +18,7 @@ __all__ = [
     "ContainedProcessResult",
     "WindowsIdentity",
     "run_contained_process",
+    "should_log_transcript",
 ]
 
 
@@ -36,6 +37,10 @@ class AgentExecutionPolicy:
     python_executable: Path | None = None
     worker_path: Path | None = None
     worker_sha256: str | None = None
+
+
+def should_log_transcript(execution_policy: AgentExecutionPolicy | None) -> bool:
+    return execution_policy is None or not (execution_policy.contain_process_tree and execution_policy.allowlist_environment)
 
 
 @dataclass(frozen=True)

@@ -174,3 +174,32 @@ def test_parse_output_logs_readable_transcript(caplog: pytest.LogCaptureFixture)
     assert "Copilot: Inspecting the implementation." in caplog.messages
     assert "Copilot tool: rg" in caplog.messages
     assert "Copilot: Done." in caplog.messages
+
+
+def test_parse_output_without_transcript_logging_preserves_metrics_and_final_response(caplog: pytest.LogCaptureFixture):
+    credentials = ("agent-bc-password-value", "agent-os-password-value", "agent-token-value")
+    caplog.set_level("INFO")
+
+    metrics, final_response = parse_output(
+        [
+            _json_line({"type": "model.call_start"}),
+            _json_line({"type": "assistant.message", "data": {"content": " ".join(credentials)}}),
+            _json_line({"type": "tool.execution_start", "data": {"toolName": "powershell"}}),
+            _json_line({"type": "assistant.message", "data": {"content": "Completed safely.", "phase": "final_answer"}}),
+            _json_line(
+                {
+                    "type": "result",
+                    "usage": {"sessionDurationMs": 1500, "totalApiDurationMs": 750},
+                }
+            ),
+        ],
+        log_transcript=False,
+    )
+
+    assert metrics is not None
+    assert metrics.execution_time == 1.5
+    assert metrics.llm_duration == 0.75
+    assert metrics.turn_count == 1
+    assert metrics.tool_usage == {"powershell": 1}
+    assert final_response == "Completed safely."
+    assert all(credential not in caplog.text for credential in credentials)

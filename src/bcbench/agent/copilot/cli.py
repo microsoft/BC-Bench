@@ -11,6 +11,7 @@ from bcbench.agent.shared.contained_process import (
     ContainedProcessInfrastructureError,
     ContainedProcessRequest,
     run_contained_process,
+    should_log_transcript,
 )
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
@@ -128,5 +129,8 @@ def invoke_copilot(
     if result.stderr:
         logger.debug("Copilot CLI stderr suppressed: character_count=%d", len(result.stderr))
 
-    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
+    metrics, final_response = parse_output(
+        result.stdout.splitlines(),
+        log_transcript=should_log_transcript(execution_policy),
+    )
     return metrics, final_response or ""
