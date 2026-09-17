@@ -118,6 +118,18 @@ class FakeWorkspaceBuilder:
         for project in ("src/App", "src/Tests", "src/Benchmark/tests"):
             (workspace / project).mkdir(parents=True, exist_ok=True)
             (workspace / project / "source.al").write_text(project, encoding="utf-8")
+            project_name = Path(project).name
+            (workspace / project / "app.json").write_text(
+                json.dumps(
+                    {
+                        "id": f"{len(project_name):08d}-2222-2222-2222-222222222222",
+                        "name": project_name,
+                        "publisher": "BCBench",
+                        "version": "1.0.0.0",
+                    }
+                ),
+                encoding="utf-8",
+            )
         return workspace
 
 
@@ -285,6 +297,57 @@ class FakeTestRunner:
         )
 
 
+class ContractPublisher:
+    def __init__(
+        self,
+        publisher: FakePublisher,
+        container: ContainerConfig,
+        version: str,
+    ) -> None:
+        self._publisher = publisher
+        self._container = container
+        self._version = version
+
+    def build_and_publish(
+        self,
+        repo_path: Path,
+        project_paths: tuple[str, ...],
+    ) -> tuple[Path, ...]:
+        evidence_directory = repo_path / "evidence" / "contract-publication" / str(len(self._publisher.calls))
+        return self._publisher(
+            repo_path,
+            project_paths,
+            self._container,
+            self._version,
+            evidence_directory,
+        ).package_paths
+
+
+class ContractTestRunner:
+    def __init__(
+        self,
+        runner: FakeTestRunner,
+        container: ContainerConfig,
+    ) -> None:
+        self._runner = runner
+        self._container = container
+
+    def run(
+        self,
+        tests: tuple[TestEntry, ...],
+        expectation: TestExpectation,
+        repo_path: Path,
+    ) -> TestRunSummary:
+        evidence_directory = repo_path / "evidence" / "contract-tests"
+        return self._runner(
+            tests,
+            expectation,
+            self._container,
+            repo_path,
+            evidence_directory,
+        ).summary
+
+
 @pytest.fixture
 def harness(tmp_path: Path):
     calls: list[tuple[object, ...]] = []
@@ -359,6 +422,19 @@ def harness(tmp_path: Path):
         "runtime_inventory": runtime_inventory,
         "runner": runner,
     }
+
+
+def test_phase_runner_accepts_task9_contract_only_adapters(harness) -> None:
+    container = ContainerConfig(name="bc", username="user", password="pass", company="CRONUS")
+    harness["test_runner"].outcome = TestOutcome.FAIL
+    harness["runner"]._publisher = ContractPublisher(harness["publisher"], container, "27.0")
+    harness["runner"]._test_runner = ContractTestRunner(harness["test_runner"], container)
+
+    result = harness["runner"].run_test_red(_submission(), harness["s0"])
+
+    assert result.status is BugFixPhaseStatus.PASSED, result.error_message
+    assert result.requested_tests == ("50100:Regression",)
+    assert len(result.package_hashes) == 2
 
 
 def test_run_test_red_restores_builds_test_last_and_requires_one_genuine_failure(harness) -> None:
@@ -521,8 +597,7 @@ def test_each_phase_persists_only_its_patch_hashes_and_checkpoint_container(
             submission,
             checkpoint,
             "H",
-            [TestEntry(codeunitID=10, functionName=frozenset({"FailsBefore"}))],
-            [],
+            (TestEntry(codeunitID=10, functionName=frozenset({"FailsBefore"})),),
         )
 
     assert result.status is BugFixPhaseStatus.PASSED
@@ -657,8 +732,7 @@ def test_benchmark_restores_sf_uses_only_fix_and_hidden_patch_and_combines_exact
         _submission(),
         harness["sf"],
         "H",
-        fail_to_pass,
-        pass_to_pass,
+        (*fail_to_pass, *pass_to_pass),
     )
 
     assert result.status is BugFixPhaseStatus.PASSED
@@ -686,8 +760,7 @@ def test_benchmark_restores_sf_independently_after_invalid_generated_test(harnes
         _submission(),
         harness["sf"],
         "H",
-        [TestEntry(codeunitID=10, functionName=frozenset({"FailsBefore"}))],
-        [],
+        (TestEntry(codeunitID=10, functionName=frozenset({"FailsBefore"})),),
     )
 
     assert invalid_red.status is BugFixPhaseStatus.INVALID_SUBMISSION

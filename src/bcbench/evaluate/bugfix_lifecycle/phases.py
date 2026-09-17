@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 import traceback
 import xml.etree.ElementTree as ET
 import zipfile
@@ -60,12 +61,18 @@ WorkspaceHasher = Callable[[Path], str]
 
 
 class ProjectPublisher(Protocol):
-    def publish(
+    def build_and_publish(
         self,
         repo_path: Path,
-        project_paths: Sequence[str],
-        container: ContainerConfig,
-        version: str,
+        project_paths: tuple[str, ...],
+    ) -> tuple[Path, ...]: ...
+
+
+class EvidenceProjectPublisher(ProjectPublisher, Protocol):
+    def build_and_publish_with_evidence(
+        self,
+        repo_path: Path,
+        project_paths: tuple[str, ...],
         evidence_directory: Path,
     ) -> ProjectPublication: ...
 
@@ -73,33 +80,55 @@ class ProjectPublisher(Protocol):
 class ExactTestRunner(Protocol):
     def run(
         self,
-        tests: Sequence[TestEntry],
+        tests: tuple[TestEntry, ...],
         expectation: TestExpectation,
-        container: ContainerConfig,
+        repo_path: Path,
+    ) -> TestRunSummary: ...
+
+
+class EvidenceExactTestRunner(ExactTestRunner, Protocol):
+    def run_with_evidence(
+        self,
+        tests: tuple[TestEntry, ...],
+        expectation: TestExpectation,
         repo_path: Path,
         evidence_directory: Path,
     ) -> TestSuiteEvidence: ...
 
 
 class DefaultProjectPublisher:
-    def publish(
+    def __init__(self, container: ContainerConfig, version: str) -> None:
+        self._container = container
+        self._version = version
+
+    def build_and_publish(
         self,
         repo_path: Path,
-        project_paths: Sequence[str],
-        container: ContainerConfig,
-        version: str,
+        project_paths: tuple[str, ...],
+    ) -> tuple[Path, ...]:
+        with tempfile.TemporaryDirectory(prefix=".bcbench-publication-evidence-", dir=repo_path) as evidence_directory:
+            return self.build_and_publish_with_evidence(
+                repo_path,
+                project_paths,
+                Path(evidence_directory),
+            ).package_paths
+
+    def build_and_publish_with_evidence(
+        self,
+        repo_path: Path,
+        project_paths: tuple[str, ...],
         evidence_directory: Path,
     ) -> ProjectPublication:
-        ordered_projects = tuple(project_paths)
+        evidence_directory.mkdir(parents=True, exist_ok=True)
         publication = build_and_publish_projects_with_evidence(
             repo_path,
-            list(ordered_projects),
-            container,
-            version,
+            list(project_paths),
+            self._container,
+            self._version,
             evidence_directory,
         )
         return ProjectPublication(
-            project_paths=ordered_projects,
+            project_paths=project_paths,
             package_paths=publication.package_paths,
             apps=tuple(
                 _app_inventory_from_package(
@@ -120,30 +149,42 @@ class DefaultProjectPublisher:
             ),
         )
 
-    __call__ = publish
-
 
 class DefaultExactTestRunner:
+    def __init__(self, container: ContainerConfig) -> None:
+        self._container = container
+
     def run(
         self,
-        tests: Sequence[TestEntry],
+        tests: tuple[TestEntry, ...],
         expectation: TestExpectation,
-        container: ContainerConfig,
+        repo_path: Path,
+    ) -> TestRunSummary:
+        with tempfile.TemporaryDirectory(prefix=".bcbench-test-evidence-", dir=repo_path) as evidence_directory:
+            return self.run_with_evidence(
+                tests,
+                expectation,
+                repo_path,
+                Path(evidence_directory),
+            ).summary
+
+    def run_with_evidence(
+        self,
+        tests: tuple[TestEntry, ...],
+        expectation: TestExpectation,
         repo_path: Path,
         evidence_directory: Path,
     ) -> TestSuiteEvidence:
-        test_entries = list(tests)
+        evidence_directory.mkdir(parents=True, exist_ok=True)
         evidence = run_test_suite_with_evidence(
-            test_entries,
+            list(tests),
             expectation,
-            container,
+            self._container,
             repo_path,
             evidence_directory,
         )
-        _require_exact_test_summary(evidence.summary, test_entries, expectation)
+        _require_exact_test_summary(evidence.summary, tests, expectation)
         return evidence
-
-    __call__ = run
 
 
 @dataclass
@@ -216,8 +257,8 @@ class BugFixPhaseRunner:
         container: ContainerConfig,
         version: str,
         project_paths: Sequence[str] = (),
-        publisher: ProjectPublisher | None = None,
-        test_runner: ExactTestRunner | None = None,
+        publisher: ProjectPublisher | EvidenceProjectPublisher | None = None,
+        test_runner: ExactTestRunner | EvidenceExactTestRunner | None = None,
         patch_applier: PatchApplier = apply_patch,
         workspace_cleaner: WorkspaceCleaner = remove_tree,
         workspace_hasher: WorkspaceHasher = materialized_workspace_tree_hash,
@@ -237,8 +278,8 @@ class BugFixPhaseRunner:
         self._container = container
         self._version = version
         self._project_paths = tuple(project_paths)
-        self._publisher = publisher or DefaultProjectPublisher()
-        self._test_runner = test_runner or DefaultExactTestRunner()
+        self._publisher = publisher or DefaultProjectPublisher(container, version)
+        self._test_runner = test_runner or DefaultExactTestRunner(container)
         self._patch_applier = patch_applier
         self._workspace_cleaner = workspace_cleaner
         self._workspace_hasher = workspace_hasher
@@ -498,11 +539,9 @@ class BugFixPhaseRunner:
         submission: GeneratedBugFixOutput,
         sf: CheckpointManifest,
         benchmark_patch: str,
-        fail_to_pass: Sequence[TestEntry],
-        pass_to_pass: Sequence[TestEntry],
+        benchmark_tests: tuple[TestEntry, ...],
     ) -> BugFixPhaseResult:
         benchmark_patch_hash = sha256_text(benchmark_patch)
-        benchmark_tests = (*fail_to_pass, *pass_to_pass)
         source_description = self._source_description(
             generated_fix_patch=submission.fix_patch,
             trusted_benchmark_patch=benchmark_patch,
@@ -771,14 +810,31 @@ class BugFixPhaseRunner:
         evidence_directory = self._operation_evidence_directory(state, "publication")
         self._verify_materialized_source(state)
         try:
-            publish = getattr(self._publisher, "publish", self._publisher)
-            returned = publish(
-                state.workspace,
-                tuple(project_paths),
-                self._container,
-                self._version,
-                evidence_directory,
-            )
+            requested_projects = tuple(project_paths)
+            publish_with_evidence = getattr(self._publisher, "build_and_publish_with_evidence", None)
+            if publish_with_evidence is not None:
+                returned = publish_with_evidence(
+                    state.workspace,
+                    requested_projects,
+                    evidence_directory,
+                )
+            else:
+                build_and_publish = getattr(self._publisher, "build_and_publish", None)
+                if build_and_publish is not None:
+                    package_paths = build_and_publish(state.workspace, requested_projects)
+                    returned = ProjectPublication(
+                        project_paths=requested_projects,
+                        package_paths=tuple(package_paths),
+                    )
+                else:
+                    legacy_publish = getattr(self._publisher, "publish", self._publisher)
+                    returned = legacy_publish(
+                        state.workspace,
+                        requested_projects,
+                        self._container,
+                        self._version,
+                        evidence_directory,
+                    )
         except BuildError as error:
             if trusted:
                 raise BugFixLifecycleInfrastructureError(f"Trusted project publication failed: {error}") from error
@@ -915,28 +971,45 @@ class BugFixPhaseRunner:
         workspace: Path,
     ) -> TestRunSummary:
         evidence_directory = self._operation_evidence_directory(state, "tests")
-        run = getattr(self._test_runner, "run", self._test_runner)
         try:
-            returned = run(
-                tuple(tests),
-                expectation,
-                self._container,
-                workspace,
-                evidence_directory,
-            )
+            requested_tests = tuple(tests)
+            run_with_evidence = getattr(self._test_runner, "run_with_evidence", None)
+            if run_with_evidence is not None:
+                returned = run_with_evidence(
+                    requested_tests,
+                    expectation,
+                    workspace,
+                    evidence_directory,
+                )
+            else:
+                run = getattr(self._test_runner, "run", None)
+                returned = (
+                    run(requested_tests, expectation, workspace)
+                    if run is not None
+                    else self._test_runner(
+                        requested_tests,
+                        expectation,
+                        self._container,
+                        workspace,
+                        evidence_directory,
+                    )
+                )
         except (OSError, ValueError, ET.ParseError) as error:
             raise BugFixLifecycleInfrastructureError(f"Invalid exact test evidence: {error}") from error
-        if not isinstance(returned, TestSuiteEvidence):
-            raise BugFixLifecycleInfrastructureError("Exact test runner must return typed test evidence")
-        summary = returned.summary
-        for path in (
-            returned.command_path,
-            returned.stdout_path,
-            returned.stderr_path,
-            *returned.discovery_paths,
-            *returned.junit_paths,
-        ):
-            state.evidence_sources[f"raw_{len(state.evidence_sources):03d}_{path.name}"] = path
+        if isinstance(returned, TestSuiteEvidence):
+            summary = returned.summary
+            for path in (
+                returned.command_path,
+                returned.stdout_path,
+                returned.stderr_path,
+                *returned.discovery_paths,
+                *returned.junit_paths,
+            ):
+                state.evidence_sources[f"raw_{len(state.evidence_sources):03d}_{path.name}"] = path
+        elif isinstance(returned, TestRunSummary):
+            summary = returned
+        else:
+            raise BugFixLifecycleInfrastructureError("Exact test runner must return a test summary or typed test evidence")
         _require_exact_test_summary(summary, tests, expectation)
         return summary
 
