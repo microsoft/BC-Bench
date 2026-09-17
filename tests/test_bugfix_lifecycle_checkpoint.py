@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import subprocess
 from dataclasses import FrozenInstanceError
@@ -147,6 +148,160 @@ def _manager(tmp_path: Path) -> tuple[CheckpointManager, FakePowerShellRunner, B
         expected_company="CRONUS",
     )
     return manager, runner, paths, app
+
+
+def test_checkpoint_readiness_uses_setup_exported_evaluator_credentials_without_serializing_secret(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _paths(tmp_path)
+    app = _app()
+    identity = _identity()
+    module_path = tmp_path / "CheckpointCredentialContract.psm1"
+    module_path.write_text(
+        f"""
+$script:app = '{json.dumps(app.to_dict(), separators=(",", ":"))}' | ConvertFrom-Json
+$script:identity = '{json.dumps(identity.to_dict(), separators=(",", ":"))}' | ConvertFrom-Json
+
+function Backup-BCBenchCheckpoint {{
+    param(
+        [string]$Name,
+        [string]$ContainerName,
+        [string]$ExpectedContainerId,
+        [string]$ExpectedInvocationId,
+        [string]$StagingDirectory
+    )
+    $backupPath = Join-Path $StagingDirectory 'database.bak'
+    [IO.File]::WriteAllBytes($backupPath, [Text.Encoding]::UTF8.GetBytes('verified database backup'))
+    [PSCustomObject][ordered]@{{
+        name = $Name
+        backup_path = $backupPath
+        sha256 = (Get-FileHash -LiteralPath $backupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        database_name = 'BC'
+        database_folder = 'C:\\databases'
+        container = $script:identity
+        apps = @($script:app)
+        service = [PSCustomObject]@{{
+            server_instance = 'BC'
+            previous_process_id = 100
+            state = 'Stopped'
+        }}
+    }}
+}}
+
+function Start-BCBenchServiceTier {{
+    param(
+        [string]$ContainerName,
+        [string]$ExpectedContainerId,
+        [string]$ExpectedInvocationId,
+        [string]$ServerInstance,
+        [int]$PreviousProcessId
+    )
+    [PSCustomObject]@{{ restarted = $true }}
+}}
+
+function Test-BCBenchReadiness {{
+    param(
+        [string]$ContainerName,
+        [string]$ExpectedContainerId,
+        [string]$ExpectedInvocationId,
+        [PSCredential]$Credential,
+        [string]$ExpectedCompany,
+        [PSObject]$ExpectedContainerIdentity,
+        [string]$ExpectedDatabaseName,
+        [string]$ExpectedDatabaseFolder,
+        [object[]]$ExpectedAppInventory,
+        [int]$TimeoutSeconds,
+        [int]$PollIntervalSeconds
+    )
+    if ($null -eq $Credential) {{ throw 'Readiness received a null credential.' }}
+    if ($Credential.UserName -cne $env:BC_SERVER_USERNAME) {{ throw 'Readiness received the wrong username.' }}
+    if ($Credential.GetNetworkCredential().Password -cne $env:BC_SERVER_PASSWORD) {{
+        throw 'Readiness received the wrong password.'
+    }}
+    if ($ExpectedCompany -cne $env:BC_COMPANY) {{ throw 'Readiness received the wrong company.' }}
+    [PSCustomObject][ordered]@{{
+        container = $script:identity
+        apps = @($script:app)
+        database_name = $ExpectedDatabaseName
+        database_folder = $ExpectedDatabaseFolder
+        database_online = $true
+        company_endpoint_ready = $true
+        test_discovery_ready = $true
+        test_count = 0
+    }}
+}}
+
+function Restore-BCBenchCheckpoint {{
+    param(
+        [string]$ContainerName,
+        [string]$ExpectedContainerId,
+        [string]$ExpectedInvocationId,
+        [PSObject]$Manifest,
+        [PSCredential]$Credential,
+        [string]$ExpectedCompany,
+        [int]$TimeoutSeconds,
+        [int]$PollIntervalSeconds
+    )
+    if ($null -eq $Credential) {{ throw 'Restore received a null credential.' }}
+    if ($Credential.UserName -cne $env:BC_SERVER_USERNAME) {{ throw 'Restore received the wrong username.' }}
+    if ($Credential.GetNetworkCredential().Password -cne $env:BC_SERVER_PASSWORD) {{
+        throw 'Restore received the wrong password.'
+    }}
+    if ($ExpectedCompany -cne $env:BC_COMPANY) {{ throw 'Restore received the wrong company.' }}
+    [PSCustomObject][ordered]@{{
+        container = $script:identity
+        apps = @($script:app)
+        database_name = [string]$Manifest.database_name
+        database_folder = [string]$Manifest.database_folder
+        database_online = $true
+        service_restarted = $true
+        company_endpoint_ready = $true
+        test_discovery_ready = $true
+        test_count = 0
+    }}
+}}
+""",
+        encoding="utf-8",
+    )
+    password = "checkpoint-evaluator-secret"
+    monkeypatch.setenv("BC_SERVER_USERNAME", "checkpoint-evaluator")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", password)
+    monkeypatch.setenv("BC_COMPANY", "CRONUS")
+    invocations: list[subprocess.CompletedProcess[str]] = []
+
+    def powershell_runner(script: str) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            ["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+            env={**os.environ},
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        invocations.append(result)
+        return result
+
+    manager = CheckpointManager(
+        paths,
+        EvidenceStore(paths),
+        powershell_runner,
+        container_name="bc-checkpoint",
+        container_id=identity.container_id,
+        invocation_id="invocation-id",
+        expected_company="CRONUS",
+        module_path=module_path,
+    )
+
+    manifest = manager.capture("baseline", (app,))
+    manager.restore(manifest, (app,))
+
+    assert len(invocations) == 3
+    assert all(password not in " ".join(result.args) for result in invocations)
+    assert all(password not in result.stdout for result in invocations)
+    assert all(password not in result.stderr for result in invocations)
+    assert password not in json.dumps(manifest.to_dict())
+    assert all("BCBENCH_EVALUATOR_" not in " ".join(result.args) for result in invocations)
 
 
 def test_checkpoint_models_are_immutable_and_json_paths_are_explicit(tmp_path: Path) -> None:
