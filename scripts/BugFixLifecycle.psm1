@@ -1597,12 +1597,14 @@ function Invoke-BCBenchAgentBcUserRemoval {
         param([string]$Username)
 
         $serverInstance = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance
-        $existingUser = Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username
+        $existingUser = @(Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default") |
+            Where-Object { $_.'User Name' -eq $Username }
         if ($null -eq $existingUser) {
             return
         }
         Remove-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username -Force
-        if ($null -ne (Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username)) {
+        if ($null -ne (@(Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default") |
+                Where-Object { $_.'User Name' -eq $Username })) {
             throw "BC user '$Username' still exists after removal."
         }
     } -ArgumentList $Username
@@ -1618,7 +1620,8 @@ function Assert-BCBenchAgentBcUserAbsent {
         param([string]$Username)
 
         $serverInstance = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance
-        if ($null -ne (Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username)) {
+        if ($null -ne (@(Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default") |
+                Where-Object { $_.'User Name' -eq $Username })) {
             throw "BC user '$Username' still exists after removal."
         }
     } -ArgumentList $Username

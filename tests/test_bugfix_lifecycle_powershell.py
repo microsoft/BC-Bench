@@ -906,13 +906,14 @@ Remove-BCBenchAgentAcl `
     assert payload["cleanupComplete"] is True
 
 
-def test_bc_user_uses_distinct_credential_super_and_pinned_helper_fallback_cleanup() -> None:
+def test_bc_user_uses_real_navserveruser_contract_for_create_existence_removal_and_absence() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'
 $global:newCall = $null
 $global:removeCall = $null
-$global:userPresent = $true
+$global:users = @([PSCustomObject]@{{ 'User Name' = 'unrelated-user' }})
 $global:getUserCalls = 0
+$global:getUserParameters = @()
 Import-Module {_ps_quote(_MODULE)} -Force
 function global:Import-Module {{
     param([string]$Name, [version]$RequiredVersion, [switch]$Force, [switch]$DisableNameChecking)
@@ -927,6 +928,7 @@ function global:New-BcContainerBcUser {{
         PermissionSetId = $PermissionSetId
         ChangePasswordAtNextLogOn = $ChangePasswordAtNextLogOn
     }}
+    $global:users += [PSCustomObject]@{{ 'User Name' = $Credential.UserName }}
 }}
 function global:Invoke-ScriptInBcContainer {{
     param([string]$containerName, [scriptblock]$ScriptBlock, [object[]]$ArgumentList)
@@ -937,20 +939,33 @@ function global:Get-NAVServerInstance {{
     [PSCustomObject]@{{ ServerInstance = 'BC' }}
 }}
 function global:Get-NAVServerUser {{
-    param([string]$ServerInstance, [string]$Tenant, [string]$UserName)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerInstance,
+        [Parameter(Mandatory = $true)][string]$Tenant
+    )
     $global:getUserCalls++
-    if ($global:userPresent) {{ return [PSCustomObject]@{{ UserName = $UserName }} }}
-    return $null
+    $global:getUserParameters += [PSCustomObject]@{{
+        ServerInstance = $ServerInstance
+        Tenant = $Tenant
+    }}
+    return $global:users
 }}
 function global:Remove-NAVServerUser {{
-    param([string]$ServerInstance, [string]$Tenant, [string]$UserName, [switch]$Force)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerInstance,
+        [Parameter(Mandatory = $true)][string]$Tenant,
+        [Parameter(Mandatory = $true)][string]$UserName,
+        [switch]$Force
+    )
     $global:removeCall = [PSCustomObject]@{{
         ServerInstance = $ServerInstance
         Tenant = $Tenant
         Username = $UserName
         Force = [bool]$Force
     }}
-    $global:userPresent = $false
+    $global:users = @($global:users | Where-Object {{ $_.'User Name' -ne $UserName }})
 }}
 function global:Remove-BcContainerBcUser {{
     $global:inventedRemoveCalls++
@@ -979,7 +994,8 @@ Remove-BCBenchAgentBcUser `
     removeCall = $global:removeCall
     invokedContainer = $global:invokedContainer
     getUserCalls = $global:getUserCalls
-    userPresent = $global:userPresent
+    getUserParameters = $global:getUserParameters
+    remainingUsers = @($global:users | ForEach-Object {{ $_.'User Name' }})
     inventedRemoveCalls = $global:inventedRemoveCalls
 }} | ConvertTo-Json -Compress -Depth 6
 """
@@ -996,7 +1012,11 @@ Remove-BCBenchAgentBcUser `
     assert payload["removeCall"]["Username"] == payload["identity"]["Username"]
     assert payload["removeCall"]["Force"] is True
     assert payload["getUserCalls"] == 2
-    assert payload["userPresent"] is False
+    assert payload["getUserParameters"] == [
+        {"ServerInstance": "BC", "Tenant": "default"},
+        {"ServerInstance": "BC", "Tenant": "default"},
+    ]
+    assert payload["remainingUsers"] == ["unrelated-user"]
     assert payload["inventedRemoveCalls"] == 0
     assert payload["identity"]["Username"] != "admin"
 
@@ -1017,11 +1037,21 @@ function global:Get-NAVServerInstance {{
     [PSCustomObject]@{{ ServerInstance = 'BC' }}
 }}
 function global:Get-NAVServerUser {{
-    param([string]$ServerInstance, [string]$Tenant, [string]$UserName)
-    [PSCustomObject]@{{ UserName = $UserName }}
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerInstance,
+        [Parameter(Mandatory = $true)][string]$Tenant
+    )
+    [PSCustomObject]@{{ 'User Name' = 'bca-1234567-abcdef' }}
 }}
 function global:Remove-NAVServerUser {{
-    param([string]$ServerInstance, [string]$Tenant, [string]$UserName, [switch]$Force)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerInstance,
+        [Parameter(Mandatory = $true)][string]$Tenant,
+        [Parameter(Mandatory = $true)][string]$UserName,
+        [switch]$Force
+    )
 }}
 $ops = @{{
     InspectContainer = {{
@@ -1948,7 +1978,7 @@ function Test-AgentUserExists {{
     return [bool](Invoke-ScriptInBcContainer -containerName $ContainerName -ScriptBlock {{
         param([string]$Username)
         $serverInstance = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance
-        return $null -ne (Get-NAVServerUser -ServerInstance $serverInstance -Tenant 'default' -UserName $Username)
+        return $null -ne (@(Get-NAVServerUser -ServerInstance $serverInstance -Tenant 'default') | Where-Object {{ $_.'User Name' -eq $Username }})
     }} -ArgumentList $Username)
 }}
 $PSDefaultParameterValues['Remove-BCBenchAgentBcUser:ExpectedContainerId'] = {_ps_quote(container_id)}
