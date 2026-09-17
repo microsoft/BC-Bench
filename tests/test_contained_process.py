@@ -222,7 +222,7 @@ def _is_elevated() -> bool:
     return bool(ctypes.windll.shell32.IsUserAnAdmin())
 
 
-def _named_pipe_exists(path: str) -> bool:
+def _can_open_named_pipe(path: str) -> bool:
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateFileW.argtypes = (
         ctypes.c_wchar_p,
@@ -238,7 +238,7 @@ def _named_pipe_exists(path: str) -> bool:
     kernel32.CloseHandle.restype = ctypes.c_bool
     handle = kernel32.CreateFileW(path, 0xC0000000, 0, None, 3, 0, None)
     if handle == ctypes.c_void_p(-1).value:
-        return ctypes.get_last_error() != 2
+        return False
     kernel32.CloseHandle(handle)
     return True
 
@@ -871,8 +871,11 @@ def test_windows_identity_isolated_environment_workspace_and_docker_access(tmp_p
         pytest.skip("requires an elevated Windows process to create and remove a disposable local user")
     if shutil.which("docker") is None:
         pytest.skip("requires the Docker CLI for the WindowsIdentity isolation e2e test")
-    if not _named_pipe_exists(r"\\.\pipe\docker_engine"):
-        pytest.skip(r"requires an available \\.\pipe\docker_engine endpoint for the WindowsIdentity isolation e2e test")
+    evaluator_docker = subprocess.run(["docker", "version"], capture_output=True, text=True, timeout=15, check=False)
+    if evaluator_docker.returncode != 0:
+        pytest.skip("requires evaluator access to the Docker daemon for the WindowsIdentity isolation e2e test")
+    if not _can_open_named_pipe(r"\\.\pipe\docker_engine"):
+        pytest.skip(r"requires evaluator access to \\.\pipe\docker_engine for the WindowsIdentity isolation e2e test")
 
     username = f"bcbench-e2e-{secrets.token_hex(3)}"
     password = _random_password()

@@ -291,7 +291,10 @@ function New-BCContainerSync {
         [string]$AuthType = "UserPassword",
 
         [Parameter(Mandatory = $false)]
-        [string[]]$AdditionalFolders = @()
+        [string[]]$AdditionalFolders = @(),
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$AdditionalParameters = @()
     )
 
     Write-Log "Creating container: $ContainerName" -Level Info
@@ -317,6 +320,9 @@ function New-BCContainerSync {
         $params.accept_insiderEula = $true
     }
 
+    if ($AdditionalFolders.Count -gt 0 -and $AdditionalParameters.Count -gt 0) {
+        throw "AdditionalFolders and AdditionalParameters cannot be used together."
+    }
     if ($AdditionalFolders -and $AdditionalFolders.Count -gt 0) {
         [string[]]$volumeMappings = @()
         foreach ($folder in $AdditionalFolders) {
@@ -324,6 +330,9 @@ function New-BCContainerSync {
             $volumeMappings += "${folder}:C:\Source"
         }
         $params.additionalParameters = $volumeMappings
+    }
+    elseif ($AdditionalParameters.Count -gt 0) {
+        $params.additionalParameters = $AdditionalParameters
     }
 
     New-BCContainer @params

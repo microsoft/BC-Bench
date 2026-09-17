@@ -218,83 +218,133 @@ function Assert-BCBenchLifecycleTopology {
     }
 }
 
-function Set-BCBenchPathAcl {
+function Invoke-BCBenchIcacls {
     param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][object[]]$Rules,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [scriptblock]$Runner
+    )
+
+    $exitCode = if ($null -ne $Runner) {
+        & $Runner $Arguments
+    }
+    else {
+        & icacls.exe @Arguments | Out-Host
+        $LASTEXITCODE
+    }
+    if ($null -eq $exitCode -or [int]$exitCode -ne 0) {
+        throw "icacls failed with exit code $exitCode for arguments: $($Arguments -join ' ')"
+    }
+}
+
+function Get-BCBenchIcaclsGrant {
+    param(
+        [Parameter(Mandatory = $true)][PSObject]$Rule,
         [switch]$IsFile
     )
 
-    Assert-BCBenchNoReparseComponents -Path $Path
-    if ($IsFile) {
-        $security = [Security.AccessControl.FileSecurity]::new()
-        $inheritance = [Security.AccessControl.InheritanceFlags]::None
-        $target = [IO.FileInfo]::new($Path)
+    $identity = [string]$Rule.Identity
+    if ($identity -match "^S-\d(-\d+)+$") {
+        $identity = "*$identity"
     }
-    else {
-        $security = [Security.AccessControl.DirectorySecurity]::new()
-        $inheritance = [Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit"
-        $target = [IO.DirectoryInfo]::new($Path)
+    $permission = switch ([string]$Rule.Rights) {
+        "FullControl" { "F" }
+        "Modify" { "M" }
+        "ReadAndExecute" { "RX" }
+        "Traverse" { "(X)" }
+        default { throw "Unsupported icacls permission '$($Rule.Rights)'." }
     }
-    $security.SetAccessRuleProtection($true, $false)
-    $security.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User)
-    foreach ($rule in $Rules) {
-        [Security.Principal.IdentityReference]$identityReference = if ([string]$rule.Identity -match "^S-\d(-\d+)+$") {
-            [Security.Principal.SecurityIdentifier]::new([string]$rule.Identity)
-        }
-        else {
-            [Security.Principal.NTAccount]::new([string]$rule.Identity)
-        }
-        $security.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
-            $identityReference,
-            [Security.AccessControl.FileSystemRights]$rule.Rights,
-            $inheritance,
-            [Security.AccessControl.PropagationFlags]::None,
-            [Security.AccessControl.AccessControlType]::Allow
-        )) | Out-Null
-    }
-    [IO.FileSystemAclExtensions]::SetAccessControl($target, $security)
+    $inheritance = if ($IsFile -or $permission -eq "(X)") { "" } else { "(OI)(CI)" }
+    return "${identity}:$inheritance$permission"
 }
 
-function Invoke-BCBenchAclSet {
+function Test-BCBenchAclIdentity {
+    param(
+        [Parameter(Mandatory = $true)][Security.Principal.IdentityReference]$Actual,
+        [Parameter(Mandatory = $true)][string]$Expected
+    )
+
+    if ($Actual.Value.Equals($Expected, [StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+    }
+    try {
+        $actualSid = $Actual.Translate([Security.Principal.SecurityIdentifier]).Value
+        $expectedSid = if ($Expected -match "^S-\d(-\d+)+$") {
+            $Expected
+        }
+        else {
+            ([Security.Principal.NTAccount]::new($Expected)).Translate([Security.Principal.SecurityIdentifier]).Value
+        }
+        return $actualSid.Equals($expectedSid, [StringComparison]::OrdinalIgnoreCase)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Assert-BCBenchAcl {
+    param([Parameter(Mandatory = $true)][PSObject]$Parameters)
+
+    $acl = Get-Acl -LiteralPath $Parameters.Path
+    if ($Parameters.InheritanceRemoved -and -not $acl.AreAccessRulesProtected) {
+        throw "ACL verification failed for '$($Parameters.Path)': inheritance is still enabled."
+    }
+    foreach ($expectedRule in $Parameters.ExpectedRules) {
+        $expectedRights = [Security.AccessControl.FileSystemRights]$expectedRule.Rights
+        $matchingRule = @($acl.Access | Where-Object {
+            $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+            (Test-BCBenchAclIdentity -Actual $_.IdentityReference -Expected ([string]$expectedRule.Identity)) -and
+            ($_.FileSystemRights -band $expectedRights) -eq $expectedRights
+        })
+        if ($matchingRule.Count -eq 0) {
+            throw "ACL verification failed for '$($Parameters.Path)': '$($expectedRule.Identity)' lacks '$($expectedRule.Rights)'."
+        }
+    }
+    if ($Parameters.AgentMustBeAbsent) {
+        $agentGrant = @($acl.Access | Where-Object {
+            $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+            (Test-BCBenchAclIdentity -Actual $_.IdentityReference -Expected ([string]$Parameters.AgentAccount))
+        })
+        if ($agentGrant.Count -gt 0) {
+            throw "ACL verification failed for '$($Parameters.Path)': agent grants remain."
+        }
+    }
+}
+
+function Set-BCBenchExplicitAcl {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][object[]]$Rules,
-        [switch]$IsFile,
-        [scriptblock]$AclSetter
-    )
-
-    if ($null -ne $AclSetter) {
-        foreach ($rule in $Rules) {
-            & $AclSetter $Path ([string]$rule.Identity) ([string]$rule.Rights) ([bool]$IsFile)
-        }
-        return
-    }
-    Set-BCBenchPathAcl -Path $Path -Rules $Rules -IsFile:$IsFile
-}
-
-function Add-BCBenchToolRootAccess {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$AgentAccount,
-        [scriptblock]$AclSetter
+        [switch]$IsFile,
+        [switch]$RemoveAgent,
+        [switch]$PreserveInheritance,
+        [scriptblock]$IcaclsRunner,
+        [scriptblock]$AclVerifier
     )
 
-    if ($null -ne $AclSetter) {
-        & $AclSetter $Path $AgentAccount "ReadAndExecute" $false
-        return
-    }
     Assert-BCBenchNoReparseComponents -Path $Path
-    $directory = [IO.DirectoryInfo]::new($Path)
-    $security = [IO.FileSystemAclExtensions]::GetAccessControl($directory)
-    $security.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
-        $AgentAccount,
-        [Security.AccessControl.FileSystemRights]::ReadAndExecute,
-        [Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit",
-        [Security.AccessControl.PropagationFlags]::None,
-        [Security.AccessControl.AccessControlType]::Allow
-    )) | Out-Null
-    [IO.FileSystemAclExtensions]::SetAccessControl($directory, $security)
+    if (-not $PreserveInheritance) {
+        Invoke-BCBenchIcacls -Arguments @($Path, "/inheritance:r") -Runner $IcaclsRunner
+    }
+    $grants = @($Rules | ForEach-Object { Get-BCBenchIcaclsGrant -Rule $_ -IsFile:$IsFile })
+    Invoke-BCBenchIcacls -Arguments (@($Path, "/grant:r") + $grants) -Runner $IcaclsRunner
+    if ($RemoveAgent) {
+        Invoke-BCBenchIcacls -Arguments @($Path, "/remove:g", $AgentAccount) -Runner $IcaclsRunner
+    }
+    $verification = [PSCustomObject]@{
+        Path               = $Path
+        ExpectedRules      = @($Rules)
+        AgentAccount       = $AgentAccount
+        AgentMustBeAbsent  = [bool]$RemoveAgent
+        InheritanceRemoved = -not $PreserveInheritance
+        IsFile             = [bool]$IsFile
+    }
+    if ($null -ne $AclVerifier) {
+        & $AclVerifier $verification
+    }
+    else {
+        Assert-BCBenchAcl -Parameters $verification
+    }
 }
 
 function Test-BCBenchIdentityAccess {
@@ -464,7 +514,8 @@ function Set-BCBenchWorkspaceAcl {
         [Parameter(Mandatory = $true)][string[]]$ToolRoots,
         [string[]]$WorkerRequestPaths = @(),
         [string[]]$WorkerOutputPaths = @(),
-        [Parameter(DontShow = $true)][scriptblock]$AclSetter,
+        [Parameter(DontShow = $true)][scriptblock]$IcaclsRunner,
+        [Parameter(DontShow = $true)][scriptblock]$AclVerifier,
         [Parameter(DontShow = $true)][scriptblock]$AccessValidator
     )
 
@@ -523,24 +574,69 @@ function Set-BCBenchWorkspaceAcl {
     $agentTraverse = [PSCustomObject]@{ Identity = $agentAccount; Rights = "Traverse" }
     $agentModify = [PSCustomObject]@{ Identity = $agentAccount; Rights = "Modify" }
 
-    Invoke-BCBenchAclSet -Path $EntryRoot -Rules ($baseRules + $agentTraverse) -AclSetter $AclSetter
+    Set-BCBenchExplicitAcl `
+        -Path $EntryRoot `
+        -Rules ($baseRules + $agentTraverse) `
+        -AgentAccount $agentAccount `
+        -IcaclsRunner $IcaclsRunner `
+        -AclVerifier $AclVerifier
     foreach ($privatePath in @($BaselineWorkspace, $MountedStaging, $EvaluatorWorkspaces, $Evidence, $ProtectedRoot)) {
-        Invoke-BCBenchAclSet -Path $privatePath -Rules $baseRules -AclSetter $AclSetter
+        Set-BCBenchExplicitAcl `
+            -Path $privatePath `
+            -Rules $baseRules `
+            -AgentAccount $agentAccount `
+            -RemoveAgent `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
     }
-    Invoke-BCBenchAclSet -Path $AgentWorkspace -Rules ($baseRules + $agentModify) -AclSetter $AclSetter
-    Invoke-BCBenchAclSet -Path $AgentLogs -Rules ($baseRules + $agentModify) -AclSetter $AclSetter
+    Set-BCBenchExplicitAcl `
+        -Path $AgentWorkspace `
+        -Rules ($baseRules + $agentModify) `
+        -AgentAccount $agentAccount `
+        -IcaclsRunner $IcaclsRunner `
+        -AclVerifier $AclVerifier
+    Set-BCBenchExplicitAcl `
+        -Path $AgentLogs `
+        -Rules ($baseRules + $agentModify) `
+        -AgentAccount $agentAccount `
+        -IcaclsRunner $IcaclsRunner `
+        -AclVerifier $AclVerifier
     foreach ($toolRoot in $ToolRoots | Select-Object -Unique) {
-        Add-BCBenchToolRootAccess -Path $toolRoot -AgentAccount $agentAccount -AclSetter $AclSetter
+        $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
+        Set-BCBenchExplicitAcl `
+            -Path $toolRoot `
+            -Rules @($agentRead) `
+            -AgentAccount $agentAccount `
+            -PreserveInheritance `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
     }
     if ($WorkerRequestPaths.Count -gt 0 -or $WorkerOutputPaths.Count -gt 0) {
-        Invoke-BCBenchAclSet -Path $MountedStaging -Rules ($baseRules + $agentTraverse) -AclSetter $AclSetter
+        Set-BCBenchExplicitAcl `
+            -Path $MountedStaging `
+            -Rules ($baseRules + $agentTraverse) `
+            -AgentAccount $agentAccount `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
     }
     foreach ($requestPath in $WorkerRequestPaths) {
         $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
-        Invoke-BCBenchAclSet -Path $requestPath -Rules ($baseRules + $agentRead) -IsFile -AclSetter $AclSetter
+        Set-BCBenchExplicitAcl `
+            -Path $requestPath `
+            -Rules ($baseRules + $agentRead) `
+            -AgentAccount $agentAccount `
+            -IsFile `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
     }
     foreach ($outputPath in $WorkerOutputPaths) {
-        Invoke-BCBenchAclSet -Path $outputPath -Rules ($baseRules + $agentModify) -IsFile -AclSetter $AclSetter
+        Set-BCBenchExplicitAcl `
+            -Path $outputPath `
+            -Rules ($baseRules + $agentModify) `
+            -AgentAccount $agentAccount `
+            -IsFile `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
     }
 
     $validationParameters = @{
@@ -604,18 +700,18 @@ function Remove-BCBenchAgentBcUser {
         throw "Refusing to remove unexpected BC username '$Username'."
     }
     Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
-    $credential = [PSCredential]::new($Username, (ConvertTo-SecureString $Password -AsPlainText -Force))
-    if ($null -ne (Get-Command Remove-BcContainerBcUser -ErrorAction SilentlyContinue)) {
-        Remove-BcContainerBcUser -containerName $ContainerName -Credential $credential
-        return
-    }
-
-    # BcContainerHelper 6.1.18 creates BC users but does not yet export its matching removal helper.
     Invoke-ScriptInBcContainer -containerName $ContainerName -ScriptBlock {
         param([string]$Username)
 
         $serverInstance = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance
+        $existingUser = Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username
+        if ($null -eq $existingUser) {
+            return
+        }
         Remove-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username -Force
+        if ($null -ne (Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username)) {
+            throw "BC user '$Username' still exists after removal."
+        }
     } -ArgumentList $Username
 }
 
@@ -747,13 +843,19 @@ function Invoke-BCBenchBugFixLifecycle {
         EvaluatorCredential    = $null
         AgentIdentity          = $null
         AgentBcIdentity        = $null
+        EvaluatorContainerConfig = $null
+        AgentContainerConfig     = $null
+        ContainerPreexisted      = $null
+        ContainerSuccessfullyCreated = $false
         Company                = $null
         BcMcpUrl               = $null
         AlToolDotNetVersion    = $null
     }
     $createdEntryRoot = $false
     $createdProtectedRoot = $false
-    $createdContainer = $false
+    $containerOwnershipChecked = $false
+    $containerPreexisted = $false
+    $successfullyCreatedContainer = $false
     $createdAgentIdentity = $false
     $createdAgentBcIdentity = $false
     $oldGithubToken = $env:GITHUB_TOKEN
@@ -812,15 +914,22 @@ function Invoke-BCBenchBugFixLifecycle {
                 -SparseCheckoutPaths $cloneInfo.SparseCheckoutPaths
         } | Out-Null
 
-        $createdContainer = $true
+        $containerPreexisted = [bool](Invoke-BCBenchOperation -Operations $Operations -Name TestContainerExists -Context $context -Default {
+            param($operationContext)
+            Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+            Import-Module (Join-Path $PSScriptRoot "BCContainerManagement.psm1") -Force -DisableNameChecking
+            return Test-ContainerExists -ContainerName $operationContext.ContainerName
+        })
+        $containerOwnershipChecked = $true
+        $context.ContainerPreexisted = $containerPreexisted
+        if ($containerPreexisted) {
+            throw "Container '$($context.ContainerName)' already exists."
+        }
         Invoke-BCBenchOperation -Operations $Operations -Name CreateContainer -Context $context -Default {
             param($operationContext)
             Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
             Import-Module (Join-Path $PSScriptRoot "BCBenchUtils.psm1") -Force -DisableNameChecking
             Import-Module (Join-Path $PSScriptRoot "BCContainerManagement.psm1") -Force -DisableNameChecking
-            if (Test-ContainerExists -ContainerName $operationContext.ContainerName) {
-                throw "Container '$($operationContext.ContainerName)' already exists."
-            }
             $artifactParameters = @{ version = $operationContext.Version; Country = $operationContext.Country }
             $artifactConfig = Get-BCBenchArtifactConfig -Category $operationContext.Category
             foreach ($key in $artifactConfig.Keys) { $artifactParameters[$key] = $artifactConfig[$key] }
@@ -835,27 +944,16 @@ function Invoke-BCBenchBugFixLifecycle {
                 $additionalParameters += "--volume"
                 $additionalParameters += "$($mapping[0]):$($mapping[1])"
             }
-            $containerParameters = @{
-                artifactUrl              = $operationContext.ArtifactUrl
-                containerName            = $operationContext.ContainerName
-                auth                     = "UserPassword"
-                credential               = $operationContext.EvaluatorCredential
-                includeTestToolkit       = $true
-                includeTestLibrariesOnly = $true
-                multitenant              = $false
-                shortcuts                = "None"
-                memoryLimit              = "16G"
-                isolation                = "hyperv"
-                accept_eula              = $true
-                additionalParameters     = $additionalParameters
-            }
-            if ($artifactConfig.accept_insiderEula) { $containerParameters.accept_insiderEula = $true }
-            New-BcContainer @containerParameters
-            if ($operationContext.Version.StartsWith("24")) {
-                $manifestPath = "C:\ProgramData\BcContainerHelper\Extensions\$($operationContext.ContainerName)\manifest.json"
-                '{"dotNetVersion":"8.0.0"}' | Set-Content -LiteralPath $manifestPath -Encoding utf8 -Force
-            }
+            New-BCContainerSync `
+                -ContainerName $operationContext.ContainerName `
+                -Version $operationContext.Version `
+                -ArtifactUrl $operationContext.ArtifactUrl `
+                -Credential $operationContext.EvaluatorCredential `
+                -AcceptInsiderEula ([bool]$artifactConfig.accept_insiderEula) `
+                -AdditionalParameters $additionalParameters
         } | Out-Null
+        $successfullyCreatedContainer = $true
+        $context.ContainerSuccessfullyCreated = $true
 
         Invoke-BCBenchOperation -Operations $Operations -Name CreateCompiler -Context $context -Default {
             param($operationContext)
@@ -920,6 +1018,28 @@ function Invoke-BCBenchBugFixLifecycle {
         } | Out-Null
 
         $evaluatorPasswordText = ConvertFrom-BCBenchSecureString -SecureString $EvaluatorPassword
+        Write-BCBenchSecretMask -Secret $evaluatorPasswordText
+        Write-BCBenchSecretMask -Secret $context.AgentBcIdentity.Password
+        $serverUrl = "http://$($context.ContainerName)"
+        $serverInstance = "BC"
+        $context.EvaluatorContainerConfig = [PSCustomObject][ordered]@{
+            name            = $context.ContainerName
+            username        = $context.EvaluatorUsername
+            password        = $evaluatorPasswordText
+            company         = [string]$context.Company
+            server_url      = $serverUrl
+            server_instance = $serverInstance
+            mcp_url         = [string]$context.BcMcpUrl
+        }
+        $context.AgentContainerConfig = [PSCustomObject][ordered]@{
+            name            = $context.ContainerName
+            username        = $context.AgentBcIdentity.Username
+            password        = $context.AgentBcIdentity.Password
+            company         = [string]$context.Company
+            server_url      = $serverUrl
+            server_instance = $serverInstance
+            mcp_url         = [string]$context.BcMcpUrl
+        }
         $outputs = [ordered]@{
             entry_root                    = $context.EntryRoot
             baseline_workspace            = $context.BaselineWorkspace
@@ -935,8 +1055,8 @@ function Invoke-BCBenchBugFixLifecycle {
             container_name                = $context.ContainerName
             bc_version                    = $context.Version
             bc_country                    = $context.Country
-            bc_server_url                 = "http://$($context.ContainerName)"
-            bc_server_instance            = "BC"
+            bc_server_url                 = $serverUrl
+            bc_server_instance            = $serverInstance
             bc_mcp_url                    = [string]$context.BcMcpUrl
             evaluator_username            = $context.EvaluatorUsername
             evaluator_password            = $evaluatorPasswordText
@@ -946,6 +1066,8 @@ function Invoke-BCBenchBugFixLifecycle {
             agent_bc_username             = $context.AgentBcIdentity.Username
             agent_bc_password             = $context.AgentBcIdentity.Password
             bc_company                    = [string]$context.Company
+            evaluator_container_config    = ($context.EvaluatorContainerConfig | ConvertTo-Json -Compress)
+            agent_container_config        = ($context.AgentContainerConfig | ConvertTo-Json -Compress)
             al_tool_dotnet_version         = $context.AlToolDotNetVersion
             al_mcp                         = ([bool]$context.AlMcp).ToString().ToLowerInvariant()
             bc_mcp                         = ([bool]$context.BcMcp).ToString().ToLowerInvariant()
@@ -971,8 +1093,8 @@ function Invoke-BCBenchBugFixLifecycle {
             BCBENCH_AGENT_BC_USERNAME      = $context.AgentBcIdentity.Username
             BCBENCH_AGENT_BC_PASSWORD      = $context.AgentBcIdentity.Password
             BC_CONTAINER_NAME              = $context.ContainerName
-            BC_SERVER_URL                  = "http://$($context.ContainerName)"
-            BC_SERVER_INSTANCE             = "BC"
+            BC_SERVER_URL                  = $serverUrl
+            BC_SERVER_INSTANCE             = $serverInstance
             BC_SERVER_USERNAME             = $context.EvaluatorUsername
             BC_SERVER_PASSWORD             = $evaluatorPasswordText
             BC_COMPANY                     = [string]$context.Company
@@ -1010,7 +1132,19 @@ function Invoke-BCBenchBugFixLifecycle {
             }
             catch { $cleanupErrors.Add("local user: $($_.Exception.Message)") }
         }
-        if ($createdContainer) {
+        $removeOwnedContainer = $successfullyCreatedContainer
+        if ($containerOwnershipChecked -and -not $containerPreexisted -and -not $removeOwnedContainer) {
+            try {
+                $removeOwnedContainer = [bool](Invoke-BCBenchOperation -Operations $Operations -Name TestContainerExists -Context $context -Default {
+                    param($operationContext)
+                    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+                    Import-Module (Join-Path $PSScriptRoot "BCContainerManagement.psm1") -Force -DisableNameChecking
+                    return Test-ContainerExists -ContainerName $operationContext.ContainerName
+                })
+            }
+            catch { $cleanupErrors.Add("container ownership check: $($_.Exception.Message)") }
+        }
+        if ($containerOwnershipChecked -and -not $containerPreexisted -and $removeOwnedContainer) {
             try {
                 Invoke-BCBenchOperation -Operations $Operations -Name RemoveContainer -Context $context -Default {
                     param($operationContext)
