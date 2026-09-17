@@ -3026,6 +3026,44 @@ function Remove-BCBenchCreatedRoot {
     }
 }
 
+function Remove-BCBenchOwnedCompilerHelperRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
+        [Parameter(Mandatory = $true)][string]$EntryRoot,
+        [Parameter(Mandatory = $true)][string]$ProtectedRoot
+    )
+
+    $absolute = Resolve-BCBenchAbsolutePath -Path $Path
+    if ($absolute -eq [IO.Path]::GetPathRoot($absolute)) {
+        throw "Refusing to remove compiler/helper filesystem root '$absolute'."
+    }
+    Assert-BCBenchNoReparseComponents -Path $absolute
+    if (
+        (Test-BCBenchPathsOverlap -First $absolute -Second $EntryRoot) -or
+        (Test-BCBenchPathsOverlap -First $absolute -Second $ProtectedRoot)
+    ) {
+        throw "Owned compiler/helper root must be disjoint from EntryRoot and ProtectedRoot: $absolute"
+    }
+    if (-not (Test-Path -LiteralPath $absolute -PathType Container)) {
+        throw "Owned compiler/helper root is not an existing directory: $absolute"
+    }
+    $markerPath = Join-Path $absolute ".bcbench-owned"
+    Assert-BCBenchNoReparseComponents -Path $markerPath
+    if (-not (Test-Path -LiteralPath $markerPath -PathType Leaf)) {
+        throw "Owned compiler/helper root is missing its ownership marker: $absolute"
+    }
+    $markerValue = [IO.File]::ReadAllText($markerPath).TrimEnd([char[]]@("`r", "`n"))
+    if ($markerValue -cne $ExpectedInvocationId) {
+        throw "Owned compiler/helper root ownership marker does not match lifecycle invocation '$ExpectedInvocationId': $absolute"
+    }
+
+    Remove-BCBenchCreatedRoot -Path $absolute
+    if (Test-Path -LiteralPath $absolute) {
+        throw "Owned compiler/helper root still exists after removal: $absolute"
+    }
+}
+
 function Add-BCBenchOutput {
     param(
         [string]$Path,
@@ -3589,6 +3627,34 @@ function Invoke-BCBenchBugFixLifecycle {
             }
         }
 
+        [string[]]$compilerHelperRootsToCleanup = @($context.OwnedCompilerHelperRoots)
+        $compilerHelperRootCleanupSucceeded = $compilerHelperRootsToCleanup.Count -eq 0
+        if ($containerAbsenceVerified) {
+            $compilerHelperRootCleanupSucceeded = $true
+            foreach ($ownedCompilerHelperRoot in $compilerHelperRootsToCleanup) {
+                try {
+                    Remove-BCBenchOwnedCompilerHelperRoot `
+                        -Path $ownedCompilerHelperRoot `
+                        -ExpectedInvocationId $context.ContainerInvocationId `
+                        -EntryRoot $context.EntryRoot `
+                        -ProtectedRoot $context.ProtectedRoot
+                }
+                catch {
+                    $compilerHelperRootCleanupSucceeded = $false
+                    $cleanupErrors.Add(
+                        "owned compiler/helper root cleanup '$ownedCompilerHelperRoot': $($_.Exception.Message)"
+                    )
+                }
+            }
+        }
+        else {
+            foreach ($ownedCompilerHelperRoot in $compilerHelperRootsToCleanup) {
+                $cleanupErrors.Add(
+                    "compiler/helper root retained because container absence was not verified: $ownedCompilerHelperRoot"
+                )
+            }
+        }
+
         $aclCleanupSucceeded = -not $aclApplicationStarted
         if ($containerAbsenceVerified) {
             if ($aclApplicationStarted) {
@@ -3632,7 +3698,7 @@ function Invoke-BCBenchBugFixLifecycle {
                     }
                 }
             }
-            if ($aclCleanupSucceeded -and $localIdentityRequirementMet) {
+            if ($aclCleanupSucceeded -and $localIdentityRequirementMet -and $compilerHelperRootCleanupSucceeded) {
                 if ($createdEntryRoot) {
                     try { Remove-BCBenchCreatedRoot -Path $entryRootPath }
                     catch { $cleanupErrors.Add("entry root removal: $($_.Exception.Message)") }

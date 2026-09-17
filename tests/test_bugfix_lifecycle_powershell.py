@@ -2496,6 +2496,131 @@ catch {{
             assert "inspect-id:owned-id" in payload["order"]
 
 
+def _run_setup_failure_with_compiler_root(tmp_path: Path, failure_mode: str) -> dict[str, object]:
+    entry_root = tmp_path / "entry"
+    protected_root = tmp_path / "protected"
+    compiler_root = tmp_path / "compiler"
+    unlisted_root = tmp_path / "unlisted"
+    quarantine_path = tmp_path / "protected.quarantine.json"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:containerExists = $false
+$global:containerId = $null
+$global:containerLabel = $null
+$ops = @{{
+    ResolveEntry = {{ [PSCustomObject]@{{ repo = 'owner/repo'; base_commit = 'abc'; environment_setup_version = '28.0' }} }}
+    CloneRepository = {{ param($Context) New-Item -ItemType Directory -Path $Context.BaselineWorkspace -Force | Out-Null }}
+    InspectContainer = {{
+        [PSCustomObject]@{{
+            Exists = $global:containerExists
+            Id = $global:containerId
+            InvocationId = $global:containerLabel
+        }}
+    }}
+    InspectContainerById = {{
+        param($Context)
+        $exists = $global:containerExists -and $global:containerId -eq $Context.ContainerId
+        [PSCustomObject]@{{
+            Exists = $exists
+            Id = if ($exists) {{ $global:containerId }} else {{ $null }}
+            InvocationId = if ($exists) {{ $global:containerLabel }} else {{ $null }}
+        }}
+    }}
+    CreateContainer = {{
+        param($Context)
+        $global:containerExists = $true
+        $global:containerId = 'owned-id'
+        $global:containerLabel = $Context.ContainerInvocationId
+    }}
+    CreateCompiler = {{
+        param($Context)
+        New-Item -ItemType Directory -Path {_ps_quote(compiler_root)} -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path {_ps_quote(compiler_root)} 'payload.txt') -Value 'owned payload'
+        New-Item -ItemType Directory -Path {_ps_quote(unlisted_root)} -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path {_ps_quote(unlisted_root)} '.bcbench-owned') -Value $Context.ContainerInvocationId
+        return {_ps_quote(compiler_root)}
+    }}
+    InitializeContainer = {{
+        param($Context)
+        if ('{failure_mode}' -eq 'marker_mismatch') {{
+            Set-Content -LiteralPath (Join-Path {_ps_quote(compiler_root)} '.bcbench-owned') -Value 'different-invocation'
+        }}
+        throw 'forced failure after compiler creation'
+    }}
+    RemoveContainer = {{
+        if ('{failure_mode}' -eq 'container_removal_failure') {{
+            throw 'forced container removal failure'
+        }}
+        $global:containerExists = $false
+        $global:containerId = $null
+        $global:containerLabel = $null
+    }}
+}}
+$message = $null
+try {{
+    Invoke-BCBenchBugFixLifecycle `
+        -InstanceId 'compiler-cleanup' `
+        -DatasetPath 'dataset.jsonl' `
+        -ContainerName 'bc-owned' `
+        -EvaluatorUsername 'admin' `
+        -EvaluatorPassword (ConvertTo-SecureString 'evaluator-secret' -AsPlainText -Force) `
+        -EntryRoot {_ps_quote(entry_root)} `
+        -ProtectedRoot {_ps_quote(protected_root)} `
+        -Operations $ops | Out-Null
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{
+    message = $message
+    compilerExists = Test-Path -LiteralPath {_ps_quote(compiler_root)}
+    compilerMarker = if (Test-Path -LiteralPath (Join-Path {_ps_quote(compiler_root)} '.bcbench-owned')) {{
+        (Get-Content -LiteralPath (Join-Path {_ps_quote(compiler_root)} '.bcbench-owned') -Raw).Trim()
+    }} else {{ $null }}
+    compilerPayloadExists = Test-Path -LiteralPath (Join-Path {_ps_quote(compiler_root)} 'payload.txt')
+    unlistedExists = Test-Path -LiteralPath {_ps_quote(unlisted_root)}
+    quarantineExists = Test-Path -LiteralPath {_ps_quote(quarantine_path)}
+    quarantine = if (Test-Path -LiteralPath {_ps_quote(quarantine_path)}) {{
+        Get-Content -LiteralPath {_ps_quote(quarantine_path)} -Raw | ConvertFrom-Json
+    }} else {{ $null }}
+}} | ConvertTo-Json -Compress -Depth 10
+"""
+    return _last_json(_run_pwsh(script))
+
+
+def test_setup_failure_after_compiler_creation_removes_owned_compiler_root(tmp_path: Path) -> None:
+    payload = _run_setup_failure_with_compiler_root(tmp_path, "cleanup_success")
+
+    assert "forced failure after compiler creation" in payload["message"]
+    assert payload["compilerExists"] is False
+    assert payload["compilerPayloadExists"] is False
+    assert payload["unlistedExists"] is True
+    assert payload["quarantineExists"] is False
+
+
+def test_setup_failure_preserves_mismatched_compiler_root_and_quarantines(tmp_path: Path) -> None:
+    payload = _run_setup_failure_with_compiler_root(tmp_path, "marker_mismatch")
+
+    assert payload["compilerExists"] is True
+    assert payload["compilerMarker"] == "different-invocation"
+    assert payload["compilerPayloadExists"] is True
+    assert payload["unlistedExists"] is True
+    assert payload["quarantineExists"] is True
+    assert any("ownership marker" in error for error in payload["quarantine"]["cleanup_errors"])
+
+
+def test_setup_failure_preserves_compiler_root_when_container_removal_fails(tmp_path: Path) -> None:
+    payload = _run_setup_failure_with_compiler_root(tmp_path, "container_removal_failure")
+
+    assert payload["compilerExists"] is True
+    assert payload["compilerPayloadExists"] is True
+    assert payload["unlistedExists"] is True
+    assert payload["quarantineExists"] is True
+    assert any("forced container removal failure" in error for error in payload["quarantine"]["cleanup_errors"])
+    assert any("compiler/helper root retained" in error for error in payload["quarantine"]["cleanup_errors"])
+
+
 def test_setup_orchestrator_exports_exact_cli_contract_and_cleans_created_resources_on_failure(tmp_path: Path) -> None:
     success_entry = tmp_path / "entry-success"
     success_protected = tmp_path / "protected-success"
