@@ -57,9 +57,6 @@ LifecycleEntryRoot = Annotated[
         "--entry-root",
         envvar="BCBENCH_LIFECYCLE_ENTRY_ROOT",
         help="Setup-owned lifecycle entry root",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
     ),
 ]
 
@@ -69,10 +66,6 @@ LifecycleProtectedRoot = Annotated[
         "--protected-root",
         envvar="BCBENCH_LIFECYCLE_PROTECTED_ROOT",
         help="Evaluator-only protected lifecycle root",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        resolve_path=True,
     ),
 ]
 
@@ -82,9 +75,6 @@ LifecycleReplayPatch = Annotated[
         "--replay-patch",
         envvar="BCBENCH_LIFECYCLE_REPLAY_PATCH",
         help="Protected patch to evaluate without running an agent",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
     ),
 ]
 
@@ -152,9 +142,6 @@ LifecycleStagedWorkerPath = Annotated[
         "--staged-worker-path",
         envvar="BCBENCH_LIFECYCLE_STAGED_WORKER_PATH",
         help="Setup-staged contained process worker",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
     ),
 ]
 
@@ -173,9 +160,6 @@ LifecycleBasePython = Annotated[
         "--base-python",
         envvar="BCBENCH_LIFECYCLE_BASE_PYTHON",
         help="Setup-approved base Python executable",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
     ),
 ]
 
@@ -187,8 +171,6 @@ LifecycleOwnedCompilerHelperRoots = Annotated[
         "--owned-helper-root",
         envvar="BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS",
         help="Setup-owned compiler/helper root to remove during cleanup; repeat as needed",
-        file_okay=False,
-        dir_okay=True,
     ),
 ]
 

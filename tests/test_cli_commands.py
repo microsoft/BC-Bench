@@ -1,6 +1,8 @@
 """Integration tests for CLI commands using Typer's CliRunner."""
 
 import json
+import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -155,6 +157,18 @@ def _without_options(args: list[str], *options: str) -> list[str]:
         filtered.append(args[index])
         index += 1
     return filtered
+
+
+def _create_junction(junction: Path, target: Path) -> None:
+    result = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(junction), str(target)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        pytest.skip(f"Directory junction creation is unavailable: {result.stderr or result.stdout}")
 
 
 @patch("bcbench.cli.import_module")
@@ -727,6 +741,62 @@ def test_bugfix_lifecycle_rejects_invalid_boundary_inputs_before_collaborators(
 
     assert result.exit_code == 2
     assert message in (result.stdout + result.stderr).lower()
+    load_entry.assert_not_called()
+    lifecycle_factory.assert_not_called()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory junction regression")
+@pytest.mark.parametrize("aliased_option", ["--protected-root", "--entry-root", "--staged-worker-path"])
+def test_bugfix_lifecycle_rejects_root_and_worker_junction_aliases_before_collaborators(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    tmp_path: Path,
+    aliased_option: str,
+):
+    args = lifecycle_cli_fixture.args("copilot")
+    if aliased_option == "--staged-worker-path":
+        target = lifecycle_cli_fixture.worker.parent
+        aliased_path = tmp_path / "worker-alias" / lifecycle_cli_fixture.worker.name
+    else:
+        target = lifecycle_cli_fixture.protected_root if aliased_option == "--protected-root" else lifecycle_cli_fixture.entry_root
+        aliased_path = tmp_path / f"{aliased_option.removeprefix('--')}-alias"
+    _create_junction(aliased_path.parent if aliased_option == "--staged-worker-path" else aliased_path, target)
+    args[args.index(aliased_option) + 1] = str(aliased_path)
+
+    with (
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]) as load_entry,
+        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123") as resolve_sid,
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3") as get_version,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert "reparse" in (result.stdout + result.stderr).lower()
+    load_entry.assert_not_called()
+    resolve_sid.assert_not_called()
+    get_version.assert_not_called()
+    lifecycle_factory.assert_not_called()
+
+
+@pytest.mark.parametrize("root_option", ["--entry-root", "--protected-root"])
+def test_bugfix_lifecycle_rejects_non_directory_roots_before_collaborators(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    tmp_path: Path,
+    root_option: str,
+):
+    invalid_root = tmp_path / f"{root_option.removeprefix('--')}.txt"
+    invalid_root.write_text("not a directory", encoding="utf-8")
+    args = lifecycle_cli_fixture.args("copilot")
+    args[args.index(root_option) + 1] = str(invalid_root)
+
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert "must be an existing" in (result.stdout + result.stderr).lower()
     load_entry.assert_not_called()
     lifecycle_factory.assert_not_called()
 

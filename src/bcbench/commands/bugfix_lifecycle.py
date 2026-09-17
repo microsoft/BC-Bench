@@ -329,6 +329,7 @@ def _run_lifecycle(
             replay_patch = require_strict_descendant(replay_patch, paths.protected_root, "replay patch", "protected root")
         except ValueError as error:
             raise typer.BadParameter(str(error), param_hint="--replay-patch") from error
+        _require_file(replay_patch, "--replay-patch")
 
     resolved_sid = _resolve_local_windows_sid(agent_os_username)
     entry = BugFixEntry.load(_CATEGORY.dataset_path, entry_id=entry_id)[0]
@@ -377,6 +378,8 @@ def _run_lifecycle(
 
 
 def _validated_paths(entry_root: Path, protected_root: Path) -> BugFixLifecyclePaths:
+    _require_directory(entry_root, "--entry-root")
+    _require_directory(protected_root, "--protected-root")
     paths = BugFixLifecyclePaths(
         entry_root=entry_root,
         baseline_workspace=entry_root / "baseline-workspace",
@@ -414,8 +417,21 @@ def _require_file(path: Path, param_hint: str) -> None:
         reject_reparse_components(path, path)
     except ValueError as error:
         raise typer.BadParameter(str(error), param_hint=param_hint) from error
+    if not path.exists():
+        raise typer.BadParameter(f"Path {path} does not exist", param_hint=param_hint)
     if not path.is_file() or path.is_symlink():
         raise typer.BadParameter(f"{param_hint.removeprefix('--').replace('-', ' ')} must be an existing regular file", param_hint=param_hint)
+
+
+def _require_directory(path: Path, param_hint: str) -> None:
+    try:
+        reject_reparse_components(path, path)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint=param_hint) from error
+    if not path.exists():
+        raise typer.BadParameter(f"Path {path} does not exist", param_hint=param_hint)
+    if not path.is_dir() or path.is_symlink():
+        raise typer.BadParameter(f"{param_hint.removeprefix('--').replace('-', ' ')} must be an existing directory", param_hint=param_hint)
 
 
 def _required(value: str | None, param_hint: str) -> str:

@@ -13,6 +13,7 @@ from bcbench.evaluate.bugfix_lifecycle import (
     materialized_workspace_tree_hash,
 )
 from bcbench.evaluate.bugfix_lifecycle import workspace as workspace_module
+from bcbench.evaluate.bugfix_lifecycle.path_safety import validate_lifecycle_paths
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -268,6 +269,24 @@ def test_builder_rejects_managed_path_escape(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="entry_root"):
         TrustedWorkspaceBuilder(paths)
+
+
+def test_validate_lifecycle_paths_canonicalizes_normal_absolute_paths(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    lexical_entry = paths.entry_root.parent / "unused" / ".." / paths.entry_root.name
+    lexical_protected = paths.protected_root.parent / "unused" / ".." / paths.protected_root.name
+    lexical_paths = BugFixLifecyclePaths(
+        **{
+            **paths.__dict__,
+            "entry_root": lexical_entry,
+            "protected_root": lexical_protected,
+        }
+    )
+
+    validated = validate_lifecycle_paths(lexical_paths)
+
+    assert validated.entry_root == paths.entry_root.resolve()
+    assert validated.protected_root == paths.protected_root.resolve()
 
 
 def test_builder_rejects_trusted_source_outside_protected_root(tmp_path: Path) -> None:
