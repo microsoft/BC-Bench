@@ -1,6 +1,16 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from bcbench.agent.shared.contained_process import AgentExecutionPolicy
+from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
+from bcbench.types import AgentRuntimeConfig, ContainerConfig, EvaluationContext
+
+if TYPE_CHECKING:
+    from bcbench.dataset import BugFixEntry
 
 
 @dataclass(frozen=True)
@@ -16,6 +26,55 @@ class BugFixLifecyclePaths:
     trusted_source: Path
     checkpoints: Path
     final_results: Path
+
+
+@dataclass(frozen=True)
+class BugFixLifecycleRequest:
+    context: EvaluationContext[BugFixEntry]
+    paths: BugFixLifecyclePaths
+    evaluator_container: ContainerConfig
+    agent_runtime: AgentRuntimeConfig
+    agent_execution_policy: AgentExecutionPolicy
+    expected_container_id: str
+    expected_container_invocation_id: str
+    agent_os_username: str
+    agent_bc_username: str
+    agent_os_sid: str
+    acl_paths: tuple[Path, ...] = ()
+    replay_patch: Path | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "expected_container_id",
+            "expected_container_invocation_id",
+            "agent_os_username",
+            "agent_bc_username",
+            "agent_os_sid",
+        ):
+            if not getattr(self, field_name).strip():
+                raise ValueError(f"{field_name} must be a non-empty string")
+        if self.evaluator_container.name != self.agent_runtime.container.name:
+            raise ValueError("Evaluator and agent runtime containers must refer to the same container")
+        if not self.agent_execution_policy.contain_process_tree:
+            raise ValueError("Production agent execution must contain the process tree")
+        if self.agent_execution_policy.restricted_identity is None:
+            raise ValueError("Production agent execution requires a restricted identity")
+        object.__setattr__(self, "acl_paths", tuple(self.acl_paths))
+
+
+@dataclass(frozen=True)
+class SubmissionAnalysis:
+    submission: GeneratedBugFixOutput
+    fix_error: str | None = None
+    test_error: str | None = None
+
+    @property
+    def fix_is_safe(self) -> bool:
+        return self.fix_error is None
+
+    @property
+    def test_is_safe(self) -> bool:
+        return self.test_error is None
 
 
 @dataclass(frozen=True)
@@ -43,7 +102,7 @@ class ContainerIdentity:
         }
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, object]) -> "ContainerIdentity":
+    def from_dict(cls, value: Mapping[str, object]) -> ContainerIdentity:
         mounts = value.get("mounts")
         if not isinstance(mounts, list) or not all(isinstance(mount, str) for mount in mounts):
             raise ValueError("Container identity mounts must be a list of strings")
@@ -85,7 +144,7 @@ class AppInventoryEntry:
         }
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, object]) -> "AppInventoryEntry":
+    def from_dict(cls, value: Mapping[str, object]) -> AppInventoryEntry:
         return cls(
             app_id=_required_string(value, "app_id"),
             name=_required_string(value, "name"),
@@ -125,7 +184,7 @@ class CheckpointManifest:
         }
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, object]) -> "CheckpointManifest":
+    def from_dict(cls, value: Mapping[str, object]) -> CheckpointManifest:
         container = value.get("container")
         apps = value.get("apps")
         if not isinstance(container, Mapping):

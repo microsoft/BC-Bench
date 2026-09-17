@@ -98,6 +98,7 @@ class BugFixPhaseResult(BaseModel):
 
 
 RuntimeIsolation = Literal["package-normalized", "database-checkpointed-single-container"]
+BugFixExecutionMode = Literal["live", "replay"]
 
 
 def _combine_required_statuses(*statuses: BugFixPhaseStatus) -> BugFixPhaseStatus:
@@ -120,10 +121,17 @@ class BugFixResult(ExecutionBasedEvaluationResult):
     generated_test_post_patch_passed: bool = False
     benchmark_test_passed: bool = False
     runtime_isolation: RuntimeIsolation = "package-normalized"
+    execution_mode: BugFixExecutionMode = "live"
+    trusted_source_commit: str | None = None
+    generated_patch_hash: str | None = None
     generated_fix_hash: str | None = None
     generated_test_hash: str | None = None
     baseline_checkpoint_hash: str | None = None
     fixed_checkpoint_hash: str | None = None
+    agent_stdout: str | None = None
+    agent_stderr: str | None = None
+    provenance: dict[str, str] = Field(default_factory=dict)
+    artifact_manifest: dict[str, str] = Field(default_factory=dict)
     test_red: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)
     test_gold: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)
     fix_build: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)

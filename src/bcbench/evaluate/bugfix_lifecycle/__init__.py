@@ -1,12 +1,22 @@
 from bcbench.evaluate.bugfix_lifecycle.checkpoint import CheckpointManager, PowerShellRunner
 from bcbench.evaluate.bugfix_lifecycle.evidence import EvidenceStore, sha256_file, sha256_text
 from bcbench.evaluate.bugfix_lifecycle.inventory import InventoryReader, InventoryVerifier
+from bcbench.evaluate.bugfix_lifecycle.lifecycle import (
+    BugFixProductionLifecycle,
+    LifecycleOwnershipApi,
+    PowerShellLifecycleOwnershipApi,
+    ProductionAgentRunner,
+    analyze_bugfix_submission,
+    run_bugfix_production_lifecycle,
+)
 from bcbench.evaluate.bugfix_lifecycle.models import (
     AppInventoryEntry,
     BugFixLifecyclePaths,
+    BugFixLifecycleRequest,
     CheckpointManifest,
     ContainerIdentity,
     ProjectPublication,
+    SubmissionAnalysis,
     TrustedSource,
 )
 from bcbench.evaluate.bugfix_lifecycle.phases import (
@@ -27,7 +37,9 @@ from bcbench.evaluate.bugfix_lifecycle.workspace import TrustedWorkspaceBuilder,
 __all__ = [
     "AppInventoryEntry",
     "BugFixLifecyclePaths",
+    "BugFixLifecycleRequest",
     "BugFixPhaseRunner",
+    "BugFixProductionLifecycle",
     "CheckpointManager",
     "CheckpointManifest",
     "ContainerIdentity",
@@ -39,16 +51,22 @@ __all__ = [
     "ExactTestRunner",
     "InventoryReader",
     "InventoryVerifier",
+    "LifecycleOwnershipApi",
+    "PowerShellLifecycleOwnershipApi",
     "PowerShellRunner",
+    "ProductionAgentRunner",
     "ProjectPublication",
     "ProjectPublisher",
+    "SubmissionAnalysis",
     "TrustedSource",
     "TrustedWorkspaceBuilder",
+    "analyze_bugfix_submission",
     "invalid_submission_phase",
     "make_invalid_submission_phase",
     "make_not_run_phase",
     "materialized_workspace_tree_hash",
     "not_run_phase",
+    "run_bugfix_production_lifecycle",
     "sha256_file",
     "sha256_text",
 ]
