@@ -1,0 +1,402 @@
+import json
+import os
+import secrets
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from bcbench.agent.shared.contained_process import WindowsIdentity
+
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows PowerShell lifecycle")
+
+_ROOT = Path(__file__).parents[1]
+_MODULE = _ROOT / "scripts" / "BugFixLifecycle.psm1"
+_SETUP = _ROOT / "scripts" / "Setup-BugFixLifecycle.ps1"
+_EXPECTED_EXPORTS = {
+    "New-BCBenchAgentIdentity",
+    "Remove-BCBenchAgentIdentity",
+    "Set-BCBenchWorkspaceAcl",
+    "Test-BCBenchIdentityAccess",
+    "New-BCBenchAgentBcUser",
+    "Remove-BCBenchAgentBcUser",
+    "Invoke-BCBenchBugFixLifecycle",
+}
+
+
+def _ps_quote(value: str | Path) -> str:
+    return f"'{str(value).replace("'", "''")}'"
+
+
+def _run_pwsh(script: str, env: dict[str, str] | None = None) -> str:
+    result = subprocess.run(
+        ["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+        env={**os.environ, **(env or {})},
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout.strip()
+
+
+def _last_json(output: str) -> object:
+    return json.loads(output.splitlines()[-1])
+
+
+def test_module_imports_and_exports_contract() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+Get-Command -Module BugFixLifecycle | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress
+"""
+    exports = set(_last_json(_run_pwsh(script)))
+
+    assert exports >= _EXPECTED_EXPORTS
+
+
+def test_setup_parameter_metadata_and_pinned_container_helper() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$tokens = $null
+$errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseFile({_ps_quote(_SETUP)}, [ref]$tokens, [ref]$errors)
+if ($errors.Count -gt 0) {{ throw ($errors | Out-String) }}
+$metadata = @{{}}
+foreach ($parameter in $ast.ParamBlock.Parameters) {{
+    $metadata[$parameter.Name.VariablePath.UserPath] = @($parameter.Attributes | ForEach-Object {{ $_.Extent.Text }})
+}}
+$metadata | ConvertTo-Json -Compress -Depth 8
+"""
+    metadata = _last_json(_run_pwsh(script))
+    source = _MODULE.read_text(encoding="utf-8") + _SETUP.read_text(encoding="utf-8")
+
+    assert {
+        "InstanceId",
+        "Category",
+        "DatasetPath",
+        "Version",
+        "ContainerName",
+        "EvaluatorUsername",
+        "EvaluatorPassword",
+        "EntryRoot",
+        "ProtectedRoot",
+        "AlMcp",
+        "BcMcp",
+    } <= metadata.keys()
+    assert any('ValidateSet("bug-fix")' in attribute for attribute in metadata["Category"])
+    assert "Import-Module BcContainerHelper -RequiredVersion 6.1.18" in source
+
+
+def test_new_agent_identity_retries_collision_and_never_adds_privileged_groups() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:getCalls = 0
+$global:newUsers = @()
+$global:groups = @()
+function global:Get-LocalUser {{
+    param([string]$Name)
+    $global:getCalls++
+    if ($global:getCalls -eq 1) {{ return [PSCustomObject]@{{ Name = $Name }} }}
+    return $null
+}}
+function global:New-LocalUser {{
+    param([string]$Name, [SecureString]$Password, [string]$Description, [switch]$AccountNeverExpires, [switch]$PasswordNeverExpires)
+    $global:newUsers += $Name
+    [PSCustomObject]@{{ Name = $Name }}
+}}
+function global:Add-LocalGroupMember {{
+    param($SID, $Member)
+    $global:groups += [string]$SID
+}}
+function global:Get-LocalGroupMember {{ @() }}
+Import-Module {_ps_quote(_MODULE)} -Force
+$identity = New-BCBenchAgentIdentity -InstanceId 'bug-fix__entry/unsafe'
+[PSCustomObject]@{{
+    identity = $identity
+    getCalls = $global:getCalls
+    newUsers = $global:newUsers
+    groups = $global:groups
+}} | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["getCalls"] >= 2
+    assert len(payload["newUsers"]) == 1
+    assert payload["identity"]["Username"].startswith("bcb-")
+    assert len(payload["identity"]["Username"]) <= 20
+    assert payload["identity"]["Password"]
+    assert payload["identity"]["Domain"]
+    assert payload["groups"] == ["S-1-5-32-545"]
+    assert "S-1-5-32-544" not in payload["groups"]
+    assert "docker-users" not in payload["groups"]
+
+
+def test_workspace_acl_uses_narrow_rights_and_runs_access_validator(tmp_path: Path) -> None:
+    entry_root = tmp_path / "entry"
+    paths = {
+        name: entry_root / name
+        for name in (
+            "baseline",
+            "agent",
+            "logs",
+            "staging",
+            "evaluators",
+            "evidence",
+        )
+    }
+    paths["entry"] = entry_root
+    paths["protected"] = tmp_path / "protected"
+    paths["tool"] = tmp_path / "tool"
+    for path in paths.values():
+        path.mkdir(parents=True, exist_ok=True)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:aclCalls = @()
+$aclSetter = {{
+    param($Path, $Identity, $Rights, $IsFile)
+    $global:aclCalls += [PSCustomObject]@{{
+        Path = [string]$Path
+        Identity = [string]$Identity
+        Rights = [string]$Rights
+        IsFile = [bool]$IsFile
+    }}
+}}
+$validator = {{
+    param($Parameters)
+    [PSCustomObject]@{{
+        WorkspaceWriteSucceeded = $true
+        ProtectedReadDenied = $true
+        ProtectedWriteDenied = $true
+        DockerCliDenied = $true
+        DockerPipeDenied = $true
+        ProcessId = 1234
+        WorkspaceProbePath = 'probe'
+        ProtectedProbePath = 'secret'
+    }}
+}}
+Import-Module {_ps_quote(_MODULE)} -Force
+$identity = [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'secret'; Domain = '.' }}
+$result = Set-BCBenchWorkspaceAcl `
+    -Identity $identity `
+    -EntryRoot {_ps_quote(paths["entry"])} `
+    -BaselineWorkspace {_ps_quote(paths["baseline"])} `
+    -AgentWorkspace {_ps_quote(paths["agent"])} `
+    -AgentLogs {_ps_quote(paths["logs"])} `
+    -MountedStaging {_ps_quote(paths["staging"])} `
+    -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
+    -Evidence {_ps_quote(paths["evidence"])} `
+    -ProtectedRoot {_ps_quote(paths["protected"])} `
+    -ToolRoots @({_ps_quote(paths["tool"])}) `
+    -AclSetter $aclSetter `
+    -AccessValidator $validator
+[PSCustomObject]@{{ calls = $global:aclCalls; result = $result }} | ConvertTo-Json -Compress -Depth 8
+"""
+    payload = _last_json(_run_pwsh(script))
+    agent_calls = [call for call in payload["calls"] if call["Identity"].endswith(r"\bcb-1234567-abcdef")]
+    rights_by_path = {Path(call["Path"]): call["Rights"] for call in agent_calls}
+
+    assert rights_by_path[paths["agent"]] == "Modify"
+    assert rights_by_path[paths["logs"]] == "Modify"
+    assert rights_by_path[paths["tool"]] == "ReadAndExecute"
+    assert paths["protected"] not in rights_by_path
+    assert paths["evaluators"] not in rights_by_path
+    assert paths["evidence"] not in rights_by_path
+    assert payload["result"]["ProcessId"] == 1234
+
+
+def test_bc_user_uses_distinct_credential_super_and_cleanup() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:newCall = $null
+$global:removeCall = $null
+Import-Module {_ps_quote(_MODULE)} -Force
+function global:Import-Module {{
+    param([string]$Name, [version]$RequiredVersion, [switch]$Force, [switch]$DisableNameChecking)
+    if ($Name -ne 'BcContainerHelper' -or [string]$RequiredVersion -ne '6.1.18') {{ throw 'wrong module pin' }}
+}}
+function global:New-BcContainerBcUser {{
+    param([string]$containerName, [PSCredential]$Credential, [string]$PermissionSetId, [bool]$ChangePasswordAtNextLogOn)
+    $global:newCall = [PSCustomObject]@{{
+        ContainerName = $containerName
+        Username = $Credential.UserName
+        Password = $Credential.GetNetworkCredential().Password
+        PermissionSetId = $PermissionSetId
+        ChangePasswordAtNextLogOn = $ChangePasswordAtNextLogOn
+    }}
+}}
+function global:Remove-BcContainerBcUser {{
+    param([string]$containerName, [PSCredential]$Credential)
+    $global:removeCall = [PSCustomObject]@{{ ContainerName = $containerName; Username = $Credential.UserName }}
+}}
+$identity = New-BCBenchAgentBcUser -InstanceId 'entry' -ContainerName 'bc-entry'
+Remove-BCBenchAgentBcUser -ContainerName 'bc-entry' -Username $identity.Username -Password $identity.Password
+[PSCustomObject]@{{ identity = $identity; newCall = $global:newCall; removeCall = $global:removeCall }} | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["identity"]["Username"].startswith("bca-")
+    assert payload["newCall"]["Username"] == payload["identity"]["Username"]
+    assert payload["newCall"]["Password"] == payload["identity"]["Password"]
+    assert payload["newCall"]["PermissionSetId"] == "SUPER"
+    assert payload["newCall"]["ChangePasswordAtNextLogOn"] is False
+    assert payload["removeCall"]["Username"] == payload["identity"]["Username"]
+    assert payload["identity"]["Username"] != "admin"
+
+
+def test_setup_orchestrator_writes_outputs_and_cleans_created_resources_on_failure(tmp_path: Path) -> None:
+    success_entry = tmp_path / "entry-success"
+    success_protected = tmp_path / "protected-success"
+    output = tmp_path / "output.txt"
+    env_file = tmp_path / "env.txt"
+    failure_entry = tmp_path / "entry-failure"
+    failure_protected = tmp_path / "protected-failure"
+    trace = tmp_path / "cleanup.jsonl"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$secure = ConvertTo-SecureString 'evaluator-secret' -AsPlainText -Force
+$successOps = @{{
+    ResolveEntry = {{ [PSCustomObject]@{{ repo = 'owner/repo'; base_commit = 'abc'; environment_setup_version = '28.0' }} }}
+    CloneRepository = {{ param($Context) New-Item -ItemType Directory -Path $Context.BaselineWorkspace -Force | Out-Null }}
+    CreateContainer = {{ }}
+    CreateCompiler = {{ }}
+    InitializeContainer = {{ }}
+    GetCompany = {{ 'CRONUS' }}
+    CreateAgentIdentity = {{ [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'os-secret'; Domain = '.' }} }}
+    CreateBcIdentity = {{ [PSCustomObject]@{{ Username = 'bca-1234567-abcdef'; Password = 'bc-secret' }} }}
+    ApplyAcl = {{ [PSCustomObject]@{{ WorkspaceWriteSucceeded = $true }} }}
+}}
+Invoke-BCBenchBugFixLifecycle `
+    -InstanceId 'entry-success' `
+    -DatasetPath 'dataset.jsonl' `
+    -ContainerName 'bc-success' `
+    -EvaluatorUsername 'admin' `
+    -EvaluatorPassword $secure `
+    -EntryRoot {_ps_quote(success_entry)} `
+    -ProtectedRoot {_ps_quote(success_protected)} `
+    -GithubOutput {_ps_quote(output)} `
+    -GithubEnv {_ps_quote(env_file)} `
+    -Operations $successOps | Out-Null
+
+$failureOps = @{{
+    ResolveEntry = $successOps.ResolveEntry
+    CloneRepository = $successOps.CloneRepository
+    CreateContainer = {{ }}
+    CreateCompiler = {{ }}
+    InitializeContainer = {{ }}
+    GetCompany = {{ 'CRONUS' }}
+    CreateAgentIdentity = $successOps.CreateAgentIdentity
+    CreateBcIdentity = $successOps.CreateBcIdentity
+    ApplyAcl = {{ throw 'acl failure' }}
+    RemoveBcIdentity = {{ param($Context) @{{ action = 'bc-user'; username = $Context.AgentBcIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
+    RemoveAgentIdentity = {{ param($Context) @{{ action = 'os-user'; username = $Context.AgentIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
+    RemoveContainer = {{ param($Context) @{{ action = 'container'; name = $Context.ContainerName }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
+}}
+$failed = $false
+try {{
+    Invoke-BCBenchBugFixLifecycle `
+        -InstanceId 'entry-failure' `
+        -DatasetPath 'dataset.jsonl' `
+        -ContainerName 'bc-failure' `
+        -EvaluatorUsername 'admin' `
+        -EvaluatorPassword $secure `
+        -EntryRoot {_ps_quote(failure_entry)} `
+        -ProtectedRoot {_ps_quote(failure_protected)} `
+        -Operations $failureOps | Out-Null
+}}
+catch {{
+    $failed = $_.Exception.Message -match 'acl failure'
+}}
+[PSCustomObject]@{{
+    failed = $failed
+    output = @(Get-Content {_ps_quote(output)})
+    environment = @(Get-Content {_ps_quote(env_file)})
+    cleanup = @(Get-Content {_ps_quote(trace)} | ForEach-Object {{ $_ | ConvertFrom-Json }})
+    failureEntryExists = Test-Path {_ps_quote(failure_entry)}
+    failureProtectedExists = Test-Path {_ps_quote(failure_protected)}
+}} | ConvertTo-Json -Compress -Depth 8
+"""
+    payload = _last_json(_run_pwsh(script))
+    output_text = "\n".join(payload["output"])
+    env_text = "\n".join(payload["environment"])
+
+    assert "agent_workspace=" in output_text
+    assert "protected_root=" in output_text
+    assert "agent_os_username=bcb-1234567-abcdef" in output_text
+    assert "agent_os_password=os-secret" in output_text
+    assert "agent_bc_password=bc-secret" in output_text
+    assert "al_tool_dotnet_version=8.0" in output_text
+    assert "BCBENCH_AGENT_WORKSPACE=" in env_text
+    assert "BC_SERVER_PASSWORD=evaluator-secret" in env_text
+    assert payload["failed"] is True
+    assert {item["action"] for item in payload["cleanup"]} == {"bc-user", "os-user", "container"}
+    assert payload["failureEntryExists"] is False
+    assert payload["failureProtectedExists"] is False
+
+
+@pytest.mark.e2e
+def test_elevated_disposable_identity_access_uses_contained_process(tmp_path: Path) -> None:
+    if shutil.which("docker") is None:
+        pytest.skip("requires Docker CLI")
+    elevated = _run_pwsh(
+        "([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())."
+        "IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
+    )
+    if elevated.lower() != "true":
+        pytest.skip("requires an elevated Windows process")
+
+    entry_root = tmp_path / "entry"
+    protected_root = tmp_path / "protected"
+    baseline = entry_root / "baseline-workspace"
+    workspace = entry_root / "agent-workspace"
+    logs = entry_root / "agent-logs"
+    staging = entry_root / "mounted-staging"
+    evaluators = entry_root / "evaluator-workspaces"
+    evidence = entry_root / "evidence"
+    tool_root = Path(sys.executable).parent
+    for path in (baseline, workspace, logs, staging, evaluators, evidence, protected_root):
+        path.mkdir(parents=True, exist_ok=True)
+    secret_path = protected_root / "secret.txt"
+    secret_path.write_text("secret", encoding="utf-8")
+    identity: WindowsIdentity | None = None
+    try:
+        script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$identity = New-BCBenchAgentIdentity -InstanceId 'e2e-{secrets.token_hex(3)}'
+$access = Set-BCBenchWorkspaceAcl `
+    -Identity $identity `
+    -EntryRoot {_ps_quote(entry_root)} `
+    -BaselineWorkspace {_ps_quote(baseline)} `
+    -AgentWorkspace {_ps_quote(workspace)} `
+    -AgentLogs {_ps_quote(logs)} `
+    -MountedStaging {_ps_quote(staging)} `
+    -EvaluatorWorkspaces {_ps_quote(evaluators)} `
+    -Evidence {_ps_quote(evidence)} `
+    -ProtectedRoot {_ps_quote(protected_root)} `
+    -ToolRoots @({_ps_quote(tool_root)})
+[PSCustomObject]@{{ identity = $identity; access = $access }} | ConvertTo-Json -Compress -Depth 8
+"""
+        payload = _last_json(_run_pwsh(script))
+        identity = WindowsIdentity(
+            payload["identity"]["Username"],
+            payload["identity"]["Password"],
+            payload["identity"]["Domain"],
+        )
+
+        assert payload["access"]["WorkspaceWriteSucceeded"] is True
+        assert payload["access"]["ProtectedReadDenied"] is True
+        assert payload["access"]["ProtectedWriteDenied"] is True
+        assert payload["access"]["DockerCliDenied"] is True
+        assert payload["access"]["DockerPipeDenied"] is True
+        assert payload["access"]["ProcessId"] > 0
+    finally:
+        if identity is not None:
+            _run_pwsh(
+                f"Import-Module {_ps_quote(_MODULE)} -Force; "
+                f"Remove-BCBenchAgentIdentity -Username {_ps_quote(identity.username)}"
+            )
