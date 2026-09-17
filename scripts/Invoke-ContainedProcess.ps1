@@ -483,14 +483,14 @@ public static class BCBenchJobObject
         return exitCode == STILL_ACTIVE;
     }
 
-    public static int GetExitCode(BCBenchSuspendedProcess process)
+    public static uint GetExitCode(BCBenchSuspendedProcess process)
     {
         uint exitCode;
         if (!GetExitCodeProcess(process.ProcessHandle, out exitCode))
         {
             throw CreateWin32Exception("GetExitCodeProcess");
         }
-        return unchecked((int)exitCode);
+        return exitCode;
     }
 
     public static void TerminateJob(BCBenchSafeJobHandle job, uint exitCode)
@@ -755,7 +755,7 @@ try {
         [BCBenchJobObject]::WaitForExit($worker)
     }
 
-    $returnCode = if ($timedOut) { $null } else { [BCBenchJobObject]::GetExitCode($worker) }
+    $returnCode = if ($timedOut) { $null } else { [long][BCBenchJobObject]::GetExitCode($worker) }
     $job.Dispose()
     $job = $null
 

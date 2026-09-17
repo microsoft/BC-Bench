@@ -28,6 +28,7 @@ pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows Job Obj
 
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _STILL_ACTIVE = 259
+_HIGH_BIT_EXIT_CODES = (0x80000000, 0xFFFFFFFF)
 _SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "Invoke-ContainedProcess.ps1"
 _WORKER_PATH = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
 
@@ -45,6 +46,19 @@ def _request(
         env=env or agent_subprocess_env(allowlist=True),
         timeout_seconds=timeout_seconds,
     )
+
+
+def _exit_process_command(returncode: int) -> tuple[str, ...]:
+    code = """
+import ctypes
+import sys
+
+kernel32 = ctypes.WinDLL("kernel32")
+kernel32.ExitProcess.argtypes = (ctypes.c_uint32,)
+kernel32.ExitProcess.restype = None
+kernel32.ExitProcess(int(sys.argv[1], 0))
+"""
+    return (sys.executable, "-c", code, hex(returncode))
 
 
 def _pid_is_running(pid: int) -> bool:
@@ -422,6 +436,54 @@ def test_returns_nonzero_result_without_losing_output(tmp_path):
     )
 
     assert result == ContainedProcessResult(7, "failed stdout\n", "failed stderr\n")
+
+
+@pytest.mark.parametrize("returncode", _HIGH_BIT_EXIT_CODES)
+def test_preserves_high_bit_windows_exit_code(tmp_path, returncode):
+    command = _exit_process_command(returncode)
+    direct = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=agent_subprocess_env(allowlist=True),
+        check=False,
+    )
+
+    result = run_contained_process(
+        ContainedProcessRequest(
+            command=command,
+            cwd=tmp_path,
+            env=agent_subprocess_env(allowlist=True),
+            timeout_seconds=10,
+        )
+    )
+
+    assert direct.returncode == returncode
+    assert result.returncode == direct.returncode
+
+
+@pytest.mark.parametrize("returncode", _HIGH_BIT_EXIT_CODES)
+def test_high_bit_windows_exit_code_is_preserved_in_called_process_error(tmp_path, returncode):
+    command = _exit_process_command(returncode)
+    direct = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=agent_subprocess_env(allowlist=True),
+        check=False,
+    )
+    result = run_contained_process(
+        ContainedProcessRequest(
+            command=command,
+            cwd=tmp_path,
+            env=agent_subprocess_env(allowlist=True),
+            timeout_seconds=10,
+        )
+    )
+
+    with pytest.raises(subprocess.CalledProcessError) as exc_info:
+        subprocess.CompletedProcess(command, result.returncode, result.stdout, result.stderr).check_returncode()
+
+    assert direct.returncode == returncode
+    assert exc_info.value.returncode == direct.returncode
 
 
 def test_successful_command_exit_kills_child_and_grandchild(tmp_path):
