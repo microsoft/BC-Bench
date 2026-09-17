@@ -345,6 +345,13 @@ $validator = {{
         EvaluatorSourceReadDenied = $true
         DocsReadDenied = $true
         AgentToolsWriteDenied = $true
+        ReadExecuteDirectoryReadSucceeded = $true
+        ReadExecuteDirectoryCreateDenied = $true
+        ReadExecuteDirectoryWriteDenied = $true
+        ReadExecuteDirectoryDeleteDenied = $true
+        ReadExecuteFileReadSucceeded = $true
+        ReadExecuteFileModifyDenied = $true
+        RuntimeExecutableExecutionSucceeded = $true
         DockerCliDenied = $true
         DockerPipeDenied = $true
         ProcessId = 1234
@@ -416,18 +423,52 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
         )
     expected_calls.extend(
         [
-            [str(paths["agent-tools"]), "/inheritance:r"],
-            [str(paths["agent-tools"]), "/grant:r", *full_control, f"{agent}:(OI)(CI)RX"],
-            [str(worker_path), "/inheritance:r"],
-            [str(worker_path), "/grant:r", f"{evaluator}:F", "*S-1-5-18:F", f"{agent}:RX"],
+            [str(paths["agent-tools"]), "/grant:r", f"{agent}:(OI)(CI)RX"],
+            [
+                str(paths["agent-tools"]),
+                "/deny",
+                "*S-1-5-21-1000-1001-1002-1003:(OI)(CI)(WD,AD,WEA,WA,DE,DC,WDAC,WO)",
+            ],
+            [str(worker_path), "/grant:r", f"{agent}:RX"],
+            [
+                str(worker_path),
+                "/deny",
+                "*S-1-5-21-1000-1001-1002-1003:(WD,AD,WEA,WA,DE,WDAC,WO)",
+            ],
         ]
     )
-    expected_calls.append([str(paths["tool"]), "/grant:r", f"{agent}:(OI)(CI)RX"])
-    expected_calls.append([str(paths["runtime"]), "/grant:r", f"{agent}:(OI)(CI)RX"])
-    expected_calls.append([str(runtime_executable), "/grant:r", f"{agent}:RX"])
+    expected_calls.extend(
+        [
+            [str(paths["tool"]), "/grant:r", f"{agent}:(OI)(CI)RX"],
+            [
+                str(paths["tool"]),
+                "/deny",
+                "*S-1-5-21-1000-1001-1002-1003:(OI)(CI)(WD,AD,WEA,WA,DE,DC,WDAC,WO)",
+            ],
+            [str(paths["runtime"]), "/grant:r", f"{agent}:(OI)(CI)RX"],
+            [
+                str(paths["runtime"]),
+                "/deny",
+                "*S-1-5-21-1000-1001-1002-1003:(OI)(CI)(WD,AD,WEA,WA,DE,DC,WDAC,WO)",
+            ],
+            [str(runtime_executable), "/grant:r", f"{agent}:RX"],
+            [
+                str(runtime_executable),
+                "/deny",
+                "*S-1-5-21-1000-1001-1002-1003:(WD,AD,WEA,WA,DE,WDAC,WO)",
+            ],
+        ]
+    )
 
     assert payload["calls"] == expected_calls
-    assert len(payload["verificationCalls"]) == 14
+    assert len(payload["verificationCalls"]) == 19
+    deny_verifications = [item for item in payload["verificationCalls"] if item["ExpectedRules"][0].get("AccessControlType") == "Deny" and item["Path"] != str(paths["benchmark"])]
+    assert len(deny_verifications) == 5
+    assert {item["ExpectedRules"][0]["Identity"] for item in deny_verifications} == {"S-1-5-21-1000-1001-1002-1003"}
+    assert {item["ExpectedRules"][0]["Rights"] for item in deny_verifications} == {
+        "WriteData, AppendData, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership",
+        "WriteData, AppendData, WriteExtendedAttributes, WriteAttributes, Delete, ChangePermissions, TakeOwnership",
+    }
     assert all("*" not in call[0] and "?" not in call[0] for call in payload["calls"])
     restricted_agent_grant_paths = {Path(call[0]).resolve() for call in payload["calls"] if "/grant:r" in call and any(agent in value for value in call[2:])}
     assert Path(paths["benchmark"]).resolve() not in restricted_agent_grant_paths
@@ -460,6 +501,110 @@ $agentAccount = "$([Environment]::MachineName)\\bcb-1234567-abcdef"
             worker_path,
         )
     }
+
+
+def test_workspace_acl_rejects_any_writable_read_execute_path(tmp_path: Path) -> None:
+    entry_root = tmp_path / "entry"
+    paths = {
+        name: entry_root / name
+        for name in (
+            "baseline",
+            "agent",
+            "logs",
+            "agent-tools",
+            "staging",
+            "evaluators",
+            "evidence",
+        )
+    }
+    paths["protected"] = tmp_path / "protected"
+    paths["tool"] = tmp_path / "tool"
+    paths["runtime"] = tmp_path / "runtime"
+    paths["benchmark"] = tmp_path / "benchmark"
+    for path in paths.values():
+        path.mkdir(parents=True, exist_ok=True)
+    dataset_path = paths["benchmark"] / "dataset" / "bcbench.jsonl"
+    dataset_path.parent.mkdir()
+    dataset_path.touch()
+    runtime_executable = paths["runtime"] / "python.exe"
+    runtime_executable.touch()
+    source_worker_path = paths["benchmark"] / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
+    source_worker_path.parent.mkdir(parents=True)
+    (paths["benchmark"] / "src" / "bcbench" / "evaluate").mkdir(parents=True)
+    (paths["benchmark"] / "docs").mkdir()
+    source_worker_path.write_text("print('worker')\n", encoding="utf-8")
+    worker_path = paths["agent-tools"] / "contained_process_worker.py"
+    worker_path.write_bytes(source_worker_path.read_bytes())
+    worker_hash = sha256(source_worker_path.read_bytes()).hexdigest()
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:calls = @()
+Import-Module {_ps_quote(_MODULE)} -Force
+$identity = [PSCustomObject]@{{
+    Username = 'bcb-1234567-abcdef'
+    Password = 'secret'
+    Domain = '.'
+    Sid = 'S-1-5-21-1000-1001-1002-1003'
+}}
+$message = $null
+try {{
+    Set-BCBenchWorkspaceAcl `
+        -Identity $identity `
+        -EntryRoot {_ps_quote(entry_root)} `
+        -BaselineWorkspace {_ps_quote(paths["baseline"])} `
+        -AgentWorkspace {_ps_quote(paths["agent"])} `
+        -AgentLogs {_ps_quote(paths["logs"])} `
+        -AgentTools {_ps_quote(paths["agent-tools"])} `
+        -MountedStaging {_ps_quote(paths["staging"])} `
+        -EvaluatorWorkspaces {_ps_quote(paths["evaluators"])} `
+        -Evidence {_ps_quote(paths["evidence"])} `
+        -ProtectedRoot {_ps_quote(paths["protected"])} `
+        -BenchmarkRoot {_ps_quote(paths["benchmark"])} `
+        -DatasetPath {_ps_quote(dataset_path)} `
+        -ToolRoots @({_ps_quote(paths["tool"])}) `
+        -RuntimeExecutablePaths @({_ps_quote(runtime_executable)}) `
+        -RuntimeRoots @({_ps_quote(paths["runtime"])}) `
+        -SourceWorkerPath {_ps_quote(source_worker_path)} `
+        -WorkerPath {_ps_quote(worker_path)} `
+        -WorkerSha256 '{worker_hash}' `
+        -IcaclsRunner {{
+            param([string[]]$Arguments)
+            $global:calls += ,@($Arguments)
+            return 0
+        }} `
+        -AclVerifier {{ }} `
+        -AccessValidator {{
+            [PSCustomObject]@{{
+                WorkspaceWriteSucceeded = $true
+                ProtectedReadDenied = $true
+                ProtectedWriteDenied = $true
+                BenchmarkWriteDenied = $true
+                DatasetReadDenied = $true
+                EvaluatorSourceReadDenied = $true
+                DocsReadDenied = $true
+                AgentToolsWriteDenied = $true
+                ReadExecuteDirectoryReadSucceeded = $true
+                ReadExecuteDirectoryCreateDenied = $false
+                ReadExecuteDirectoryWriteDenied = $true
+                ReadExecuteDirectoryDeleteDenied = $true
+                ReadExecuteFileReadSucceeded = $true
+                ReadExecuteFileModifyDenied = $true
+                RuntimeExecutableExecutionSucceeded = $true
+                DockerCliDenied = $true
+                DockerPipeDenied = $true
+            }}
+        }} | Out-Null
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{ message = $message; calls = $global:calls }} | ConvertTo-Json -Compress -Depth 8
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert "ReadExecuteDirectoryCreateDenied was false" in payload["message"]
+    assert any(call[1:] == ["/remove:g", "*S-1-5-21-1000-1001-1002-1003"] for call in payload["calls"])
+    assert any(call[1:] == ["/remove:d", "*S-1-5-21-1000-1001-1002-1003"] for call in payload["calls"])
 
 
 @pytest.mark.parametrize(
@@ -1311,7 +1456,8 @@ def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, f
     staging = entry_root / "mounted-staging"
     evaluators = entry_root / "evaluator-workspaces"
     evidence = entry_root / "evidence"
-    tool_root = tmp_path / "tool-root"
+    tool_parent = tmp_path / "tool-parent"
+    tool_root = tool_parent / "tool-root"
     benchmark_parent = tmp_path / "benchmark-parent"
     benchmark_root = benchmark_parent / "benchmark"
     dataset_path = benchmark_root / "dataset" / "bcbench.jsonl"
@@ -1324,14 +1470,24 @@ def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, f
     (evaluator_source / "__init__.py").write_text("", encoding="utf-8")
     (docs / "readme.txt").write_text("restricted", encoding="utf-8")
     source_worker.write_bytes((_ROOT / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py").read_bytes())
-    inherited_acl = subprocess.run(
-        ["icacls.exe", str(benchmark_parent), "/grant", "*S-1-5-32-545:(OI)(CI)RX"],
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    assert inherited_acl.returncode == 0, inherited_acl.stdout + inherited_acl.stderr
+    for path, grants in (
+        (benchmark_parent, ("*S-1-5-32-545:(OI)(CI)RX",)),
+        (
+            tool_parent,
+            (
+                "*S-1-5-32-545:(OI)(CI)M",
+                "*S-1-5-11:(OI)(CI)M",
+            ),
+        ),
+    ):
+        inherited_acl = subprocess.run(
+            ["icacls.exe", str(path), "/grant", *grants],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        assert inherited_acl.returncode == 0, inherited_acl.stdout + inherited_acl.stderr
     secret_path = protected_root / "secret.txt"
     secret_path.write_text("secret", encoding="utf-8")
     instance_id = f"integration-{secrets.token_hex(3)}"
@@ -1351,6 +1507,8 @@ $inheritedUsersAllowPresent = $false
 $agentToolsInheritanceProtected = $false
 $workerInheritanceProtected = $false
 $agentWorkerWriteGrantPresent = $false
+$readExecuteDenyPaths = @()
+$inheritedModifySids = @()
 $baseAclPreserved = $false
 $userPresentBeforeAclCleanup = $false
 $userPresentAfterAclCleanup = $false
@@ -1418,6 +1576,32 @@ try {{
         catch {{ return $false }}
         return $ruleSid -eq $agentSid -and ($_.FileSystemRights -band $writeRights) -ne 0
     }})
+    $denyPaths = @(
+        $tools.AgentTools,
+        $tools.WorkerPath,
+        {_ps_quote(tool_root)},
+        $runtime.BasePrefix,
+        $runtime.BaseExecutable
+    )
+    $readExecuteDenyPaths = @($denyPaths | Where-Object {{
+        $path = $_
+        $acl = Get-Acl -LiteralPath $path
+        [bool]($acl.Access | Where-Object {{
+            if ($_.AccessControlType -ne [Security.AccessControl.AccessControlType]::Deny -or $_.IsInherited) {{ return $false }}
+            try {{ $ruleSid = $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value }}
+            catch {{ $ruleSid = $_.IdentityReference.Value }}
+            return $ruleSid -eq $agentSid -and ($_.FileSystemRights -band $writeRights) -eq $writeRights
+        }})
+    }})
+    $toolAcl = Get-Acl -LiteralPath {_ps_quote(tool_root)}
+    $inheritedModifySids = @($toolAcl.Access | Where-Object {{
+        $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+        $_.IsInherited -and
+        ($_.FileSystemRights -band [Security.AccessControl.FileSystemRights]::Modify) -eq [Security.AccessControl.FileSystemRights]::Modify
+    }} | ForEach-Object {{
+        try {{ $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value }}
+        catch {{ $_.IdentityReference.Value }}
+    }})
 }}
 catch {{
     $probeError = $_.Exception.Message
@@ -1474,6 +1658,8 @@ finally {{
     agentToolsInheritanceProtected = $agentToolsInheritanceProtected
     workerInheritanceProtected = $workerInheritanceProtected
     agentWorkerWriteGrantPresent = $agentWorkerWriteGrantPresent
+    readExecuteDenyPaths = $readExecuteDenyPaths
+    inheritedModifySids = $inheritedModifySids
     trackedPathCount = $aclTransaction.ModifiedPaths.Count
     baseAclPreserved = $baseAclPreserved
     userPresentBeforeAclCleanup = $userPresentBeforeAclCleanup
@@ -1496,9 +1682,11 @@ finally {{
         assert payload["probeError"] is None
         assert payload["benchmarkDenyApplied"] is True
         assert payload["inheritedUsersAllowPresent"] is True
-        assert payload["agentToolsInheritanceProtected"] is True
-        assert payload["workerInheritanceProtected"] is True
+        assert payload["agentToolsInheritanceProtected"] is False
+        assert payload["workerInheritanceProtected"] is False
         assert payload["agentWorkerWriteGrantPresent"] is False
+        assert len(payload["readExecuteDenyPaths"]) == 5
+        assert {"S-1-5-32-545", "S-1-5-11"} <= set(payload["inheritedModifySids"])
         assert payload["access"]["WorkspaceWriteSucceeded"] is True
         assert payload["access"]["ProtectedReadDenied"] is True
         assert payload["access"]["ProtectedWriteDenied"] is True
@@ -1507,6 +1695,26 @@ finally {{
         assert payload["access"]["EvaluatorSourceReadDenied"] is True
         assert payload["access"]["DocsReadDenied"] is True
         assert payload["access"]["AgentToolsWriteDenied"] is True
+        assert payload["access"]["ReadExecuteDirectoryReadSucceeded"] is True
+        assert payload["access"]["ReadExecuteDirectoryCreateDenied"] is True
+        assert payload["access"]["ReadExecuteDirectoryWriteDenied"] is True
+        assert payload["access"]["ReadExecuteDirectoryDeleteDenied"] is True
+        assert payload["access"]["ReadExecuteFileReadSucceeded"] is True
+        assert payload["access"]["ReadExecuteFileModifyDenied"] is True
+        assert payload["access"]["RuntimeExecutableExecutionSucceeded"] is True
+        assert {Path(item["Path"]).resolve() for item in payload["access"]["ReadExecuteDirectoryResults"]} == {
+            (entry_root / "agent-tools").resolve(),
+            tool_root.resolve(),
+            Path(sys.base_prefix).resolve(),
+        }
+        assert all(item["ReadSucceeded"] and item["CreateDenied"] and item["WriteDenied"] and item["DeleteDenied"] for item in payload["access"]["ReadExecuteDirectoryResults"])
+        assert {Path(item["Path"]).resolve() for item in payload["access"]["ReadExecuteFileResults"]} == {
+            (entry_root / "agent-tools" / "contained_process_worker.py").resolve(),
+            Path(getattr(sys, "_base_executable", sys.executable)).resolve(),
+        }
+        assert all(item["ReadSucceeded"] and item["ModifyDenied"] for item in payload["access"]["ReadExecuteFileResults"])
+        assert len(payload["access"]["RuntimeExecutableResults"]) == 1
+        assert payload["access"]["RuntimeExecutableResults"][0]["ExecutionSucceeded"] is True
         assert payload["access"]["DockerCliDenied"] is True
         assert payload["access"]["DockerPipeDenied"] is True
         assert payload["access"]["ProcessId"] > 0

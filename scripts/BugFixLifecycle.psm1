@@ -6,6 +6,10 @@ $script:UsersGroupSid = "S-1-5-32-545"
 $script:AdministratorsGroupSid = "S-1-5-32-544"
 $script:SystemSid = "S-1-5-18"
 $script:LifecycleInvocationLabel = "bcbench.lifecycle.invocation"
+$script:AgentDirectoryDenyMask = "(OI)(CI)(WD,AD,WEA,WA,DE,DC,WDAC,WO)"
+$script:AgentDirectoryDenyRights = "WriteData, AppendData, WriteExtendedAttributes, WriteAttributes, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership"
+$script:AgentFileDenyMask = "(WD,AD,WEA,WA,DE,WDAC,WO)"
+$script:AgentFileDenyRights = "WriteData, AppendData, WriteExtendedAttributes, WriteAttributes, Delete, ChangePermissions, TakeOwnership"
 
 function Write-BCBenchSecretMask {
     param([AllowEmptyString()][string]$Secret)
@@ -560,7 +564,16 @@ function Assert-BCBenchAcl {
         $matchingRule = @($acl.Access | Where-Object {
             $_.AccessControlType -eq $expectedType -and
             (Test-BCBenchAclIdentity -Actual $_.IdentityReference -Expected ([string]$expectedRule.Identity)) -and
-            ($_.FileSystemRights -band $expectedRights) -eq $expectedRights
+            ($_.FileSystemRights -band $expectedRights) -eq $expectedRights -and
+            (
+                $null -eq $expectedRule.PSObject.Properties["MustBeExplicit"] -or
+                -not [bool]$expectedRule.MustBeExplicit -or
+                -not $_.IsInherited
+            ) -and
+            (
+                $null -eq $expectedRule.PSObject.Properties["InheritanceFlags"] -or
+                $_.InheritanceFlags -eq [Security.AccessControl.InheritanceFlags]$expectedRule.InheritanceFlags
+            )
         })
         if ($matchingRule.Count -eq 0) {
             throw "ACL verification failed for '$($Parameters.Path)': '$($expectedRule.Identity)' lacks '$($expectedRule.Rights)'."
@@ -600,6 +613,47 @@ function Set-BCBenchIdentityDeny {
         AgentMustBeAbsent  = $false
         InheritanceRemoved = $false
         IsFile             = $false
+    }
+    if ($null -ne $AclVerifier) {
+        & $AclVerifier $verification
+    }
+    else {
+        Assert-BCBenchAcl -Parameters $verification
+    }
+}
+
+function Invoke-BCBenchReadExecuteDeny {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Sid,
+        [switch]$IsFile,
+        [scriptblock]$IcaclsRunner,
+        [scriptblock]$AclVerifier
+    )
+
+    if ($Sid -notmatch "^S-\d(-\d+)+$") {
+        throw "Restricted identity has an invalid SID '$Sid'."
+    }
+    Assert-BCBenchNoReparseComponents -Path $Path
+    $denyMask = if ($IsFile) { $script:AgentFileDenyMask } else { $script:AgentDirectoryDenyMask }
+    $denyRights = if ($IsFile) { $script:AgentFileDenyRights } else { $script:AgentDirectoryDenyRights }
+    $inheritanceFlags = if ($IsFile) { "None" } else { "ContainerInherit, ObjectInherit" }
+    Invoke-BCBenchIcacls `
+        -Arguments @($Path, "/deny", "*${Sid}:$denyMask") `
+        -Runner $IcaclsRunner
+    $verification = [PSCustomObject]@{
+        Path               = $Path
+        ExpectedRules      = @([PSCustomObject]@{
+            Identity          = $Sid
+            Rights            = $denyRights
+            AccessControlType = "Deny"
+            MustBeExplicit    = $true
+            InheritanceFlags  = $inheritanceFlags
+        })
+        AgentAccount       = $Sid
+        AgentMustBeAbsent  = $false
+        InheritanceRemoved = $false
+        IsFile             = [bool]$IsFile
     }
     if ($null -ne $AclVerifier) {
         & $AclVerifier $verification
@@ -657,6 +711,9 @@ function Test-BCBenchIdentityAccess {
         [Parameter(Mandatory = $true)][string]$DatasetPath,
         [Parameter(Mandatory = $true)][string]$EvaluatorSourcePath,
         [Parameter(Mandatory = $true)][string]$DocsPath,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ReadExecuteDirectoryPaths,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ReadExecuteFilePaths,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$RuntimeExecutablePaths,
         [string]$PythonExecutable = (Get-Command python -ErrorAction Stop).Source,
         [string]$ContainedProcessScriptPath = (Join-Path $PSScriptRoot "Invoke-ContainedProcess.ps1"),
         [string]$ContainedProcessWorkerPath = (Join-Path (Split-Path $PSScriptRoot -Parent) "src\bcbench\agent\shared\contained_process_worker.py"),
@@ -668,7 +725,37 @@ function Test-BCBenchIdentityAccess {
     $protectedProbe = Join-Path $ProtectedRoot "identity-access-$probeId.txt"
     $protectedWriteProbe = Join-Path $ProtectedRoot "forbidden-$probeId.txt"
     $benchmarkWriteProbe = Join-Path $BenchmarkRoot "forbidden-$probeId.txt"
-    [IO.File]::WriteAllText($protectedProbe, "evaluator-only", [Text.UTF8Encoding]::new($false))
+    $directoryProbes = [System.Collections.Generic.List[object]]::new()
+    try {
+        [IO.File]::WriteAllText($protectedProbe, "evaluator-only", [Text.UTF8Encoding]::new($false))
+        foreach ($path in $ReadExecuteDirectoryPaths | Select-Object -Unique) {
+            $directory = Resolve-BCBenchAbsolutePath -Path $path
+            $probe = [PSCustomObject]@{
+                Directory  = $directory
+                CreatePath = Join-Path $directory ".bcbench-create-$probeId.tmp"
+                WritePath  = Join-Path $directory ".bcbench-write-$probeId.tmp"
+                DeletePath = Join-Path $directory ".bcbench-delete-$probeId.tmp"
+            }
+            $directoryProbes.Add($probe)
+            [IO.File]::WriteAllText($probe.WritePath, "write-probe", [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($probe.DeletePath, "delete-probe", [Text.UTF8Encoding]::new($false))
+        }
+    }
+    catch {
+        Remove-Item -LiteralPath $protectedProbe -Force -ErrorAction SilentlyContinue
+        foreach ($probe in $directoryProbes) {
+            Remove-Item -LiteralPath $probe.CreatePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.WritePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.DeletePath -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+    $readExecuteFiles = @($ReadExecuteFilePaths | Select-Object -Unique | ForEach-Object {
+        Resolve-BCBenchAbsolutePath -Path $_
+    })
+    $runtimeExecutables = @($RuntimeExecutablePaths | Select-Object -Unique | ForEach-Object {
+        Resolve-BCBenchAbsolutePath -Path $_
+    })
     $probeRoot = Join-Path $ProtectedRoot ".identity-access-$probeId"
     New-Item -ItemType Directory -Path $probeRoot | Out-Null
 
@@ -687,6 +774,9 @@ dataset_read_error = None
 evaluator_source_read_error = None
 docs_read_error = None
 agent_tools_write_error = None
+read_execute_directory_results = []
+read_execute_file_results = []
+runtime_executable_results = []
 docker_cli_error = None
 docker_pipe_error = None
 
@@ -734,12 +824,97 @@ except OSError as error:
     benchmark_write_error = str(error)
 
 try:
-    with Path(os.environ["BCBENCH_WORKER_PROBE"]).open("ab") as worker_file:
-        worker_file.write(b"\n# forbidden")
+    with Path(os.environ["BCBENCH_WORKER_PROBE"]).open("r+b"):
+        pass
     agent_tools_write_denied = False
 except OSError as error:
     agent_tools_write_denied = True
     agent_tools_write_error = str(error)
+
+for probe in json.loads(os.environ["BCBENCH_READ_EXECUTE_DIRECTORY_PROBES"]):
+    directory_result = {"Path": probe["Directory"]}
+    try:
+        next(Path(probe["Directory"]).iterdir(), None)
+        directory_result["ReadSucceeded"] = True
+        directory_result["ReadError"] = None
+    except OSError as error:
+        directory_result["ReadSucceeded"] = False
+        directory_result["ReadError"] = str(error)
+
+    try:
+        Path(probe["CreatePath"]).write_text("forbidden", encoding="utf-8")
+        directory_result["CreateDenied"] = False
+        directory_result["CreateError"] = None
+    except OSError as error:
+        directory_result["CreateDenied"] = True
+        directory_result["CreateError"] = str(error)
+
+    try:
+        with Path(probe["WritePath"]).open("ab") as probe_file:
+            probe_file.write(b"forbidden")
+        directory_result["WriteDenied"] = False
+        directory_result["WriteError"] = None
+    except OSError as error:
+        directory_result["WriteDenied"] = True
+        directory_result["WriteError"] = str(error)
+
+    try:
+        Path(probe["DeletePath"]).unlink()
+        directory_result["DeleteDenied"] = False
+        directory_result["DeleteError"] = None
+    except OSError as error:
+        directory_result["DeleteDenied"] = True
+        directory_result["DeleteError"] = str(error)
+    read_execute_directory_results.append(directory_result)
+
+for path in json.loads(os.environ["BCBENCH_READ_EXECUTE_FILES"]):
+    file_result = {"Path": path}
+    try:
+        with Path(path).open("rb") as probe_file:
+            probe_file.read(1)
+        file_result["ReadSucceeded"] = True
+        file_result["ReadError"] = None
+    except OSError as error:
+        file_result["ReadSucceeded"] = False
+        file_result["ReadError"] = str(error)
+
+    try:
+        with Path(path).open("r+b") as probe_file:
+            original = probe_file.read(1)
+            if original:
+                probe_file.seek(0)
+                probe_file.write(original)
+                probe_file.flush()
+        file_result["ModifyDenied"] = False
+        file_result["ModifyError"] = None
+    except OSError as error:
+        file_result["ModifyDenied"] = True
+        file_result["ModifyError"] = str(error)
+    read_execute_file_results.append(file_result)
+
+for path in json.loads(os.environ["BCBENCH_RUNTIME_EXECUTABLES"]):
+    executable_result = {"Path": path}
+    try:
+        execution = subprocess.run(
+            [path, "-c", "print('bcbench-runtime-ok')"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        executable_result["ExecutionSucceeded"] = (
+            execution.returncode == 0
+            and execution.stdout.strip() == "bcbench-runtime-ok"
+        )
+        executable_result["ExecutionError"] = (
+            None
+            if executable_result["ExecutionSucceeded"]
+            else (execution.stdout + execution.stderr).strip()
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        executable_result["ExecutionSucceeded"] = False
+        executable_result["ExecutionError"] = str(error)
+    runtime_executable_results.append(executable_result)
 
 try:
     docker = subprocess.run(["docker", "version"], capture_output=True, text=True, timeout=15, check=False)
@@ -789,6 +964,30 @@ print(json.dumps({
     "DocsReadError": docs_read_error,
     "AgentToolsWriteDenied": agent_tools_write_denied,
     "AgentToolsWriteError": agent_tools_write_error,
+    "ReadExecuteDirectoryReadSucceeded": all(
+        result["ReadSucceeded"] for result in read_execute_directory_results
+    ),
+    "ReadExecuteDirectoryCreateDenied": all(
+        result["CreateDenied"] for result in read_execute_directory_results
+    ),
+    "ReadExecuteDirectoryWriteDenied": all(
+        result["WriteDenied"] for result in read_execute_directory_results
+    ),
+    "ReadExecuteDirectoryDeleteDenied": all(
+        result["DeleteDenied"] for result in read_execute_directory_results
+    ),
+    "ReadExecuteFileReadSucceeded": all(
+        result["ReadSucceeded"] for result in read_execute_file_results
+    ),
+    "ReadExecuteFileModifyDenied": all(
+        result["ModifyDenied"] for result in read_execute_file_results
+    ),
+    "RuntimeExecutableExecutionSucceeded": all(
+        result["ExecutionSucceeded"] for result in runtime_executable_results
+    ),
+    "ReadExecuteDirectoryResults": read_execute_directory_results,
+    "ReadExecuteFileResults": read_execute_file_results,
+    "RuntimeExecutableResults": runtime_executable_results,
     "DockerCliDenied": docker_cli_denied,
     "DockerCliError": docker_cli_error,
     "DockerPipeDenied": docker_pipe_denied,
@@ -824,6 +1023,9 @@ print(json.dumps({
             BCBENCH_EVALUATOR_SOURCE_PROBE   = $EvaluatorSourcePath
             BCBENCH_DOCS_PROBE               = $DocsPath
             BCBENCH_WORKER_PROBE             = $ContainedProcessWorkerPath
+            BCBENCH_READ_EXECUTE_DIRECTORY_PROBES = ($directoryProbes | ConvertTo-Json -AsArray -Compress -Depth 4)
+            BCBENCH_READ_EXECUTE_FILES       = ($readExecuteFiles | ConvertTo-Json -AsArray -Compress)
+            BCBENCH_RUNTIME_EXECUTABLES      = ($runtimeExecutables | ConvertTo-Json -AsArray -Compress)
         }
         timeout_seconds = 20
         identity        = @{
@@ -848,9 +1050,9 @@ print(json.dumps({
             -PythonExecutable $PythonExecutable `
             -WorkerPath $ContainedProcessWorkerPath `
             -ExpectedWorkerSha256 $ContainedProcessWorkerSha256 `
-            -WorkerStartupTimeoutSeconds 30
+            -WorkerStartupTimeoutSeconds 30 2>&1
         if ($LASTEXITCODE -ne 0) {
-            throw "Contained identity probe failed with wrapper exit code $LASTEXITCODE."
+            throw "Contained identity probe failed with wrapper exit code $LASTEXITCODE`: $(($wrapperOutput | Out-String).Trim())"
         }
         $wrapperResult = ($wrapperOutput | Out-String).Trim() | ConvertFrom-Json
         if ($wrapperResult.timed_out -or $wrapperResult.returncode -ne 0) {
@@ -863,6 +1065,11 @@ print(json.dumps({
         Remove-Item -LiteralPath $protectedProbe -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $protectedWriteProbe -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $benchmarkWriteProbe -Force -ErrorAction SilentlyContinue
+        foreach ($probe in $directoryProbes) {
+            Remove-Item -LiteralPath $probe.CreatePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.WritePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $probe.DeletePath -Force -ErrorAction SilentlyContinue
+        }
         Remove-Item -LiteralPath $probeRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
@@ -1028,6 +1235,7 @@ function Set-BCBenchWorkspaceAcl {
     if ($null -eq $AclTransaction) {
         $AclTransaction = New-BCBenchAgentAclTransaction -Identity $Identity
     }
+    $agentSid = [string]$AclTransaction.Sid
 
     try {
         Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $BenchmarkRoot
@@ -1071,15 +1279,28 @@ function Set-BCBenchWorkspaceAcl {
         Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $AgentTools
         Set-BCBenchExplicitAcl `
             -Path $AgentTools `
-            -Rules ($baseRules + $agentRead) `
+            -Rules @($agentRead) `
             -AgentAccount $agentAccount `
+            -PreserveInheritance `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
+        Invoke-BCBenchReadExecuteDeny `
+            -Path $AgentTools `
+            -Sid $agentSid `
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
         Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $WorkerPath
         Set-BCBenchExplicitAcl `
             -Path $WorkerPath `
-            -Rules ($baseRules + $agentRead) `
+            -Rules @($agentRead) `
             -AgentAccount $agentAccount `
+            -IsFile `
+            -PreserveInheritance `
+            -IcaclsRunner $IcaclsRunner `
+            -AclVerifier $AclVerifier
+        Invoke-BCBenchReadExecuteDeny `
+            -Path $WorkerPath `
+            -Sid $agentSid `
             -IsFile `
             -IcaclsRunner $IcaclsRunner `
             -AclVerifier $AclVerifier
@@ -1093,6 +1314,11 @@ function Set-BCBenchWorkspaceAcl {
                 -PreserveInheritance `
                 -IcaclsRunner $IcaclsRunner `
                 -AclVerifier $AclVerifier
+            Invoke-BCBenchReadExecuteDeny `
+                -Path $toolRoot `
+                -Sid $agentSid `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
         }
         foreach ($runtimeRoot in $RuntimeRoots | Select-Object -Unique) {
             $agentRead = [PSCustomObject]@{ Identity = $agentAccount; Rights = "ReadAndExecute" }
@@ -1102,6 +1328,11 @@ function Set-BCBenchWorkspaceAcl {
                 -Rules @($agentRead) `
                 -AgentAccount $agentAccount `
                 -PreserveInheritance `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+            Invoke-BCBenchReadExecuteDeny `
+                -Path $runtimeRoot `
+                -Sid $agentSid `
                 -IcaclsRunner $IcaclsRunner `
                 -AclVerifier $AclVerifier
         }
@@ -1114,6 +1345,12 @@ function Set-BCBenchWorkspaceAcl {
                 -AgentAccount $agentAccount `
                 -IsFile `
                 -PreserveInheritance `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+            Invoke-BCBenchReadExecuteDeny `
+                -Path $runtimeExecutablePath `
+                -Sid $agentSid `
+                -IsFile `
                 -IcaclsRunner $IcaclsRunner `
                 -AclVerifier $AclVerifier
         }
@@ -1131,8 +1368,15 @@ function Set-BCBenchWorkspaceAcl {
             Add-BCBenchAgentAclPath -Transaction $AclTransaction -Path $requestPath
             Set-BCBenchExplicitAcl `
                 -Path $requestPath `
-                -Rules ($baseRules + $agentRead) `
+                -Rules @($agentRead) `
                 -AgentAccount $agentAccount `
+                -IsFile `
+                -PreserveInheritance `
+                -IcaclsRunner $IcaclsRunner `
+                -AclVerifier $AclVerifier
+            Invoke-BCBenchReadExecuteDeny `
+                -Path $requestPath `
+                -Sid $agentSid `
                 -IsFile `
                 -IcaclsRunner $IcaclsRunner `
                 -AclVerifier $AclVerifier
@@ -1157,6 +1401,9 @@ function Set-BCBenchWorkspaceAcl {
             DatasetPath                  = $DatasetPath
             EvaluatorSourcePath          = $evaluatorSourcePath
             DocsPath                     = $docsPath
+            ReadExecuteDirectoryPaths    = @($AgentTools) + @($ToolRoots) + @($RuntimeRoots)
+            ReadExecuteFilePaths         = @($WorkerPath) + @($RuntimeExecutablePaths) + @($WorkerRequestPaths)
+            RuntimeExecutablePaths       = @($RuntimeExecutablePaths)
             PythonExecutable             = @($RuntimeExecutablePaths)[0]
             ContainedProcessWorkerPath   = $WorkerPath
             ContainedProcessWorkerSha256 = $WorkerSha256
@@ -1176,6 +1423,13 @@ function Set-BCBenchWorkspaceAcl {
             "EvaluatorSourceReadDenied",
             "DocsReadDenied",
             "AgentToolsWriteDenied",
+            "ReadExecuteDirectoryReadSucceeded",
+            "ReadExecuteDirectoryCreateDenied",
+            "ReadExecuteDirectoryWriteDenied",
+            "ReadExecuteDirectoryDeleteDenied",
+            "ReadExecuteFileReadSucceeded",
+            "ReadExecuteFileModifyDenied",
+            "RuntimeExecutableExecutionSucceeded",
             "DockerCliDenied",
             "DockerPipeDenied"
         )) {
