@@ -60,12 +60,16 @@ class ContainedProcessInfrastructureError(RuntimeError):
         wrapper_stdout: str,
         wrapper_stderr: str,
         wrapper_returncode: int | None = None,
+        reason: str | None = None,
     ) -> None:
-        if wrapper_returncode is None:
+        if reason is not None:
+            message = reason
+        elif wrapper_returncode is None:
             message = f"Contained process wrapper exceeded its {watchdog_timeout_seconds}-second watchdog"
         else:
             message = f"Contained process wrapper exited with status {wrapper_returncode}"
         super().__init__(message)
+        self.reason = reason
         self.watchdog_timeout_seconds = watchdog_timeout_seconds
         self.wrapper_returncode = wrapper_returncode
         self.child_stdout = child_stdout
@@ -105,6 +109,8 @@ class _WrapperResult(TypedDict):
 
 _WORKER_STARTUP_TIMEOUT_SECONDS = 30
 _WRAPPER_SHUTDOWN_GRACE_SECONDS = 10
+_MAX_WINDOWS_RETURN_CODE = 0xFFFFFFFF
+_WRAPPER_RESULT_FIELDS = {"returncode", "stdout", "stderr", "timed_out"}
 
 
 def _write_request(path: Path, request: ContainedProcessRequest) -> None:
@@ -131,6 +137,43 @@ def _normalized_subprocess_output(output: str | bytes | None) -> str:
     if isinstance(output, bytes):
         output = output.decode("utf-8", errors="replace")
     return _normalize_newlines(output or "")
+
+
+def _parse_wrapper_result(wrapper_stdout: str) -> _WrapperResult:
+    payload = json.loads(wrapper_stdout)
+    if not isinstance(payload, dict):
+        raise TypeError("Contained process wrapper response must be a JSON object")
+
+    fields = set(payload)
+    if fields != _WRAPPER_RESULT_FIELDS:
+        missing = sorted(_WRAPPER_RESULT_FIELDS - fields)
+        extra = sorted(fields - _WRAPPER_RESULT_FIELDS)
+        raise ValueError(f"Contained process wrapper response fields are invalid: missing={missing}, extra={extra}")
+
+    timed_out = payload["timed_out"]
+    if type(timed_out) is not bool:
+        raise TypeError("Contained process wrapper response timed_out must be a boolean")
+
+    stdout = payload["stdout"]
+    stderr = payload["stderr"]
+    if not isinstance(stdout, str):
+        raise TypeError("Contained process wrapper response stdout must be a string")
+    if not isinstance(stderr, str):
+        raise TypeError("Contained process wrapper response stderr must be a string")
+
+    returncode = payload["returncode"]
+    if timed_out:
+        if returncode is not None:
+            raise ValueError("Contained process wrapper response returncode must be null when timed_out is true")
+    else:
+        if returncode is None:
+            raise ValueError("Contained process wrapper response returncode cannot be null when timed_out is false")
+        if type(returncode) is not int:
+            raise TypeError("Contained process wrapper response returncode must be an integer when timed_out is false")
+        if not 0 <= returncode <= _MAX_WINDOWS_RETURN_CODE:
+            raise ValueError("Contained process wrapper response returncode must be an unsigned 32-bit integer")
+
+    return cast(_WrapperResult, payload)
 
 
 def _current_windows_user_sid() -> str:
@@ -295,7 +338,18 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
                 child_stderr=_read_capture(stderr_path),
             ) from exc
 
-        payload = cast(_WrapperResult, json.loads(completed.stdout))
+        try:
+            payload = _parse_wrapper_result(completed.stdout)
+        except (TypeError, ValueError) as exc:
+            raise ContainedProcessInfrastructureError(
+                None,
+                child_stdout=_read_capture(stdout_path),
+                child_stderr=_read_capture(stderr_path),
+                wrapper_stdout=_normalized_subprocess_output(completed.stdout),
+                wrapper_stderr=_normalized_subprocess_output(completed.stderr),
+                wrapper_returncode=completed.returncode,
+                reason=f"Contained process wrapper returned an invalid response: {exc}",
+            ) from exc
         stdout = _normalize_newlines(payload["stdout"])
         stderr = _normalize_newlines(payload["stderr"])
         if payload["timed_out"]:

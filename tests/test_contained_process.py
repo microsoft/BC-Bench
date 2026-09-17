@@ -766,6 +766,105 @@ def test_wrapper_reported_timeout_remains_command_timeout(tmp_path, monkeypatch)
     assert exc_info.value.stderr == "command stderr"
 
 
+@pytest.mark.parametrize(
+    ("wrapper_stdout", "expected_cause"),
+    [
+        pytest.param("not JSON", json.JSONDecodeError, id="malformed-json"),
+        pytest.param(
+            '{"returncode":0,"stdout":"command stdout","stderr":"command stderr"}',
+            ValueError,
+            id="missing-field",
+        ),
+        pytest.param(
+            '{"returncode":0,"stdout":"command stdout","stderr":"command stderr","timed_out":"false"}',
+            TypeError,
+            id="timed-out-wrong-type",
+        ),
+        pytest.param(
+            '{"returncode":0,"stdout":1,"stderr":"command stderr","timed_out":false}',
+            TypeError,
+            id="stdout-wrong-type",
+        ),
+        pytest.param(
+            '{"returncode":0,"stdout":"command stdout","stderr":null,"timed_out":false}',
+            TypeError,
+            id="stderr-wrong-type",
+        ),
+        pytest.param(
+            '{"returncode":0,"stdout":"command stdout","stderr":"command stderr","timed_out":true}',
+            ValueError,
+            id="timeout-with-returncode",
+        ),
+        pytest.param(
+            '{"returncode":null,"stdout":"command stdout","stderr":"command stderr","timed_out":false}',
+            ValueError,
+            id="false-success-null-returncode",
+        ),
+        pytest.param(
+            '{"returncode":true,"stdout":"command stdout","stderr":"command stderr","timed_out":false}',
+            TypeError,
+            id="bool-returncode",
+        ),
+        pytest.param(
+            '{"returncode":1.0,"stdout":"command stdout","stderr":"command stderr","timed_out":false}',
+            TypeError,
+            id="returncode-wrong-type",
+        ),
+        pytest.param(
+            '{"returncode":-1,"stdout":"command stdout","stderr":"command stderr","timed_out":false}',
+            ValueError,
+            id="negative-returncode",
+        ),
+        pytest.param(
+            '{"returncode":4294967296,"stdout":"command stdout","stderr":"command stderr","timed_out":false}',
+            ValueError,
+            id="out-of-range-returncode",
+        ),
+        pytest.param(
+            '{"returncode":0,"stdout":"command stdout","stderr":"command stderr","timed_out":false,"unexpected":true}',
+            ValueError,
+            id="extra-field",
+        ),
+    ],
+)
+def test_invalid_wrapper_response_raises_infrastructure_error_with_all_diagnostics(
+    tmp_path,
+    monkeypatch,
+    wrapper_stdout,
+    expected_cause,
+):
+    script_path = tmp_path / "Invoke-ContainedProcess.ps1"
+    script_path.touch()
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        stdout_path = Path(command[command.index("-StdoutPath") + 1])
+        stderr_path = Path(command[command.index("-StderrPath") + 1])
+        stdout_path.write_bytes(b"child stdout\r\n")
+        stderr_path.write_bytes(b"child stderr\r\n")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=wrapper_stdout,
+            stderr="wrapper stderr\r\n",
+        )
+
+    monkeypatch.setattr(
+        "bcbench.agent.shared.contained_process.get_config",
+        lambda: SimpleNamespace(paths=SimpleNamespace(ps_script_path=tmp_path)),
+    )
+    monkeypatch.setattr("bcbench.agent.shared.contained_process.subprocess.run", fake_run)
+
+    with pytest.raises(ContainedProcessInfrastructureError) as exc_info:
+        run_contained_process(_request(tmp_path, "print('launched')"))
+
+    assert isinstance(exc_info.value.__cause__, expected_cause)
+    assert exc_info.value.wrapper_returncode == 0
+    assert exc_info.value.child_stdout == "child stdout\n"
+    assert exc_info.value.child_stderr == "child stderr\n"
+    assert exc_info.value.wrapper_stdout == wrapper_stdout
+    assert exc_info.value.wrapper_stderr == "wrapper stderr\n"
+
+
 @pytest.mark.e2e
 def test_windows_identity_isolated_environment_workspace_and_docker_access(tmp_path, monkeypatch):
     if not _is_elevated():

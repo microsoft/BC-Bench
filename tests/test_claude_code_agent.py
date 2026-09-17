@@ -192,6 +192,28 @@ def test_claude_code_contained_path_constructs_request_and_parses_stdout(tmp_pat
     gateway.stop.assert_called_once_with()
 
 
+def test_claude_code_stops_gateway_when_mcp_config_setup_fails(tmp_path: Path):
+    gateway = Mock(base_url="http://127.0.0.1/mcp")
+    setup_error = RuntimeError("MCP config setup failed")
+    with (
+        patch("bcbench.agent.claude.agent.shutil.which", return_value="claude"),
+        patch("bcbench.agent.claude.agent.build_prompt", return_value="prompt"),
+        patch("bcbench.agent.claude.agent.start_bc_mcp_gateway", return_value=gateway),
+        patch("bcbench.agent.claude.agent.build_mcp_config", side_effect=setup_error),
+        pytest.raises(RuntimeError) as error,
+    ):
+        run_claude_code(
+            entry=create_dataset_entry(),
+            model="claude-test-model",
+            category=EvaluationCategory.BUG_FIX,
+            repo_path=tmp_path,
+            output_dir=tmp_path / "output",
+        )
+
+    assert error.value is setup_error
+    gateway.stop.assert_called_once_with()
+
+
 @pytest.mark.parametrize(
     ("contained_result", "contained_error", "expected_error"),
     [
