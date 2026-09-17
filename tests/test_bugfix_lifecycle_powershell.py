@@ -286,6 +286,229 @@ $identity = New-BCBenchAgentIdentity -InstanceId 'bug-fix__entry/unsafe'
     assert "docker-users" not in payload["groups"]
 
 
+def test_remove_agent_identity_propagates_local_user_provider_errors() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:errorAction = $null
+function global:Get-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+
+    $global:errorAction = [string]$PSBoundParameters.ErrorAction
+    $errorRecord = [Management.Automation.ErrorRecord]::new(
+        [InvalidOperationException]::new('local user provider unavailable'),
+        'ProviderUnavailable',
+        [Management.Automation.ErrorCategory]::ResourceUnavailable,
+        $Name
+    )
+    $PSCmdlet.ThrowTerminatingError($errorRecord)
+}}
+Import-Module {_ps_quote(_MODULE)} -Force
+$message = $null
+try {{
+    Remove-BCBenchAgentIdentity -Username 'bcb-1234567-abcdef'
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{
+    message = $message
+    errorAction = $global:errorAction
+}} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload == {
+        "message": "local user provider unavailable",
+        "errorAction": "Stop",
+    }
+
+
+def test_remove_agent_identity_accepts_only_true_missing_user() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:removeCalls = 0
+function global:Get-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+
+    $errorRecord = [Management.Automation.ErrorRecord]::new(
+        [Management.Automation.ItemNotFoundException]::new("User $Name was not found."),
+        'UserNotFound',
+        [Management.Automation.ErrorCategory]::ObjectNotFound,
+        $Name
+    )
+    $PSCmdlet.ThrowTerminatingError($errorRecord)
+}}
+function global:Remove-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    $global:removeCalls++
+}}
+Import-Module {_ps_quote(_MODULE)} -Force
+Remove-BCBenchAgentIdentity -Username 'bcb-1234567-abcdef'
+$global:removeCalls | ConvertTo-Json -Compress
+"""
+    remove_calls = _last_json(_run_pwsh(script))
+
+    assert remove_calls == 0
+
+
+def test_remove_agent_identity_propagates_removal_errors() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:errorAction = $null
+function global:Get-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    [PSCustomObject]@{{ Name = $Name; Enabled = $true }}
+}}
+function global:Remove-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    $global:errorAction = [string]$PSBoundParameters.ErrorAction
+    throw 'identity removal failed'
+}}
+Import-Module {_ps_quote(_MODULE)} -Force
+$message = $null
+try {{
+    Remove-BCBenchAgentIdentity -Username 'bcb-1234567-abcdef'
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{
+    message = $message
+    errorAction = $global:errorAction
+}} | ConvertTo-Json -Compress
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload == {
+        "message": "identity removal failed",
+        "errorAction": "Stop",
+    }
+
+
+def test_new_agent_identity_rollback_disables_and_verifies_when_removal_fails() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:user = $null
+$global:disableCalls = 0
+$global:getCalls = 0
+function global:Get-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    $global:getCalls++
+    return $global:user
+}}
+function global:New-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name, [SecureString]$Password, [string]$Description, [switch]$AccountNeverExpires, [switch]$PasswordNeverExpires)
+    $global:user = [PSCustomObject]@{{ Name = $Name; Enabled = $true; Sid = 'S-1-5-21-1000-1001-1002-1003' }}
+    return $global:user
+}}
+function global:Add-LocalGroupMember {{
+    [CmdletBinding()]
+    param($SID, $Member)
+    throw 'identity creation failed'
+}}
+function global:Remove-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    throw 'identity removal failed'
+}}
+function global:Disable-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    $global:disableCalls++
+    $global:user.Enabled = $false
+}}
+Import-Module {_ps_quote(_MODULE)} -Force
+$exception = $null
+try {{
+    New-BCBenchAgentIdentity -InstanceId 'rollback-disable' | Out-Null
+}}
+catch {{
+    $exception = $_.Exception
+}}
+[PSCustomObject]@{{
+    type = $exception.GetType().FullName
+    messages = @($exception.InnerExceptions | ForEach-Object {{ $_.Message }})
+    disableCalls = $global:disableCalls
+    enabled = $global:user.Enabled
+    getCalls = $global:getCalls
+}} | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["type"] == "System.AggregateException"
+    assert payload["messages"] == ["identity creation failed", "identity removal failed"]
+    assert payload["disableCalls"] == 1
+    assert payload["enabled"] is False
+    assert payload["getCalls"] >= 2
+
+
+def test_new_agent_identity_rollback_aggregates_removal_and_disable_failures() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:user = $null
+$global:verifyCalls = 0
+function global:Get-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    if ($null -ne $global:user) {{ $global:verifyCalls++ }}
+    return $global:user
+}}
+function global:New-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name, [SecureString]$Password, [string]$Description, [switch]$AccountNeverExpires, [switch]$PasswordNeverExpires)
+    $global:user = [PSCustomObject]@{{ Name = $Name; Enabled = $true; Sid = 'S-1-5-21-1000-1001-1002-1003' }}
+    return $global:user
+}}
+function global:Add-LocalGroupMember {{
+    [CmdletBinding()]
+    param($SID, $Member)
+    throw 'identity creation failed'
+}}
+function global:Remove-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    throw 'identity removal failed'
+}}
+function global:Disable-LocalUser {{
+    [CmdletBinding()]
+    param([string]$Name)
+    $global:user.Enabled = $false
+    throw 'identity disable failed'
+}}
+Import-Module {_ps_quote(_MODULE)} -Force
+$exception = $null
+try {{
+    New-BCBenchAgentIdentity -InstanceId 'rollback-disable-failure' | Out-Null
+}}
+catch {{
+    $exception = $_.Exception
+}}
+[PSCustomObject]@{{
+    type = $exception.GetType().FullName
+    messages = @($exception.InnerExceptions | ForEach-Object {{ $_.Message }})
+    enabled = $global:user.Enabled
+    verifyCalls = $global:verifyCalls
+}} | ConvertTo-Json -Compress -Depth 6
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["type"] == "System.AggregateException"
+    assert payload["messages"] == [
+        "identity creation failed",
+        "identity removal failed",
+        "identity disable failed",
+    ]
+    assert payload["enabled"] is False
+    assert payload["verifyCalls"] >= 1
+
+
 def test_workspace_acl_uses_exact_checked_icacls_commands_and_runs_access_validator(tmp_path: Path) -> None:
     entry_root = tmp_path / "entry"
     paths = {

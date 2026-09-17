@@ -79,6 +79,25 @@ function Assert-BCBenchAgentNotPrivileged {
     }
 }
 
+function Get-BCBenchLocalUser {
+    param([Parameter(Mandatory = $true)][string]$Username)
+
+    try {
+        return Get-LocalUser -Name $Username -ErrorAction Stop
+    }
+    catch {
+        $errorId = [string]$_.FullyQualifiedErrorId
+        $reason = ($errorId -split ",", 2)[0]
+        if (
+            $_.CategoryInfo.Category -eq [Management.Automation.ErrorCategory]::ObjectNotFound -and
+            $reason -eq "UserNotFound"
+        ) {
+            return $null
+        }
+        throw
+    }
+}
+
 function New-BCBenchAgentIdentity {
     [CmdletBinding()]
     param(
@@ -88,7 +107,7 @@ function New-BCBenchAgentIdentity {
 
     for ($attempt = 1; $attempt -le $MaxCollisionRetries; $attempt++) {
         $username = New-BCBenchScopedUsername -Prefix bcb -InstanceId $InstanceId
-        if ($null -ne (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
+        if ($null -ne (Get-BCBenchLocalUser -Username $username)) {
             continue
         }
 
@@ -117,8 +136,32 @@ function New-BCBenchAgentIdentity {
             }
         }
         catch {
+            $creationFailure = $_.Exception
             if ($createdUser) {
-                Remove-LocalUser -Name $username -ErrorAction SilentlyContinue
+                try {
+                    Remove-LocalUser -Name $username -ErrorAction Stop
+                }
+                catch {
+                    $failures = [System.Collections.Generic.List[Exception]]::new()
+                    $failures.Add($creationFailure)
+                    $failures.Add($_.Exception)
+                    try {
+                        Disable-LocalUser -Name $username -ErrorAction Stop
+                    }
+                    catch {
+                        $failures.Add($_.Exception)
+                    }
+                    try {
+                        Assert-BCBenchAgentIdentityDisabled -Username $username
+                    }
+                    catch {
+                        $failures.Add($_.Exception)
+                    }
+                    throw [AggregateException]::new(
+                        "Failed to create local agent identity '$username' and safely roll it back.",
+                        $failures.ToArray()
+                    )
+                }
             }
             throw
         }
@@ -142,10 +185,10 @@ function Remove-BCBenchAgentIdentity {
     if ($Username -notmatch "^bcb-[a-f0-9]{7}-[a-f0-9]{6}$") {
         throw "Refusing to remove unexpected local username '$Username'."
     }
-    if ($null -ne (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
+    if ($null -ne (Get-BCBenchLocalUser -Username $Username)) {
         Remove-LocalUser -Name $Username -ErrorAction Stop
     }
-    if ($null -ne (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
+    if ($null -ne (Get-BCBenchLocalUser -Username $Username)) {
         throw "Local user '$Username' still exists after removal."
     }
 }
@@ -156,7 +199,7 @@ function Disable-BCBenchAgentIdentity {
     if ($Username -notmatch "^bcb-[a-f0-9]{7}-[a-f0-9]{6}$") {
         throw "Refusing to disable unexpected local username '$Username'."
     }
-    $localUser = Get-LocalUser -Name $Username -ErrorAction SilentlyContinue
+    $localUser = Get-BCBenchLocalUser -Username $Username
     if ($null -ne $localUser -and [bool]$localUser.Enabled) {
         Disable-LocalUser -Name $Username -ErrorAction Stop
     }
@@ -168,7 +211,7 @@ function Assert-BCBenchAgentIdentityDisabled {
     if ($Username -notmatch "^bcb-[a-f0-9]{7}-[a-f0-9]{6}$") {
         throw "Refusing to verify unexpected local username '$Username'."
     }
-    $localUser = Get-LocalUser -Name $Username -ErrorAction SilentlyContinue
+    $localUser = Get-BCBenchLocalUser -Username $Username
     if ($null -ne $localUser -and [bool]$localUser.Enabled) {
         throw "Local user '$Username' remains enabled after disablement."
     }
