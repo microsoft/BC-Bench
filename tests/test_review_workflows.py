@@ -10,7 +10,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "ecf8e31759d6ddd6d78e3a0b7836b40134368009"
+DEFAULT_ENGINE_SHA = "bab2863f14a1f5c474179c136e2c9775cc836fa6"
 PWSH = shutil.which("pwsh")
 
 
@@ -40,6 +40,8 @@ def test_claude_workflow_routes_code_review_through_claude() -> None:
 
 def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
+    workflow_data = yaml.safe_load(workflow)
+    inputs = workflow_data[True]["workflow_dispatch"]["inputs"]
     config = yaml.safe_load(AGENT_CONFIG.read_text(encoding="utf-8"))
 
     assert "category: code-review" in workflow
@@ -54,9 +56,39 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert 'agent: "BC PR Review"' in workflow
     assert '"mai-code-1.1-flash"' in workflow
     assert "mai-code-1-flash-picker" not in workflow
-    assert '"gemini-3.7-flash"' in workflow
-    assert "gemini-3.6-flash" not in workflow
-    for input_name in ("model:", "engine-sha:", "test-run:", "repeat:", "git-ref:", "modified-only:"):
+    assert "claude-" not in workflow
+    assert "gemini-" not in workflow
+    assert inputs["model"]["default"] == "gpt-5.6-sol"
+    assert inputs["model"]["options"] == [
+        "gpt-5.4",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.3-codex",
+        "mai-code-1.1-flash",
+    ]
+    assert inputs["leaf-model"]["default"] == "gpt-5.6-luna"
+    assert inputs["leaf-model"]["options"] == ["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
+    assert 'leaf-execution:\n        description: "Deterministic leaf scheduling mode"\n        required: false\n        default: "serial"' in workflow
+    assert 'max-leaf-concurrency:\n        description: "Maximum simultaneous leaves in parallel mode"' in workflow
+    assert 'COPILOT_REVIEW_CLI_VERSION: "1.0.83"' in workflow
+    assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
+    assert "COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}" in workflow
+    assert "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}" in workflow
+    assert "full' }}-${{ inputs.repetition-id }}" in workflow
+    for input_name in (
+        "model:",
+        "leaf-model:",
+        "leaf-execution:",
+        "max-leaf-concurrency:",
+        "engine-sha:",
+        "test-run:",
+        "modified-only:",
+        "repeat:",
+        "repetition-id:",
+        "entries:",
+        "git-ref:",
+    ):
         assert input_name in workflow
 
 
@@ -77,7 +109,7 @@ def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     summarize = workflow["jobs"]["summarize-results"]["with"]
 
-    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}"
+    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.entries != '' }}"
     # Repeats stay available so an override can be measured over several runs.
     assert "inputs.engine-sha" not in workflow["jobs"]["requeue"]["if"]
 
@@ -86,10 +118,12 @@ def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
 def test_pr_review_requeue_preserves_engine_sha(engine_sha: str) -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     payload = workflow["jobs"]["requeue"]["with"]["workflow-inputs"]
-    expression = "${{ toJSON(inputs.engine-sha) }}"
+    engine_expression = "${{ toJSON(inputs.engine-sha) }}"
+    entries_expression = "${{ toJSON(inputs.entries) }}"
 
-    assert expression in payload
-    assert json.loads(payload.replace(expression, json.dumps(engine_sha)))["engine-sha"] == engine_sha
+    assert engine_expression in payload
+    parsed = json.loads(payload.replace(engine_expression, json.dumps(engine_sha)).replace(entries_expression, json.dumps("")))
+    assert parsed["engine-sha"] == engine_sha
 
 
 def test_requeue_workflow_reads_inputs_from_environment() -> None:
@@ -128,7 +162,7 @@ def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.82" in action
+    assert "@github/copilot@1.0.83" in action
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:

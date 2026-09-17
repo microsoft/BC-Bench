@@ -23,6 +23,7 @@ import yaml
 
 from bcbench.agent.pr_review.metrics import build_pr_review_metrics
 from bcbench.agent.pr_review.review_output import engine_report_to_review_comments, load_engine_report
+from bcbench.agent.pr_review.run_manifest import RUN_MANIFEST_FILE_NAME, load_run_manifest, validate_run_manifest
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.dataset.codereview import CodeReviewEntry
@@ -37,6 +38,7 @@ _config = get_config()
 _FINDINGS_OUTPUT_FILE = "al-code-review-findings.json"
 _REVIEW_OUTPUT_FILE = "review.json"
 _PREPARE_BCQUALITY_SCRIPT = Path(__file__).parent / "scripts" / "Prepare-BCQualityRoot.ps1"
+_COPILOT_CLI_VERSION = "1.0.83"
 
 
 def _load_pr_review_settings() -> dict[str, Any]:
@@ -54,7 +56,7 @@ def _resolve_pr_review_root(engine_path: Path | None) -> Path:
     return root
 
 
-def get_pr_review_version(engine_path: Path | None) -> str:
+def get_pr_review_version(engine_path: Path | None, *, require_clean: bool = True) -> str:
     root = _resolve_pr_review_root(engine_path)
     try:
         result = subprocess.run(
@@ -68,7 +70,7 @@ def get_pr_review_version(engine_path: Path | None) -> str:
         git_root, commit = result.stdout.strip().splitlines()
         if Path(git_root).resolve() != root or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
             raise AgentError(f"PR Review engine path must be the root of a Git checkout: {root}")
-        if has_changes(root):
+        if require_clean and has_changes(root):
             raise AgentError("PR Review evaluations require a clean engine checkout. Commit changes first, or use 'bcbench run pr-review' for a smoke test.")
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         raise AgentError(f"Could not determine PR Review engine version at {root}: {exc}") from exc
@@ -159,6 +161,7 @@ def run_pr_review_agent(
     category: EvaluationCategory,
     repo_path: Path,
     output_dir: Path,
+    agent_version: str,
     engine_path: Path | None = None,
     min_severity: str | None = None,
 ) -> tuple[PRReviewMetrics, ExperimentConfiguration]:
@@ -189,6 +192,18 @@ def run_pr_review_agent(
     _commit_patch_as_head(repo_path)
     trusted_workspace = _init_trusted_workspace(output_dir / "trusted")
     bcquality_root = _prepare_bcquality_root(engine_root, pwsh, output_dir / "bcquality")
+    leaf_model = os.environ.get("COPILOT_REVIEW_LEAF_MODEL", "").strip()
+    if not leaf_model:
+        raise AgentError("COPILOT_REVIEW_LEAF_MODEL is required for deterministic PR Review evaluation.")
+    leaf_execution = os.environ.get("COPILOT_REVIEW_LEAF_EXECUTION", "serial").strip().lower()
+    if leaf_execution not in {"serial", "parallel"}:
+        raise AgentError("COPILOT_REVIEW_LEAF_EXECUTION must be 'serial' or 'parallel'.")
+    try:
+        max_leaf_concurrency = int(os.environ.get("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY", "4"))
+    except ValueError as exc:
+        raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.") from exc
+    if max_leaf_concurrency < 1:
+        raise AgentError("COPILOT_REVIEW_MAX_LEAF_CONCURRENCY must be a positive integer.")
 
     engine = engine_root / "agents" / "ALReviewAgent" / "scripts" / "Invoke-CopilotPRReview.ps1"
     env = {
@@ -202,6 +217,10 @@ def run_pr_review_agent(
         "BCQUALITY_ROOT": str(bcquality_root),
         "GITHUB_REPOSITORY": entry.repo,
         "COPILOT_MODEL": model,
+        "COPILOT_REVIEW_CLI_VERSION": _COPILOT_CLI_VERSION,
+        "COPILOT_REVIEW_LEAF_MODEL": leaf_model,
+        "COPILOT_REVIEW_LEAF_EXECUTION": leaf_execution,
+        "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY": str(max_leaf_concurrency),
         "AGENT_MINIMUM_SEVERITY": severity,
     }
 
@@ -222,6 +241,16 @@ def run_pr_review_agent(
         logger.debug(f"Engine stdout:\n{result.stdout}")
         if result.stderr:
             logger.debug(f"Engine stderr:\n{result.stderr}")
+        manifest = load_run_manifest(output_dir / RUN_MANIFEST_FILE_NAME)
+        validate_run_manifest(
+            manifest,
+            engine_commit=agent_version,
+            cli_version=_COPILOT_CLI_VERSION,
+            root_model=model,
+            leaf_model=leaf_model,
+            leaf_execution=leaf_execution,
+            max_leaf_concurrency=max_leaf_concurrency,
+        )
         count = _write_review_json(output_dir, repo_path)
         logger.info(f"Engine review complete for {entry.instance_id}: wrote {count} comment(s) to {_REVIEW_OUTPUT_FILE}")
     except subprocess.TimeoutExpired:
@@ -235,4 +264,4 @@ def run_pr_review_agent(
         logger.exception("Unexpected error running engine review")
         raise
     else:
-        return build_pr_review_metrics(output_dir, time.monotonic() - start), config
+        return build_pr_review_metrics(output_dir, time.monotonic() - start, manifest), config
