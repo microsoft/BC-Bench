@@ -49,6 +49,7 @@ from bcbench.exceptions import (
     GeneratedOutputError,
     GeneratedSubmissionError,
     NoTestsExtractedError,
+    PhaseExecutionInfrastructureError,
     ProjectDiscoveryError,
     TestExtractionError,
 )
@@ -399,7 +400,9 @@ class ProductionBugFixLifecycle:
         agent_error: AgentError | None = None
         phases = _empty_phases()
         result_persisted = False
+        result_finalized = False
         barrier_error: BugFixLifecycleInfrastructureError | None = None
+        persisted_failure_phase: str | None = None
 
         try:
             try:
@@ -465,6 +468,11 @@ class ProductionBugFixLifecycle:
                                 trusted_source.commit,
                             )
                             submission_frozen = True
+                        except GeneratedSubmissionError as error:
+                            full_patch = error.generated_patch or ""
+                            submission_frozen = True
+                            analysis = _globally_invalid_analysis(full_patch, str(error))
+                            self._save_exception("submission-freeze-invalid.txt", error)
                         except EmptyDiffError as error:
                             submission_frozen = True
                             self._save_exception("submission-freeze-empty.txt", error)
@@ -539,12 +547,13 @@ class ProductionBugFixLifecycle:
                     propagate = agent_error
                 else:
                     try:
-                        analysis = self._analyzer(
-                            request.paths.agent_workspace,
-                            full_patch,
-                            trusted_source.commit,
-                            request.context.entry.project_paths,
-                        )
+                        if analysis is None:
+                            analysis = self._analyzer(
+                                request.paths.agent_workspace,
+                                full_patch,
+                                trusted_source.commit,
+                                request.context.entry.project_paths,
+                            )
                         phase_runner = self._phase_runner_factory(trusted_source)
                         phases, sf = self._run_phases(
                             request,
@@ -568,6 +577,30 @@ class ProductionBugFixLifecycle:
                             agent_stderr=agent_stderr,
                             error_message=_phase_error_message(phases),
                         )
+                    except PhaseExecutionInfrastructureError as error:
+                        propagate = error.original
+                        persisted_failure_phase = error.phase_name
+                        sf = error.fixed_checkpoint
+                        self._save_exception("lifecycle-emergency.txt", error.original)
+                        self._persist_phase_results(
+                            phases,
+                            skip_evidence_names={error.phase_name},
+                        )
+                        result = self._create_result(
+                            request,
+                            phases,
+                            full_patch=full_patch,
+                            full_patch_hash=full_patch_hash,
+                            trusted_source=trusted_source,
+                            s0=s0,
+                            sf=sf,
+                            analysis=analysis,
+                            execution_mode=execution_mode,
+                            timeout=timeout,
+                            agent_stdout=agent_stdout,
+                            agent_stderr=agent_stderr,
+                            error_message=str(error.original),
+                        )
                     except BaseException as error:  # noqa: BLE001 - final evidence precedes propagation
                         propagate = error
                         self._save_exception("lifecycle-emergency.txt", error)
@@ -590,6 +623,7 @@ class ProductionBugFixLifecycle:
 
             result = _require_result(result)
             result = result.model_copy(update={"artifact_manifest": self._artifact_manifest(request)})
+            result_finalized = True
             self._persist_result(request, result)
             result_persisted = True
         except BaseException as error:  # noqa: BLE001 - all failures need final evidence and cleanup
@@ -614,8 +648,13 @@ class ProductionBugFixLifecycle:
                     error_message=str(error),
                 )
             if not result_persisted:
-                self._persist_phase_results(phases)
-                result = result.model_copy(update={"artifact_manifest": self._artifact_manifest(request)})
+                self._persist_phase_results(
+                    phases,
+                    skip_evidence_names=({persisted_failure_phase} if persisted_failure_phase is not None else ()),
+                )
+                if not result_finalized:
+                    result = result.model_copy(update={"artifact_manifest": self._artifact_manifest(request)})
+                    result_finalized = True
                 try:
                     self._persist_result(request, result)
                     result_persisted = True
@@ -736,79 +775,85 @@ class ProductionBugFixLifecycle:
         phases: dict[str, BugFixPhaseResult],
     ) -> tuple[dict[str, BugFixPhaseResult], CheckpointManifest | None]:
         submission = analysis.submission
-
-        if analysis.test_is_safe:
-            phases["test_red"] = runner.run_test_red(submission, s0)
-            phases["test_gold"] = runner.run_test_gold(
-                submission,
-                s0,
-                request.context.entry.patch,
-            )
-        else:
-            phases["test_red"] = self._persist_phase(
-                "test-red",
-                make_invalid_submission_phase(analysis.test_error or "Invalid generated test."),
-            )
-            phases["test_gold"] = self._persist_phase(
-                "test-gold",
-                make_invalid_submission_phase(analysis.test_error or "Invalid generated test."),
-            )
-
         sf: CheckpointManifest | None = None
-        if analysis.fix_is_safe:
-            phases["fix_build"], sf = runner.run_fix_build(submission, s0)
-        else:
-            phases["fix_build"] = self._persist_phase(
-                "fix-build",
-                make_invalid_submission_phase(analysis.fix_error or "Invalid generated fix."),
-            )
 
-        if not analysis.test_is_safe:
-            phases["generated_pair"] = self._persist_phase(
-                "generated-pair",
-                make_invalid_submission_phase(analysis.test_error or "Invalid generated test."),
-            )
-        elif sf is None:
-            phases["generated_pair"] = self._persist_phase(
-                "generated-pair",
-                _prerequisite_phase(
-                    phases["fix_build"],
-                    "Fixed checkpoint is unavailable.",
-                ),
-            )
-        elif not phases["test_red"].executed_tests:
-            phases["generated_pair"] = self._persist_phase(
-                "generated-pair",
-                _prerequisite_phase(
+        try:
+            if analysis.test_is_safe:
+                phases["test_red"] = runner.run_test_red(submission, s0)
+                phases["test_gold"] = runner.run_test_gold(
+                    submission,
+                    s0,
+                    request.context.entry.patch,
+                )
+            else:
+                phases["test_red"] = self._persist_phase(
+                    "test-red",
+                    make_invalid_submission_phase(analysis.test_error or "Invalid generated test."),
+                )
+                phases["test_gold"] = self._persist_phase(
+                    "test-gold",
+                    make_invalid_submission_phase(analysis.test_error or "Invalid generated test."),
+                )
+
+            if analysis.fix_is_safe:
+                phases["fix_build"], sf = runner.run_fix_build(submission, s0)
+            else:
+                phases["fix_build"] = self._persist_phase(
+                    "fix-build",
+                    make_invalid_submission_phase(analysis.fix_error or "Invalid generated fix."),
+                )
+
+            if not analysis.test_is_safe:
+                phases["generated_pair"] = self._persist_phase(
+                    "generated-pair",
+                    make_invalid_submission_phase(analysis.test_error or "Invalid generated test."),
+                )
+            elif sf is None:
+                phases["generated_pair"] = self._persist_phase(
+                    "generated-pair",
+                    _prerequisite_phase(
+                        phases["fix_build"],
+                        "Fixed checkpoint is unavailable.",
+                    ),
+                )
+            elif not phases["test_red"].executed_tests:
+                phases["generated_pair"] = self._persist_phase(
+                    "generated-pair",
+                    _prerequisite_phase(
+                        phases["test_red"],
+                        "The red phase did not execute the generated test.",
+                    ),
+                )
+            else:
+                phases["generated_pair"] = runner.run_generated_pair(
+                    submission,
+                    sf,
                     phases["test_red"],
-                    "The red phase did not execute the generated test.",
-                ),
-            )
-        else:
-            phases["generated_pair"] = runner.run_generated_pair(
-                submission,
-                sf,
-                phases["test_red"],
-            )
+                )
 
-        if sf is not None:
-            phases["benchmark_fix"] = runner.run_benchmark_fix(
-                submission,
-                sf,
-                request.context.entry.test_patch,
-                (
-                    *request.context.entry.fail_to_pass,
-                    *request.context.entry.pass_to_pass,
-                ),
-            )
-        else:
-            phases["benchmark_fix"] = self._persist_phase(
-                "benchmark-fix",
-                _prerequisite_phase(
-                    phases["fix_build"],
-                    "Fixed checkpoint is unavailable.",
-                ),
-            )
+            if sf is not None:
+                phases["benchmark_fix"] = runner.run_benchmark_fix(
+                    submission,
+                    sf,
+                    request.context.entry.test_patch,
+                    (
+                        *request.context.entry.fail_to_pass,
+                        *request.context.entry.pass_to_pass,
+                    ),
+                )
+            else:
+                phases["benchmark_fix"] = self._persist_phase(
+                    "benchmark-fix",
+                    _prerequisite_phase(
+                        phases["fix_build"],
+                        "Fixed checkpoint is unavailable.",
+                    ),
+                )
+        except PhaseExecutionInfrastructureError as error:
+            field_name = _phase_result_field(error.phase_name)
+            phases[field_name] = error.result
+            error.fixed_checkpoint = sf
+            raise
         return phases, sf
 
     def _persist_phase(
@@ -822,7 +867,10 @@ class ProductionBugFixLifecycle:
     def _persist_phase_results(
         self,
         phases: Mapping[str, BugFixPhaseResult],
+        *,
+        skip_evidence_names: Iterable[str] = (),
     ) -> None:
+        skipped = set(skip_evidence_names)
         names = {
             "test_red": "test-red",
             "test_gold": "test-gold",
@@ -831,6 +879,8 @@ class ProductionBugFixLifecycle:
             "benchmark_fix": "benchmark-fix",
         }
         for field_name, evidence_name in names.items():
+            if evidence_name in skipped:
+                continue
             self._evidence_store.save_phase(evidence_name, phases[field_name])
 
     def _create_result(
@@ -920,11 +970,23 @@ class ProductionBugFixLifecycle:
         request: BugFixLifecycleRequest,
         result: BugFixResult,
     ) -> None:
-        result.save(
-            request.context.result_dir,
-            f"{request.context.entry.instance_id}.jsonl",
+        self._write_result_jsonl(
+            request.context.result_dir / f"{request.context.entry.instance_id}.jsonl",
+            result,
         )
         self._evidence_store.save_final_result(result)
+
+    @staticmethod
+    def _write_result_jsonl(
+        destination: Path,
+        result: BugFixResult,
+    ) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_text(
+            destination,
+            json.dumps(result.model_dump(mode="json")) + "\n",
+        )
+        logger.info(f"Saved evaluation result for {result.instance_id} to {destination}")
 
     def _save_step(self, name: str, payload: object) -> None:
         path = self._evidence_store.save_text(
@@ -1127,6 +1189,20 @@ def _prerequisite_phase(
     if prerequisite.status is BugFixPhaseStatus.INVALID_SUBMISSION:
         return make_invalid_submission_phase(reason)
     return make_not_run_phase(reason)
+
+
+def _phase_result_field(phase_name: str) -> str:
+    fields = {
+        "test-red": "test_red",
+        "test-gold": "test_gold",
+        "fix-build": "fix_build",
+        "generated-pair": "generated_pair",
+        "benchmark-fix": "benchmark_fix",
+    }
+    try:
+        return fields[phase_name]
+    except KeyError as error:
+        raise ValueError(f"Unknown bug-fix phase: {phase_name}") from error
 
 
 def _remove_baseline_build_artifacts(
@@ -1434,6 +1510,13 @@ BugFixProductionLifecycle = ProductionBugFixLifecycle
 
 
 def _atomic_json(destination: Path, payload: object) -> None:
+    _atomic_text(
+        destination,
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+    )
+
+
+def _atomic_text(destination: Path, content: str) -> None:
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -1446,8 +1529,7 @@ def _atomic_json(destination: Path, payload: object) -> None:
             delete=False,
         ) as temporary:
             temporary_path = Path(temporary.name)
-            json.dump(payload, temporary, indent=2, sort_keys=True)
-            temporary.write("\n")
+            temporary.write(content)
             temporary.flush()
             os.fsync(temporary.fileno())
         temporary_path.replace(destination)

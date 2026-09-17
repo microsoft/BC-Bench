@@ -30,6 +30,7 @@ from bcbench.exceptions import (
     CheckpointInfrastructureError,
     GeneratedSubmissionError,
     PatchApplicationError,
+    PhaseExecutionInfrastructureError,
     TestExecutionError,
     TestExecutionFailureKind,
     TestInfrastructureError,
@@ -841,11 +842,14 @@ def test_restore_failure_is_infrastructure_error(harness) -> None:
 def test_unexpected_error_persists_emergency_diagnostic_and_propagates(harness) -> None:
     harness["publisher"].error = RuntimeError("unexpected")
 
-    with pytest.raises(RuntimeError, match="unexpected"):
+    with pytest.raises(PhaseExecutionInfrastructureError, match="fix-build") as exc_info:
         harness["runner"].run_fix_build(_submission(), harness["s0"])
 
+    assert isinstance(exc_info.value.original, RuntimeError)
+    assert exc_info.value.phase_name == "fix-build"
+    assert exc_info.value.result is harness["evidence"].saved_phases[-1]
+    assert exc_info.value.result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
     assert any(call[0] == "save-text" and "unexpected" in call[2] for call in harness["calls"])
-    assert harness["evidence"].saved_phases[-1].status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
     assert harness["cleanup_calls"]
 
 

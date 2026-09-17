@@ -38,6 +38,7 @@ from bcbench.exceptions import (
     GeneratedSubmissionError,
     PackageInventoryError,
     PatchApplicationError,
+    PhaseExecutionInfrastructureError,
     TestExecutionError,
     TestExecutionFailureKind,
     TestExecutionTimeoutExpired,
@@ -678,7 +679,11 @@ class BugFixPhaseRunner:
         )
         self._evidence_store.save_phase(name, result)
         if unexpected_error is not None:
-            raise unexpected_error.with_traceback(unexpected_error.__traceback__)
+            raise PhaseExecutionInfrastructureError(
+                unexpected_error,
+                result,
+                name,
+            ) from unexpected_error
         return result
 
     def _restore(self, manifest: CheckpointManifest) -> None:

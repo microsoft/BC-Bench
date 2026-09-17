@@ -441,7 +441,10 @@ def stage_and_get_complete_diff(repo_path: Path, trusted_commit: str) -> str:
     try:
         patch = patch_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise GeneratedSubmissionError("Generated submission diff is not valid UTF-8.") from exc
+        raise GeneratedSubmissionError(
+            "Generated submission diff is not valid UTF-8.",
+            generated_patch=patch_bytes.decode("utf-8", errors="replace"),
+        ) from exc
 
     logger.info("Complete git diff retrieved successfully")
     logger.debug(f"Generated complete diff:\n{patch}")

@@ -159,13 +159,13 @@ class BugFixResult(ExecutionBasedEvaluationResult):
             return self.fix_build.status
         if metric is BugFixMetricName.FIX_QUALITY:
             return self.benchmark_fix.status
-        if self.timeout:
-            return BugFixPhaseStatus.FAILED
         resolution_statuses = [
             self.metric_status(BugFixMetricName.GENERATED_TEST_VALIDITY),
             self.metric_status(BugFixMetricName.GENERATED_PAIR_TRANSITION),
             self.metric_status(BugFixMetricName.FIX_QUALITY),
         ]
+        if self.timeout:
+            resolution_statuses.append(BugFixPhaseStatus.FAILED)
         fix_build_status = self.metric_status(BugFixMetricName.FIX_BUILD)
         if fix_build_status in (BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION):
             resolution_statuses.append(fix_build_status)

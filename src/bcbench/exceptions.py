@@ -6,7 +6,9 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from bcbench.evaluate.bugfix_lifecycle.models import CheckpointManifest
     from bcbench.operations.test_execution import TestRunSummary
+    from bcbench.results.bugfix import BugFixPhaseResult
     from bcbench.types import AgentMetrics, ExperimentConfiguration
 
 __all__ = [
@@ -29,6 +31,7 @@ __all__ = [
     "NoEntriesFoundError",
     "PackageInventoryError",
     "PatchApplicationError",
+    "PhaseExecutionInfrastructureError",
     "ProjectDiscoveryError",
     "TestExecutionError",
     "TestExecutionFailureKind",
@@ -55,6 +58,22 @@ class CleanupInfrastructureError(BugFixLifecycleInfrastructureError):
 
 class PackageInventoryError(BugFixLifecycleInfrastructureError):
     """Built packages or installed application inventory failed verification."""
+
+
+class PhaseExecutionInfrastructureError(BugFixLifecycleInfrastructureError):
+    """Unexpected phase execution failed after its result was persisted."""
+
+    def __init__(
+        self,
+        original: BaseException,
+        result: BugFixPhaseResult,
+        phase_name: str,
+    ) -> None:
+        self.original = original
+        self.result = result
+        self.phase_name = phase_name
+        self.fixed_checkpoint: CheckpointManifest | None = None
+        super().__init__(f"Unexpected infrastructure failure in phase {phase_name}: {original}")
 
 
 class DatasetError(BCBenchError):
@@ -309,6 +328,15 @@ class GeneratedOutputError(BCBenchError):
 
 class GeneratedSubmissionError(GeneratedOutputError):
     """Agent-generated submission violates bug-fix constraints."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        generated_patch: str | None = None,
+    ) -> None:
+        self.generated_patch = generated_patch
+        super().__init__(message)
 
 
 class AgentError(BCBenchError):

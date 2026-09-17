@@ -107,6 +107,19 @@ def test_evidence_store_saves_submission_manifest_diagnostic_and_final_result(tm
     assert json.loads(result_path.read_text(encoding="utf-8")) == phase.model_dump(mode="json")
 
 
+def test_save_final_result_is_idempotent(tmp_path: Path) -> None:
+    store = EvidenceStore(_lifecycle_paths(tmp_path))
+    result = BugFixPhaseResult(status=BugFixPhaseStatus.PASSED, evidence={"log": "complete"})
+
+    first_path = store.save_final_result(result)
+    first_content = first_path.read_bytes()
+    second_path = store.save_final_result(result)
+
+    assert second_path == first_path
+    assert second_path.read_bytes() == first_content
+    assert list(second_path.parent.iterdir()) == [second_path]
+
+
 def test_evidence_store_saves_inventory_and_returns_relative_protected_path(tmp_path: Path) -> None:
     paths = _lifecycle_paths(tmp_path)
     store = EvidenceStore(paths)

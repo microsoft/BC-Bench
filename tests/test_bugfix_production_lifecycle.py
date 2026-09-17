@@ -23,8 +23,14 @@ from bcbench.evaluate.bugfix_lifecycle import (
     analyze_bugfix_submission,
 )
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
-from bcbench.exceptions import AgentError, AgentTimeoutError, CleanupInfrastructureError
-from bcbench.results.bugfix import BugFixPhaseResult, BugFixPhaseStatus
+from bcbench.exceptions import (
+    AgentError,
+    AgentTimeoutError,
+    CleanupInfrastructureError,
+    GeneratedSubmissionError,
+    PhaseExecutionInfrastructureError,
+)
+from bcbench.results.bugfix import BugFixMetricName, BugFixPhaseResult, BugFixPhaseStatus, BugFixResultSummary
 from bcbench.types import AgentMetrics, AgentRuntimeConfig, ContainerConfig, ExperimentConfiguration
 from tests.conftest import create_evaluation_context
 
@@ -84,8 +90,12 @@ def _submission(*, fix_error: str | None = None, test_error: str | None = None) 
 class FakeEvidence:
     def __init__(self, tmp_path: Path, calls: list[str]) -> None:
         self.root = tmp_path / "protected"
+        self.final_root = self.root / "final"
         self.calls = calls
         self.final_result = None
+        self.final_result_payloads: list[str] = []
+        self.final_result_failure: str | None = None
+        self.final_result_attempts = 0
 
     def save_text(self, name: str, content: str) -> Path:
         self.calls.append(f"evidence:{name}")
@@ -115,8 +125,18 @@ class FakeEvidence:
 
     def save_final_result(self, result: object) -> Path:
         self.calls.append("save-final-result")
+        self.final_result_attempts += 1
+        if self.final_result_failure == "before" and self.final_result_attempts == 1:
+            raise OSError("protected final failed before write")
         self.final_result = result
-        return self.save_text("final-result.json", "result")
+        content = result.model_dump_json() if hasattr(result, "model_dump_json") else json.dumps(result)
+        self.final_result_payloads.append(content)
+        path = self.final_root / "final-result.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        if self.final_result_failure == "after" and self.final_result_attempts == 1:
+            raise OSError("protected final failed after write")
+        return path
 
     def relative_protected_path(self, path: Path) -> Path:
         return path.relative_to(self.root)
@@ -216,8 +236,9 @@ class FakeOwnership:
 
 
 class FakePhases:
-    def __init__(self, calls: list[str]) -> None:
+    def __init__(self, calls: list[str], evidence: FakeEvidence) -> None:
         self.calls = calls
+        self.evidence = evidence
         self.statuses = {
             "red": BugFixPhaseStatus.PASSED,
             "gold": BugFixPhaseStatus.PASSED,
@@ -225,34 +246,53 @@ class FakePhases:
             "pair": BugFixPhaseStatus.PASSED,
             "benchmark": BugFixPhaseStatus.PASSED,
         }
+        self.unexpected_phase: str | None = None
         self.red_executed = ("50100::Regression",)
         self.sf: CheckpointManifest | None = None
 
-    def _phase(self, name: str) -> BugFixPhaseResult:
+    def _phase(
+        self,
+        name: str,
+        status: BugFixPhaseStatus | None = None,
+    ) -> BugFixPhaseResult:
         return BugFixPhaseResult(
-            status=self.statuses[name],
+            status=status or self.statuses[name],
+            error_message="unexpected phase failure" if status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR else None,
             executed_tests=self.red_executed if name == "red" else (),
         )
 
+    def _fail_if_configured(self, name: str, evidence_name: str) -> None:
+        if self.unexpected_phase != name:
+            return
+        original = RuntimeError(f"{name} exploded")
+        result = self._phase(name, BugFixPhaseStatus.INFRASTRUCTURE_ERROR)
+        self.evidence.save_phase(evidence_name, result)
+        raise PhaseExecutionInfrastructureError(original, result, evidence_name)
+
     def run_test_red(self, submission, s0):
         self.calls.append("phase:red")
+        self._fail_if_configured("red", "test-red")
         return self._phase("red")
 
     def run_test_gold(self, submission, s0, gold_patch):
         self.calls.append("phase:gold")
+        self._fail_if_configured("gold", "test-gold")
         return self._phase("gold")
 
     def run_fix_build(self, submission, s0):
         self.calls.append("phase:fix")
+        self._fail_if_configured("fix", "fix-build")
         result = self._phase("fix")
         return result, self.sf if result.status is BugFixPhaseStatus.PASSED else None
 
     def run_generated_pair(self, submission, sf, red_result):
         self.calls.append("phase:pair")
+        self._fail_if_configured("pair", "generated-pair")
         return self._phase("pair")
 
     def run_benchmark_fix(self, submission, sf, benchmark_patch, benchmark_tests):
         self.calls.append("phase:benchmark")
+        self._fail_if_configured("benchmark", "benchmark-fix")
         return self._phase("benchmark")
 
 
@@ -284,7 +324,7 @@ def _harness(tmp_path: Path):
     workspace = FakeWorkspace(paths, calls)
     checkpoint = FakeCheckpoint(tmp_path, calls)
     ownership = FakeOwnership(calls)
-    phases = FakePhases(calls)
+    phases = FakePhases(calls, evidence)
     phases.sf = checkpoint.sf
 
     def setup_repo(entry, path):
@@ -534,6 +574,180 @@ def test_structurally_invalid_fix_marks_its_own_unexecuted_consumers_invalid(
     assert "phase:benchmark" not in calls
 
 
+@pytest.mark.parametrize(
+    ("message", "available_patch"),
+    [
+        ("Cannot safely freeze workspace symbolic link or reparse point: unsafe", None),
+        ("Cannot safely freeze unsupported workspace entry: socket", "partial patch"),
+        ("Generated submission diff is not valid UTF-8.", None),
+    ],
+)
+def test_freezer_submission_error_is_globally_invalid(
+    tmp_path: Path,
+    message: str,
+    available_patch: str | None,
+) -> None:
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    analyzer_calls: list[str] = []
+    lifecycle._analyzer = lambda *args: analyzer_calls.append("analyze") or _submission()
+    error = GeneratedSubmissionError(message, generated_patch=available_patch)
+
+    def freeze(_path: Path, _trusted_commit: str) -> str:
+        calls.append("freeze")
+        raise error
+
+    lifecycle._freeze_submission = freeze
+
+    result = lifecycle.run(request, _agent(calls))
+
+    assert analyzer_calls == []
+    assert result.output == (available_patch or "")
+    assert result.test_red.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.test_gold.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.fix_build.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.generated_pair.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.benchmark_fix.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.metric_status(BugFixMetricName.RESOLUTION) is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.infrastructure_failure is False
+    assert result.resolved is False
+    assert any(call == "evidence:submission-freeze-invalid.txt" for call in calls)
+    assert evidence.final_result == result
+    if available_patch is not None:
+        assert (evidence.root / "generated-full.patch").read_text(encoding="utf-8") == available_patch
+
+
+def test_freezer_invalid_submission_precedes_timeout_resolution(tmp_path: Path) -> None:
+    request, lifecycle, calls, _, _, _ = _harness(tmp_path)
+
+    def timeout(context, execution_policy):
+        calls.append("agent")
+        raise AgentTimeoutError(
+            "timed out",
+            metrics=AgentMetrics(execution_time=10),
+            config=ExperimentConfiguration(),
+        )
+
+    def freeze(_path: Path, _trusted_commit: str) -> str:
+        calls.append("freeze")
+        raise GeneratedSubmissionError("Cannot safely freeze unsupported workspace entry: socket")
+
+    lifecycle._freeze_submission = freeze
+
+    result = lifecycle.run(request, timeout)
+
+    assert result.timeout is True
+    assert result.metric_status(BugFixMetricName.RESOLUTION) is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.infrastructure_failure is False
+
+
+@pytest.mark.parametrize(
+    ("phase_name", "result_field", "completed_fields"),
+    [
+        ("red", "test_red", ()),
+        ("gold", "test_gold", ("test_red",)),
+        ("fix", "fix_build", ("test_red", "test_gold")),
+        ("pair", "generated_pair", ("test_red", "test_gold", "fix_build")),
+        (
+            "benchmark",
+            "benchmark_fix",
+            ("test_red", "test_gold", "fix_build", "generated_pair"),
+        ),
+    ],
+)
+def test_unexpected_phase_error_preserves_saved_result_and_stops_later_phases(
+    tmp_path: Path,
+    phase_name: str,
+    result_field: str,
+    completed_fields: tuple[str, ...],
+) -> None:
+    request, lifecycle, calls, evidence, _, phases = _harness(tmp_path)
+    phases.unexpected_phase = phase_name
+
+    with pytest.raises(RuntimeError, match=rf"{phase_name} exploded"):
+        lifecycle.run(request, _agent(calls))
+
+    final_result = evidence.final_result
+    assert final_result is not None
+    assert getattr(final_result, result_field).status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    for field_name in completed_fields:
+        assert getattr(final_result, field_name).status is BugFixPhaseStatus.PASSED
+    field_order = ("test_red", "test_gold", "fix_build", "generated_pair", "benchmark_fix")
+    failing_index = field_order.index(result_field)
+    for field_name in field_order[failing_index + 1 :]:
+        assert getattr(final_result, field_name).status is BugFixPhaseStatus.NOT_RUN
+    evidence_name = {
+        "test_red": "test-red",
+        "test_gold": "test-gold",
+        "fix_build": "fix-build",
+        "generated_pair": "generated-pair",
+        "benchmark_fix": "benchmark-fix",
+    }[result_field]
+    assert sum(call.startswith(f"save-phase:{evidence_name}:") for call in calls) == 1
+    assert calls.index("save-final-result") < calls.index("remove-container")
+
+
+def _assert_single_production_result(request: BugFixLifecycleRequest) -> None:
+    result_path = request.context.result_dir / f"{request.context.entry.instance_id}.jsonl"
+    lines = result_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    result = request.context.category.result_class.model_validate_json(lines[0])
+    summary = BugFixResultSummary.from_results([result], run_id="fault")
+    assert summary.total == 1
+
+
+def test_result_retry_after_failure_before_jsonl_is_atomic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    original = lifecycle._write_result_jsonl
+    attempts = 0
+
+    def fail_once(path: Path, result: object) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("jsonl failed before write")
+        original(path, result)
+
+    monkeypatch.setattr(lifecycle, "_write_result_jsonl", fail_once)
+
+    with pytest.raises(OSError, match="jsonl failed before write"):
+        lifecycle.run(request, _agent(calls))
+
+    assert attempts == 2
+    _assert_single_production_result(request)
+    assert evidence.final_result is not None
+
+
+def test_result_retry_after_jsonl_before_protected_final_does_not_duplicate(
+    tmp_path: Path,
+) -> None:
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    evidence.final_result_failure = "before"
+
+    with pytest.raises(OSError, match="protected final failed before write"):
+        lifecycle.run(request, _agent(calls))
+
+    _assert_single_production_result(request)
+    assert evidence.final_result_attempts == 2
+    assert evidence.final_result is not None
+
+
+def test_result_retry_after_protected_final_write_is_idempotent(tmp_path: Path) -> None:
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    evidence.final_result_failure = "after"
+
+    with pytest.raises(OSError, match="protected final failed after write"):
+        lifecycle.run(request, _agent(calls))
+
+    _assert_single_production_result(request)
+    assert evidence.final_result_attempts == 2
+    assert evidence.final_result_payloads[0] == evidence.final_result_payloads[1]
+    result_path = evidence.final_root / "final-result.json"
+    assert json.loads(result_path.read_text(encoding="utf-8")) == evidence.final_result.model_dump(mode="json")
+
+
 @pytest.mark.parametrize("failure", ["close", "sessions"])
 def test_isolation_barrier_failure_never_freezes_analyzes_or_runs_phases(
     tmp_path: Path,
@@ -657,7 +871,7 @@ def test_cleanup_failure_quarantines_after_result_persistence(tmp_path: Path) ->
     assert "remove-roots" not in calls
     assert request.paths.protected_root.joinpath("quarantine.json").is_file()
     assert request.paths.final_results.joinpath("cleanup.json").is_file()
-    assert request.paths.protected_root.joinpath("final-result.json").is_file()
+    assert request.paths.final_results.joinpath("final-result.json").is_file()
     assert not request.paths.final_results.joinpath("cleanup-quarantine.json").exists()
 
 

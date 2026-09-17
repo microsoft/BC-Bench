@@ -379,6 +379,9 @@ def test_complete_diff_rejects_non_utf8_al_content_as_generated_submission_error
         stage_and_get_complete_diff(repo_path, trusted_commit)
 
     assert isinstance(exc_info.value.__cause__, UnicodeDecodeError)
+    assert exc_info.value.generated_patch is not None
+    assert "src/Main/Invalid.al" in exc_info.value.generated_patch
+    assert "\ufffd" in exc_info.value.generated_patch
 
 
 def test_complete_diff_does_not_execute_agent_clean_filter(tmp_path: Path):
