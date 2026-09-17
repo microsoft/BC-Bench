@@ -575,6 +575,71 @@ def test_run_test_suite_serializes_exact_json_and_returns_parsed_summary(tmp_pat
     assert all(result.outcome is TestOutcome.PASS for result in summary.results)
 
 
+def test_run_test_suite_with_evidence_preserves_raw_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    evidence_path = repo_path / "evidence" / "test-red"
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert evidence_path_from_command(command[-1]) == evidence_path
+        write_discovery(evidence_path, 50100, ["RegressionTest"])
+        write_results(evidence_path, 50100, '<testcase name="RegressionTest" />')
+        return subprocess.CompletedProcess(command, returncode=0, stdout="test stdout", stderr="test stderr")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    result = bc_operations.run_test_suite_with_evidence(
+        entries,
+        TestExpectation.ALL_PASS,
+        container,
+        repo_path,
+        evidence_path,
+    )
+
+    assert result.summary.executed == (TestIdentity(50100, "RegressionTest"),)
+    assert result.stdout_path.read_text(encoding="utf-8") == "test stdout"
+    assert result.stderr_path.read_text(encoding="utf-8") == "test stderr"
+    assert result.discovery_paths == (evidence_path / "discovery-50100.json",)
+    assert result.junit_paths == (evidence_path / "results-50100.xml",)
+
+
+def test_run_test_suite_with_evidence_preserves_raw_files_on_malformed_junit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: ContainerConfig,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    evidence_path = repo_path / "evidence" / "test-red"
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        write_discovery(evidence_path_from_command(command[-1]), 50100, ["RegressionTest"])
+        (evidence_path / "results-50100.xml").write_text("<testsuite>", encoding="utf-8")
+        return subprocess.CompletedProcess(command, returncode=0, stdout="test stdout", stderr="test stderr")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    entries = [TestEntry(codeunitID=50100, functionName=frozenset({"RegressionTest"}))]
+
+    with pytest.raises(TestInfrastructureError, match="Invalid test evidence"):
+        bc_operations.run_test_suite_with_evidence(
+            entries,
+            TestExpectation.ALL_PASS,
+            container,
+            repo_path,
+            evidence_path,
+        )
+
+    assert (evidence_path / "discovery-50100.json").is_file()
+    assert (evidence_path / "results-50100.xml").is_file()
+    assert (evidence_path / "stdout.txt").read_text(encoding="utf-8") == "test stdout"
+    assert (evidence_path / "stderr.txt").read_text(encoding="utf-8") == "test stderr"
+
+
 def test_expected_failed_tests_do_not_depend_on_subprocess_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, container: ContainerConfig):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()

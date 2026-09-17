@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import traceback
+import xml.etree.ElementTree as ET
+import zipfile
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -12,6 +14,11 @@ from typing import Protocol
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_lifecycle.checkpoint import CheckpointManager
 from bcbench.evaluate.bugfix_lifecycle.evidence import EvidenceStore, sha256_file, sha256_text
+from bcbench.evaluate.bugfix_lifecycle.inventory import (
+    InventoryReader,
+    InventoryVerifier,
+    expected_inventory_after_publication,
+)
 from bcbench.evaluate.bugfix_lifecycle.models import (
     AppInventoryEntry,
     CheckpointManifest,
@@ -34,7 +41,11 @@ from bcbench.exceptions import (
     TestExecutionTimeoutExpired,
     TestInfrastructureError,
 )
-from bcbench.operations.bc_operations import build_and_publish_projects, run_test_suite
+from bcbench.operations.bc_operations import (
+    TestSuiteEvidence,
+    build_and_publish_projects_with_evidence,
+    run_test_suite_with_evidence,
+)
 from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.git_operations import apply_patch
 from bcbench.operations.project_operations import is_test_project, order_project_paths
@@ -44,7 +55,6 @@ from bcbench.types import ContainerConfig
 
 PatchApplier = Callable[[Path, str, str], None]
 WorkspaceCleaner = Callable[[Path], None]
-InventoryReader = Callable[[], Sequence[AppInventoryEntry]]
 
 
 class ProjectPublisher(Protocol):
@@ -54,7 +64,8 @@ class ProjectPublisher(Protocol):
         project_paths: Sequence[str],
         container: ContainerConfig,
         version: str,
-    ) -> Sequence[Path]: ...
+        evidence_directory: Path,
+    ) -> ProjectPublication: ...
 
 
 class ExactTestRunner(Protocol):
@@ -64,7 +75,8 @@ class ExactTestRunner(Protocol):
         expectation: TestExpectation,
         container: ContainerConfig,
         repo_path: Path,
-    ) -> TestRunSummary: ...
+        evidence_directory: Path,
+    ) -> TestSuiteEvidence: ...
 
 
 class DefaultProjectPublisher:
@@ -74,18 +86,37 @@ class DefaultProjectPublisher:
         project_paths: Sequence[str],
         container: ContainerConfig,
         version: str,
-    ) -> tuple[Path, ...]:
+        evidence_directory: Path,
+    ) -> ProjectPublication:
         ordered_projects = tuple(project_paths)
-        build_and_publish_projects(repo_path, list(ordered_projects), container, version)
-        packages = tuple(
-            sorted(
-                (package for project in ordered_projects for package in (repo_path / project).rglob("*.app") if ".alpackages" not in {part.casefold() for part in package.parts}),
-                key=lambda path: str(path).casefold(),
-            )
+        publication = build_and_publish_projects_with_evidence(
+            repo_path,
+            list(ordered_projects),
+            container,
+            version,
+            evidence_directory,
         )
-        if not packages:
-            raise PackageInventoryError(f"Build and publish produced no application packages for projects: {ordered_projects}")
-        return packages
+        return ProjectPublication(
+            project_paths=ordered_projects,
+            package_paths=publication.package_paths,
+            apps=tuple(
+                _app_inventory_from_package(
+                    repo_path / record.project_path,
+                    record.package_path,
+                )
+                for record in publication.projects
+            ),
+            evidence_paths=tuple(
+                path
+                for record in publication.projects
+                for path in (
+                    record.command_path,
+                    record.stdout_path,
+                    record.stderr_path,
+                    record.diagnostics_path,
+                )
+            ),
+        )
 
     __call__ = publish
 
@@ -97,11 +128,18 @@ class DefaultExactTestRunner:
         expectation: TestExpectation,
         container: ContainerConfig,
         repo_path: Path,
-    ) -> TestRunSummary:
+        evidence_directory: Path,
+    ) -> TestSuiteEvidence:
         test_entries = list(tests)
-        summary = run_test_suite(test_entries, expectation, container, repo_path)
-        _require_exact_test_summary(summary, test_entries, expectation)
-        return summary
+        evidence = run_test_suite_with_evidence(
+            test_entries,
+            expectation,
+            container,
+            repo_path,
+            evidence_directory,
+        )
+        _require_exact_test_summary(evidence.summary, test_entries, expectation)
+        return evidence
 
     __call__ = run
 
@@ -118,7 +156,14 @@ class _PhaseState:
     protected_kinds: dict[Path, str] = field(default_factory=dict)
     summary: TestRunSummary | None = None
     evidence: dict[str, str] = field(default_factory=dict)
+    evidence_sources: dict[str, Path] = field(default_factory=dict)
+    additional_sources: dict[str, str] = field(default_factory=dict)
+    raw_evidence_roots: list[Path] = field(default_factory=list)
+    protected_packages: set[Path] = field(default_factory=set)
+    secondary_diagnostics: list[str] = field(default_factory=list)
     expected_apps: tuple[AppInventoryEntry, ...] = ()
+    operation_index: int = 0
+    inventory_index: int = 0
 
 
 def make_not_run_phase(reason: str) -> BugFixPhaseResult:
@@ -161,7 +206,14 @@ class BugFixPhaseRunner:
         patch_applier: PatchApplier = apply_patch,
         workspace_cleaner: WorkspaceCleaner = remove_tree,
         inventory_reader: InventoryReader | None = None,
+        inventory_verifier: InventoryVerifier | None = None,
     ) -> None:
+        if evidence_store is None:
+            raise ValueError("An evidence store is required")
+        if inventory_verifier is None and inventory_reader is None:
+            raise ValueError("An inventory verifier or inventory reader is required")
+        if inventory_verifier is not None and inventory_reader is not None:
+            raise ValueError("Provide either inventory_verifier or inventory_reader, not both")
         self._trusted_source = trusted_source
         self._workspace_builder = workspace_builder
         self._checkpoint_manager = checkpoint_manager
@@ -173,7 +225,12 @@ class BugFixPhaseRunner:
         self._test_runner = test_runner or DefaultExactTestRunner()
         self._patch_applier = patch_applier
         self._workspace_cleaner = workspace_cleaner
-        self._inventory_reader = inventory_reader
+        if inventory_verifier is not None:
+            self._inventory_verifier = inventory_verifier
+        else:
+            if inventory_reader is None:
+                raise ValueError("An inventory reader is required")
+            self._inventory_verifier = InventoryVerifier(inventory_reader, evidence_store)
         self._generated_test_package_hashes: set[str] = set()
 
     def run_test_red(
@@ -184,23 +241,30 @@ class BugFixPhaseRunner:
         source_description = self._source_description(generated_test_patch=submission.test_patch)
 
         def action(state: _PhaseState) -> None:
+            self._restore_and_verify(state, s0)
             self._require_single_generated_test(submission)
-            self._restore(s0)
             state.workspace = self._create_workspace(state.name)
             self._apply_generated(
                 state.workspace,
                 submission.test_patch,
                 "test-red generated test patch",
             )
-            self._publish_batch(state, self._product_projects(submission), "test-red-product")
+            self._publish_batch(
+                state,
+                self._product_projects(submission),
+                "test-red-product",
+                trusted=True,
+            )
             test_packages = self._publish_batch(
                 state,
                 submission.test_projects,
                 "generated-test",
+                trusted=False,
             )
             self._generated_test_package_hashes.update(sha256_file(package) for package in test_packages)
             self._verify_no_unexpected_workspace_packages(state)
             state.summary = self._run_exact_tests(
+                state,
                 submission.tests,
                 TestExpectation.ALL_FAIL,
                 state.workspace,
@@ -218,35 +282,47 @@ class BugFixPhaseRunner:
             trusted_gold_patch=gold_patch,
             generated_test_patch=submission.test_patch,
         )
-        source_hash = sha256_text(source_description)
+        product_source_description = self._source_description(
+            trusted_gold_patch=gold_patch,
+        )
+        product_source_hash = sha256_text(product_source_description)
 
         def action(state: _PhaseState) -> None:
+            self._restore_and_verify(state, s0)
             self._require_single_generated_test(submission)
-            self._restore(s0)
             state.workspace = self._create_workspace(state.name)
             self._apply_trusted(
                 state.workspace,
                 gold_patch,
                 "test-gold trusted gold patch",
             )
+            state.additional_sources["gold_product_source"] = product_source_description
+            product_packages = self._publish_batch(
+                state,
+                self._product_projects(submission),
+                f"gold-product-{product_source_hash}",
+                trusted=True,
+            )
+            self._protect_packages(
+                state,
+                product_packages,
+                f"gold-product-{product_source_hash}",
+            )
             self._apply_generated(
                 state.workspace,
                 submission.test_patch,
                 "test-gold generated test patch",
             )
-            self._publish_batch(
-                state,
-                self._product_projects(submission),
-                f"gold-product-{source_hash}",
-            )
             test_packages = self._publish_batch(
                 state,
                 submission.test_projects,
                 "generated-test",
+                trusted=False,
             )
             self._generated_test_package_hashes.update(sha256_file(package) for package in test_packages)
             self._verify_no_unexpected_workspace_packages(state)
             state.summary = self._run_exact_tests(
+                state,
                 submission.tests,
                 TestExpectation.ALL_PASS,
                 state.workspace,
@@ -264,7 +340,7 @@ class BugFixPhaseRunner:
 
         def action(state: _PhaseState) -> None:
             nonlocal fixed_manifest
-            self._restore(s0)
+            self._restore_and_verify(state, s0)
             state.workspace = self._create_workspace(state.name)
             self._apply_generated(
                 state.workspace,
@@ -280,6 +356,7 @@ class BugFixPhaseRunner:
                 state,
                 self._product_projects(submission),
                 "fixed-product",
+                trusted=False,
             )
             self._verify_no_unexpected_workspace_packages(state)
             self._assert_no_forbidden_package_hashes(state.workspace)
@@ -288,7 +365,7 @@ class BugFixPhaseRunner:
                 state.expected_apps,
             )
             state.checkpoint_hash = fixed_manifest.sha256
-            state.evidence["fixed_checkpoint"] = str(fixed_manifest.backup_path)
+            state.evidence["fixed_checkpoint"] = self._relative_protected_path(fixed_manifest.backup_path)
 
         result = self._execute_phase("fix-build", s0, source_description, action)
         if result.status is not BugFixPhaseStatus.PASSED:
@@ -325,6 +402,7 @@ class BugFixPhaseRunner:
         )
 
         def action(state: _PhaseState) -> None:
+            self._verify_checkpoint_inventory(state, sf)
             self._require_single_generated_test(submission)
             state.workspace = self._create_workspace(state.name)
             self._apply_generated(
@@ -341,10 +419,12 @@ class BugFixPhaseRunner:
                 state,
                 submission.test_projects,
                 "generated-test",
+                trusted=False,
             )
             self._generated_test_package_hashes.update(sha256_file(package) for package in test_packages)
             self._verify_no_unexpected_workspace_packages(state)
             state.summary = self._run_exact_tests(
+                state,
                 submission.tests,
                 TestExpectation.ALL_PASS,
                 state.workspace,
@@ -367,7 +447,7 @@ class BugFixPhaseRunner:
         )
 
         def action(state: _PhaseState) -> None:
-            self._restore(sf)
+            self._restore_and_verify(state, sf)
             state.workspace = self._create_workspace(state.name)
             self._assert_projects_have_no_packages(
                 state.workspace,
@@ -393,10 +473,12 @@ class BugFixPhaseRunner:
                 state,
                 self._benchmark_test_projects(),
                 "benchmark-test",
+                trusted=True,
             )
             self._verify_no_unexpected_workspace_packages(state)
             self._assert_no_forbidden_package_hashes(state.workspace)
             state.summary = self._run_exact_tests(
+                state,
                 benchmark_tests,
                 TestExpectation.ALL_PASS,
                 state.workspace,
@@ -451,8 +533,7 @@ class BugFixPhaseRunner:
             if unexpected_error is None:
                 status = BugFixPhaseStatus.INFRASTRUCTURE_ERROR
                 error_message = str(cleanup_error)
-            else:
-                self._save_secondary_diagnostic(state, "cleanup", cleanup_error)
+            self._save_secondary_diagnostic(state, "cleanup", cleanup_error)
 
         result = self._phase_result(
             state,
@@ -467,6 +548,22 @@ class BugFixPhaseRunner:
 
     def _restore(self, manifest: CheckpointManifest) -> None:
         self._checkpoint_manager.restore(manifest, manifest.apps)
+
+    def _restore_and_verify(
+        self,
+        state: _PhaseState,
+        manifest: CheckpointManifest,
+    ) -> None:
+        self._restore(manifest)
+        self._verify_checkpoint_inventory(state, manifest)
+
+    def _verify_checkpoint_inventory(
+        self,
+        state: _PhaseState,
+        manifest: CheckpointManifest,
+    ) -> None:
+        state.expected_apps = manifest.apps
+        self._verify_runtime_inventory(state, "checkpoint")
 
     def _create_workspace(self, name: str) -> Path:
         try:
@@ -494,36 +591,54 @@ class BugFixPhaseRunner:
         state: _PhaseState,
         project_paths: Sequence[str],
         protected_kind: str,
+        *,
+        trusted: bool,
     ) -> tuple[Path, ...]:
         if not project_paths:
             return ()
         if state.workspace is None:
             raise BugFixLifecycleInfrastructureError("Evaluator workspace is unavailable")
+        evidence_directory = self._operation_evidence_directory(state, "publication")
         try:
             publish = getattr(self._publisher, "publish", self._publisher)
-            returned_packages = tuple(
-                publish(
-                    state.workspace,
-                    tuple(project_paths),
-                    self._container,
-                    self._version,
-                )
+            returned = publish(
+                state.workspace,
+                tuple(project_paths),
+                self._container,
+                self._version,
+                evidence_directory,
             )
+        except BuildError as error:
+            if trusted:
+                raise BugFixLifecycleInfrastructureError(f"Trusted project publication failed: {error}") from error
+            raise
+        except BuildTimeoutExpired:
+            raise
         except (OSError, ValueError) as error:
             raise PackageInventoryError(f"Project publication infrastructure failed: {error}") from error
+        if not isinstance(returned, ProjectPublication):
+            raise PackageInventoryError("Project publisher must return typed publication evidence")
         publication = ProjectPublication(
-            project_paths=tuple(project_paths),
-            package_paths=tuple(package if package.is_absolute() else state.workspace / package for package in returned_packages),
+            project_paths=returned.project_paths,
+            package_paths=tuple(package if package.is_absolute() else state.workspace / package for package in returned.package_paths),
+            apps=returned.apps,
+            evidence_paths=returned.evidence_paths,
         )
+        if publication.project_paths != tuple(project_paths):
+            raise PackageInventoryError(f"Project publication paths do not match the request: expected={tuple(project_paths)}, actual={publication.project_paths}")
         self._verify_publication(
             state,
             publication,
             allow_generated_test=protected_kind == "generated-test",
         )
+        published_apps = publication.apps or self._publication_apps(state, publication)
         state.packages.extend(publication.package_paths)
         state.package_hashes.update((package.resolve(), sha256_file(package)) for package in publication.package_paths)
         state.protected_kinds.update(dict.fromkeys(publication.package_paths, protected_kind))
-        self._verify_runtime_inventory(state)
+        for path in publication.evidence_paths:
+            state.evidence_sources[f"raw_{len(state.evidence_sources):03d}_{path.name}"] = path
+        state.expected_apps = expected_inventory_after_publication(state.expected_apps, published_apps)
+        self._verify_runtime_inventory(state, "post-publication")
         return publication.package_paths
 
     def _verify_publication(
@@ -557,6 +672,15 @@ class BugFixPhaseRunner:
         missing_projects = [project for project, root in project_roots.items() if not any(package.is_relative_to(root) for package in packages)]
         if missing_projects:
             raise PackageInventoryError(f"Projects produced no application package: {missing_projects}")
+        package_counts = {project: sum(package.is_relative_to(root) for package in packages) for project, root in project_roots.items()}
+        invalid_counts = {project: count for project, count in package_counts.items() if count != 1}
+        if invalid_counts:
+            raise PackageInventoryError(f"Projects must produce exactly one application package: {invalid_counts}")
+        if publication.apps:
+            package_hashes = Counter(sha256_file(package) for package in packages)
+            app_hashes = Counter(app.content_hash for app in publication.apps)
+            if None in app_hashes or app_hashes != package_hashes:
+                raise PackageInventoryError(f"Publication application hashes do not match package hashes: apps={app_hashes}, packages={package_hashes}")
 
         if not allow_generated_test:
             forbidden = self._generated_test_package_hashes
@@ -564,46 +688,81 @@ class BugFixPhaseRunner:
             if contaminated:
                 raise PackageInventoryError(f"Generated test packages are forbidden in this phase: {contaminated}")
 
-    def _verify_runtime_inventory(self, state: _PhaseState) -> None:
-        if self._inventory_reader is None:
-            return
+    def _publication_apps(
+        self,
+        state: _PhaseState,
+        publication: ProjectPublication,
+    ) -> tuple[AppInventoryEntry, ...]:
+        if state.workspace is None:
+            raise PackageInventoryError("Evaluator workspace is unavailable")
+        apps: list[AppInventoryEntry] = []
+        for project in publication.project_paths:
+            project_root = state.workspace / Path(project.replace("\\", "/"))
+            project_packages = tuple(package for package in publication.package_paths if package.resolve().is_relative_to(project_root.resolve()))
+            if len(project_packages) != 1:
+                raise PackageInventoryError(f"Expected exactly one package for project {project!r}, found {len(project_packages)}")
+            apps.append(_app_inventory_from_package(project_root, project_packages[0]))
+        return tuple(apps)
+
+    def _operation_evidence_directory(
+        self,
+        state: _PhaseState,
+        operation: str,
+    ) -> Path:
+        if state.workspace is None:
+            raise BugFixLifecycleInfrastructureError("Evaluator workspace is unavailable")
+        path = state.workspace / "evidence" / state.name / f"{state.operation_index:02d}-{operation}"
+        state.operation_index += 1
+        state.raw_evidence_roots.append(path)
+        return path
+
+    def _verify_runtime_inventory(
+        self,
+        state: _PhaseState,
+        stage: str,
+    ) -> None:
+        evidence_name = f"{state.name}-{state.inventory_index:02d}-{stage}"
         try:
-            inventory = tuple(self._inventory_reader())
-        except (OSError, ValueError) as error:
-            raise PackageInventoryError(f"Failed to read installed application inventory: {error}") from error
-
-        unhealthy = [app.name for app in inventory if not app.installed or not app.synchronized]
-        if unhealthy:
-            raise PackageInventoryError(f"Applications are not installed and synchronized: {sorted(unhealthy)}")
-
-        package_hashes = {sha256_file(package) for package in state.packages}
-        inventory_hashes = {app.content_hash for app in inventory if app.content_hash is not None}
-        missing_hashes = sorted(package_hashes - inventory_hashes)
-        if missing_hashes:
-            raise PackageInventoryError(f"Published package hashes are absent from installed inventory: {missing_hashes}")
-
-        baseline_keys = {_inventory_key(app) for app in state.expected_apps}
-        allowed_hashes = {app.content_hash for app in state.expected_apps if app.content_hash is not None} | package_hashes
-        unexpected = [
-            app.name for app in inventory if (app.content_hash is not None and app.content_hash not in allowed_hashes) or (app.content_hash is None and _inventory_key(app) not in baseline_keys)
-        ]
-        if unexpected:
-            raise PackageInventoryError(f"Unexpected applications are installed: {sorted(unexpected)}")
+            inventory, path = self._inventory_verifier.verify(
+                evidence_name,
+                state.expected_apps,
+            )
+        except PackageInventoryError:
+            path = self._inventory_verifier.last_evidence_path
+            if path is not None:
+                state.evidence_sources[f"inventory_{state.inventory_index + 1:02d}"] = path
+            raise
+        state.inventory_index += 1
         state.expected_apps = inventory
+        state.evidence_sources[f"inventory_{state.inventory_index:02d}"] = path
 
     def _run_exact_tests(
         self,
+        state: _PhaseState,
         tests: Sequence[TestEntry],
         expectation: TestExpectation,
         workspace: Path,
     ) -> TestRunSummary:
+        evidence_directory = self._operation_evidence_directory(state, "tests")
         run = getattr(self._test_runner, "run", self._test_runner)
-        summary = run(
+        returned = run(
             tuple(tests),
             expectation,
             self._container,
             workspace,
+            evidence_directory,
         )
+        if not isinstance(returned, TestSuiteEvidence):
+            raise BugFixLifecycleInfrastructureError("Exact test runner must return typed test evidence")
+        summary = returned.summary
+        for path in (
+            returned.command_path,
+            returned.stdout_path,
+            returned.stderr_path,
+            *returned.discovery_paths,
+            *returned.junit_paths,
+        ):
+            state.evidence_sources[f"raw_{len(state.evidence_sources):03d}_{path.name}"] = path
         _require_exact_test_summary(summary, tests, expectation)
         return summary
 
@@ -612,7 +771,23 @@ class BugFixPhaseRunner:
             f"{state.name}-source.txt",
             state.source_description,
         )
-        state.evidence["source"] = str(source_path)
+        state.evidence_sources["source"] = source_path
+        for key, content in state.additional_sources.items():
+            state.evidence_sources[key] = self._evidence_store.save_submission(
+                f"{state.name}-{key.replace('_', '-')}.txt",
+                content,
+            )
+
+        for root in state.raw_evidence_roots:
+            if root.is_dir():
+                for path in sorted(
+                    (candidate for candidate in root.rglob("*") if candidate.is_file()),
+                    key=lambda candidate: str(candidate).casefold(),
+                ):
+                    state.evidence_sources.setdefault(
+                        f"raw_{len(state.evidence_sources):03d}_{path.name}",
+                        path,
+                    )
 
         discovered_packages = (
             tuple(package for package in state.workspace.rglob("*.app") if ".alpackages" not in {part.casefold() for part in package.parts})
@@ -625,11 +800,10 @@ class BugFixPhaseRunner:
                 key=lambda path: str(path).casefold(),
             )
         )
-        for index, package in enumerate(unique_packages):
-            state.package_hashes[package] = sha256_file(package)
-            kind = state.protected_kinds.get(package, state.name)
-            protected = self._evidence_store.protect_artifact(package, kind)
-            state.evidence[f"package_{index}"] = str(protected)
+        for package in unique_packages:
+            if package not in state.protected_packages:
+                kind = state.protected_kinds.get(package, state.name)
+                self._protect_packages(state, (package,), kind)
 
         if state.summary is not None:
             tests_path = self._evidence_store.save_text(
@@ -646,7 +820,33 @@ class BugFixPhaseRunner:
                 )
                 + "\n",
             )
-            state.evidence["tests"] = str(tests_path)
+            state.evidence_sources["tests"] = tests_path
+
+        for key, path in tuple(state.evidence_sources.items()):
+            if key in state.evidence:
+                continue
+            protected = self._evidence_store.protect_artifact(
+                path,
+                f"{state.name}-evidence",
+            )
+            state.evidence[key] = self._relative_protected_path(protected)
+
+    def _protect_packages(
+        self,
+        state: _PhaseState,
+        packages: Sequence[Path],
+        kind: str,
+    ) -> None:
+        for package in packages:
+            resolved = package.resolve()
+            state.package_hashes[resolved] = sha256_file(resolved)
+            protected = self._evidence_store.protect_artifact(resolved, kind)
+            state.protected_packages.add(resolved)
+            state.evidence[f"package_{len(state.protected_packages) - 1}"] = self._relative_protected_path(protected)
+
+    def _relative_protected_path(self, path: Path) -> str:
+        relative = getattr(self._evidence_store, "relative_protected_path", None)
+        return str(relative(path) if relative is not None else path)
 
     def _cleanup_workspace(
         self,
@@ -669,6 +869,9 @@ class BugFixPhaseRunner:
         error_message: str | None,
     ) -> BugFixPhaseResult:
         summary = state.summary
+        if state.secondary_diagnostics:
+            diagnostic_message = "; ".join(state.secondary_diagnostics)
+            error_message = f"{error_message}\nSecondary evidence failures: {diagnostic_message}" if error_message else f"Secondary evidence failures: {diagnostic_message}"
         return BugFixPhaseResult(
             status=status,
             started_at=started_at,
@@ -726,7 +929,7 @@ class BugFixPhaseRunner:
             f"{state.name}-emergency.txt",
             diagnostic,
         )
-        state.evidence["emergency"] = str(path)
+        state.evidence_sources["emergency"] = path
 
     def _save_secondary_diagnostic(
         self,
@@ -745,9 +948,13 @@ class BugFixPhaseRunner:
                     )
                 ),
             )
-            state.evidence[f"{kind}_failure"] = str(path)
+            protected = self._evidence_store.protect_artifact(
+                path,
+                f"{state.name}-evidence",
+            )
+            state.evidence[f"{kind}_failure"] = self._relative_protected_path(protected)
         except Exception as diagnostic_error:  # noqa: BLE001 - retain the primary error
-            state.evidence[f"{kind}_diagnostic_error"] = str(diagnostic_error)
+            state.secondary_diagnostics.append(f"{kind}: {diagnostic_error}")
 
     def _persist_dependency_result(
         self,
@@ -880,12 +1087,80 @@ def _require_exact_test_summary(
     summary.require(expectation)
 
 
-def _inventory_key(app: AppInventoryEntry) -> tuple[str, ...]:
-    return (
-        app.app_id,
-        app.name,
-        app.publisher,
-        app.version,
-        app.package_id or "",
-        app.scope,
+def _app_inventory_from_package(
+    project_root: Path,
+    package_path: Path,
+) -> AppInventoryEntry:
+    manifest_path = project_root / "app.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise PackageInventoryError(f"Failed to read project manifest {manifest_path}: {error}") from error
+    if not isinstance(manifest, dict):
+        raise PackageInventoryError(f"Project manifest must be a JSON object: {manifest_path}")
+
+    package_manifest = _read_package_manifest(package_path)
+    return AppInventoryEntry(
+        app_id=_manifest_value(manifest, "id", manifest_path),
+        name=_manifest_value(manifest, "name", manifest_path),
+        publisher=_manifest_value(manifest, "publisher", manifest_path),
+        version=_manifest_value(manifest, "version", manifest_path),
+        package_id=_optional_manifest_value(package_manifest, "package_id"),
+        scope=_optional_manifest_value(package_manifest, "scope") or "Global",
+        installed=True,
+        synchronized=True,
+        content_hash=sha256_file(package_path),
     )
+
+
+def _read_package_manifest(package_path: Path) -> dict[str, str]:
+    if not zipfile.is_zipfile(package_path):
+        return {}
+    try:
+        with zipfile.ZipFile(package_path) as package:
+            manifest_name = next(
+                (name for name in package.namelist() if Path(name).name.casefold() == "navxmanifest.xml"),
+                None,
+            )
+            if manifest_name is None:
+                return {}
+            root = ET.fromstring(package.read(manifest_name))
+    except (OSError, zipfile.BadZipFile, ET.ParseError) as error:
+        raise PackageInventoryError(f"Failed to read package manifest {package_path}: {error}") from error
+
+    values: dict[str, str] = {}
+    for element in root.iter():
+        local_name = element.tag.rsplit("}", 1)[-1].casefold()
+        attributes = {name.casefold(): value for name, value in element.attrib.items()}
+        text = (element.text or "").strip()
+        if local_name in {"packageid", "package_id"} and text:
+            values.setdefault("package_id", text)
+        if local_name == "scope" and text:
+            values.setdefault("scope", text)
+        package_id = attributes.get("packageid") or attributes.get("package_id")
+        if package_id:
+            values.setdefault("package_id", package_id)
+        if local_name in {"package", "navxpackage"} and attributes.get("id"):
+            values.setdefault("package_id", attributes["id"])
+        if attributes.get("scope"):
+            values.setdefault("scope", attributes["scope"])
+    return values
+
+
+def _manifest_value(
+    project_manifest: dict[str, object],
+    name: str,
+    manifest_path: Path,
+) -> str:
+    value = project_manifest.get(name)
+    if not isinstance(value, str) or not value:
+        raise PackageInventoryError(f"Project manifest {manifest_path} has no non-empty {name!r}")
+    return value
+
+
+def _optional_manifest_value(
+    package_manifest: dict[str, str],
+    name: str,
+) -> str | None:
+    value = package_manifest.get(name)
+    return value or None

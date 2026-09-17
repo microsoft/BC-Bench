@@ -1,5 +1,6 @@
 from bcbench.evaluate.bugfix_lifecycle.checkpoint import CheckpointManager, PowerShellRunner
 from bcbench.evaluate.bugfix_lifecycle.evidence import EvidenceStore, sha256_file, sha256_text
+from bcbench.evaluate.bugfix_lifecycle.inventory import InventoryReader, InventoryVerifier
 from bcbench.evaluate.bugfix_lifecycle.models import (
     AppInventoryEntry,
     BugFixLifecyclePaths,
@@ -32,6 +33,8 @@ __all__ = [
     "DefaultProjectPublisher",
     "EvidenceStore",
     "ExactTestRunner",
+    "InventoryReader",
+    "InventoryVerifier",
     "PowerShellRunner",
     "ProjectPublication",
     "ProjectPublisher",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 from shutil import rmtree
@@ -12,11 +14,14 @@ from bcbench.evaluate.bugfix_lifecycle import (
     BugFixPhaseRunner,
     CheckpointManifest,
     ContainerIdentity,
+    InventoryVerifier,
+    ProjectPublication,
     TrustedSource,
     make_invalid_submission_phase,
     make_not_run_phase,
     sha256_file,
 )
+from bcbench.evaluate.bugfix_lifecycle import phases as phases_module
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
 from bcbench.exceptions import (
     BuildError,
@@ -28,6 +33,7 @@ from bcbench.exceptions import (
     TestExecutionFailureKind,
     TestInfrastructureError,
 )
+from bcbench.operations.bc_operations import TestSuiteEvidence
 from bcbench.operations.test_execution import TestCaseResult, TestExpectation, TestIdentity, TestOutcome, TestRunSummary
 from bcbench.results.bugfix import BugFixPhaseStatus
 from bcbench.types import ContainerConfig
@@ -83,7 +89,7 @@ def _summary(
     *,
     discovered: Sequence[TestIdentity] | None = None,
     executed: Sequence[TestIdentity] | None = None,
-) -> TestRunSummary:
+) -> TestSuiteEvidence:
     requested = tuple(TestIdentity(test.codeunitID, function_name) for test in tests for function_name in sorted(test.functionName))
     discovered_identities = tuple(discovered) if discovered is not None else requested
     executed_identities = tuple(executed) if executed is not None else requested
@@ -110,16 +116,31 @@ class FakeWorkspaceBuilder:
 
 
 class FakeCheckpointManager:
-    def __init__(self, calls: list[tuple[object, ...]], fixed: CheckpointManifest) -> None:
+    def __init__(
+        self,
+        calls: list[tuple[object, ...]],
+        fixed: CheckpointManifest,
+        runtime_inventory: list[AppInventoryEntry],
+    ) -> None:
         self.calls = calls
         self.fixed = fixed
+        self.runtime_inventory = runtime_inventory
 
     def restore(self, manifest: CheckpointManifest, expected_apps: Sequence[AppInventoryEntry]) -> None:
         self.calls.append(("restore", manifest.name, tuple(app.name for app in expected_apps)))
+        self.runtime_inventory[:] = expected_apps
 
     def capture(self, name: str, expected_apps: Sequence[AppInventoryEntry]) -> CheckpointManifest:
         self.calls.append(("capture", name, tuple(app.name for app in expected_apps)))
-        return self.fixed
+        return CheckpointManifest(
+            name=self.fixed.name,
+            backup_path=self.fixed.backup_path,
+            sha256=self.fixed.sha256,
+            database_name=self.fixed.database_name,
+            database_folder=self.fixed.database_folder,
+            container=self.fixed.container,
+            apps=tuple(expected_apps),
+        )
 
 
 class FakeEvidenceStore:
@@ -150,29 +171,77 @@ class FakeEvidenceStore:
         path.write_text(diagnostic, encoding="utf-8")
         return path
 
+    def save_inventory(self, name: str, expected: object, actual: object) -> Path:
+        path = self.root / "inventories" / f"{name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"actual": actual, "expected": expected}),
+            encoding="utf-8",
+        )
+        return path
+
     def protect_artifact(self, source: Path, kind: str) -> Path:
         self.calls.append(("protect", kind, source.name))
-        destination = self.root / kind / source.name
+        destination = self.root / kind / f"{sha256_file(source)[:8]}-{source.name}"
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(source.read_bytes())
         return destination
 
+    def relative_protected_path(self, path: Path) -> Path:
+        return path.relative_to(self.root) if path.is_relative_to(self.root) else Path(path.name)
+
 
 class FakePublisher:
-    def __init__(self, calls: list[tuple[object, ...]]) -> None:
+    def __init__(
+        self,
+        calls: list[tuple[object, ...]],
+        runtime_inventory: list[AppInventoryEntry],
+    ) -> None:
         self.calls = calls
+        self.runtime_inventory = runtime_inventory
         self.error: Exception | None = None
 
-    def __call__(self, repo_path: Path, project_paths: Sequence[str], _container: ContainerConfig, _version: str) -> tuple[Path, ...]:
+    def __call__(
+        self,
+        repo_path: Path,
+        project_paths: Sequence[str],
+        _container: ContainerConfig,
+        _version: str,
+        _evidence_directory: Path,
+    ) -> ProjectPublication:
         self.calls.append(("publish", tuple(project_paths)))
+        _evidence_directory.mkdir(parents=True, exist_ok=True)
+        (_evidence_directory / "command.json").write_text("build command", encoding="utf-8")
+        (_evidence_directory / "stdout.txt").write_text("build stdout", encoding="utf-8")
+        (_evidence_directory / "stderr.txt").write_text("build stderr", encoding="utf-8")
         if self.error is not None:
             raise self.error
         packages = []
+        apps = []
         for project in project_paths:
             package = repo_path / project / f"{Path(project).name}.app"
             package.write_bytes(project.encode())
             packages.append(package)
-        return tuple(packages)
+            name = Path(project).name
+            app = AppInventoryEntry(
+                app_id=f"{len(name):08d}-2222-2222-2222-222222222222",
+                name=name,
+                publisher="BCBench",
+                version="1.0.0.0",
+                package_id=None,
+                scope="Global",
+                installed=True,
+                synchronized=True,
+                content_hash=sha256_file(package),
+            )
+            apps.append(app)
+            self.runtime_inventory[:] = [installed for installed in self.runtime_inventory if installed.app_id != app.app_id]
+            self.runtime_inventory.append(app)
+        return ProjectPublication(
+            project_paths=tuple(project_paths),
+            package_paths=tuple(packages),
+            apps=tuple(apps),
+        )
 
 
 class FakeTestRunner:
@@ -188,11 +257,25 @@ class FakeTestRunner:
         expectation: TestExpectation,
         _container: ContainerConfig,
         _repo_path: Path,
+        evidence_directory: Path,
     ) -> TestRunSummary:
         self.calls.append(("test", expectation, tuple(tests)))
+        evidence_directory.mkdir(parents=True, exist_ok=True)
+        (evidence_directory / "command.json").write_text("test command", encoding="utf-8")
+        (evidence_directory / "stdout.txt").write_text("test stdout", encoding="utf-8")
+        (evidence_directory / "stderr.txt").write_text("test stderr", encoding="utf-8")
+        (evidence_directory / "discovery-50100.json").write_text("{}", encoding="utf-8")
+        (evidence_directory / "results-50100.xml").write_text("<testsuite />", encoding="utf-8")
         if self.error is not None:
             raise self.error
-        return self.summary or _summary(tests, self.outcome)
+        return TestSuiteEvidence(
+            summary=self.summary or _summary(tests, self.outcome),
+            command_path=evidence_directory / "command.json",
+            stdout_path=evidence_directory / "stdout.txt",
+            stderr_path=evidence_directory / "stderr.txt",
+            discovery_paths=(evidence_directory / "discovery-50100.json",),
+            junit_paths=(evidence_directory / "results-50100.xml",),
+        )
 
 
 @pytest.fixture
@@ -202,9 +285,10 @@ def harness(tmp_path: Path):
     s0 = _manifest(tmp_path, "baseline")
     sf = _manifest(tmp_path, "fixed")
     workspace_builder = FakeWorkspaceBuilder(tmp_path / "workspaces", calls)
-    checkpoint_manager = FakeCheckpointManager(calls, sf)
+    runtime_inventory = [_app()]
+    checkpoint_manager = FakeCheckpointManager(calls, sf, runtime_inventory)
     evidence_store = FakeEvidenceStore(tmp_path / "evidence", calls)
-    publisher = FakePublisher(calls)
+    publisher = FakePublisher(calls, runtime_inventory)
     test_runner = FakeTestRunner(calls)
     patch_calls: list[tuple[str, str]] = []
 
@@ -230,6 +314,7 @@ def harness(tmp_path: Path):
         test_runner=test_runner,
         patch_applier=apply_patch,
         workspace_cleaner=cleanup,
+        inventory_reader=lambda: tuple(runtime_inventory),
     )
     return {
         "calls": calls,
@@ -237,11 +322,13 @@ def harness(tmp_path: Path):
         "s0": s0,
         "sf": sf,
         "workspace_builder": workspace_builder,
+        "checkpoint_manager": checkpoint_manager,
         "evidence": evidence_store,
         "publisher": publisher,
         "test_runner": test_runner,
         "patch_calls": patch_calls,
         "cleanup_calls": cleanup_calls,
+        "runtime_inventory": runtime_inventory,
         "runner": runner,
     }
 
@@ -286,7 +373,35 @@ def test_run_test_gold_restores_s0_applies_gold_before_test_and_content_addresse
     ]
     product_protection = next(call for call in harness["calls"] if call[0] == "protect" and call[2] == "App.app")
     assert product_protection[1].startswith("gold-product-")
+    assert harness["calls"].index(product_protection) < harness["calls"].index(("publish", ("src/Tests",)))
     assert ("test", TestExpectation.ALL_PASS, _submission().tests) in harness["calls"]
+    assert "gold_product_source" in result.evidence
+
+
+def test_phase_runner_requires_inventory_reader(harness) -> None:
+    with pytest.raises(ValueError, match="inventory"):
+        BugFixPhaseRunner(
+            trusted_source=harness["source"],
+            workspace_builder=harness["workspace_builder"],
+            checkpoint_manager=harness["checkpoint_manager"],
+            evidence_store=harness["evidence"],
+            container=ContainerConfig(name="bc", username="user", password="pass", company="CRONUS"),
+            version="27.0",
+            inventory_reader=None,
+        )
+
+
+def test_phase_runner_requires_evidence_store(harness) -> None:
+    with pytest.raises(ValueError, match="evidence"):
+        BugFixPhaseRunner(
+            trusted_source=harness["source"],
+            workspace_builder=harness["workspace_builder"],
+            checkpoint_manager=harness["checkpoint_manager"],
+            evidence_store=None,
+            container=ContainerConfig(name="bc", username="user", password="pass", company="CRONUS"),
+            version="27.0",
+            inventory_reader=lambda: (_app(),),
+        )
 
 
 def test_invalid_generated_test_does_not_block_independent_fix_and_pair_does_not_restore_sf(harness) -> None:
@@ -298,11 +413,12 @@ def test_invalid_generated_test_does_not_block_independent_fix_and_pair_does_not
     pair = harness["runner"].run_generated_pair(submission, fixed, red)
 
     assert phase.status is BugFixPhaseStatus.PASSED
-    assert fixed == harness["sf"]
+    assert fixed is not None
+    assert tuple(sorted(app.name for app in fixed.apps)) == ("App", "Base")
     assert pair.status is BugFixPhaseStatus.PASSED
     restores = [call for call in harness["calls"] if call[0] == "restore"]
     assert restores == [("restore", "baseline", ("Base",))]
-    capture_index = harness["calls"].index(("capture", "fixed", ("Base",)))
+    capture_index = harness["calls"].index(("capture", "fixed", ("App", "Base")))
     pair_workspace_index = next(index for index, call in enumerate(harness["calls"]) if call[:2] == ("workspace", "generated-pair"))
     assert capture_index < pair_workspace_index
     assert harness["patch_calls"] == [
@@ -358,6 +474,22 @@ def test_benchmark_restores_sf_uses_only_fix_and_hidden_patch_and_combines_exact
         (*fail_to_pass, *pass_to_pass),
     ) in harness["calls"]
     assert result.requested_tests == ("10:FailsBefore", "20:StillPasses")
+
+
+def test_benchmark_restores_sf_independently_after_invalid_generated_test(harness) -> None:
+    invalid_red = make_invalid_submission_phase("invalid generated test")
+
+    result = harness["runner"].run_benchmark_fix(
+        _submission(),
+        harness["sf"],
+        "H",
+        [TestEntry(codeunitID=10, functionName=frozenset({"FailsBefore"}))],
+        [],
+    )
+
+    assert invalid_red.status is BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.status is BugFixPhaseStatus.PASSED
+    assert ("restore", "fixed", ("Base",)) in harness["calls"]
 
 
 @pytest.mark.parametrize(
@@ -418,6 +550,18 @@ def test_trusted_patch_failure_is_infrastructure_error(harness) -> None:
     assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
 
 
+def test_restore_failure_is_infrastructure_error(harness) -> None:
+    def fail_restore(*_args) -> None:
+        raise CheckpointInfrastructureError("fake restore failed")
+
+    harness["checkpoint_manager"].restore = fail_restore
+
+    result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "fake restore failed" in result.error_message
+
+
 def test_unexpected_error_persists_emergency_diagnostic_and_propagates(harness) -> None:
     harness["publisher"].error = RuntimeError("unexpected")
 
@@ -442,6 +586,7 @@ def test_cleanup_failure_overrides_success_and_keeps_protected_evidence(harness)
     assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
     assert "cleanup" in result.error_message.lower()
     assert any(call[0] == "protect" for call in harness["calls"])
+    assert "cleanup_failure" in result.evidence
     assert harness["evidence"].saved_phases[-1] == result
 
 
@@ -457,44 +602,196 @@ def test_package_hashes_survive_real_workspace_cleanup(harness) -> None:
 
 
 def test_fix_capture_uses_verified_installed_and_synchronized_inventory(harness) -> None:
-    def read_inventory() -> tuple[AppInventoryEntry, ...]:
-        packages = sorted((harness["workspace_builder"].root).rglob("*.app"))
-        return (
-            _app(),
-            *(
+    result, manifest = harness["runner"].run_fix_build(_submission(), harness["s0"])
+
+    assert result.status is BugFixPhaseStatus.PASSED
+    assert manifest is not None
+    assert tuple(sorted(app.name for app in manifest.apps)) == ("App", "Base")
+    assert ("capture", "fixed", ("App", "Base")) in harness["calls"]
+
+
+def test_unhealthy_runtime_inventory_is_infrastructure_error(harness) -> None:
+    unhealthy = _app().to_dict()
+    unhealthy["installed"] = False
+    harness["runner"]._inventory_verifier = InventoryVerifier(
+        lambda: (AppInventoryEntry.from_dict(unhealthy),),
+        harness["evidence"],
+    )
+
+    result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "installed and synchronized" in result.error_message
+
+
+@pytest.mark.parametrize("inventory_kind", ["missing", "duplicate", "unexpected"])
+def test_exact_checkpoint_inventory_rejects_missing_duplicate_and_unexpected(
+    harness,
+    inventory_kind: str,
+) -> None:
+    baseline = _app()
+    unexpected = AppInventoryEntry(
+        **{
+            **baseline.to_dict(),
+            "app_id": "99999999-9999-9999-9999-999999999999",
+            "name": "Unexpected",
+            "content_hash": "b" * 64,
+        }
+    )
+    inventories = {
+        "missing": (),
+        "duplicate": (baseline, baseline),
+        "unexpected": (baseline, unexpected),
+    }
+    harness["runner"]._inventory_verifier = InventoryVerifier(
+        lambda: inventories[inventory_kind],
+        harness["evidence"],
+    )
+
+    result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "inventory" in result.error_message.lower()
+    assert any(key.startswith("inventory_") for key in result.evidence)
+
+
+def test_inventory_rejects_same_hash_with_different_identity(harness) -> None:
+    baseline = _app()
+    forged = AppInventoryEntry(
+        **{
+            **baseline.to_dict(),
+            "app_id": "99999999-9999-9999-9999-999999999999",
+            "name": "Forged",
+        }
+    )
+    harness["runner"]._inventory_verifier = InventoryVerifier(
+        lambda: (forged,),
+        harness["evidence"],
+    )
+
+    result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "same" in result.error_message.lower() or "different identity" in result.error_message.lower()
+
+
+def test_fix_build_rejects_installed_generated_test_contamination(harness) -> None:
+    original_publish = harness["publisher"].__call__
+
+    def publish_with_contamination(*args, **kwargs):
+        publication = original_publish(*args, **kwargs)
+        if publication.project_paths == ("src/App",):
+            harness["runtime_inventory"].append(
                 AppInventoryEntry(
-                    app_id=f"{index:08d}-2222-2222-2222-222222222222",
-                    name=package.stem,
+                    app_id="77777777-7777-7777-7777-777777777777",
+                    name="Tests",
                     publisher="BCBench",
                     version="1.0.0.0",
                     package_id=None,
                     scope="Global",
                     installed=True,
                     synchronized=True,
-                    content_hash=sha256_file(package),
+                    content_hash="7" * 64,
                 )
-                for index, package in enumerate(packages, start=1)
-            ),
-        )
+            )
+        return publication
 
-    harness["runner"]._inventory_reader = read_inventory
-
-    result, manifest = harness["runner"].run_fix_build(_submission(), harness["s0"])
-
-    assert result.status is BugFixPhaseStatus.PASSED
-    assert manifest == harness["sf"]
-    assert ("capture", "fixed", ("Base", "App")) in harness["calls"]
-
-
-def test_unhealthy_runtime_inventory_is_infrastructure_error(harness) -> None:
-    unhealthy = _app().to_dict()
-    unhealthy["installed"] = False
-    harness["runner"]._inventory_reader = lambda: (AppInventoryEntry.from_dict(unhealthy),)
+    harness["runner"]._publisher = publish_with_contamination
 
     result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
 
     assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
-    assert "installed and synchronized" in result.error_message
+    assert "unexpected" in result.error_message.lower()
+
+
+def test_trusted_product_build_failure_is_infrastructure_but_generated_fix_is_failed(harness) -> None:
+    harness["publisher"].error = BuildError("src/App", "compiler")
+
+    trusted = harness["runner"].run_test_red(_submission(), harness["s0"])
+    generated = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    assert trusted.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert generated.status is BugFixPhaseStatus.FAILED
+
+
+def test_generated_test_publication_build_failure_is_failed(harness) -> None:
+    original_publish = harness["publisher"].__call__
+
+    def fail_generated_test(*args, **kwargs):
+        project_paths = args[1]
+        if tuple(project_paths) == ("src/Tests",):
+            raise BuildError("src/Tests", "generated test compiler error")
+        return original_publish(*args, **kwargs)
+
+    harness["runner"]._publisher = fail_generated_test
+
+    result = harness["runner"].run_test_red(_submission(), harness["s0"])
+
+    assert result.status is BugFixPhaseStatus.FAILED
+    assert "src/Tests" in result.error_message
+
+
+def test_raw_phase_evidence_and_inventory_survive_workspace_cleanup(harness) -> None:
+    harness["test_runner"].outcome = TestOutcome.FAIL
+    harness["runner"]._workspace_cleaner = rmtree
+
+    result = harness["runner"].run_test_red(_submission(), harness["s0"])
+
+    protected_contents = [path.read_text(encoding="utf-8") for path in harness["evidence"].root.rglob("*") if path.is_file()]
+    assert result.status is BugFixPhaseStatus.PASSED
+    assert any(key.startswith("inventory_") for key in result.evidence)
+    assert all(not Path(path).is_absolute() for path in result.evidence.values())
+    assert "build stdout" in protected_contents
+    assert "build stderr" in protected_contents
+    assert "test stdout" in protected_contents
+    assert "test stderr" in protected_contents
+    assert "{}" in protected_contents
+    assert "<testsuite />" in protected_contents
+
+
+def test_raw_failure_evidence_survives_workspace_cleanup(harness) -> None:
+    harness["publisher"].error = BuildError("src/App", "compiler error")
+    harness["runner"]._workspace_cleaner = rmtree
+
+    result = harness["runner"].run_fix_build(_submission(), harness["s0"])[0]
+
+    protected_contents = [path.read_text(encoding="utf-8") for path in harness["evidence"].root.rglob("*") if path.is_file()]
+    assert result.status is BugFixPhaseStatus.FAILED
+    assert "build command" in protected_contents
+    assert "build stdout" in protected_contents
+    assert "build stderr" in protected_contents
+
+
+def test_package_inventory_uses_project_identity_and_package_id(tmp_path: Path) -> None:
+    project = tmp_path / "App"
+    project.mkdir()
+    (project / "app.json").write_text(
+        json.dumps(
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "Product",
+                "publisher": "BCBench",
+                "version": "27.0.0.0",
+            }
+        ),
+        encoding="utf-8",
+    )
+    package = project / "Product.app"
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr(
+            "NavxManifest.xml",
+            ('<Package Scope="Global"><PackageId>22222222-2222-2222-2222-222222222222</PackageId></Package>'),
+        )
+
+    app = phases_module._app_inventory_from_package(project, package)
+
+    assert app.app_id == "11111111-1111-1111-1111-111111111111"
+    assert app.name == "Product"
+    assert app.publisher == "BCBench"
+    assert app.version == "27.0.0.0"
+    assert app.package_id == "22222222-2222-2222-2222-222222222222"
+    assert app.scope == "Global"
+    assert app.content_hash == sha256_file(package)
 
 
 def test_exact_identity_multiset_rejects_duplicate_missing_and_unexpected_execution(harness) -> None:

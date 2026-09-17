@@ -1,13 +1,18 @@
 """Operations for Business Central and Git."""
 
 from bcbench.operations.bc_operations import (
+    ProjectBuildEvidence,
+    ProjectPublicationEvidence,
+    TestSuiteEvidence,
     build_and_publish_projects,
+    build_and_publish_projects_with_evidence,
     build_ps_app_build_and_publish,
     build_ps_dataset_tests_script,
     build_ps_test_script,
     copy_symbol_apps,
     execute_al_query,
     resolve_artifact_version_root,
+    run_test_suite_with_evidence,
     run_tests,
     wrap_query_as_api,
 )
@@ -42,12 +47,16 @@ from bcbench.operations.test_operations import (
 )
 
 __all__ = [
+    "ProjectBuildEvidence",
+    "ProjectPublicationEvidence",
     "TestExpectation",
     "TestRunSummary",
+    "TestSuiteEvidence",
     "added_lines_belong_to_members",
     "apply_patch",
     "bootstrap_app_json",
     "build_and_publish_projects",
+    "build_and_publish_projects_with_evidence",
     "build_ps_app_build_and_publish",
     "build_ps_dataset_tests_script",
     "build_ps_test_script",
@@ -77,6 +86,7 @@ __all__ = [
     "remove_tree",
     "resolve_artifact_version_root",
     "resolve_trusted_commit",
+    "run_test_suite_with_evidence",
     "run_tests",
     "set_runtime_version",
     "setup_agent_skills",

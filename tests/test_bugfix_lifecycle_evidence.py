@@ -106,6 +106,23 @@ def test_evidence_store_saves_submission_manifest_diagnostic_and_final_result(tm
     assert json.loads(result_path.read_text(encoding="utf-8")) == phase.model_dump(mode="json")
 
 
+def test_evidence_store_saves_inventory_and_returns_relative_protected_path(tmp_path: Path) -> None:
+    paths = _lifecycle_paths(tmp_path)
+    store = EvidenceStore(paths)
+    inventory_path = store.save_inventory(
+        "test-red-00-checkpoint",
+        [{"name": "Base"}],
+        [{"name": "Base"}],
+    )
+    protected = store.protect_artifact(inventory_path, "test-red-evidence")
+
+    assert json.loads(inventory_path.read_text(encoding="utf-8")) == {
+        "actual": [{"name": "Base"}],
+        "expected": [{"name": "Base"}],
+    }
+    assert store.relative_protected_path(protected) == protected.relative_to(paths.protected_root)
+
+
 @pytest.mark.parametrize(
     ("method_name", "arguments", "relative_destination"),
     [

@@ -7,6 +7,7 @@ import pytest
 
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
+from bcbench.exceptions import BuildError
 from bcbench.operations import bc_operations
 from bcbench.operations.test_execution import TestExpectation
 from bcbench.types import ContainerConfig
@@ -353,6 +354,79 @@ class TestRunTestSuite:
         assert '"functionName":["ExchangeProductionBOMItemShouldSetEndingDate"]' in command
         # Should NOT contain Python repr format
         assert "TestEntry(" not in command
+
+
+def test_build_and_publish_with_evidence_preserves_command_output_and_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = tmp_path / "repo"
+    project_path = repo_path / "src" / "App"
+    output_path = project_path / "output"
+    output_path.mkdir(parents=True)
+    package = output_path / "App.app"
+    package.write_bytes(b"package")
+    evidence_path = repo_path / "evidence" / "build"
+
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            returncode=0,
+            stdout="build stdout",
+            stderr="build stderr",
+        ),
+    )
+
+    result = bc_operations.build_and_publish_projects_with_evidence(
+        repo_path,
+        ["src/App"],
+        ContainerConfig(name="bcserver", username="admin", password="pass", company="CRONUS"),
+        "27.0",
+        evidence_path,
+    )
+
+    record = result.projects[0]
+    assert record.package_path == package
+    assert record.command_path.read_text(encoding="utf-8")
+    assert record.stdout_path.read_text(encoding="utf-8") == "build stdout"
+    assert record.stderr_path.read_text(encoding="utf-8") == "build stderr"
+    assert record.package_hash
+
+
+def test_build_and_publish_with_evidence_preserves_failure_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = tmp_path / "repo"
+    (repo_path / "src" / "App").mkdir(parents=True)
+    evidence_path = repo_path / "evidence" / "build"
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            returncode=1,
+            stdout="compiler failure",
+            stderr="publish failure",
+        ),
+    )
+
+    with pytest.raises(BuildError):
+        bc_operations.build_and_publish_projects_with_evidence(
+            repo_path,
+            ["src/App"],
+            ContainerConfig(name="bcserver", username="admin", password="pass", company="CRONUS"),
+            "27.0",
+            evidence_path,
+        )
+
+    project_evidence = next(evidence_path.iterdir())
+    assert (project_evidence / "command.json").is_file()
+    assert (project_evidence / "stdout.txt").read_text(encoding="utf-8") == "compiler failure"
+    assert (project_evidence / "stderr.txt").read_text(encoding="utf-8") == "publish failure"
+    assert json.loads((project_evidence / "publication.json").read_text(encoding="utf-8"))["status"] == "failed"
 
     def test_multiple_test_entries_serialized_as_json(self, mock_subprocess):
         test_entries = [

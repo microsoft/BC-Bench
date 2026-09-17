@@ -147,10 +147,20 @@ class CheckpointManifest:
 class ProjectPublication:
     project_paths: tuple[str, ...]
     package_paths: tuple[Path, ...]
+    apps: tuple[AppInventoryEntry, ...]
+    evidence_paths: tuple[Path, ...]
 
-    def __init__(self, project_paths: tuple[str, ...], package_paths: tuple[Path, ...]) -> None:
+    def __init__(
+        self,
+        project_paths: tuple[str, ...],
+        package_paths: tuple[Path, ...],
+        apps: tuple[AppInventoryEntry, ...] = (),
+        evidence_paths: tuple[Path, ...] = (),
+    ) -> None:
         object.__setattr__(self, "project_paths", tuple(project_paths))
         object.__setattr__(self, "package_paths", tuple(package_paths))
+        object.__setattr__(self, "apps", tuple(apps))
+        object.__setattr__(self, "evidence_paths", tuple(evidence_paths))
 
 
 def _required_string(value: Mapping[str, object], name: str) -> str:

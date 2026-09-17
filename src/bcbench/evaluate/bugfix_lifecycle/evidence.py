@@ -134,6 +134,17 @@ class EvidenceStore:
             self._entry_root,
         )
 
+    def save_inventory(self, name: str, expected: object, actual: object) -> Path:
+        return self._write_json(
+            self._evidence_root / "inventories" / _with_suffix(name, ".json"),
+            {
+                "actual": actual,
+                "expected": expected,
+            },
+            self._evidence_root,
+            self._entry_root,
+        )
+
     def save_text(self, name: str, diagnostic: str) -> Path:
         return self._write_text(self._evidence_root / "diagnostics" / _safe_name(name), diagnostic, self._evidence_root, self._entry_root)
 
@@ -191,6 +202,11 @@ class EvidenceStore:
         if sha256_file(destination) != source_hash:
             raise ValueError(f"Protected artifact hash mismatch after replace: {destination}")
         return destination
+
+    def relative_protected_path(self, path: Path) -> Path:
+        absolute = absolute_path(path)
+        require_strict_descendant(absolute, self._protected_root, "protected evidence", "protected root")
+        return absolute.relative_to(self._protected_root)
 
     def _validate_roots(self) -> None:
         validate_evidence_roots(self._entry_root, self._evidence_root, self._protected_root, self._final_results)

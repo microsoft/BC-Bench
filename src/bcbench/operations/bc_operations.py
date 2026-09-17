@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from string import Template
 from typing import Literal
@@ -28,6 +30,69 @@ from bcbench.types import ContainerConfig
 
 logger = get_logger(__name__)
 _config = get_config()
+
+
+@dataclass(frozen=True)
+class ProjectBuildEvidence:
+    project_path: str
+    command_path: Path
+    stdout_path: Path
+    stderr_path: Path
+    diagnostics_path: Path
+    package_path: Path
+    package_hash: str
+
+
+@dataclass(frozen=True)
+class ProjectPublicationEvidence:
+    projects: tuple[ProjectBuildEvidence, ...]
+
+    @property
+    def package_paths(self) -> tuple[Path, ...]:
+        return tuple(project.package_path for project in self.projects)
+
+
+@dataclass(frozen=True)
+class TestSuiteEvidence:
+    summary: TestRunSummary
+    command_path: Path
+    stdout_path: Path
+    stderr_path: Path
+    discovery_paths: tuple[Path, ...]
+    junit_paths: tuple[Path, ...]
+
+
+def _sha256_file(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_evidence(path: Path, content: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8", newline="\n")
+    return path
+
+
+def _prepare_evidence_directory(path: Path) -> Path:
+    if path.exists() and any(path.iterdir()):
+        raise ValueError(f"Evidence directory must be empty: {path}")
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _redacted_command(script: str, password: str) -> str:
+    escaped_password = _escape_ps_string(password)
+    redacted_script = script.replace(f"'{escaped_password}'", "'***'")
+    return (
+        json.dumps(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command", redacted_script],
+            indent=2,
+        )
+        + "\n"
+    )
 
 
 def resolve_artifact_version_root(version: str) -> Path | None:
@@ -218,6 +283,150 @@ def build_and_publish_projects(repo_path: Path, project_paths: list[str], contai
     logger.info("All projects built and published")
 
 
+def build_and_publish_projects_with_evidence(
+    repo_path: Path,
+    project_paths: list[str],
+    container: ContainerConfig,
+    version: str,
+    evidence_directory: Path,
+) -> ProjectPublicationEvidence:
+    evidence_root = _prepare_evidence_directory(evidence_directory)
+    records: list[ProjectBuildEvidence] = []
+    logger.info(f"Building and publishing {len(project_paths)} projects with evidence")
+
+    for index, project_path in enumerate(project_paths):
+        full_project_path = repo_path / project_path
+        project_evidence = evidence_root / f"{index:03d}-{Path(project_path).name}"
+        project_evidence.mkdir(parents=True)
+        ps_script = build_ps_app_build_and_publish(
+            container_name=container.name,
+            username=container.username,
+            password=container.password,
+            project_path=full_project_path,
+            version=version,
+        )
+        command_path = _write_evidence(
+            project_evidence / "command.json",
+            _redacted_command(ps_script, container.password),
+        )
+        stdout_path = project_evidence / "stdout.txt"
+        stderr_path = project_evidence / "stderr.txt"
+        diagnostics_path = project_evidence / "publication.json"
+        timeout = _config.timeout.build_baseapp if "BaseApp" in project_path else _config.timeout.build_app
+
+        try:
+            result = subprocess.run(
+                ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                cwd=repo_path,
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as error:
+            stdout = error.stdout.decode(errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
+            stderr = error.stderr.decode(errors="replace") if isinstance(error.stderr, bytes) else error.stderr or ""
+            _write_evidence(stdout_path, stdout)
+            _write_evidence(stderr_path, stderr)
+            _write_evidence(
+                diagnostics_path,
+                json.dumps(
+                    {
+                        "project_path": project_path,
+                        "status": "timeout",
+                        "timeout_seconds": timeout,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+            )
+            raise BuildTimeoutExpired(project_path, timeout) from None
+        except OSError as error:
+            _write_evidence(stdout_path, "")
+            _write_evidence(stderr_path, str(error))
+            _write_evidence(
+                diagnostics_path,
+                json.dumps(
+                    {
+                        "project_path": project_path,
+                        "status": "launch-error",
+                        "error": str(error),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+            )
+            raise
+
+        _write_evidence(stdout_path, result.stdout or "")
+        _write_evidence(stderr_path, result.stderr or "")
+        if result.returncode != 0:
+            _write_evidence(
+                diagnostics_path,
+                json.dumps(
+                    {
+                        "project_path": project_path,
+                        "status": "failed",
+                        "returncode": result.returncode,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+            )
+            raise BuildError(project_path, result.stdout or "") from None
+
+        packages = tuple(sorted((full_project_path / "output").glob("*.app"), key=lambda path: str(path).casefold()))
+        if len(packages) != 1:
+            _write_evidence(
+                diagnostics_path,
+                json.dumps(
+                    {
+                        "project_path": project_path,
+                        "status": "invalid-package-output",
+                        "package_paths": [str(package) for package in packages],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+            )
+            raise BuildError(project_path, f"Expected exactly one produced .app package, found {len(packages)}.")
+
+        package_path = packages[0]
+        package_hash = _sha256_file(package_path)
+        _write_evidence(
+            diagnostics_path,
+            json.dumps(
+                {
+                    "package_hash": package_hash,
+                    "package_path": str(package_path),
+                    "project_path": project_path,
+                    "returncode": result.returncode,
+                    "status": "published",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+        )
+        records.append(
+            ProjectBuildEvidence(
+                project_path=project_path,
+                command_path=command_path,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                diagnostics_path=diagnostics_path,
+                package_path=package_path,
+                package_hash=package_hash,
+            )
+        )
+
+    return ProjectPublicationEvidence(tuple(records))
+
+
 def run_tests(entry: _BugFixTestGenBase, container: ContainerConfig, repo_path: Path) -> TestRunSummary:
     try:
         summaries: list[TestRunSummary] = []
@@ -263,81 +472,112 @@ def run_test_suite(
     container: ContainerConfig,
     repo_path: Path,
 ) -> TestRunSummary:
+    with tempfile.TemporaryDirectory(prefix=".bcbench-test-evidence-", dir=repo_path) as evidence_directory:
+        return run_test_suite_with_evidence(
+            test_entries,
+            expectation,
+            container,
+            repo_path,
+            Path(evidence_directory),
+        ).summary
+
+
+def run_test_suite_with_evidence(
+    test_entries: list[TestEntry],
+    expectation: TestExpectation,
+    container: ContainerConfig,
+    repo_path: Path,
+    evidence_directory: Path,
+) -> TestSuiteEvidence:
     normalized_entries = _normalize_test_entries(test_entries)
     test_entries_json = _serialize_test_entries(normalized_entries)
-
-    with tempfile.TemporaryDirectory(prefix=".bcbench-test-evidence-", dir=repo_path) as evidence_directory:
-        evidence_path = Path(evidence_directory)
-        ps_script = build_ps_dataset_tests_script(
-            container.name,
-            container.username,
-            container.password,
-            test_entries_json,
-            evidence_path,
+    evidence_path = _prepare_evidence_directory(evidence_directory)
+    ps_script = build_ps_dataset_tests_script(
+        container.name,
+        container.username,
+        container.password,
+        test_entries_json,
+        evidence_path,
+    )
+    command_path = _write_evidence(evidence_path / "command.json", _redacted_command(ps_script, container.password))
+    stdout_path = evidence_path / "stdout.txt"
+    stderr_path = evidence_path / "stderr.txt"
+    logger.info(f"Running test suite with expectation: {expectation}")
+    logger.info(f"Tests to run: {test_entries_json}")
+    try:
+        result = subprocess.run(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            cwd=repo_path,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=_config.timeout.test_execution,
         )
-        logger.info(f"Running test suite with expectation: {expectation}")
-        logger.info(f"Tests to run: {test_entries_json}")
-        try:
-            result = subprocess.run(
-                ["pwsh", "-NoProfile", "-NonInteractive", "-Command", ps_script],
-                cwd=repo_path,
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=_config.timeout.test_execution,
-            )
-        except subprocess.TimeoutExpired as error:
-            logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
-            timeout_error = TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution)
-            stdout = error.stdout.decode(errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
-            stderr = error.stderr.decode(errors="replace") if isinstance(error.stderr, bytes) else error.stderr or ""
-            raise TestInfrastructureError(
-                expectation,
-                reason=f"Business Central test execution timed out after {_config.timeout.test_execution} seconds",
-                stdout=stdout,
-                stderr=stderr,
-            ) from timeout_error
-        except OSError as error:
-            raise TestInfrastructureError(
-                expectation,
-                reason=f"Failed to launch Business Central test execution infrastructure: {error}",
-            ) from error
+    except subprocess.TimeoutExpired as error:
+        logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")
+        timeout_error = TestExecutionTimeoutExpired(test_entries_json, _config.timeout.test_execution)
+        stdout = error.stdout.decode(errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
+        stderr = error.stderr.decode(errors="replace") if isinstance(error.stderr, bytes) else error.stderr or ""
+        _write_evidence(stdout_path, stdout)
+        _write_evidence(stderr_path, stderr)
+        raise TestInfrastructureError(
+            expectation,
+            reason=f"Business Central test execution timed out after {_config.timeout.test_execution} seconds",
+            stdout=stdout,
+            stderr=stderr,
+        ) from timeout_error
+    except OSError as error:
+        _write_evidence(stdout_path, "")
+        _write_evidence(stderr_path, str(error))
+        raise TestInfrastructureError(
+            expectation,
+            reason=f"Failed to launch Business Central test execution infrastructure: {error}",
+        ) from error
 
-        if result.stdout:
-            logger.debug(f"Test output:\n{result.stdout}")
+    _write_evidence(stdout_path, result.stdout or "")
+    _write_evidence(stderr_path, result.stderr or "")
+    if result.stdout:
+        logger.debug(f"Test output:\n{result.stdout}")
 
-        try:
-            summary = load_test_run_summary(evidence_path, normalized_entries)
-        except (OSError, ValueError, ET.ParseError) as error:
-            raise TestInfrastructureError(
-                expectation,
-                stderr=result.stderr,
-                stdout=result.stdout,
-                reason=f"Invalid test evidence: {error}",
-            ) from error
+    try:
+        summary = load_test_run_summary(evidence_path, normalized_entries)
+    except (OSError, ValueError, ET.ParseError) as error:
+        raise TestInfrastructureError(
+            expectation,
+            stderr=result.stderr,
+            stdout=result.stdout,
+            reason=f"Invalid test evidence: {error}",
+        ) from error
 
-        if result.returncode != 0:
-            raise TestInfrastructureError(
-                expectation,
-                stderr=result.stderr,
-                stdout=result.stdout,
-                reason="Business Central test execution failed before evidence validation",
-                summary=summary,
-            )
+    if result.returncode != 0:
+        raise TestInfrastructureError(
+            expectation,
+            stderr=result.stderr,
+            stdout=result.stdout,
+            reason="Business Central test execution failed before evidence validation",
+            summary=summary,
+        )
 
-        try:
-            summary.require(expectation)
-        except TestExecutionError as error:
-            raise TestExecutionError(
-                error.expectation,
-                stderr=result.stderr,
-                stdout=result.stdout,
-                reason=error.reason,
-                summary=error.summary,
-                failure_kind=error.failure_kind,
-            ) from error
-        logger.info(f"Test suite completed with expectation met: {expectation}")
-        return summary
+    try:
+        summary.require(expectation)
+    except TestExecutionError as error:
+        raise TestExecutionError(
+            error.expectation,
+            stderr=result.stderr,
+            stdout=result.stdout,
+            reason=error.reason,
+            summary=error.summary,
+            failure_kind=error.failure_kind,
+        ) from error
+    logger.info(f"Test suite completed with expectation met: {expectation}")
+    return TestSuiteEvidence(
+        summary=summary,
+        command_path=command_path,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+        discovery_paths=tuple(sorted(evidence_path.glob("discovery-*.json"), key=lambda path: path.name)),
+        junit_paths=tuple(sorted(evidence_path.glob("results-*.xml"), key=lambda path: path.name)),
+    )
 
 
 # --- data-query category: compile + run an AL query and capture its rows via a wrapped API query ---
