@@ -3137,7 +3137,11 @@ function Invoke-BCBenchBugFixLifecycle {
         TrustedSource          = $protectedPaths.TrustedSource
         Checkpoints            = $protectedPaths.Checkpoints
         FinalResults           = $protectedPaths.FinalResults
-        ToolRoots              = @($ToolRoots)
+        ToolRoots              = @(
+            $ToolRoots |
+                ForEach-Object { Resolve-BCBenchAbsolutePath -Path $_ } |
+                Select-Object -Unique
+        )
         AlMcp                  = [bool]$AlMcp
         BcMcp                  = [bool]$BcMcp
         Entry                  = $null
@@ -3408,6 +3412,12 @@ function Invoke-BCBenchBugFixLifecycle {
             server_instance = $serverInstance
             mcp_url         = [string]$context.BcMcpUrl
         }
+        $aclPathsJson = ConvertTo-Json `
+            -InputObject ([object[]]@($context.AclTransaction.ModifiedPaths)) `
+            -Compress
+        $cleanupToolRootsJson = ConvertTo-Json `
+            -InputObject ([object[]]@($context.ToolRoots)) `
+            -Compress
         $outputs = [ordered]@{
             entry_root                    = $context.EntryRoot
             baseline_workspace            = $context.BaselineWorkspace
@@ -3421,6 +3431,10 @@ function Invoke-BCBenchBugFixLifecycle {
             contained_process_worker      = $context.WorkerPath
             contained_process_worker_sha256 = $context.WorkerSha256
             contained_process_python      = $context.PythonBaseExecutable
+            python_base_prefix            = $context.PythonBasePrefix
+            agent_os_sid                  = $context.AclTransaction.Sid
+            acl_paths_json                = $aclPathsJson
+            cleanup_tool_roots_json       = $cleanupToolRootsJson
             mounted_staging               = $context.MountedStaging
             evaluator_workspaces          = $context.EvaluatorWorkspaces
             evidence                      = $context.Evidence
@@ -3467,6 +3481,10 @@ function Invoke-BCBenchBugFixLifecycle {
             BCBENCH_CONTAINED_PROCESS_WORKER = $context.WorkerPath
             BCBENCH_CONTAINED_PROCESS_WORKER_SHA256 = $context.WorkerSha256
             BCBENCH_CONTAINED_PROCESS_PYTHON = $context.PythonBaseExecutable
+            BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX = $context.PythonBasePrefix
+            BCBENCH_LIFECYCLE_AGENT_OS_SID = $context.AclTransaction.Sid
+            BCBENCH_LIFECYCLE_ACL_PATHS_JSON = $aclPathsJson
+            BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON = $cleanupToolRootsJson
             BCBENCH_MOUNTED_STAGING        = $context.MountedStaging
             BCBENCH_EVALUATOR_WORKSPACES   = $context.EvaluatorWorkspaces
             BCBENCH_EVIDENCE               = $context.Evidence

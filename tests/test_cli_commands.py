@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,6 +40,8 @@ class LifecycleCliFixture:
     protected_root: Path
     worker: Path
     python: Path
+    python_base_prefix: Path
+    tool_root: Path
     replay_patch: Path
     owned_root: Path
     evaluator_config: dict[str, str]
@@ -71,6 +74,14 @@ class LifecycleCliFixture:
             bugfix_lifecycle_commands.sha256_file(self.worker),
             "--base-python",
             str(self.python),
+            "--python-base-prefix",
+            str(self.python_base_prefix),
+            "--agent-os-sid",
+            "S-1-5-21-123",
+            "--acl-paths-json",
+            json.dumps([str(path) for path in self.acl_paths]),
+            "--cleanup-tool-roots-json",
+            json.dumps([str(self.tool_root)]),
             "--owned-compiler-helper-root",
             str(self.owned_root),
             "--evaluator-container-config",
@@ -103,6 +114,25 @@ class LifecycleCliFixture:
             args.extend(("--replay-patch", str(self.replay_patch)))
         return args
 
+    @property
+    def acl_paths(self) -> tuple[Path, ...]:
+        return (
+            Path(bugfix_lifecycle_commands.__file__).parents[3],
+            self.entry_root,
+            self.entry_root / "baseline-workspace",
+            self.entry_root / "mounted-staging",
+            self.entry_root / "evaluator-workspaces",
+            self.entry_root / "evidence",
+            self.protected_root,
+            self.entry_root / "agent-workspace",
+            self.entry_root / "agent-logs",
+            self.entry_root / "agent-tools",
+            self.worker,
+            self.tool_root,
+            self.python_base_prefix,
+            self.python,
+        )
+
 
 @pytest.fixture
 def lifecycle_cli_fixture(tmp_path: Path) -> LifecycleCliFixture:
@@ -115,8 +145,12 @@ def lifecycle_cli_fixture(tmp_path: Path) -> LifecycleCliFixture:
     worker = entry_root / "agent-tools" / "contained_process_worker.py"
     worker.parent.mkdir()
     worker.write_text("print('worker')\n", encoding="utf-8")
-    python = tmp_path / "python.exe"
+    python_base_prefix = tmp_path / "runtime"
+    python = python_base_prefix / "nested" / "bin" / "python.exe"
+    python.parent.mkdir(parents=True)
     python.write_bytes(b"python")
+    tool_root = tmp_path / "tool"
+    tool_root.mkdir()
     replay_patch = protected_root / "replay.patch"
     replay_patch.write_text("diff --git a/a.al b/a.al\n", encoding="utf-8")
     owned_root = tmp_path / "compiler"
@@ -141,6 +175,8 @@ def lifecycle_cli_fixture(tmp_path: Path) -> LifecycleCliFixture:
         protected_root=protected_root,
         worker=worker,
         python=python,
+        python_base_prefix=python_base_prefix,
+        tool_root=tool_root,
         replay_patch=replay_patch,
         owned_root=owned_root,
         evaluator_config=evaluator_config,
@@ -473,9 +509,10 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     captured: dict[str, Any] = {}
 
     class Lifecycle:
-        def run(self, request, agent_runner):
+        def run(self, request, agent_runner, cleanup_lease):
             captured["request"] = request
             captured["runner"] = agent_runner
+            captured["cleanup_lease"] = cleanup_lease
             agent_runner(request.context, request.agent_execution_policy)
 
     def from_request(request):
@@ -484,7 +521,6 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
 
     with (
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
-        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", side_effect=from_request),
         patch.object(bugfix_lifecycle_commands, version_function, return_value="1.2.3"),
         patch.object(bugfix_lifecycle_commands, runner_function) as run_agent,
@@ -494,6 +530,7 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert result.exit_code == 0, result.stdout
     request = captured["request"]
     assert captured["constructed_request"] is request
+    assert captured["cleanup_lease"].is_lifecycle_owner
     assert request.context.category is EvaluationCategory.BUG_FIX
     assert request.context.agent_name is agent_name
     assert request.context.agent_version == "1.2.3"
@@ -510,6 +547,8 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert request.agent_execution_policy.contain_process_tree is True
     assert request.agent_execution_policy.allowlist_environment is True
     assert request.agent_execution_policy.python_executable == lifecycle_cli_fixture.python
+    assert request.python_base_prefix == lifecycle_cli_fixture.python_base_prefix
+    assert request.acl_paths == lifecycle_cli_fixture.acl_paths
     assert request.agent_execution_policy.worker_path == lifecycle_cli_fixture.worker
     agent_profile = request.paths.agent_logs / "profile"
     agent_roaming = agent_profile / "AppData" / "Roaming"
@@ -537,14 +576,13 @@ def test_bugfix_lifecycle_replay_skips_agent_runner_and_hides_secrets(lifecycle_
     captured: dict[str, Any] = {}
 
     class Lifecycle:
-        def run(self, request, agent_runner):
+        def run(self, request, agent_runner, _cleanup_lease):
             captured["request"] = request
             if request.replay_patch is None:
                 agent_runner(request.context, request.agent_execution_policy)
 
     with (
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
-        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
         patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
         patch.object(bugfix_lifecycle_commands, "run_copilot_agent") as run_agent,
@@ -569,7 +607,7 @@ def test_bugfix_lifecycle_environment_only_accepts_blank_mcp_url_when_bc_mcp_dis
     agent_config = lifecycle_cli_fixture.agent_config | {"mcp_url": ""}
 
     class Lifecycle:
-        def run(self, request, _agent_runner):
+        def run(self, request, _agent_runner, _cleanup_lease):
             captured["request"] = request
 
     environment = {
@@ -584,6 +622,10 @@ def test_bugfix_lifecycle_environment_only_accepts_blank_mcp_url_when_bc_mcp_dis
         "BCBENCH_LIFECYCLE_STAGED_WORKER_PATH": str(lifecycle_cli_fixture.worker),
         "BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256": bugfix_lifecycle_commands.sha256_file(lifecycle_cli_fixture.worker),
         "BCBENCH_LIFECYCLE_BASE_PYTHON": str(lifecycle_cli_fixture.python),
+        "BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX": str(lifecycle_cli_fixture.python_base_prefix),
+        "BCBENCH_LIFECYCLE_AGENT_OS_SID": "S-1-5-21-123",
+        "BCBENCH_LIFECYCLE_ACL_PATHS_JSON": json.dumps([str(path) for path in lifecycle_cli_fixture.acl_paths]),
+        "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON": json.dumps([str(lifecycle_cli_fixture.tool_root)]),
         "BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS": str(lifecycle_cli_fixture.owned_root),
         "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG": json.dumps(evaluator_config),
         "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG": json.dumps(agent_config),
@@ -599,7 +641,6 @@ def test_bugfix_lifecycle_environment_only_accepts_blank_mcp_url_when_bc_mcp_dis
 
     with (
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
-        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
         patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
     ):
@@ -632,7 +673,7 @@ def test_bugfix_lifecycle_constructs_separate_configs_without_json(lifecycle_cli
     captured: dict[str, Any] = {}
 
     class Lifecycle:
-        def run(self, request, _agent_runner):
+        def run(self, request, _agent_runner, _cleanup_lease):
             captured["request"] = request
 
     args = _without_options(
@@ -642,7 +683,6 @@ def test_bugfix_lifecycle_constructs_separate_configs_without_json(lifecycle_cli
     )
     with (
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
-        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
         patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
     ):
@@ -659,7 +699,7 @@ def test_bugfix_lifecycle_accepts_prefixed_environment_options(lifecycle_cli_fix
     captured: dict[str, Any] = {}
 
     class Lifecycle:
-        def run(self, request, _agent_runner):
+        def run(self, request, _agent_runner, _cleanup_lease):
             captured["request"] = request
 
     environment = {
@@ -674,6 +714,10 @@ def test_bugfix_lifecycle_accepts_prefixed_environment_options(lifecycle_cli_fix
         "BCBENCH_LIFECYCLE_STAGED_WORKER_PATH": str(lifecycle_cli_fixture.worker),
         "BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256": bugfix_lifecycle_commands.sha256_file(lifecycle_cli_fixture.worker),
         "BCBENCH_LIFECYCLE_BASE_PYTHON": str(lifecycle_cli_fixture.python),
+        "BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX": str(lifecycle_cli_fixture.python_base_prefix),
+        "BCBENCH_LIFECYCLE_AGENT_OS_SID": "S-1-5-21-123",
+        "BCBENCH_LIFECYCLE_ACL_PATHS_JSON": json.dumps([str(path) for path in lifecycle_cli_fixture.acl_paths]),
+        "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON": json.dumps([str(lifecycle_cli_fixture.tool_root)]),
         "BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS": str(lifecycle_cli_fixture.owned_root),
         "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG": json.dumps(lifecycle_cli_fixture.evaluator_config),
         "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG": json.dumps(lifecycle_cli_fixture.agent_config),
@@ -690,7 +734,6 @@ def test_bugfix_lifecycle_accepts_prefixed_environment_options(lifecycle_cli_fix
     }
     with (
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
-        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123"),
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
         patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
     ):
@@ -753,11 +796,125 @@ def test_bugfix_lifecycle_rejects_invalid_boundary_inputs_before_collaborators(
     with (
         patch.object(BugFixEntry, "load") as load_entry,
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True, return_value=None),
     ):
         result = runner.invoke(app, args)
 
     assert result.exit_code == 2
     assert message in (result.stdout + result.stderr).lower()
+    load_entry.assert_not_called()
+    lifecycle_factory.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "failure_point",
+    ["entry_load", "version", "run_dir", "collaborator"],
+)
+def test_bugfix_lifecycle_preflight_failures_cleanup_exactly_once(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    failure_point: str,
+):
+    cleanup_calls: list[object] = []
+    patches = [
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+        patch.object(
+            bugfix_lifecycle_commands.LifecycleCleanup,
+            "run",
+            autospec=True,
+            side_effect=lambda cleanup: cleanup_calls.append(cleanup.resources),
+        ),
+    ]
+    if failure_point == "entry_load":
+        patches[0] = patch.object(BugFixEntry, "load", side_effect=RuntimeError("entry load failed"))
+    elif failure_point == "version":
+        patches[1] = patch.object(bugfix_lifecycle_commands, "get_copilot_version", side_effect=RuntimeError("version failed"))
+    elif failure_point == "run_dir":
+        patches.append(patch.object(bugfix_lifecycle_commands, "prepare_run_dir", side_effect=RuntimeError("run dir failed")))
+    elif failure_point == "collaborator":
+        patches.append(
+            patch.object(
+                bugfix_lifecycle_commands.ProductionBugFixLifecycle,
+                "from_request",
+                side_effect=RuntimeError("collaborator failed"),
+            )
+        )
+
+    with ExitStack() as stack:
+        for active_patch in patches:
+            stack.enter_context(active_patch)
+        result = runner.invoke(app, lifecycle_cli_fixture.args("copilot"))
+
+    assert result.exit_code == 1
+    assert len(cleanup_calls) == 1
+    for secret in ("os-secret", "bc-secret", "evaluator-secret"):
+        assert secret not in result.stdout
+        assert secret not in result.stderr
+
+
+def test_bugfix_lifecycle_handoff_prevents_duplicate_cleanup_on_lifecycle_start_failure(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+):
+    cleanup_calls: list[object] = []
+
+    class Lifecycle:
+        def run(self, request, _agent_runner, cleanup_lease):
+            cleanup_lease.cleanup_as_lifecycle(lambda: cleanup_calls.append(request.provisioned_resources))
+            raise RuntimeError("lifecycle start failed")
+
+    with (
+        patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
+        patch.object(
+            bugfix_lifecycle_commands.LifecycleCleanup,
+            "run",
+            autospec=True,
+            side_effect=lambda cleanup: cleanup_calls.append(cleanup.resources),
+        ),
+    ):
+        result = runner.invoke(app, lifecycle_cli_fixture.args("copilot"))
+
+    assert result.exit_code == 1
+    assert len(cleanup_calls) == 1
+
+
+@pytest.mark.parametrize("mutation", ["absent", "missing", "tampered"])
+def test_bugfix_lifecycle_rejects_invalid_acl_transaction_before_handoff_and_cleans(
+    lifecycle_cli_fixture: LifecycleCliFixture,
+    tmp_path: Path,
+    mutation: str,
+):
+    args = lifecycle_cli_fixture.args("copilot")
+    acl_index = args.index("--acl-paths-json") + 1
+    acl_paths = list(lifecycle_cli_fixture.acl_paths)
+    if mutation == "absent":
+        args = _without_options(args, "--acl-paths-json")
+    elif mutation == "missing":
+        acl_paths.remove(lifecycle_cli_fixture.python_base_prefix)
+    else:
+        tampered = tmp_path / "unapproved"
+        tampered.mkdir()
+        acl_paths[-1] = tampered
+    if mutation != "absent":
+        args[acl_index] = json.dumps([str(path) for path in acl_paths])
+    cleanup_calls: list[object] = []
+
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(
+            bugfix_lifecycle_commands.LifecycleCleanup,
+            "run",
+            autospec=True,
+            side_effect=lambda cleanup: cleanup_calls.append(cleanup.resources),
+        ),
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    assert "acl" in (result.stdout + result.stderr).lower()
+    assert len(cleanup_calls) == 1
     load_entry.assert_not_called()
     lifecycle_factory.assert_not_called()
 
@@ -781,7 +938,6 @@ def test_bugfix_lifecycle_rejects_substituted_identity_names_before_collaborator
     args[args.index(option) + 1] = value
 
     with (
-        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid") as resolve_sid,
         patch.object(BugFixEntry, "load") as load_entry,
         patch.object(bugfix_lifecycle_commands, "get_copilot_version") as get_version,
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
@@ -790,7 +946,6 @@ def test_bugfix_lifecycle_rejects_substituted_identity_names_before_collaborator
 
     assert result.exit_code == 2
     assert message in (result.stdout + result.stderr).lower()
-    resolve_sid.assert_not_called()
     load_entry.assert_not_called()
     get_version.assert_not_called()
     lifecycle_factory.assert_not_called()
@@ -815,7 +970,6 @@ def test_bugfix_lifecycle_rejects_root_and_worker_junction_aliases_before_collab
 
     with (
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]) as load_entry,
-        patch.object(bugfix_lifecycle_commands, "_resolve_local_windows_sid", return_value="S-1-5-21-123") as resolve_sid,
         patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3") as get_version,
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
     ):
@@ -824,7 +978,6 @@ def test_bugfix_lifecycle_rejects_root_and_worker_junction_aliases_before_collab
     assert result.exit_code == 2
     assert "reparse" in (result.stdout + result.stderr).lower()
     load_entry.assert_not_called()
-    resolve_sid.assert_not_called()
     get_version.assert_not_called()
     lifecycle_factory.assert_not_called()
 
@@ -843,6 +996,7 @@ def test_bugfix_lifecycle_rejects_non_directory_roots_before_collaborators(
     with (
         patch.object(BugFixEntry, "load") as load_entry,
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True, return_value=None),
     ):
         result = runner.invoke(app, args)
 
@@ -859,6 +1013,7 @@ def test_bugfix_lifecycle_rejects_missing_replay_file_before_collaborators(lifec
     with (
         patch.object(BugFixEntry, "load") as load_entry,
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True, return_value=None),
     ):
         result = runner.invoke(app, args)
 

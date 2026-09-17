@@ -2448,6 +2448,12 @@ def test_setup_orchestrator_writes_outputs_and_cleans_created_resources_on_failu
     failure_entry = tmp_path / "entry-failure"
     failure_protected = tmp_path / "protected-failure"
     trace = tmp_path / "cleanup.jsonl"
+    python_base_prefix = tmp_path / "runtime"
+    python_base_executable = python_base_prefix / "nested" / "bin" / "python.exe"
+    python_base_executable.parent.mkdir(parents=True)
+    python_base_executable.write_bytes(b"python")
+    tool_root = tmp_path / "tool"
+    tool_root.mkdir()
     script = f"""
 $ErrorActionPreference = 'Stop'
 Import-Module {_ps_quote(_MODULE)} -Force
@@ -2470,7 +2476,30 @@ $successOps = @{{
     GetCompany = {{ 'CRONUS' }}
     CreateAgentIdentity = {{ [PSCustomObject]@{{ Username = 'bcb-1234567-abcdef'; Password = 'os-secret'; Domain = '.'; Sid = 'S-1-5-21-1000-1001-1002-1003' }} }}
     CreateBcIdentity = {{ [PSCustomObject]@{{ Username = 'bca-1234567-abcdef'; Password = 'bc-secret' }} }}
-    ApplyAcl = {{ [PSCustomObject]@{{ WorkspaceWriteSucceeded = $true }} }}
+    ApplyAcl = {{
+        param($Context)
+        foreach ($path in @(
+            $Context.BenchmarkRoot,
+            $Context.EntryRoot,
+            $Context.BaselineWorkspace,
+            $Context.MountedStaging,
+            $Context.EvaluatorWorkspaces,
+            $Context.Evidence,
+            $Context.ProtectedRoot,
+            $Context.AgentWorkspace,
+            $Context.AgentLogs,
+            $Context.AgentTools,
+            $Context.WorkerPath,
+            $Context.ToolRoots,
+            $Context.PythonBasePrefix,
+            $Context.PythonBaseExecutable
+        )) {{
+            if (-not $Context.AclTransaction.ModifiedPaths.Contains([string]$path)) {{
+                $Context.AclTransaction.ModifiedPaths.Add([string]$path)
+            }}
+        }}
+        [PSCustomObject]@{{ WorkspaceWriteSucceeded = $true; AclTransaction = $Context.AclTransaction }}
+    }}
 }}
 $env:GITHUB_ACTIONS = 'true'
 $successContext = Invoke-BCBenchBugFixLifecycle `
@@ -2481,6 +2510,11 @@ $successContext = Invoke-BCBenchBugFixLifecycle `
     -EvaluatorPassword $secure `
     -EntryRoot {_ps_quote(success_entry)} `
     -ProtectedRoot {_ps_quote(success_protected)} `
+    -PythonExecutable {_ps_quote(python_base_executable)} `
+    -PythonBaseExecutable {_ps_quote(python_base_executable)} `
+    -PythonBasePrefix {_ps_quote(python_base_prefix)} `
+    -PythonPrefix {_ps_quote(python_base_prefix)} `
+    -ToolRoots @({_ps_quote(tool_root)}) `
     -GithubOutput {_ps_quote(output)} `
     -GithubEnv {_ps_quote(env_file)} `
     -Operations $successOps
@@ -2560,6 +2594,10 @@ catch {{
     assert "contained_process_worker=" in output_text
     assert "contained_process_worker_sha256=" in output_text
     assert "contained_process_python=" in output_text
+    assert "python_base_prefix=" in output_text
+    assert "agent_os_sid=" in output_text
+    assert "acl_paths_json=" in output_text
+    assert "cleanup_tool_roots_json=" in output_text
     assert "protected_root=" in output_text
     assert "agent_os_username=bcb-1234567-abcdef" in output_text
     assert "agent_os_password=os-secret" in output_text
@@ -2591,6 +2629,13 @@ catch {{
     assert payload["containerSuccessfullyCreated"] is True
     assert output_values["container_id"] == "docker-success"
     assert output_values["container_observed_invocation_id"] == output_values["container_invocation_id"]
+    assert output_values["python_base_prefix"] == str(python_base_prefix)
+    assert output_values["agent_os_sid"] == "S-1-5-21-1000-1001-1002-1003"
+    assert json.loads(output_values["cleanup_tool_roots_json"]) == [str(tool_root)]
+    acl_paths = tuple(Path(path) for path in json.loads(output_values["acl_paths_json"]))
+    assert python_base_prefix in acl_paths
+    assert python_base_executable in acl_paths
+    assert python_base_executable.parent not in acl_paths
     profile = success_entry / "agent-logs" / "profile"
     assert output_values["agent_profile"] == str(profile)
     assert output_values["agent_appdata"] == str(profile / "AppData" / "Roaming")
@@ -2610,6 +2655,10 @@ catch {{
     assert "BCBENCH_CONTAINED_PROCESS_WORKER=" in env_text
     assert "BCBENCH_CONTAINED_PROCESS_WORKER_SHA256=" in env_text
     assert "BCBENCH_CONTAINED_PROCESS_PYTHON=" in env_text
+    assert f"BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX={python_base_prefix}" in env_text
+    assert "BCBENCH_LIFECYCLE_AGENT_OS_SID=S-1-5-21-1000-1001-1002-1003" in env_text
+    assert "BCBENCH_LIFECYCLE_ACL_PATHS_JSON=" in env_text
+    assert "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON=" in env_text
     assert "BC_SERVER_PASSWORD=evaluator-secret" in env_text
     assert payload["agentProfileDirectoriesExist"] is True
     assert payload["agentLogFiles"] == 0

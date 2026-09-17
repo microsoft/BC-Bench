@@ -163,6 +163,44 @@ LifecycleBasePython = Annotated[
     ),
 ]
 
+LifecyclePythonBasePrefix = Annotated[
+    Path,
+    typer.Option(
+        "--python-base-prefix",
+        envvar="BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX",
+        help="Exact setup-approved Python base prefix",
+    ),
+]
+
+LifecycleAgentOsSid = Annotated[
+    str,
+    typer.Option(
+        "--agent-os-sid",
+        envvar="BCBENCH_LIFECYCLE_AGENT_OS_SID",
+        help="Restricted Windows agent SID recorded by setup",
+    ),
+]
+
+LifecycleAclPathsJson = Annotated[
+    str | None,
+    typer.Option(
+        "--acl-paths-json",
+        envvar="BCBENCH_LIFECYCLE_ACL_PATHS_JSON",
+        help="Compact setup ACL transaction path list",
+        show_default=False,
+    ),
+]
+
+LifecycleCleanupToolRootsJson = Annotated[
+    str | None,
+    typer.Option(
+        "--cleanup-tool-roots-json",
+        envvar="BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON",
+        help="Compact setup-approved cleanup tool root list",
+        show_default=False,
+    ),
+]
+
 LifecycleOwnedCompilerHelperRoots = Annotated[
     list[Path] | None,
     typer.Option(

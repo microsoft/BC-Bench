@@ -6,8 +6,9 @@ import subprocess
 import tempfile
 import traceback
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
@@ -22,6 +23,7 @@ from bcbench.evaluate.bugfix_lifecycle.models import (
     CheckpointManifest,
     ContainerIdentity,
     ProjectPublication,
+    ProvisionedLifecycleResources,
     SubmissionAnalysis,
     TrustedSource,
 )
@@ -29,6 +31,7 @@ from bcbench.evaluate.bugfix_lifecycle.path_safety import (
     ENTRY_MANAGED_PATH_NAMES,
     reject_reparse_components,
     require_strict_descendant,
+    validate_cleanup_acl_paths,
     validate_lifecycle_paths,
     validate_owned_lifecycle_roots,
 )
@@ -107,6 +110,178 @@ class LifecycleOwnershipApi(Protocol):
     def remove_roots(self) -> None: ...
 
     def disable_local_identity(self) -> None: ...
+
+
+class _CleanupOwner(Enum):
+    CLI = "cli"
+    LIFECYCLE = "lifecycle"
+    RELEASED = "released"
+
+
+@dataclass
+class CleanupLease:
+    resources: ProvisionedLifecycleResources
+    _owner: _CleanupOwner = field(default=_CleanupOwner.CLI, init=False, repr=False)
+
+    @classmethod
+    def for_cli(cls, resources: ProvisionedLifecycleResources) -> CleanupLease:
+        return cls(resources)
+
+    @classmethod
+    def for_lifecycle(cls, resources: ProvisionedLifecycleResources) -> CleanupLease:
+        lease = cls(resources)
+        lease.transfer_to_lifecycle()
+        return lease
+
+    @property
+    def is_lifecycle_owner(self) -> bool:
+        return self._owner is _CleanupOwner.LIFECYCLE
+
+    def replace_resources(self, resources: ProvisionedLifecycleResources) -> None:
+        if self._owner is not _CleanupOwner.CLI:
+            raise RuntimeError("Cleanup resources can only be replaced by the CLI owner")
+        self.resources = resources
+
+    def transfer_to_lifecycle(self) -> None:
+        if self._owner is not _CleanupOwner.CLI:
+            raise RuntimeError("Cleanup lease is not owned by the CLI")
+        self._owner = _CleanupOwner.LIFECYCLE
+
+    def cleanup_as_cli(
+        self,
+        cleanup: Callable[[], CleanupInfrastructureError | None],
+    ) -> CleanupInfrastructureError | None:
+        if self._owner is not _CleanupOwner.CLI:
+            return None
+        self._owner = _CleanupOwner.RELEASED
+        return cleanup()
+
+    def cleanup_as_lifecycle(
+        self,
+        cleanup: Callable[[], CleanupInfrastructureError | None],
+    ) -> CleanupInfrastructureError | None:
+        if self._owner is _CleanupOwner.RELEASED:
+            raise RuntimeError("Cleanup lease was already released")
+        if self._owner is not _CleanupOwner.LIFECYCLE:
+            raise RuntimeError("Cleanup lease is not owned by the lifecycle")
+        self._owner = _CleanupOwner.RELEASED
+        return cleanup()
+
+
+@dataclass(frozen=True)
+class LifecycleCleanup:
+    resources: ProvisionedLifecycleResources
+    ownership_api: LifecycleOwnershipApi
+
+    @classmethod
+    def from_resources(
+        cls,
+        resources: ProvisionedLifecycleResources,
+        *,
+        powershell_runner: PowerShellRunner | None = None,
+    ) -> LifecycleCleanup:
+        evidence = EvidenceStore(resources.paths)
+        ownership = PowerShellLifecycleOwnershipApi(
+            resources,
+            evidence,
+            powershell_runner or _default_cleanup_powershell_runner(),
+        )
+        return cls(resources, ownership)
+
+    def run(self) -> CleanupInfrastructureError | None:
+        errors: list[str] = []
+        completed_operations: list[str] = []
+        container_absent = False
+        identity_secured = False
+        try:
+            self.ownership_api.verify_container_ownership()
+        except Exception as error:  # noqa: BLE001 - cleanup aggregates every ownership failure
+            errors.append(f"container ownership verification: {error}")
+        else:
+            completed_operations.append("container_ownership_verified")
+            for name, operation in (
+                ("evaluator process stop", self.ownership_api.stop_evaluator_processes),
+                ("BC user removal", self.ownership_api.remove_bc_user),
+                ("container removal", self.ownership_api.remove_container_and_verify),
+            ):
+                try:
+                    operation()
+                except Exception as error:  # noqa: BLE001 - cleanup must continue to quarantine
+                    errors.append(f"{name}: {error}")
+                    break
+                completed_operations.append(name.replace(" ", "_"))
+            else:
+                container_absent = True
+
+        if container_absent:
+            for name, operation in (
+                ("owned root removal", self.ownership_api.remove_roots),
+                ("ACL removal", self.ownership_api.remove_acl),
+                ("local identity removal", self.ownership_api.remove_local_identity),
+            ):
+                try:
+                    operation()
+                except Exception as error:  # noqa: BLE001 - cleanup must continue to quarantine
+                    errors.append(f"{name}: {error}")
+                    break
+                completed_operations.append(name.replace(" ", "_"))
+                if name == "local identity removal":
+                    identity_secured = True
+
+        if errors and not identity_secured:
+            try:
+                self.ownership_api.disable_local_identity()
+            except Exception as error:  # noqa: BLE001 - quarantine records disablement failure
+                errors.append(f"local identity disablement/verification: {error}")
+            else:
+                completed_operations.append("local_identity_disabled")
+
+        cleanup_payload = {
+            "status": "failure" if errors else "success",
+            "instance_id": self.resources.instance_id,
+            "container_id": self.resources.expected_container_id,
+            "container_invocation_id": self.resources.expected_container_invocation_id,
+            "completed_operations": completed_operations,
+            "cleanup_errors": errors,
+        }
+        try:
+            self.resources.paths.final_results.mkdir(parents=True, exist_ok=True)
+            reject_reparse_components(
+                self.resources.paths.final_results,
+                self.resources.paths.protected_root,
+            )
+            _atomic_json(
+                self.resources.paths.final_results / "cleanup.json",
+                cleanup_payload,
+            )
+        except Exception as error:  # noqa: BLE001 - quarantine must capture cleanup record failure
+            errors.append(f"cleanup record persistence: {error}")
+
+        if not errors:
+            return None
+
+        quarantine_payload = {
+            **cleanup_payload,
+            "status": "quarantined",
+            "cleanup_errors": errors,
+            "entry_root": str(self.resources.paths.entry_root),
+            "protected_root": str(self.resources.paths.protected_root),
+            "local_username": self.resources.agent_os_username,
+            "local_sid": self.resources.agent_os_sid,
+        }
+        try:
+            self.resources.paths.protected_root.mkdir(parents=True, exist_ok=True)
+            reject_reparse_components(
+                self.resources.paths.protected_root,
+                self.resources.paths.protected_root,
+            )
+            _atomic_json(
+                self.resources.paths.protected_root / "quarantine.json",
+                quarantine_payload,
+            )
+        except Exception as error:  # noqa: BLE001 - cleanup reports quarantine failure too
+            errors.append(f"quarantine persistence: {error}")
+        return CleanupInfrastructureError("; ".join(errors))
 
 
 def analyze_bugfix_submission(
@@ -324,7 +499,7 @@ class ProductionBugFixLifecycle:
         workspace = TrustedWorkspaceBuilder(request.paths)
         runner = powershell_runner or _default_powershell_runner(request)
         ownership = PowerShellLifecycleOwnershipApi(
-            request,
+            request.provisioned_resources,
             evidence,
             runner,
         )
@@ -383,7 +558,13 @@ class ProductionBugFixLifecycle:
         self,
         request: BugFixLifecycleRequest,
         agent_runner: ProductionAgentRunner,
+        cleanup_lease: CleanupLease | None = None,
     ) -> BugFixResult:
+        active_cleanup_lease = cleanup_lease or CleanupLease.for_lifecycle(request.provisioned_resources)
+        if active_cleanup_lease.resources != request.provisioned_resources:
+            raise ValueError("Cleanup lease resources must match the lifecycle request")
+        if not active_cleanup_lease.is_lifecycle_owner:
+            raise ValueError("Cleanup lease must be owned by the lifecycle")
         result: BugFixResult | None = None
         propagate: BaseException | None = None
         trusted_source: TrustedSource | None = None
@@ -398,13 +579,14 @@ class ProductionBugFixLifecycle:
         agent_stdout: str | None = None
         agent_stderr: str | None = None
         agent_error: AgentError | None = None
-        phases = _empty_phases()
+        phases: dict[str, BugFixPhaseResult] = {}
         result_persisted = False
         result_finalized = False
         barrier_error: BugFixLifecycleInfrastructureError | None = None
         persisted_failure_phase: str | None = None
 
         try:
+            phases = _empty_phases()
             try:
                 trusted_source, s0 = self._setup(request)
             except Exception as error:  # noqa: BLE001 - setup failure must produce a final result
@@ -662,7 +844,7 @@ class ProductionBugFixLifecycle:
                     persistence_error.add_note(f"Primary lifecycle failure: {propagate}")
                     propagate = persistence_error
         finally:
-            cleanup_error = self._cleanup(request)
+            cleanup_error = active_cleanup_lease.cleanup_as_lifecycle(lambda: self._cleanup(request))
 
         if cleanup_error is not None:
             if propagate is not None:
@@ -1056,88 +1238,10 @@ class ProductionBugFixLifecycle:
         return None
 
     def _cleanup(self, request: BugFixLifecycleRequest) -> CleanupInfrastructureError | None:
-        errors: list[str] = []
-        completed_operations: list[str] = []
-        container_absent = False
-        identity_secured = False
-        try:
-            self._ownership_api.verify_container_ownership()
-        except Exception as error:  # noqa: BLE001 - cleanup aggregates every ownership failure
-            errors.append(f"container ownership verification: {error}")
-        else:
-            completed_operations.append("container_ownership_verified")
-            for name, operation in (
-                ("evaluator process stop", self._ownership_api.stop_evaluator_processes),
-                ("BC user removal", self._ownership_api.remove_bc_user),
-                ("container removal", self._ownership_api.remove_container_and_verify),
-            ):
-                try:
-                    operation()
-                except Exception as error:  # noqa: BLE001 - cleanup must continue to quarantine
-                    errors.append(f"{name}: {error}")
-                    break
-                completed_operations.append(name.replace(" ", "_"))
-            else:
-                container_absent = True
-
-        if container_absent:
-            for name, operation in (
-                ("owned root removal", self._ownership_api.remove_roots),
-                ("ACL removal", self._ownership_api.remove_acl),
-                ("local identity removal", self._ownership_api.remove_local_identity),
-            ):
-                try:
-                    operation()
-                except Exception as error:  # noqa: BLE001 - cleanup must continue to quarantine
-                    errors.append(f"{name}: {error}")
-                    break
-                completed_operations.append(name.replace(" ", "_"))
-                if name == "local identity removal":
-                    identity_secured = True
-
-        if errors and not identity_secured:
-            try:
-                self._ownership_api.disable_local_identity()
-            except Exception as error:  # noqa: BLE001 - quarantine records disablement failure
-                errors.append(f"local identity disablement/verification: {error}")
-            else:
-                completed_operations.append("local_identity_disabled")
-                identity_secured = True
-
-        cleanup_payload = {
-            "status": "failure" if errors else "success",
-            "instance_id": request.context.entry.instance_id,
-            "container_id": request.expected_container_id,
-            "container_invocation_id": request.expected_container_invocation_id,
-            "completed_operations": completed_operations,
-            "cleanup_errors": errors,
-        }
-        try:
-            request.paths.final_results.mkdir(parents=True, exist_ok=True)
-            reject_reparse_components(request.paths.final_results, request.paths.protected_root)
-            _atomic_json(request.paths.final_results / "cleanup.json", cleanup_payload)
-        except Exception as error:  # noqa: BLE001 - quarantine must capture cleanup record failure
-            errors.append(f"cleanup record persistence: {error}")
-
-        if not errors:
-            return None
-
-        quarantine_payload = {
-            **cleanup_payload,
-            "status": "quarantined",
-            "cleanup_errors": errors,
-            "entry_root": str(request.paths.entry_root),
-            "protected_root": str(request.paths.protected_root),
-            "local_username": request.agent_os_username,
-            "local_sid": request.agent_os_sid,
-        }
-        try:
-            request.paths.protected_root.mkdir(parents=True, exist_ok=True)
-            reject_reparse_components(request.paths.protected_root, request.paths.protected_root)
-            _atomic_json(request.paths.protected_root / "quarantine.json", quarantine_payload)
-        except Exception as error:  # noqa: BLE001 - cleanup reports quarantine failure too
-            errors.append(f"quarantine persistence: {error}")
-        return CleanupInfrastructureError("; ".join(errors))
+        return LifecycleCleanup(
+            request.provisioned_resources,
+            self._ownership_api,
+        ).run()
 
 
 def _empty_phases() -> dict[str, BugFixPhaseResult]:
@@ -1254,17 +1358,38 @@ def _default_powershell_runner(
     return run
 
 
+def _default_cleanup_powershell_runner() -> PowerShellRunner:
+    def run(script: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                "pwsh",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ],
+            env=os.environ,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+    return run
+
+
 class PowerShellLifecycleOwnershipApi:
     def __init__(
         self,
-        request: BugFixLifecycleRequest,
+        resources: ProvisionedLifecycleResources,
         evidence_store: EvidenceStore,
         powershell_runner: PowerShellRunner,
         *,
         module_path: Path | None = None,
     ) -> None:
-        self._request = request
-        self._paths = validate_lifecycle_paths(request.paths)
+        self._resources = resources
+        self._paths = validate_lifecycle_paths(resources.paths)
         self._evidence_store = evidence_store
         self._runner = powershell_runner
         self._module_path = (module_path or Path(__file__).parents[4] / "scripts" / "BugFixLifecycle.psm1").resolve()
@@ -1326,7 +1451,7 @@ class PowerShellLifecycleOwnershipApi:
                     f"Import-Module {_ps_quote(self._module_path)} -Force",
                     "Remove-BCBenchAgentBcUser `",
                     f"  -ContainerName {_ps_quote(self._container_name)} `",
-                    f"  -Username {_ps_quote(self._request.agent_bc_username)} `",
+                    f"  -Username {_ps_quote(self._resources.agent_bc_username)} `",
                     f"  -ExpectedContainerId {_ps_quote(self._container_id)} `",
                     f"  -ExpectedInvocationId {_ps_quote(self._invocation_id)}",
                 )
@@ -1348,7 +1473,8 @@ class PowerShellLifecycleOwnershipApi:
         )
 
     def remove_acl(self) -> None:
-        encoded_paths = json.dumps([str(path) for path in self._request.acl_paths])
+        acl_paths = validate_cleanup_acl_paths(self._resources)
+        encoded_paths = json.dumps([str(path) for path in acl_paths])
         self._invoke(
             "\n".join(
                 (
@@ -1356,7 +1482,7 @@ class PowerShellLifecycleOwnershipApi:
                     f"Import-Module {_ps_quote(self._module_path)} -Force",
                     f"$paths = '{_ps_single_quote(encoded_paths)}' | ConvertFrom-Json",
                     "$transaction = [PSCustomObject]@{",
-                    f"  Sid = {_ps_quote(self._request.agent_os_sid)}",
+                    f"  Sid = {_ps_quote(self._resources.agent_os_sid)}",
                     "  ModifiedPaths = [System.Collections.Generic.List[string]]::new()",
                     "  CleanupComplete = $false",
                     "}",
@@ -1373,7 +1499,7 @@ class PowerShellLifecycleOwnershipApi:
                     "$ErrorActionPreference = 'Stop'",
                     f"Import-Module {_ps_quote(self._module_path)} -Force",
                     "Remove-BCBenchAgentIdentity `",
-                    f"  -Username {_ps_quote(self._request.agent_os_username)}",
+                    f"  -Username {_ps_quote(self._resources.agent_os_username)}",
                 )
             )
         )
@@ -1381,7 +1507,7 @@ class PowerShellLifecycleOwnershipApi:
     def remove_roots(self) -> None:
         entry_paths = tuple(getattr(self._paths, name) for name in ENTRY_MANAGED_PATH_NAMES)
         external_roots = validate_owned_lifecycle_roots(
-            self._request.compiler_helper_roots,
+            self._resources.compiler_helper_roots,
             self._paths,
             self._invocation_id,
         )
@@ -1420,24 +1546,24 @@ class PowerShellLifecycleOwnershipApi:
                     "$ErrorActionPreference = 'Stop'",
                     f"Import-Module {_ps_quote(self._module_path)} -Force",
                     "Disable-BCBenchAgentIdentity `",
-                    f"  -Username {_ps_quote(self._request.agent_os_username)}",
+                    f"  -Username {_ps_quote(self._resources.agent_os_username)}",
                     "Assert-BCBenchAgentIdentityDisabled `",
-                    f"  -Username {_ps_quote(self._request.agent_os_username)}",
+                    f"  -Username {_ps_quote(self._resources.agent_os_username)}",
                 )
             )
         )
 
     @property
     def _container_name(self) -> str:
-        return self._request.evaluator_container.name
+        return self._resources.container_name
 
     @property
     def _container_id(self) -> str:
-        return self._request.expected_container_id
+        return self._resources.expected_container_id
 
     @property
     def _invocation_id(self) -> str:
-        return self._request.expected_container_invocation_id
+        return self._resources.expected_container_invocation_id
 
     def _stop_service(
         self,

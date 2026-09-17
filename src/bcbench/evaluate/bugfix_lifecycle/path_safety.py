@@ -1,9 +1,14 @@
 import os
 import stat
+from dataclasses import replace
 from itertools import combinations
 from pathlib import Path
 
-from bcbench.evaluate.bugfix_lifecycle.models import BugFixLifecyclePaths, OwnedLifecycleRoot
+from bcbench.evaluate.bugfix_lifecycle.models import (
+    BugFixLifecyclePaths,
+    OwnedLifecycleRoot,
+    ProvisionedLifecycleResources,
+)
 
 ENTRY_MANAGED_PATH_NAMES = (
     "baseline_workspace",
@@ -168,3 +173,153 @@ def validate_owned_lifecycle_roots(
             f"compiler_helper_roots[{second_index}]",
         )
     return tuple(validated)
+
+
+def validate_provisioned_lifecycle_resources(
+    resources: ProvisionedLifecycleResources,
+) -> ProvisionedLifecycleResources:
+    paths = validate_lifecycle_paths(resources.paths)
+    benchmark_root = _require_directory_without_reparse(resources.benchmark_root, "benchmark_root")
+    staged_worker = require_strict_descendant(
+        resources.staged_worker_path,
+        paths.agent_tools,
+        "staged_worker_path",
+        "agent_tools",
+    )
+    if not staged_worker.is_file() or staged_worker.is_symlink():
+        raise ValueError(f"staged_worker_path must be an existing regular file: {staged_worker}")
+
+    python_base_prefix = _validate_read_execute_root(
+        resources.python_base_prefix,
+        "python_base_prefix",
+        benchmark_root,
+        paths,
+    )
+    base_python = require_strict_descendant(
+        resources.base_python,
+        python_base_prefix,
+        "base_python",
+        "python_base_prefix",
+    )
+    if not base_python.is_file() or base_python.is_symlink():
+        raise ValueError(f"base_python must be an existing regular file: {base_python}")
+
+    cleanup_tool_roots = tuple(
+        _validate_read_execute_root(
+            root,
+            f"cleanup_tool_roots[{index}]",
+            benchmark_root,
+            paths,
+        )
+        for index, root in enumerate(resources.cleanup_tool_roots)
+    )
+    compiler_helper_roots = validate_owned_lifecycle_roots(
+        resources.compiler_helper_roots,
+        paths,
+        resources.expected_container_invocation_id,
+    )
+    acl_paths = validate_cleanup_acl_paths(resources)
+
+    return replace(
+        resources,
+        paths=paths,
+        benchmark_root=benchmark_root,
+        staged_worker_path=staged_worker,
+        base_python=base_python,
+        python_base_prefix=python_base_prefix,
+        cleanup_tool_roots=cleanup_tool_roots,
+        acl_paths=acl_paths,
+        compiler_helper_roots=compiler_helper_roots,
+    )
+
+
+def validate_cleanup_acl_paths(
+    resources: ProvisionedLifecycleResources,
+) -> tuple[Path, ...]:
+    paths = validate_lifecycle_paths(resources.paths)
+    benchmark_root = _require_directory_without_reparse(resources.benchmark_root, "benchmark_root")
+    staged_worker = require_strict_descendant(
+        resources.staged_worker_path,
+        paths.agent_tools,
+        "staged_worker_path",
+        "agent_tools",
+    )
+    python_base_prefix = _validate_read_execute_root(
+        resources.python_base_prefix,
+        "python_base_prefix",
+        benchmark_root,
+        paths,
+    )
+    base_python = require_strict_descendant(
+        resources.base_python,
+        python_base_prefix,
+        "base_python",
+        "python_base_prefix",
+    )
+    if not base_python.is_file() or base_python.is_symlink():
+        raise ValueError(f"base_python must be an existing regular file: {base_python}")
+    cleanup_tool_roots = tuple(
+        _validate_read_execute_root(
+            root,
+            f"cleanup_tool_roots[{index}]",
+            benchmark_root,
+            paths,
+        )
+        for index, root in enumerate(resources.cleanup_tool_roots)
+    )
+    expected_acl_paths = tuple(
+        dict.fromkeys(
+            (
+                benchmark_root,
+                paths.entry_root,
+                paths.baseline_workspace,
+                paths.mounted_staging,
+                paths.evaluator_workspaces,
+                paths.evidence,
+                paths.protected_root,
+                paths.agent_workspace,
+                paths.agent_logs,
+                paths.agent_tools,
+                staged_worker,
+                *cleanup_tool_roots,
+                python_base_prefix,
+                base_python,
+            )
+        )
+    )
+    acl_paths = tuple(_canonical_path(path) for path in resources.acl_paths)
+    if acl_paths != expected_acl_paths:
+        raise ValueError("ACL transaction paths do not exactly match setup-provisioned runtime and tool roots")
+    return acl_paths
+
+
+def _require_directory_without_reparse(path: Path, name: str) -> Path:
+    canonical = _canonical_path(path)
+    if not canonical.is_dir() or canonical.is_symlink():
+        raise ValueError(f"{name} must be an existing directory: {canonical}")
+    return canonical
+
+
+def _validate_read_execute_root(
+    root: Path,
+    name: str,
+    benchmark_root: Path,
+    paths: BugFixLifecyclePaths,
+) -> Path:
+    canonical = _require_directory_without_reparse(root, name)
+    restricted_paths = (
+        benchmark_root,
+        paths.protected_root,
+        paths.baseline_workspace,
+        paths.mounted_staging,
+        paths.evaluator_workspaces,
+        paths.evidence,
+    )
+    for restricted_path in restricted_paths:
+        if paths_overlap(canonical, restricted_path):
+            raise ValueError(f"{name} must not overlap restricted benchmark or lifecycle paths")
+    if paths_overlap(canonical, paths.entry_root):
+        allowed_roots = (paths.agent_workspace, paths.agent_logs, paths.agent_tools)
+        if not any(canonical.is_relative_to(allowed_root) for allowed_root in allowed_roots):
+            raise ValueError(f"{name} must be within an allowed agent root when inside entry_root")
+    return canonical

@@ -15,10 +15,12 @@ from bcbench.evaluate.bugfix_lifecycle import (
     BugFixLifecycleRequest,
     BugFixProductionLifecycle,
     CheckpointManifest,
+    CleanupLease,
     ContainerIdentity,
     OwnedLifecycleRoot,
     PowerShellLifecycleOwnershipApi,
     ProductionBugFixLifecycle,
+    ProvisionedLifecycleResources,
     SubmissionAnalysis,
     TrustedSource,
     analyze_bugfix_submission,
@@ -306,12 +308,48 @@ def _harness(tmp_path: Path):
     agent_temp = agent_profile / "temp"
     for path in (agent_roaming, agent_local, agent_temp):
         path.mkdir(parents=True, exist_ok=True)
+    paths.agent_tools.mkdir()
+    staged_worker = paths.agent_tools / "contained_process_worker.py"
+    staged_worker.write_text("print('worker')\n", encoding="utf-8")
+    python_base_prefix = tmp_path / "runtime"
+    base_python = python_base_prefix / "nested" / "bin" / "python.exe"
+    base_python.parent.mkdir(parents=True)
+    base_python.write_bytes(b"python")
+    resources = ProvisionedLifecycleResources(
+        instance_id=create_evaluation_context(tmp_path).entry.instance_id,
+        paths=paths,
+        container_name="bc",
+        expected_container_id="container-id",
+        expected_container_invocation_id="invocation-id",
+        agent_os_username="bcb-1234567-123456",
+        agent_bc_username="bca-1234567-123456",
+        agent_os_sid="S-1-5-21-1",
+        benchmark_root=Path(__file__).parents[1],
+        staged_worker_path=staged_worker,
+        base_python=base_python,
+        python_base_prefix=python_base_prefix,
+        acl_paths=(
+            Path(__file__).parents[1],
+            paths.entry_root,
+            paths.baseline_workspace,
+            paths.mounted_staging,
+            paths.evaluator_workspaces,
+            paths.evidence,
+            paths.protected_root,
+            paths.agent_workspace,
+            paths.agent_logs,
+            paths.agent_tools,
+            staged_worker,
+            python_base_prefix,
+            base_python,
+        ),
+    )
     context = create_evaluation_context(tmp_path)
     evaluator = ContainerConfig("bc", "admin", "evaluator-secret", "CRONUS")
     runtime = AgentRuntimeConfig(container=ContainerConfig("bc", "bca-1234567-123456", "agent-secret", "CRONUS"))
     request = BugFixLifecycleRequest(
         context=context,
-        paths=paths,
+        provisioned_resources=resources,
         evaluator_container=evaluator,
         agent_runtime=runtime,
         agent_execution_policy=AgentExecutionPolicy(
@@ -331,11 +369,6 @@ def _harness(tmp_path: Path):
                 "TMP": str(agent_temp),
             },
         ),
-        expected_container_id="container-id",
-        expected_container_invocation_id="invocation-id",
-        agent_os_username="bcb-1234567-123456",
-        agent_bc_username="bca-1234567-123456",
-        agent_os_sid="S-1-5-21-1",
     )
     evidence = FakeEvidence(tmp_path, calls)
     workspace = FakeWorkspace(paths, calls)
@@ -1197,14 +1230,15 @@ def test_cleanup_removes_owned_entry_and_compiler_helper_roots_before_acl_and_id
         (root / "payload.txt").write_text("owned", encoding="utf-8")
     request.paths.final_results.mkdir(parents=True)
     request.paths.final_results.joinpath("evidence.json").write_text("protected", encoding="utf-8")
-    request = BugFixLifecycleRequest(
-        **{
-            **request.__dict__,
-            "compiler_helper_roots": (
+    request = replace(
+        request,
+        provisioned_resources=replace(
+            request.provisioned_resources,
+            compiler_helper_roots=(
                 OwnedLifecycleRoot(compiler_root, token),
                 OwnedLifecycleRoot(helper_root, token),
             ),
-        }
+        ),
     )
     for path in (
         request.paths.agent_workspace,
@@ -1216,7 +1250,7 @@ def test_cleanup_removes_owned_entry_and_compiler_helper_roots_before_acl_and_id
     ):
         path.mkdir(parents=True, exist_ok=True)
     api = PowerShellLifecycleOwnershipApi(
-        request,
+        request.provisioned_resources,
         evidence,
         lambda script: subprocess.CompletedProcess([], 0, "{}", ""),
     )
@@ -1237,14 +1271,53 @@ def test_cleanup_root_marker_mismatch_preserves_root(tmp_path: Path) -> None:
     (root / ".bcbench-owned").write_text("wrong-owner", encoding="utf-8")
 
     with pytest.raises(ValueError, match="ownership marker"):
-        BugFixLifecycleRequest(
-            **{
-                **request.__dict__,
-                "compiler_helper_roots": (OwnedLifecycleRoot(root, request.expected_container_invocation_id),),
-            }
+        replace(
+            request,
+            provisioned_resources=replace(
+                request.provisioned_resources,
+                compiler_helper_roots=(OwnedLifecycleRoot(root, request.expected_container_invocation_id),),
+            ),
         )
 
     assert root.exists()
+
+
+def test_cleanup_lease_transfers_single_cleanup_owner(tmp_path: Path) -> None:
+    request, _, _, _, _, _ = _harness(tmp_path)
+    calls: list[str] = []
+    lease = CleanupLease.for_cli(request.provisioned_resources)
+
+    lease.transfer_to_lifecycle()
+
+    assert lease.is_lifecycle_owner
+    assert lease.cleanup_as_cli(lambda: calls.append("cli")) is None
+    lease.cleanup_as_lifecycle(lambda: calls.append("lifecycle"))
+    with pytest.raises(RuntimeError, match="already released"):
+        lease.cleanup_as_lifecycle(lambda: calls.append("duplicate"))
+
+    assert calls == ["lifecycle"]
+
+
+def test_powershell_cleanup_uses_exported_acl_paths_and_python_prefix(tmp_path: Path) -> None:
+    request, _, _, evidence, _, _ = _harness(tmp_path)
+    python_prefix = request.python_base_prefix
+    python_executable = request.provisioned_resources.base_python
+    scripts: list[str] = []
+
+    def run(script: str) -> subprocess.CompletedProcess[str]:
+        scripts.append(script)
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    api = PowerShellLifecycleOwnershipApi(request.provisioned_resources, evidence, run)
+
+    api.remove_roots()
+    api.remove_acl()
+
+    assert len(scripts) == 1
+    assert json.dumps([str(path) for path in request.acl_paths]) in scripts[0]
+    assert python_prefix in request.acl_paths
+    assert python_executable in request.acl_paths
+    assert str(python_executable.parent) not in {str(path) for path in request.acl_paths}
 
 
 def test_production_lifecycle_public_symbol_and_compatibility_alias() -> None:

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Annotated, cast
@@ -23,18 +21,22 @@ from bcbench.cli_options import (
     ContainerServerUrl,
     ContainerUsername,
     CopilotModel,
+    LifecycleAclPathsJson,
     LifecycleAgentBcPassword,
     LifecycleAgentBcUsername,
     LifecycleAgentContainerConfig,
     LifecycleAgentOsPassword,
+    LifecycleAgentOsSid,
     LifecycleAgentOsUsername,
     LifecycleBasePython,
+    LifecycleCleanupToolRootsJson,
     LifecycleEntryRoot,
     LifecycleEvaluatorContainerConfig,
     LifecycleExpectedContainerId,
     LifecycleExpectedInvocationId,
     LifecycleOwnedCompilerHelperRoots,
     LifecycleProtectedRoot,
+    LifecyclePythonBasePrefix,
     LifecycleReplayPatch,
     LifecycleStagedWorkerPath,
     LifecycleStagedWorkerSha256,
@@ -46,8 +48,11 @@ from bcbench.dataset import BugFixEntry
 from bcbench.evaluate.bugfix_lifecycle import (
     BugFixLifecyclePaths,
     BugFixLifecycleRequest,
+    CleanupLease,
+    LifecycleCleanup,
     OwnedLifecycleRoot,
     ProductionBugFixLifecycle,
+    ProvisionedLifecycleResources,
     sha256_file,
 )
 from bcbench.evaluate.bugfix_lifecycle.path_safety import (
@@ -56,7 +61,7 @@ from bcbench.evaluate.bugfix_lifecycle.path_safety import (
     require_disjoint,
     require_strict_descendant,
     validate_lifecycle_paths,
-    validate_owned_lifecycle_roots,
+    validate_provisioned_lifecycle_resources,
 )
 from bcbench.operations import prepare_run_dir
 from bcbench.types import AgentHarness, AgentMetrics, AgentRuntimeConfig, ContainerConfig, EvaluationCategory, EvaluationContext, ExperimentConfiguration
@@ -90,6 +95,10 @@ def bugfix_lifecycle_copilot(
     staged_worker_path: LifecycleStagedWorkerPath,
     staged_worker_sha256: LifecycleStagedWorkerSha256,
     base_python: LifecycleBasePython,
+    python_base_prefix: LifecyclePythonBasePrefix,
+    agent_os_sid: LifecycleAgentOsSid,
+    acl_paths_json: LifecycleAclPathsJson = None,
+    cleanup_tool_roots_json: LifecycleCleanupToolRootsJson = None,
     owned_compiler_helper_roots: LifecycleOwnedCompilerHelperRoots = None,
     replay_patch: LifecycleReplayPatch = None,
     evaluator_container_config: LifecycleEvaluatorContainerConfig = None,
@@ -123,6 +132,10 @@ def bugfix_lifecycle_copilot(
         staged_worker_path=staged_worker_path,
         staged_worker_sha256=staged_worker_sha256,
         base_python=base_python,
+        python_base_prefix=python_base_prefix,
+        agent_os_sid=agent_os_sid,
+        acl_paths_json=acl_paths_json,
+        cleanup_tool_roots_json=cleanup_tool_roots_json,
         owned_compiler_helper_roots=owned_compiler_helper_roots,
         evaluator_container_config=evaluator_container_config,
         agent_container_config=agent_container_config,
@@ -167,6 +180,10 @@ def bugfix_lifecycle_claude(
     staged_worker_path: LifecycleStagedWorkerPath,
     staged_worker_sha256: LifecycleStagedWorkerSha256,
     base_python: LifecycleBasePython,
+    python_base_prefix: LifecyclePythonBasePrefix,
+    agent_os_sid: LifecycleAgentOsSid,
+    acl_paths_json: LifecycleAclPathsJson = None,
+    cleanup_tool_roots_json: LifecycleCleanupToolRootsJson = None,
     owned_compiler_helper_roots: LifecycleOwnedCompilerHelperRoots = None,
     replay_patch: LifecycleReplayPatch = None,
     evaluator_container_config: LifecycleEvaluatorContainerConfig = None,
@@ -200,6 +217,10 @@ def bugfix_lifecycle_claude(
         staged_worker_path=staged_worker_path,
         staged_worker_sha256=staged_worker_sha256,
         base_python=base_python,
+        python_base_prefix=python_base_prefix,
+        agent_os_sid=agent_os_sid,
+        acl_paths_json=acl_paths_json,
+        cleanup_tool_roots_json=cleanup_tool_roots_json,
         owned_compiler_helper_roots=owned_compiler_helper_roots,
         evaluator_container_config=evaluator_container_config,
         agent_container_config=agent_container_config,
@@ -245,6 +266,10 @@ def _run_lifecycle(
     staged_worker_path: Path,
     staged_worker_sha256: str,
     base_python: Path,
+    python_base_prefix: Path,
+    agent_os_sid: str,
+    acl_paths_json: str | None,
+    cleanup_tool_roots_json: str | None,
     owned_compiler_helper_roots: list[Path] | None,
     evaluator_container_config: str | None,
     agent_container_config: str | None,
@@ -335,9 +360,72 @@ def _run_lifecycle(
 
     owned_roots = tuple(OwnedLifecycleRoot(path, expected_invocation_id) for path in owned_compiler_helper_roots or ())
     try:
-        owned_roots = validate_owned_lifecycle_roots(owned_roots, paths, expected_invocation_id)
+        resources = ProvisionedLifecycleResources(
+            instance_id=entry_id,
+            paths=paths,
+            container_name=evaluator_container.name,
+            expected_container_id=expected_container_id,
+            expected_container_invocation_id=expected_invocation_id,
+            agent_os_username=agent_os_username,
+            agent_bc_username=agent_bc_username,
+            agent_os_sid=agent_os_sid,
+            benchmark_root=Path(__file__).parents[3],
+            staged_worker_path=staged_worker_path,
+            base_python=base_python,
+            python_base_prefix=python_base_prefix,
+            cleanup_tool_roots=_parse_path_list(
+                cleanup_tool_roots_json,
+                "--cleanup-tool-roots-json",
+            ),
+            acl_paths=_parse_path_list(acl_paths_json, "--acl-paths-json"),
+            compiler_helper_roots=owned_roots,
+        )
     except ValueError as error:
-        raise typer.BadParameter(str(error), param_hint="--owned-compiler-helper-root") from error
+        raise typer.BadParameter(str(error)) from error
+    cleanup_lease = CleanupLease.for_cli(resources)
+    try:
+        _run_lifecycle_with_cleanup_lease(
+            cleanup_lease=cleanup_lease,
+            replay_patch=replay_patch,
+            staged_worker_sha256=staged_worker_sha256,
+            agent_os_password=agent_os_password,
+            evaluator_container=evaluator_container,
+            agent_runtime=agent_runtime,
+            model=model,
+            output_dir=output_dir,
+            run_id=run_id,
+            agent_name=agent_name,
+            agent_version=agent_version,
+            agent_runner=agent_runner,
+        )
+    except BaseException as error:
+        cleanup_error = cleanup_lease.cleanup_as_cli(lambda: LifecycleCleanup.from_resources(cleanup_lease.resources).run())
+        if cleanup_error is not None:
+            raise cleanup_error from error
+        raise
+
+
+def _run_lifecycle_with_cleanup_lease(
+    *,
+    cleanup_lease: CleanupLease,
+    replay_patch: Path | None,
+    staged_worker_sha256: str,
+    agent_os_password: str,
+    evaluator_container: ContainerConfig,
+    agent_runtime: AgentRuntimeConfig,
+    model: str,
+    output_dir: Path,
+    run_id: str,
+    agent_name: AgentHarness,
+    agent_version: Callable[[], str],
+    agent_runner: LifecycleAgentInvoker,
+) -> None:
+    try:
+        resources = validate_provisioned_lifecycle_resources(cleanup_lease.resources)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--acl-paths-json") from error
+    cleanup_lease.replace_resources(resources)
+    paths = resources.paths
     if replay_patch is not None:
         try:
             replay_patch = require_strict_descendant(replay_patch, paths.protected_root, "replay patch", "protected root")
@@ -346,8 +434,7 @@ def _run_lifecycle(
         _require_file(replay_patch, "--replay-patch")
 
     profile_environment = _prepare_agent_profile(paths)
-    resolved_sid = _resolve_local_windows_sid(agent_os_username)
-    entry = BugFixEntry.load(_CATEGORY.dataset_path, entry_id=entry_id)[0]
+    entry = BugFixEntry.load(_CATEGORY.dataset_path, entry_id=resources.instance_id)[0]
     resolved_agent_version = agent_version()
     run_dir = prepare_run_dir(output_dir, run_id)
     context = EvaluationContext(
@@ -362,34 +449,30 @@ def _run_lifecycle(
     )
     execution_policy = AgentExecutionPolicy(
         contain_process_tree=True,
-        restricted_identity=WindowsIdentity(agent_os_username, agent_os_password),
+        restricted_identity=WindowsIdentity(resources.agent_os_username, agent_os_password),
         allowlist_environment=True,
-        python_executable=base_python,
-        worker_path=staged_worker_path,
+        python_executable=resources.base_python,
+        worker_path=resources.staged_worker_path,
         worker_sha256=staged_worker_sha256.lower(),
         environment_overrides=profile_environment,
     )
     try:
         request = BugFixLifecycleRequest(
             context=context,
-            paths=paths,
+            provisioned_resources=resources,
             evaluator_container=evaluator_container,
             agent_runtime=agent_runtime,
             agent_execution_policy=execution_policy,
-            expected_container_id=expected_container_id,
-            expected_container_invocation_id=expected_invocation_id,
-            agent_os_username=agent_os_username,
-            agent_bc_username=agent_bc_username,
-            agent_os_sid=resolved_sid,
-            acl_paths=_acl_paths(paths, staged_worker_path, base_python, owned_roots),
-            compiler_helper_roots=owned_roots,
             replay_patch=replay_patch,
         )
     except ValueError as error:
         raise typer.BadParameter(str(error)) from error
-    ProductionBugFixLifecycle.from_request(request).run(
+    lifecycle = ProductionBugFixLifecycle.from_request(request)
+    cleanup_lease.transfer_to_lifecycle()
+    lifecycle.run(
         request,
         lambda agent_context, policy: agent_runner(agent_context, policy, agent_runtime, paths.agent_logs),
+        cleanup_lease,
     )
 
 
@@ -561,6 +644,18 @@ def _parse_container_config(payload: str, param_hint: str) -> ContainerConfig:
         raise typer.BadParameter(f"Invalid container config JSON: {error}", param_hint=param_hint) from error
 
 
+def _parse_path_list(payload: str | None, param_hint: str) -> tuple[Path, ...]:
+    if payload is None:
+        return ()
+    try:
+        value: object = json.loads(payload)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{param_hint} must be valid JSON: {error}") from error
+    if not isinstance(value, list) or not all(isinstance(path, str) and path.strip() for path in value):
+        raise ValueError(f"{param_hint} must be a JSON list of non-empty paths")
+    return tuple(Path(path) for path in cast(list[str], value))
+
+
 def _validated_container_config_value(value: object) -> dict[str, str]:
     if not isinstance(value, Mapping):
         raise TypeError("container config must be a JSON object")
@@ -598,49 +693,3 @@ def _validate_distinct_credentials(
         raise typer.BadParameter("Evaluator, agent OS, and agent BC identities must differ")
     if len({evaluator.password, agent_os_password, agent.password}) != 3:
         raise typer.BadParameter("Evaluator, agent OS, and agent BC passwords must differ")
-
-
-def _resolve_local_windows_sid(username: str) -> str:
-    environment = {**os.environ, "BCBENCH_LIFECYCLE_AGENT_OS_USERNAME": username}
-    script = "$account = [Security.Principal.NTAccount]::new('.', $env:BCBENCH_LIFECYCLE_AGENT_OS_USERNAME); $account.Translate([Security.Principal.SecurityIdentifier]).Value"
-    try:
-        result = subprocess.run(
-            ["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
-            env=environment,
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
-    except OSError as error:
-        raise typer.BadParameter(f"Could not resolve agent OS SID: {error}", param_hint="--agent-os-sid") from error
-    if result.returncode != 0:
-        diagnostics = result.stderr.strip() or result.stdout.strip()
-        raise typer.BadParameter(f"Could not resolve agent OS SID: {diagnostics}", param_hint="--agent-os-sid")
-    return _required(result.stdout, "--agent-os-sid")
-
-
-def _acl_paths(
-    paths: BugFixLifecyclePaths,
-    worker_path: Path,
-    base_python: Path,
-    owned_roots: tuple[OwnedLifecycleRoot, ...],
-) -> tuple[Path, ...]:
-    benchmark_root = Path(__file__).parents[3]
-    candidates = (
-        benchmark_root,
-        paths.entry_root,
-        paths.baseline_workspace,
-        paths.agent_workspace,
-        paths.agent_logs,
-        paths.agent_tools,
-        paths.mounted_staging,
-        paths.evaluator_workspaces,
-        paths.evidence,
-        paths.protected_root,
-        worker_path,
-        base_python,
-        base_python.parent,
-        *(owned_root.path for owned_root in owned_roots),
-    )
-    return tuple(dict.fromkeys(candidates))

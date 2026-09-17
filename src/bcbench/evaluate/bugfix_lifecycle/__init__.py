@@ -3,6 +3,8 @@ from bcbench.evaluate.bugfix_lifecycle.evidence import EvidenceStore, sha256_fil
 from bcbench.evaluate.bugfix_lifecycle.inventory import InventoryReader, InventoryVerifier
 from bcbench.evaluate.bugfix_lifecycle.lifecycle import (
     BugFixProductionLifecycle,
+    CleanupLease,
+    LifecycleCleanup,
     LifecycleOwnershipApi,
     PowerShellLifecycleOwnershipApi,
     ProductionAgentRunner,
@@ -18,6 +20,7 @@ from bcbench.evaluate.bugfix_lifecycle.models import (
     ContainerIdentity,
     OwnedLifecycleRoot,
     ProjectPublication,
+    ProvisionedLifecycleResources,
     SubmissionAnalysis,
     TrustedSource,
 )
@@ -44,6 +47,7 @@ __all__ = [
     "BugFixProductionLifecycle",
     "CheckpointManager",
     "CheckpointManifest",
+    "CleanupLease",
     "ContainerIdentity",
     "DefaultExactTestRunner",
     "DefaultProjectPublisher",
@@ -53,6 +57,7 @@ __all__ = [
     "ExactTestRunner",
     "InventoryReader",
     "InventoryVerifier",
+    "LifecycleCleanup",
     "LifecycleOwnershipApi",
     "OwnedLifecycleRoot",
     "PowerShellLifecycleOwnershipApi",
@@ -61,6 +66,7 @@ __all__ = [
     "ProductionBugFixLifecycle",
     "ProjectPublication",
     "ProjectPublisher",
+    "ProvisionedLifecycleResources",
     "SubmissionAnalysis",
     "TrustedSource",
     "TrustedWorkspaceBuilder",

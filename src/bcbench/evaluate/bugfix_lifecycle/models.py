@@ -51,23 +51,27 @@ class OwnedLifecycleRoot:
 
 
 @dataclass(frozen=True)
-class BugFixLifecycleRequest:
-    context: EvaluationContext[BugFixEntry]
+class ProvisionedLifecycleResources:
+    instance_id: str
     paths: BugFixLifecyclePaths
-    evaluator_container: ContainerConfig
-    agent_runtime: AgentRuntimeConfig
-    agent_execution_policy: AgentExecutionPolicy
+    container_name: str
     expected_container_id: str
     expected_container_invocation_id: str
     agent_os_username: str
     agent_bc_username: str
     agent_os_sid: str
+    benchmark_root: Path
+    staged_worker_path: Path
+    base_python: Path
+    python_base_prefix: Path
+    cleanup_tool_roots: tuple[Path, ...] = ()
     acl_paths: tuple[Path, ...] = ()
     compiler_helper_roots: tuple[OwnedLifecycleRoot, ...] = ()
-    replay_patch: Path | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
+            "instance_id",
+            "container_name",
             "expected_container_id",
             "expected_container_invocation_id",
             "agent_os_username",
@@ -76,8 +80,33 @@ class BugFixLifecycleRequest:
         ):
             if not getattr(self, field_name).strip():
                 raise ValueError(f"{field_name} must be a non-empty string")
+        if _SETUP_OS_USERNAME.fullmatch(self.agent_os_username.strip()) is None:
+            raise ValueError("Production agent_os_username must be a setup-owned OS username")
+        if _SETUP_BC_USERNAME.fullmatch(self.agent_bc_username.strip()) is None:
+            raise ValueError("Production agent_bc_username must be a setup-owned BC username")
+        if re.fullmatch(r"S-\d(?:-\d+)+", self.agent_os_sid.strip(), re.IGNORECASE) is None:
+            raise ValueError("Production agent_os_sid must be a Windows SID")
+        object.__setattr__(self, "cleanup_tool_roots", tuple(self.cleanup_tool_roots))
+        object.__setattr__(self, "acl_paths", tuple(self.acl_paths))
+        object.__setattr__(self, "compiler_helper_roots", tuple(self.compiler_helper_roots))
+
+
+@dataclass(frozen=True)
+class BugFixLifecycleRequest:
+    context: EvaluationContext[BugFixEntry]
+    provisioned_resources: ProvisionedLifecycleResources
+    evaluator_container: ContainerConfig
+    agent_runtime: AgentRuntimeConfig
+    agent_execution_policy: AgentExecutionPolicy
+    replay_patch: Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.context.entry.instance_id != self.provisioned_resources.instance_id:
+            raise ValueError("Lifecycle entry must match provisioned resources")
         if self.evaluator_container.name != self.agent_runtime.container.name:
             raise ValueError("Evaluator and agent runtime containers must refer to the same container")
+        if self.evaluator_container.name != self.provisioned_resources.container_name:
+            raise ValueError("Evaluator container must match provisioned resources")
         if not self.agent_execution_policy.contain_process_tree:
             raise ValueError("Production agent execution must contain the process tree")
         restricted_identity = self.agent_execution_policy.restricted_identity
@@ -89,10 +118,6 @@ class BugFixLifecycleRequest:
         local_domains = {".", *([local_machine] if local_machine else [])}
         if restricted_identity.domain.strip().casefold() not in local_domains:
             raise ValueError("Production restricted identity must use local Windows domain '.' or the local machine name")
-        if _SETUP_OS_USERNAME.fullmatch(self.agent_os_username.strip()) is None:
-            raise ValueError("Production agent_os_username must be a setup-owned OS username")
-        if _SETUP_BC_USERNAME.fullmatch(self.agent_bc_username.strip()) is None:
-            raise ValueError("Production agent_bc_username must be a setup-owned BC username")
         restricted_username = _normalized_windows_local_username(
             restricted_identity.username,
             "restricted identity username",
@@ -135,19 +160,49 @@ class BugFixLifecycleRequest:
             raise ValueError("Production policy HOMEDRIVE and HOMEPATH must reconstruct USERPROFILE")
         if environment_overrides != expected_environment:
             raise ValueError("Production policy profile environment overrides must use the agent_logs/profile layout")
-        object.__setattr__(self, "acl_paths", tuple(self.acl_paths))
-        object.__setattr__(self, "compiler_helper_roots", tuple(self.compiler_helper_roots))
-        from bcbench.evaluate.bugfix_lifecycle.path_safety import validate_owned_lifecycle_roots
+        from bcbench.evaluate.bugfix_lifecycle.path_safety import validate_provisioned_lifecycle_resources
 
         object.__setattr__(
             self,
-            "compiler_helper_roots",
-            validate_owned_lifecycle_roots(
-                self.compiler_helper_roots,
-                self.paths,
-                self.expected_container_invocation_id,
-            ),
+            "provisioned_resources",
+            validate_provisioned_lifecycle_resources(self.provisioned_resources),
         )
+
+    @property
+    def paths(self) -> BugFixLifecyclePaths:
+        return self.provisioned_resources.paths
+
+    @property
+    def expected_container_id(self) -> str:
+        return self.provisioned_resources.expected_container_id
+
+    @property
+    def expected_container_invocation_id(self) -> str:
+        return self.provisioned_resources.expected_container_invocation_id
+
+    @property
+    def agent_os_username(self) -> str:
+        return self.provisioned_resources.agent_os_username
+
+    @property
+    def agent_bc_username(self) -> str:
+        return self.provisioned_resources.agent_bc_username
+
+    @property
+    def agent_os_sid(self) -> str:
+        return self.provisioned_resources.agent_os_sid
+
+    @property
+    def python_base_prefix(self) -> Path:
+        return self.provisioned_resources.python_base_prefix
+
+    @property
+    def acl_paths(self) -> tuple[Path, ...]:
+        return self.provisioned_resources.acl_paths
+
+    @property
+    def compiler_helper_roots(self) -> tuple[OwnedLifecycleRoot, ...]:
+        return self.provisioned_resources.compiler_helper_roots
 
 
 @dataclass(frozen=True)
