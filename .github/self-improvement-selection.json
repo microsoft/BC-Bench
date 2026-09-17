@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "mode": "new",
+  "datasetBase": "26365d6a41a96fac41df9dcc8339cb71241fcb1f",
+  "datasetHash": "B5F1FEFA94EA1E5925EC2E9373E77EC20EC09F01CB60B380679DCA3948498134",
+  "sourceRepo": "microsoft/BCApps",
+  "requestId": "",
+  "sourceCommentUrls": [
+    "https://github.com/microsoft/BCApps/pull/10312#discussion_r3860586561"
+  ],
+  "entryIds": [
+    "synthetic__style-locked-label-locale-default-01"
+  ],
+  "newEntryIds": [
+    "synthetic__style-locked-label-locale-default-01"
+  ],
+  "reusedEntryIds": [],
+  "selections": [
+    {
+      "instanceId": "synthetic__style-locked-label-locale-default-01",
+      "origin": "new",
+      "coverage": [
+        {
+          "commentUrl": "https://github.com/microsoft/BCApps/pull/10312#discussion_r3860586561",
+          "purpose": "false_positive_guard",
+          "file": "src/SampleExpenseAgentSetup.Table.al",
+          "lineStart": 24,
+          "lineEnd": 24,
+          "rationale": "The bot flagged XDOMESTICTxt (assigned as the default into a Code field with TableRelation to VAT Business Posting Group) as needing Locked = true per style/label-locked-for-non-translatable, treating it like a wire-level token (GET, JSON, URL). The maintainer explicitly rejected this ('It should be translated!') and the merged code kept the Label unlocked. This is a default value for master data that a locale's own translation is expected to match against its own localized posting-group setup, not an integration contract string, so the rule's rationale does not apply here. The synthetic entry isolates exactly this shape (Label assigned as a default into a TableRelation-backed Code field, single new file, no other findings) with expected_comments=[] and the article recorded at metadata.articles, encoding the guard by omission. Limitation: this does not prove the label can never cause a referential-integrity issue in any locale, only that the maintainer's stated design intent for this specific default-value pattern rejects the Locked=true fix; genuinely non-translatable machine tokens (URLs, JSON, GUIDs) remain correctly covered by the original article's anti-pattern."
+        }
+      ]
+    }
+  ],
+  "payloadHashes": [
+    {
+      "instanceId": "synthetic__style-locked-label-locale-default-01",
+      "sha256": "678DE4566A80EBB6BB3DE8F661860BB2AB3CA85FA54BB8D09883A85712E3FEE6"
+    }
+  ]
+}
