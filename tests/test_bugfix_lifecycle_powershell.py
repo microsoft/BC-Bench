@@ -1096,7 +1096,17 @@ catch {{
     assert payload["scriptCalls"] == 0
 
 
-@pytest.mark.parametrize("failure_mode", ["ownership_mismatch", "remove_failure", "post_remove_exists", "success"])
+@pytest.mark.parametrize(
+    "failure_mode",
+    [
+        "ownership_mismatch",
+        "bc_remove_failure",
+        "bc_absence_failure",
+        "remove_failure",
+        "post_remove_exists",
+        "success",
+    ],
+)
 def test_cleanup_preserves_mounted_roots_until_container_absence_is_verified(tmp_path: Path, failure_mode: str) -> None:
     entry_root = tmp_path / "entry"
     protected_root = tmp_path / "protected"
@@ -1160,7 +1170,14 @@ $ops = @{{
         }}
         throw 'forced setup failure'
     }}
-    RemoveBcIdentity = {{ $global:order += 'bc-user' }}
+    RemoveBcIdentity = {{
+        $global:order += 'bc-user'
+        if ('{failure_mode}' -eq 'bc_remove_failure') {{ throw 'forced BC user removal failure' }}
+    }}
+    VerifyBcIdentityAbsent = {{
+        $global:order += 'verify-bc-user-absent'
+        if ('{failure_mode}' -eq 'bc_absence_failure') {{ throw 'forced BC user absence verification failure' }}
+    }}
     RemoveContainer = {{
         param($Context)
         $global:order += "remove-container:$($Context.VerifiedContainerId)"
@@ -1183,6 +1200,7 @@ $ops = @{{
         $global:identityDisableCalls++
         $global:order += 'disable-local-user'
     }}
+    VerifyAgentIdentityDisabled = {{ }}
 }}
 $message = $null
 try {{
@@ -1224,6 +1242,7 @@ catch {{
         assert payload["protectedExists"] is False
         assert payload["quarantineExists"] is False
         assert "inspect-id:owned-id" in payload["order"]
+        assert payload["order"].index("verify-bc-user-absent") < payload["order"].index("remove-container:owned-id")
         assert payload["order"].index("remove-container:owned-id") < payload["order"].index("acl")
         assert payload["order"].index("inspect-id:owned-id") < payload["order"].index("acl")
     else:
@@ -1240,6 +1259,14 @@ catch {{
         if failure_mode == "ownership_mismatch":
             assert not any(item.startswith("remove-container:") for item in payload["order"])
             assert "Refusing container-scoped cleanup" in payload["message"]
+        elif failure_mode == "bc_remove_failure":
+            assert not any(item.startswith("remove-container:") for item in payload["order"])
+            assert "forced BC user removal failure" in payload["message"]
+            assert "verify-bc-user-absent" not in payload["order"]
+        elif failure_mode == "bc_absence_failure":
+            assert not any(item.startswith("remove-container:") for item in payload["order"])
+            assert "forced BC user absence verification failure" in payload["message"]
+            assert payload["order"].index("bc-user") < payload["order"].index("verify-bc-user-absent")
         elif failure_mode == "remove_failure":
             assert "forced remove failure" in payload["message"]
         else:
@@ -1304,6 +1331,7 @@ $failureOps = @{{
     CreateBcIdentity = $successOps.CreateBcIdentity
     ApplyAcl = {{ throw 'acl failure' }}
     RemoveBcIdentity = {{ param($Context) @{{ action = 'bc-user'; username = $Context.AgentBcIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
+    VerifyBcIdentityAbsent = {{ }}
     RemoveAcl = {{ param($Context) @{{ action = 'acl'; sid = $Context.AgentIdentity.Sid }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
     RemoveAgentIdentity = {{ param($Context) @{{ action = 'os-user'; username = $Context.AgentIdentity.Username }} | ConvertTo-Json -Compress | Add-Content {_ps_quote(trace)} }}
     RemoveContainer = {{
@@ -1519,6 +1547,7 @@ catch {{
             [
                 "verify-bc",
                 "bc-user:owned-id",
+                "verify-bc-user-absent",
                 "container:owned-id",
                 "verify-container-name",
                 "verify-container-id",
@@ -1531,7 +1560,7 @@ catch {{
         (
             True,
             False,
-            ["verify-bc"],
+            ["verify-bc", "disable-local-user", "verify-local-user-disabled"],
             0,
             0,
         ),
@@ -1541,10 +1570,13 @@ catch {{
             [
                 "verify-bc",
                 "bc-user:owned-id",
+                "verify-bc-user-absent",
                 "container:owned-id",
                 "verify-container-name",
                 "verify-container-id",
                 "acl",
+                "disable-local-user",
+                "verify-local-user-disabled",
             ],
             1,
             1,
@@ -1626,6 +1658,9 @@ $ops = @{{
         $global:bcCalls++
         $global:order += "bc-user:$($Context.VerifiedContainerId)"
     }}
+    VerifyBcIdentityAbsent = {{
+        $global:order += 'verify-bc-user-absent'
+    }}
     RemoveAcl = {{
         param($Context)
         $global:order += 'acl'
@@ -1635,6 +1670,12 @@ $ops = @{{
     RemoveAgentIdentity = {{
         $global:osCalls++
         $global:order += 'os-user'
+    }}
+    DisableAgentIdentity = {{
+        $global:order += 'disable-local-user'
+    }}
+    VerifyAgentIdentityDisabled = {{
+        $global:order += 'verify-local-user-disabled'
     }}
     RemoveContainer = {{
         param($Context)
@@ -1682,6 +1723,143 @@ catch {{
         assert payload["osCalls"] == 0
     else:
         assert payload["osCalls"] == 1
+
+
+@pytest.mark.parametrize("fallback_failure", ["none", "disable", "verification"])
+def test_local_user_removal_failure_immediately_disables_and_verifies_exact_identity(tmp_path: Path, fallback_failure: str) -> None:
+    entry_root = tmp_path / "entry"
+    protected_root = tmp_path / "protected"
+    quarantine_path = tmp_path / "protected.quarantine.json"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_MODULE)} -Force
+$global:containerExists = $false
+$global:containerId = $null
+$global:containerLabel = $null
+$global:order = @()
+$ops = @{{
+    ResolveEntry = {{ [PSCustomObject]@{{ repo = 'owner/repo'; base_commit = 'abc'; environment_setup_version = '28.0' }} }}
+    CloneRepository = {{ param($Context) New-Item -ItemType Directory -Path $Context.BaselineWorkspace -Force | Out-Null }}
+    InspectContainer = {{
+        [PSCustomObject]@{{
+            Exists = $global:containerExists
+            Id = $global:containerId
+            InvocationId = $global:containerLabel
+        }}
+    }}
+    InspectContainerById = {{
+        [PSCustomObject]@{{
+            Exists = $global:containerExists
+            Id = $global:containerId
+            InvocationId = $global:containerLabel
+        }}
+    }}
+    CreateContainer = {{
+        param($Context)
+        $global:containerExists = $true
+        $global:containerId = 'owned-id'
+        $global:containerLabel = $Context.ContainerInvocationId
+    }}
+    CreateCompiler = {{ }}
+    InitializeContainer = {{ }}
+    GetCompany = {{ 'CRONUS' }}
+    CreateAgentIdentity = {{
+        [PSCustomObject]@{{
+            Username = 'bcb-1234567-abcdef'
+            Password = 'os-secret'
+            Domain = '.'
+            Sid = 'S-1-5-21-1000-1001-1002-1003'
+        }}
+    }}
+    CreateBcIdentity = {{ [PSCustomObject]@{{ Username = 'bca-1234567-abcdef'; Password = 'bc-secret' }} }}
+    ApplyAcl = {{
+        param($Context)
+        $Context.AclTransaction.ModifiedPaths.Add($Context.EntryRoot)
+        throw 'forced setup failure'
+    }}
+    RemoveBcIdentity = {{ $global:order += 'remove-bc-user' }}
+    VerifyBcIdentityAbsent = {{ $global:order += 'verify-bc-user-absent' }}
+    RemoveContainer = {{
+        $global:order += 'remove-container'
+        $global:containerExists = $false
+        $global:containerId = $null
+        $global:containerLabel = $null
+    }}
+    RemoveAcl = {{
+        param($Context)
+        $global:order += 'remove-acl'
+        $Context.AclTransaction.CleanupComplete = $true
+    }}
+    RemoveAgentIdentity = {{
+        param($Context)
+        $global:order += "remove-local-user:$($Context.AgentIdentity.Username)"
+        throw 'forced local user removal failure'
+    }}
+    DisableAgentIdentity = {{
+        param($Context)
+        $global:order += "disable-local-user:$($Context.AgentIdentity.Username)"
+        if ('{fallback_failure}' -eq 'disable') {{ throw 'forced local user disable failure' }}
+    }}
+    VerifyAgentIdentityDisabled = {{
+        param($Context)
+        $global:order += "verify-local-user-disabled:$($Context.AgentIdentity.Username)"
+        if ('{fallback_failure}' -eq 'verification') {{ throw 'local user remains enabled' }}
+    }}
+}}
+$message = $null
+try {{
+    Invoke-BCBenchBugFixLifecycle `
+        -InstanceId 'identity-fallback' `
+        -DatasetPath 'dataset.jsonl' `
+        -ContainerName 'bc-owned' `
+        -EvaluatorUsername 'admin' `
+        -EvaluatorPassword (ConvertTo-SecureString 'evaluator-secret' -AsPlainText -Force) `
+        -EntryRoot {_ps_quote(entry_root)} `
+        -ProtectedRoot {_ps_quote(protected_root)} `
+        -Operations $ops | Out-Null
+}}
+catch {{
+    $message = $_.Exception.Message
+}}
+[PSCustomObject]@{{
+    message = $message
+    order = $global:order
+    entryExists = Test-Path -LiteralPath {_ps_quote(entry_root)}
+    protectedExists = Test-Path -LiteralPath {_ps_quote(protected_root)}
+    quarantineExists = Test-Path -LiteralPath {_ps_quote(quarantine_path)}
+    quarantine = if (Test-Path -LiteralPath {_ps_quote(quarantine_path)}) {{
+        Get-Content -LiteralPath {_ps_quote(quarantine_path)} -Raw | ConvertFrom-Json
+    }} else {{ $null }}
+}} | ConvertTo-Json -Compress -Depth 10
+"""
+    payload = _last_json(_run_pwsh(script))
+
+    exact_username = "bcb-1234567-abcdef"
+    remove_action = f"remove-local-user:{exact_username}"
+    disable_action = f"disable-local-user:{exact_username}"
+    verify_action = f"verify-local-user-disabled:{exact_username}"
+    assert payload["order"][:7] == [
+        "remove-bc-user",
+        "verify-bc-user-absent",
+        "remove-container",
+        "remove-acl",
+        remove_action,
+        disable_action,
+        *([] if fallback_failure == "disable" else [verify_action]),
+    ]
+    assert "forced local user removal failure" in payload["message"]
+    assert payload["quarantineExists"] is True
+    assert payload["quarantine"]["local_username"] == exact_username
+    assert payload["quarantine"]["local_sid"] == "S-1-5-21-1000-1001-1002-1003"
+    assert any("forced local user removal failure" in error for error in payload["quarantine"]["cleanup_errors"])
+    if fallback_failure == "none":
+        assert payload["entryExists"] is False
+        assert payload["protectedExists"] is False
+    else:
+        assert payload["entryExists"] is True
+        assert payload["protectedExists"] is True
+        expected_error = "forced local user disable failure" if fallback_failure == "disable" else "local user remains enabled"
+        assert expected_error in payload["message"]
 
 
 @pytest.mark.e2e

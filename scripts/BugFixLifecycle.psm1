@@ -145,6 +145,9 @@ function Remove-BCBenchAgentIdentity {
     if ($null -ne (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
         Remove-LocalUser -Name $Username -ErrorAction Stop
     }
+    if ($null -ne (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
+        throw "Local user '$Username' still exists after removal."
+    }
 }
 
 function Disable-BCBenchAgentIdentity {
@@ -156,6 +159,18 @@ function Disable-BCBenchAgentIdentity {
     $localUser = Get-LocalUser -Name $Username -ErrorAction SilentlyContinue
     if ($null -ne $localUser -and [bool]$localUser.Enabled) {
         Disable-LocalUser -Name $Username -ErrorAction Stop
+    }
+}
+
+function Assert-BCBenchAgentIdentityDisabled {
+    param([Parameter(Mandatory = $true)][string]$Username)
+
+    if ($Username -notmatch "^bcb-[a-f0-9]{7}-[a-f0-9]{6}$") {
+        throw "Refusing to verify unexpected local username '$Username'."
+    }
+    $localUser = Get-LocalUser -Name $Username -ErrorAction SilentlyContinue
+    if ($null -ne $localUser -and [bool]$localUser.Enabled) {
+        throw "Local user '$Username' remains enabled after disablement."
     }
 }
 
@@ -1593,6 +1608,22 @@ function Invoke-BCBenchAgentBcUserRemoval {
     } -ArgumentList $Username
 }
 
+function Assert-BCBenchAgentBcUserAbsent {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContainerId,
+        [Parameter(Mandatory = $true)][string]$Username
+    )
+
+    Invoke-ScriptInBcContainer -containerName $ContainerId -ScriptBlock {
+        param([string]$Username)
+
+        $serverInstance = (Get-NAVServerInstance | Select-Object -First 1).ServerInstance
+        if ($null -ne (Get-NAVServerUser -ServerInstance $serverInstance -Tenant "default" -UserName $Username)) {
+            throw "BC user '$Username' still exists after removal."
+        }
+    } -ArgumentList $Username
+}
+
 function Remove-BCBenchAgentBcUser {
     [CmdletBinding()]
     param(
@@ -2266,6 +2297,7 @@ function Invoke-BCBenchBugFixLifecycle {
         $containerAbsenceVerified = $false
         $containerOwnershipVerified = $false
         $preserveRestrictedEvidence = $false
+        $localIdentityRequirementMet = -not $createdAgentIdentity
 
         if (
             $containerOwnershipChecked -and
@@ -2294,6 +2326,7 @@ function Invoke-BCBenchBugFixLifecycle {
         }
 
         if ($containerOwnershipVerified) {
+            $bcUserAbsenceVerified = -not $createdAgentBcIdentity
             if ($createdAgentBcIdentity) {
                 try {
                     Invoke-BCBenchOperation -Operations $Operations -Name RemoveBcIdentity -Context $context -Default {
@@ -2306,29 +2339,50 @@ function Invoke-BCBenchBugFixLifecycle {
                             -Operations $Operations
                     } | Out-Null
                 }
-                catch { $cleanupErrors.Add("BC user cleanup: $($_.Exception.Message)") }
-            }
-            try {
-                Invoke-BCBenchOperation -Operations $Operations -Name RemoveContainer -Context $context -Default {
-                    param($operationContext)
-                    $output = & docker container rm --force $operationContext.VerifiedContainerId 2>&1
-                    if ($LASTEXITCODE -ne 0) {
-                        throw "Docker removal failed for owned container ID '$($operationContext.VerifiedContainerId)': $(@($output) -join [Environment]::NewLine)"
+                catch {
+                    $cleanupErrors.Add("BC user removal: $($_.Exception.Message)")
+                    $preserveRestrictedEvidence = $true
+                }
+                if (-not $preserveRestrictedEvidence) {
+                    try {
+                        Invoke-BCBenchOperation -Operations $Operations -Name VerifyBcIdentityAbsent -Context $context -Default {
+                            param($operationContext)
+                            $verifiedContainerId = Get-BCBenchVerifiedContainerId -Operations $Operations -Context $operationContext
+                            Assert-BCBenchAgentBcUserAbsent `
+                                -ContainerId $verifiedContainerId `
+                                -Username $operationContext.AgentBcIdentity.Username
+                        } | Out-Null
+                        $bcUserAbsenceVerified = $true
                     }
-                } | Out-Null
+                    catch {
+                        $cleanupErrors.Add("BC user absence verification: $($_.Exception.Message)")
+                        $preserveRestrictedEvidence = $true
+                    }
+                }
             }
-            catch {
-                $cleanupErrors.Add("container removal: $($_.Exception.Message)")
-                $preserveRestrictedEvidence = $true
-            }
-            if (-not $preserveRestrictedEvidence) {
+            if ($bcUserAbsenceVerified) {
                 try {
-                    Assert-BCBenchContainerAbsent -Operations $Operations -Context $context
-                    $containerAbsenceVerified = $true
+                    Invoke-BCBenchOperation -Operations $Operations -Name RemoveContainer -Context $context -Default {
+                        param($operationContext)
+                        $output = & docker container rm --force $operationContext.VerifiedContainerId 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "Docker removal failed for owned container ID '$($operationContext.VerifiedContainerId)': $(@($output) -join [Environment]::NewLine)"
+                        }
+                    } | Out-Null
                 }
                 catch {
-                    $cleanupErrors.Add("post-removal container verification: $($_.Exception.Message)")
+                    $cleanupErrors.Add("container removal: $($_.Exception.Message)")
                     $preserveRestrictedEvidence = $true
+                }
+                if (-not $preserveRestrictedEvidence) {
+                    try {
+                        Assert-BCBenchContainerAbsent -Operations $Operations -Context $context
+                        $containerAbsenceVerified = $true
+                    }
+                    catch {
+                        $cleanupErrors.Add("post-removal container verification: $($_.Exception.Message)")
+                        $preserveRestrictedEvidence = $true
+                    }
                 }
             }
         }
@@ -2355,10 +2409,28 @@ function Invoke-BCBenchBugFixLifecycle {
                         param($operationContext)
                         Remove-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
                     } | Out-Null
+                    $localIdentityRequirementMet = $true
                 }
-                catch { $cleanupErrors.Add("local user removal: $($_.Exception.Message)") }
+                catch {
+                    $cleanupErrors.Add("local user removal: $($_.Exception.Message)")
+                    try {
+                        Invoke-BCBenchOperation -Operations $Operations -Name DisableAgentIdentity -Context $context -Default {
+                            param($operationContext)
+                            Disable-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
+                        } | Out-Null
+                        Invoke-BCBenchOperation -Operations $Operations -Name VerifyAgentIdentityDisabled -Context $context -Default {
+                            param($operationContext)
+                            Assert-BCBenchAgentIdentityDisabled -Username $operationContext.AgentIdentity.Username
+                        } | Out-Null
+                        $localIdentityRequirementMet = $true
+                    }
+                    catch {
+                        $cleanupErrors.Add("local user disablement/verification: $($_.Exception.Message)")
+                        $preserveRestrictedEvidence = $true
+                    }
+                }
             }
-            if ($aclCleanupSucceeded) {
+            if ($aclCleanupSucceeded -and $localIdentityRequirementMet) {
                 if ($createdEntryRoot) {
                     try { Remove-BCBenchCreatedRoot -Path $entryRootPath }
                     catch { $cleanupErrors.Add("entry root removal: $($_.Exception.Message)") }
@@ -2376,8 +2448,16 @@ function Invoke-BCBenchBugFixLifecycle {
                     param($operationContext)
                     Disable-BCBenchAgentIdentity -Username $operationContext.AgentIdentity.Username
                 } | Out-Null
+                Invoke-BCBenchOperation -Operations $Operations -Name VerifyAgentIdentityDisabled -Context $context -Default {
+                    param($operationContext)
+                    Assert-BCBenchAgentIdentityDisabled -Username $operationContext.AgentIdentity.Username
+                } | Out-Null
+                $localIdentityRequirementMet = $true
             }
-            catch { $cleanupErrors.Add("local user disablement: $($_.Exception.Message)") }
+            catch {
+                $cleanupErrors.Add("local user disablement/verification: $($_.Exception.Message)")
+                $preserveRestrictedEvidence = $true
+            }
             $cleanupErrors.Add(
                 "restricted identity, SID ACLs, EntryRoot, and ProtectedRoot retained for quarantine because safe cleanup was not verified: $($context.AgentIdentity.Username)"
             )
