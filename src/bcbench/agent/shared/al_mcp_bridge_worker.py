@@ -75,6 +75,8 @@ class _BridgeTransport(StreamableHTTPServerTransport):
         async def events() -> AsyncIterator[dict[str, str]]:
             nonlocal cursor
             while not self.is_terminated:
+                if self._events and cursor < self._events[0][0] - 1:
+                    raise RuntimeError("AL MCP event history expired during replay")
                 changed = self._events_changed
                 event = next((event for event in self._events if event[0] > cursor), None)
                 if event is None:

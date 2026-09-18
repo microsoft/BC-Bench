@@ -96,9 +96,12 @@ def test_startup_containment_failure_remains_failed_on_every_shutdown(tmp_path, 
 
     monkeypatch.setattr("bcbench.agent.shared.al_mcp_bridge.run_contained_process", fail_containment)
     clients = ManagedAgentClients()
-    with pytest.raises(AlMcpBridgeError, match="containment"):
+    with pytest.raises(AlMcpBridgeError, match="containment") as startup_failure:
         clients.start_al_mcp({"command": sys.executable}, tmp_path)
     for _ in range(2):
+        with pytest.raises(AlMcpBridgeError) as shutdown_failure:
+            clients._stoppers[0]()
+        assert shutdown_failure.value is startup_failure.value
         with pytest.raises(RuntimeError, match="shutdown/transport verification failed"):
             clients.stop()
 
@@ -208,6 +211,39 @@ def test_server_event_buffer_is_bounded_and_undelivered_events_expire():
         assert len(transport._events) == _EVENT_BUFFER_SIZE
         with anyio.fail_after(2), pytest.raises(TimeoutError, match="event delivery timed out"):
             await transport.watch_event_deadlines()
+
+    anyio.run(check)
+
+
+def test_replay_history_expiring_during_connection_fails_instead_of_skipping_events():
+    async def check():
+        transport = _BridgeTransport("session", timeout=1)
+        message = JSONRPCMessage.model_validate({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+        for _ in range(_EVENT_BUFFER_SIZE):
+            transport.buffer_event(message)
+        transport._delivered_id = _EVENT_BUFFER_SIZE
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/mcp",
+            "headers": [(b"accept", b"text/event-stream"), (b"mcp-session-id", b"session"), (b"last-event-id", b"0")],
+        }
+        sent = []
+
+        async def receive():
+            await anyio.sleep_forever()
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                transport.buffer_event(JSONRPCMessage.model_validate({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}))
+            else:
+                sent.append(message)
+                await transport.terminate()
+
+        with anyio.fail_after(2), pytest.raises(RuntimeError, match="history expired during replay"):
+            await transport._handle_get_request(Request(scope, receive), send)
+        assert sent == []
+        assert not transport._events_connected
 
     anyio.run(check)
 
