@@ -78,6 +78,7 @@ LifecycleDatasetPath = Annotated[
     Path,
     typer.Option(
         "--dataset-path",
+        parser=Path,
         envvar="BCBENCH_LIFECYCLE_DATASET_PATH",
         help="Exact evaluator-owned dataset file selected by lifecycle setup",
     ),

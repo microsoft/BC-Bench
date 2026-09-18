@@ -547,6 +547,41 @@ def test_lifecycle_acquires_cleanup_before_validating_dataset(lifecycle_cli_fixt
     cleanup.assert_called_once()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows device path parser regression")
+@pytest.mark.parametrize("command", ["copilot", "claude"])
+@pytest.mark.parametrize("source", ["option", "environment"])
+@pytest.mark.parametrize("malformed_ownership", [False, True])
+def test_lifecycle_unreadable_device_dataset_reaches_cleanup_ownership(lifecycle_cli_fixture, command, source, malformed_ownership):
+    dataset = r"\\.\NUL"
+    args = _without_options(lifecycle_cli_fixture.args(command), "--dataset-path")
+    if source == "option":
+        args.extend(("--dataset-path", dataset))
+    if malformed_ownership:
+        args[args.index("--acl-paths-json") + 1] = "{"
+    raw_cleanup = bugfix_lifecycle_commands.RawSetupCleanup.run
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True, return_value=None) as cleanup,
+        patch.object(bugfix_lifecycle_commands.RawSetupCleanup, "run", autospec=True, side_effect=raw_cleanup) as quarantine,
+    ):
+        result = runner.invoke(app, args, env={"BCBENCH_LIFECYCLE_DATASET_PATH": dataset})
+
+    assert result.exit_code != 0
+    if malformed_ownership:
+        quarantine.assert_called_once()
+        cleanup.assert_not_called()
+        evidence = json.loads((lifecycle_cli_fixture.protected_root / "quarantine.json").read_text())
+        assert evidence["status"] == "quarantined"
+        assert evidence["reason"] == "ownership_envelope_parse_failure"
+    else:
+        cleanup.assert_called_once()
+        quarantine.assert_not_called()
+    assert "not readable" not in result.output
+    load_entry.assert_not_called()
+    lifecycle_factory.assert_not_called()
+
+
 def test_lifecycle_cleans_up_after_exact_dataset_loading_fails(lifecycle_cli_fixture):
     with (
         patch.object(BugFixEntry, "load", side_effect=ValueError("invalid custom dataset")),
