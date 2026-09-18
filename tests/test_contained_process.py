@@ -636,6 +636,31 @@ def test_job_drain_is_bounded_and_precedes_capture_reads():
     assert powershell_source.index("[BCBenchJobObject]::WaitForEmptyJob($job, 5000)") < powershell_source.index("[IO.File]::ReadAllText($StdoutPath")
 
 
+def test_evaluator_stop_signal_terminates_job_before_timeout(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    stop_path = tmp_path / "stop"
+    pid_path = tmp_path / "running.pid"
+    code = f"import os, time; from pathlib import Path; Path({str(pid_path)!r}).write_text(str(os.getpid())); time.sleep(60)"
+    request = ContainedProcessRequest(
+        command=(sys.executable, "-c", code),
+        cwd=tmp_path,
+        env=agent_subprocess_env(allowlist=True),
+        timeout_seconds=60,
+        stop_path=stop_path,
+    )
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(run_contained_process, request)
+        deadline = time.monotonic() + 10
+        while not pid_path.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        stop_path.touch()
+        result = future.result(timeout=10)
+    assert pid_path.exists()
+    assert result.returncode == 1
+    assert not _pid_is_running(int(pid_path.read_text()))
+
+
 def test_timeout_raises_with_captured_output(tmp_path):
     with pytest.raises(subprocess.TimeoutExpired) as exc_info:
         run_contained_process(

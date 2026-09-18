@@ -232,6 +232,7 @@ def _prepare_raw_quarantine_root(path: Path) -> Path:
 class LifecycleCleanup:
     resources: ProvisionedLifecycleResources
     ownership_api: LifecycleOwnershipApi
+    stop_agent_clients: Callable[[], None] | None = None
 
     @classmethod
     def from_resources(
@@ -252,6 +253,13 @@ class LifecycleCleanup:
         completed_operations: list[str] = []
         container_absent = False
         identity_secured = False
+        if self.stop_agent_clients is not None:
+            try:
+                self.stop_agent_clients()
+            except Exception as error:  # noqa: BLE001 - continue securing identities/container and persist quarantine
+                errors.append(f"agent client shutdown: {error}")
+            else:
+                completed_operations.append("agent_clients_stopped")
         try:
             self.ownership_api.verify_container_ownership()
         except Exception as error:  # noqa: BLE001 - cleanup aggregates every ownership failure
@@ -697,7 +705,7 @@ class ProductionBugFixLifecycle:
                         request.context.metrics = agent_context.metrics
                         request.context.experiment = agent_context.experiment
 
-                barrier_error = self._establish_isolation_barrier()
+                barrier_error = self._establish_isolation_barrier(request)
                 if barrier_error is None:
                     if request.replay_patch is not None:
                         full_patch = self._read_replay_patch(request)
@@ -1255,11 +1263,12 @@ class ProductionBugFixLifecycle:
         except Exception:
             logger.exception(f"Failed to persist lifecycle diagnostic {name}")
 
-    def _establish_isolation_barrier(self) -> BugFixLifecycleInfrastructureError | None:
+    def _establish_isolation_barrier(self, request: BugFixLifecycleRequest) -> BugFixLifecycleInfrastructureError | None:
         outcomes: dict[str, dict[str, str]] = {}
         errors: list[str] = []
         for name, operation in (
             ("close_process_group", self._ownership_api.close_contained_group),
+            ("stop_agent_clients", lambda: self._stop_agent_clients(request)),
             ("stop_agent_sessions", self._ownership_api.stop_agent_sessions),
         ):
             try:
@@ -1300,7 +1309,14 @@ class ProductionBugFixLifecycle:
         return LifecycleCleanup(
             request.provisioned_resources,
             self._ownership_api,
+            stop_agent_clients=lambda: self._stop_agent_clients(request),
         ).run()
+
+    @staticmethod
+    def _stop_agent_clients(request: BugFixLifecycleRequest) -> None:
+        clients = request.agent_execution_policy.managed_clients
+        if clients is not None:
+            clients.stop()
 
 
 def _empty_phases() -> dict[str, BugFixPhaseResult]:

@@ -14,8 +14,10 @@ from typed container configuration populated at the CLI boundary.
 
 import base64
 import json
+import socket
 import threading
 import time
+from collections.abc import Callable
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
@@ -55,6 +57,26 @@ _STREAM_CHUNK_BYTES = 8192
 _PROBE_TIMEOUT_SECONDS = 120
 _WARMUP_BUDGET_SECONDS = 600
 _WARMUP_RETRY_DELAY_SECONDS = 5
+
+
+class _GatewayHttpServer(ThreadingHTTPServer):
+    def __init__(self, address: tuple[str, int], handler: type[BaseHTTPRequestHandler]) -> None:
+        super().__init__(address, handler)
+        self.active_threads: set[threading.Thread] = set()
+        self.thread_lock = threading.Lock()
+
+    def process_request(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+        thread = threading.Thread(target=self.process_request_thread, args=(request, client_address), daemon=True)
+        with self.thread_lock:
+            self.active_threads.add(thread)
+        thread.start()
+
+    def process_request_thread(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self.thread_lock:
+                self.active_threads.remove(threading.current_thread())
 
 
 def _header_safe(key: str, value: str) -> bool:
@@ -123,7 +145,7 @@ class BcMcpGateway:
             injected["Company"] = company
         self._injected_headers: dict[str, str] = injected
 
-        self._server: ThreadingHTTPServer | None = None
+        self._server: _GatewayHttpServer | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._forwarded_count = 0
@@ -146,7 +168,7 @@ class BcMcpGateway:
 
     def start(self) -> "BcMcpGateway":
         gateway = self
-        server = ThreadingHTTPServer(("127.0.0.1", 0), _build_handler(gateway))
+        server = _GatewayHttpServer(("127.0.0.1", 0), _build_handler(gateway))
         self._server = server
         port = server.server_address[1]
         self.base_url = f"http://127.0.0.1:{port}{self._base_path}"
@@ -163,6 +185,20 @@ class BcMcpGateway:
             self._thread.join(timeout=5)
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
+
+    def stop_verified(self) -> None:
+        server, thread = self._server, self._thread
+        self.stop()
+        if thread is not None and thread.is_alive():
+            raise AgentError("BC MCP gateway listener termination was not verified")
+        if server is not None:
+            deadline = time.monotonic() + 5
+            with server.thread_lock:
+                clients = tuple(server.active_threads)
+            for client in clients:
+                client.join(timeout=max(0, deadline - time.monotonic()))
+            if any(client.is_alive() for client in clients):
+                raise AgentError("BC MCP gateway still has active client requests")
 
     def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
         connection = HTTPConnection(host, port, timeout=_PROBE_TIMEOUT_SECONDS)
@@ -405,7 +441,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
     return _ProxyHandler
 
 
-def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None) -> BcMcpGateway | None:
+def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None, *, register: Callable[[Callable[[], None]], None] | None = None) -> BcMcpGateway | None:
     """Start a localhost MCP gateway in front of the BC container, or return None when disabled."""
     if runtime is None or not runtime.bc_mcp:
         return None
@@ -416,7 +452,10 @@ def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None) -> BcMcpGateway | N
         username=container.username,
         password=container.password,
         company=container.company,
-    ).start()
+    )
+    if register is not None:
+        register(gateway.stop_verified)
+    gateway.start()
     logger.info(f"BC MCP gateway listening at {gateway.base_url}/mcp (credential-free; path-restricted to /mcp)")
     gateway.warm_up()
     return gateway

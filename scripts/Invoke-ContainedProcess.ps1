@@ -809,8 +809,23 @@ try {
     Write-TestLifecycleEvent "GateCreated"
 
     $timeoutMilliseconds = [Math]::Min([int64]$request.timeout_seconds * 1000, [int]::MaxValue)
-    $timedOut = -not [BCBenchJobObject]::WaitForExit($worker, [uint32]$timeoutMilliseconds)
-    $returnCode = if ($timedOut) { $null } else { [long][BCBenchJobObject]::GetExitCode($worker) }
+    $stopProperty = $request.PSObject.Properties["stop_path"]
+    $stopRequested = $false
+    if ($null -eq $stopProperty) {
+        $timedOut = -not [BCBenchJobObject]::WaitForExit($worker, [uint32]$timeoutMilliseconds)
+    }
+    else {
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        $exited = $false
+        while (-not ($exited = [BCBenchJobObject]::WaitForExit($worker, 100))) {
+            $stopRequested = Test-Path -LiteralPath ([string]$stopProperty.Value) -PathType Leaf
+            if ($stopRequested -or $timer.ElapsedMilliseconds -ge $timeoutMilliseconds) {
+                break
+            }
+        }
+        $timedOut = -not $exited -and -not $stopRequested
+    }
+    $returnCode = if ($timedOut) { $null } elseif ($stopRequested) { 1 } else { [long][BCBenchJobObject]::GetExitCode($worker) }
     # Kill-on-close starts termination asynchronously; retain the job until all descendants exit.
     [BCBenchJobObject]::TerminateJob($job, 1)
     [BCBenchJobObject]::WaitForEmptyJob($job, 5000)

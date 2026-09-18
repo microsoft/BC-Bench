@@ -6,6 +6,7 @@ import subprocess
 from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -1103,6 +1104,36 @@ def test_replay_analysis_also_requires_isolation_barrier(tmp_path: Path) -> None
     assert analyzer_calls == []
     assert result.execution_mode == "replay"
     assert result.generated_patch_hash is None
+
+
+def test_managed_clients_stop_before_service_tier_freeze_and_official_phases(tmp_path):
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    clients = Mock()
+    clients.stop.side_effect = lambda: calls.append("stop-clients")
+    request = replace(request, agent_execution_policy=replace(request.agent_execution_policy, managed_clients=clients))
+
+    lifecycle.run(request, _agent(calls))
+
+    assert calls.index("agent") < calls.index("stop-clients") < calls.index("stop-agent-sessions") < calls.index("freeze") < calls.index("phase:red")
+    barrier = json.loads((evidence.root / "10-isolation-barrier.json").read_text())
+    assert barrier["operations"]["stop_agent_clients"]["status"] == "verified"
+    assert clients.stop.call_count == 2
+
+
+def test_bridge_shutdown_failure_blocks_official_phases_and_quarantines(tmp_path):
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    clients = Mock()
+    clients.stop.side_effect = RuntimeError("bridge remains active")
+    request = replace(request, agent_execution_policy=replace(request.agent_execution_policy, managed_clients=clients))
+
+    with pytest.raises(CleanupInfrastructureError, match="bridge remains active"):
+        lifecycle.run(request, _agent(calls))
+
+    assert "freeze" not in calls
+    assert "stop-agent-sessions" in calls
+    assert not any(call.startswith("phase:") for call in calls)
+    assert evidence.final_result.test_red.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert (request.paths.protected_root / "quarantine.json").is_file()
 
 
 def test_timeout_preserves_diagnostics_and_forces_resolution_failure(tmp_path: Path) -> None:

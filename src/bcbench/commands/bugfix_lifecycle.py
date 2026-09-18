@@ -11,6 +11,7 @@ import typer
 from bcbench.agent import get_claude_version, get_copilot_version, run_claude_code, run_copilot_agent
 from bcbench.agent.shared.contained_process import AgentExecutionPolicy, WindowsIdentity
 from bcbench.agent.shared.env import production_agent_profile_environment
+from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from bcbench.cli_options import (
     ClaudeCodeModel,
     ContainerCompany,
@@ -582,6 +583,7 @@ def _run_lifecycle_with_cleanup_lease(
         worker_path=resources.staged_worker_path,
         worker_sha256=staged_worker_sha256.lower(),
         environment_overrides=profile_environment,
+        managed_clients=ManagedAgentClients(),
     )
     try:
         request = BugFixLifecycleRequest(

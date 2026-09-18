@@ -39,6 +39,14 @@ BC PR Review is the production-fidelity BC-ALAgents + BCQuality runner for the `
 
 BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time. You can run evaluations locally and replace the dataset under `dataset/` with tasks from your own codebase.
 
+### Isolated bug-fix lifecycle
+
+After provisioning with `scripts\Setup-BugFixLifecycle.ps1`, use `uv run bcbench bugfix-lifecycle copilot <entry>` or `claude <entry>` with the exported `BCBENCH_LIFECYCLE_*` configuration. `--replay-patch` bypasses the agent. This opt-in path is separate from normal evaluations.
+
+Production AL MCP runs in an evaluator-owned Job Object behind an unguessable loopback HTTP endpoint. BC credentials stay in evaluator-only configuration and the server environment, not the agent's MCP configuration. The isolation barrier verifies client shutdown before freezing the submission or running official phases; transport or shutdown failures fail closed. Normal nonproduction AL MCP still uses stdio.
+
+`tests\test_production_mcp_secrets.py` exercises real shell inspection without changing host accounts. Its `e2e` test additionally requires an explicitly provisioned disposable restricted identity and readable runtime/worker via `BCBENCH_BRIDGE_TEST_USERNAME`, `PASSWORD`, `WORKSPACE`, `PYTHON`, and `WORKER` (each with the `BCBENCH_BRIDGE_TEST_` prefix). Run it only on a dedicated runner with `uv run pytest tests\test_production_mcp_secrets.py -m e2e`; it does not provision accounts or validate a real BC server.
+
 ### Documentation map
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — fork setup, repo layout, versioning, day-to-day maintainer ops

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = "==3.13.*"
 
 [[package]]
@@ -250,6 +250,7 @@ source = { editable = "." }
 dependencies = [
     { name = "jinja2" },
     { name = "jsonschema" },
+    { name = "mcp" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -260,6 +261,7 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
     { name = "unidiff" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -285,6 +287,7 @@ redteam = [
 requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "jsonschema", specifier = ">=4.0" },
+    { name = "mcp", specifier = ">=1.26,<2" },
     { name = "numpy", specifier = ">=2.3.5" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
@@ -295,6 +298,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.9.0" },
     { name = "typing-extensions", specifier = ">=4.0" },
     { name = "unidiff", specifier = ">=0.7" },
+    { name = "uvicorn", specifier = ">=0.35,<1" },
 ]
 
 [package.metadata.requires-dev]
@@ -818,6 +822,15 @@ http2 = [
 ]
 
 [[package]]
+name = "httpx-sse"
+version = "0.4.3"
+source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
+sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/httpx-sse/0.4.3/httpx_sse-0.4.3.tar.gz", hash = "sha256:9b1ed0127459a66014aec3c56bebd93da3c1bc8bb6618c8082039a44889a755d" }
+wheels = [
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/httpx-sse/0.4.3/httpx_sse-0.4.3-py3-none-any.whl", hash = "sha256:0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc" },
+]
+
+[[package]]
 name = "huggingface-hub"
 version = "1.16.1"
 source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
@@ -1124,6 +1137,31 @@ dependencies = [
 sdist = { url = "https://ms-feed-2.pkgs.visualstudio.com/f5581750-f66a-4ee8-b9cc-8269930bd7c4/_packaging/637e612b-d5d4-45c1-8a31-e0deb2a5a828/pypi/download/matplotlib-inline/0.2.1/matplotlib_inline-0.2.1.tar.gz", hash = "sha256:e1ee949c340d771fc39e241ea75683deb94762c8fa5f2927ec57c83c4dffa9fe" }
 wheels = [
     { url = "https://ms-feed-2.pkgs.visualstudio.com/f5581750-f66a-4ee8-b9cc-8269930bd7c4/_packaging/637e612b-d5d4-45c1-8a31-e0deb2a5a828/pypi/download/matplotlib-inline/0.2.1/matplotlib_inline-0.2.1-py3-none-any.whl", hash = "sha256:d56ce5156ba6085e00a9d54fead6ed29a9c47e215cd1bba2e976ef39f5710a76" },
+]
+
+[[package]]
+name = "mcp"
+version = "1.30.0"
+source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "httpx" },
+    { name = "httpx-sse" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "python-multipart" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "sse-starlette" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
+    { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
+]
+sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/mcp/1.30/mcp-1.30.0.tar.gz", hash = "sha256:445414625fce5c295faa505bb11bacece661ab6f4028d57c935db57820b7a3e4" }
+wheels = [
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/mcp/1.30/mcp-1.30.0-py3-none-any.whl", hash = "sha256:666edb5009503e1047c9d60346a756f94b261f05cc2625f23d41c728ffc484d0" },
 ]
 
 [[package]]
@@ -1672,6 +1710,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pydantic-settings"
+version = "2.15.0"
+source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "typing-inspection" },
+]
+sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/pydantic-settings/2.15/pydantic_settings-2.15.0.tar.gz", hash = "sha256:694b793e84f766ba76a90ebdefc01d0a9a045dab0382bee70393da93712ad117" }
+wheels = [
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/pydantic-settings/2.15/pydantic_settings-2.15.0-py3-none-any.whl", hash = "sha256:0ba092c291c94baceb5eff768aa0d56400a457585bc0175925a5a5510303da42" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.20.0"
 source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
@@ -1819,12 +1871,31 @@ wheels = [
 ]
 
 [[package]]
+name = "python-multipart"
+version = "0.0.32"
+source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
+sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/python-multipart/0.0.32/python_multipart-0.0.32.tar.gz", hash = "sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e" }
+wheels = [
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/python-multipart/0.0.32/python_multipart-0.0.32-py3-none-any.whl", hash = "sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23" },
+]
+
+[[package]]
 name = "pytz"
 version = "2025.2"
 source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
 sdist = { url = "https://ms-feed-17.pkgs.visualstudio.com/02a0e93b-9e7a-46f6-8851-5a56920f8f7e/_packaging/2aa351dc-4441-4d20-a430-25f505f2a55a/pypi/download/pytz/2025.2/pytz-2025.2.tar.gz", hash = "sha256:360b9e3dbb49a209c21ad61809c7fb453643e048b38924c765813546746e81c3" }
 wheels = [
     { url = "https://ms-feed-17.pkgs.visualstudio.com/02a0e93b-9e7a-46f6-8851-5a56920f8f7e/_packaging/2aa351dc-4441-4d20-a430-25f505f2a55a/pypi/download/pytz/2025.2/pytz-2025.2-py2.py3-none-any.whl", hash = "sha256:5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00" },
+]
+
+[[package]]
+name = "pywin32"
+version = "312"
+source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
+wheels = [
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/pywin32/312/pywin32-312-cp313-cp313-win32.whl", hash = "sha256:7a27df850933d16a8eabfbaeb73d52b273e2da667f80d70b01a89d1f6828d02c" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/pywin32/312/pywin32-312-cp313-cp313-win_amd64.whl", hash = "sha256:c53e878d15a1c44788082bfe712a905433473aa38f86375b7cf8b45e3acbaaf9" },
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/pywin32/312/pywin32-312-cp313-cp313-win_arm64.whl", hash = "sha256:59aba5d5940842075343a5ddc6b11f1cdf0d1567fe745290359dfbcc7c2eb831" },
 ]
 
 [[package]]
@@ -2165,6 +2236,19 @@ wheels = [
     { url = "https://ms-feed-2.pkgs.visualstudio.com/f5581750-f66a-4ee8-b9cc-8269930bd7c4/_packaging/637e612b-d5d4-45c1-8a31-e0deb2a5a828/pypi/download/sqlalchemy/2.0.51/sqlalchemy-2.0.51-cp313-cp313-win32.whl", hash = "sha256:b93ab07b5292dbe7e6b8da89475275e7042744283921344b56105f3eeb0f828b" },
     { url = "https://ms-feed-2.pkgs.visualstudio.com/f5581750-f66a-4ee8-b9cc-8269930bd7c4/_packaging/637e612b-d5d4-45c1-8a31-e0deb2a5a828/pypi/download/sqlalchemy/2.0.51/sqlalchemy-2.0.51-cp313-cp313-win_amd64.whl", hash = "sha256:0f053118c30e53161857a953e4de667d90e274980dccbe5dd3829bbbeece72a5" },
     { url = "https://ms-feed-2.pkgs.visualstudio.com/f5581750-f66a-4ee8-b9cc-8269930bd7c4/_packaging/637e612b-d5d4-45c1-8a31-e0deb2a5a828/pypi/download/sqlalchemy/2.0.51/sqlalchemy-2.0.51-py3-none-any.whl", hash = "sha256:bb024d8b621d0be75f4f44ecc7c950450026e76d66dc8f791bb5331d7fed59d5" },
+]
+
+[[package]]
+name = "sse-starlette"
+version = "3.4.11"
+source = { registry = "https://packagefeedproxy.microsoft.io/pypi/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "starlette" },
+]
+sdist = { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/sse-starlette/3.4.11/sse_starlette-3.4.11.tar.gz", hash = "sha256:1bae716c02f3e6f294be41ff333220692dae7c3cbab077c900f159676719dade" }
+wheels = [
+    { url = "https://ms-feed-25.pkgs.visualstudio.com/6f084628-a36d-42cb-934d-057357e379dc/_packaging/49d7402f-07bb-4b18-a9ce-086e6e98a554/pypi/download/sse-starlette/3.4.11/sse_starlette-3.4.11-py3-none-any.whl", hash = "sha256:c7b2244bdff016fe7f64e10075e89a3e6bbf899649cc89b0fe884b5545042453" },
 ]
 
 [[package]]

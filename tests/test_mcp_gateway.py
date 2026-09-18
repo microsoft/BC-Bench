@@ -109,6 +109,24 @@ def _request(base_url: str, method: str, path: str, body: bytes | None = None):
 
 
 class TestBcMcpGateway:
+    def test_verified_stop_rejects_a_still_active_client(self, gateway):
+        from unittest.mock import Mock
+
+        client = Mock()
+        client.is_alive.return_value = True
+        server = gateway._server
+        with server.thread_lock:
+            server.active_threads.add(client)
+        with pytest.raises(Exception, match="active client"):
+            gateway.stop_verified()
+        client.join.assert_called_once()
+
+    def test_verified_stop_closes_listener(self, gateway):
+        url = gateway.base_url
+        gateway.stop_verified()
+        with pytest.raises(ConnectionError):
+            _request(url, "GET", "/BC/mcp")
+
     def test_disabled_returns_none(self):
         assert start_bc_mcp_gateway(None) is None
 

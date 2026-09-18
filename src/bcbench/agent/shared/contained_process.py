@@ -9,9 +9,12 @@ from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 from pathlib import Path
 from types import MappingProxyType
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 from bcbench.config import get_config
+
+if TYPE_CHECKING:
+    from bcbench.agent.shared.managed_clients import ManagedAgentClients
 
 __all__ = [
     "AgentExecutionPolicy",
@@ -40,6 +43,7 @@ class AgentExecutionPolicy:
     worker_path: Path | None = None
     worker_sha256: str | None = None
     environment_overrides: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    managed_clients: "ManagedAgentClients | None" = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         overrides = dict(self.environment_overrides)
@@ -64,6 +68,7 @@ class ContainedProcessRequest:
     python_executable: Path | None = None
     worker_path: Path | None = None
     worker_sha256: str | None = None
+    stop_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -144,6 +149,8 @@ def _write_request(path: Path, request: ContainedProcessRequest) -> None:
         "timeout_seconds": request.timeout_seconds,
         "identity": asdict(request.identity) if request.identity is not None else None,
     }
+    if request.stop_path is not None:
+        payload["stop_path"] = str(request.stop_path)
     with path.open("x", encoding="utf-8") as request_file:
         json.dump(payload, request_file, separators=(",", ":"))
 

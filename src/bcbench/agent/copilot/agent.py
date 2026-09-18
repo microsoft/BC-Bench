@@ -46,7 +46,8 @@ def run_copilot_agent(
     logger.info(f"Running GitHub Copilot CLI on: {entry.instance_id}")
 
     prompt: str = build_prompt(entry, repo_path, copilot_config, category, al_mcp=bool(runtime and runtime.al_mcp))
-    bc_gateway = start_bc_mcp_gateway(runtime)
+    managed_clients = execution_policy.managed_clients if execution_policy else None
+    bc_gateway = start_bc_mcp_gateway(runtime, register=managed_clients.register) if managed_clients is not None else start_bc_mcp_gateway(runtime)
     try:
         mcp_config_json, mcp_server_names = build_mcp_config(
             copilot_config,
@@ -54,6 +55,8 @@ def run_copilot_agent(
             repo_path,
             runtime=runtime,
             bc_mcp_gateway_url=bc_gateway.base_url if bc_gateway else None,
+            managed_clients=managed_clients,
+            require_evaluator_bridge=bool(execution_policy and execution_policy.restricted_identity),
         )
         lsp_plugin_dir: Path | None = build_al_lsp_plugin(
             entry,
@@ -146,5 +149,5 @@ def run_copilot_agent(
         else:
             return metrics, config
     finally:
-        if bc_gateway is not None:
+        if bc_gateway is not None and managed_clients is None:
             bc_gateway.stop()
