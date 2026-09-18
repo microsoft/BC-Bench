@@ -916,3 +916,162 @@ def test_test_shutdown_latch(tmp_path: Path, monkeypatch, failure: str) -> None:
     assert (paths.protected_root / "quarantine.json").exists()
     with pytest.raises(CheckpointInfrastructureError, match="shutdown is unverified"):
         PowerShellRehearsalAdapter.create_probe(adapter)
+
+
+def _supervisor_setup(tmp_path: Path):
+    from bcbench.commands.bugfix_lifecycle import _lifecycle_paths
+    from tests.test_bugfix_production_lifecycle import _harness
+
+    request, *_ = _harness(tmp_path / "fixture")
+    paths = _lifecycle_paths(tmp_path / "owned-entry", tmp_path / "owned-protected")
+    paths.agent_workspace.mkdir(parents=True)
+    paths.protected_root.mkdir()
+    resources = replace(request.provisioned_resources, paths=paths)
+    (paths.protected_root / "workflow-execution.json").write_text(
+        json.dumps(
+            {
+                "status": "launching",
+                "container_id": resources.expected_container_id,
+                "invocation_id": resources.expected_container_invocation_id,
+            }
+        )
+    )
+    (paths.protected_root / "workflow-setup.json").write_text(
+        json.dumps(
+            {
+                "Status": "ready",
+                "InstanceId": resources.instance_id,
+                "ContainerName": resources.container_name,
+                "ContainerId": resources.expected_container_id,
+                "ContainerInvocationId": resources.expected_container_invocation_id,
+                "EntryRoot": str(paths.entry_root),
+                "ProtectedRoot": str(paths.protected_root),
+                "AgentIdentity": {"Username": resources.agent_os_username, "Sid": resources.agent_os_sid},
+                "AgentBcIdentity": {"Username": resources.agent_bc_username},
+                "AclTransaction": None,
+                "OwnedCompilerHelperRoots": [],
+                "SetupCleanupErrors": [],
+            }
+        )
+    )
+    return request, resources
+
+
+def _finalize_twice(resources):
+    import os
+
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell unavailable")
+    module = Path(__file__).parents[1] / "scripts" / "BugFixLifecycle.psm1"
+    script = f"""
+$ErrorActionPreference='Stop'
+Import-Module '{module}' -Force -DisableNameChecking
+$global:present=$true
+$global:calls=[Collections.Generic.List[string]]::new()
+$ops=@{{
+ InspectContainer={{[pscustomobject]@{{Exists=$global:present;Id=$env:OWNED_ID;InvocationId=$env:OWNED_INVOCATION}}}}
+ InspectContainerById={{[pscustomobject]@{{Exists=$global:present;Id=$env:OWNED_ID;InvocationId=$env:OWNED_INVOCATION}}}}
+ ReadAgentIdentity={{[pscustomobject]@{{Sid=$env:OWNED_SID}}}}
+ DisableAgentIdentity={{$global:calls.Add('disable')}}
+ VerifyAgentIdentityDisabled={{}}
+ StopServiceTier={{$global:calls.Add('stop')}}
+ RemoveBcIdentity={{$global:calls.Add('bc-user')}}
+ RemoveContainer={{$global:calls.Add('remove');$global:present=$false}}
+ RemoveAcl={{}}
+ RemoveAgentIdentity={{}}
+}}
+foreach ($attempt in 1..2) {{
+ try {{
+  Complete-BCBenchBugFixLifecycle -EntryRoot $env:OWNED_ENTRY -ProtectedRoot $env:OWNED_ROOT -ContainerName $env:OWNED_NAME -Operations $ops
+ }} catch {{ $global:calls.Add('failed') }}
+}}
+@{{calls=@($global:calls);present=$global:present}} | ConvertTo-Json -Compress
+"""
+    result = subprocess.run(
+        [pwsh, "-NoProfile", "-NonInteractive", "-Command", script],
+        env={
+            **os.environ,
+            "OWNED_ID": resources.expected_container_id,
+            "OWNED_INVOCATION": resources.expected_container_invocation_id,
+            "OWNED_SID": resources.agent_os_sid,
+            "OWNED_ENTRY": str(resources.paths.entry_root),
+            "OWNED_ROOT": str(resources.paths.protected_root),
+            "OWNED_NAME": resources.container_name,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+@pytest.mark.parametrize("failure", ["nonzero", "missing_evidence", "cancel_validation"])
+def test_crash_before_quarantine_never_authorizes_finalizer(tmp_path: Path, monkeypatch, failure: str) -> None:
+    from bcbench.agent.shared.contained_process import ContainedProcessResult
+    from bcbench.evaluate.bugfix_lifecycle import rehearsal_execution as module
+
+    class SimulatedCrash(BaseException):
+        pass
+
+    request, resources = _supervisor_setup(tmp_path)
+    root = resources.paths.protected_root
+    with monkeypatch.context() as patch:
+        patch.setattr(module.shutil, "which", lambda _: "C:\\PowerShell\\pwsh.exe")
+        patch.setattr(module, "run_contained_process", lambda _: ContainedProcessResult(1 if failure == "nonzero" else 0, "", ""))
+        if failure == "cancel_validation":
+
+            def interrupt(*_args):
+                raise KeyboardInterrupt
+
+            patch.setattr(module, "require_rehearsal_evidence", interrupt)
+        write = module.write_rehearsal_record
+
+        def crash_before_marker(path, payload):
+            if path == root / "quarantine.json":
+                raise SimulatedCrash
+            return write(path, payload)
+
+        patch.setattr(module, "write_rehearsal_record", crash_before_marker)
+        with pytest.raises(SimulatedCrash):
+            module.run_rehearsal_worker(resources, request.evaluator_container, request.context.entry, iterations=10)
+    assert not (root / "quarantine.json").exists()
+    state_before_finalizer = json.loads((root / "workflow-execution.json").read_text())["status"]
+    result = _finalize_twice(resources)
+    assert result["present"] is True
+    assert "remove" not in result["calls"]
+    assert result["calls"].count("failed") == 2
+    assert state_before_finalizer == "rehearsal_running"
+    assert (root / "quarantine.json").exists()
+
+
+def test_success_evidence_is_durable_before_cleanup_eligibility(tmp_path: Path, monkeypatch) -> None:
+    from bcbench.agent.shared.contained_process import ContainedProcessResult
+    from bcbench.evaluate.bugfix_lifecycle import rehearsal_execution as module
+    from bcbench.evaluate.bugfix_lifecycle.execution import WorkflowExecution
+
+    request, resources = _supervisor_setup(tmp_path)
+    root = resources.paths.protected_root
+    validated = []
+    with monkeypatch.context() as patch:
+        patch.setattr(module.shutil, "which", lambda _: "C:\\PowerShell\\pwsh.exe")
+        patch.setattr(module, "run_contained_process", lambda _: ContainedProcessResult(0, "", ""))
+        patch.setattr(module, "require_rehearsal_evidence", lambda *_: validated.append(True))
+        finish = WorkflowExecution.finish_rehearsal
+
+        def finish_after_proof(self, **kwargs):
+            assert validated == [True]
+            record = json.loads((root / "workflow-rehearsal.json").read_text())
+            assert record["status"] == "success"
+            assert record["worker_shutdown"] == "verified"
+            finish(self, **kwargs)
+
+        patch.setattr(WorkflowExecution, "finish_rehearsal", finish_after_proof)
+        module.run_rehearsal_worker(resources, request.evaluator_container, request.context.entry, iterations=10)
+    result = _finalize_twice(resources)
+    assert result["present"] is False
+    assert result["calls"].count("remove") == 1
+    assert "failed" not in result["calls"]
+    assert not (root / "quarantine.json").exists()

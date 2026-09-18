@@ -150,11 +150,12 @@ def run_rehearsal_worker(
             )
         )
         status["worker_shutdown"] = "verified"
-        execution.finish_rehearsal(resume_lifecycle=s0 is not None)
         if result.returncode:
             raise CheckpointInfrastructureError("Rehearsal worker failed; inspect protected rehearsal records")  # noqa: TRY301 - persist failure and verified shutdown together
         require_rehearsal_evidence(resources, iterations, fault)
         status["status"] = "success"
+        write_rehearsal_record(record_path, status)
+        execution.finish_rehearsal(resume_lifecycle=s0 is not None)
     except BaseException as error:
         if isinstance(error, subprocess.TimeoutExpired):
             status["worker_shutdown"] = "verified"

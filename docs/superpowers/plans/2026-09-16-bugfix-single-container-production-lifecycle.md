@@ -1827,6 +1827,10 @@ absence-check/quarantine evidence, and deliberately exits nonzero.
 Focused support modules reuse `CheckpointManager`, production publication,
 test-evidence validation/classification, containment, and the ownership-safe
 finalizer. The durable `rehearsal_running` handoff blocks cleanup on cancellation.
+The supervisor validates the worker exit code and complete clean-S0/cycle evidence,
+then durably writes success before making cleanup eligible. Failure paths keep
+the handoff in `rehearsal_running`; even a crash before quarantine persistence
+cannot authorize destructive cleanup merely because process drainage finished.
 Failed test invocations latch the adapter unsafe just like failed PowerShell
 operations. No subsequent restore or clean-S0 success record is allowed while
 test-descendant shutdown remains unverified; the worker retains quarantine.
