@@ -49,6 +49,8 @@ Production AL MCP runs in an evaluator-owned Job Object behind an unguessable lo
 
 If agent or bridge shutdown cannot be verified, cleanup retains owned workspaces and ACLs, disables the restricted identity, and writes quarantine evidence rather than deleting potentially active resources. Bridge shutdown failures remain terminal across repeated checks, including cleanup after failed startup.
 
+Wrapper watchdog, nonzero-exit, and invalid-response failures retain wrapper diagnostics but do not read child capture files without verified Job Object drainage. Temporary cleanup errors cannot replace that containment-failure classification.
+
 Production AL LSP and configured plugins are staged under the entry's setup-owned `agent-tools\plugins` directory, outside the benchmark checkout and evaluated repository. Setup grants the restricted identity read/execute access, denies modification, and records the plugin root in the exact ACL transaction. The invocation ownership marker is checked before use and cleanup. Nonproduction plugin locations are unchanged.
 
 `tests\test_production_mcp_secrets.py` exercises real shell inspection without changing host accounts. Its `e2e` test additionally requires an explicitly provisioned disposable restricted identity and readable runtime/worker via `BCBENCH_BRIDGE_TEST_USERNAME`, `PASSWORD`, `WORKSPACE`, `PYTHON`, and `WORKER` (each with the `BCBENCH_BRIDGE_TEST_` prefix). Run it only on a dedicated runner with `uv run pytest tests\test_production_mcp_secrets.py -m e2e`; it does not provision accounts or validate a real BC server.

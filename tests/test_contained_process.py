@@ -6,6 +6,7 @@ import shutil
 import string
 import subprocess
 import sys
+import tempfile
 import time
 from hashlib import sha256
 from pathlib import Path
@@ -845,7 +846,7 @@ def test_wrapper_launch_failure_raises_infrastructure_error(tmp_path, monkeypatc
     assert exc_info.value.wrapper_stderr == "assignment failed"
 
 
-def test_wrapper_failure_includes_child_captures_and_wrapper_diagnostics(tmp_path, monkeypatch):
+def test_wrapper_failure_skips_unverified_child_captures_and_keeps_wrapper_diagnostics(tmp_path, monkeypatch):
     script_path = tmp_path / "Invoke-ContainedProcess.ps1"
     script_path.touch()
     wrapper_command: list[str] = []
@@ -874,13 +875,13 @@ def test_wrapper_failure_includes_child_captures_and_wrapper_diagnostics(tmp_pat
 
     assert isinstance(exc_info.value.__cause__, subprocess.CalledProcessError)
     assert exc_info.value.wrapper_returncode == 23
-    assert exc_info.value.child_stdout == "child stdout\n"
-    assert exc_info.value.child_stderr == "child stderr\n"
+    assert exc_info.value.child_stdout == ""
+    assert exc_info.value.child_stderr == ""
     assert exc_info.value.wrapper_stdout == "wrapper stdout diagnostic\n"
     assert exc_info.value.wrapper_stderr == "wrapper stderr diagnostic\n"
 
 
-def test_wrapper_watchdog_timeout_raises_infrastructure_error_with_all_captures(tmp_path, monkeypatch):
+def test_wrapper_watchdog_timeout_skips_unverified_child_captures(tmp_path, monkeypatch):
     script_path = tmp_path / "Invoke-ContainedProcess.ps1"
     script_path.touch()
     watchdog_timeout = 71
@@ -907,8 +908,8 @@ def test_wrapper_watchdog_timeout_raises_infrastructure_error_with_all_captures(
         run_contained_process(_request(tmp_path, "print('launched')", timeout_seconds=31))
 
     assert exc_info.value.watchdog_timeout_seconds == watchdog_timeout
-    assert exc_info.value.child_stdout == "child stdout\n"
-    assert exc_info.value.child_stderr == "child stderr\n"
+    assert exc_info.value.child_stdout == ""
+    assert exc_info.value.child_stderr == ""
     assert exc_info.value.wrapper_stdout == "wrapper stdout\n"
     assert exc_info.value.output == "wrapper stdout\n"
     assert exc_info.value.wrapper_stderr == "wrapper stderr\n"
@@ -1001,7 +1002,7 @@ def test_wrapper_reported_timeout_remains_command_timeout(tmp_path, monkeypatch)
         ),
     ],
 )
-def test_invalid_wrapper_response_raises_infrastructure_error_with_all_diagnostics(
+def test_invalid_wrapper_response_raises_infrastructure_error_without_reading_child_captures(
     tmp_path,
     monkeypatch,
     wrapper_stdout,
@@ -1033,10 +1034,50 @@ def test_invalid_wrapper_response_raises_infrastructure_error_with_all_diagnosti
 
     assert isinstance(exc_info.value.__cause__, expected_cause)
     assert exc_info.value.wrapper_returncode == 0
-    assert exc_info.value.child_stdout == "child stdout\n"
-    assert exc_info.value.child_stderr == "child stderr\n"
+    assert exc_info.value.child_stdout == ""
+    assert exc_info.value.child_stderr == ""
     assert exc_info.value.wrapper_stdout == wrapper_stdout
     assert exc_info.value.wrapper_stderr == "wrapper stderr\n"
+
+
+@pytest.mark.parametrize("wrapper_failure", ["watchdog", "nonzero", "invalid"])
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+def test_unverified_drainage_never_reads_captures_or_loses_containment_failure(tmp_path, monkeypatch, wrapper_failure, cleanup_fails):
+    reads = []
+    read_text = Path.read_text
+    cleanup = tempfile.TemporaryDirectory.cleanup
+
+    def locked_capture(path, *args, **kwargs):
+        if path.name in {"stdout.txt", "stderr.txt"}:
+            reads.append(path)
+            raise PermissionError("capture still held by unverified descendant")
+        return read_text(path, *args, **kwargs)
+
+    def fail_wrapper(command, **kwargs):
+        for option in ("-StdoutPath", "-StderrPath"):
+            Path(command[command.index(option) + 1]).touch()
+        if wrapper_failure == "watchdog":
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"], output="watchdog diagnostic")
+        if wrapper_failure == "nonzero":
+            raise subprocess.CalledProcessError(1, command, stderr="wrapper diagnostic")
+        return subprocess.CompletedProcess(command, 0, "invalid JSON", "invalid response diagnostic")
+
+    def locked_cleanup(directory):
+        cleanup(directory)
+        raise PermissionError("temporary file still held by unverified descendant")
+
+    monkeypatch.setattr(Path, "read_text", locked_capture)
+    monkeypatch.setattr(contained_process_module.subprocess, "run", fail_wrapper)
+    if cleanup_fails:
+        monkeypatch.setattr(tempfile.TemporaryDirectory, "cleanup", locked_cleanup)
+    with pytest.raises(ContainedProcessInfrastructureError) as failure:
+        run_contained_process(_request(tmp_path, "print('never launched')"))
+
+    assert reads == []
+    assert failure.value.child_stdout == ""
+    assert failure.value.child_stderr == ""
+    if cleanup_fails:
+        assert any("PermissionError" in note for note in failure.value.__notes__)
 
 
 @pytest.mark.e2e

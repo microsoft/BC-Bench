@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
 from pathlib import Path
@@ -11,7 +12,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessInfrastructureError, WindowsIdentity
+from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessInfrastructureError, ContainedProcessRequest, WindowsIdentity, run_contained_process
 from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from bcbench.evaluate.bugfix_lifecycle import (
     BugFixLifecyclePaths,
@@ -1184,6 +1185,49 @@ def test_unverified_agent_job_shutdown_blocks_freeze_even_without_bridge_failure
     assert not any(call.startswith("phase:") for call in calls)
     assert evidence.final_result.generated_patch_hash is None
     assert "remove-roots" not in calls
+    assert (request.paths.protected_root / "quarantine.json").is_file()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows containment protection is required")
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+def test_watchdog_capture_and_cleanup_faults_preserve_lifecycle_quarantine(tmp_path, monkeypatch, cleanup_fails):
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    read_text = Path.read_text
+    cleanup = tempfile.TemporaryDirectory.cleanup
+    capture_reads = []
+
+    def locked_capture(path, *args, **kwargs):
+        if path.name in {"stdout.txt", "stderr.txt"}:
+            capture_reads.append(path)
+            raise PermissionError("capture sharing violation")
+        return read_text(path, *args, **kwargs)
+
+    def watchdog(command, **kwargs):
+        for option in ("-StdoutPath", "-StderrPath"):
+            Path(command[command.index(option) + 1]).touch()
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"], stderr="watchdog")
+
+    def locked_cleanup(directory):
+        cleanup(directory)
+        raise PermissionError("cleanup sharing violation")
+
+    def failed_agent(context, policy):
+        run_contained_process(ContainedProcessRequest((sys.executable,), context.repo_path, {}, 30))
+
+    monkeypatch.setattr(Path, "read_text", locked_capture)
+    monkeypatch.setattr("bcbench.agent.shared.contained_process.subprocess.run", watchdog)
+    if cleanup_fails:
+        monkeypatch.setattr(tempfile.TemporaryDirectory, "cleanup", locked_cleanup)
+    with pytest.raises(CleanupInfrastructureError, match="shutdown was not verified"):
+        lifecycle.run(request, failed_agent)
+
+    assert capture_reads == []
+    assert "freeze" not in calls
+    assert "remove-roots" not in calls
+    assert "disable-local" in calls
+    assert "stop-agent-sessions" in calls
+    assert not any(call.startswith("phase:") for call in calls)
+    assert evidence.final_result.generated_patch_hash is None
     assert (request.paths.protected_root / "quarantine.json").is_file()
 
 

@@ -4,7 +4,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -154,10 +155,6 @@ def _write_request(path: Path, request: ContainedProcessRequest) -> None:
         payload["stop_path"] = str(request.stop_path)
     with path.open("x", encoding="utf-8") as request_file:
         json.dump(payload, request_file, separators=(",", ":"))
-
-
-def _read_capture(path: Path) -> str:
-    return _normalize_newlines(path.read_text(encoding="utf-8", errors="replace")) if path.exists() else ""
 
 
 def _normalize_newlines(value: str) -> str:
@@ -336,14 +333,31 @@ def _resolve_worker_launch(request: ContainedProcessRequest) -> tuple[Path, Path
     return python_executable, worker_path, expected_digest
 
 
+@contextmanager
+def _contained_process_directory() -> Iterator[Path]:
+    temporary = tempfile.TemporaryDirectory(prefix="bcbench-contained-")
+    failure: BaseException | None = None
+    try:
+        yield Path(temporary.name)
+    except (ContainedProcessInfrastructureError, KeyboardInterrupt) as error:
+        failure = error
+        raise
+    finally:
+        try:
+            temporary.cleanup()
+        except OSError as cleanup_error:
+            if failure is None:
+                raise
+            failure.add_note(f"Contained process temporary cleanup also failed ({type(cleanup_error).__name__}): {temporary.name}")
+
+
 def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessResult:
     script_path = get_config().paths.ps_script_path / "Invoke-ContainedProcess.ps1"
     if not script_path.is_file():
         raise FileNotFoundError(script_path)
 
     python_executable, worker_path, worker_sha256 = _resolve_worker_launch(request)
-    with tempfile.TemporaryDirectory(prefix="bcbench-contained-") as temp_dir:
-        temp_path = Path(temp_dir)
+    with _contained_process_directory() as temp_path:
         _protect_temp_directory(temp_path)
         private_path = temp_path / "private"
         shared_path = temp_path / "shared"
@@ -395,18 +409,17 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
                 timeout=watchdog_timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
+            # Only the wrapper's valid result proves job drainage; failure-path captures may still be held open.
             raise ContainedProcessInfrastructureError(
                 watchdog_timeout_seconds,
-                child_stdout=_read_capture(stdout_path),
-                child_stderr=_read_capture(stderr_path),
+                child_stdout="",
+                child_stderr="",
                 wrapper_stdout=_normalized_subprocess_output(exc.output),
                 wrapper_stderr=_normalized_subprocess_output(exc.stderr),
             ) from exc
         except subprocess.CalledProcessError as exc:
             raise ContainedProcessInfrastructureError.from_called_process_error(
                 exc,
-                child_stdout=_read_capture(stdout_path),
-                child_stderr=_read_capture(stderr_path),
             ) from exc
 
         try:
@@ -414,8 +427,8 @@ def run_contained_process(request: ContainedProcessRequest) -> ContainedProcessR
         except (TypeError, ValueError) as exc:
             raise ContainedProcessInfrastructureError(
                 None,
-                child_stdout=_read_capture(stdout_path),
-                child_stderr=_read_capture(stderr_path),
+                child_stdout="",
+                child_stderr="",
                 wrapper_stdout=_normalized_subprocess_output(completed.stdout),
                 wrapper_stderr=_normalized_subprocess_output(completed.stderr),
                 wrapper_returncode=completed.returncode,
