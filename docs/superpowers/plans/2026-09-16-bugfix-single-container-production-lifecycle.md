@@ -1696,6 +1696,8 @@ Workflow cleanup runs inside the existing contained-process runner with a 180-se
 
 If runtime rejection or an interrupted pending attempt prevents the cleanup worker from securing an already-acquired identity, the supervisor reads and validates the protected setup ownership record for diagnostic purposes only. Failure evidence explicitly records identity security as unverified, warns that the account may remain enabled, and requires manual containment. It never claims disablement from setup metadata, targets a mismatched account, or runs disallowed PowerShell as a fallback; existing quarantine and pending-attempt evidence remain intact.
 
+The cleanup child receives only an explicit Windows/profile/module-path environment allowlist. BC, lifecycle, model-provider, GitHub, Azure, and ADO credentials are not forwarded or serialized into either contained-process request JSON. The supervisor's own environment is unchanged.
+
 The exact compiler/symbol root returned by setup is included in `ToolRoots` as well as owned cleanup roots. It therefore participates in the existing read/execute grant, explicit write/delete denial, restricted-account access probes, exact CLI ACL metadata, and ownership-marker-checked cleanup.
 
 The shared summary now selects only `evaluation-results-*`; CI's mock artifact name is updated to that prefix to preserve the existing caller. Normal Copilot/Claude workflows and the legacy setup action remain unchanged. Real container, restricted-tooling, and paid-agent canaries remain pending on a production runner; local tests do not establish those outcomes.

@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import time
@@ -6,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from bcbench.agent.shared import contained_process
 from bcbench.evaluate.bugfix_lifecycle import workflow_cleanup
 from bcbench.exceptions import CleanupInfrastructureError
 
@@ -194,3 +196,63 @@ def test_startup_failure_records_inability_to_secure_identity_without_touching_f
         assert "sid" not in security
     if failure == "pending":
         assert pending.read_text() == '{"status":"running","worker_shutdown":"unverified"}'
+
+
+def test_cleanup_credentials_never_enter_actual_contained_request_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    secret_names = (
+        "BC_SERVER_PASSWORD",
+        "BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD",
+        "BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD",
+        "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG",
+        "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG",
+        "COPILOT_GITHUB_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "ANTHROPIC_API_KEY",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "ADO_TOKEN",
+        "AZURE_CLIENT_SECRET",
+        "UNRELATED_API_KEY",
+    )
+    secrets = {name: f"cleanup-secret-sentinel-{index}" for index, name in enumerate(secret_names)}
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("BCBENCH_LIFECYCLE_ENTRY_ROOT", "setup-env-must-not-be-serialized")
+    monkeypatch.setenv("CLEANUP_UNRECOGNIZED_ENV", "must-not-be-forwarded")
+    serialized = {}
+    write_request = contained_process._write_request
+    parse_result = contained_process._parse_wrapper_result
+    request_root = None
+
+    def capture_request(path, request):
+        nonlocal request_root
+        write_request(path, request)
+        request_root = path.parent.parent
+        serialized["private"] = path.read_text(encoding="utf-8")
+
+    def capture_worker_request(output):
+        assert request_root is not None
+        serialized["worker"] = (request_root / "shared" / "worker-request.json").read_text(encoding="utf-8-sig")
+        return parse_result(output)
+
+    monkeypatch.setattr(contained_process, "_write_request", capture_request)
+    monkeypatch.setattr(contained_process, "_parse_wrapper_result", capture_worker_request)
+    workflow_cleanup.complete_workflow_cleanup(
+        tmp_path / "entry",
+        tmp_path / "protected",
+        "bc-test",
+        worker_command=(sys.executable, "-c", "import os; assert os.environ['SystemRoot']; assert os.environ['PATH']"),
+    )
+    assert set(serialized) == {"private", "worker"}
+    for name, secret in secrets.items():
+        assert os.environ[name] == secret
+    for text in serialized.values():
+        environment = json.loads(text)["env"]
+        for name, secret in secrets.items():
+            assert name not in environment
+            assert secret not in text
+        assert "BCBENCH_LIFECYCLE_ENTRY_ROOT" not in environment
+        assert "CLEANUP_UNRECOGNIZED_ENV" not in environment
+        assert environment["PATH"]
+        assert environment["SYSTEMROOT"]
+        assert environment["TEMP"]

@@ -9,6 +9,30 @@ from bcbench.agent.shared.contained_process import ContainedProcessInfrastructur
 from bcbench.evaluate.bugfix_lifecycle.path_safety import absolute_path, reject_reparse_components, require_disjoint
 from bcbench.exceptions import CleanupInfrastructureError
 
+_CLEANUP_ENVIRONMENT_KEYS = frozenset(
+    {
+        "ALLUSERSPROFILE",
+        "APPDATA",
+        "COMSPEC",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOCALAPPDATA",
+        "PATH",
+        "PATHEXT",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMW6432",
+        "PSMODULEPATH",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+        "WINDIR",
+    }
+)
+
 
 def _write_record(path: Path, payload: dict[str, object], *, exclusive: bool = False) -> None:
     reject_reparse_components(path, path.parent)
@@ -130,7 +154,7 @@ def complete_workflow_cleanup(
                     "-Worker",
                 ),
                 cwd=Path(__file__).parents[4],
-                env=dict(os.environ),
+                env={name.upper(): value for name, value in os.environ.items() if name.upper() in _CLEANUP_ENVIRONMENT_KEYS},
                 timeout_seconds=timeout_seconds,
             )
         )
