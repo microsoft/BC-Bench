@@ -3658,6 +3658,7 @@ function Invoke-BCBenchBugFixLifecycle {
                 -Value $context.ContainerInvocationId `
                 -Encoding utf8
             $context.OwnedCompilerHelperRoots = @($ownedCompilerRoot)
+            $context.ToolRoots = @(@($context.ToolRoots) + @($ownedCompilerRoot) | Select-Object -Unique)
         }
         Invoke-BCBenchOperation -Operations $Operations -Name InitializeContainer -Context $context -Default {
             param($operationContext)

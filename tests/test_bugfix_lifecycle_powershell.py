@@ -2822,11 +2822,12 @@ catch {{
     assert output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"] == payload["invocationId"]
     assert output_values["BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX"] == str(python_base_prefix)
     assert output_values["BCBENCH_LIFECYCLE_AGENT_OS_SID"] == "S-1-5-21-1000-1001-1002-1003"
-    assert json.loads(output_values["BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON"]) == [str(tool_root), str(success_entry / "agent-tools" / "plugins")]
+    assert json.loads(output_values["BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON"]) == [str(tool_root), str(success_entry / "agent-tools" / "plugins"), str(compiler_root)]
     acl_paths = tuple(Path(path) for path in json.loads(output_values["BCBENCH_LIFECYCLE_ACL_PATHS_JSON"]))
     assert python_base_prefix in acl_paths
     assert python_base_executable in acl_paths
     assert python_base_executable.parent not in acl_paths
+    assert compiler_root in acl_paths
     assert output_values["BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS"] == str(compiler_root)
     assert len(output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"]) == 32
     assert set(output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"]) <= set("0123456789abcdef")
@@ -2872,6 +2873,8 @@ catch {{
     assert request.agent_runtime.al_lsp is True
     assert request.agent_runtime.bc_mcp is True
     assert request.compiler_helper_roots[0].path == compiler_root
+    assert compiler_root in request.provisioned_resources.cleanup_tool_roots
+    assert compiler_root in request.acl_paths
 
     non_mask_output = "\n".join(line for line in raw_output.splitlines()[:-1] if not line.startswith("::add-mask::"))
     for secret in (
@@ -3491,13 +3494,14 @@ def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, f
     evidence = entry_root / "evidence"
     tool_parent = tmp_path / "tool-parent"
     tool_root = tool_parent / "tool-root"
+    compiler_root = tmp_path / "compiler"
     benchmark_parent = tmp_path / "benchmark-parent"
     benchmark_root = benchmark_parent / "benchmark"
     dataset_path = benchmark_root / "dataset" / "bcbench.jsonl"
     evaluator_source = benchmark_root / "src" / "bcbench" / "evaluate"
     docs = benchmark_root / "docs"
     source_worker = benchmark_root / "src" / "bcbench" / "agent" / "shared" / "contained_process_worker.py"
-    for path in (baseline, workspace, logs, staging, evaluators, evidence, tool_root, protected_root, dataset_path.parent, evaluator_source, docs, source_worker.parent):
+    for path in (baseline, workspace, logs, staging, evaluators, evidence, tool_root, compiler_root, protected_root, dataset_path.parent, evaluator_source, docs, source_worker.parent):
         path.mkdir(parents=True, exist_ok=True)
     profile = logs / "profile"
     for path in (profile / "AppData" / "Roaming", profile / "AppData" / "Local", profile / "temp"):
@@ -3574,7 +3578,7 @@ try {{
         ProtectedRoot = {_ps_quote(protected_root)}
         BenchmarkRoot = {_ps_quote(benchmark_root)}
         DatasetPath = {_ps_quote(dataset_path)}
-        ToolRoots = @({_ps_quote(tool_root)}, (Join-Path $tools.AgentTools 'plugins'))
+        ToolRoots = @({_ps_quote(tool_root)}, (Join-Path $tools.AgentTools 'plugins'), {_ps_quote(compiler_root)})
         RuntimeExecutablePaths = @($runtime.BaseExecutable)
         RuntimeRoots = @($runtime.BasePrefix)
         SourceWorkerPath = {_ps_quote(source_worker)}
@@ -3618,6 +3622,7 @@ try {{
         $tools.WorkerPath,
         (Join-Path $tools.AgentTools 'plugins'),
         {_ps_quote(tool_root)},
+        {_ps_quote(compiler_root)},
         $runtime.BasePrefix,
         $runtime.BaseExecutable
     )
@@ -3709,7 +3714,7 @@ finally {{
 
     assert payload["username"].startswith("bcb-")
     assert payload["agentAclRemains"] is False
-    assert payload["trackedPathCount"] == 15
+    assert payload["trackedPathCount"] == 16
     assert payload["baseAclPreserved"] is True
     assert payload["userPresentBeforeAclCleanup"] is True
     assert payload["userPresentAfterAclCleanup"] is True
@@ -3723,7 +3728,7 @@ finally {{
         assert payload["agentToolsInheritanceProtected"] is False
         assert payload["workerInheritanceProtected"] is False
         assert payload["agentWorkerWriteGrantPresent"] is False
-        assert len(payload["readExecuteDenyPaths"]) == 6
+        assert len(payload["readExecuteDenyPaths"]) == 7
         assert {"S-1-5-32-545", "S-1-5-11"} <= set(payload["inheritedModifySids"])
         assert payload["access"]["WorkspaceWriteSucceeded"] is True
         assert payload["access"]["ProfilePathsWriteSucceeded"] is True
@@ -3753,6 +3758,7 @@ finally {{
             (entry_root / "agent-tools").resolve(),
             (entry_root / "agent-tools" / "plugins").resolve(),
             tool_root.resolve(),
+            compiler_root.resolve(),
             Path(sys.base_prefix).resolve(),
         }
         assert all(item["ReadSucceeded"] and item["CreateDenied"] and item["WriteDenied"] and item["DeleteDenied"] for item in payload["access"]["ReadExecuteDirectoryResults"])

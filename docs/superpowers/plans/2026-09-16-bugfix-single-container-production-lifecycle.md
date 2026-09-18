@@ -1694,6 +1694,8 @@ The execution handoff is separate from setup readiness: setup creates `not_start
 
 Workflow cleanup runs inside the existing contained-process runner with a 180-second total worker budget (plus its bounded 30-second startup and 10-second shutdown allowances), inside a five-minute workflow step. The owned identity is disabled before container calls. A durable sibling `*.cleanup-pending.quarantine.json` is created before launching the worker and removed only after verified successful termination; timeout or supervisor cancellation retains it and blocks retries. Store-packaged WindowsApps PowerShell is rejected before provisioning because package activation can escape descendant containment; the runner must provide native PowerShell 7. No local runtime installation is performed by this change.
 
+The exact compiler/symbol root returned by setup is included in `ToolRoots` as well as owned cleanup roots. It therefore participates in the existing read/execute grant, explicit write/delete denial, restricted-account access probes, exact CLI ACL metadata, and ownership-marker-checked cleanup.
+
 The shared summary now selects only `evaluation-results-*`; CI's mock artifact name is updated to that prefix to preserve the existing caller. Normal Copilot/Claude workflows and the legacy setup action remain unchanged. Real container, restricted-tooling, and paid-agent canaries remain pending on a production runner; local tests do not establish those outcomes.
 
 **Files:**
