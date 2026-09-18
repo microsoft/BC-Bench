@@ -32,6 +32,7 @@ from bcbench.evaluate.bugfix_lifecycle.path_safety import (
     absolute_path,
     reject_reparse_components,
     require_strict_descendant,
+    validate_agent_plugin_root,
     validate_cleanup_acl_paths,
     validate_owned_lifecycle_roots,
 )
@@ -1580,6 +1581,9 @@ class PowerShellLifecycleOwnershipApi:
         )
 
     def remove_roots(self) -> None:
+        plugin_root = self._paths.agent_tools / "plugins"
+        if plugin_root.exists() or plugin_root.is_symlink() or plugin_root.is_junction():
+            validate_agent_plugin_root(self._resources)
         entry_paths = tuple(getattr(self._paths, name) for name in ENTRY_MANAGED_PATH_NAMES)
         external_roots = validate_owned_lifecycle_roots(
             self._resources.compiler_helper_roots,

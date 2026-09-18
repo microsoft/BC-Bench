@@ -81,7 +81,7 @@ class LifecycleCliFixture:
             "--acl-paths-json",
             json.dumps([str(path) for path in self.acl_paths]),
             "--cleanup-tool-roots-json",
-            json.dumps([str(self.tool_root)]),
+            json.dumps([str(path) for path in self.tool_roots]),
             "--owned-compiler-helper-root",
             str(self.owned_root),
             "--evaluator-container-config",
@@ -129,9 +129,18 @@ class LifecycleCliFixture:
             self.entry_root / "agent-tools",
             self.worker,
             self.tool_root,
+            self.plugin_root,
             self.python_base_prefix,
             self.python,
         )
+
+    @property
+    def plugin_root(self) -> Path:
+        return self.entry_root / "agent-tools" / "plugins"
+
+    @property
+    def tool_roots(self) -> tuple[Path, ...]:
+        return self.tool_root, self.plugin_root
 
 
 @pytest.fixture
@@ -145,6 +154,9 @@ def lifecycle_cli_fixture(tmp_path: Path) -> LifecycleCliFixture:
     worker = entry_root / "agent-tools" / "contained_process_worker.py"
     worker.parent.mkdir()
     worker.write_text("print('worker')\n", encoding="utf-8")
+    plugin_root = worker.parent / "plugins"
+    plugin_root.mkdir()
+    (plugin_root / ".bcbench-owned").write_text("invocation-id\n", encoding="utf-8")
     python_base_prefix = tmp_path / "runtime"
     python = python_base_prefix / "nested" / "bin" / "python.exe"
     python.parent.mkdir(parents=True)
@@ -472,6 +484,19 @@ def test_bugfix_lifecycle_help_lists_fixed_category_agent_commands():
     assert "agent-container-config" not in copilot.stdout
 
 
+def test_lifecycle_rejects_unowned_plugin_staging_before_agent_or_dataset(lifecycle_cli_fixture):
+    (lifecycle_cli_fixture.plugin_root / ".bcbench-owned").write_text("other-invocation")
+    with (
+        patch.object(BugFixEntry, "load") as load,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", return_value=None) as cleanup,
+    ):
+        result = runner.invoke(app, lifecycle_cli_fixture.args("copilot"))
+    assert result.exit_code != 0
+    assert "ownership marker" in result.output
+    load.assert_not_called()
+    cleanup.assert_called_once()
+
+
 def test_bugfix_lifecycle_requires_protected_root_when_entry_root_is_supplied(
     lifecycle_cli_fixture: LifecycleCliFixture,
 ):
@@ -550,6 +575,7 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert request.python_base_prefix == lifecycle_cli_fixture.python_base_prefix
     assert request.acl_paths == lifecycle_cli_fixture.acl_paths
     assert request.agent_execution_policy.worker_path == lifecycle_cli_fixture.worker
+    assert request.agent_execution_policy.plugin_root == lifecycle_cli_fixture.plugin_root
     agent_profile = request.paths.agent_logs / "profile"
     agent_roaming = agent_profile / "AppData" / "Roaming"
     agent_local = agent_profile / "AppData" / "Local"
@@ -625,7 +651,7 @@ def test_bugfix_lifecycle_environment_only_accepts_blank_mcp_url_when_bc_mcp_dis
         "BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX": str(lifecycle_cli_fixture.python_base_prefix),
         "BCBENCH_LIFECYCLE_AGENT_OS_SID": "S-1-5-21-123",
         "BCBENCH_LIFECYCLE_ACL_PATHS_JSON": json.dumps([str(path) for path in lifecycle_cli_fixture.acl_paths]),
-        "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON": json.dumps([str(lifecycle_cli_fixture.tool_root)]),
+        "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON": json.dumps([str(path) for path in lifecycle_cli_fixture.tool_roots]),
         "BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS": str(lifecycle_cli_fixture.owned_root),
         "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG": json.dumps(evaluator_config),
         "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG": json.dumps(agent_config),
@@ -717,7 +743,7 @@ def test_bugfix_lifecycle_accepts_prefixed_environment_options(lifecycle_cli_fix
         "BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX": str(lifecycle_cli_fixture.python_base_prefix),
         "BCBENCH_LIFECYCLE_AGENT_OS_SID": "S-1-5-21-123",
         "BCBENCH_LIFECYCLE_ACL_PATHS_JSON": json.dumps([str(path) for path in lifecycle_cli_fixture.acl_paths]),
-        "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON": json.dumps([str(lifecycle_cli_fixture.tool_root)]),
+        "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON": json.dumps([str(path) for path in lifecycle_cli_fixture.tool_roots]),
         "BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS": str(lifecycle_cli_fixture.owned_root),
         "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG": json.dumps(lifecycle_cli_fixture.evaluator_config),
         "BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG": json.dumps(lifecycle_cli_fixture.agent_config),
@@ -952,7 +978,7 @@ def test_bugfix_lifecycle_malformed_ownership_envelope_quarantines_exactly_once_
     assert quarantine["staged_worker_path"] == str(lifecycle_cli_fixture.worker)
     assert quarantine["base_python"] == str(lifecycle_cli_fixture.python)
     assert quarantine["python_base_prefix"] == str(lifecycle_cli_fixture.python_base_prefix)
-    assert quarantine["cleanup_tool_roots_json"] == json.dumps([str(lifecycle_cli_fixture.tool_root)])
+    assert quarantine["cleanup_tool_roots_json"] == json.dumps([str(path) for path in lifecycle_cli_fixture.tool_roots])
     assert quarantine["owned_compiler_helper_roots"] == [str(lifecycle_cli_fixture.owned_root)]
 
 

@@ -78,11 +78,12 @@ def run_claude_code(
             repo_path,
             AgentHarness.CLAUDE,
             runtime=runtime,
+            plugin_root=execution_policy.plugin_root if execution_policy else None,
         )
         instructions_enabled: bool = setup_instructions_from_config(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
         skills_enabled: bool = setup_agent_skills(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
         custom_agent: str | None = setup_custom_agent(claude_config, entry, repo_path, harness=AgentHarness.CLAUDE)
-        plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False)
+        plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(claude_config, allow_copilot_manifest=False, plugin_root=execution_policy.plugin_root if execution_policy else None)
 
         config = ExperimentConfiguration(
             mcp_servers=mcp_server_names,

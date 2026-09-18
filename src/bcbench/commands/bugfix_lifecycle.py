@@ -65,6 +65,7 @@ from bcbench.evaluate.bugfix_lifecycle.path_safety import (
     reject_reparse_components,
     require_disjoint,
     require_strict_descendant,
+    validate_agent_plugin_root,
     validate_lifecycle_paths,
     validate_provisioned_lifecycle_resources,
 )
@@ -550,6 +551,7 @@ def _run_lifecycle_with_cleanup_lease(
 ) -> None:
     try:
         resources = validate_provisioned_lifecycle_resources(cleanup_lease.resources)
+        plugin_root = validate_agent_plugin_root(resources)
     except ValueError as error:
         raise typer.BadParameter(str(error), param_hint="--acl-paths-json") from error
     cleanup_lease.replace_resources(resources)
@@ -584,6 +586,7 @@ def _run_lifecycle_with_cleanup_lease(
         worker_sha256=staged_worker_sha256.lower(),
         environment_overrides=profile_environment,
         managed_clients=ManagedAgentClients(),
+        plugin_root=plugin_root,
     )
     try:
         request = BugFixLifecycleRequest(

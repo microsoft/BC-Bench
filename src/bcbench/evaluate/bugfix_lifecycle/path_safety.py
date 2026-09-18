@@ -233,6 +233,19 @@ def validate_provisioned_lifecycle_resources(
     )
 
 
+def validate_agent_plugin_root(resources: ProvisionedLifecycleResources) -> Path:
+    root = resources.paths.agent_tools / "plugins"
+    reject_reparse_components(root, resources.paths.agent_tools)
+    require_disjoint(root, resources.benchmark_root, "agent plugin root", "benchmark root")
+    if root not in resources.cleanup_tool_roots:
+        raise ValueError("Agent plugin root must be included in the setup ACL tool roots")
+    marker = root / ".bcbench-owned"
+    reject_reparse_components(marker, root)
+    if not marker.is_file() or marker.read_text(encoding="utf-8").strip() != resources.expected_container_invocation_id:
+        raise ValueError("Agent plugin root ownership marker does not match the setup invocation")
+    return root
+
+
 def validate_cleanup_acl_paths(
     resources: ProvisionedLifecycleResources,
 ) -> tuple[Path, ...]:
@@ -264,6 +277,7 @@ def validate_cleanup_acl_paths(
             f"cleanup_tool_roots[{index}]",
             benchmark_root,
             paths,
+            require_exists=False,
         )
         for index, root in enumerate(resources.cleanup_tool_roots)
     )
@@ -305,8 +319,10 @@ def _validate_read_execute_root(
     name: str,
     benchmark_root: Path,
     paths: BugFixLifecyclePaths,
+    *,
+    require_exists: bool = True,
 ) -> Path:
-    canonical = _require_directory_without_reparse(root, name)
+    canonical = _require_directory_without_reparse(root, name) if require_exists else _canonical_path(root)
     restricted_paths = (
         benchmark_root,
         paths.protected_root,

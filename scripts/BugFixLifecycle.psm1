@@ -326,6 +326,7 @@ function New-BCBenchAgentTools {
     param(
         [Parameter(Mandatory = $true)][string]$EntryRoot,
         [Parameter(Mandatory = $true)][string]$BenchmarkRoot,
+        [Parameter(Mandatory = $true)][string]$InvocationId,
         [Parameter(Mandatory = $true)][string]$SourceWorkerPath
     )
 
@@ -364,6 +365,9 @@ function New-BCBenchAgentTools {
     if ($workerHash -ne $sourceHash) {
         throw "Staged contained process worker hash does not match its evaluator source."
     }
+    $pluginRoot = Join-Path $agentTools "plugins"
+    New-Item -ItemType Directory -Path $pluginRoot | Out-Null
+    Set-Content -LiteralPath (Join-Path $pluginRoot ".bcbench-owned") -Value $InvocationId -Encoding utf8NoBOM
 
     return [PSCustomObject]@{
         AgentTools   = $agentTools
@@ -3263,11 +3267,13 @@ function Invoke-BCBenchBugFixLifecycle {
             return New-BCBenchAgentTools `
                 -EntryRoot $operationContext.EntryRoot `
                 -BenchmarkRoot $operationContext.BenchmarkRoot `
+                -InvocationId $operationContext.ContainerInvocationId `
                 -SourceWorkerPath $operationContext.SourceWorkerPath
         }
         $context.AgentTools = Resolve-BCBenchAbsolutePath -Path ([string]$agentTools.AgentTools)
         $context.WorkerPath = Resolve-BCBenchAbsolutePath -Path ([string]$agentTools.WorkerPath)
         $context.WorkerSha256 = [string]$agentTools.WorkerSha256
+        $context.ToolRoots = @($context.ToolRoots) + @(Join-Path $context.AgentTools "plugins")
 
         $context.Entry = Invoke-BCBenchOperation -Operations $Operations -Name ResolveEntry -Context $context -Default {
             param($operationContext)

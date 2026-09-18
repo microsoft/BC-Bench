@@ -44,6 +44,7 @@ class AgentExecutionPolicy:
     worker_sha256: str | None = None
     environment_overrides: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
     managed_clients: "ManagedAgentClients | None" = field(default=None, repr=False, compare=False)
+    plugin_root: Path | None = None
 
     def __post_init__(self) -> None:
         overrides = dict(self.environment_overrides)

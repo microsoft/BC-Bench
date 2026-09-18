@@ -72,6 +72,21 @@ class TestSharedBehavior:
         assert _build(entry, repo_path, harness, _runtime(al_lsp=False)) is None
         assert not (plugin_root / _PLUGIN_FOLDER).exists()
 
+    @pytest.mark.usefixtures("artifact_paths")
+    def test_production_lsp_uses_setup_plugin_root_without_touching_default(self, entry, repo_path, harness, plugin_root, tmp_path):
+        production_root = tmp_path / "entry" / "agent-tools" / "plugins"
+        production_root.mkdir(parents=True)
+        default = plugin_root / _PLUGIN_FOLDER
+        default.mkdir(parents=True)
+        (default / "keep.txt").write_text("nonproduction")
+        result = build_al_lsp_plugin(entry, EvaluationCategory.BUG_FIX, repo_path, harness, _runtime(), plugin_root=production_root)
+        assert result == production_root / _PLUGIN_FOLDER
+        server = _read_lsp(production_root)
+        assert ("lspServers" in server) == (harness is AgentHarness.COPILOT)
+        build_al_lsp_plugin(entry, EvaluationCategory.BUG_FIX, repo_path, harness, None, plugin_root=production_root)
+        assert not result.exists()
+        assert (default / "keep.txt").read_text() == "nonproduction"
+
     def test_removes_stale_plugin_when_disabled(self, entry, repo_path, harness, plugin_root):
         plugin_dir = plugin_root / _PLUGIN_FOLDER
         (plugin_dir / ".claude-plugin").mkdir(parents=True)

@@ -1136,6 +1136,22 @@ def test_bridge_shutdown_failure_blocks_official_phases_and_quarantines(tmp_path
     assert (request.paths.protected_root / "quarantine.json").is_file()
 
 
+def test_owned_plugin_root_cleanup_preserves_exact_acl_metadata_after_deletion(tmp_path):
+    request, _, _, _, _, _ = _harness(tmp_path)
+    resources = request.provisioned_resources
+    root = resources.paths.agent_tools / "plugins"
+    root.mkdir()
+    (root / ".bcbench-owned").write_text(resources.expected_container_invocation_id)
+    index = resources.acl_paths.index(resources.staged_worker_path) + 1
+    resources = replace(resources, cleanup_tool_roots=(root,), acl_paths=(*resources.acl_paths[:index], root, *resources.acl_paths[index:]))
+    scripts = []
+    api = PowerShellLifecycleOwnershipApi(resources, None, lambda script: scripts.append(script) or subprocess.CompletedProcess([], 0, "", ""))
+    api.remove_roots()
+    api.remove_acl()
+    assert not root.exists()
+    assert str(root).replace("\\", "\\\\") in scripts[-1]
+
+
 def test_timeout_preserves_diagnostics_and_forces_resolution_failure(tmp_path: Path) -> None:
     request, lifecycle, calls, _, _, _ = _harness(tmp_path)
 

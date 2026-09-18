@@ -1081,6 +1081,7 @@ Import-Module {_ps_quote(_MODULE)} -Force
 $tools = New-BCBenchAgentTools `
     -EntryRoot {_ps_quote(entry_root)} `
     -BenchmarkRoot {_ps_quote(_ROOT)} `
+    -InvocationId 'plugin-invocation' `
     -SourceWorkerPath {_ps_quote(source_worker)}
 [PSCustomObject]@{{
     tools = $tools
@@ -1095,6 +1096,7 @@ $tools = New-BCBenchAgentTools `
     assert not worker.is_relative_to(_ROOT)
     assert payload["tools"]["WorkerSha256"] == payload["sourceHash"]
     assert worker.read_bytes() == source_worker.read_bytes()
+    assert (entry_root / "agent-tools" / "plugins" / ".bcbench-owned").read_text(encoding="utf-8").strip() == "plugin-invocation"
 
 
 def test_setup_rejects_benchmark_root_as_explicit_tool_root(tmp_path: Path) -> None:
@@ -2681,8 +2683,8 @@ $successOps = @{{
             $Context.AgentWorkspace,
             $Context.AgentLogs,
             $Context.AgentTools,
-            $Context.WorkerPath,
-            $Context.ToolRoots,
+            $Context.WorkerPath
+        ) + @($Context.ToolRoots) + @(
             $Context.PythonBasePrefix,
             $Context.PythonBaseExecutable
         )) {{
@@ -2815,7 +2817,7 @@ catch {{
     assert output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"] == payload["invocationId"]
     assert output_values["BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX"] == str(python_base_prefix)
     assert output_values["BCBENCH_LIFECYCLE_AGENT_OS_SID"] == "S-1-5-21-1000-1001-1002-1003"
-    assert json.loads(output_values["BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON"]) == [str(tool_root)]
+    assert json.loads(output_values["BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON"]) == [str(tool_root), str(success_entry / "agent-tools" / "plugins")]
     acl_paths = tuple(Path(path) for path in json.loads(output_values["BCBENCH_LIFECYCLE_ACL_PATHS_JSON"]))
     assert python_base_prefix in acl_paths
     assert python_base_executable in acl_paths
@@ -3537,6 +3539,7 @@ try {{
     $tools = New-BCBenchAgentTools `
         -EntryRoot {_ps_quote(entry_root)} `
         -BenchmarkRoot {_ps_quote(benchmark_root)} `
+        -InvocationId 'e2e-plugin-invocation' `
         -SourceWorkerPath {_ps_quote(source_worker)}
     $parameters = @{{
         Identity = $identity
@@ -3551,7 +3554,7 @@ try {{
         ProtectedRoot = {_ps_quote(protected_root)}
         BenchmarkRoot = {_ps_quote(benchmark_root)}
         DatasetPath = {_ps_quote(dataset_path)}
-        ToolRoots = @({_ps_quote(tool_root)})
+        ToolRoots = @({_ps_quote(tool_root)}, (Join-Path $tools.AgentTools 'plugins'))
         RuntimeExecutablePaths = @($runtime.BaseExecutable)
         RuntimeRoots = @($runtime.BasePrefix)
         SourceWorkerPath = {_ps_quote(source_worker)}
@@ -3593,6 +3596,7 @@ try {{
     $denyPaths = @(
         $tools.AgentTools,
         $tools.WorkerPath,
+        (Join-Path $tools.AgentTools 'plugins'),
         {_ps_quote(tool_root)},
         $runtime.BasePrefix,
         $runtime.BaseExecutable
@@ -3685,7 +3689,7 @@ finally {{
 
     assert payload["username"].startswith("bcb-")
     assert payload["agentAclRemains"] is False
-    assert payload["trackedPathCount"] == 14
+    assert payload["trackedPathCount"] == 15
     assert payload["baseAclPreserved"] is True
     assert payload["userPresentBeforeAclCleanup"] is True
     assert payload["userPresentAfterAclCleanup"] is True
@@ -3699,7 +3703,7 @@ finally {{
         assert payload["agentToolsInheritanceProtected"] is False
         assert payload["workerInheritanceProtected"] is False
         assert payload["agentWorkerWriteGrantPresent"] is False
-        assert len(payload["readExecuteDenyPaths"]) == 5
+        assert len(payload["readExecuteDenyPaths"]) == 6
         assert {"S-1-5-32-545", "S-1-5-11"} <= set(payload["inheritedModifySids"])
         assert payload["access"]["WorkspaceWriteSucceeded"] is True
         assert payload["access"]["ProfilePathsWriteSucceeded"] is True
@@ -3727,6 +3731,7 @@ finally {{
         assert payload["access"]["OutputHandleCaptureSucceeded"] is True
         assert {Path(item["Path"]).resolve() for item in payload["access"]["ReadExecuteDirectoryResults"]} == {
             (entry_root / "agent-tools").resolve(),
+            (entry_root / "agent-tools" / "plugins").resolve(),
             tool_root.resolve(),
             Path(sys.base_prefix).resolve(),
         }

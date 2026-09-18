@@ -29,8 +29,12 @@ def test_real_agent_shell_cannot_find_bc_password_in_public_surfaces(tmp_path, m
     monkeypatch.setenv("BC_SERVER_PASSWORD", secret)
     monkeypatch.setenv("BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD", secret)
     clients = ManagedAgentClients()
-    policy = AgentExecutionPolicy(contain_process_tree=True, allowlist_environment=True, managed_clients=clients)
-    runtime = AgentRuntimeConfig(ContainerConfig("test", "agent", secret, "CRONUS"), al_mcp=True)
+    plugin_root = tmp_path / "agent-tools" / "plugins"
+    plugin_root.mkdir(parents=True)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    policy = AgentExecutionPolicy(contain_process_tree=True, allowlist_environment=True, managed_clients=clients, plugin_root=plugin_root)
+    runtime = AgentRuntimeConfig(ContainerConfig("test", "agent", secret, "CRONUS"), al_mcp=True, al_lsp=True)
     config = {
         "mcp": {"servers": [{"name": "altool", "type": "stdio", "command": sys.executable, "args": [str(_SERVER), "launchmcpserver"]}]},
         "plugins": [],
@@ -40,7 +44,8 @@ def test_real_agent_shell_cannot_find_bc_password_in_public_surfaces(tmp_path, m
     def shell(command, env):
         prefix = "--additional-mcp-config=" if harness == "copilot" else "--mcp-config="
         mcp = next(arg.removeprefix(prefix) for arg in command if arg.startswith(prefix))
-        result = run_contained_process(ContainedProcessRequest((sys.executable, str(_PROBE), mcp), tmp_path, env, 15))
+        assert f"--plugin-dir={plugin_root / 'al-lsp-plugin'}" in command
+        result = run_contained_process(ContainedProcessRequest((sys.executable, str(_PROBE), mcp), workspace, env, 15))
         assert result.returncode == 0, result.stderr
         observed.append(json.loads(result.stdout))
         return result
@@ -62,7 +67,7 @@ def test_real_agent_shell_cannot_find_bc_password_in_public_surfaces(tmp_path, m
     with (
         patch(f"{module}.yaml.safe_load", return_value=config),
         patch(f"{module}.build_prompt", return_value="run probe"),
-        patch(f"{module}.build_al_lsp_plugin", return_value=None),
+        patch("bcbench.agent.shared.lsp._resolve_symbol_paths", return_value=([], [])),
         patch(f"{module}.setup_instructions_from_config", return_value=False),
         patch(f"{module}.setup_agent_skills", return_value=False),
         patch(f"{module}.setup_custom_agent", return_value=None),
@@ -72,9 +77,9 @@ def test_real_agent_shell_cannot_find_bc_password_in_public_surfaces(tmp_path, m
         try:
             if harness == "claude":
                 with patch("bcbench.agent.claude.agent.shutil.which", side_effect=lambda name: sys.executable if name == "claude" else which(name)):
-                    run_claude_code(create_dataset_entry(), "model", EvaluationCategory.BUG_FIX, tmp_path, tmp_path, runtime, policy)
+                    run_claude_code(create_dataset_entry(), "model", EvaluationCategory.BUG_FIX, workspace, workspace, runtime, policy)
             else:
-                run_copilot_agent(create_dataset_entry(), "model", EvaluationCategory.BUG_FIX, tmp_path, tmp_path, runtime, policy)
+                run_copilot_agent(create_dataset_entry(), "model", EvaluationCategory.BUG_FIX, workspace, workspace, runtime, policy)
         finally:
             clients.stop()
 
@@ -84,6 +89,8 @@ def test_real_agent_shell_cannot_find_bc_password_in_public_surfaces(tmp_path, m
     server = observed[0]["config"]["mcpServers"]["altool"]
     assert set(server) == {"type", "url"}
     assert server["url"].startswith("http://127.0.0.1:")
+    lsp = json.loads((plugin_root / "al-lsp-plugin" / ".lsp.json").read_text())
+    assert ("lspServers" in lsp) == (harness == "copilot")
 
 
 @pytest.mark.e2e

@@ -64,11 +64,12 @@ def run_copilot_agent(
             repo_path,
             AgentHarness.COPILOT,
             runtime=runtime,
+            plugin_root=execution_policy.plugin_root if execution_policy else None,
         )
         instructions_enabled: bool = setup_instructions_from_config(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
         skills_enabled: bool = setup_agent_skills(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
         custom_agent: str | None = setup_custom_agent(copilot_config, entry, repo_path, harness=AgentHarness.COPILOT)
-        plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True)
+        plugins: list[tuple[PluginConfig, Path]] = resolve_config_plugins(copilot_config, allow_copilot_manifest=True, plugin_root=execution_policy.plugin_root if execution_policy else None)
 
         config = ExperimentConfiguration(
             mcp_servers=mcp_server_names,
