@@ -1811,6 +1811,9 @@ then restores that checkpoint and compares exact inventory, database files,
 schema, data, and test-discovery multisets. The original clean official `S0` is
 never overwritten or relabeled. A final restore proves the probe absent before
 an agent or official phase can run. Failure of that proof retains quarantine.
+Every database file must have complete identity/path/state metadata and be
+`ONLINE` both at baseline and after restore; equal snapshots never excuse an
+offline secondary file.
 
 `Test-BugFixLifecycleCheckpoint.ps1` consumes the setup action's environment.
 `CheckpointPath` is a new manifest path inside the protected checkpoint directory,

@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Protocol
 
 from bcbench.dataset import TestEntry
@@ -51,8 +51,7 @@ class RehearsalProbe:
             if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
                 raise CheckpointInfrastructureError(f"Invalid rehearsal probe {name}")
             values.append(tuple(value))
-        if not values[0]:
-            raise CheckpointInfrastructureError("Rehearsal needs database file evidence")
+        require_online_database_files(values[0])
         return cls(*values)
 
 
@@ -95,7 +94,28 @@ def select_rehearsal_app(
     raise CheckpointInfrastructureError("No entry-owned published test app is available for rehearsal")
 
 
+def require_online_database_files(files: tuple[str, ...]) -> None:
+    if not files:
+        raise CheckpointInfrastructureError("Rehearsal database_files evidence is missing")
+    identities: set[tuple[str, str]] = set()
+    for record in files:
+        fields = record.split(":", 3)
+        if len(fields) != 4 or not fields[0].strip() or not fields[1].isascii() or not fields[1].isdecimal() or int(fields[1]) <= 0 or fields[2] not in {"ROWS", "LOG", "FILESTREAM", "FULLTEXT"}:
+            raise CheckpointInfrastructureError("Malformed rehearsal database_files identity")
+        path, separator, state = fields[3].rpartition(":")
+        if not separator or not PureWindowsPath(path).is_absolute() or not PureWindowsPath(path).name:
+            raise CheckpointInfrastructureError("Malformed rehearsal database_files path or state")
+        if state != "ONLINE":
+            raise CheckpointInfrastructureError("Every rehearsal database_files entry must be ONLINE")
+        identity = (fields[0], fields[1])
+        if identity in identities:
+            raise CheckpointInfrastructureError("Duplicate rehearsal database_files identity")
+        identities.add(identity)
+
+
 def require_same_probe(expected: RehearsalProbe, actual: RehearsalProbe) -> None:
+    require_online_database_files(expected.database_files)
+    require_online_database_files(actual.database_files)
     for name in ("database_files", "columns", "rows", "discovered"):
         if Counter(getattr(expected, name)) != Counter(getattr(actual, name)):
             raise CheckpointInfrastructureError(f"Rehearsal {name} did not revert exactly")
@@ -128,6 +148,7 @@ def _require_inventory(expected: Sequence[AppInventoryEntry], actual: Sequence[A
 
 
 def _require_probe_created(official: RehearsalProbe, expected: RehearsalProbe) -> None:
+    require_online_database_files(expected.database_files)
     if not expected.columns or not expected.rows:
         raise CheckpointInfrastructureError("SQL rehearsal probe was not created")
     if Counter(expected.database_files) != Counter(official.database_files) or Counter(expected.discovered) != Counter(official.discovered):
@@ -146,6 +167,7 @@ def _run_iteration(
 ) -> BugFixPhaseStatus:
     adapter.mutate(app)
     changed = adapter.read_probe()
+    require_online_database_files(changed.database_files)
     record["mutated_probe"] = asdict(changed)
     if changed.columns == expected.columns or changed.rows == expected.rows:
         raise CheckpointInfrastructureError("Rehearsal did not actually mutate both SQL schema and data")
@@ -213,6 +235,7 @@ def run_checkpoint_rehearsal(
         raise CheckpointInfrastructureError("Rehearsal app is not in official S0")
     output.mkdir(parents=True, exist_ok=False)
     official = adapter.read_probe()
+    require_online_database_files(official.database_files)
     if official.columns or official.rows or not official.database_files or not official.discovered:
         raise CheckpointInfrastructureError("Official S0 must have no rehearsal probe and complete file/discovery evidence")
     if Counter(adapter.read_inventory()) != Counter(s0.apps):

@@ -153,7 +153,7 @@ def test_probe_comparison_rejects_each_restoration_dimension(field: str) -> None
     from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, require_same_probe
     from bcbench.exceptions import CheckpointInfrastructureError
 
-    original = RehearsalProbe(("BC:1:BC.mdf:ONLINE",), ("MarkerId:int", "Value:int"), ("1:17",), ("50100:Probe",))
+    original = RehearsalProbe((r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE",), ("MarkerId:int", "Value:int"), ("1:17",), ("50100:Probe",))
     altered = replace(original, **{field: (*getattr(original, field), "extra")})
     with pytest.raises(CheckpointInfrastructureError, match=field):
         require_same_probe(original, altered)
@@ -163,7 +163,7 @@ def test_probe_discovery_compares_multisets() -> None:
     from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, require_same_probe
     from bcbench.exceptions import CheckpointInfrastructureError
 
-    probe = RehearsalProbe(("file",), (), (), ("1:A", "2:B"))
+    probe = RehearsalProbe((r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE",), (), (), ("1:A", "2:B"))
     require_same_probe(probe, replace(probe, discovered=("2:B", "1:A")))
     with pytest.raises(CheckpointInfrastructureError, match="discovered"):
         require_same_probe(probe, replace(probe, discovered=("1:A", "1:A", "2:B")))
@@ -314,7 +314,7 @@ def test_real_checkpoint_manager_restores_sql_fixture_and_stops_on_first_mismatc
             discovery = ("50100:Probe",)
             if failure == "discovery" and any(call.startswith("restore:rehearsal-") for call in calls) and columns:
                 discovery += discovery
-            return RehearsalProbe(("BC:file:ONLINE",), columns, rows, discovery)
+            return RehearsalProbe((r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE",), columns, rows, discovery)
 
         def read_inventory(self):
             return inventory()
@@ -643,7 +643,7 @@ def test_timed_out_adapter_refuses_further_container_operations(tmp_path: Path, 
 def test_probe_payload_allows_no_tests_during_owned_app_uninstall() -> None:
     from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe
 
-    assert RehearsalProbe.from_dict({"database_files": ["file"], "columns": ["owned"], "rows": ["1:29"], "discovered": []}).discovered == ()
+    assert RehearsalProbe.from_dict({"database_files": [r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE"], "columns": ["owned"], "rows": ["1:29"], "discovered": []}).discovered == ()
 
 
 @pytest.mark.parametrize("keys", [("BC_SERVER_PASSWORD",), ("TOKEN", "token"), ("PATH",)])
@@ -711,7 +711,7 @@ def test_probe_creation_refusal_does_not_restore_over_an_unowned_object(tmp_path
         fault_applied = False
 
         def read_probe(self):
-            return RehearsalProbe(("database",), (), (), ("50100:Probe",))
+            return RehearsalProbe((r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE",), (), (), ("50100:Probe",))
 
         def read_inventory(self):
             return (app,)
@@ -801,3 +801,55 @@ def test_injected_evidence_accepts_only_its_specific_production_failure(tmp_path
     else:
         with pytest.raises((CheckpointInfrastructureError, TestExecutionError, TestInfrastructureError)):
             module._run_iteration(manager, manifest, adapter, app, expected, 1, fault, {})
+
+
+@pytest.mark.parametrize(
+    "secondary",
+    [
+        r"BC:2:ROWS:C:\databases\BC2.ndf:OFFLINE",
+        r"BC:2:LOG:C:\databases\BC.ldf:RECOVERY_PENDING",
+        r"BC:2:LOG:C:\databases\BC.ldf",
+        r"BC:2:LOG:C:\databases\BC.ldf:",
+        "ONLINE",
+    ],
+)
+def test_every_database_file_must_be_online_even_when_snapshots_are_identical(secondary: str) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, require_same_probe
+    from bcbench.exceptions import CheckpointInfrastructureError
+
+    files = (r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE", secondary)
+    payload = {"database_files": list(files), "columns": [], "rows": [], "discovered": ["50100:Probe"]}
+    with pytest.raises(CheckpointInfrastructureError, match="database_files"):
+        RehearsalProbe.from_dict(payload)
+    probe = RehearsalProbe(files, (), (), ("50100:Probe",))
+    with pytest.raises(CheckpointInfrastructureError, match="database_files"):
+        require_same_probe(probe, probe)
+
+
+def test_persistently_offline_baseline_file_blocks_probe_creation(tmp_path: Path) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, run_checkpoint_rehearsal
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _manager
+
+    manager, runner, paths, app = _manager(tmp_path)
+    s0 = manager.capture("baseline", (app,))
+    runner.calls.clear()
+
+    class OfflineBaseline:
+        def read_probe(self):
+            return RehearsalProbe(
+                (r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE", r"BC:2:ROWS:C:\databases\BC2.ndf:OFFLINE"),
+                (),
+                (),
+                ("50100:Probe",),
+            )
+
+        def read_inventory(self):
+            return (app,)
+
+        def create_probe(self):
+            pytest.fail("Probe creation must not run with an OFFLINE database file")
+
+    with pytest.raises(CheckpointInfrastructureError, match="database_files"):
+        run_checkpoint_rehearsal(manager, s0, OfflineBaseline(), app, paths.final_results / "rehearsal")
+    assert runner.calls == []
