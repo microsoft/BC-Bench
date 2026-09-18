@@ -89,6 +89,18 @@ bugfix_lifecycle_app = typer.Typer(
 )
 
 
+@bugfix_lifecycle_app.command("cleanup")
+def bugfix_lifecycle_cleanup(
+    entry_root: Annotated[Path, typer.Option()],
+    protected_root: Annotated[Path, typer.Option()],
+    container_name: Annotated[str, typer.Option()],
+    timeout_seconds: Annotated[int, typer.Option(min=1)] = 180,
+) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.workflow_cleanup import complete_workflow_cleanup
+
+    complete_workflow_cleanup(entry_root, protected_root, container_name, timeout_seconds=timeout_seconds)
+
+
 @bugfix_lifecycle_app.command("copilot")
 def bugfix_lifecycle_copilot(
     entry_id: Annotated[str, typer.Argument(help="Bug-fix entry ID to evaluate")],

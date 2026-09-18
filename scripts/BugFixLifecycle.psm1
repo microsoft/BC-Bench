@@ -3218,6 +3218,15 @@ function Complete-BCBenchBugFixLifecycle {
                 throw "Restricted account SID changed; refusing to alter a replacement identity."
             }
             $identityVerified = $true
+            # Secure the identity before any Docker/service call can consume the cleanup deadline.
+            Invoke-BCBenchOperation -Operations $Operations -Name DisableAgentIdentity -Context $context -Default {
+                param($c)
+                Disable-BCBenchAgentIdentity -Username $c.AgentIdentity.Username
+            } | Out-Null
+            Invoke-BCBenchOperation -Operations $Operations -Name VerifyAgentIdentityDisabled -Context $context -Default {
+                param($c)
+                Assert-BCBenchAgentIdentityDisabled -Username $c.AgentIdentity.Username
+            } | Out-Null
         }
         foreach ($marker in @((Join-Path $protected "quarantine.json"), (Get-BCBenchQuarantinePath -ProtectedRoot $protected))) {
             if (Test-Path -LiteralPath $marker) { throw "Existing quarantine requires manual review; evidence and resources retained." }

@@ -158,6 +158,7 @@ jobs:
       - name: Verify cleanup even when setup or CLI fails
         id: cleanup
         if: always()
+        timeout-minutes: 5
         shell: pwsh
         env:
           ENTRY_ROOT: ${{ steps.paths.outputs.entry_root }}
@@ -167,7 +168,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if ([string]::IsNullOrWhiteSpace($env:PROTECTED_ROOT)) { throw "Lifecycle paths were not allocated; no setup was allowed." }
           .\scripts\Complete-BugFixLifecycle.ps1 -EntryRoot $env:ENTRY_ROOT `
-            -ProtectedRoot $env:PROTECTED_ROOT -ContainerName $env:CONTAINER_NAME
+            -ProtectedRoot $env:PROTECTED_ROOT -ContainerName $env:CONTAINER_NAME -TimeoutSeconds 180
       - name: Upload only result JSONL for summary
         id: results
         if: always()
@@ -195,6 +196,7 @@ jobs:
           path: |
             ${{ steps.paths.outputs.protected_root }}/quarantine.json
             ${{ steps.paths.outputs.protected_root }}.quarantine.json
+            ${{ steps.paths.outputs.protected_root }}.cleanup-pending.quarantine.json
           retention-days: 30
       - name: Fail closed on quarantine
         id: check-quarantine
@@ -205,7 +207,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           if ([string]::IsNullOrWhiteSpace($env:PROTECTED_ROOT)) { throw "Cannot check quarantine without allocated paths." }
-          foreach ($path in @((Join-Path $env:PROTECTED_ROOT 'quarantine.json'), "$env:PROTECTED_ROOT.quarantine.json")) {
+          foreach ($path in @((Join-Path $env:PROTECTED_ROOT 'quarantine.json'), "$env:PROTECTED_ROOT.quarantine.json", "$env:PROTECTED_ROOT.cleanup-pending.quarantine.json")) {
             if (Test-Path -LiteralPath $path) { throw "Lifecycle quarantined; inspect the protected evidence artifact." }
           }
 

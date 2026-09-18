@@ -70,6 +70,8 @@ def test_cleanup_and_separate_artifacts_always_run() -> None:
     cleanup = _step(steps, "cleanup")
     assert cleanup["if"] == "always()"
     assert "Complete-BugFixLifecycle.ps1" in cleanup["run"]
+    assert "-TimeoutSeconds 180" in cleanup["run"]
+    assert cleanup["timeout-minutes"] == 5
     results = _step(steps, "results")
     evidence = _step(steps, "evidence")
     quarantine = _step(steps, "quarantine")
@@ -84,6 +86,7 @@ def test_cleanup_and_separate_artifacts_always_run() -> None:
     assert not evidence["with"]["name"].startswith("evaluation-results-")
     assert "protected" in evidence["with"]["path"].lower()
     assert "quarantine.json" in quarantine["with"]["path"]
+    assert ".cleanup-pending.quarantine.json" in quarantine["with"]["path"]
     check = _step(steps, "check-quarantine")
     assert check["if"] == "always()"
     assert "throw" in check["run"]
@@ -124,6 +127,10 @@ def test_setup_pins_helper_and_resolves_exact_dataset_before_tooling() -> None:
     action = _load(ACTION)
     steps = action["runs"]["steps"]
     source = ACTION.read_text(encoding="utf-8")
+    preflight = _step(steps, "cleanup-runtime")
+    assert "WindowsApps" in preflight["run"]
+    assert "throw" in preflight["run"]
+    assert steps.index(preflight) < steps.index(_step(steps, "setup"))
     assert "Install-Module -Name BcContainerHelper -RequiredVersion 6.1.18" in source
     assert any(step.get("uses") == "azure/login@v3" for step in steps)
     assert any(step.get("uses") == "actions/cache@v5" for step in steps)

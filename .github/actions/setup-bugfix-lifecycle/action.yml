@@ -104,6 +104,16 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Require native PowerShell for contained cleanup
+      id: cleanup-runtime
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $powershell = (Get-Command pwsh -ErrorAction Stop).Source
+        if ($powershell -match '[\\/]WindowsApps[\\/]') {
+          throw "Production cleanup requires native PowerShell 7, not Store-packaged WindowsApps activation."
+        }
+
     - name: Resolve exact dataset entry and AL framework
       id: resolve
       shell: pwsh
