@@ -44,9 +44,11 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
 public sealed class BCBenchSafeJobHandle : SafeHandleZeroOrMinusOneIsInvalid
@@ -138,6 +140,19 @@ public static class BCBenchJobObject
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
+    {
+        public long TotalUserTime;
+        public long TotalKernelTime;
+        public long ThisPeriodTotalUserTime;
+        public long ThisPeriodTotalKernelTime;
+        public uint TotalPageFaultCount;
+        public uint TotalProcesses;
+        public uint ActiveProcesses;
+        public uint TotalTerminatedProcesses;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
     {
         public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
@@ -208,6 +223,15 @@ public static class BCBenchJobObject
     [DllImport("kernel32.dll", EntryPoint = "TerminateJobObject", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool TerminateJobObject(BCBenchSafeJobHandle job, uint exitCode);
+
+    [DllImport("kernel32.dll", EntryPoint = "QueryInformationJobObject", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryInformationJobObject(
+        BCBenchSafeJobHandle job,
+        int informationClass,
+        out JOBOBJECT_BASIC_ACCOUNTING_INFORMATION information,
+        uint informationLength,
+        IntPtr returnLength);
 
     [DllImport("kernel32.dll", EntryPoint = "TerminateProcess", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -503,6 +527,33 @@ public static class BCBenchJobObject
         {
             throw CreateWin32Exception("TerminateJobObject");
         }
+        Trace("JobTerminated");
+    }
+
+    public static void WaitForEmptyJob(BCBenchSafeJobHandle job, int timeoutMilliseconds)
+    {
+        Stopwatch timer = Stopwatch.StartNew();
+        while (true)
+        {
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION information;
+            if (!QueryInformationJobObject(
+                job, 1, out information,
+                (uint)Marshal.SizeOf(typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION)),
+                IntPtr.Zero))
+            {
+                throw CreateWin32Exception("QueryInformationJobObject");
+            }
+            if (information.ActiveProcesses == 0)
+            {
+                Trace("JobEmpty");
+                return;
+            }
+            if (timer.ElapsedMilliseconds >= timeoutMilliseconds)
+            {
+                throw new TimeoutException("Timed out waiting for contained job to become empty");
+            }
+            Thread.Sleep(10);
+        }
     }
 
     public static void TerminateProcess(SafeProcessHandle process, uint exitCode)
@@ -759,12 +810,10 @@ try {
 
     $timeoutMilliseconds = [Math]::Min([int64]$request.timeout_seconds * 1000, [int]::MaxValue)
     $timedOut = -not [BCBenchJobObject]::WaitForExit($worker, [uint32]$timeoutMilliseconds)
-    if ($timedOut) {
-        [BCBenchJobObject]::TerminateJob($job, 1)
-        [BCBenchJobObject]::WaitForExit($worker)
-    }
-
     $returnCode = if ($timedOut) { $null } else { [long][BCBenchJobObject]::GetExitCode($worker) }
+    # Kill-on-close starts termination asynchronously; retain the job until all descendants exit.
+    [BCBenchJobObject]::TerminateJob($job, 1)
+    [BCBenchJobObject]::WaitForEmptyJob($job, 5000)
     $job.Dispose()
     $job = $null
 
@@ -774,19 +823,21 @@ try {
         stderr = [IO.File]::ReadAllText($StderrPath, [Text.Encoding]::UTF8)
         timed_out = $timedOut
     } | ConvertTo-Json -Compress
+    Write-TestLifecycleEvent "CapturesRead"
 }
 catch {
     $failure = $_
     if ($null -ne $worker) {
         try {
-            if ([BCBenchJobObject]::IsRunning($worker)) {
-                if ($jobAssigned) {
-                    [BCBenchJobObject]::TerminateJob($job, 1)
+            if ($jobAssigned -and $null -ne $job) {
+                [BCBenchJobObject]::TerminateJob($job, 1)
+                [BCBenchJobObject]::WaitForEmptyJob($job, 5000)
+            }
+            elseif ([BCBenchJobObject]::IsRunning($worker)) {
+                [BCBenchJobObject]::TerminateProcess($worker.ProcessHandle, 1)
+                if (-not [BCBenchJobObject]::WaitForExit($worker, 5000)) {
+                    throw "Timed out waiting for unassigned worker termination."
                 }
-                else {
-                    [BCBenchJobObject]::TerminateProcess($worker.ProcessHandle, 1)
-                }
-                [BCBenchJobObject]::WaitForExit($worker)
             }
         }
         catch {

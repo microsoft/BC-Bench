@@ -381,7 +381,7 @@ def test_assign_resume_and_gate_creation_are_strictly_ordered(tmp_path):
 
     assert completed.returncode == 0, completed.stderr
     events = _lifecycle_events(trace_path)
-    assert [event.split(":", maxsplit=1)[0] for event in events] == ["Created", "Assigned", "Resumed", "GateCreated"]
+    assert [event.split(":", maxsplit=1)[0] for event in events] == ["Created", "Assigned", "Resumed", "GateCreated", "JobTerminated", "JobEmpty", "CapturesRead"]
     assert (tmp_path / "launch.gate").is_file()
 
 
@@ -614,16 +614,26 @@ def test_successful_command_exit_kills_child_and_grandchild(tmp_path):
     result, child_pid, grandchild_pid = _run_command_leaving_sleeping_descendants(tmp_path, 0)
 
     assert result.returncode == 0
-    assert _wait_until_stopped(child_pid)
-    assert _wait_until_stopped(grandchild_pid)
+    assert not _pid_is_running(child_pid)
+    assert not _pid_is_running(grandchild_pid)
 
 
 def test_nonzero_command_exit_kills_child_and_grandchild(tmp_path):
     result, child_pid, grandchild_pid = _run_command_leaving_sleeping_descendants(tmp_path, 7)
 
     assert result.returncode == 7
-    assert _wait_until_stopped(child_pid)
-    assert _wait_until_stopped(grandchild_pid)
+    assert not _pid_is_running(child_pid)
+    assert not _pid_is_running(grandchild_pid)
+
+
+def test_job_drain_is_bounded_and_precedes_capture_reads():
+    source = _SCRIPT_PATH.read_text(encoding="utf-8")
+    powershell_source = source.split("'@", maxsplit=1)[1]
+
+    assert "QueryInformationJobObject" in source
+    assert "ActiveProcesses" in source
+    assert "Timed out waiting for contained job to become empty" in source
+    assert powershell_source.index("[BCBenchJobObject]::WaitForEmptyJob($job, 5000)") < powershell_source.index("[IO.File]::ReadAllText($StdoutPath")
 
 
 def test_timeout_raises_with_captured_output(tmp_path):
