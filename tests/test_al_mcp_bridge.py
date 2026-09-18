@@ -6,10 +6,17 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import anyio
 import pytest
 import requests
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+from mcp.server.streamable_http import StreamableHTTPServerTransport
+from mcp.types import JSONRPCMessage
+from starlette.requests import Request
 
 from bcbench.agent.shared.al_mcp_bridge import AlMcpBridge, AlMcpBridgeError
+from bcbench.agent.shared.al_mcp_bridge_worker import _EVENT_BUFFER_SIZE, _BridgeTransport
 from bcbench.agent.shared.contained_process import ContainedProcessInfrastructureError, ContainedProcessResult
 from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from tests.test_contained_process import _pid_is_running
@@ -20,8 +27,8 @@ _HEADERS = {"Content-Type": "application/json", "Accept": "application/json, tex
 
 
 @pytest.fixture
-def bridge(tmp_path):
-    server = {"command": sys.executable, "args": [str(_SERVER)], "env": {"BC_SERVER_PASSWORD": "bridge-only-bc-secret"}}
+def bridge(tmp_path, request):
+    server = {"command": sys.executable, "args": [str(_SERVER)], "env": {"BC_SERVER_PASSWORD": "bridge-only-bc-secret", **getattr(request, "param", {})}}
     instance = AlMcpBridge(server, tmp_path, timeout_seconds=60)
     instance.start()
     try:
@@ -108,6 +115,142 @@ def test_bridge_forwards_initialization_discovery_calls_and_errors(bridge):
     assert _message(_rpc(bridge, "fixture/secret-ready", 5, headers=headers))["result"] == {"configured": True}
 
 
+@pytest.mark.parametrize("bridge", [{"FIXTURE_INITIALIZE_EVENTS": "1"}], indirect=True)
+def test_initialization_notifications_do_not_block_response_before_get(bridge):
+    response = _rpc(bridge, "initialize", params={"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}})
+    response.raise_for_status()
+    messages = [json.loads(line[5:]) for line in response.text.splitlines() if line.startswith("data:")]
+    assert messages == [
+        {"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info", "data": "starting"}},
+        {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "fixture", "version": "1"}}},
+    ]
+
+
+@pytest.mark.parametrize("bridge", [{"FIXTURE_INITIALIZE_REQUEST": "1"}], indirect=True)
+def test_initialization_server_request_and_client_reply_without_get(bridge, tmp_path):
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}}
+    with requests.post(bridge.url, headers=_HEADERS, json=payload, stream=True, timeout=10) as stream:
+        stream.raise_for_status()
+        events = (json.loads(line[5:]) for line in stream.iter_lines() if line.startswith(b"data:"))
+        assert next(events) == {"jsonrpc": "2.0", "id": "initialize-ping", "method": "ping"}
+        headers = {**_HEADERS, "Mcp-Session-Id": stream.headers["Mcp-Session-Id"], "MCP-Protocol-Version": "2025-03-26"}
+        reply = {"jsonrpc": "2.0", "id": "initialize-ping", "result": {}}
+        assert requests.post(bridge.url, headers=headers, json=reply, timeout=5).status_code == 202
+        assert next(events)["result"]["serverInfo"]["name"] == "fixture"
+        assert json.loads((tmp_path / "initialize-response.json").read_text()) == reply
+
+
+@pytest.mark.parametrize("bridge", [{"FIXTURE_INITIALIZE_EVENTS": "1", "FIXTURE_INITIALIZE_REQUEST": "1"}], indirect=True)
+def test_sdk_client_initializes_with_notifications_and_server_request_then_discovers_tools(bridge):
+    async def check():
+        with anyio.fail_after(10):
+            async with streamable_http_client(bridge.url) as (read, write, _session_id), ClientSession(read, write) as session:
+                assert (await session.initialize()).serverInfo.name == "fixture"
+                assert (await session.list_tools()).tools[0].name == "echo"
+                result = await session.call_tool("echo", {"value": "sdk request"})
+                assert not result.isError
+
+    anyio.run(check)
+
+
+def test_events_buffer_before_first_get_and_across_reconnection(bridge):
+    headers = _initialize(bridge)
+    assert _message(_rpc(bridge, "fixture/events", 8, headers=headers))["result"] == {}
+    with requests.get(bridge.url, headers={**_HEADERS, **headers}, stream=True, timeout=5) as stream:
+        stream.raise_for_status()
+        events = (json.loads(line[5:]) for line in stream.iter_lines() if line.startswith(b"data:"))
+        assert next(events)["method"] == "notifications/tools/list_changed"
+        assert next(events)["method"] == "roots/list"
+    time.sleep(0.1)
+    assert _message(_rpc(bridge, "fixture/events", 9, headers=headers))["result"] == {}
+    with requests.get(bridge.url, headers={**_HEADERS, **headers}, stream=True, timeout=5) as stream:
+        stream.raise_for_status()
+        events = (json.loads(line[5:]) for line in stream.iter_lines() if line.startswith(b"data:"))
+        assert next(events)["method"] == "notifications/tools/list_changed"
+        assert next(events)["method"] == "roots/list"
+    assert _message(_rpc(bridge, "tools/list", 10, headers=headers))["result"]["tools"][0]["name"] == "echo"
+
+
+def test_get_reconnection_replays_after_last_received_event_without_loss(bridge):
+    headers = {**_HEADERS, **_initialize(bridge)}
+    assert _message(_rpc(bridge, "fixture/events", 8, headers=headers))["result"] == {}
+    with requests.get(bridge.url, headers=headers, stream=True, timeout=5) as stream:
+        stream.raise_for_status()
+        event_id = None
+        lines = stream.iter_lines()
+        for line in lines:
+            if line.startswith(b"id:"):
+                event_id = line[3:].strip().decode()
+            if line.startswith(b"data:"):
+                assert json.loads(line[5:])["method"] == "notifications/tools/list_changed"
+                break
+        assert event_id is not None
+        assert requests.get(bridge.url, headers=headers, timeout=5).status_code == 409
+    time.sleep(0.1)
+    assert _message(_rpc(bridge, "fixture/events", 9, headers=headers))["result"] == {}
+    assert requests.get(bridge.url, headers={**headers, "Mcp-Session-Id": "invalid"}, timeout=5).status_code == 404
+    assert requests.get(bridge.url, headers={**headers, "Last-Event-ID": "invalid"}, timeout=5).status_code == 400
+    assert requests.get(bridge.url, headers={**headers, "Last-Event-ID": "10000"}, timeout=5).status_code == 409
+    with requests.get(bridge.url, headers={**headers, "Last-Event-ID": event_id}, stream=True, timeout=5) as stream:
+        stream.raise_for_status()
+        events = (json.loads(line[5:]) for line in stream.iter_lines() if line.startswith(b"data:"))
+        assert [next(events)["method"] for _ in range(3)] == ["roots/list", "notifications/tools/list_changed", "roots/list"]
+
+
+def test_server_event_buffer_is_bounded_and_undelivered_events_expire():
+    async def check():
+        transport = _BridgeTransport("session", timeout=1)
+        message = JSONRPCMessage.model_validate({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+        for _ in range(_EVENT_BUFFER_SIZE):
+            transport.buffer_event(message)
+        with pytest.raises(BufferError, match="undelivered event buffer exhausted"):
+            transport.buffer_event(message)
+        assert len(transport._events) == _EVENT_BUFFER_SIZE
+        with anyio.fail_after(2), pytest.raises(TimeoutError, match="event delivery timed out"):
+            await transport.watch_event_deadlines()
+
+    anyio.run(check)
+
+
+@pytest.mark.parametrize("failure", ["closed", "timeout", "partial-closed", "partial-timeout"])
+def test_post_transport_failure_never_returns_empty_success_and_preserves_request_id(monkeypatch, failure):
+    async def check():
+        transport = _BridgeTransport("session", timeout=1)
+        messages = []
+        scope = {"type": "http", "method": "POST", "path": "/mcp", "headers": []}
+
+        async def receive():
+            return {"type": "http.request", "body": b'{"jsonrpc":"2.0","id":"request-id","method":"tools/list"}'}
+
+        async def send(message):
+            messages.append(message)
+
+        async def failed_post(self, scope, request, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/event-stream")]})
+            if failure.startswith("partial"):
+                await send({"type": "http.response.body", "body": b'data: {"jsonrpc":"2.0","method":"notifications/message"}\r\n\r\n', "more_body": True})
+            if failure.endswith("timeout"):
+                await anyio.sleep_forever()
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+        monkeypatch.setattr(StreamableHTTPServerTransport, "_handle_post_request", failed_post)
+        with anyio.fail_after(3):
+            await transport._handle_post_request(scope, Request(scope, receive), receive, send)
+        assert isinstance(transport.failure, TimeoutError if failure.endswith("timeout") else RuntimeError)
+        body = b"".join(message.get("body", b"") for message in messages)
+        if failure.startswith("partial"):
+            assert messages[0]["status"] == 200
+            response = json.loads(next(line[5:] for line in body.splitlines() if line.startswith(b"data:") and b'"error"' in line))
+        else:
+            assert messages[0]["status"] == (504 if failure == "timeout" else 502)
+            response = json.loads(body)
+        assert response["id"] == "request-id"
+        assert response["error"]["code"] == -32603
+        assert messages[-1].get("more_body", False) is False
+
+    anyio.run(check)
+
+
 def test_bridge_cancellation_is_forwarded_while_request_is_pending(bridge, tmp_path):
     headers = _initialize(bridge)
     with ThreadPoolExecutor(max_workers=1) as executor:
@@ -139,7 +282,8 @@ def test_stop_verifies_server_and_descendants_dead_and_endpoint_closed(bridge, t
         requests.get(url, timeout=1)
 
 
-def test_server_notifications_requests_and_client_responses_are_forwarded(bridge, tmp_path):
+@pytest.mark.parametrize("reply", [{"result": {"roots": []}}, {"error": {"code": -32603, "message": "client failed"}}])
+def test_server_notifications_requests_and_client_responses_are_forwarded(bridge, tmp_path, reply):
     headers = _initialize(bridge)
     with requests.get(bridge.url, headers={**_HEADERS, **headers}, stream=True, timeout=5) as stream:
         stream.raise_for_status()
@@ -147,7 +291,7 @@ def test_server_notifications_requests_and_client_responses_are_forwarded(bridge
         events = (json.loads(line[5:]) for line in stream.iter_lines() if line.startswith(b"data:"))
         assert next(events)["method"] == "notifications/tools/list_changed"
         assert next(events) == {"jsonrpc": "2.0", "id": "server-request", "method": "roots/list"}
-        response = {"jsonrpc": "2.0", "id": "server-request", "result": {"roots": []}}
+        response = {"jsonrpc": "2.0", "id": "server-request", **reply}
         assert requests.post(bridge.url, headers={**_HEADERS, **headers}, json=response, timeout=5).status_code == 202
         deadline = time.monotonic() + 5
         while not (tmp_path / "server-response.json").exists() and time.monotonic() < deadline:
@@ -167,7 +311,7 @@ def test_delete_shuts_down_stdio_server_and_descendants(bridge, tmp_path):
 def test_transport_failure_fails_closed_without_successful_fallback(tmp_path, method):
     bridge = AlMcpBridge({"command": sys.executable, "args": [str(_SERVER)], "env": {}}, tmp_path, timeout_seconds=30).start()
     headers = _initialize(bridge)
-    with pytest.raises((requests.RequestException, StopIteration)):
+    with pytest.raises(requests.RequestException):
         _message(_rpc(bridge, method, 9, headers=headers))
     with pytest.raises(AlMcpBridgeError, match="transport"):
         bridge.stop()

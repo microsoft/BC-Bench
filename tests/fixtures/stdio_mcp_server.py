@@ -14,12 +14,22 @@ def send(message):
 Path("server.pid").write_text(str(os.getpid()))
 child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
 Path("descendant.pid").write_text(str(child.pid))
+initialization = None
 for line in sys.stdin:
     message = json.loads(line)
     method = message.get("method")
     request_id = message.get("id")
     if method == "initialize":
-        send({"id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "fixture", "version": "1"}}})
+        initialization = {"id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "fixture", "version": "1"}}}
+        if os.environ.get("FIXTURE_INITIALIZE_EVENTS"):
+            send({"method": "notifications/message", "params": {"level": "info", "data": "starting"}})
+        if os.environ.get("FIXTURE_INITIALIZE_REQUEST"):
+            send({"id": "initialize-ping", "method": "ping"})
+        else:
+            send(initialization)
+    elif request_id == "initialize-ping":
+        Path("initialize-response.json").write_text(json.dumps(message))
+        send(initialization)
     elif method == "tools/list":
         send({"id": request_id, "result": {"tools": [{"name": "echo", "inputSchema": {"type": "object"}}]}})
     elif method == "tools/call":

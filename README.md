@@ -47,6 +47,8 @@ Setup exports the resolved `-DatasetPath` as `BCBENCH_LIFECYCLE_DATASET_PATH` (`
 
 Production AL MCP runs in an evaluator-owned Job Object behind an unguessable loopback HTTP endpoint. BC credentials stay in evaluator-only configuration and the server environment, not the agent's MCP configuration. The isolation barrier verifies client shutdown before freezing the submission or running official phases; transport or shutdown failures fail closed. Normal nonproduction AL MCP still uses stdio.
 
+Initialization-time server messages use the initialization response stream, including server requests that need a client reply before initialization completes. Unsolicited messages use a separate bounded event buffer (256 events) with GET reconnection and `Last-Event-ID` replay. Undelivered-event overflow, delivery deadlines, and incomplete or timed-out responses are transport failures, not empty successful responses.
+
 If agent or bridge shutdown cannot be verified, cleanup retains owned workspaces and ACLs, disables the restricted identity, and writes quarantine evidence rather than deleting potentially active resources. Bridge shutdown failures remain terminal across repeated checks, including cleanup after failed startup.
 
 Wrapper watchdog, nonzero-exit, and invalid-response failures retain wrapper diagnostics but do not read child capture files without verified Job Object drainage. Temporary cleanup errors cannot replace that containment-failure classification.
