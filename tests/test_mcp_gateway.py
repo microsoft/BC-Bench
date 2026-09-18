@@ -1,14 +1,18 @@
 import base64
 import json
+import socket
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 import pytest
 
+from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from bcbench.agent.shared.mcp_gateway import BcMcpGateway, start_bc_mcp_gateway
+from bcbench.exceptions import AgentError
 from bcbench.types import AgentRuntimeConfig, ContainerConfig
 
 _WARMUP_MODULE = "bcbench.agent.shared.mcp_gateway"
@@ -108,6 +112,181 @@ def _request(base_url: str, method: str, path: str, body: bytes | None = None):
         conn.close()
 
 
+@pytest.fixture
+def idle_sse_gateway():
+    release = threading.Event()
+
+    class IdleSseHandler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, format, *args):
+            pass
+
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.flush()
+            release.wait(timeout=20)
+            self.close_connection = True
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            self.do_GET()
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), IdleSseHandler)
+    listener = threading.Thread(target=upstream.serve_forever, daemon=True)
+    listener.start()
+    gateway = BcMcpGateway(f"http://127.0.0.1:{upstream.server_address[1]}/BC", "admin", "secret", None).start()
+    server = gateway._server
+    try:
+        yield gateway, release
+    finally:
+        release.set()
+        gateway.stop()
+        with server.thread_lock:
+            clients = tuple(server.active_threads)
+        for client in clients:
+            client.join(timeout=5)
+        upstream.shutdown()
+        upstream.server_close()
+        listener.join(timeout=5)
+
+
+@pytest.mark.parametrize("stop_mode", ["legacy", "lifecycle"])
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_stop_interrupts_idle_upstream_sse_after_downstream_disconnect(idle_sse_gateway, stop_mode, method):
+    gateway, release = idle_sse_gateway
+    server, listener = gateway._server, gateway._thread
+    split = urlsplit(gateway.base_url)
+    connection = HTTPConnection(split.hostname, split.port, timeout=10)
+    try:
+        body = b'{"jsonrpc":"2.0","id":1,"method":"initialize"}' if method == "POST" else None
+        connection.request(method, "/BC/mcp", body=body)
+        response = connection.getresponse()
+        assert response.status == 200
+        assert response.getheader("Content-Type") == "text/event-stream"
+        with server.thread_lock:
+            requests = tuple(server.active_threads)
+        assert requests
+        assert all(request.is_alive() for request in requests)
+        connection.sock.shutdown(socket.SHUT_RDWR)
+        response.close()
+        connection.close()
+        started = time.monotonic()
+        if stop_mode == "lifecycle":
+            clients = ManagedAgentClients()
+            clients.register(gateway.stop_verified)
+            clients.stop()
+            clients.stop()
+        else:
+            gateway.stop()
+        assert time.monotonic() - started < 3
+        assert not release.is_set()
+        assert not listener.is_alive()
+        assert not any(request.is_alive() for request in requests)
+        with pytest.raises(ConnectionError):
+            _request(gateway.base_url, "GET", "/BC/mcp")
+    finally:
+        connection.close()
+
+
+def test_verified_stop_interrupts_pending_downstream_body_and_rejects_late_acceptance(idle_sse_gateway):
+    gateway, _ = idle_sse_gateway
+    server = gateway._server
+    split = urlsplit(gateway.base_url)
+    with socket.create_connection((split.hostname, split.port), timeout=5) as connection:
+        connection.sendall(b"POST /BC/mcp HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n{")
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            with server.thread_lock:
+                requests = tuple(server.active_threads)
+            if requests:
+                break
+            time.sleep(0.01)
+        assert requests
+        gateway.stop_verified()
+        assert not any(request.is_alive() for request in requests)
+        assert gateway.forwarded_count == 0
+        with server.thread_lock:
+            assert not server.active_connections
+            assert not server.active_threads
+
+    accepted, peer = socket.socketpair()
+    with accepted, peer:
+        server.process_request(accepted, ("127.0.0.1", 1))
+        assert accepted.fileno() == -1
+        with pytest.raises(ConnectionAbortedError, match="stopping"):
+            server.register_connection(peer)
+        assert not server.active_connections
+        assert not server.active_threads
+
+
+def test_upstream_connect_racing_shutdown_is_closed_without_forwarding(idle_sse_gateway, monkeypatch):
+    gateway, _ = idle_sse_gateway
+    server = gateway._server
+    connected = threading.Event()
+    resume = threading.Event()
+    original_connect = HTTPConnection.connect
+
+    def delayed_connect(connection):
+        original_connect(connection)
+        if connection.port == gateway._origin_port:
+            connected.set()
+            assert resume.wait(timeout=5)
+
+    monkeypatch.setattr(HTTPConnection, "connect", delayed_connect)
+    split = urlsplit(gateway.base_url)
+    connection = HTTPConnection(split.hostname, split.port, timeout=5)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        try:
+            connection.request("GET", "/BC/mcp")
+            assert connected.wait(timeout=2)
+            stopped = executor.submit(gateway.stop_verified)
+            assert server.stopping.wait(timeout=2)
+            resume.set()
+            stopped.result(timeout=3)
+            assert gateway.forwarded_count == 0
+            with server.thread_lock:
+                assert not server.active_connections
+                assert not server.active_threads
+        finally:
+            resume.set()
+            connection.close()
+
+
+def test_verified_stop_retains_socket_close_failure_and_attempts_every_connection(idle_sse_gateway, monkeypatch):
+    gateway, _ = idle_sse_gateway
+    server = gateway._server
+    first, second = socket.socketpair()
+    failed_descriptor = first.fileno()
+    other_descriptor = second.fileno()
+    server.register_connection(first)
+    server.register_connection(second)
+    close = socket.close
+    attempts = []
+
+    def fail_one_close(descriptor):
+        attempts.append(descriptor)
+        if descriptor == failed_descriptor:
+            raise OSError("injected socket close failure")
+        close(descriptor)
+
+    monkeypatch.setattr(socket, "close", fail_one_close)
+    try:
+        with pytest.raises(AgentError, match="socket shutdown was not verified") as failure:
+            gateway.stop_verified()
+        assert {failed_descriptor, other_descriptor} <= set(attempts)
+        with pytest.raises(AgentError) as repeated:
+            gateway.stop_verified()
+        assert repeated.value is failure.value
+    finally:
+        close(failed_descriptor)
+        first.close()
+        second.close()
+
+
 class TestBcMcpGateway:
     def test_verified_stop_rejects_a_still_active_client(self, gateway):
         from unittest.mock import Mock
@@ -117,9 +296,13 @@ class TestBcMcpGateway:
         server = gateway._server
         with server.thread_lock:
             server.active_threads.add(client)
-        with pytest.raises(Exception, match="active client"):
+        with pytest.raises(AgentError, match="active client") as failure:
             gateway.stop_verified()
         client.join.assert_called_once()
+        client.is_alive.return_value = False
+        with pytest.raises(AgentError) as repeated:
+            gateway.stop_verified()
+        assert repeated.value is failure.value
 
     def test_verified_stop_closes_listener(self, gateway):
         url = gateway.base_url
