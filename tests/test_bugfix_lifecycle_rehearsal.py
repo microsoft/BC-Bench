@@ -853,3 +853,66 @@ def test_persistently_offline_baseline_file_blocks_probe_creation(tmp_path: Path
     with pytest.raises(CheckpointInfrastructureError, match="database_files"):
         run_checkpoint_rehearsal(manager, s0, OfflineBaseline(), app, paths.final_results / "rehearsal")
     assert runner.calls == []
+
+
+@pytest.mark.parametrize("failure", ["timeout", "interrupt"])
+def test_test_shutdown_latch(tmp_path: Path, monkeypatch, failure: str) -> None:
+    import base64
+    import re
+
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, run_checkpoint_rehearsal
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal_adapter import PowerShellRehearsalAdapter
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _manager
+    from tests.test_bugfix_production_lifecycle import _harness
+
+    manager, runner, paths, app = _manager(tmp_path / "c")
+    s0 = manager.capture("baseline", (app,))
+    request, *_ = _harness(tmp_path / "setup")
+    resources = replace(request.provisioned_resources, paths=paths, expected_container_id=s0.container.container_id)
+    output = paths.final_results / "rehearsal"
+    adapter = PowerShellRehearsalAdapter(resources, request.evaluator_container, s0, output, (TestEntry(codeunitID=50199, functionName=frozenset({"Probe"})),))
+    state = {"probe": False, "mutated": False}
+    calls = []
+
+    def powershell(script):
+        calls.append("powershell")
+        result = runner(script)
+        payload = json.loads(result.stdout)
+        if "Backup-BCBenchCheckpoint" in script:
+            payload["name"] = re.search(r"-Name '([^']+)'", script).group(1)
+        if "Restore-BCBenchCheckpoint" in script:
+            manifest = json.loads(base64.b64decode(re.search(r"FromBase64String\('([^']+)'\)", script).group(1)))
+            state.update(probe=manifest["name"] != "baseline", mutated=False)
+        return subprocess.CompletedProcess(result.args, result.returncode, json.dumps(payload), result.stderr)
+
+    def probe():
+        return RehearsalProbe(
+            (r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE",),
+            ("value", "added") if state["mutated"] else (("value",) if state["probe"] else ()),
+            ("29",) if state["mutated"] else (("17",) if state["probe"] else ()),
+            ("50199:Probe",),
+        )
+
+    monkeypatch.setattr("bcbench.evaluate.bugfix_lifecycle.rehearsal_adapter.evaluator_powershell", powershell)
+    manager._powershell_runner = adapter.run
+    monkeypatch.setattr(adapter, "read_probe", probe)
+    monkeypatch.setattr(adapter, "read_inventory", lambda: (replace(app, installed=not state["mutated"]),))
+    monkeypatch.setattr(adapter, "create_probe", lambda: state.update(probe=True))
+    monkeypatch.setattr(adapter, "mutate", lambda _app: state.update(mutated=True))
+
+    def failed_test_process(*_args, **_kwargs):
+        calls.append("test-failed-before-drain")
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(["test-fixture"], 1)
+        raise KeyboardInterrupt
+
+    # Exercise the production operation's timeout wrapping, not a synthesized phase status.
+    monkeypatch.setattr("bcbench.operations.bc_operations.subprocess.run", failed_test_process)
+    with pytest.raises((TestInfrastructureError, KeyboardInterrupt, BaseExceptionGroup)):
+        run_checkpoint_rehearsal(manager, s0, adapter, app, output, fault=RehearsalFault.MISSING_JUNIT)
+    assert calls[-1] == "test-failed-before-drain"
+    assert json.loads((output / "clean-s0.json").read_text())["verified"] is False
+    assert (paths.protected_root / "quarantine.json").exists()
+    with pytest.raises(CheckpointInfrastructureError, match="shutdown is unverified"):
+        PowerShellRehearsalAdapter.create_probe(adapter)

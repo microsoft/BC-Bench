@@ -142,11 +142,16 @@ $result = @{ mutated = $true }
         directory = self.output / f"test-evidence-{iteration:04d}"
         # Verify immutable ownership immediately before the production test operation.
         self._invoke("Assert-BCBenchContainerOwnership @owned -Operations @{} | Out-Null\n$result = @{ owned = $true }")
-        run_test_suite_with_evidence(
-            list(tests),
-            TestExpectation.ALL_PASS,
-            replace(self.container, name=self.resources.expected_container_id),
-            self.resources.benchmark_root,
-            directory,
-        )
+        try:
+            run_test_suite_with_evidence(
+                list(tests),
+                TestExpectation.ALL_PASS,
+                replace(self.container, name=self.resources.expected_container_id),
+                self.resources.benchmark_root,
+                directory,
+            )
+        except BaseException:
+            # Only the outer contained worker can verify drainage after a failed test invocation.
+            self._operations_safe = False
+            raise
         return directory, tests

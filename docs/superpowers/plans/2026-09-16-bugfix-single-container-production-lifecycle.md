@@ -1827,6 +1827,9 @@ absence-check/quarantine evidence, and deliberately exits nonzero.
 Focused support modules reuse `CheckpointManager`, production publication,
 test-evidence validation/classification, containment, and the ownership-safe
 finalizer. The durable `rehearsal_running` handoff blocks cleanup on cancellation.
+Failed test invocations latch the adapter unsafe just like failed PowerShell
+operations. No subsequent restore or clean-S0 success record is allowed while
+test-descendant shutdown remains unverified; the worker retains quarantine.
 Evaluator credentials pass through an explicit parent-environment channel, not
 request JSON or command arguments; restricted agent workers cannot use it.
 Only nonsecret protected evidence is uploaded, never database backups or
