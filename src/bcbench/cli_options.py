@@ -51,6 +51,11 @@ ContainerCompany = Annotated[str, typer.Option(envvar="BC_COMPANY", help="BC com
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
 
+LifecycleOutputDir = Annotated[
+    Path,
+    typer.Option("--output-dir", parser=Path, help="Directory to save evaluation results (validated after cleanup ownership)"),
+]
+
 LifecycleEntryRoot = Annotated[
     Path,
     typer.Option(

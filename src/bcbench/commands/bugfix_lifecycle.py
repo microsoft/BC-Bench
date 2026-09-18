@@ -39,13 +39,13 @@ from bcbench.cli_options import (
     LifecycleEvaluatorContainerConfig,
     LifecycleExpectedContainerId,
     LifecycleExpectedInvocationId,
+    LifecycleOutputDir,
     LifecycleOwnedCompilerHelperRoots,
     LifecycleProtectedRoot,
     LifecyclePythonBasePrefix,
     LifecycleReplayPatch,
     LifecycleStagedWorkerPath,
     LifecycleStagedWorkerSha256,
-    OutputDir,
     RunId,
 )
 from bcbench.config import get_config
@@ -119,7 +119,7 @@ def bugfix_lifecycle_copilot(
     mcp_url: ContainerMcpUrl = None,
     company: ContainerCompany = "",
     model: CopilotModel = "gpt-5.6-luna",
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    output_dir: LifecycleOutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "copilot_lifecycle_run",
     al_mcp: LifecycleAlMcp = False,
     al_lsp: LifecycleAlLsp = False,
@@ -206,7 +206,7 @@ def bugfix_lifecycle_claude(
     mcp_url: ContainerMcpUrl = None,
     company: ContainerCompany = "",
     model: ClaudeCodeModel = "claude-haiku-4-5",
-    output_dir: OutputDir = _config.paths.evaluation_results_path,
+    output_dir: LifecycleOutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "claude_lifecycle_run",
     al_mcp: LifecycleAlMcp = False,
     al_lsp: LifecycleAlLsp = False,
@@ -433,6 +433,8 @@ def _run_lifecycle_after_lease(
     agent_version: Callable[[], str],
     agent_runner: LifecycleAgentInvoker,
 ) -> None:
+    if output_dir.exists():
+        _require_directory(output_dir, "--output-dir")
     paths = _validated_paths(entry_root, protected_root)
     _validate_worker(staged_worker_path, staged_worker_sha256, paths)
     _require_file(base_python, "--base-python")

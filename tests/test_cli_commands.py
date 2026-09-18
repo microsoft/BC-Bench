@@ -1021,6 +1021,48 @@ def test_bugfix_lifecycle_validation_failures_cleanup_exactly_once_before_collab
     raw_cleanup_run.assert_not_called()
 
 
+@pytest.mark.parametrize("command", ["copilot", "claude"])
+@pytest.mark.parametrize("malformed_ownership", [False, True])
+def test_lifecycle_output_file_is_validated_only_after_cleanup_ownership(lifecycle_cli_fixture, command, malformed_ownership):
+    output_file = lifecycle_cli_fixture.protected_root.parent / "output-file"
+    output_file.write_text("keep existing contents", encoding="utf-8")
+    args = lifecycle_cli_fixture.args(command)
+    args[args.index("--output-dir") + 1] = str(output_file)
+    if malformed_ownership:
+        args[args.index("--acl-paths-json") + 1] = "{"
+    raw_cleanup = bugfix_lifecycle_commands.RawSetupCleanup.run
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version") as copilot_version,
+        patch.object(bugfix_lifecycle_commands, "get_claude_version") as claude_version,
+        patch.object(bugfix_lifecycle_commands, "prepare_run_dir") as prepare_result_dir,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True, return_value=None) as cleanup,
+        patch.object(bugfix_lifecycle_commands.RawSetupCleanup, "run", autospec=True, side_effect=raw_cleanup) as quarantine,
+    ):
+        result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    if malformed_ownership:
+        quarantine.assert_called_once()
+        cleanup.assert_not_called()
+        assert "valid json" in (result.stdout + result.stderr).lower()
+        evidence = json.loads((lifecycle_cli_fixture.protected_root / "quarantine.json").read_text())
+        assert evidence["status"] == "quarantined"
+        assert evidence["reason"] == "ownership_envelope_parse_failure"
+    else:
+        cleanup.assert_called_once()
+        quarantine.assert_not_called()
+        assert "--output-dir" in result.stderr
+        assert "directory" in result.stderr.lower()
+    load_entry.assert_not_called()
+    copilot_version.assert_not_called()
+    claude_version.assert_not_called()
+    prepare_result_dir.assert_not_called()
+    lifecycle_factory.assert_not_called()
+    assert output_file.read_text() == "keep existing contents"
+
+
 def test_bugfix_lifecycle_malformed_ownership_envelope_quarantines_exactly_once_before_collaborators(
     lifecycle_cli_fixture: LifecycleCliFixture,
 ):

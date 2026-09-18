@@ -45,6 +45,8 @@ After provisioning with `scripts\Setup-BugFixLifecycle.ps1`, use `uv run bcbench
 
 Setup exports the resolved `-DatasetPath` as `BCBENCH_LIFECYCLE_DATASET_PATH` (`--dataset-path`); the CLI loads that exact file, never the category default. The file must remain inside the setup's agent-denied benchmark tree, with no links or junctions. Setup probes dataset read denial under the restricted identity; CLI validation retains that boundary and acquires cleanup ownership before validating or loading the dataset.
 
+Both lifecycle commands parse `--output-dir` lexically and validate it after acquiring cleanup ownership. An existing file is rejected without bypassing cleanup; a malformed ownership envelope still writes raw quarantine evidence. Other commands retain their existing output-option behavior.
+
 Production AL MCP runs in an evaluator-owned Job Object behind an unguessable loopback HTTP endpoint. BC credentials stay in evaluator-only configuration and the server environment, not the agent's MCP configuration. The isolation barrier verifies client shutdown before freezing the submission or running official phases; transport or shutdown failures fail closed. Normal nonproduction AL MCP still uses stdio.
 
 Initialization-time server messages use the initialization response stream, including server requests that need a client reply before initialization completes. Unsolicited messages use a separate bounded event buffer (256 events) with GET reconnection and `Last-Event-ID` replay. Undelivered-event overflow, delivery deadlines, and incomplete or timed-out responses are transport failures, not empty successful responses.
