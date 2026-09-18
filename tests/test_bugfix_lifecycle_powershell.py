@@ -2624,7 +2624,8 @@ def test_setup_failure_preserves_compiler_root_when_container_removal_fails(tmp_
     assert any("compiler/helper root retained" in error for error in payload["quarantine"]["cleanup_errors"])
 
 
-def test_setup_orchestrator_exports_exact_cli_contract_and_cleans_created_resources_on_failure(tmp_path: Path) -> None:
+@pytest.mark.parametrize("workflow_evidence", [False, True])
+def test_setup_orchestrator_exports_exact_cli_contract_and_cleans_created_resources_on_failure(tmp_path: Path, workflow_evidence: bool) -> None:
     success_entry = tmp_path / "entry-success"
     success_protected = tmp_path / "protected-success"
     output = tmp_path / "output.txt"
@@ -2716,6 +2717,7 @@ $successContext = Invoke-BCBenchBugFixLifecycle `
     -BcMcp `
     -GithubOutput {_ps_quote(output)} `
     -GithubEnv {_ps_quote(env_file)} `
+    -WorkflowEvidence:${str(workflow_evidence).lower()} `
     -Operations $successOps
 
 $failureOps = @{{
@@ -2749,6 +2751,7 @@ try {{
         -EvaluatorPassword $secure `
         -EntryRoot {_ps_quote(failure_entry)} `
         -ProtectedRoot {_ps_quote(failure_protected)} `
+        -WorkflowEvidence:${str(workflow_evidence).lower()} `
         -Operations $failureOps | Out-Null
 }}
 catch {{
@@ -2887,7 +2890,18 @@ catch {{
     assert payload["failed"] is True
     assert {item["action"] for item in payload["cleanup"]} == {"bc-user", "acl", "os-user", "container"}
     assert payload["failureEntryExists"] is False
-    assert payload["failureProtectedExists"] is False
+    assert payload["failureProtectedExists"] is workflow_evidence
+    if workflow_evidence:
+        for root, status in ((success_protected, "ready"), (failure_protected, "rolled-back")):
+            state_text = (root / "workflow-setup.json").read_text(encoding="utf-8-sig")
+            state = json.loads(state_text)
+            assert state["Status"] == status
+            assert state["SetupCleanupErrors"] == []
+            assert state["ContainerId"] == "docker-success"
+            assert state["AgentIdentity"]["Username"] == "bcb-1234567-abcdef"
+            for secret in ("evaluator-secret", "os-secret", "bc-secret"):
+                assert secret not in state_text
+            assert "Password" not in state_text
 
 
 @pytest.mark.parametrize(

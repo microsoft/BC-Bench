@@ -29,6 +29,11 @@ on:
         required: false
         type: boolean
         default: false
+      production:
+        description: Use production lifecycle scoring
+        required: false
+        type: boolean
+        default: false
       git-ref:
         description: "Git ref (branch) the evaluation was dispatched from; preserved across requeue for experiment tracking"
         required: false
@@ -60,6 +65,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           path: ${{ inputs.results-dir }}/
+          pattern: evaluation-results-*
           merge-multiple: true
 
       - name: Summarize evaluation results
@@ -82,7 +88,7 @@ jobs:
 
       - name: Resolve bceval evaluator config for category
         id: bceval
-        run: uv run bcbench category bceval-config --category "${{ inputs.category }}"
+        run: uv run bcbench category bceval-config --category "${{ inputs.category }}" ${{ inputs.production && '--production' || '' }}
 
       - name: Upload result using bceval
         env:

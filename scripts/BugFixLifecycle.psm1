@@ -3080,6 +3080,198 @@ function Add-BCBenchOutput {
     }
 }
 
+function Write-BCBenchWorkflowSetupState {
+    param(
+        [Parameter(Mandatory = $true)][PSObject]$Context,
+        [Parameter(Mandatory = $true)][string]$Status,
+        [string[]]$CleanupErrors = @()
+    )
+
+    $state = [ordered]@{
+        Status = $Status
+        InstanceId = $Context.InstanceId
+        ContainerName = $Context.ContainerName
+        ContainerId = $Context.ContainerId
+        ContainerInvocationId = $Context.ContainerInvocationId
+        EntryRoot = $Context.EntryRoot
+        ProtectedRoot = $Context.ProtectedRoot
+        AgentIdentity = if ($null -ne $Context.AgentIdentity) {
+            @{ Username = $Context.AgentIdentity.Username; Sid = $Context.AgentIdentity.Sid }
+        } else { $null }
+        AgentBcIdentity = if ($null -ne $Context.AgentBcIdentity) {
+            @{ Username = $Context.AgentBcIdentity.Username }
+        } else { $null }
+        AclTransaction = $Context.AclTransaction
+        OwnedCompilerHelperRoots = @($Context.OwnedCompilerHelperRoots)
+        SetupCleanupErrors = @($CleanupErrors)
+    }
+    $path = Join-Path $Context.ProtectedRoot "workflow-setup.json"
+    Assert-BCBenchNoReparseComponents -Path $path
+    $temporary = "$path.tmp"
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporary -Encoding utf8
+    Move-Item -LiteralPath $temporary -Destination $path -Force
+}
+
+function Complete-BCBenchBugFixLifecycle {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$EntryRoot,
+        [Parameter(Mandatory = $true)][string]$ProtectedRoot,
+        [Parameter(Mandatory = $true)][string]$ContainerName,
+        [Parameter(DontShow = $true)][hashtable]$Operations = @{}
+    )
+
+    $entry = Resolve-BCBenchAbsolutePath -Path $EntryRoot
+    $protected = Resolve-BCBenchAbsolutePath -Path $ProtectedRoot
+    Assert-BCBenchLifecycleTopology -EntryRoot $entry -ProtectedRoot $protected -EntryPaths @{} -ProtectedPaths @{}
+    $context = [PSCustomObject]@{
+        InstanceId = "workflow"
+        ContainerName = $ContainerName
+        ContainerId = $null
+        ContainerInvocationId = $null
+        EntryRoot = $entry
+        ProtectedRoot = $protected
+        AgentIdentity = $null
+        AclTransaction = $null
+    }
+    $identityVerified = $false
+    $errors = [Collections.Generic.List[string]]::new()
+    try {
+        $statePath = Join-Path $protected "workflow-setup.json"
+        Assert-BCBenchNoReparseComponents -Path $statePath
+        if (-not (Test-Path -LiteralPath $statePath)) {
+            Assert-BCBenchContainerAbsent -Context $context -Operations $Operations
+            if ((Test-Path -LiteralPath $entry) -or (Test-Path -LiteralPath $protected)) {
+                throw "Lifecycle roots exist without durable setup ownership; manual quarantine review is required."
+            }
+            return
+        }
+        $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        if ($state.EntryRoot -ne $entry -or $state.ProtectedRoot -ne $protected -or $state.ContainerName -cne $ContainerName) {
+            throw "Workflow cleanup state does not match the allocated roots and container."
+        }
+        $context = $state
+        $context | Add-Member -NotePropertyName VerifiedContainerId -NotePropertyValue $null -Force
+        if ($null -ne $context.AgentIdentity) {
+            $user = Invoke-BCBenchOperation -Operations $Operations -Name ReadAgentIdentity -Context $context -Default {
+                param($c)
+                Get-BCBenchLocalUser -Username $c.AgentIdentity.Username
+            }
+            if ($null -ne $user -and [string]$user.Sid -cne [string]$context.AgentIdentity.Sid) {
+                throw "Restricted account SID changed; refusing to alter a replacement identity."
+            }
+            $identityVerified = $true
+        }
+        foreach ($marker in @((Join-Path $protected "quarantine.json"), (Get-BCBenchQuarantinePath -ProtectedRoot $protected))) {
+            if (Test-Path -LiteralPath $marker) { throw "Existing quarantine requires manual review; evidence and resources retained." }
+        }
+        if ($context.Status -notin @("ready", "rolled-back")) {
+            throw "Setup did not finish its ownership handoff; resources retained for quarantine."
+        }
+        if ($context.Status -eq "ready" -and (
+            [string]::IsNullOrWhiteSpace($context.ContainerId) -or
+            [string]::IsNullOrWhiteSpace($context.ContainerInvocationId)
+        )) {
+            throw "Completed setup is missing immutable container ownership."
+        }
+        if (@($context.SetupCleanupErrors).Count -gt 0) { throw "Setup cleanup was not verified." }
+        $container = Invoke-BCBenchOperation -Operations $Operations -Name InspectContainer -Context $context -Default {
+            param($c)
+            Get-BCBenchContainerState -ContainerName $c.ContainerName
+        }
+        if ($container.Exists) {
+            Get-BCBenchVerifiedContainerId -Context $context -Operations $Operations | Out-Null
+            Invoke-BCBenchOperation -Operations $Operations -Name StopServiceTier -Context $context -Default {
+                param($c)
+                Stop-BCBenchServiceTier -ContainerName $c.ContainerName -ExpectedContainerId $c.ContainerId -ExpectedInvocationId $c.ContainerInvocationId
+            } | Out-Null
+            if ($null -ne $context.AgentBcIdentity) {
+                Invoke-BCBenchOperation -Operations $Operations -Name RemoveBcIdentity -Context $context -Default {
+                    param($c)
+                    Remove-BCBenchAgentBcUser -ContainerName $c.ContainerName -Username $c.AgentBcIdentity.Username `
+                        -ExpectedContainerId $c.ContainerId -ExpectedInvocationId $c.ContainerInvocationId
+                } | Out-Null
+            }
+            Remove-BCBenchContainerAndVerify -ContainerName $context.ContainerName `
+                -ExpectedContainerId $context.ContainerId -ExpectedInvocationId $context.ContainerInvocationId -Operations $Operations
+        }
+        Assert-BCBenchContainerAbsent -Context $context -Operations $Operations
+
+        foreach ($root in @($context.OwnedCompilerHelperRoots)) {
+            Assert-BCBenchNoReparseComponents -Path $root
+            if (Test-Path -LiteralPath $root) {
+                Remove-BCBenchOwnedCompilerHelperRoot -Path $root -ExpectedInvocationId $context.ContainerInvocationId `
+                    -EntryRoot $entry -ProtectedRoot $protected
+            }
+        }
+        $managedNames = @("baseline-workspace", "agent-workspace", "agent-logs", "agent-tools", "mounted-staging", "evaluator-workspaces", "evidence")
+        if (Test-Path -LiteralPath $entry) {
+            $plugins = Join-Path $entry "agent-tools\plugins"
+            if (Test-Path -LiteralPath $plugins) {
+                $pluginMarker = Join-Path $plugins ".bcbench-owned"
+                Assert-BCBenchNoReparseComponents -Path $pluginMarker
+                if (
+                    -not (Test-Path -LiteralPath $pluginMarker -PathType Leaf) -or
+                    [IO.File]::ReadAllText($pluginMarker).TrimEnd([char[]]@("`r", "`n")) -cne $context.ContainerInvocationId
+                ) {
+                    throw "Agent plugin ownership marker does not match the lifecycle invocation."
+                }
+            }
+            $unknown = @(Get-ChildItem -LiteralPath $entry -Force | Where-Object { $_.Name -notin $managedNames })
+            if ($unknown.Count -gt 0) { throw "Entry root contains unowned paths; retaining it for quarantine." }
+            foreach ($name in $managedNames) {
+                $path = Join-Path $entry $name
+                if (Test-Path -LiteralPath $path) { Remove-BCBenchCreatedRoot -Path $path }
+            }
+            Remove-Item -LiteralPath $entry -ErrorAction Stop
+        }
+        if ($null -ne $context.AclTransaction) {
+            Invoke-BCBenchOperation -Operations $Operations -Name RemoveAcl -Context $context -Default {
+                param($c)
+                Remove-BCBenchAgentAcl -Transaction $c.AclTransaction
+            } | Out-Null
+        }
+        if ($identityVerified) {
+            Invoke-BCBenchOperation -Operations $Operations -Name RemoveAgentIdentity -Context $context -Default {
+                param($c)
+                Remove-BCBenchAgentIdentity -Username $c.AgentIdentity.Username
+            } | Out-Null
+        }
+        @{ status = "success"; container_id = $context.ContainerId; invocation_id = $context.ContainerInvocationId } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $protected "workflow-cleanup.json") -Encoding utf8
+    }
+    catch {
+        $errors.Add($_.Exception.Message)
+        if ($identityVerified) {
+            try {
+                Invoke-BCBenchOperation -Operations $Operations -Name DisableAgentIdentity -Context $context -Default {
+                    param($c)
+                    Disable-BCBenchAgentIdentity -Username $c.AgentIdentity.Username
+                } | Out-Null
+                Invoke-BCBenchOperation -Operations $Operations -Name VerifyAgentIdentityDisabled -Context $context -Default {
+                    param($c)
+                    Assert-BCBenchAgentIdentityDisabled -Username $c.AgentIdentity.Username
+                } | Out-Null
+            }
+            catch { $errors.Add("Restricted identity disablement/verification failed: $($_.Exception.Message)") }
+        }
+        Assert-BCBenchNoReparseComponents -Path $protected
+        if (-not (Test-Path -LiteralPath $protected)) { New-Item -ItemType Directory -Path $protected | Out-Null }
+        @{ status = "failure"; cleanup_errors = @($errors) } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $protected "workflow-cleanup.json") -Encoding utf8
+        $quarantinePath = Get-BCBenchQuarantinePath -ProtectedRoot $protected
+        Assert-BCBenchNoReparseComponents -Path $quarantinePath
+        if (-not (Test-Path -LiteralPath $quarantinePath)) {
+            Write-BCBenchCleanupQuarantine -Context $context `
+                -OriginalError "Workflow cleanup could not be verified." -CleanupErrors @($errors) | Out-Null
+        }
+        $marker = Join-Path $protected "quarantine.json"
+        Assert-BCBenchNoReparseComponents -Path $marker
+        if (-not (Test-Path -LiteralPath $marker)) { Copy-Item -LiteralPath $quarantinePath -Destination $marker }
+        throw "Workflow cleanup failed; quarantine retained: $($errors -join '; ')"
+    }
+}
+
 function Invoke-BCBenchBugFixLifecycle {
     [CmdletBinding()]
     param(
@@ -3104,6 +3296,7 @@ function Invoke-BCBenchBugFixLifecycle {
         [switch]$AlMcp,
         [switch]$AlLsp,
         [switch]$BcMcp,
+        [switch]$WorkflowEvidence,
         [string]$GithubToken,
         [string]$AdoToken,
         [string]$GithubOutput = $env:GITHUB_OUTPUT,
@@ -3226,6 +3419,8 @@ function Invoke-BCBenchBugFixLifecycle {
     $aclApplicationStarted = $false
     $oldGithubToken = $env:GITHUB_TOKEN
     $oldAdoToken = $env:ADO_TOKEN
+    $workflowStatus = "provisioning"
+    [string[]]$workflowCleanupErrors = @()
 
     try {
         Write-BCBenchSecretMask -Secret $GithubToken
@@ -3238,6 +3433,7 @@ function Invoke-BCBenchBugFixLifecycle {
         $createdEntryRoot = $true
         New-Item -ItemType Directory -Path $protectedRootPath | Out-Null
         $createdProtectedRoot = $true
+        if ($WorkflowEvidence) { Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus }
         foreach ($path in @(
             $context.AgentWorkspace,
             $context.AgentLogs,
@@ -3372,6 +3568,7 @@ function Invoke-BCBenchBugFixLifecycle {
             throw "Container '$($context.ContainerName)' was not observable after creation."
         }
         $context.ContainerSuccessfullyCreated = $true
+        if ($WorkflowEvidence) { Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus }
 
         $compilerRoot = Invoke-BCBenchOperation -Operations $Operations -Name CreateCompiler -Context $context -Default {
             param($operationContext)
@@ -3427,11 +3624,13 @@ function Invoke-BCBenchBugFixLifecycle {
         }
         $createdAgentIdentity = $true
         $context.AclTransaction = New-BCBenchAgentAclTransaction -Identity $context.AgentIdentity
+        if ($WorkflowEvidence) { Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus }
         $context.AgentBcIdentity = Invoke-BCBenchOperation -Operations $Operations -Name CreateBcIdentity -Context $context -Default {
             param($operationContext)
             return New-BCBenchAgentBcUser -InstanceId $operationContext.InstanceId -ContainerName $operationContext.ContainerName
         }
         $createdAgentBcIdentity = $true
+        if ($WorkflowEvidence) { Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus }
         $aclApplicationStarted = $true
         $aclResult = Invoke-BCBenchOperation -Operations $Operations -Name ApplyAcl -Context $context -Default {
             param($operationContext)
@@ -3532,6 +3731,8 @@ function Invoke-BCBenchBugFixLifecycle {
         if (-not [string]::IsNullOrEmpty([string]$context.ReplayPatch)) {
             $environment["BCBENCH_LIFECYCLE_REPLAY_PATCH"] = $context.ReplayPatch
         }
+        $workflowStatus = "ready"
+        if ($WorkflowEvidence) { Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus }
         foreach ($item in $environment.GetEnumerator()) {
             Add-BCBenchOutput -Path $GithubOutput -Name $item.Key -Value ([string]$item.Value)
             Add-BCBenchOutput -Path $GithubEnv -Name $item.Key -Value ([string]$item.Value)
@@ -3710,7 +3911,7 @@ function Invoke-BCBenchBugFixLifecycle {
                     try { Remove-BCBenchCreatedRoot -Path $entryRootPath }
                     catch { $cleanupErrors.Add("entry root removal: $($_.Exception.Message)") }
                 }
-                if ($createdProtectedRoot) {
+                if ($createdProtectedRoot -and -not $WorkflowEvidence) {
                     try { Remove-BCBenchCreatedRoot -Path $protectedRootPath }
                     catch { $cleanupErrors.Add("protected root removal: $($_.Exception.Message)") }
                 }
@@ -3739,6 +3940,8 @@ function Invoke-BCBenchBugFixLifecycle {
         }
 
         $quarantinePath = $null
+        $workflowStatus = "rolled-back"
+        $workflowCleanupErrors = @($cleanupErrors)
         if ($cleanupErrors.Count -gt 0) {
             try {
                 $quarantinePath = Write-BCBenchCleanupQuarantine `
@@ -3762,10 +3965,14 @@ function Invoke-BCBenchBugFixLifecycle {
     finally {
         $env:GITHUB_TOKEN = $oldGithubToken
         $env:ADO_TOKEN = $oldAdoToken
+        if ($WorkflowEvidence -and $createdProtectedRoot) {
+            Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus -CleanupErrors $workflowCleanupErrors
+        }
     }
 }
 
 Export-ModuleMember -Function `
+    Complete-BCBenchBugFixLifecycle, `
     Backup-BCBenchCheckpoint, `
     Get-BCBenchAppInventory, `
     Get-BCBenchContainerIdentity, `

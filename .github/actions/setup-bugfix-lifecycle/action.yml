@@ -1,0 +1,211 @@
+name: Setup production bug-fix lifecycle
+description: Provision one isolated lifecycle with evaluator-only credentials and durable cleanup evidence
+
+inputs:
+  instance-id:
+    description: Bug-fix dataset entry
+    required: true
+  entry-root:
+    description: Unique absolute entry root outside the benchmark checkout
+    required: true
+  protected-root:
+    description: Unique absolute protected evidence root
+    required: true
+  container-name:
+    description: Unique container name for this job
+    required: true
+  azure-client-id:
+    description: Azure OIDC client ID
+    required: true
+  azure-tenant-id:
+    description: Azure OIDC tenant ID
+    required: true
+  github-token:
+    description: Token for public repository cloning
+    required: true
+  al-mcp:
+    description: Enable evaluator-owned AL MCP bridge
+    default: "false"
+  al-lsp:
+    description: Enable restricted AL LSP
+    default: "false"
+  bc-mcp:
+    description: Enable BC MCP gateway
+    default: "false"
+
+outputs:
+  al_tool_dotnet_version:
+    description: AL tool framework for the exact entry version
+    value: ${{ steps.resolve.outputs.al_tool_dotnet_version }}
+  entry_root:
+    description: Lifecycle entry root
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_ENTRY_ROOT }}
+  protected_root:
+    description: Protected evidence root
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_PROTECTED_ROOT }}
+  dataset_path:
+    description: Exact dataset selected by setup
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_DATASET_PATH }}
+  container_name:
+    description: Owned container name
+    value: ${{ steps.setup.outputs.BC_CONTAINER_NAME }}
+  server_url:
+    description: Evaluator connection target
+    value: ${{ steps.setup.outputs.BC_SERVER_URL }}
+  server_instance:
+    description: BC server instance
+    value: ${{ steps.setup.outputs.BC_SERVER_INSTANCE }}
+  evaluator_username:
+    description: Evaluator BC account name
+    value: ${{ steps.setup.outputs.BC_SERVER_USERNAME }}
+  company:
+    description: Selected BC company
+    value: ${{ steps.setup.outputs.BC_COMPANY }}
+  mcp_url:
+    description: BC MCP upstream target
+    value: ${{ steps.setup.outputs.BC_MCP_URL }}
+  agent_os_username:
+    description: Restricted OS account
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_AGENT_OS_USERNAME }}
+  agent_os_sid:
+    description: Restricted OS SID
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_AGENT_OS_SID }}
+  agent_bc_username:
+    description: Restricted BC account
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_AGENT_BC_USERNAME }}
+  expected_container_id:
+    description: Immutable Docker ID
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID }}
+  expected_invocation_id:
+    description: Ownership label
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID }}
+  staged_worker_path:
+    description: Restricted worker path
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_STAGED_WORKER_PATH }}
+  staged_worker_sha256:
+    description: Restricted worker hash
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256 }}
+  base_python:
+    description: Base Python executable
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_BASE_PYTHON }}
+  python_base_prefix:
+    description: Base Python runtime
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX }}
+  acl_paths_json:
+    description: Exact modified ACL paths
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_ACL_PATHS_JSON }}
+  cleanup_tool_roots_json:
+    description: Tool roots whose ACLs must be cleaned
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON }}
+  owned_compiler_helper_roots:
+    description: Owned compiler helper roots
+    value: ${{ steps.setup.outputs.BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve exact dataset entry and AL framework
+      id: resolve
+      shell: pwsh
+      env:
+        INSTANCE_ID: ${{ inputs.instance-id }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Import-Module .\scripts\BCBenchUtils.psm1 -Force -DisableNameChecking
+        Import-Module .\scripts\DatasetEntry.psm1 -Force -DisableNameChecking
+        $datasetPath = Get-BCBenchDatasetPath -Category bug-fix
+        $entries = @(Get-DatasetEntries -DatasetPath $datasetPath -InstanceId $env:INSTANCE_ID)
+        if ($entries.Count -ne 1) { throw "Expected exactly one bug-fix dataset entry." }
+        $version = Get-BCBenchEntryVersion -InstanceId $env:INSTANCE_ID -Category bug-fix -DatasetPath $datasetPath
+        $framework = if (([System.Version]$version).Major -lt 29) { "8.0" } else { "10.0" }
+        $artifactConfig = Get-BCBenchArtifactConfig -Category bug-fix
+        $cacheKey = "bcartifacts-$version"
+        if ($artifactConfig.storageAccount) { $cacheKey += "-$($artifactConfig.storageAccount)" }
+        "dataset_path=$datasetPath" >> $env:GITHUB_OUTPUT
+        "version=$version" >> $env:GITHUB_OUTPUT
+        "al_tool_dotnet_version=$framework" >> $env:GITHUB_OUTPUT
+        "cache_key=$cacheKey" >> $env:GITHUB_OUTPUT
+        "internal=$($entries[0].repo.StartsWith('microsoftInternal/', [StringComparison]::OrdinalIgnoreCase).ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+    - name: Install pinned BcContainerHelper
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Install-Module -Name BcContainerHelper -RequiredVersion 6.1.18 -Force -AllowClobber
+
+    - name: Azure OIDC for the internal repository
+      if: steps.resolve.outputs.internal == 'true'
+      uses: azure/login@v3
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        allow-no-subscriptions: true
+
+    - name: Cache BC sandbox artifacts
+      uses: actions/cache@v5
+      with:
+        path: C:\bcartifacts.cache
+        key: ${{ steps.resolve.outputs.cache_key }}
+
+    - name: Setup AL tool runtime
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ steps.resolve.outputs.al_tool_dotnet_version }}.x
+
+    - name: Install pinned AL tool before applying restricted ACLs
+      id: al-tool
+      shell: pwsh
+      env:
+        AL_FRAMEWORK: ${{ steps.resolve.outputs.al_tool_dotnet_version }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        dotnet tool update -g Microsoft.Dynamics.BusinessCentral.Development.Tools --version 18.0.37.11445-beta --framework "net$env:AL_FRAMEWORK"
+        if ($LASTEXITCODE -ne 0) { throw "AL tool installation failed ($LASTEXITCODE)." }
+        "$HOME\.dotnet\tools" >> $env:GITHUB_PATH
+
+    - name: Provision lifecycle and export the restricted CLI environment
+      id: setup
+      shell: pwsh
+      env:
+        INSTANCE_ID: ${{ inputs.instance-id }}
+        ENTRY_ROOT: ${{ inputs.entry-root }}
+        PROTECTED_ROOT: ${{ inputs.protected-root }}
+        CONTAINER_NAME: ${{ inputs.container-name }}
+        DATASET_PATH: ${{ steps.resolve.outputs.dataset_path }}
+        BC_VERSION: ${{ steps.resolve.outputs.version }}
+        INTERNAL_REPO: ${{ steps.resolve.outputs.internal }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        AL_MCP: ${{ inputs.al-mcp }}
+        AL_LSP: ${{ inputs.al-lsp }}
+        BC_MCP: ${{ inputs.bc-mcp }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $password = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(24)) + 'aA1!'
+        Write-Output "::add-mask::$password"
+        $credential = ConvertTo-SecureString $password -AsPlainText -Force
+        $adoToken = ''
+        if ($env:INTERNAL_REPO -eq 'true') {
+          $adoToken = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($adoToken)) { throw "ADO token acquisition failed." }
+          Write-Output "::add-mask::$adoToken"
+        }
+        $python = uv run python -c "import sys; print(sys.executable)"
+        if ($LASTEXITCODE -ne 0) { throw "Python resolution failed ($LASTEXITCODE)." }
+        $npmRoot = npm prefix -g
+        if ($LASTEXITCODE -ne 0) { throw "npm prefix resolution failed ($LASTEXITCODE)." }
+        $gitRoot = Split-Path (Split-Path (Get-Command git -ErrorAction Stop).Source -Parent) -Parent
+        $toolRoots = @(
+          $npmRoot,
+          $gitRoot,
+          (Split-Path (Get-Command node -ErrorAction Stop).Source -Parent),
+          (Split-Path (Get-Command pwsh -ErrorAction Stop).Source -Parent),
+          (Split-Path (Get-Command dotnet -ErrorAction Stop).Source -Parent),
+          (Join-Path $HOME '.dotnet\tools')
+        ) | Select-Object -Unique
+        .\scripts\Setup-BugFixLifecycle.ps1 -InstanceId $env:INSTANCE_ID -Category bug-fix `
+          -DatasetPath $env:DATASET_PATH -Version $env:BC_VERSION `
+          -EntryRoot $env:ENTRY_ROOT -ProtectedRoot $env:PROTECTED_ROOT -ContainerName $env:CONTAINER_NAME `
+          -EvaluatorUsername admin -EvaluatorPassword $credential `
+          -PythonExecutable $python -ToolRoots $toolRoots -WorkflowEvidence `
+          -AlMcp:($env:AL_MCP -eq 'true') -AlLsp:($env:AL_LSP -eq 'true') -BcMcp:($env:BC_MCP -eq 'true') `
+          -GithubToken $env:GITHUB_TOKEN -AdoToken $adoToken

@@ -1,0 +1,242 @@
+name: Opt-in production bug-fix evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: Agent harness
+        type: choice
+        options: [copilot, claude]
+        default: copilot
+        required: true
+      model:
+        description: Model ID from the selected harness registry
+        type: string
+        default: claude-sonnet-5
+        required: true
+      test-run:
+        description: Evaluate the two canary entries rather than the full dataset
+        type: boolean
+        default: true
+      al-mcp:
+        description: Enable evaluator-owned AL MCP
+        type: boolean
+        default: false
+      al-lsp:
+        description: Enable restricted AL LSP
+        type: boolean
+        default: false
+      bc-mcp:
+        description: Enable BC MCP gateway
+        type: boolean
+        default: false
+      rehearsal:
+        description: Reserved for Task13 checkpoint rehearsal (currently rejected)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bugfix-production-evaluation
+  cancel-in-progress: false
+
+env:
+  EVALUATION_RESULTS_DIR: evaluation_results
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/setup-python-uv
+      - name: Validate dispatch before provisioning or paid agent execution
+        id: validate
+        shell: pwsh
+        env:
+          AGENT: ${{ inputs.agent }}
+          MODEL: ${{ inputs.model }}
+          REHEARSAL: ${{ inputs.rehearsal }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:REHEARSAL -eq 'true') { throw "Checkpoint rehearsal is not implemented until Task13." }
+          @'
+          import os
+          from typing import get_args
+          from bcbench.cli_options import CopilotModel, ClaudeCodeModel
+          registries = {"copilot": CopilotModel, "claude": ClaudeCodeModel}
+          annotation = registries.get(os.environ["AGENT"])
+          if annotation is None or os.environ["MODEL"] not in get_args(get_args(annotation)[0]):
+              raise SystemExit("Model must belong to the selected agent harness.")
+          '@ | uv run python -
+          if ($LASTEXITCODE -ne 0) { throw "Invalid agent/model selection." }
+
+  get-entries:
+    needs: validate
+    uses: $/.github/workflows/get-entries.yml
+    with:
+      category: bug-fix
+      test-run: ${{ inputs.test-run }}
+
+  evaluate:
+    needs: get-entries
+    if: needs.get-entries.outputs.entries != '[]'
+    runs-on: GitHub-BCBench
+    environment:
+      name: ado-read
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
+      copilot-requests: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+    name: ${{ inputs.agent }} - ${{ matrix.entry }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Allocate unique paths before any setup side effects
+        id: paths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $invocation = [Guid]::NewGuid().ToString('N')
+          "entry_root=C:\bcbench\entries\$invocation" >> $env:GITHUB_OUTPUT
+          "protected_root=C:\bcbench-protected\$invocation" >> $env:GITHUB_OUTPUT
+          "container_name=bcbench-$invocation" >> $env:GITHUB_OUTPUT
+      - uses: $/.github/actions/setup-python-uv
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: $/.github/actions/install-agent-harnesses
+      - name: Setup isolated production lifecycle
+        id: setup
+        timeout-minutes: 40
+        uses: $/.github/actions/setup-bugfix-lifecycle
+        with:
+          instance-id: ${{ matrix.entry }}
+          entry-root: ${{ steps.paths.outputs.entry_root }}
+          protected-root: ${{ steps.paths.outputs.protected_root }}
+          container-name: ${{ steps.paths.outputs.container_name }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          github-token: ${{ github.token }}
+          al-mcp: ${{ inputs.al-mcp }}
+          al-lsp: ${{ inputs.al-lsp }}
+          bc-mcp: ${{ inputs.bc-mcp }}
+      - name: Run production lifecycle
+        id: evaluate
+        timeout-minutes: 120
+        shell: pwsh
+        env:
+          AGENT: ${{ inputs.agent }}
+          MODEL: ${{ inputs.model }}
+          INSTANCE_ID: ${{ matrix.entry }}
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          uv run bcbench bugfix-lifecycle $env:AGENT $env:INSTANCE_ID `
+            --model $env:MODEL `
+            --entry-root $env:BCBENCH_LIFECYCLE_ENTRY_ROOT `
+            --protected-root $env:BCBENCH_LIFECYCLE_PROTECTED_ROOT `
+            --dataset-path $env:BCBENCH_LIFECYCLE_DATASET_PATH `
+            --output-dir $env:EVALUATION_RESULTS_DIR
+          if ($LASTEXITCODE -ne 0) { throw "Production lifecycle failed ($LASTEXITCODE)." }
+      - name: Verify cleanup even when setup or CLI fails
+        id: cleanup
+        if: always()
+        shell: pwsh
+        env:
+          ENTRY_ROOT: ${{ steps.paths.outputs.entry_root }}
+          PROTECTED_ROOT: ${{ steps.paths.outputs.protected_root }}
+          CONTAINER_NAME: ${{ steps.paths.outputs.container_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:PROTECTED_ROOT)) { throw "Lifecycle paths were not allocated; no setup was allowed." }
+          .\scripts\Complete-BugFixLifecycle.ps1 -EntryRoot $env:ENTRY_ROOT `
+            -ProtectedRoot $env:PROTECTED_ROOT -ContainerName $env:CONTAINER_NAME
+      - name: Upload only result JSONL for summary
+        id: results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: evaluation-results-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
+          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          retention-days: ${{ inputs.test-run && 1 || 30 }}
+      - name: Upload protected lifecycle evidence separately
+        id: evidence
+        if: always() && steps.paths.outputs.protected_root != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: lifecycle-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
+          path: |
+            ${{ steps.paths.outputs.protected_root }}/final-results/
+            ${{ steps.paths.outputs.protected_root }}/workflow-*.json
+          retention-days: ${{ inputs.test-run && 1 || 30 }}
+      - name: Upload quarantine markers
+        id: quarantine
+        if: always() && steps.paths.outputs.protected_root != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: lifecycle-quarantine-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
+          path: |
+            ${{ steps.paths.outputs.protected_root }}/quarantine.json
+            ${{ steps.paths.outputs.protected_root }}.quarantine.json
+          retention-days: 30
+      - name: Fail closed on quarantine
+        id: check-quarantine
+        if: always()
+        shell: pwsh
+        env:
+          PROTECTED_ROOT: ${{ steps.paths.outputs.protected_root }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:PROTECTED_ROOT)) { throw "Cannot check quarantine without allocated paths." }
+          foreach ($path in @((Join-Path $env:PROTECTED_ROOT 'quarantine.json'), "$env:PROTECTED_ROOT.quarantine.json")) {
+            if (Test-Path -LiteralPath $path) { throw "Lifecycle quarantined; inspect the protected evidence artifact." }
+          }
+
+  result-artifacts:
+    needs: evaluate
+    if: always() && needs.evaluate.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      available: ${{ steps.artifacts.outputs.available }}
+    steps:
+      - id: artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          count=$(gh api --paginate "repos/$GH_REPO/actions/runs/$RUN_ID/artifacts" --jq '[.artifacts[] | select(.expired == false and (.name | startswith("evaluation-results-")))] | length' | awk '{n += $1} END {print n+0}')
+          if [ "$count" -gt 0 ]; then echo "available=true" >> "$GITHUB_OUTPUT"; else echo "available=false" >> "$GITHUB_OUTPUT"; fi
+
+  summarize-results:
+    needs: [evaluate, result-artifacts]
+    if: always() && needs.result-artifacts.outputs.available == 'true'
+    uses: $/.github/workflows/summarize-results.yml
+    permissions:
+      contents: write
+      id-token: write
+    with:
+      results-dir: evaluation_results
+      model: ${{ inputs.model }}
+      agent: ${{ inputs.agent == 'copilot' && 'GitHub Copilot CLI' || 'Claude Code' }}
+      mock: ${{ inputs.test-run }}
+      category: bug-fix
+      production: true
+      skip-leaderboard: true
+    secrets: inherit

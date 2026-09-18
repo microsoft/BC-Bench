@@ -1686,11 +1686,20 @@ git commit -m "Add bug-fix lifecycle commands" -m "Co-authored-by: Copilot <2235
 
 ## Task 12: Add the Opt-In Production Workflow
 
+**Implementation notes:** The workflow keeps credentials in the existing setup-exported environment, installs tooling before restricted ACL provisioning, and rejects `rehearsal: true` until Task 13. Protected artifacts contain `final-results` and nonsecret workflow cleanup records, not database backups or credential-bearing setup exports.
+
+The focused `Complete-BugFixLifecycle.ps1` / `Complete-BCBenchBugFixLifecycle` entry point uses a protected `workflow-setup.json` ownership record and the existing container/account/ACL operations. Setup's opt-in `-WorkflowEvidence` preserves that record through rollback. The finalizer handles a CLI that never launches, verifies both Docker name and immutable ID, preserves existing quarantine, and quarantines incomplete handoffs rather than guessing ownership. Hard process interruption before ownership can be recorded requires manual quarantine review.
+
+The shared summary now selects only `evaluation-results-*`; CI's mock artifact name is updated to that prefix to preserve the existing caller. Normal Copilot/Claude workflows and the legacy setup action remain unchanged. Real container, restricted-tooling, and paid-agent canaries remain pending on a production runner; local tests do not establish those outcomes.
+
 **Files:**
 - Create: `.github\actions\setup-bugfix-lifecycle\action.yml`
 - Create: `.github\workflows\bugfix-production-evaluation.yml`
 - Modify: `.github\workflows\summarize-results.yml`
 - Create: `tests\test_bugfix_lifecycle_workflow.py`
+- Create: `scripts\Complete-BugFixLifecycle.ps1`
+- Modify: `scripts\Setup-BugFixLifecycle.ps1`, `scripts\BugFixLifecycle.psm1`
+- Modify: `tests\test_bugfix_lifecycle_powershell.py`, `.github\workflows\CI.yml`
 
 - [ ] **Step 1: Write failing workflow structure tests**
 

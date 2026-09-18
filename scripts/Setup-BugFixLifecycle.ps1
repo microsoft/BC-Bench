@@ -35,6 +35,8 @@ param(
 
     [switch]$BcMcp,
 
+    [switch]$WorkflowEvidence,
+
     [string]$GithubToken,
 
     [string]$AdoToken
@@ -121,6 +123,7 @@ try {
         -AlMcp:$AlMcp `
         -AlLsp:$AlLsp `
         -BcMcp:$BcMcp `
+        -WorkflowEvidence:$WorkflowEvidence `
         -GithubToken $GithubToken `
         -AdoToken $AdoToken | Out-Null
 }
