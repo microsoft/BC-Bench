@@ -1,6 +1,12 @@
+import json
+import os
+import subprocess
+from contextlib import nullcontext
 from inspect import signature
 from pathlib import Path
 from typing import get_type_hints
+
+import pytest
 
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_lifecycle import (
@@ -11,6 +17,7 @@ from bcbench.evaluate.bugfix_lifecycle import (
     ProjectPublisher,
 )
 from bcbench.evaluate.bugfix_lifecycle import phases as phases_module
+from bcbench.exceptions import BuildError, BuildTimeoutExpired, TestInfrastructureError
 from bcbench.operations.bc_operations import (
     ProjectBuildEvidence,
     ProjectPublicationEvidence,
@@ -175,3 +182,72 @@ def test_benchmark_fix_exposes_four_logical_arguments() -> None:
         "benchmark_patch",
         "benchmark_tests",
     )
+
+
+@pytest.mark.parametrize("operation", ["publication", "tests"])
+@pytest.mark.parametrize("outcome", ["success", "nonzero", "timeout", "launch-error"])
+def test_production_evaluator_uses_password_only_in_child_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    operation: str,
+    outcome: str,
+) -> None:
+    secret = "evaluator'credential-$sentinel"
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "ambient-value-must-not-win")
+    container = ContainerConfig(name="bc", username="evaluator", password=secret, company="CRONUS")
+    evidence = tmp_path / "evidence"
+    project = tmp_path / "App"
+    output = project / "output"
+    output.mkdir(parents=True)
+    (project / "app.json").write_text(
+        json.dumps(
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "App",
+                "publisher": "BCBench",
+                "version": "1.0.0.0",
+            }
+        )
+    )
+    (output / "App.app").write_bytes(b"package")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"], output="partial stdout", stderr="partial stderr")
+        if outcome == "launch-error":
+            raise OSError("PowerShell could not start")
+        if operation == "tests":
+            (evidence / "discovery-50100.json").write_text(json.dumps({"codeunitID": 50100, "functionName": ["Regression"]}))
+            (evidence / "results-50100.xml").write_text('<testsuite><testcase name="Regression" /></testsuite>')
+        return subprocess.CompletedProcess(command, 1 if outcome == "nonzero" else 0, stdout="operation stdout", stderr="operation stderr")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    expected = TestInfrastructureError if operation == "tests" else {"nonzero": BuildError, "timeout": BuildTimeoutExpired, "launch-error": OSError}.get(outcome, BuildError)
+    with nullcontext() if outcome == "success" else pytest.raises(expected):
+        if operation == "publication":
+            result = DefaultProjectPublisher(container, "28.0").build_and_publish_with_evidence(tmp_path, ("App",), evidence)
+            assert result.package_paths == (output / "App.app",)
+        else:
+            result = DefaultExactTestRunner(container).run_with_evidence(
+                (TestEntry(codeunitID=50100, functionName=frozenset({"Regression"})),),
+                TestExpectation.ALL_PASS,
+                tmp_path,
+                evidence,
+            )
+            assert result.summary.executed_count == 1
+
+    assert len(calls) == 1
+    command, options = calls[0]
+    for value in (secret, secret.replace("'", "''")):
+        assert value not in "\n".join(command)
+        assert value not in caplog.text
+        for path in evidence.rglob("*"):
+            if path.is_file():
+                assert value not in path.read_text(encoding="utf-8")
+    assert "ConvertTo-SecureString $env:BC_SERVER_PASSWORD -AsPlainText -Force" in command[-1]
+    assert options["env"]["BC_SERVER_PASSWORD"] == secret
+    assert options["env"]["PATH"] == os.environ["PATH"]
+    assert os.environ["BC_SERVER_PASSWORD"] == "ambient-value-must-not-win"

@@ -1,6 +1,7 @@
 """Business Central specific operations for building, publishing, and testing."""
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -134,6 +135,10 @@ def _escape_ps_string(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _ps_password_value(password: str, from_environment: bool) -> str:
+    return "$env:BC_SERVER_PASSWORD" if from_environment else f"'{_escape_ps_string(password)}'"
+
+
 # PowerShell script templates using Python's built-in string.Template
 _BUILD_AND_PUBLISH_TEMPLATE = Template(
     """
@@ -142,7 +147,7 @@ Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
 $$projectPath = '$project_path'
-$$password = ConvertTo-SecureString '$password' -AsPlainText -Force
+$$password = ConvertTo-SecureString $password_value -AsPlainText -Force
 $$credential = New-Object System.Management.Automation.PSCredential('$username', $$password)
 
 Update-AppProjectVersion -ProjectPath $$projectPath -Version $version
@@ -177,7 +182,7 @@ Import-Module BcContainerHelper -Force -DisableNameChecking
 Import-Module '$app_utils_path' -Force
 $$ErrorActionPreference = 'Stop'
 
-$$password = ConvertTo-SecureString '$password' -AsPlainText -Force
+$$password = ConvertTo-SecureString $password_value -AsPlainText -Force
 $$credential = New-Object System.Management.Automation.PSCredential('$username', $$password)
 
 $$testEntries = '$test_entries_json' | ConvertFrom-Json
@@ -187,14 +192,22 @@ Invoke-DatasetTests -containerName '$container_name' -credential $$credential -t
 )
 
 
-def build_ps_app_build_and_publish(container_name: str, username: str, password: str, project_path: Path, version: str) -> str:
+def build_ps_app_build_and_publish(
+    container_name: str,
+    username: str,
+    password: str,
+    project_path: Path,
+    version: str,
+    *,
+    password_from_environment: bool = False,
+) -> str:
     app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     return _BUILD_AND_PUBLISH_TEMPLATE.substitute(
         app_utils_path=_escape_ps_string(str(app_utils_path)),
         container_name=_escape_ps_string(container_name),
         username=_escape_ps_string(username),
-        password=_escape_ps_string(password),
+        password_value=_ps_password_value(password, password_from_environment),
         project_path=_escape_ps_string(str(project_path)),
         version=version,
     )
@@ -229,14 +242,22 @@ def build_ps_test_script(
     )
 
 
-def build_ps_dataset_tests_script(container_name: str, username: str, password: str, test_entries_json: str, evidence_directory: Path) -> str:
+def build_ps_dataset_tests_script(
+    container_name: str,
+    username: str,
+    password: str,
+    test_entries_json: str,
+    evidence_directory: Path,
+    *,
+    password_from_environment: bool = False,
+) -> str:
     app_utils_path = _config.paths.ps_script_path / "AppUtils.psm1"
 
     return _DATASET_TESTS_TEMPLATE.substitute(
         app_utils_path=_escape_ps_string(str(app_utils_path)),
         container_name=_escape_ps_string(container_name),
         username=_escape_ps_string(username),
-        password=_escape_ps_string(password),
+        password_value=_ps_password_value(password, password_from_environment),
         test_entries_json=_escape_ps_string(test_entries_json),
         evidence_directory=_escape_ps_string(str(evidence_directory)),
     )
@@ -304,6 +325,7 @@ def build_and_publish_projects_with_evidence(
             password=container.password,
             project_path=full_project_path,
             version=version,
+            password_from_environment=True,
         )
         command_path = _write_evidence(
             project_evidence / "command.json",
@@ -322,6 +344,7 @@ def build_and_publish_projects_with_evidence(
                 check=False,
                 text=True,
                 timeout=timeout,
+                env={**os.environ, "BC_SERVER_PASSWORD": container.password},
             )
         except subprocess.TimeoutExpired as error:
             stdout = error.stdout.decode(errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
@@ -498,6 +521,7 @@ def run_test_suite_with_evidence(
         container.password,
         test_entries_json,
         evidence_path,
+        password_from_environment=True,
     )
     command_path = _write_evidence(evidence_path / "command.json", _redacted_command(ps_script, container.password))
     stdout_path = evidence_path / "stdout.txt"
@@ -512,6 +536,7 @@ def run_test_suite_with_evidence(
             check=False,
             text=True,
             timeout=_config.timeout.test_execution,
+            env={**os.environ, "BC_SERVER_PASSWORD": container.password},
         )
     except subprocess.TimeoutExpired as error:
         logger.exception(f"Test execution timed out after {_config.timeout.test_execution} seconds")

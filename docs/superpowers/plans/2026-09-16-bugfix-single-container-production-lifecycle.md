@@ -1698,6 +1698,8 @@ If runtime rejection or an interrupted pending attempt prevents the cleanup work
 
 The cleanup child receives only an explicit Windows/profile/module-path environment allowlist. BC, lifecycle, model-provider, GitHub, Azure, and ADO credentials are not forwarded or serialized into either contained-process request JSON. The supervisor's own environment is unchanged.
 
+The official publication and exact-test adapters pass the evaluator BC password through their PowerShell child's environment, not through the actual `-Command` argument. The existing shared templates support that channel without changing legacy template defaults. Success, nonzero exit, timeout, and launch-error regressions inspect the actual subprocess requests and evidence, rather than relying on saved-command redaction.
+
 The exact compiler/symbol root returned by setup is included in `ToolRoots` as well as owned cleanup roots. It therefore participates in the existing read/execute grant, explicit write/delete denial, restricted-account access probes, exact CLI ACL metadata, and ownership-marker-checked cleanup.
 
 The shared summary now selects only `evaluation-results-*`; CI's mock artifact name is updated to that prefix to preserve the existing caller. Normal Copilot/Claude workflows and the legacy setup action remain unchanged. Real container, restricted-tooling, and paid-agent canaries remain pending on a production runner; local tests do not establish those outcomes.
