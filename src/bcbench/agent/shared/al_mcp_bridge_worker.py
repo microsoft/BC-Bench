@@ -108,9 +108,9 @@ async def serve(config_path: Path) -> None:
             tasks.start_soon(watch_process)
             tasks.start_soon(server.serve, [listener])
             await _wait_until(lambda: server.started)
-            pending = root / "ready.tmp"
-            pending.write_text(json.dumps({"url": f"http://127.0.0.1:{port}{path}"}), encoding="utf-8")
-            pending.replace(root / "ready.json")
+            (root / "ready.json").write_text(json.dumps({"url": f"http://127.0.0.1:{port}{path}"}), encoding="utf-8")
+            # File existence during a Windows rename is not a signal that the publishing handle closed.
+            (root / "ready").touch()
             await _wait_until(lambda: (root / "shutdown").exists() or transport.is_terminated)
             stopping = True
             (root / "state.txt").write_text("closing-http")

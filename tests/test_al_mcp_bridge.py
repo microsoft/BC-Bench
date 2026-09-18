@@ -1,5 +1,6 @@
 import json
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -9,6 +10,7 @@ import pytest
 import requests
 
 from bcbench.agent.shared.al_mcp_bridge import AlMcpBridge, AlMcpBridgeError
+from bcbench.agent.shared.contained_process import ContainedProcessResult
 from tests.test_contained_process import _pid_is_running
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows Job Objects are required")
@@ -47,6 +49,37 @@ def _initialize(bridge):
     headers = {"Mcp-Session-Id": response.headers["Mcp-Session-Id"], "MCP-Protocol-Version": "2025-03-26"}
     assert _rpc(bridge, "notifications/initialized", None, headers=headers).status_code == 202
     return headers
+
+
+def test_readiness_payload_is_not_consumed_until_publisher_closes_and_signals(tmp_path, monkeypatch):
+    published = threading.Event()
+    release = threading.Event()
+    expected_url = "http://127.0.0.1:12345/token/mcp"
+
+    def publisher(request):
+        root = Path(request.command[-1]).parent
+        (root / "ready.json").write_text(json.dumps({"url": expected_url}))
+        published.set()
+        assert release.wait(timeout=5)
+        (root / "ready").touch()
+        deadline = time.monotonic() + 5
+        while not (root / "shutdown").exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        return ContainedProcessResult(0, "", "")
+
+    monkeypatch.setattr("bcbench.agent.shared.al_mcp_bridge.run_contained_process", publisher)
+    bridge = AlMcpBridge({"command": sys.executable}, tmp_path, timeout_seconds=30)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(bridge.start)
+        try:
+            assert published.wait(timeout=5)
+            with pytest.raises(TimeoutError):
+                future.result(timeout=0.2)
+            release.set()
+            assert future.result(timeout=5).url == expected_url
+        finally:
+            release.set()
+            bridge.stop()
 
 
 def test_bridge_forwards_initialization_discovery_calls_and_errors(bridge):

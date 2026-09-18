@@ -66,7 +66,7 @@ class AlMcpBridge:
             self._thread = threading.Thread(target=run, name="al-mcp-bridge")
             self._thread.start()
             ready = self._root / "ready.json"
-            self._wait_for_startup(ready)
+            self._wait_for_startup(self._root / "ready")
             self.url = json.loads(ready.read_text(encoding="utf-8"))["url"]
         except BaseException:
             self.stop()
