@@ -69,6 +69,15 @@ LifecycleProtectedRoot = Annotated[
     ),
 ]
 
+LifecycleDatasetPath = Annotated[
+    Path,
+    typer.Option(
+        "--dataset-path",
+        envvar="BCBENCH_LIFECYCLE_DATASET_PATH",
+        help="Exact evaluator-owned dataset file selected by lifecycle setup",
+    ),
+]
+
 LifecycleReplayPatch = Annotated[
     Path | None,
     typer.Option(

@@ -34,6 +34,7 @@ from bcbench.cli_options import (
     LifecycleBasePython,
     LifecycleBcMcp,
     LifecycleCleanupToolRootsJson,
+    LifecycleDatasetPath,
     LifecycleEntryRoot,
     LifecycleEvaluatorContainerConfig,
     LifecycleExpectedContainerId,
@@ -92,6 +93,7 @@ def bugfix_lifecycle_copilot(
     entry_id: Annotated[str, typer.Argument(help="Bug-fix entry ID to evaluate")],
     entry_root: LifecycleEntryRoot,
     protected_root: LifecycleProtectedRoot,
+    dataset_path: LifecycleDatasetPath,
     agent_os_username: LifecycleAgentOsUsername,
     agent_os_password: LifecycleAgentOsPassword,
     agent_bc_username: LifecycleAgentBcUsername,
@@ -128,6 +130,7 @@ def bugfix_lifecycle_copilot(
         entry_id=entry_id,
         entry_root=entry_root,
         protected_root=protected_root,
+        dataset_path=dataset_path,
         replay_patch=replay_patch,
         agent_os_username=agent_os_username,
         agent_os_password=agent_os_password,
@@ -177,6 +180,7 @@ def bugfix_lifecycle_claude(
     entry_id: Annotated[str, typer.Argument(help="Bug-fix entry ID to evaluate")],
     entry_root: LifecycleEntryRoot,
     protected_root: LifecycleProtectedRoot,
+    dataset_path: LifecycleDatasetPath,
     agent_os_username: LifecycleAgentOsUsername,
     agent_os_password: LifecycleAgentOsPassword,
     agent_bc_username: LifecycleAgentBcUsername,
@@ -213,6 +217,7 @@ def bugfix_lifecycle_claude(
         entry_id=entry_id,
         entry_root=entry_root,
         protected_root=protected_root,
+        dataset_path=dataset_path,
         replay_patch=replay_patch,
         agent_os_username=agent_os_username,
         agent_os_password=agent_os_password,
@@ -262,6 +267,7 @@ def _run_lifecycle(
     entry_id: str,
     entry_root: Path,
     protected_root: Path,
+    dataset_path: Path,
     replay_patch: Path | None,
     agent_os_username: str,
     agent_os_password: str,
@@ -344,6 +350,7 @@ def _run_lifecycle(
             entry_id=entry_id,
             entry_root=entry_root,
             protected_root=protected_root,
+            dataset_path=dataset_path,
             replay_patch=replay_patch,
             agent_os_username=agent_os_username,
             agent_os_password=agent_os_password,
@@ -391,6 +398,7 @@ def _run_lifecycle_after_lease(
     entry_id: str,
     entry_root: Path,
     protected_root: Path,
+    dataset_path: Path,
     replay_patch: Path | None,
     agent_os_username: str,
     agent_os_password: str,
@@ -520,6 +528,7 @@ def _run_lifecycle_after_lease(
     cleanup_lease.replace_resources(resources)
     _run_lifecycle_with_cleanup_lease(
         cleanup_lease=cleanup_lease,
+        dataset_path=dataset_path,
         replay_patch=replay_patch,
         staged_worker_sha256=staged_worker_sha256,
         agent_os_password=agent_os_password,
@@ -537,6 +546,7 @@ def _run_lifecycle_after_lease(
 def _run_lifecycle_with_cleanup_lease(
     *,
     cleanup_lease: CleanupLease,
+    dataset_path: Path,
     replay_patch: Path | None,
     staged_worker_sha256: str,
     agent_os_password: str,
@@ -564,7 +574,12 @@ def _run_lifecycle_with_cleanup_lease(
         _require_file(replay_patch, "--replay-patch")
 
     profile_environment = _prepare_agent_profile(paths)
-    entry = BugFixEntry.load(_CATEGORY.dataset_path, entry_id=resources.instance_id)[0]
+    _require_file(dataset_path, "--dataset-path")
+    try:
+        dataset_path = require_strict_descendant(dataset_path, resources.benchmark_root, "setup dataset", "agent-denied benchmark root")
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--dataset-path") from error
+    entry = BugFixEntry.load(dataset_path, entry_id=resources.instance_id)[0]
     resolved_agent_version = agent_version()
     run_dir = prepare_run_dir(output_dir, run_id)
     context = EvaluationContext(

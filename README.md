@@ -43,6 +43,8 @@ BC-Bench is open source, and you're welcome to fork and adapt it for your own us
 
 After provisioning with `scripts\Setup-BugFixLifecycle.ps1`, use `uv run bcbench bugfix-lifecycle copilot <entry>` or `claude <entry>` with the exported `BCBENCH_LIFECYCLE_*` configuration. `--replay-patch` bypasses the agent. This opt-in path is separate from normal evaluations.
 
+Setup exports the resolved `-DatasetPath` as `BCBENCH_LIFECYCLE_DATASET_PATH` (`--dataset-path`); the CLI loads that exact file, never the category default. The file must remain inside the setup's agent-denied benchmark tree, with no links or junctions. Setup probes dataset read denial under the restricted identity; CLI validation retains that boundary and acquires cleanup ownership before validating or loading the dataset.
+
 Production AL MCP runs in an evaluator-owned Job Object behind an unguessable loopback HTTP endpoint. BC credentials stay in evaluator-only configuration and the server environment, not the agent's MCP configuration. The isolation barrier verifies client shutdown before freezing the submission or running official phases; transport or shutdown failures fail closed. Normal nonproduction AL MCP still uses stdio.
 
 Production AL LSP and configured plugins are staged under the entry's setup-owned `agent-tools\plugins` directory, outside the benchmark checkout and evaluated repository. Setup grants the restricted identity read/execute access, denies modification, and records the plugin root in the exact ACL transaction. The invocation ownership marker is checked before use and cleanup. Nonproduction plugin locations are unchanged.

@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import tempfile
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,8 @@ class LifecycleCliFixture:
             str(self.entry_root),
             "--protected-root",
             str(self.protected_root),
+            "--dataset-path",
+            str(EvaluationCategory.BUG_FIX.dataset_path),
             "--agent-os-username",
             "bcb-1234567-abcdef",
             "--agent-os-password",
@@ -497,6 +500,87 @@ def test_lifecycle_rejects_unowned_plugin_staging_before_agent_or_dataset(lifecy
     cleanup.assert_called_once()
 
 
+@pytest.mark.parametrize("command", ["copilot", "claude"])
+@pytest.mark.parametrize("source", ["option", "environment"])
+def test_lifecycle_loads_exact_setup_dataset_not_default_with_same_id(lifecycle_cli_fixture, command, source):
+    captured = {}
+    default = create_dataset_entry(project_paths=["default/App"], environment_setup_version="27.0")
+    custom = create_dataset_entry(project_paths=["custom/App"], environment_setup_version="28.0", patch="custom gold patch")
+
+    class Lifecycle:
+        def run(self, request, _agent_runner, _cleanup_lease):
+            captured["entry"] = request.context.entry
+
+    with tempfile.TemporaryDirectory(prefix=".lifecycle-test-", dir=Path(__file__).parents[1] / "dataset") as directory:
+        root = Path(directory)
+        (root / "default").mkdir()
+        (root / "custom").mkdir()
+        default_path = create_dataset_file(root / "default", [default])
+        custom_path = create_dataset_file(root / "custom", [custom])
+        with (
+            patch.object(EvaluationCategory, "dataset_path", new_callable=PropertyMock, return_value=default_path),
+            patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
+            patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
+            patch.object(bugfix_lifecycle_commands, "get_claude_version", return_value="1.2.3"),
+        ):
+            args = _without_options(lifecycle_cli_fixture.args(command), "--dataset-path")
+            if source == "option":
+                args.extend(("--dataset-path", str(custom_path)))
+            result = runner.invoke(app, args, env={"BCBENCH_LIFECYCLE_DATASET_PATH": str(custom_path)})
+        assert result.exit_code == 0, result.output
+        assert captured["entry"] == custom
+
+
+@pytest.mark.parametrize("path_kind", ["missing", "agent-readable"])
+def test_lifecycle_acquires_cleanup_before_validating_dataset(lifecycle_cli_fixture, path_kind):
+    dataset = lifecycle_cli_fixture.entry_root / ("missing.jsonl" if path_kind == "missing" else "agent-logs\\dataset.jsonl")
+    if path_kind != "missing":
+        create_dataset_file(dataset.parent)
+    args = _without_options(lifecycle_cli_fixture.args("copilot"), "--dataset-path")
+    with (
+        patch.object(BugFixEntry, "load") as load,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", return_value=None) as cleanup,
+    ):
+        result = runner.invoke(app, [*args, "--dataset-path", str(dataset)])
+    assert result.exit_code != 0
+    load.assert_not_called()
+    cleanup.assert_called_once()
+
+
+def test_lifecycle_cleans_up_after_exact_dataset_loading_fails(lifecycle_cli_fixture):
+    with (
+        patch.object(BugFixEntry, "load", side_effect=ValueError("invalid custom dataset")),
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", return_value=None) as cleanup,
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version") as version,
+    ):
+        result = runner.invoke(app, lifecycle_cli_fixture.args("copilot"))
+    assert result.exit_code != 0
+    assert isinstance(result.exception, ValueError)
+    cleanup.assert_called_once()
+    version.assert_not_called()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows dataset junction regression")
+def test_lifecycle_rejects_dataset_junction_before_loading(lifecycle_cli_fixture):
+    dataset = EvaluationCategory.BUG_FIX.dataset_path
+    with tempfile.TemporaryDirectory(prefix=".lifecycle-test-", dir=dataset.parent) as directory:
+        alias = Path(directory) / "alias"
+        _create_junction(alias, dataset.parent)
+        try:
+            args = _without_options(lifecycle_cli_fixture.args("copilot"), "--dataset-path")
+            with (
+                patch.object(BugFixEntry, "load") as load,
+                patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", return_value=None) as cleanup,
+            ):
+                result = runner.invoke(app, [*args, "--dataset-path", str(alias / dataset.name)])
+            assert result.exit_code != 0
+            assert "reparse point" in result.output
+            load.assert_not_called()
+            cleanup.assert_called_once()
+        finally:
+            alias.rmdir()
+
+
 def test_bugfix_lifecycle_requires_protected_root_when_entry_root_is_supplied(
     lifecycle_cli_fixture: LifecycleCliFixture,
 ):
@@ -639,6 +723,7 @@ def test_bugfix_lifecycle_environment_only_accepts_blank_mcp_url_when_bc_mcp_dis
     environment = {
         "BCBENCH_LIFECYCLE_ENTRY_ROOT": str(lifecycle_cli_fixture.entry_root),
         "BCBENCH_LIFECYCLE_PROTECTED_ROOT": str(lifecycle_cli_fixture.protected_root),
+        "BCBENCH_LIFECYCLE_DATASET_PATH": str(EvaluationCategory.BUG_FIX.dataset_path),
         "BCBENCH_LIFECYCLE_AGENT_OS_USERNAME": "bcb-1234567-abcdef",
         "BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD": "os-secret",
         "BCBENCH_LIFECYCLE_AGENT_BC_USERNAME": agent_config["username"],
@@ -731,6 +816,7 @@ def test_bugfix_lifecycle_accepts_prefixed_environment_options(lifecycle_cli_fix
     environment = {
         "BCBENCH_LIFECYCLE_ENTRY_ROOT": str(lifecycle_cli_fixture.entry_root),
         "BCBENCH_LIFECYCLE_PROTECTED_ROOT": str(lifecycle_cli_fixture.protected_root),
+        "BCBENCH_LIFECYCLE_DATASET_PATH": str(EvaluationCategory.BUG_FIX.dataset_path),
         "BCBENCH_LIFECYCLE_AGENT_OS_USERNAME": "bcb-1234567-abcdef",
         "BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD": "os-secret",
         "BCBENCH_LIFECYCLE_AGENT_BC_USERNAME": lifecycle_cli_fixture.agent_config["username"],

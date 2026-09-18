@@ -40,6 +40,7 @@ _CANONICAL_LIFECYCLE_ENVVARS = {
     "BCBENCH_LIFECYCLE_BASE_PYTHON",
     "BCBENCH_LIFECYCLE_BC_MCP",
     "BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON",
+    "BCBENCH_LIFECYCLE_DATASET_PATH",
     "BCBENCH_LIFECYCLE_ENTRY_ROOT",
     "BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG",
     "BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID",
@@ -2698,7 +2699,7 @@ $successOps = @{{
 $env:GITHUB_ACTIONS = 'true'
 $successContext = Invoke-BCBenchBugFixLifecycle `
     -InstanceId 'owner__repo-11' `
-    -DatasetPath 'dataset.jsonl' `
+    -DatasetPath {_ps_quote(_ROOT / "dataset" / "bcbench.jsonl")} `
     -ContainerName 'bc-success' `
     -EvaluatorUsername 'admin' `
     -EvaluatorPassword $secure `
@@ -2814,6 +2815,7 @@ catch {{
     assert payload["containerPreexisted"] is False
     assert payload["containerSuccessfullyCreated"] is True
     assert output_values["BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID"] == "docker-success"
+    assert Path(output_values["BCBENCH_LIFECYCLE_DATASET_PATH"]) == _ROOT / "dataset" / "bcbench.jsonl"
     assert output_values["BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID"] == payload["invocationId"]
     assert output_values["BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX"] == str(python_base_prefix)
     assert output_values["BCBENCH_LIFECYCLE_AGENT_OS_SID"] == "S-1-5-21-1000-1001-1002-1003"

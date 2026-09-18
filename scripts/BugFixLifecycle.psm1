@@ -3158,7 +3158,7 @@ function Invoke-BCBenchBugFixLifecycle {
     $context = [PSCustomObject]@{
         InstanceId             = $InstanceId
         Category               = $Category
-        DatasetPath            = $DatasetPath
+        DatasetPath            = Resolve-BCBenchAbsolutePath -Path $DatasetPath
         Version                = $Version
         Country                = $Country
         ContainerName          = $ContainerName
@@ -3501,6 +3501,7 @@ function Invoke-BCBenchBugFixLifecycle {
         $environment = [ordered]@{
             BCBENCH_LIFECYCLE_ENTRY_ROOT = $context.EntryRoot
             BCBENCH_LIFECYCLE_PROTECTED_ROOT = $context.ProtectedRoot
+            BCBENCH_LIFECYCLE_DATASET_PATH = $context.DatasetPath
             BCBENCH_LIFECYCLE_AGENT_OS_USERNAME = $context.AgentIdentity.Username
             BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD = $context.AgentIdentity.Password
             BCBENCH_LIFECYCLE_AGENT_BC_USERNAME = $context.AgentBcIdentity.Username
