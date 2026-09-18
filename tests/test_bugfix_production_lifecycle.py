@@ -10,7 +10,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from bcbench.agent.shared.contained_process import AgentExecutionPolicy, WindowsIdentity
+from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessInfrastructureError, WindowsIdentity
 from bcbench.evaluate.bugfix_lifecycle import (
     BugFixLifecyclePaths,
     BugFixLifecycleRequest,
@@ -1131,8 +1131,29 @@ def test_bridge_shutdown_failure_blocks_official_phases_and_quarantines(tmp_path
 
     assert "freeze" not in calls
     assert "stop-agent-sessions" in calls
+    assert "remove-roots" not in calls
+    assert "disable-local" in calls
     assert not any(call.startswith("phase:") for call in calls)
     assert evidence.final_result.test_red.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert (request.paths.protected_root / "quarantine.json").is_file()
+
+
+@pytest.mark.parametrize("persistence_failure", [None, "before"])
+def test_unverified_agent_job_shutdown_blocks_freeze_even_without_bridge_failure(tmp_path, persistence_failure):
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    evidence.final_result_failure = persistence_failure
+    error = ContainedProcessInfrastructureError(30, child_stdout="", child_stderr="", wrapper_stdout="", wrapper_stderr="")
+
+    def failed_agent(context, policy):
+        raise error
+
+    with pytest.raises(CleanupInfrastructureError, match="shutdown was not verified"):
+        lifecycle.run(request, failed_agent)
+    assert "freeze" not in calls
+    assert "stop-agent-sessions" in calls
+    assert not any(call.startswith("phase:") for call in calls)
+    assert evidence.final_result.generated_patch_hash is None
+    assert "remove-roots" not in calls
     assert (request.paths.protected_root / "quarantine.json").is_file()
 
 

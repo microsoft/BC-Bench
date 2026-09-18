@@ -12,7 +12,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
-from bcbench.agent.shared.contained_process import AgentExecutionPolicy
+from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessInfrastructureError
 from bcbench.dataset import BugFixEntry, TestEntry
 from bcbench.evaluate import bugfix_output
 from bcbench.evaluate.bugfix_lifecycle.checkpoint import CheckpointManager, PowerShellResult, PowerShellRunner
@@ -254,10 +254,12 @@ class LifecycleCleanup:
         completed_operations: list[str] = []
         container_absent = False
         identity_secured = False
+        clients_stopped = True
         if self.stop_agent_clients is not None:
             try:
                 self.stop_agent_clients()
             except Exception as error:  # noqa: BLE001 - continue securing identities/container and persist quarantine
+                clients_stopped = False
                 errors.append(f"agent client shutdown: {error}")
             else:
                 completed_operations.append("agent_clients_stopped")
@@ -281,7 +283,7 @@ class LifecycleCleanup:
             else:
                 container_absent = True
 
-        if container_absent:
+        if container_absent and clients_stopped:
             for name, operation in (
                 ("owned root removal", self.ownership_api.remove_roots),
                 ("ACL removal", self.ownership_api.remove_acl),
@@ -635,6 +637,7 @@ class ProductionBugFixLifecycle:
             raise ValueError("Cleanup lease must be owned by the lifecycle")
         result: BugFixResult | None = None
         propagate: BaseException | None = None
+        agent_execution_error: BaseException | None = None
         trusted_source: TrustedSource | None = None
         s0: CheckpointManifest | None = None
         sf: CheckpointManifest | None = None
@@ -700,13 +703,14 @@ class ProductionBugFixLifecycle:
                         agent_stdout = getattr(error, "stdout", None)
                         agent_stderr = getattr(error, "stderr", None)
                     except BaseException as error:  # noqa: BLE001 - persist diagnostics before propagation
+                        agent_execution_error = error
                         propagate = error
                         self._save_exception("lifecycle-emergency.txt", error)
                     finally:
                         request.context.metrics = agent_context.metrics
                         request.context.experiment = agent_context.experiment
 
-                barrier_error = self._establish_isolation_barrier(request)
+                barrier_error = self._establish_isolation_barrier(request, agent_execution_error)
                 if barrier_error is None:
                     if request.replay_patch is not None:
                         full_patch = self._read_replay_patch(request)
@@ -912,7 +916,7 @@ class ProductionBugFixLifecycle:
                     persistence_error.add_note(f"Primary lifecycle failure: {propagate}")
                     propagate = persistence_error
         finally:
-            cleanup_error = active_cleanup_lease.cleanup_as_lifecycle(lambda: self._cleanup(request))
+            cleanup_error = active_cleanup_lease.cleanup_as_lifecycle(lambda: self._cleanup(request, agent_execution_error))
 
         if cleanup_error is not None:
             if propagate is not None:
@@ -1264,11 +1268,11 @@ class ProductionBugFixLifecycle:
         except Exception:
             logger.exception(f"Failed to persist lifecycle diagnostic {name}")
 
-    def _establish_isolation_barrier(self, request: BugFixLifecycleRequest) -> BugFixLifecycleInfrastructureError | None:
+    def _establish_isolation_barrier(self, request: BugFixLifecycleRequest, execution_error: BaseException | None) -> BugFixLifecycleInfrastructureError | None:
         outcomes: dict[str, dict[str, str]] = {}
         errors: list[str] = []
         for name, operation in (
-            ("close_process_group", self._ownership_api.close_contained_group),
+            ("close_process_group", lambda: self._close_agent_group(execution_error)),
             ("stop_agent_clients", lambda: self._stop_agent_clients(request)),
             ("stop_agent_sessions", self._ownership_api.stop_agent_sessions),
         ):
@@ -1306,18 +1310,28 @@ class ProductionBugFixLifecycle:
         )
         return None
 
-    def _cleanup(self, request: BugFixLifecycleRequest) -> CleanupInfrastructureError | None:
+    def _close_agent_group(self, execution_error: BaseException | None) -> None:
+        self._ownership_api.close_contained_group()
+        self._verify_agent_execution_closed(execution_error)
+
+    @staticmethod
+    def _verify_agent_execution_closed(execution_error: BaseException | None) -> None:
+        if isinstance(execution_error, ContainedProcessInfrastructureError | KeyboardInterrupt):
+            raise BugFixLifecycleInfrastructureError("Contained agent process shutdown was not verified")
+
+    def _cleanup(self, request: BugFixLifecycleRequest, execution_error: BaseException | None) -> CleanupInfrastructureError | None:
         return LifecycleCleanup(
             request.provisioned_resources,
             self._ownership_api,
-            stop_agent_clients=lambda: self._stop_agent_clients(request),
+            stop_agent_clients=lambda: self._stop_agent_clients(request, execution_error),
         ).run()
 
     @staticmethod
-    def _stop_agent_clients(request: BugFixLifecycleRequest) -> None:
+    def _stop_agent_clients(request: BugFixLifecycleRequest, execution_error: BaseException | None = None) -> None:
         clients = request.agent_execution_policy.managed_clients
         if clients is not None:
             clients.stop()
+        ProductionBugFixLifecycle._verify_agent_execution_closed(execution_error)
 
 
 def _empty_phases() -> dict[str, BugFixPhaseResult]:
