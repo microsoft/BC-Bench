@@ -30,6 +30,7 @@ from bcbench.evaluate.bugfix_lifecycle import (
     TrustedSource,
     analyze_bugfix_submission,
 )
+from bcbench.evaluate.bugfix_lifecycle.execution import WorkflowExecution
 from bcbench.evaluate.bugfix_output import GeneratedBugFixOutput
 from bcbench.exceptions import (
     AgentError,
@@ -424,6 +425,90 @@ def _agent(calls: list[str]):
         return AgentMetrics(execution_time=1), ExperimentConfiguration()
 
     return run
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_workflow_execution_requires_verified_shutdown_before_resource_cleanup(tmp_path: Path, interrupted: bool) -> None:
+    request, lifecycle, calls, _evidence, ownership, _phases = _harness(tmp_path)
+    protected = request.paths.protected_root
+    protected.mkdir(parents=True, exist_ok=True)
+    (protected / "workflow-setup.json").write_text("{}")
+    execution = protected / "workflow-execution.json"
+    execution.write_text(
+        json.dumps(
+            {
+                "status": "not_started",
+                "container_id": request.expected_container_id,
+                "invocation_id": request.expected_container_invocation_id,
+            }
+        )
+    )
+
+    def agent(context, policy):
+        assert json.loads(execution.read_text())["status"] == "running"
+        if interrupted:
+            raise KeyboardInterrupt("interrupted CLI")
+        return _agent(calls)(context, policy)
+
+    original_remove = ownership.remove_container_and_verify
+
+    def remove_container():
+        assert json.loads(execution.read_text())["status"] == "shutdown_verified"
+        original_remove()
+
+    ownership.remove_container_and_verify = remove_container
+    if interrupted:
+        with pytest.raises(CleanupInfrastructureError):
+            lifecycle.run(request, agent)
+        assert json.loads(execution.read_text())["status"] == "running"
+        assert "remove-container" not in calls
+        assert "remove-roots" not in calls
+        assert "disable-local" in calls
+        assert (protected / "quarantine.json").exists()
+    else:
+        lifecycle.run(request, agent)
+        assert json.loads(execution.read_text())["status"] == "shutdown_verified"
+        assert "remove-container" in calls
+
+
+@pytest.mark.parametrize("state", ["cleanup_claimed", "launching", "running", "shutdown_verified"])
+def test_workflow_execution_rejects_duplicate_or_cleanup_owned_lifecycle(tmp_path: Path, state: str) -> None:
+    request, _lifecycle, _calls, _evidence, _ownership, _phases = _harness(tmp_path)
+    execution = WorkflowExecution(request.provisioned_resources)
+    execution.path.parent.mkdir(exist_ok=True)
+    execution.path.write_text(
+        json.dumps(
+            {
+                "status": state,
+                "container_id": request.expected_container_id,
+                "invocation_id": request.expected_container_invocation_id,
+            }
+        )
+    )
+    with pytest.raises(CleanupInfrastructureError, match="Cannot enter"):
+        execution.begin_lifecycle()
+    assert json.loads(execution.path.read_text())["status"] == state
+
+
+def test_workflow_execution_interrupted_transition_lock_is_never_stolen(tmp_path: Path) -> None:
+    request, _lifecycle, _calls, _evidence, _ownership, _phases = _harness(tmp_path)
+    execution = WorkflowExecution(request.provisioned_resources)
+    execution.path.parent.mkdir(exist_ok=True)
+    execution.path.write_text(
+        json.dumps(
+            {
+                "status": "not_started",
+                "container_id": request.expected_container_id,
+                "invocation_id": request.expected_container_invocation_id,
+            }
+        )
+    )
+    lock = execution.path.with_suffix(".lock")
+    lock.touch()
+    with pytest.raises(CleanupInfrastructureError, match="locked or interrupted"):
+        execution.begin_cli()
+    assert lock.exists()
+    assert json.loads(execution.path.read_text())["status"] == "not_started"
 
 
 @pytest.mark.parametrize(

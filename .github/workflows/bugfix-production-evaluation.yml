@@ -144,6 +144,10 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\BugFixLifecycle.psm1 -Force -DisableNameChecking
+          Start-BCBenchWorkflowExecution -ProtectedRoot $env:BCBENCH_LIFECYCLE_PROTECTED_ROOT `
+            -ExpectedContainerId $env:BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID `
+            -ExpectedInvocationId $env:BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID
           uv run bcbench bugfix-lifecycle $env:AGENT $env:INSTANCE_ID `
             --model $env:MODEL `
             --entry-root $env:BCBENCH_LIFECYCLE_ENTRY_ROOT `

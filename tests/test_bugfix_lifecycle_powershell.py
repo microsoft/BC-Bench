@@ -2892,6 +2892,10 @@ catch {{
     assert payload["failureEntryExists"] is False
     assert payload["failureProtectedExists"] is workflow_evidence
     if workflow_evidence:
+        execution = json.loads((success_protected / "workflow-execution.json").read_text(encoding="utf-8-sig"))
+        assert execution["status"] == "cli_running"
+        assert execution["container_id"] == "docker-success"
+        assert execution["invocation_id"] == payload["invocationId"]
         for root, status in ((success_protected, "ready"), (failure_protected, "rolled-back")):
             state_text = (root / "workflow-setup.json").read_text(encoding="utf-8-sig")
             state = json.loads(state_text)

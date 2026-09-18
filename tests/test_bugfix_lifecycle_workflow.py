@@ -62,6 +62,7 @@ def test_tooling_precedes_restricted_setup_and_cli_uses_environment_contract() -
     assert run["env"]["COPILOT_GITHUB_TOKEN"] == "${{ github.token }}"
     assert run["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "${{ secrets.ANTHROPIC_API_KEY }}"
     assert "$LASTEXITCODE" in run["run"]
+    assert run["run"].index("Start-BCBenchWorkflowExecution") < run["run"].index("uv run bcbench bugfix-lifecycle")
 
 
 def test_cleanup_and_separate_artifacts_always_run() -> None:
@@ -210,6 +211,11 @@ def test_dispatch_validation_uses_current_model_registry(agent: str, model: str,
         "plugin-marker-mismatch",
         "missing-container-id",
         "setup-quarantine",
+        "launching",
+        "cli_running",
+        "running",
+        "shutdown_verified",
+        "missing-execution",
     ],
 )
 def test_workflow_finalizer_is_idempotent_and_ownership_safe(tmp_path: Path, scenario: str) -> None:
@@ -248,6 +254,18 @@ def test_workflow_finalizer_is_idempotent_and_ownership_safe(tmp_path: Path, sce
         (compiler / ".bcbench-owned").write_text("not-our-invocation")
         state["OwnedCompilerHelperRoots"] = [str(compiler)]
     (protected / "workflow-setup.json").write_text(json.dumps(state), encoding="utf-8")
+    execution_status = scenario if scenario in {"launching", "cli_running", "running", "shutdown_verified"} else "not_started"
+    if scenario != "missing-execution":
+        (protected / "workflow-execution.json").write_text(
+            json.dumps(
+                {
+                    "status": execution_status,
+                    "container_id": "owned-id",
+                    "invocation_id": "owned-label",
+                }
+            ),
+            encoding="utf-8",
+        )
     evidence = protected / "final-results"
     evidence.mkdir()
     (evidence / "final-result.json").write_text('{"evidence":"preserve"}')
@@ -309,10 +327,10 @@ try {
     payload = json.loads(result.stdout.splitlines()[-1])
     assert "not recognized" not in payload["message"]
     assert (evidence / "final-result.json").read_text() == '{"evidence":"preserve"}'
-    if scenario in {"never-launched", "already-clean"}:
+    if scenario in {"never-launched", "already-clean", "shutdown_verified"}:
         assert payload["message"] == ""
         assert not payload["entryExists"]
-        assert payload["calls"].count("container") == (1 if scenario == "never-launched" else 0)
+        assert payload["calls"].count("container") == (0 if scenario == "already-clean" else 1)
         assert json.loads((protected / "workflow-cleanup.json").read_text(encoding="utf-8-sig"))["status"] == "success"
         assert not (protected / "quarantine.json").exists()
     else:

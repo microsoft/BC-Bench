@@ -17,6 +17,7 @@ from bcbench.dataset import BugFixEntry, TestEntry
 from bcbench.evaluate import bugfix_output
 from bcbench.evaluate.bugfix_lifecycle.checkpoint import CheckpointManager, PowerShellResult, PowerShellRunner
 from bcbench.evaluate.bugfix_lifecycle.evidence import EvidenceStore, sha256_file, sha256_text
+from bcbench.evaluate.bugfix_lifecycle.execution import WorkflowExecution
 from bcbench.evaluate.bugfix_lifecycle.models import (
     AppInventoryEntry,
     BugFixLifecycleRequest,
@@ -264,6 +265,7 @@ class LifecycleCleanup:
             else:
                 completed_operations.append("agent_clients_stopped")
         try:
+            WorkflowExecution(self.resources).require_shutdown()
             self.ownership_api.verify_container_ownership()
         except Exception as error:  # noqa: BLE001 - cleanup aggregates every ownership failure
             errors.append(f"container ownership verification: {error}")
@@ -635,6 +637,7 @@ class ProductionBugFixLifecycle:
             raise ValueError("Cleanup lease resources must match the lifecycle request")
         if not active_cleanup_lease.is_lifecycle_owner:
             raise ValueError("Cleanup lease must be owned by the lifecycle")
+        WorkflowExecution(request.provisioned_resources).begin_lifecycle()
         result: BugFixResult | None = None
         propagate: BaseException | None = None
         agent_execution_error: BaseException | None = None
@@ -1320,10 +1323,17 @@ class ProductionBugFixLifecycle:
             raise BugFixLifecycleInfrastructureError("Contained agent process shutdown was not verified")
 
     def _cleanup(self, request: BugFixLifecycleRequest, execution_error: BaseException | None) -> CleanupInfrastructureError | None:
+        execution = WorkflowExecution(request.provisioned_resources)
+
+        def verify_shutdown() -> None:
+            self._close_agent_group(execution_error)
+            self._stop_agent_clients(request, execution_error)
+            self._ownership_api.stop_agent_sessions()
+
         return LifecycleCleanup(
             request.provisioned_resources,
             self._ownership_api,
-            stop_agent_clients=lambda: self._stop_agent_clients(request, execution_error),
+            stop_agent_clients=(lambda: execution.verify_shutdown(verify_shutdown) if execution.enabled else self._stop_agent_clients(request, execution_error)),
         ).run()
 
     @staticmethod

@@ -61,6 +61,7 @@ from bcbench.evaluate.bugfix_lifecycle import (
     RawSetupCleanup,
     sha256_file,
 )
+from bcbench.evaluate.bugfix_lifecycle.execution import WorkflowExecution
 from bcbench.evaluate.bugfix_lifecycle.path_safety import (
     absolute_path,
     reject_reparse_components,
@@ -343,6 +344,7 @@ def _run_lifecycle(
             raise cleanup_error from error
         raise
 
+    WorkflowExecution(resources).begin_cli()
     cleanup_lease = CleanupLease.for_cli(resources)
     try:
         _run_lifecycle_after_lease(

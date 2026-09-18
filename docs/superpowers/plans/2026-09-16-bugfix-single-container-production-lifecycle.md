@@ -1690,6 +1690,8 @@ git commit -m "Add bug-fix lifecycle commands" -m "Co-authored-by: Copilot <2235
 
 The focused `Complete-BugFixLifecycle.ps1` / `Complete-BCBenchBugFixLifecycle` entry point uses a protected `workflow-setup.json` ownership record and the existing container/account/ACL operations. Setup's opt-in `-WorkflowEvidence` preserves that record through rollback. The finalizer handles a CLI that never launches, verifies both Docker name and immutable ID, preserves existing quarantine, and quarantines incomplete handoffs rather than guessing ownership. Hard process interruption before ownership can be recorded requires manual quarantine review.
 
+The execution handoff is separate from setup readiness: setup creates `not_started`, the workflow consumes that launch permission before invoking the CLI, and the CLI/lifecycle record their ownership before activity. Only verified contained-process, managed-client, and agent-session shutdown records `shutdown_verified`. Exclusive create-new transition locks and a terminal cleanup claim prevent launch/cleanup races; an interrupted transition or execution retains resources, disables the owned identity, and quarantines instead of treating setup readiness as shutdown proof.
+
 The shared summary now selects only `evaluation-results-*`; CI's mock artifact name is updated to that prefix to preserve the existing caller. Normal Copilot/Claude workflows and the legacy setup action remain unchanged. Real container, restricted-tooling, and paid-agent canaries remain pending on a production runner; local tests do not establish those outcomes.
 
 **Files:**

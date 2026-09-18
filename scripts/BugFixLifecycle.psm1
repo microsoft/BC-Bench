@@ -3112,6 +3112,63 @@ function Write-BCBenchWorkflowSetupState {
     Move-Item -LiteralPath $temporary -Destination $path -Force
 }
 
+function Set-BCBenchWorkflowExecutionState {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProtectedRoot,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId,
+        [Parameter(Mandatory = $true)][ValidateSet("not_started", "launching", "cleanup_claimed")][string]$Status
+    )
+
+    $path = Join-Path $ProtectedRoot "workflow-execution.json"
+    $lock = Join-Path $ProtectedRoot "workflow-execution.lock"
+    Assert-BCBenchNoReparseComponents -Path $path
+    Assert-BCBenchNoReparseComponents -Path $lock
+    $handle = [IO.File]::Open($lock, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        if ($Status -eq "not_started") {
+            if (Test-Path -LiteralPath $path) { throw "Workflow execution handoff already exists." }
+            $state = @{ status = $Status; container_id = $ExpectedContainerId; invocation_id = $ExpectedInvocationId }
+        }
+        else {
+            $state = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
+            if ($state.container_id -cne $ExpectedContainerId -or $state.invocation_id -cne $ExpectedInvocationId) {
+                throw "Workflow execution ownership does not match setup."
+            }
+            if ($Status -eq "launching" -and $state.status -ne "not_started") {
+                throw "Workflow execution is already launched or claimed by cleanup."
+            }
+            if ($Status -eq "cleanup_claimed") {
+                $basis = if ($state.status -eq "cleanup_claimed") { $state.cleanup_basis } else { $state.status }
+                if ($basis -notin @("not_started", "shutdown_verified")) {
+                    throw "Workflow execution shutdown is not verified; retain resources."
+                }
+                $state.cleanup_basis = $basis
+            }
+            $state.status = $Status
+        }
+        $temporary = Join-Path $ProtectedRoot "workflow-execution.tmp"
+        $bytes = [Text.Encoding]::UTF8.GetBytes(($state | ConvertTo-Json -Compress))
+        $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+        Move-Item -LiteralPath $temporary -Destination $path -Force
+    }
+    finally {
+        $handle.Dispose()
+        Remove-Item -LiteralPath $lock -ErrorAction Stop
+    }
+}
+
+function Start-BCBenchWorkflowExecution {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProtectedRoot,
+        [Parameter(Mandatory = $true)][string]$ExpectedContainerId,
+        [Parameter(Mandatory = $true)][string]$ExpectedInvocationId
+    )
+    Set-BCBenchWorkflowExecutionState -ProtectedRoot $ProtectedRoot -ExpectedContainerId $ExpectedContainerId `
+        -ExpectedInvocationId $ExpectedInvocationId -Status launching
+}
+
 function Complete-BCBenchBugFixLifecycle {
     [CmdletBinding()]
     param(
@@ -3175,6 +3232,10 @@ function Complete-BCBenchBugFixLifecycle {
             throw "Completed setup is missing immutable container ownership."
         }
         if (@($context.SetupCleanupErrors).Count -gt 0) { throw "Setup cleanup was not verified." }
+        if ($context.Status -eq "ready") {
+            Set-BCBenchWorkflowExecutionState -ProtectedRoot $protected -ExpectedContainerId $context.ContainerId `
+                -ExpectedInvocationId $context.ContainerInvocationId -Status cleanup_claimed
+        }
         $container = Invoke-BCBenchOperation -Operations $Operations -Name InspectContainer -Context $context -Default {
             param($c)
             Get-BCBenchContainerState -ContainerName $c.ContainerName
@@ -3732,7 +3793,11 @@ function Invoke-BCBenchBugFixLifecycle {
             $environment["BCBENCH_LIFECYCLE_REPLAY_PATCH"] = $context.ReplayPatch
         }
         $workflowStatus = "ready"
-        if ($WorkflowEvidence) { Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus }
+        if ($WorkflowEvidence) {
+            Set-BCBenchWorkflowExecutionState -ProtectedRoot $context.ProtectedRoot -ExpectedContainerId $context.ContainerId `
+                -ExpectedInvocationId $context.ContainerInvocationId -Status not_started
+            Write-BCBenchWorkflowSetupState -Context $context -Status $workflowStatus
+        }
         foreach ($item in $environment.GetEnumerator()) {
             Add-BCBenchOutput -Path $GithubOutput -Name $item.Key -Value ([string]$item.Value)
             Add-BCBenchOutput -Path $GithubEnv -Name $item.Key -Value ([string]$item.Value)
@@ -3972,6 +4037,7 @@ function Invoke-BCBenchBugFixLifecycle {
 }
 
 Export-ModuleMember -Function `
+    Start-BCBenchWorkflowExecution, `
     Complete-BCBenchBugFixLifecycle, `
     Backup-BCBenchCheckpoint, `
     Get-BCBenchAppInventory, `
