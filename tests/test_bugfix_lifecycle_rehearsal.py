@@ -725,3 +725,79 @@ def test_probe_creation_refusal_does_not_restore_over_an_unowned_object(tmp_path
     with pytest.raises(CheckpointInfrastructureError, match="existing SQL probe"):
         run_checkpoint_rehearsal(manager, s0, RefusedProbe(), app, paths.final_results / "rehearsal")
     assert runner.calls == []
+
+
+@pytest.mark.parametrize("fault", [RehearsalFault.MISSING_JUNIT, RehearsalFault.DUPLICATE_DISCOVERY, RehearsalFault.DUPLICATE_EXECUTION])
+@pytest.mark.parametrize("attack", [None, "malformed_discovery", "malformed_xml", "wrong_discovery", "unrelated_io", "other_execution"])
+def test_injected_evidence_accepts_only_its_specific_production_failure(tmp_path: Path, monkeypatch, fault, attack) -> None:
+    from bcbench.evaluate.bugfix_lifecycle import rehearsal as module
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _manager
+
+    manager, _, _, app = _manager(tmp_path)
+    manifest = manager.capture("baseline", (app,))
+    evidence = tmp_path / "test-evidence"
+    evidence.mkdir()
+    tests = _valid_evidence(evidence)
+    expected = module.RehearsalProbe((r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE",), ("value",), ("17",), ("50199:RehearsalProbe",))
+
+    class Adapter:
+        fault_applied = False
+        mutated = False
+
+        def mutate(self, selected):
+            assert selected == app
+            self.mutated = True
+
+        def read_probe(self):
+            return replace(expected, columns=("value", "added"), rows=("29",)) if self.mutated else expected
+
+        def read_inventory(self):
+            return (replace(app, installed=False),) if self.mutated else (app,)
+
+        def set_fault(self, value):
+            assert value is RehearsalFault.NONE
+
+        def test_evidence(self, iteration):
+            assert iteration == 1
+            return evidence, tests
+
+    adapter = Adapter()
+    original_restore = manager.restore
+
+    def restore(*args):
+        original_restore(*args)
+        adapter.mutated = False
+
+    monkeypatch.setattr(manager, "restore", restore)
+    original_inject = module.inject_test_evidence_fault
+
+    def inject(*args):
+        proof = original_inject(*args)
+        if attack == "malformed_discovery":
+            (evidence / "discovery-50199.json").write_text("{invalid", encoding="utf-8")
+        elif attack == "malformed_xml":
+            (evidence / "results-50199.xml").write_text("<invalid", encoding="utf-8")
+        elif attack == "wrong_discovery":
+            (evidence / "discovery-50199.json").write_text(json.dumps({"codeunitID": 50199, "functionName": ["Unrelated"]}), encoding="utf-8")
+        elif attack == "other_execution":
+            # A second requested codeunit disappears only after the target fault was injected.
+            (evidence / "results-50200.xml").unlink()
+        elif attack == "unrelated_io":
+
+            def failed_read(*_args):
+                raise PermissionError("unrelated evidence read failure")
+
+            monkeypatch.setattr("bcbench.operations.bc_operations.load_test_run_summary", failed_read)
+        return proof
+
+    if attack == "other_execution":
+        tests += (TestEntry(codeunitID=50200, functionName=frozenset({"Other"})),)
+        (evidence / "discovery-50200.json").write_text(json.dumps({"codeunitID": 50200, "functionName": ["Other"]}))
+        (evidence / "results-50200.xml").write_text('<testsuite><testcase name="Other"/></testsuite>')
+    monkeypatch.setattr(module, "inject_test_evidence_fault", inject)
+    if attack is None:
+        assert module._run_iteration(manager, manifest, adapter, app, expected, 1, fault, {}) is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    else:
+        with pytest.raises((CheckpointInfrastructureError, TestExecutionError, TestInfrastructureError)):
+            module._run_iteration(manager, manifest, adapter, app, expected, 1, fault, {})

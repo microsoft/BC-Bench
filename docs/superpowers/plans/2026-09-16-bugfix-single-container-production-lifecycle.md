@@ -1798,6 +1798,11 @@ an exact entry-owned test app from the trusted baseline publication and protecte
 package hashes, then uninstalls that version without force/cascade/data-deletion
 options. Missing provenance or dependency failures stop the rehearsal.
 
+Injected test-evidence faults retain an exact post-injection input fingerprint
+and the pristine production summary. Verification requires the specific missing
+JUnit path/cause or exact discovery/execution multiset delta; unrelated I/O,
+parse, selection, and outcome failures cannot satisfy the injected-fault check.
+
 The SQL probe is a cryptographically named, invocation/container-marked table
 in the exact local single-tenant database. It never changes existing app or
 business tables. A separate `rehearsal-*` checkpoint contains its initial row and

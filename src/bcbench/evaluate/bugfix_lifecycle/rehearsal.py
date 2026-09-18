@@ -1,4 +1,5 @@
 import copy
+import errno
 import json
 import os
 import xml.etree.ElementTree as ET
@@ -15,10 +16,10 @@ from bcbench.evaluate.bugfix_lifecycle.evidence import sha256_file
 from bcbench.evaluate.bugfix_lifecycle.models import AppInventoryEntry, CheckpointManifest, ProjectPublication
 from bcbench.evaluate.bugfix_lifecycle.path_safety import reject_reparse_components
 from bcbench.evaluate.bugfix_lifecycle.phases import classify_phase_error
-from bcbench.exceptions import CheckpointInfrastructureError, TestExecutionError, TestInfrastructureError
+from bcbench.exceptions import CheckpointInfrastructureError, TestExecutionError, TestExecutionFailureKind, TestInfrastructureError
 from bcbench.operations.bc_operations import require_test_evidence
 from bcbench.operations.project_operations import is_test_project
-from bcbench.operations.test_execution import TestExpectation
+from bcbench.operations.test_execution import TestExpectation, TestRunSummary
 from bcbench.results.bugfix import BugFixPhaseStatus
 
 
@@ -179,11 +180,11 @@ def _run_iteration(
         _require_inventory(rehearsal.apps, adapter.read_inventory())
         if fault in _EVIDENCE_FAULTS:
             evidence, tests = adapter.test_evidence(iteration)
-            inject_test_evidence_fault(fault, evidence, tests)
+            proof = inject_test_evidence_fault(fault, evidence, tests)
             try:
                 require_test_evidence(evidence, tests, TestExpectation.ALL_PASS)
             except (TestExecutionError, TestInfrastructureError) as error:
-                if classify_phase_error(error) is not BugFixPhaseStatus.INFRASTRUCTURE_ERROR:
+                if not proof.matches(error) or classify_phase_error(error) is not BugFixPhaseStatus.INFRASTRUCTURE_ERROR:
                     raise
                 observed = error
             if observed is None:
@@ -277,8 +278,50 @@ def run_checkpoint_rehearsal(
                 raise
 
 
-def inject_test_evidence_fault(fault: RehearsalFault, directory: Path, tests: tuple[TestEntry, ...]) -> None:
-    require_test_evidence(directory, tests, TestExpectation.ALL_PASS)
+@dataclass(frozen=True)
+class InjectedTestEvidenceFault:
+    fault: RehearsalFault
+    pristine: TestRunSummary
+    junit: Path
+    files: tuple[tuple[Path, str | None], ...]
+
+    def matches(self, error: TestExecutionError | TestInfrastructureError) -> bool:
+        for path, digest in self.files:
+            if digest is None:
+                if path.exists():
+                    return False
+            elif not path.is_file() or sha256_file(path) != digest:
+                return False
+        if error.expectation != TestExpectation.ALL_PASS:
+            return False
+        if self.fault is RehearsalFault.MISSING_JUNIT:
+            cause = error.__cause__
+            return (
+                isinstance(error, TestInfrastructureError)
+                and isinstance(cause, FileNotFoundError)
+                and cause.errno == errno.ENOENT
+                and cause.filename == str(self.junit)
+                and error.reason == f"Invalid test evidence: {cause}"
+                and error.summary is None
+            )
+        if not isinstance(error, TestExecutionError) or error.failure_kind is not TestExecutionFailureKind.SELECTION_EVIDENCE or error.summary is None:
+            return False
+        summary = error.summary
+        discovered = Counter(self.pristine.discovered)
+        results = Counter(self.pristine.results)
+        if self.fault is RehearsalFault.DUPLICATE_DISCOVERY:
+            discovered.update((self.pristine.discovered[0],))
+            reason = "Discovery evidence mismatch: missing 0, unexpected 1."
+        elif self.fault is RehearsalFault.DUPLICATE_EXECUTION:
+            results.update((self.pristine.results[0],))
+            reason = "Execution evidence mismatch: missing 0, unexpected 1."
+        else:
+            return False
+        return error.reason == reason and Counter(summary.requested) == Counter(self.pristine.requested) and Counter(summary.discovered) == discovered and Counter(summary.results) == results
+
+
+def inject_test_evidence_fault(fault: RehearsalFault, directory: Path, tests: tuple[TestEntry, ...]) -> InjectedTestEvidenceFault:
+    pristine = require_test_evidence(directory, tests, TestExpectation.ALL_PASS)
     codeunit_id = tests[0].codeunitID
     discovery = directory / f"discovery-{codeunit_id}.json"
     junit = directory / f"results-{codeunit_id}.xml"
@@ -295,3 +338,5 @@ def inject_test_evidence_fault(fault: RehearsalFault, directory: Path, tests: tu
         tree.write(junit, encoding="utf-8", xml_declaration=True)
     else:
         raise ValueError(f"Not a test-evidence fault: {fault}")
+    paths = tuple(directory / name for codeunit in dict.fromkeys(test.codeunitID for test in tests) for name in (f"discovery-{codeunit}.json", f"results-{codeunit}.xml"))
+    return InjectedTestEvidenceFault(fault, pristine, junit, tuple((path, sha256_file(path) if path.exists() else None) for path in paths))

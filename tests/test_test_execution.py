@@ -417,6 +417,8 @@ def test_missing_discovery_file_remains_absent(tmp_path: Path):
 
 
 def test_missing_results_file_raises_file_not_found_error(tmp_path: Path):
+    import errno
+
     from bcbench.operations.test_execution import load_test_run_summary
 
     write_discovery(tmp_path, 50100, ["MissingExecution"])
@@ -426,7 +428,8 @@ def test_missing_results_file_raises_file_not_found_error(tmp_path: Path):
     with pytest.raises(FileNotFoundError) as error:
         load_test_run_summary(tmp_path, entries)
 
-    assert str(results_path) in str(error.value)
+    assert error.value.filename == str(results_path)
+    assert error.value.errno == errno.ENOENT
     assert "50100" in str(error.value)
 
 

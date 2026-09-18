@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -164,7 +165,7 @@ def load_test_run_summary(evidence_dir: Path, test_entries: Iterable[TestEntry])
 
         results_path = evidence_dir / f"results-{codeunit_id}.xml"
         if not results_path.exists():
-            raise FileNotFoundError(f"Missing JUnit results for codeunit {codeunit_id}: {results_path}")
+            raise FileNotFoundError(errno.ENOENT, f"Missing JUnit results for codeunit {codeunit_id}", str(results_path))
 
         root = ET.parse(results_path).getroot()
         for testcase in (node for node in root.iter() if _local_name(node.tag) == "testcase"):
