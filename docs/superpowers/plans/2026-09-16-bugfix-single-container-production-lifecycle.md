@@ -1792,6 +1792,29 @@ git commit -m "Add opt-in bug-fix production workflow" -m "Co-authored-by: Copil
 
 ## Task 13: Add Checkpoint Rehearsal and Fault Injection
 
+**Partial implementation; Task 13 is not complete.** The test-evidence portion now
+shares `require_test_evidence` with production test execution and
+`classify_phase_error` with production phases. The rehearsal support helper alters
+real evidence files for missing JUnit, duplicate discovery, and duplicate
+execution, and refuses already-invalid evidence. The additional
+`DuplicateExecution` and `ServiceRestartFailure` fault names follow the approved
+design; declaring them does not implement the remaining fault adapters.
+
+**Unresolved prerequisite:** define a collision-safe AL fixture allocation and
+prove its install/schema/data mutations are confined to that invocation. No
+rehearsal AL fixture or reserved object-ID range was found in the repository.
+The existing publisher uses `ForceSync`; this partial change does not guess an
+object-ID range or execute schema mutations. The controller must resolve the
+fixture allocation/preflight before wiring the real adapter.
+
+**Remaining coherent follow-on:** implement the owned AL fixture and probe,
+reuse official baseline publication plus `CheckpointManager` for the restore
+loop, implement remaining adapter faults and owned cleanup, extend the durable
+worker handoff, and then add the script and workflow/canary gates together.
+The workflow still rejects rehearsal requests, and no Task 13 checklist item is
+claimed complete. No real restore cycles, native cleanup, Docker services, or
+paid agents were run by this partial implementation.
+
 **Files:**
 - Create: `scripts\Test-BugFixLifecycleCheckpoint.ps1`
 - Modify: `.github\workflows\bugfix-production-evaluation.yml`

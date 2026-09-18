@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -505,6 +506,46 @@ def run_test_suite(
         ).summary
 
 
+def require_test_evidence(
+    evidence_path: Path,
+    test_entries: Iterable[TestEntry],
+    expectation: TestExpectation,
+    *,
+    returncode: int = 0,
+    stdout: str = "",
+    stderr: str = "",
+) -> TestRunSummary:
+    try:
+        summary = load_test_run_summary(evidence_path, test_entries)
+    except (OSError, ValueError, ET.ParseError) as error:
+        raise TestInfrastructureError(
+            expectation,
+            stderr=stderr,
+            stdout=stdout,
+            reason=f"Invalid test evidence: {error}",
+        ) from error
+    if returncode != 0:
+        raise TestInfrastructureError(
+            expectation,
+            stderr=stderr,
+            stdout=stdout,
+            reason="Business Central test execution failed before evidence validation",
+            summary=summary,
+        )
+    try:
+        summary.require(expectation)
+    except TestExecutionError as error:
+        raise TestExecutionError(
+            error.expectation,
+            stderr=stderr,
+            stdout=stdout,
+            reason=error.reason,
+            summary=error.summary,
+            failure_kind=error.failure_kind,
+        ) from error
+    return summary
+
+
 def run_test_suite_with_evidence(
     test_entries: list[TestEntry],
     expectation: TestExpectation,
@@ -564,36 +605,14 @@ def run_test_suite_with_evidence(
     if result.stdout:
         logger.debug(f"Test output:\n{result.stdout}")
 
-    try:
-        summary = load_test_run_summary(evidence_path, normalized_entries)
-    except (OSError, ValueError, ET.ParseError) as error:
-        raise TestInfrastructureError(
-            expectation,
-            stderr=result.stderr,
-            stdout=result.stdout,
-            reason=f"Invalid test evidence: {error}",
-        ) from error
-
-    if result.returncode != 0:
-        raise TestInfrastructureError(
-            expectation,
-            stderr=result.stderr,
-            stdout=result.stdout,
-            reason="Business Central test execution failed before evidence validation",
-            summary=summary,
-        )
-
-    try:
-        summary.require(expectation)
-    except TestExecutionError as error:
-        raise TestExecutionError(
-            error.expectation,
-            stderr=result.stderr,
-            stdout=result.stdout,
-            reason=error.reason,
-            summary=error.summary,
-            failure_kind=error.failure_kind,
-        ) from error
+    summary = require_test_evidence(
+        evidence_path,
+        normalized_entries,
+        expectation,
+        returncode=result.returncode,
+        stderr=result.stderr,
+        stdout=result.stdout,
+    )
     logger.info(f"Test suite completed with expectation met: {expectation}")
     return TestSuiteEvidence(
         summary=summary,

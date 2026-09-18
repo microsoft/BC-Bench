@@ -233,6 +233,29 @@ def make_not_run_phase(reason: str) -> BugFixPhaseResult:
     )
 
 
+def classify_phase_error(error: BaseException) -> BugFixPhaseStatus | None:
+    if isinstance(error, GeneratedSubmissionError):
+        return BugFixPhaseStatus.INVALID_SUBMISSION
+    if isinstance(error, TestExecutionError):
+        if error.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE:
+            return BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+        return BugFixPhaseStatus.FAILED
+    if isinstance(error, BuildError):
+        return BugFixPhaseStatus.FAILED
+    if isinstance(
+        error,
+        (
+            BuildTimeoutExpired,
+            CheckpointInfrastructureError,
+            TestExecutionTimeoutExpired,
+            TestInfrastructureError,
+            BugFixLifecycleInfrastructureError,
+        ),
+    ):
+        return BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    return None
+
+
 def make_invalid_submission_phase(reason: str) -> BugFixPhaseResult:
     now = datetime.now(UTC)
     return BugFixPhaseResult(
@@ -1177,26 +1200,7 @@ class BugFixPhaseRunner:
         self,
         error: BaseException,
     ) -> BugFixPhaseStatus | None:
-        if isinstance(error, GeneratedSubmissionError):
-            return BugFixPhaseStatus.INVALID_SUBMISSION
-        if isinstance(error, TestExecutionError):
-            if error.failure_kind is TestExecutionFailureKind.SELECTION_EVIDENCE:
-                return BugFixPhaseStatus.INFRASTRUCTURE_ERROR
-            return BugFixPhaseStatus.FAILED
-        if isinstance(error, BuildError):
-            return BugFixPhaseStatus.FAILED
-        if isinstance(
-            error,
-            (
-                BuildTimeoutExpired,
-                CheckpointInfrastructureError,
-                TestExecutionTimeoutExpired,
-                TestInfrastructureError,
-                BugFixLifecycleInfrastructureError,
-            ),
-        ):
-            return BugFixPhaseStatus.INFRASTRUCTURE_ERROR
-        return None
+        return classify_phase_error(error)
 
     def _capture_error_summary(
         self,

@@ -637,6 +637,32 @@ def test_missing_junit_through_phase_runner_is_infrastructure_error_with_evidenc
     assert any(call[0] == "save-phase" and call[1] == "test-red" for call in harness["calls"])
 
 
+@pytest.mark.parametrize("fault_name", ["MissingJUnit", "DuplicateDiscovery", "DuplicateExecution"])
+def test_rehearsal_faulted_files_flow_through_production_phase_classification(harness, monkeypatch, fault_name: str) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalFault, inject_test_evidence_fault
+    from bcbench.operations.bc_operations import require_test_evidence
+
+    def run_with_fault(tests, expectation, _container, _workspace, evidence_directory):
+        evidence_directory.mkdir(parents=True, exist_ok=True)
+        (evidence_directory / "discovery-50100.json").write_text(json.dumps({"codeunitID": 50100, "functionName": ["Regression"]}), encoding="utf-8")
+        (evidence_directory / "results-50100.xml").write_text('<testsuite><testcase name="Regression"/></testsuite>', encoding="utf-8")
+        inject_test_evidence_fault(RehearsalFault(fault_name), evidence_directory, tests)
+        return require_test_evidence(evidence_directory, tests, expectation)
+
+    monkeypatch.setattr(harness["runner"], "_test_runner", run_with_fault)
+    result = harness["runner"].run_test_red(_submission(), harness["s0"])
+
+    assert result.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert "provenance" in result.evidence
+    assert harness["evidence"].saved_phases[-1] == result
+    expected = {
+        "MissingJUnit": "Missing JUnit results",
+        "DuplicateDiscovery": "Discovery evidence mismatch: missing 0, unexpected 1",
+        "DuplicateExecution": "Execution evidence mismatch: missing 0, unexpected 1",
+    }
+    assert expected[fault_name] in result.error_message
+
+
 def test_missing_source_after_expected_hash_capture_blocks_build(harness) -> None:
     original_hasher = harness["runner"]._workspace_hasher
     call_count = 0
