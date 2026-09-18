@@ -190,6 +190,49 @@ def test_rehearsal_workflow_uses_two_entries_and_optional_success_gate() -> None
     assert evaluate["env"]["BCBENCH_LIFECYCLE_REHEARSAL_ITERATIONS"] == "${{ inputs.test-run && '1' || '0' }}"
 
 
+def test_rehearsal_selects_two_distinct_entries_from_actual_four_entry_output(tmp_path: Path, monkeypatch) -> None:
+    import os
+    import sys
+
+    import yaml
+
+    from bcbench.commands.dataset import list_entries
+    from bcbench.types import EvaluationCategory
+
+    raw_output = tmp_path / "raw-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(raw_output))
+    list_entries(category=EvaluationCategory.BUG_FIX, github_output="entries", test_run=True)
+    entries = json.loads(raw_output.read_text().split("=", 1)[1])
+    assert len(entries) == len(set(entries)) == 4
+    root = Path(__file__).parents[1]
+    jobs = yaml.safe_load((root / ".github" / "workflows" / "bugfix-production-evaluation.yml").read_text())["jobs"]
+    assert "select-rehearsal-entries" in jobs
+    selection = jobs["select-rehearsal-entries"]
+    assert selection["needs"] == "rehearsal-entries"
+    step = next(step for step in selection["steps"] if step.get("id") == "select")
+    assert jobs["rehearsal"]["needs"] == "select-rehearsal-entries"
+    assert jobs["rehearsal"]["strategy"]["matrix"]["entry"] == "${{ fromJson(needs.select-rehearsal-entries.outputs.entries) }}"
+    output = tmp_path / "selected-output"
+    for provided in (entries, list(reversed(entries)), [entries[0]] * 4, []):
+        output.unlink(missing_ok=True)
+        result = subprocess.run(
+            [sys.executable, "-c", step["run"]],
+            env={**os.environ, "ENTRIES": json.dumps(provided), "GITHUB_OUTPUT": str(output)},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        if len(set(provided)) < 2:
+            assert result.returncode != 0
+            assert not output.exists()
+        else:
+            assert result.returncode == 0, result.stderr
+            selected = json.loads(output.read_text().split("=", 1)[1])
+            assert selected == sorted(entries)[:2]
+            assert len(set(selected)) == 2
+
+
 @pytest.mark.parametrize("failure", [None, "data", "schema", "inventory", "discovery", "mutate", "interrupt"])
 def test_real_checkpoint_manager_restores_sql_fixture_and_stops_on_first_mismatch(tmp_path: Path, failure: str | None) -> None:
     import base64

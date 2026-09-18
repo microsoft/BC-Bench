@@ -22,7 +22,7 @@ def list_entries(
     category: EvaluationCategoryOption = EvaluationCategory.BUG_FIX,
     github_output: Annotated[str | None, typer.Option(help="Write JSON output to GITHUB_OUTPUT with this key name")] = None,
     modified_only: Annotated[bool, typer.Option(help="Only list entries that have been modified in git diff")] = False,
-    test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 2 entries)")] = False,
+    test_run: Annotated[bool, typer.Option(help="Indicate this is a test run (with 4 sampled entries)")] = False,
 ) -> None:
     """List dataset entry IDs."""
     entry_cls = category.entry_class

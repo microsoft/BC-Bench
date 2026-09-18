@@ -15,7 +15,7 @@ on:
         default: claude-sonnet-5
         required: true
       test-run:
-        description: Evaluate the two canary entries rather than the full dataset
+        description: Evaluate four sampled canary entries rather than the full dataset
         type: boolean
         default: true
       al-mcp:
@@ -87,9 +87,33 @@ jobs:
       category: bug-fix
       test-run: true
 
-  rehearsal:
+  select-rehearsal-entries:
     needs: rehearsal-entries
     if: inputs.rehearsal && needs.rehearsal-entries.outputs.entries != '[]'
+    runs-on: ubuntu-latest
+    outputs:
+      entries: ${{ steps.select.outputs.entries }}
+    steps:
+      - name: Select two distinct entries from the test-run sample
+        id: select
+        shell: python {0}
+        env:
+          ENTRIES: ${{ needs.rehearsal-entries.outputs.entries }}
+        run: |
+          import json
+          import os
+          entries = json.loads(os.environ["ENTRIES"])
+          if not isinstance(entries, list) or not all(isinstance(entry, str) and entry.strip() for entry in entries):
+              raise SystemExit("Expected a JSON array of entry IDs.")
+          selected = sorted(set(entries))[:2]
+          if len(selected) != 2:
+              raise SystemExit("Rehearsal requires two distinct entries.")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("entries=" + json.dumps(selected) + "\n")
+
+  rehearsal:
+    needs: select-rehearsal-entries
+    if: inputs.rehearsal && needs.select-rehearsal-entries.outputs.entries != '[]'
     runs-on: GitHub-BCBench
     timeout-minutes: 240
     environment:
@@ -102,7 +126,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        entry: ${{ fromJson(needs.rehearsal-entries.outputs.entries) }}
+        entry: ${{ fromJson(needs.select-rehearsal-entries.outputs.entries) }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -111,10 +135,11 @@ jobs:
         id: paths
         shell: pwsh
         env:
-          ENTRIES: ${{ needs.rehearsal-entries.outputs.entries }}
+          ENTRIES: ${{ needs.select-rehearsal-entries.outputs.entries }}
         run: |
           $ErrorActionPreference = 'Stop'
-          if (@($env:ENTRIES | ConvertFrom-Json).Count -ne 2) { throw "Rehearsal requires exactly two canary entries." }
+          $entries = @($env:ENTRIES | ConvertFrom-Json)
+          if ($entries.Count -ne 2 -or @($entries | Sort-Object -Unique).Count -ne 2) { throw "Rehearsal requires exactly two distinct canary entries." }
           $invocation = [Guid]::NewGuid().ToString('N')
           "entry_root=C:\bcbench\entries\$invocation" >> $env:GITHUB_OUTPUT
           "protected_root=C:\bcbench-protected\$invocation" >> $env:GITHUB_OUTPUT

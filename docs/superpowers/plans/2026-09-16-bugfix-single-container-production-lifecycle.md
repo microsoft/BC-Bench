@@ -1904,7 +1904,7 @@ The script must restore or remove only its own named resources in `finally`.
 
 - [x] **Step 5: Add a manual rehearsal job**
 
-Add a workflow input `rehearsal: boolean`. When true, run the checkpoint rehearsal for the two entries returned by `get-entries.yml` with `test-run: true` before live agent evaluation. Do not update the leaderboard.
+Add a workflow input `rehearsal: boolean`. When true, obtain the four-entry sample from `get-entries.yml` with `test-run: true`, then select the first two distinct IDs in sorted order for the checkpoint rehearsal before live agent evaluation. Reject fewer than two distinct IDs. This selection is deterministic for the reusable workflow's output; ordinary callers retain their existing four-entry sampling behavior. Do not update the leaderboard.
 
 - [x] **Step 6: Run contract and Python tests**
 
