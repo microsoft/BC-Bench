@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -15,6 +16,64 @@ def _write_record(path: Path, payload: dict[str, object], *, exclusive: bool = F
         json.dump(payload, stream)
         stream.flush()
         os.fsync(stream.fileno())
+
+
+def _read_setup_identity(entry_root: Path, protected_root: Path, container_name: str) -> tuple[str, str]:
+    setup = protected_root / "workflow-setup.json"
+    reject_reparse_components(setup, protected_root)
+    with setup.open(encoding="utf-8-sig") as stream:
+        content = stream.read(1_048_577)
+    if len(content) > 1_048_576:
+        raise ValueError("Setup ownership record exceeds the size limit")
+    state = json.loads(content)
+    if (
+        not isinstance(state, dict)
+        or state.get("EntryRoot") != str(entry_root)
+        or state.get("ProtectedRoot") != str(protected_root)
+        or state.get("ContainerName") != container_name
+        or not all(isinstance(state.get(key), str) and state[key].strip() for key in ("ContainerId", "ContainerInvocationId"))
+    ):
+        raise ValueError("Setup ownership does not match the allocated lifecycle")
+    identity = state.get("AgentIdentity")
+    if (
+        not isinstance(identity, dict)
+        or not isinstance(identity.get("Username"), str)
+        or re.fullmatch(r"bcb-[a-f0-9]{7}-[a-f0-9]{6}", identity["Username"], re.IGNORECASE) is None
+        or not isinstance(identity.get("Sid"), str)
+        or re.fullmatch(r"S-\d+(?:-\d+)+", identity["Sid"]) is None
+    ):
+        raise ValueError("Setup has no valid restricted identity")
+    return identity["Username"], identity["Sid"]
+
+
+def _unverified_identity_security(entry_root: Path, protected_root: Path, container_name: str) -> dict[str, object]:
+    evidence: dict[str, object] = {
+        "status": "unverified",
+        "ownership": "unverified",
+        "local_identity_verified": False,
+        "reason": "Cleanup did not verify identity disablement or removal. The account may remain enabled; manual containment is required.",
+    }
+    try:
+        username, sid = _read_setup_identity(entry_root, protected_root, container_name)
+        evidence.update(ownership="setup_record_validated", username=username, sid=sid)
+    except (OSError, UnicodeError, ValueError) as error:
+        evidence["ownership_error"] = f"Cannot establish the owned identity from setup ({type(error).__name__}); the supervisor did not target any account."
+    return evidence
+
+
+def _persist_cleanup_failure(
+    entry_root: Path,
+    protected_root: Path,
+    container_name: str,
+    payload: dict[str, object],
+) -> None:
+    payload["identity_security"] = _unverified_identity_security(entry_root, protected_root, container_name)
+    protected_root.mkdir(exist_ok=True)
+    _write_record(protected_root / "workflow-cleanup-worker.json", payload)
+    _write_record(protected_root / "workflow-cleanup.json", payload)
+    marker = protected_root / "quarantine.json"
+    if not marker.exists():
+        _write_record(marker, payload, exclusive=True)
 
 
 def complete_workflow_cleanup(
@@ -46,10 +105,8 @@ def complete_workflow_cleanup(
     try:
         _write_record(pending, payload, exclusive=True)
     except FileExistsError as error:
-        protected_root.mkdir(exist_ok=True)
-        marker = protected_root / "quarantine.json"
-        if not marker.exists():
-            _write_record(marker, {"status": "quarantined", "reason": "interrupted cleanup worker; shutdown unverified"}, exclusive=True)
+        payload.update(status="failed", reason="interrupted cleanup worker; shutdown and identity security unverified")
+        _persist_cleanup_failure(entry_root, protected_root, container_name, payload)
         raise CleanupInfrastructureError("An interrupted cleanup attempt must be reviewed before retry") from error
 
     try:
@@ -96,10 +153,5 @@ def complete_workflow_cleanup(
             reason = "Cleanup failed or was interrupted"
         payload.update(status="failed", reason=reason)
         _write_record(pending, payload)
-        protected_root.mkdir(exist_ok=True)
-        _write_record(protected_root / "workflow-cleanup-worker.json", payload)
-        _write_record(protected_root / "workflow-cleanup.json", payload)
-        marker = protected_root / "quarantine.json"
-        if not marker.exists():
-            _write_record(marker, payload, exclusive=True)
+        _persist_cleanup_failure(entry_root, protected_root, container_name, payload)
         raise CleanupInfrastructureError(reason) from error

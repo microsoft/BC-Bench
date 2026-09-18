@@ -117,3 +117,80 @@ def test_supervisor_interrupt_preserves_unverified_attempt(tmp_path: Path, monke
     pending = protected.with_name(protected.name + ".cleanup-pending.quarantine.json")
     assert json.loads(pending.read_text())["worker_shutdown"] == "unverified"
     assert json.loads((protected / "workflow-cleanup.json").read_text())["status"] == "failed"
+
+
+@pytest.mark.parametrize("failure", ["missing-runtime", "packaged-runtime", "pending", "startup-interruption"])
+@pytest.mark.parametrize("ownership", ["owned", "foreign-container", "foreign-root", "invalid-account", "missing", "malformed"])
+def test_startup_failure_records_inability_to_secure_identity_without_touching_foreign_resources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    ownership: str,
+) -> None:
+    entry = tmp_path / "entry"
+    protected = tmp_path / "protected"
+    entry.mkdir()
+    protected.mkdir()
+    retained = entry / "retain.txt"
+    retained.write_text("owned resources")
+    state = {
+        "EntryRoot": str(entry),
+        "ProtectedRoot": str(protected),
+        "ContainerName": "bc-test",
+        "ContainerId": "owned-container-id",
+        "ContainerInvocationId": "owned-invocation-id",
+        "AgentIdentity": {"Username": "bcb-1234567-abcdef", "Sid": "S-1-5-21-1-2-3-1001"},
+    }
+    if ownership == "foreign-container":
+        state["ContainerName"] = "foreign-container"
+    elif ownership == "foreign-root":
+        state["EntryRoot"] = str(tmp_path / "foreign-entry")
+    elif ownership == "invalid-account":
+        state["AgentIdentity"] = {"Username": "administrator", "Sid": "S-1-5-21-1-2-3-500"}
+    setup = protected / "workflow-setup.json"
+    if ownership != "missing":
+        setup.write_text("not-json" if ownership == "malformed" else json.dumps(state), encoding="utf-8")
+    setup_reads = []
+    open_path = Path.open
+
+    def record_setup_read(path, *args, **kwargs):
+        if path == setup:
+            setup_reads.append(path)
+        return open_path(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", record_setup_read)
+    launches = []
+
+    def launch(request):
+        launches.append(request)
+        raise KeyboardInterrupt("cancelled before worker creation")
+
+    monkeypatch.setattr(workflow_cleanup, "run_contained_process", launch)
+    runtime = None if failure == "missing-runtime" else r"C:\Program Files\WindowsApps\PowerShell\pwsh.exe"
+    monkeypatch.setattr(workflow_cleanup.shutil, "which", lambda _: runtime)
+    pending = protected.with_name(protected.name + ".cleanup-pending.quarantine.json")
+    if failure == "pending":
+        pending.write_text('{"status":"running","worker_shutdown":"unverified"}')
+    worker_command = (sys.executable, "-c", "pass") if failure == "startup-interruption" else None
+    with pytest.raises(CleanupInfrastructureError):
+        workflow_cleanup.complete_workflow_cleanup(entry, protected, "bc-test", worker_command=worker_command)
+    assert setup_reads
+    assert len(launches) == (1 if failure == "startup-interruption" else 0)
+    assert retained.read_text() == "owned resources"
+    evidence = json.loads((protected / "workflow-cleanup-worker.json").read_text())
+    security = evidence["identity_security"]
+    assert security["status"] == "unverified"
+    assert security["local_identity_verified"] is False
+    assert security["reason"]
+    assert evidence["status"] == "failed"
+    assert json.loads((protected / "quarantine.json").read_text())["identity_security"] == security
+    if ownership == "owned":
+        assert security["ownership"] == "setup_record_validated"
+        assert security["username"] == "bcb-1234567-abcdef"
+        assert security["sid"] == "S-1-5-21-1-2-3-1001"
+    else:
+        assert security["ownership"] == "unverified"
+        assert "username" not in security
+        assert "sid" not in security
+    if failure == "pending":
+        assert pending.read_text() == '{"status":"running","worker_shutdown":"unverified"}'
