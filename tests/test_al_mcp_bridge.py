@@ -4,6 +4,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import Mock
 from urllib.parse import urlsplit
 
 import anyio
@@ -104,6 +105,39 @@ def test_startup_containment_failure_remains_failed_on_every_shutdown(tmp_path, 
         assert shutdown_failure.value is startup_failure.value
         with pytest.raises(RuntimeError, match="shutdown/transport verification failed"):
             clients.stop()
+
+
+@pytest.mark.parametrize("interrupt", [KeyboardInterrupt("shutdown interrupted"), SystemExit(130)])
+def test_managed_client_shutdown_interrupt_is_preserved_and_repeated_stop_fails(interrupt):
+    clients = ManagedAgentClients()
+    stoppers = [
+        Mock(),
+        Mock(side_effect=KeyboardInterrupt("later interrupt")),
+        Mock(side_effect=ValueError("private client diagnostic")),
+        Mock(side_effect=interrupt),
+        Mock(side_effect=RuntimeError("private client diagnostic")),
+        Mock(),
+    ]
+    for stop in stoppers:
+        clients.register(stop)
+
+    with pytest.raises(type(interrupt)) as initial_failure:
+        clients.stop()
+    assert initial_failure.value is interrupt
+    assert any("shutdown/transport verification failed" in note for note in interrupt.__notes__)
+    failures = []
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="shutdown/transport verification failed") as failure:
+            clients.stop()
+        failures.append(failure.value)
+        assert failure.value.__cause__ is interrupt
+        assert type(interrupt).__name__ in str(failure.value)
+        assert "ValueError" in str(failure.value)
+        assert "RuntimeError" in str(failure.value)
+        assert "private client diagnostic" not in str(failure.value)
+    assert failures[0] is failures[1]
+    for stop in stoppers:
+        stop.assert_called_once()
 
 
 def test_bridge_forwards_initialization_discovery_calls_and_errors(bridge):

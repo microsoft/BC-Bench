@@ -29,11 +29,18 @@ class ManagedAgentClients:
             return
         self._closed = True
         errors = []
+        interrupt: BaseException | None = None
         for stop in reversed(self._stoppers):
             try:
                 stop()
-            except Exception as error:  # noqa: BLE001 - attempt every owned client before failing the isolation barrier
+            except BaseException as error:  # noqa: BLE001 - attempt every client, then propagate the original interruption
                 errors.append(type(error).__name__)
+                if not isinstance(error, Exception) and interrupt is None:
+                    interrupt = error
         if errors:
             self._failure = RuntimeError(f"Agent client shutdown/transport verification failed: {', '.join(errors)}")
+            if interrupt is not None:
+                self._failure.__cause__ = interrupt
+                interrupt.add_note(str(self._failure))
+                raise interrupt
             raise self._failure

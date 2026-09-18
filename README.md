@@ -51,7 +51,7 @@ Production AL MCP runs in an evaluator-owned Job Object behind an unguessable lo
 
 Initialization-time server messages use the initialization response stream, including server requests that need a client reply before initialization completes. Unsolicited messages use a separate bounded event buffer (256 events) with GET reconnection and `Last-Event-ID` replay. Undelivered-event overflow, history expiring during replay, delivery deadlines, and incomplete or timed-out responses are transport failures, not empty successful responses.
 
-If agent or bridge shutdown cannot be verified, cleanup retains owned workspaces and ACLs, disables the restricted identity, and writes quarantine evidence rather than deleting potentially active resources. Bridge shutdown failures remain terminal across repeated checks, including cleanup after failed startup.
+If agent or bridge shutdown cannot be verified, cleanup retains owned workspaces and ACLs, disables the restricted identity, and writes quarantine evidence rather than deleting potentially active resources. Bridge shutdown failures remain terminal across repeated checks, including cleanup after failed startup. Interrupted managed-client shutdown attempts all remaining stoppers before propagating the original interruption; subsequent checks raise the retained verification failure so lifecycle cleanup quarantines the resources.
 
 Wrapper watchdog, nonzero-exit, and invalid-response failures retain wrapper diagnostics but do not read child capture files without verified Job Object drainage. Temporary cleanup errors cannot replace that containment-failure classification.
 

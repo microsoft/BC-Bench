@@ -12,6 +12,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from bcbench.agent.shared.al_mcp_bridge import AlMcpBridge
 from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessInfrastructureError, ContainedProcessRequest, WindowsIdentity, run_contained_process
 from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from bcbench.evaluate.bugfix_lifecycle import (
@@ -1167,6 +1168,48 @@ def test_bridge_startup_cleanup_failure_blocks_freeze_and_quarantines(tmp_path, 
     barrier = json.loads((evidence.root / "isolation-barrier-failure.json").read_text())
     assert barrier["operations"]["stop_agent_clients"]["status"] == "infrastructure_error"
     assert (request.paths.protected_root / "quarantine.json").is_file()
+
+
+def test_bridge_join_interrupt_remains_unverified_through_lifecycle_cleanup(tmp_path):
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    interrupt = KeyboardInterrupt("bridge join interrupted")
+    bridge = AlMcpBridge({"command": sys.executable}, tmp_path, timeout_seconds=30)
+    bridge._root = tmp_path / "bridge"
+    bridge._root.mkdir()
+    bridge._thread = Mock()
+    bridge._thread.join.side_effect = interrupt
+    clients = ManagedAgentClients()
+    remaining_stop = Mock()
+    clients.register(remaining_stop)
+    clients.register(bridge.stop)
+    request = replace(request, agent_execution_policy=replace(request.agent_execution_policy, managed_clients=clients))
+
+    with pytest.raises((KeyboardInterrupt, CleanupInfrastructureError)) as failure:
+        lifecycle.run(request, _agent(calls))
+
+    assert isinstance(failure.value, CleanupInfrastructureError)
+    assert failure.value.__cause__ is interrupt
+    assert "KeyboardInterrupt" in str(failure.value)
+    remaining_stop.assert_called_once()
+    bridge._thread.join.assert_called_once_with(timeout=5)
+    with pytest.raises(KeyboardInterrupt) as bridge_failure:
+        bridge.stop()
+    assert bridge_failure.value is interrupt
+    assert "freeze" not in calls
+    assert "remove-roots" not in calls
+    assert "remove-acl" not in calls
+    assert "remove-local" not in calls
+    assert "disable-local" in calls
+    assert "remove-container" in calls
+    assert not any(call.startswith("phase:") for call in calls)
+    assert evidence.final_result.test_red.status is BugFixPhaseStatus.NOT_RUN
+    assert evidence.final_result.generated_patch_hash is None
+    cleanup = json.loads((request.paths.final_results / "cleanup.json").read_text())
+    assert cleanup["status"] == "failure"
+    assert "agent_clients_stopped" not in cleanup["completed_operations"]
+    quarantine = json.loads((request.paths.protected_root / "quarantine.json").read_text())
+    assert quarantine["status"] == "quarantined"
+    assert "local_identity_disabled" in quarantine["completed_operations"]
 
 
 @pytest.mark.parametrize("persistence_failure", [None, "before"])
