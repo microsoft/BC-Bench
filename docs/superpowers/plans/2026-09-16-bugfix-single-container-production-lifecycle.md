@@ -1704,6 +1704,8 @@ The exact compiler/symbol root returned by setup is included in `ToolRoots` as w
 
 The shared summary now selects only `evaluation-results-*`; CI's mock artifact name is updated to that prefix to preserve the existing caller. Normal Copilot/Claude workflows and the legacy setup action remain unchanged. Real container, restricted-tooling, and paid-agent canaries remain pending on a production runner; local tests do not establish those outcomes.
 
+Production result artifacts have stable run-and-entry names with explicit overwrite on rerun, so merged downloads contain one JSONL target per entry and retain entries not rerun. Protected evidence and quarantine artifacts remain attempt-specific and are excluded from result downloads.
+
 **Files:**
 - Create: `.github\actions\setup-bugfix-lifecycle\action.yml`
 - Create: `.github\workflows\bugfix-production-evaluation.yml`

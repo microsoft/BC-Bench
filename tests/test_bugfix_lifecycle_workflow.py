@@ -2,6 +2,8 @@ import json
 import os
 import shutil
 import subprocess
+from collections import Counter
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 import pytest
@@ -105,6 +107,31 @@ def test_summary_runs_after_failed_evaluation_without_parsing_evidence() -> None
     download = next(step for step in steps if step.get("uses", "").startswith("actions/download-artifact@"))
     assert download["with"]["pattern"] == "evaluation-results-*"
     assert "${{ inputs.production && '--production' || '' }}" in _step(steps, "bceval")["run"]
+
+
+@pytest.mark.parametrize("rerun_entry", ["owner__repo-1", "owner__repo-2"])
+def test_rerun_replaces_only_its_entry_without_ambiguous_summary_targets(rerun_entry: str) -> None:
+    steps = _load(WORKFLOW)["jobs"]["evaluate"]["steps"]
+    upload = _step(steps, "results")["with"]
+    artifacts: dict[str, dict[str, str]] = {}
+    entries = ("owner__repo-1", "owner__repo-2")
+    for attempt, entry in ((1, entries[0]), (1, entries[1]), (2, rerun_entry)):
+        name = upload["name"].replace("${{ github.run_id }}", "123").replace("${{ github.run_attempt }}", str(attempt)).replace("${{ matrix.entry }}", entry)
+        if name in artifacts:
+            assert upload.get("overwrite") is True
+            del artifacts[name]
+        artifacts[name] = {f"123/{entry}.jsonl": f"{entry}-attempt-{attempt}"}
+    download = next(step["with"] for step in _load(SUMMARY)["jobs"]["summarize-results"]["steps"] if step.get("uses", "").startswith("actions/download-artifact@"))
+    assert download["merge-multiple"] is True
+    selected = [files for name, files in artifacts.items() if fnmatchcase(name, download["pattern"])]
+    targets = Counter(path for files in selected for path in files)
+    assert targets == {f"123/{entry}.jsonl": 1 for entry in entries}
+    merged = {path: value for files in selected for path, value in files.items()}
+    assert merged == {f"123/{entry}.jsonl": f"{entry}-attempt-{2 if entry == rerun_entry else 1}" for entry in entries}
+    assert "${{ github.run_attempt }}" not in upload["name"]
+    assert upload["overwrite"] is True
+    for step_id in ("evidence", "quarantine"):
+        assert "${{ github.run_attempt }}" in _step(steps, step_id)["with"]["name"]
 
 
 def test_all_summary_callers_upload_matching_result_artifacts() -> None:
