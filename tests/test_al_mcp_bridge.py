@@ -10,7 +10,8 @@ import pytest
 import requests
 
 from bcbench.agent.shared.al_mcp_bridge import AlMcpBridge, AlMcpBridgeError
-from bcbench.agent.shared.contained_process import ContainedProcessResult
+from bcbench.agent.shared.contained_process import ContainedProcessInfrastructureError, ContainedProcessResult
+from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from tests.test_contained_process import _pid_is_running
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows Job Objects are required")
@@ -80,6 +81,19 @@ def test_readiness_payload_is_not_consumed_until_publisher_closes_and_signals(tm
         finally:
             release.set()
             bridge.stop()
+
+
+def test_startup_containment_failure_remains_failed_on_every_shutdown(tmp_path, monkeypatch):
+    def fail_containment(request):
+        raise ContainedProcessInfrastructureError(30, child_stdout="", child_stderr="", wrapper_stdout="", wrapper_stderr="")
+
+    monkeypatch.setattr("bcbench.agent.shared.al_mcp_bridge.run_contained_process", fail_containment)
+    clients = ManagedAgentClients()
+    with pytest.raises(AlMcpBridgeError, match="containment"):
+        clients.start_al_mcp({"command": sys.executable}, tmp_path)
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="shutdown/transport verification failed"):
+            clients.stop()
 
 
 def test_bridge_forwards_initialization_discovery_calls_and_errors(bridge):

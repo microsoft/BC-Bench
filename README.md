@@ -47,7 +47,7 @@ Setup exports the resolved `-DatasetPath` as `BCBENCH_LIFECYCLE_DATASET_PATH` (`
 
 Production AL MCP runs in an evaluator-owned Job Object behind an unguessable loopback HTTP endpoint. BC credentials stay in evaluator-only configuration and the server environment, not the agent's MCP configuration. The isolation barrier verifies client shutdown before freezing the submission or running official phases; transport or shutdown failures fail closed. Normal nonproduction AL MCP still uses stdio.
 
-If agent or bridge shutdown cannot be verified, cleanup retains owned workspaces and ACLs, disables the restricted identity, and writes quarantine evidence rather than deleting potentially active resources.
+If agent or bridge shutdown cannot be verified, cleanup retains owned workspaces and ACLs, disables the restricted identity, and writes quarantine evidence rather than deleting potentially active resources. Bridge shutdown failures remain terminal across repeated checks, including cleanup after failed startup.
 
 Production AL LSP and configured plugins are staged under the entry's setup-owned `agent-tools\plugins` directory, outside the benchmark checkout and evaluated repository. Setup grants the restricted identity read/execute access, denies modification, and records the plugin root in the exact ACL transaction. The invocation ownership marker is checked before use and cleanup. Nonproduction plugin locations are unchanged.
 

@@ -34,6 +34,7 @@ class AlMcpBridge:
         self._thread: threading.Thread | None = None
         self._result: ContainedProcessResult | None = None
         self._error: BaseException | None = None
+        self._shutdown_failure: BaseException | None = None
         self._stopped = False
         self.url = ""
 
@@ -81,8 +82,18 @@ class AlMcpBridge:
             time.sleep(0.02)
 
     def stop(self) -> None:
+        if self._shutdown_failure is not None:
+            raise self._shutdown_failure
         if self._stopped:
             return
+        try:
+            self._stop_transport()
+        except BaseException as error:
+            self._shutdown_failure = error
+            raise
+        self._stopped = True
+
+    def _stop_transport(self) -> None:
         if self._root is not None and self._thread is not None:
             (self._root / "shutdown").touch()
             self._thread.join(timeout=5)
@@ -91,7 +102,6 @@ class AlMcpBridge:
                 self._thread.join(timeout=10)
             if self._thread.is_alive():
                 raise AlMcpBridgeError("AL MCP bridge process termination could not be verified")
-        self._stopped = True
         failure = self._root / "failure.json" if self._root else None
         diagnostic = failure.read_text(encoding="utf-8") if failure is not None and failure.exists() else ""
         state = self._root / "state.txt" if self._root else None

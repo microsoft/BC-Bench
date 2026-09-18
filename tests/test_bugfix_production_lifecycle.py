@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
 from pathlib import Path
@@ -11,6 +12,7 @@ from unittest.mock import Mock
 import pytest
 
 from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessInfrastructureError, WindowsIdentity
+from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from bcbench.evaluate.bugfix_lifecycle import (
     BugFixLifecyclePaths,
     BugFixLifecycleRequest,
@@ -1135,6 +1137,34 @@ def test_bridge_shutdown_failure_blocks_official_phases_and_quarantines(tmp_path
     assert "disable-local" in calls
     assert not any(call.startswith("phase:") for call in calls)
     assert evidence.final_result.test_red.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert (request.paths.protected_root / "quarantine.json").is_file()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows bridge protection is required")
+def test_bridge_startup_cleanup_failure_blocks_freeze_and_quarantines(tmp_path, monkeypatch):
+    request, lifecycle, calls, evidence, _, _ = _harness(tmp_path)
+    clients = ManagedAgentClients()
+    request = replace(request, agent_execution_policy=replace(request.agent_execution_policy, managed_clients=clients))
+
+    def fail_containment(request):
+        raise ContainedProcessInfrastructureError(30, child_stdout="", child_stderr="", wrapper_stdout="", wrapper_stderr="")
+
+    def failed_agent(context, policy):
+        policy.managed_clients.start_al_mcp({"command": sys.executable}, context.repo_path)
+
+    monkeypatch.setattr("bcbench.agent.shared.al_mcp_bridge.run_contained_process", fail_containment)
+    with pytest.raises(CleanupInfrastructureError, match="shutdown/transport verification failed"):
+        lifecycle.run(request, failed_agent)
+
+    assert "freeze" not in calls
+    assert "stop-agent-sessions" in calls
+    assert "remove-roots" not in calls
+    assert "disable-local" in calls
+    assert not any(call.startswith("phase:") for call in calls)
+    assert evidence.final_result.test_red.status is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+    assert evidence.final_result.generated_patch_hash is None
+    barrier = json.loads((evidence.root / "isolation-barrier-failure.json").read_text())
+    assert barrier["operations"]["stop_agent_clients"]["status"] == "infrastructure_error"
     assert (request.paths.protected_root / "quarantine.json").is_file()
 
 
