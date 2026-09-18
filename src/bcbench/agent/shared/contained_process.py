@@ -71,6 +71,17 @@ class ContainedProcessRequest:
     worker_path: Path | None = None
     worker_sha256: str | None = None
     stop_path: Path | None = None
+    parent_environment_keys: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.parent_environment_keys and self.identity is not None:
+            raise ValueError("Restricted workers cannot inherit evaluator environment")
+        names = tuple(name.upper() for name in self.parent_environment_keys)
+        if len(set(names)) != len(names) or any(not name or "=" in name or "\0" in name for name in names):
+            raise ValueError("Invalid parent environment keys")
+        if set(names).intersection(name.upper() for name in self.env):
+            raise ValueError("Parent environment keys must not duplicate serialized environment")
+        object.__setattr__(self, "parent_environment_keys", names)
 
 
 @dataclass(frozen=True)
@@ -153,6 +164,8 @@ def _write_request(path: Path, request: ContainedProcessRequest) -> None:
     }
     if request.stop_path is not None:
         payload["stop_path"] = str(request.stop_path)
+    if request.parent_environment_keys:
+        payload["parent_environment_keys"] = list(request.parent_environment_keys)
     with path.open("x", encoding="utf-8") as request_file:
         json.dump(payload, request_file, separators=(",", ":"))
 

@@ -725,6 +725,20 @@ try {
         cwd = [string]$request.cwd
         env = $request.env
     }
+    $inheritedEnvironment = @{}
+    if ($null -ne $request.PSObject.Properties["parent_environment_keys"]) {
+        if ($null -ne $request.identity) { throw "Restricted workers cannot inherit evaluator environment." }
+        $workerRequest.parent_environment_keys = @($request.parent_environment_keys)
+        foreach ($name in $workerRequest.parent_environment_keys) {
+            if ([string]::IsNullOrWhiteSpace($name) -or $name -match '[=\x00]' -or
+                $inheritedEnvironment.ContainsKey($name) -or $null -ne $request.env.PSObject.Properties[$name]) {
+                throw "Invalid or duplicate parent environment key."
+            }
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ($null -eq $value) { throw "Required parent environment variable is missing." }
+            $inheritedEnvironment[$name] = $value
+        }
+    }
 
     if ($null -ne $request.identity) {
         $aclDomain = if ([string]$request.identity.domain -eq ".") {
@@ -763,6 +777,9 @@ try {
     [string[]]$environmentEntries = @(
         foreach ($property in $request.env.PSObject.Properties) {
             "$($property.Name)=$([string]$property.Value)"
+        }
+        foreach ($name in $inheritedEnvironment.Keys) {
+            "$name=$($inheritedEnvironment[$name])"
         }
     )
     [string[]]$workerArguments = @(

@@ -1792,35 +1792,57 @@ git commit -m "Add opt-in bug-fix production workflow" -m "Co-authored-by: Copil
 
 ## Task 13: Add Checkpoint Rehearsal and Fault Injection
 
-**Partial implementation; Task 13 is not complete.** The test-evidence portion now
-shares `require_test_evidence` with production test execution and
-`classify_phase_error` with production phases. The rehearsal support helper alters
-real evidence files for missing JUnit, duplicate discovery, and duplicate
-execution, and refuses already-invalid evidence. The additional
-`DuplicateExecution` and `ServiceRestartFailure` fault names follow the approved
-design; declaring them does not implement the remaining fault adapters.
+**Implementation:** no new AL fixture or reserved object-ID range is needed.
+The original assumption that one was required was incorrect. Rehearsal selects
+an exact entry-owned test app from the trusted baseline publication and protected
+package hashes, then uninstalls that version without force/cascade/data-deletion
+options. Missing provenance or dependency failures stop the rehearsal.
 
-**Unresolved prerequisite:** define a collision-safe AL fixture allocation and
-prove its install/schema/data mutations are confined to that invocation. No
-rehearsal AL fixture or reserved object-ID range was found in the repository.
-The existing publisher uses `ForceSync`; this partial change does not guess an
-object-ID range or execute schema mutations. The controller must resolve the
-fixture allocation/preflight before wiring the real adapter.
+The SQL probe is a cryptographically named, invocation/container-marked table
+in the exact local single-tenant database. It never changes existing app or
+business tables. A separate `rehearsal-*` checkpoint contains its initial row and
+schema; each cycle uninstalls the test app, changes the row, and adds a column,
+then restores that checkpoint and compares exact inventory, database files,
+schema, data, and test-discovery multisets. The original clean official `S0` is
+never overwritten or relabeled. A final restore proves the probe absent before
+an agent or official phase can run. Failure of that proof retains quarantine.
 
-**Remaining coherent follow-on:** implement the owned AL fixture and probe,
-reuse official baseline publication plus `CheckpointManager` for the restore
-loop, implement remaining adapter faults and owned cleanup, extend the durable
-worker handoff, and then add the script and workflow/canary gates together.
-The workflow still rejects rehearsal requests, and no Task 13 checklist item is
-claimed complete. No real restore cycles, native cleanup, Docker services, or
-paid agents were run by this partial implementation.
+`Test-BugFixLifecycleCheckpoint.ps1` consumes the setup action's environment.
+`CheckpointPath` is a new manifest path inside the protected checkpoint directory,
+not an arbitrary backup input. Normal dedicated runs default to ten cycles per
+entry; ordinary canaries run one cycle through the same helper after official
+baseline preparation. An injected restore/test-evidence fault is terminal after
+its first verified infrastructure outcome. `CleanupFailure` instead leaves the
+owned container present at the actual removal boundary, requires persisted
+absence-check/quarantine evidence, and deliberately exits nonzero.
+
+Focused support modules reuse `CheckpointManager`, production publication,
+test-evidence validation/classification, containment, and the ownership-safe
+finalizer. The durable `rehearsal_running` handoff blocks cleanup on cancellation.
+Evaluator credentials pass through an explicit parent-environment channel, not
+request JSON or command arguments; restricted agent workers cannot use it.
+Only nonsecret protected evidence is uploaded, never database backups or
+leaderboard result artifacts.
+
+**Production verification remains pending:** ten consecutive real restore cycles
+on both canaries, live AL/harness checks, and native PowerShell cleanup require
+the provisioned production runner. Local SQLite/file and injected-PowerShell
+fixtures are not evidence that these production cycles ran. No Docker services,
+paid agents, or production workflow dispatches were launched locally.
+
+**Local validation:** the full non-E2E suite passed 1,981 tests (3 skipped,
+5 deselected). After the final probe-creation refusal guard, the affected
+checkpoint/rehearsal/phase/PowerShell/workflow/cleanup/containment suites passed
+456 tests (3 deselected), including all 55 rehearsal tests. Ruff lint/format
+checks and parsing all five changed PowerShell files passed. Independent
+specification and quality gates remain controller-owned.
 
 **Files:**
 - Create: `scripts\Test-BugFixLifecycleCheckpoint.ps1`
 - Modify: `.github\workflows\bugfix-production-evaluation.yml`
 - Create: `tests\test_bugfix_lifecycle_rehearsal.py`
 
-- [ ] **Step 1: Write rehearsal-script contract tests**
+- [x] **Step 1: Write rehearsal-script contract tests**
 
 Create `tests\test_bugfix_lifecycle_rehearsal.py` that verifies the script accepts:
 
@@ -1838,9 +1860,11 @@ and validates allowed faults:
 - `UnexpectedApp`
 - `MissingJUnit`
 - `DuplicateDiscovery`
+- `DuplicateExecution`
+- `ServiceRestartFailure`
 - `CleanupFailure`
 
-- [ ] **Step 2: Run the contract tests**
+- [x] **Step 2: Run the contract tests**
 
 Run:
 
@@ -1850,37 +1874,39 @@ uv run pytest tests\test_bugfix_lifecycle_rehearsal.py -v
 
 Expected: script not found.
 
-- [ ] **Step 3: Implement restore rehearsal**
+- [x] **Step 3: Implement restore rehearsal**
 
 The script must:
 
-1. capture `S0`;
-2. mutate app inventory, schema, and a dedicated test-data record;
-3. restore `S0`;
+1. prepare and publish trusted baseline O, capture clean official `S0`, then capture a separate rehearsal checkpoint with the owned SQL probe;
+2. mutate entry-owned test-app inventory, owned probe schema, and its dedicated record;
+3. restore the separate rehearsal checkpoint;
 4. verify container ID, database topology, app inventory, data, authentication, company, endpoint, and test discovery;
 5. repeat for `Iterations`;
 6. emit one JSON record per iteration;
-7. exit non-zero on the first mismatch.
+7. exit non-zero on the first mismatch;
+8. restore clean official `S0` in `finally`, prove the probe absent, or retain quarantine.
 
 Default `Iterations` to 10 for the dedicated rehearsal job and 1 for ordinary canary entries.
 
-- [ ] **Step 4: Implement explicit fault injection**
+- [x] **Step 4: Implement explicit fault injection**
 
 Each `Fault` value must alter one controlled evaluator input and assert the resulting status:
 
 - backup corruption and hash mismatch produce checkpoint infrastructure errors;
 - readiness failure prevents tests from running;
 - unexpected app fails inventory verification;
-- missing JUnit and duplicate discovery produce test infrastructure errors;
+- missing JUnit and duplicate discovery/execution produce test infrastructure errors;
+- a failed restart result is rejected by the production restore validator;
 - cleanup failure creates quarantine evidence.
 
 The script must restore or remove only its own named resources in `finally`.
 
-- [ ] **Step 5: Add a manual rehearsal job**
+- [x] **Step 5: Add a manual rehearsal job**
 
 Add a workflow input `rehearsal: boolean`. When true, run the checkpoint rehearsal for the two entries returned by `get-entries.yml` with `test-run: true` before live agent evaluation. Do not update the leaderboard.
 
-- [ ] **Step 6: Run contract and Python tests**
+- [x] **Step 6: Run contract and Python tests**
 
 Run:
 
@@ -1890,7 +1916,7 @@ uv run pytest tests\test_bugfix_lifecycle_rehearsal.py tests\test_bugfix_lifecyc
 
 Expected: all tests pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add scripts\Test-BugFixLifecycleCheckpoint.ps1 .github\workflows\bugfix-production-evaluation.yml tests\test_bugfix_lifecycle_rehearsal.py

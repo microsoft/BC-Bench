@@ -51,12 +51,15 @@ class WorkflowExecution:
             if payload.get("status") not in allowed:
                 raise CleanupInfrastructureError(f"Cannot enter {status} from workflow execution state {payload.get('status')}")
             payload["status"] = status
-            temporary = self.path.with_suffix(".tmp")
-            with temporary.open("x", encoding="utf-8") as stream:
-                json.dump(payload, stream)
-                stream.flush()
-                os.fsync(stream.fileno())
-            temporary.replace(self.path)
+            self._write(payload)
+
+    def _write(self, payload: dict[str, object]) -> None:
+        temporary = self.path.with_suffix(".tmp")
+        with temporary.open("x", encoding="utf-8") as stream:
+            json.dump(payload, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(self.path)
 
     def begin_cli(self) -> None:
         self._transition({"not_started", "launching"}, "cli_running")
@@ -64,12 +67,26 @@ class WorkflowExecution:
     def begin_lifecycle(self) -> None:
         self._transition({"not_started", "cli_running"}, "running")
 
+    def begin_rehearsal(self) -> None:
+        self._transition({"launching", "cli_running", "running"}, "rehearsal_running")
+
+    def finish_rehearsal(self, *, resume_lifecycle: bool) -> None:
+        self._transition({"rehearsal_running"}, "running" if resume_lifecycle else "shutdown_verified")
+
     def verify_shutdown(self, verification: Callable[[], None]) -> None:
-        try:
+        if not self.enabled:
             verification()
-        except BaseException as error:
-            raise CleanupInfrastructureError("Workflow execution shutdown could not be verified") from error
-        self._transition({"running"}, "shutdown_verified")
+            return
+        with self._lock():
+            payload = self._read()
+            if payload.get("status") != "running":
+                raise CleanupInfrastructureError("Workflow execution cannot verify shutdown while a rehearsal or another owner is active")
+            try:
+                verification()
+            except BaseException as error:
+                raise CleanupInfrastructureError("Workflow execution shutdown could not be verified") from error
+            payload["status"] = "shutdown_verified"
+            self._write(payload)
 
     def require_shutdown(self) -> None:
         if not self.enabled:

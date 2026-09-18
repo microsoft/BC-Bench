@@ -1,15 +1,17 @@
 import json
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 
 class _WorkerRequest(TypedDict):
     command: list[str]
     cwd: str
     env: dict[str, str]
+    parent_environment_keys: NotRequired[list[str]]
 
 
 def _load_request(path: Path) -> _WorkerRequest:
@@ -36,7 +38,7 @@ def main(arguments: list[str] | None = None) -> int:
     process = subprocess.Popen(
         request["command"],
         cwd=Path(request["cwd"]),
-        env=request["env"],
+        env={**request["env"], **{name: os.environ[name] for name in request.get("parent_environment_keys", [])}},
     )
     return process.wait()
 

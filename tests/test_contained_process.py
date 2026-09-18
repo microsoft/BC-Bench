@@ -43,6 +43,33 @@ def test_wrapper_launches_worker_file_from_requested_workspace() -> None:
     assert "(Split-Path -Parent $WorkerPath)" not in source
 
 
+def test_evaluator_parent_environment_reaches_child_without_request_secret(tmp_path, monkeypatch):
+    secret = "fixture-evaluator-password"
+    monkeypatch.setenv("BC_SERVER_PASSWORD", secret)
+    monkeypatch.setenv("UNLISTED_REHEARSAL_SECRET", "must-not-reach-the-worker")
+    original_write = contained_process_module._write_request
+    writes = []
+
+    def inspect_request(path, request):
+        original_write(path, request)
+        assert secret not in path.read_text()
+        writes.append(path)
+
+    monkeypatch.setattr(contained_process_module, "_write_request", inspect_request)
+    result = run_contained_process(
+        ContainedProcessRequest(
+            command=(sys.executable, "-c", "import os,hashlib; print(hashlib.sha256(os.environ['BC_SERVER_PASSWORD'].encode()).hexdigest()); assert 'UNLISTED_REHEARSAL_SECRET' not in os.environ"),
+            cwd=tmp_path,
+            env=agent_subprocess_env(allowlist=True),
+            timeout_seconds=10,
+            parent_environment_keys=("BC_SERVER_PASSWORD",),
+        )
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == sha256(secret.encode()).hexdigest()
+    assert len(writes) == 1
+
+
 def _request(
     tmp_path: Path,
     code: str,

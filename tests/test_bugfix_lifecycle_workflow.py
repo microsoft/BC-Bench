@@ -205,7 +205,7 @@ def test_setup_pins_helper_and_resolves_exact_dataset_before_tooling() -> None:
         ("copilot", "claude-haiku-4-5", "false", False),
         ("other", "claude-sonnet-5", "false", False),
         ("copilot", "'; throw 'injected", "false", False),
-        ("copilot", "gpt-5.6-luna", "true", False),
+        ("copilot", "gpt-5.6-luna", "true", True),
     ],
 )
 def test_dispatch_validation_uses_current_model_registry(agent: str, model: str, rehearsal: str, valid: bool) -> None:
@@ -224,7 +224,7 @@ def test_dispatch_validation_uses_current_model_registry(agent: str, model: str,
     )
     assert (result.returncode == 0) is valid, result.stdout + result.stderr
     if rehearsal == "true":
-        assert "not implemented" in result.stderr
+        assert "not implemented" not in result.stderr
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell required")
@@ -248,6 +248,8 @@ def test_dispatch_validation_uses_current_model_registry(agent: str, model: str,
         "launching",
         "cli_running",
         "running",
+        "rehearsal_running",
+        "remove-noop",
         "shutdown_verified",
         "missing-execution",
     ],
@@ -288,7 +290,7 @@ def test_workflow_finalizer_is_idempotent_and_ownership_safe(tmp_path: Path, sce
         (compiler / ".bcbench-owned").write_text("not-our-invocation")
         state["OwnedCompilerHelperRoots"] = [str(compiler)]
     (protected / "workflow-setup.json").write_text(json.dumps(state), encoding="utf-8")
-    execution_status = scenario if scenario in {"launching", "cli_running", "running", "shutdown_verified"} else "not_started"
+    execution_status = scenario if scenario in {"launching", "cli_running", "running", "rehearsal_running", "shutdown_verified"} else "not_started"
     if scenario != "missing-execution":
         (protected / "workflow-execution.json").write_text(
             json.dumps(
@@ -336,6 +338,7 @@ $ops = @{
     RemoveContainer = {
         $global:calls.Add('container')
         if ($env:SCENARIO -eq 'remove-fails') { throw 'forced container removal failure' }
+        if ($env:SCENARIO -eq 'remove-noop') { return }
         $global:present = $false
     }
     RemoveAcl = { $global:calls.Add('acl') }
@@ -371,8 +374,10 @@ try {
         assert payload["message"]
         assert payload["entryExists"]
         assert (protected / "quarantine.json").is_file()
-        if scenario not in {"remove-fails", "unowned-path", "compiler-marker-mismatch", "plugin-marker-mismatch"}:
+        if scenario not in {"remove-fails", "remove-noop", "unowned-path", "compiler-marker-mismatch", "plugin-marker-mismatch"}:
             assert "container" not in payload["calls"]
+        if scenario == "remove-noop":
+            assert "still exists after removal" in payload["message"]
         if scenario == "sid-replaced":
             assert "disable" not in payload["calls"]
         else:

@@ -107,6 +107,7 @@ def complete_workflow_cleanup(
     *,
     timeout_seconds: int = 180,
     worker_command: tuple[str, ...] | None = None,
+    inject_container_removal_failure: bool = False,
 ) -> None:
     if timeout_seconds <= 0:
         raise ValueError("Cleanup deadline must be positive")
@@ -152,6 +153,7 @@ def complete_workflow_cleanup(
                     "-ContainerName",
                     container_name,
                     "-Worker",
+                    *(("-InjectContainerRemovalFailure",) if inject_container_removal_failure else ()),
                 ),
                 cwd=Path(__file__).parents[4],
                 env={name.upper(): value for name, value in os.environ.items() if name.upper() in _CLEANUP_ENVIRONMENT_KEYS},

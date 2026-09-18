@@ -1,4 +1,7 @@
 import json
+import shutil
+import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -86,3 +89,596 @@ def test_non_evidence_fault_is_rejected_without_mutation(tmp_path: Path) -> None
     with pytest.raises(ValueError, match="Not a test-evidence fault"):
         inject_test_evidence_fault(RehearsalFault.CORRUPT_BACKUP, tmp_path, tests)
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == pristine
+
+
+def test_public_script_contract_and_parser() -> None:
+    root = Path(__file__).parents[1]
+    script = root / "scripts" / "Test-BugFixLifecycleCheckpoint.ps1"
+    assert script.is_file()
+    source = script.read_text()
+    for parameter in ("ContainerName", "CheckpointPath", "Iterations", "Fault"):
+        assert f"${parameter}" in source
+    for fault in RehearsalFault:
+        assert f'"{fault.value}"' in source
+    assert "Start-BCBenchWorkflowExecution" in source
+    assert "Complete-BugFixLifecycle.ps1" in source
+    assert "WindowsApps" in source
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell parser unavailable")
+    result = subprocess.run(
+        [
+            pwsh,
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            f"$e=$null; $t=$null; [Management.Automation.Language.Parser]::ParseFile('{script}',[ref]$t,[ref]$e) | Out-Null; if ($e.Count) {{ throw ($e | Out-String) }}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("invalid", [None, "product", "foreign_project", "hash", "version", "missing"])
+def test_inventory_mutation_requires_exact_entry_test_publication(tmp_path: Path, invalid: str | None) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.evidence import sha256_file
+    from bcbench.evaluate.bugfix_lifecycle.models import ProjectPublication
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import select_rehearsal_app
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _app
+
+    package = tmp_path / "test.app"
+    package.write_bytes(b"trusted package")
+    app = replace(_app(), name="Entry Tests", content_hash=sha256_file(package))
+    project = "src/Entry/Tests" if invalid != "product" else "src/Entry/App"
+    publication = ProjectPublication((project,), (package,), (app,))
+    baseline = (replace(app, version="9.0.0.0"),) if invalid == "version" else (app,)
+    if invalid == "hash":
+        package.write_bytes(b"tampered")
+    if invalid == "missing":
+        baseline = ()
+    allowed = ("src/Other/Tests",) if invalid == "foreign_project" else (project,)
+    if invalid:
+        with pytest.raises(CheckpointInfrastructureError):
+            select_rehearsal_app(publication, baseline, allowed)
+    else:
+        assert select_rehearsal_app(publication, baseline, allowed) == app
+
+
+@pytest.mark.parametrize("field", ["database_files", "columns", "rows", "discovered"])
+def test_probe_comparison_rejects_each_restoration_dimension(field: str) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, require_same_probe
+    from bcbench.exceptions import CheckpointInfrastructureError
+
+    original = RehearsalProbe(("BC:1:BC.mdf:ONLINE",), ("MarkerId:int", "Value:int"), ("1:17",), ("50100:Probe",))
+    altered = replace(original, **{field: (*getattr(original, field), "extra")})
+    with pytest.raises(CheckpointInfrastructureError, match=field):
+        require_same_probe(original, altered)
+
+
+def test_probe_discovery_compares_multisets() -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, require_same_probe
+    from bcbench.exceptions import CheckpointInfrastructureError
+
+    probe = RehearsalProbe(("file",), (), (), ("1:A", "2:B"))
+    require_same_probe(probe, replace(probe, discovered=("2:B", "1:A")))
+    with pytest.raises(CheckpointInfrastructureError, match="discovered"):
+        require_same_probe(probe, replace(probe, discovered=("1:A", "1:A", "2:B")))
+
+
+def test_rehearsal_workflow_uses_two_entries_and_optional_success_gate() -> None:
+    import yaml
+
+    root = Path(__file__).parents[1]
+    jobs = yaml.safe_load((root / ".github" / "workflows" / "bugfix-production-evaluation.yml").read_text())["jobs"]
+    assert jobs["rehearsal-entries"]["with"] == {"category": "bug-fix", "test-run": True}
+    assert "inputs.rehearsal" in jobs["rehearsal-entries"]["if"]
+    assert "rehearsal" in jobs["evaluate"]["needs"]
+    assert "always()" in jobs["evaluate"]["if"]
+    for status in ("success", "skipped"):
+        assert f"needs.rehearsal.result == '{status}'" in jobs["evaluate"]["if"]
+    steps = jobs["rehearsal"]["steps"]
+    run = next(step for step in steps if step.get("id") == "rehearsal")
+    assert "-Iterations 10" in run["run"]
+    assert any(step.get("uses") == "$/.github/actions/setup-bugfix-lifecycle" for step in steps)
+    assert not any("install-agent-harnesses" in step.get("uses", "") for step in steps)
+    assert not any("evaluation-results-" in step.get("with", {}).get("name", "") for step in steps)
+    evaluate = next(step for step in jobs["evaluate"]["steps"] if step.get("id") == "evaluate")
+    assert evaluate["env"]["BCBENCH_LIFECYCLE_REHEARSAL_ITERATIONS"] == "${{ inputs.test-run && '1' || '0' }}"
+
+
+@pytest.mark.parametrize("failure", [None, "data", "schema", "inventory", "discovery", "mutate", "interrupt"])
+def test_real_checkpoint_manager_restores_sql_fixture_and_stops_on_first_mismatch(tmp_path: Path, failure: str | None) -> None:
+    import base64
+    import re
+    import sqlite3
+
+    from bcbench.evaluate.bugfix_lifecycle import CheckpointManager, EvidenceStore, sha256_file
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, run_checkpoint_rehearsal
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _app, _identity, _paths
+
+    paths = _paths(tmp_path)
+    database = tmp_path / "owned.db"
+    with sqlite3.connect(database) as connection:
+        connection.executescript("CREATE TABLE inventory(installed INT); INSERT INTO inventory VALUES (1);")
+    app = _app()
+    calls = []
+
+    def inventory():
+        with sqlite3.connect(database) as connection:
+            return (replace(app, installed=bool(connection.execute("SELECT installed FROM inventory").fetchone()[0])),)
+
+    def runner(script):
+        if "Backup-BCBenchCheckpoint" in script:
+            staging = Path(re.search(r"-StagingDirectory '([^']+)'", script).group(1))
+            name = re.search(r"-Name '([^']+)'", script).group(1)
+            backup = staging / "database.bak"
+            backup.write_bytes(database.read_bytes())
+            calls.append(f"capture:{name}")
+            payload = {
+                "name": name,
+                "backup_path": str(backup),
+                "sha256": sha256_file(backup),
+                "database_name": "BC",
+                "database_folder": "C:\\databases",
+                "container": _identity().to_dict(),
+                "apps": [a.to_dict() for a in inventory()],
+                "service": {"server_instance": "BC", "previous_process_id": 10, "state": "Stopped"},
+            }
+        else:
+            if "Restore-BCBenchCheckpoint" in script:
+                encoded = re.search(r"FromBase64String\('([^']+)'\)", script).group(1)
+                manifest = json.loads(base64.b64decode(encoded))
+                calls.append(f"restore:{manifest['name']}")
+                database.write_bytes(Path(manifest["backup_path"]).read_bytes())
+                if manifest["name"] != "baseline":
+                    with sqlite3.connect(database) as connection:
+                        if failure == "data":
+                            connection.execute("UPDATE probe SET value=999")
+                        elif failure == "schema":
+                            connection.execute("ALTER TABLE probe ADD COLUMN leaked INT")
+                        elif failure == "inventory":
+                            connection.execute("UPDATE inventory SET installed=0")
+            payload = {
+                "container": _identity().to_dict(),
+                "apps": [a.to_dict() for a in inventory()],
+                "database_name": "BC",
+                "database_folder": "C:\\databases",
+                "database_online": True,
+                "service_restarted": True,
+                "company_endpoint_ready": True,
+                "test_discovery_ready": True,
+                "test_count": 1,
+            }
+        return subprocess.CompletedProcess(["fixture"], 0, json.dumps(payload), "")
+
+    manager = CheckpointManager(paths, EvidenceStore(paths), runner, container_name="bc-checkpoint", container_id="container-id", invocation_id="invocation-id", expected_company="CRONUS")
+    s0 = manager.capture("baseline", (app,))
+    original_hash = sha256_file(s0.backup_path)
+
+    class Adapter:
+        probe_name = "BCBenchRehearsal_" + "a" * 32
+        fault_applied = False
+
+        def read_probe(self):
+            with sqlite3.connect(database) as connection:
+                columns = tuple(row[1] for row in connection.execute("PRAGMA table_info(probe)"))
+                rows = tuple(str(row[0]) for row in connection.execute("SELECT value FROM probe")) if columns else ()
+            discovery = ("50100:Probe",)
+            if failure == "discovery" and any(call.startswith("restore:rehearsal-") for call in calls) and columns:
+                discovery += discovery
+            return RehearsalProbe(("BC:file:ONLINE",), columns, rows, discovery)
+
+        def read_inventory(self):
+            return inventory()
+
+        def create_probe(self):
+            calls.append("create")
+            with sqlite3.connect(database) as connection:
+                connection.executescript("CREATE TABLE probe(value INT); INSERT INTO probe VALUES (17);")
+
+        def mutate(self, selected):
+            assert selected == app
+            calls.append("mutate")
+            with sqlite3.connect(database) as connection:
+                connection.executescript("UPDATE inventory SET installed=0; UPDATE probe SET value=29; ALTER TABLE probe ADD COLUMN changed INT;")
+            if failure == "mutate":
+                raise RuntimeError("partial mutation")
+            if failure == "interrupt":
+                raise KeyboardInterrupt
+
+        def set_fault(self, fault):
+            assert fault is RehearsalFault.NONE
+
+        def test_evidence(self, iteration):
+            raise AssertionError("Readiness/restore proof must not run tests")
+
+    output = paths.final_results / "rehearsal"
+    if failure:
+        with pytest.raises((CheckpointInfrastructureError, RuntimeError, KeyboardInterrupt)):
+            run_checkpoint_rehearsal(manager, s0, Adapter(), app, output, iterations=3)
+    else:
+        run_checkpoint_rehearsal(manager, s0, Adapter(), app, output, iterations=3)
+    records = [json.loads(path.read_text()) for path in sorted(output.glob("iteration-*.json"))]
+    assert len(records) == (1 if failure else 3)
+    assert all(record["verified"] is (failure is None) for record in records)
+    assert calls.count("mutate") == (1 if failure else 3)
+    assert calls[-1] == "restore:baseline"
+    assert Adapter().read_probe().columns == ()
+    assert inventory() == (app,)
+    assert sha256_file(s0.backup_path) == original_hash
+    assert json.loads((output / "clean-s0.json").read_text())["verified"] is True
+    if failure is None:
+        from bcbench.evaluate.bugfix_lifecycle.rehearsal_execution import require_rehearsal_evidence
+        from tests.test_bugfix_production_lifecycle import _harness
+
+        request, *_ = _harness(tmp_path / "validation")
+        resources = replace(request.provisioned_resources, paths=paths, expected_container_id="container-id")
+        require_rehearsal_evidence(resources, 3, RehearsalFault.NONE)
+        with pytest.raises(CheckpointInfrastructureError, match="evidence"):
+            require_rehearsal_evidence(resources, 10, RehearsalFault.NONE)
+        record = output / "iteration-0002.json"
+        value = json.loads(record.read_text())
+        value["verified"] = False
+        record.write_text(json.dumps(value))
+        with pytest.raises(CheckpointInfrastructureError, match="evidence"):
+            require_rehearsal_evidence(resources, 3, RehearsalFault.NONE)
+
+
+@pytest.mark.parametrize("case", ["create", "identifier", "ownership", "mutate"])
+def test_powershell_probe_boundary_uses_owned_identifiers(tmp_path: Path, case: str) -> None:
+    module = Path(__file__).parents[1] / "scripts" / "BugFixLifecycleRehearsal.psm1"
+    assert module.exists()
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell unavailable")
+    script = f"""
+Import-Module '{module}' -Force -DisableNameChecking
+$script:called = $false
+$operations = @{{
+    InspectContainer = {{ param($c) [pscustomobject]@{{Exists=$true; Id='{("replacement" if case == "ownership" else "container-id")}'; InvocationId='invocation-id'}} }}
+    ReadDatabaseTopology = {{ param($c) [pscustomobject]@{{database_name='BC'; database_folder='C:\\databases'; database_online=$true}} }}
+    ExecuteProbe = {{ param($c)
+        $script:called = $true
+        if ($c.Sql -notmatch 'BCBenchOwner') {{ throw 'No ownership marker check' }}
+        if ($c.Sql -match 'DROP TABLE|DELETE FROM') {{ throw 'Destructive fallback' }}
+        if ($c.Sql -notmatch 'BCBenchRehearsal_[a-f0-9]{{32}}') {{ throw 'No exact named table' }}
+        [pscustomobject]@{{ database_files=@('file'); columns=@(); rows=@() }}
+    }}
+}}
+$failed = $false
+try {{
+    Invoke-BCBenchRehearsalProbe -ContainerName bc -ExpectedContainerId container-id -ExpectedInvocationId invocation-id `
+      -DatabaseName BC -DatabaseFolder 'C:\\databases' -ProbeName '{("Bad;DROP" if case == "identifier" else "BCBenchRehearsal_" + "a" * 32)}' `
+      -Mode {("Mutate" if case == "mutate" else "Create")} -Operations $operations | Out-Null
+}} catch {{ $failed = $true; [Console]::Error.WriteLine($_.ToString()) }}
+@{{failed=$failed;called=$script:called}} | ConvertTo-Json -Compress
+"""
+    result = subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, timeout=30, check=False)
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    assert payload == {"failed": case in ("identifier", "ownership"), "called": case not in ("identifier", "ownership")}, result.stderr
+
+
+def test_contained_rehearsal_credentials_are_inherited_not_serialized(tmp_path: Path, monkeypatch) -> None:
+    import sys
+
+    from bcbench.agent.shared import contained_process_worker
+    from bcbench.agent.shared.contained_process import ContainedProcessRequest, _write_request
+
+    secret = "rehearsal-only-secret-never-json"
+    monkeypatch.setenv("BC_SERVER_PASSWORD", secret)
+    request = ContainedProcessRequest(
+        command=(sys.executable, "-c", "import os; assert os.environ['BC_SERVER_PASSWORD'] == '" + secret + "'"),
+        cwd=tmp_path,
+        env={},
+        timeout_seconds=10,
+        parent_environment_keys=("BC_SERVER_PASSWORD",),
+    )
+    # The command itself must not contain a secret; the child checks its hash.
+    import hashlib
+
+    request = replace(
+        request, command=(sys.executable, "-c", f"import os,hashlib; assert hashlib.sha256(os.environ['BC_SERVER_PASSWORD'].encode()).hexdigest() == '{hashlib.sha256(secret.encode()).hexdigest()}'")
+    )
+    path = tmp_path / "request.json"
+    _write_request(path, request)
+    assert secret not in path.read_text()
+    gate = tmp_path / "gate"
+    gate.touch()
+    assert contained_process_worker.main([str(path), str(gate), "1"]) == 0
+
+
+def test_active_rehearsal_handoff_blocks_cleanup_and_shutdown(tmp_path: Path) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.execution import WorkflowExecution
+    from bcbench.exceptions import CleanupInfrastructureError
+    from tests.test_bugfix_production_lifecycle import _harness
+
+    request, *_ = _harness(tmp_path)
+    execution = WorkflowExecution(request.provisioned_resources)
+    execution.path.parent.mkdir(exist_ok=True)
+    execution.path.write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "container_id": request.expected_container_id,
+                "invocation_id": request.expected_container_invocation_id,
+            }
+        )
+    )
+    execution.begin_rehearsal()
+    with pytest.raises(CleanupInfrastructureError):
+        execution.require_shutdown()
+    shutdown_calls = []
+    with pytest.raises(CleanupInfrastructureError):
+        execution.verify_shutdown(lambda: shutdown_calls.append("unsafe-shutdown"))
+    assert shutdown_calls == []
+    assert json.loads(execution.path.read_text())["status"] == "rehearsal_running"
+    execution.finish_rehearsal(resume_lifecycle=True)
+    assert json.loads(execution.path.read_text())["status"] == "running"
+
+
+def test_cleanup_fault_verifier_rejects_unrelated_quarantine(tmp_path: Path) -> None:
+    from bcbench.commands.bugfix_rehearsal import verify_cleanup_fault
+    from bcbench.exceptions import CleanupInfrastructureError
+
+    (tmp_path / "workflow-setup.json").write_text(json.dumps({"ContainerId": "owned", "ContainerInvocationId": "invocation"}))
+    (tmp_path / "workflow-cleanup-worker.json").write_text(json.dumps({"worker_shutdown": "verified"}))
+    marker = {"expected_container_id": "owned", "expected_invocation_id": "invocation", "cleanup_errors": ["ownership mismatch"]}
+    (tmp_path / "quarantine.json").write_text(json.dumps(marker))
+    with pytest.raises(CleanupInfrastructureError):
+        verify_cleanup_fault(tmp_path)
+    marker["cleanup_errors"] = ["container Docker ID 'owned' still exists after removal."]
+    (tmp_path / "quarantine.json").write_text(json.dumps(marker))
+    verify_cleanup_fault(tmp_path)
+    result = json.loads((tmp_path / "workflow-rehearsal-cleanup-fault.json").read_text())
+    assert result["verified"] is True
+    assert result["status"] == BugFixPhaseStatus.INFRASTRUCTURE_ERROR.value
+
+
+@pytest.mark.parametrize(
+    ("fault", "expected"),
+    [
+        ("CorruptBackup", "Staged checkpoint backup hash mismatch"),
+        ("ReadinessFailure", "readiness evidence was incomplete"),
+        ("UnexpectedApp", "readiness application inventory does not match"),
+        ("ServiceRestartFailure", "service tier was not genuinely restarted"),
+    ],
+)
+def test_restore_faults_fail_in_real_production_powershell_validators(tmp_path: Path, fault: str, expected: str) -> None:
+    from tests.test_bugfix_lifecycle_checkpoint import _app, _identity
+
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell unavailable")
+    backup = tmp_path / "staging" / "restore" / "database.bak"
+    backup.parent.mkdir(parents=True)
+    backup.write_bytes(b"staged database")
+    module = Path(__file__).parents[1] / "scripts" / "BugFixLifecycleRehearsal.psm1"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module '{module}' -Force -DisableNameChecking
+$global:calls = [Collections.Generic.List[string]]::new()
+$identity = '{json.dumps(_identity().to_dict())}' | ConvertFrom-Json
+$app = '{json.dumps(_app().to_dict())}' | ConvertFrom-Json
+$manifest = [pscustomobject]@{{
+    container=$identity; apps=@($app); database_name='BC'; database_folder='C:\\databases';
+    backup_path='{backup}'; sha256=(Get-FileHash -LiteralPath '{backup}' -Algorithm SHA256).Hash.ToLowerInvariant()
+}}
+$ops = @{{
+    InspectContainer = {{ [pscustomobject]@{{Exists=$true; Id='container-id'; InvocationId='invocation-id'}} }}
+    ReadContainerIdentity = {{ $identity }}
+    ReadDatabaseTopology = {{ [pscustomobject]@{{database_name='BC'; database_folder='C:\\databases'; database_online=$true}} }}
+    ReadAppInventory = {{ @($app) }}
+    StopServiceTier = {{ $global:calls.Add('stop'); [pscustomobject]@{{server_instance='BC';previous_process_id=10;state='Stopped'}} }}
+    StartServiceTier = {{ $global:calls.Add('start'); [pscustomobject]@{{restarted=$true}} }}
+    RestoreDatabases = {{ $global:calls.Add('restore') }}
+    TestReadiness = {{ $global:calls.Add('readiness'); [pscustomobject]@{{company_endpoint_ready=$true;test_discovery_ready=$true;test_count=1}} }}
+}}
+$message = ''
+try {{
+    Restore-BCBenchRehearsalCheckpoint -ContainerName bc -ExpectedContainerId container-id -ExpectedInvocationId invocation-id `
+      -Manifest $manifest -Credential ([PSCredential]::new('fixture',(ConvertTo-SecureString 'fixture' -AsPlainText -Force))) `
+      -ExpectedCompany CRONUS -StagingRoot '{backup.parent.parent}' -Fault {fault} -Operations $ops | Out-Null
+}} catch {{ $message=$_.Exception.Message }}
+@{{message=$message;calls=@($global:calls)}} | ConvertTo-Json -Compress
+"""
+    result = subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, timeout=30, check=False)
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    assert expected in payload["message"], payload
+    assert "readiness" not in payload["calls"]
+    assert ("restore" in payload["calls"]) is (fault != "CorruptBackup")
+
+
+def test_hash_fault_rejects_protected_manifest_without_modifying_master(tmp_path: Path) -> None:
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _manager
+
+    manager, runner, _paths, app = _manager(tmp_path)
+    s0 = manager.capture("baseline", (app,))
+    original = s0.backup_path.read_bytes()
+    runner.calls.clear()
+    with pytest.raises(CheckpointInfrastructureError, match="protected checkpoint hash mismatch"):
+        manager.restore(replace(s0, sha256="0" * 64), (app,))
+    assert s0.backup_path.read_bytes() == original
+    assert runner.calls == []
+
+
+def test_rehearsal_supervisor_does_not_accept_zero_exit_without_cycle_evidence(tmp_path: Path, monkeypatch) -> None:
+    from bcbench.agent.shared.contained_process import ContainedProcessResult
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal_execution import run_rehearsal_worker
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_production_lifecycle import _harness
+
+    request, *_ = _harness(tmp_path)
+    root = request.paths.protected_root
+    root.mkdir(exist_ok=True)
+    (root / "workflow-execution.json").write_text(
+        json.dumps(
+            {
+                "status": "launching",
+                "container_id": request.expected_container_id,
+                "invocation_id": request.expected_container_invocation_id,
+            }
+        )
+    )
+    monkeypatch.setattr("bcbench.evaluate.bugfix_lifecycle.rehearsal_execution.shutil.which", lambda _: "C:\\PowerShell\\pwsh.exe")
+
+    def child(spec):
+        assert json.loads((root / "workflow-execution.json").read_text())["status"] == "rehearsal_running"
+        assert "BC_SERVER_PASSWORD" not in spec.env
+        assert "BC_SERVER_PASSWORD" in spec.parent_environment_keys
+        assert request.evaluator_container.password not in (root / "workflow-rehearsal-request.json").read_text()
+        return ContainedProcessResult(0, "", "")
+
+    monkeypatch.setattr("bcbench.evaluate.bugfix_lifecycle.rehearsal_execution.run_contained_process", child)
+    with pytest.raises(CheckpointInfrastructureError, match="evidence"):
+        run_rehearsal_worker(request.provisioned_resources, request.evaluator_container, request.context.entry, iterations=10)
+    assert (root / "quarantine.json").exists()
+
+
+@pytest.mark.parametrize("failure", ["timeout", "cancel"])
+def test_interrupted_rehearsal_worker_never_becomes_never_launched(tmp_path: Path, monkeypatch, failure: str) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal_execution import run_rehearsal_worker
+    from tests.test_bugfix_production_lifecycle import _harness
+
+    request, *_ = _harness(tmp_path)
+    root = request.paths.protected_root
+    root.mkdir(exist_ok=True)
+    (root / "workflow-execution.json").write_text(
+        json.dumps(
+            {
+                "status": "launching",
+                "container_id": request.expected_container_id,
+                "invocation_id": request.expected_container_invocation_id,
+            }
+        )
+    )
+    monkeypatch.setattr("bcbench.evaluate.bugfix_lifecycle.rehearsal_execution.shutil.which", lambda _: "C:\\PowerShell\\pwsh.exe")
+
+    def child(spec):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(spec.command, spec.timeout_seconds)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("bcbench.evaluate.bugfix_lifecycle.rehearsal_execution.run_contained_process", child)
+    with pytest.raises((subprocess.TimeoutExpired, KeyboardInterrupt)):
+        run_rehearsal_worker(request.provisioned_resources, request.evaluator_container, request.context.entry, iterations=10)
+    assert json.loads((root / "workflow-execution.json").read_text())["status"] == "rehearsal_running"
+    assert json.loads((root / "quarantine.json").read_text())["status"] == "quarantined"
+
+
+def test_timed_out_adapter_refuses_further_container_operations(tmp_path: Path, monkeypatch) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal_adapter import PowerShellRehearsalAdapter
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _manager
+    from tests.test_bugfix_production_lifecycle import _harness
+
+    request, *_ = _harness(tmp_path / "setup")
+    manager, _, _, app = _manager(tmp_path / "checkpoint")
+    s0 = manager.capture("baseline", (app,))
+    adapter = PowerShellRehearsalAdapter(request.provisioned_resources, request.evaluator_container, s0, request.paths.final_results, ())
+    calls = []
+
+    def timeout(script):
+        calls.append(script)
+        raise subprocess.TimeoutExpired(["pwsh"], 1200)
+
+    monkeypatch.setattr("bcbench.evaluate.bugfix_lifecycle.rehearsal_adapter.evaluator_powershell", timeout)
+    with pytest.raises(subprocess.TimeoutExpired):
+        adapter.run("mutate")
+    with pytest.raises(CheckpointInfrastructureError, match="unverified"):
+        adapter.run("restore")
+    assert calls == ["mutate"]
+
+
+def test_probe_payload_allows_no_tests_during_owned_app_uninstall() -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe
+
+    assert RehearsalProbe.from_dict({"database_files": ["file"], "columns": ["owned"], "rows": ["1:29"], "discovered": []}).discovered == ()
+
+
+@pytest.mark.parametrize("keys", [("BC_SERVER_PASSWORD",), ("TOKEN", "token"), ("PATH",)])
+def test_parent_environment_channel_cannot_bypass_restricted_identity_or_duplicate_environment(tmp_path: Path, keys) -> None:
+    from bcbench.agent.shared.contained_process import ContainedProcessRequest, WindowsIdentity
+
+    with pytest.raises(ValueError, match="environment"):
+        ContainedProcessRequest(
+            command=("python",),
+            cwd=tmp_path,
+            env={"PATH": "safe"},
+            timeout_seconds=1,
+            parent_environment_keys=keys,
+            identity=WindowsIdentity("restricted", "secret") if keys == ("BC_SERVER_PASSWORD",) else None,
+        )
+
+
+@pytest.mark.parametrize("methods", [[], ["Probe"], ["Probe", "Probe"]])
+def test_powershell_exact_discovery_preserves_flat_multisets(methods) -> None:
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("PowerShell unavailable")
+    module = Path(__file__).parents[1] / "scripts" / "BugFixLifecycleRehearsal.psm1"
+    script = f"""
+$ErrorActionPreference='Stop'
+Import-Module '{module}' -Force -DisableNameChecking
+$ops=@{{
+ InspectContainer={{[pscustomobject]@{{Exists=$true;Id='owned';InvocationId='invocation'}}}}
+ DiscoverTests={{ [pscustomobject]@{{Id=50100;Tests=('{json.dumps(methods)}'|ConvertFrom-Json)}} }}
+}}
+$items=@(Get-BCBenchRehearsalDiscovery -ContainerName bc -ExpectedContainerId owned -ExpectedInvocationId invocation `
+ -Credential ([PSCredential]::new('fixture',(ConvertTo-SecureString 'fixture' -AsPlainText -Force))) -Company CRONUS -Operations $ops)
+@{{discovered=$items}} | ConvertTo-Json -Compress
+"""
+    result = subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, check=False, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.strip().splitlines()[-1])["discovered"] == [f"50100:{method}" for method in methods]
+
+
+def test_lifecycle_finally_preserves_rehearsal_quarantine_resources(tmp_path: Path) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.lifecycle import LifecycleCleanup
+    from tests.test_bugfix_production_lifecycle import _harness
+
+    request, _lifecycle, calls, _evidence, ownership, _phases = _harness(tmp_path)
+    request.paths.protected_root.mkdir(exist_ok=True)
+    (request.paths.protected_root / "quarantine.json").write_text('{"reason":"rehearsal_clean_s0_unverified"}')
+    error = LifecycleCleanup(request.provisioned_resources, ownership).run()
+    assert error is not None
+    assert "remove-container" not in calls
+    assert "remove-roots" not in calls
+    assert "disable-local" in calls
+
+
+def test_probe_creation_refusal_does_not_restore_over_an_unowned_object(tmp_path: Path) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalProbe, run_checkpoint_rehearsal
+    from bcbench.exceptions import CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import _manager
+
+    manager, runner, paths, app = _manager(tmp_path)
+    s0 = manager.capture("baseline", (app,))
+    runner.calls.clear()
+
+    class RefusedProbe:
+        probe_name = "BCBenchRehearsal_" + "a" * 32
+        fault_applied = False
+
+        def read_probe(self):
+            return RehearsalProbe(("database",), (), (), ("50100:Probe",))
+
+        def read_inventory(self):
+            return (app,)
+
+        def create_probe(self):
+            raise CheckpointInfrastructureError("Refusing an existing SQL probe object")
+
+        def set_fault(self, _fault):
+            pass
+
+    with pytest.raises(CheckpointInfrastructureError, match="existing SQL probe"):
+        run_checkpoint_rehearsal(manager, s0, RefusedProbe(), app, paths.final_results / "rehearsal")
+    assert runner.calls == []

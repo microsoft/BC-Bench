@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -95,10 +96,11 @@ def bugfix_lifecycle_cleanup(
     protected_root: Annotated[Path, typer.Option()],
     container_name: Annotated[str, typer.Option()],
     timeout_seconds: Annotated[int, typer.Option(min=1)] = 180,
+    inject_container_removal_failure: Annotated[bool, typer.Option(hidden=True)] = False,
 ) -> None:
     from bcbench.evaluate.bugfix_lifecycle.workflow_cleanup import complete_workflow_cleanup
 
-    complete_workflow_cleanup(entry_root, protected_root, container_name, timeout_seconds=timeout_seconds)
+    complete_workflow_cleanup(entry_root, protected_root, container_name, timeout_seconds=timeout_seconds, inject_container_removal_failure=inject_container_removal_failure)
 
 
 @bugfix_lifecycle_app.command("copilot")
@@ -627,6 +629,7 @@ def _run_lifecycle_with_cleanup_lease(
             agent_runtime=agent_runtime,
             agent_execution_policy=execution_policy,
             replay_patch=replay_patch,
+            rehearsal_iterations=int(os.environ.get("BCBENCH_LIFECYCLE_REHEARSAL_ITERATIONS", "0")),
         )
     except ValueError as error:
         raise typer.BadParameter(str(error)) from error

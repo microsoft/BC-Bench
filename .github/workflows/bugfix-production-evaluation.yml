@@ -31,7 +31,7 @@ on:
         type: boolean
         default: false
       rehearsal:
-        description: Reserved for Task13 checkpoint rehearsal (currently rejected)
+        description: Require ten checkpoint restore rehearsals on each of the two canary entries before evaluation
         type: boolean
         default: false
 
@@ -59,10 +59,8 @@ jobs:
         env:
           AGENT: ${{ inputs.agent }}
           MODEL: ${{ inputs.model }}
-          REHEARSAL: ${{ inputs.rehearsal }}
         run: |
           $ErrorActionPreference = 'Stop'
-          if ($env:REHEARSAL -eq 'true') { throw "Checkpoint rehearsal is not implemented until Task13." }
           @'
           import os
           from typing import get_args
@@ -81,9 +79,120 @@ jobs:
       category: bug-fix
       test-run: ${{ inputs.test-run }}
 
+  rehearsal-entries:
+    needs: validate
+    if: inputs.rehearsal
+    uses: $/.github/workflows/get-entries.yml
+    with:
+      category: bug-fix
+      test-run: true
+
+  rehearsal:
+    needs: rehearsal-entries
+    if: inputs.rehearsal && needs.rehearsal-entries.outputs.entries != '[]'
+    runs-on: GitHub-BCBench
+    timeout-minutes: 240
+    environment:
+      name: ado-read
+      deployment: false
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        entry: ${{ fromJson(needs.rehearsal-entries.outputs.entries) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Allocate owned rehearsal paths
+        id: paths
+        shell: pwsh
+        env:
+          ENTRIES: ${{ needs.rehearsal-entries.outputs.entries }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (@($env:ENTRIES | ConvertFrom-Json).Count -ne 2) { throw "Rehearsal requires exactly two canary entries." }
+          $invocation = [Guid]::NewGuid().ToString('N')
+          "entry_root=C:\bcbench\entries\$invocation" >> $env:GITHUB_OUTPUT
+          "protected_root=C:\bcbench-protected\$invocation" >> $env:GITHUB_OUTPUT
+          "container_name=bcbench-$invocation" >> $env:GITHUB_OUTPUT
+      - uses: $/.github/actions/setup-python-uv
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Setup isolated checkpoint rehearsal
+        id: setup
+        timeout-minutes: 40
+        uses: $/.github/actions/setup-bugfix-lifecycle
+        with:
+          instance-id: ${{ matrix.entry }}
+          entry-root: ${{ steps.paths.outputs.entry_root }}
+          protected-root: ${{ steps.paths.outputs.protected_root }}
+          container-name: ${{ steps.paths.outputs.container_name }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          github-token: ${{ github.token }}
+      - name: Rehearse ten consecutive restores before any paid agent
+        id: rehearsal
+        timeout-minutes: 190
+        shell: pwsh
+        run: |
+          .\scripts\Test-BugFixLifecycleCheckpoint.ps1 -ContainerName $env:BC_CONTAINER_NAME `
+            -CheckpointPath (Join-Path $env:BCBENCH_LIFECYCLE_PROTECTED_ROOT 'checkpoints\official-s0.json') `
+            -Iterations 10 -Fault None
+      - name: Finalize even after cancellation or failed launch
+        id: cleanup
+        if: always()
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          ENTRY_ROOT: ${{ steps.paths.outputs.entry_root }}
+          PROTECTED_ROOT: ${{ steps.paths.outputs.protected_root }}
+          CONTAINER_NAME: ${{ steps.paths.outputs.container_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:PROTECTED_ROOT)) { throw "No rehearsal ownership paths were allocated." }
+          .\scripts\Complete-BugFixLifecycle.ps1 -EntryRoot $env:ENTRY_ROOT -ProtectedRoot $env:PROTECTED_ROOT `
+            -ContainerName $env:CONTAINER_NAME -TimeoutSeconds 180
+      - name: Upload protected rehearsal evidence, never backups or leaderboard results
+        id: evidence
+        if: always() && steps.paths.outputs.protected_root != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: rehearsal-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
+          path: |
+            ${{ steps.paths.outputs.protected_root }}/final-results/
+            ${{ steps.paths.outputs.protected_root }}/workflow-*.json
+          retention-days: 30
+      - name: Preserve quarantine markers
+        id: quarantine
+        if: always() && steps.paths.outputs.protected_root != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: rehearsal-quarantine-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
+          path: |
+            ${{ steps.paths.outputs.protected_root }}/quarantine.json
+            ${{ steps.paths.outputs.protected_root }}.quarantine.json
+            ${{ steps.paths.outputs.protected_root }}.cleanup-pending.quarantine.json
+          retention-days: 30
+      - name: Fail closed on rehearsal quarantine
+        if: always()
+        shell: pwsh
+        env:
+          PROTECTED_ROOT: ${{ steps.paths.outputs.protected_root }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:PROTECTED_ROOT)) { throw "No rehearsal ownership paths were allocated." }
+          foreach ($path in @((Join-Path $env:PROTECTED_ROOT 'quarantine.json'), "$env:PROTECTED_ROOT.quarantine.json", "$env:PROTECTED_ROOT.cleanup-pending.quarantine.json")) {
+            if (Test-Path -LiteralPath $path) { throw "Rehearsal quarantined; do not promote." }
+          }
+
   evaluate:
-    needs: get-entries
-    if: needs.get-entries.outputs.entries != '[]'
+    needs: [get-entries, rehearsal]
+    if: always() && !cancelled() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' && (needs.rehearsal.result == 'success' || (!inputs.rehearsal && needs.rehearsal.result == 'skipped'))
     runs-on: GitHub-BCBench
     environment:
       name: ado-read
@@ -139,6 +248,7 @@ jobs:
           AGENT: ${{ inputs.agent }}
           MODEL: ${{ inputs.model }}
           INSTANCE_ID: ${{ matrix.entry }}
+          BCBENCH_LIFECYCLE_REHEARSAL_ITERATIONS: ${{ inputs.test-run && '1' || '0' }}
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}

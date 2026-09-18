@@ -70,7 +70,7 @@ from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.git_operations import resolve_trusted_commit
 from bcbench.operations.project_operations import find_project_path, is_test_project, order_project_paths
 from bcbench.results.bugfix import BugFixMetricName, BugFixPhaseResult, BugFixPhaseStatus, BugFixResult
-from bcbench.types import AgentMetrics, EvaluationContext, ExperimentConfiguration
+from bcbench.types import AgentMetrics, ContainerConfig, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
 
@@ -256,7 +256,16 @@ class LifecycleCleanup:
         container_absent = False
         identity_secured = False
         clients_stopped = True
-        if self.stop_agent_clients is not None:
+        protected = self.resources.paths.protected_root
+        quarantined = any(
+            path.exists() or path.is_symlink()
+            for path in (
+                protected / "quarantine.json",
+                protected.with_name(protected.name + ".quarantine.json"),
+                protected.with_name(protected.name + ".cleanup-pending.quarantine.json"),
+            )
+        )
+        if self.stop_agent_clients is not None and not quarantined:
             try:
                 self.stop_agent_clients()
             except Exception as error:  # noqa: BLE001 - continue securing identities/container and persist quarantine
@@ -265,6 +274,8 @@ class LifecycleCleanup:
             else:
                 completed_operations.append("agent_clients_stopped")
         try:
+            if quarantined:
+                raise CleanupInfrastructureError("Existing quarantine requires review; resources retained")  # noqa: TRY301 - ownership failures follow the same identity-securing finalizer
             WorkflowExecution(self.resources).require_shutdown()
             self.ownership_api.verify_container_ownership()
         except Exception as error:  # noqa: BLE001 - cleanup aggregates every ownership failure
@@ -347,10 +358,10 @@ class LifecycleCleanup:
                 self.resources.paths.protected_root,
                 self.resources.paths.protected_root,
             )
-            _atomic_json(
-                self.resources.paths.protected_root / "quarantine.json",
-                quarantine_payload,
-            )
+            marker = self.resources.paths.protected_root / "quarantine.json"
+            reject_reparse_components(marker, self.resources.paths.protected_root)
+            if not marker.exists():
+                _atomic_json(marker, quarantine_payload)
         except Exception as error:  # noqa: BLE001 - cleanup reports quarantine failure too
             errors.append(f"quarantine persistence: {error}")
         return CleanupInfrastructureError("; ".join(errors))
@@ -559,6 +570,7 @@ class ProductionBugFixLifecycle:
         self._set_runtime = set_runtime
         self._commit_changes = commit_changes
         self._freeze_submission = freeze_submission
+        self.baseline_publication: ProjectPublication | None = None
 
     @classmethod
     def from_request(
@@ -567,33 +579,49 @@ class ProductionBugFixLifecycle:
         *,
         powershell_runner: PowerShellRunner | None = None,
     ) -> ProductionBugFixLifecycle:
-        evidence = EvidenceStore(request.paths)
-        workspace = TrustedWorkspaceBuilder(request.paths)
-        runner = powershell_runner or _default_powershell_runner(request)
-        ownership = PowerShellLifecycleOwnershipApi(
+        return cls.from_resources(
             request.provisioned_resources,
+            request.evaluator_container,
+            request.context.entry,
+            powershell_runner=powershell_runner or _default_powershell_runner(request),
+        )
+
+    @classmethod
+    def from_resources(
+        cls,
+        resources: ProvisionedLifecycleResources,
+        container: ContainerConfig,
+        entry: BugFixEntry,
+        *,
+        powershell_runner: PowerShellRunner,
+    ) -> ProductionBugFixLifecycle:
+        evidence = EvidenceStore(resources.paths)
+        workspace = TrustedWorkspaceBuilder(resources.paths)
+        runner = powershell_runner
+        ownership = PowerShellLifecycleOwnershipApi(
+            resources,
             evidence,
             runner,
         )
         checkpoint = CheckpointManager(
-            request.paths,
+            resources.paths,
             evidence,
             runner,
-            container_name=request.evaluator_container.name,
-            container_id=request.expected_container_id,
-            invocation_id=request.expected_container_invocation_id,
-            expected_company=request.evaluator_container.company,
+            container_name=container.name,
+            container_id=resources.expected_container_id,
+            invocation_id=resources.expected_container_invocation_id,
+            expected_company=container.company,
         )
         publisher = DefaultProjectPublisher(
-            request.evaluator_container,
-            request.context.entry.environment_setup_version,
+            container,
+            entry.environment_setup_version,
         )
 
         def baseline_publisher(
             repo_path: Path,
             project_paths: tuple[str, ...],
         ) -> ProjectPublication:
-            evidence_directory = request.paths.evidence / "baseline-publication"
+            evidence_directory = resources.paths.evidence / "baseline-publication"
             publication = publisher.build_and_publish_with_evidence(
                 repo_path,
                 project_paths,
@@ -601,9 +629,7 @@ class ProductionBugFixLifecycle:
             )
             for path in publication.evidence_paths:
                 evidence.protect_artifact(path, "baseline-publication-evidence")
-            for path in publication.package_paths:
-                evidence.protect_artifact(path, "baseline-package")
-            return publication
+            return replace(publication, package_paths=tuple(evidence.protect_artifact(path, "baseline-package") for path in publication.package_paths))
 
         def phase_runner_factory(trusted_source: TrustedSource) -> BugFixPhaseRunner:
             return BugFixPhaseRunner(
@@ -611,9 +637,9 @@ class ProductionBugFixLifecycle:
                 workspace_builder=workspace,
                 checkpoint_manager=checkpoint,
                 evidence_store=evidence,
-                container=request.evaluator_container,
-                version=request.context.entry.environment_setup_version,
-                project_paths=request.context.entry.project_paths,
+                container=container,
+                version=entry.environment_setup_version,
+                project_paths=entry.project_paths,
                 inventory_reader=ownership.read_app_inventory,
             )
 
@@ -933,27 +959,52 @@ class ProductionBugFixLifecycle:
         self,
         request: BugFixLifecycleRequest,
     ) -> tuple[TrustedSource, CheckpointManifest]:
-        baseline = request.paths.baseline_workspace
-        self._setup_repo(request.context.entry, baseline)
-        self._save_step("01-repository-prebuild.json", {"status": "complete"})
-        self._baseline_publisher(
-            baseline,
-            tuple(request.context.entry.project_paths),
+        source, s0 = self.prepare_baseline(request.provisioned_resources, request.context.entry)
+        if request.rehearsal_iterations:
+            self._rehearse(request, s0)
+        return source, s0
+
+    def _rehearse(self, request: BugFixLifecycleRequest, s0: CheckpointManifest) -> None:
+        from bcbench.evaluate.bugfix_lifecycle.rehearsal_execution import run_rehearsal_worker
+
+        if self.baseline_publication is None:
+            raise BugFixLifecycleInfrastructureError("Rehearsal requires trusted baseline package provenance")
+        run_rehearsal_worker(
+            request.provisioned_resources,
+            request.evaluator_container,
+            request.context.entry,
+            iterations=request.rehearsal_iterations,
+            s0=s0,
+            publication=self.baseline_publication,
         )
+
+    def prepare_baseline(
+        self,
+        resources: ProvisionedLifecycleResources,
+        entry: BugFixEntry,
+    ) -> tuple[TrustedSource, CheckpointManifest]:
+        baseline = resources.paths.baseline_workspace
+        self._setup_repo(entry, baseline)
+        self._save_step("01-repository-prebuild.json", {"status": "complete"})
+        publication = self._baseline_publisher(
+            baseline,
+            tuple(entry.project_paths),
+        )
+        self.baseline_publication = publication if isinstance(publication, ProjectPublication) else None
         self._save_step("02-baseline-publication.json", {"status": "complete"})
         _remove_baseline_build_artifacts(
             baseline,
-            request.context.entry.project_paths,
+            entry.project_paths,
         )
-        self._copy_problem(request.context.entry, baseline)
+        self._copy_problem(entry, baseline)
         self._save_step("03-problem-copy.json", {"status": "complete"})
-        self._set_runtime(baseline, request.context.entry.project_paths)
+        self._set_runtime(baseline, entry.project_paths)
         self._save_step("04-runtime.json", {"status": "complete"})
         self._commit_changes(baseline, "Prepare bug-fix production baseline")
         self._save_step("05-preparation-commit.json", {"status": "complete"})
 
         identity = self._ownership_api.get_container_identity()
-        if identity.container_id != request.expected_container_id:
+        if identity.container_id != resources.expected_container_id:
             raise BugFixLifecycleInfrastructureError("Recorded container identity does not match the expected owned container")
         apps = tuple(self._ownership_api.read_app_inventory())
         self._save_step("06-container-identity.json", identity.to_dict())

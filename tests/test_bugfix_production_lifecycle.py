@@ -511,6 +511,36 @@ def test_workflow_execution_interrupted_transition_lock_is_never_stolen(tmp_path
     assert json.loads(execution.path.read_text())["status"] == "not_started"
 
 
+def test_rehearsal_baseline_preparation_reuses_official_setup_without_agent(tmp_path: Path) -> None:
+    request, lifecycle, calls, _evidence, _ownership, _phases = _harness(tmp_path)
+    source, checkpoint = lifecycle.prepare_baseline(request.provisioned_resources, request.context.entry)
+    assert checkpoint.name == "baseline"
+    assert source.commit
+    assert not any(call == "agent" for call in calls)
+    assert lifecycle.baseline_publication is None  # This harness publisher intentionally returns no package records.
+
+
+def test_canary_rehearsal_runs_after_s0_and_before_agent(tmp_path: Path, monkeypatch) -> None:
+    request, lifecycle, calls, _evidence, _ownership, _phases = _harness(tmp_path)
+    request = replace(request, rehearsal_iterations=1)
+    observed = []
+
+    def rehearse(active_request, s0):
+        assert active_request is request
+        assert s0.name == "baseline"
+        observed.append("rehearsal")
+
+    monkeypatch.setattr(lifecycle, "_rehearse", rehearse)
+
+    def agent(context, policy):
+        assert observed == ["rehearsal"]
+        observed.append("agent")
+        return _agent(calls)(context, policy)
+
+    lifecycle.run(request, agent)
+    assert observed == ["rehearsal", "agent"]
+
+
 @pytest.mark.parametrize(
     ("execution_policy", "message"),
     [

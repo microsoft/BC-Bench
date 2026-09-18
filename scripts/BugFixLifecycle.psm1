@@ -4047,6 +4047,12 @@ function Invoke-BCBenchBugFixLifecycle {
 }
 
 Export-ModuleMember -Function `
+    Assert-BCBenchContainerOwnership, `
+    Assert-BCBenchNoReparseComponents, `
+    Invoke-BCBenchOperation, `
+    Resolve-BCBenchAbsolutePath, `
+    Test-BCBenchAppInventoryEqual, `
+    Test-BCBenchPathContains, `
     Start-BCBenchWorkflowExecution, `
     Complete-BCBenchBugFixLifecycle, `
     Backup-BCBenchCheckpoint, `
