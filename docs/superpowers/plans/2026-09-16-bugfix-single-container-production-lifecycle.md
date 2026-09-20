@@ -1950,11 +1950,11 @@ git commit -m "Add bug-fix checkpoint rehearsal" -m "Co-authored-by: Copilot <22
 
 **Closed preparation gaps:** both lifecycle harness commands now accept `--replay-timeout` only with a replay patch, with combination validation after cleanup ownership. The request carries the marker to the existing timeout/result projection without invoking an agent. The optional workflow `canary-entries` JSON-array input validates exactly five distinct IDs against reusable `get-entries` output before evaluation or rehearsal provisioning and drives the matrix. Empty input preserves four-entry/full defaults; dedicated two-entry/ten-cycle selection, cleanup, artifacts, and disabled leaderboard publication are unchanged.
 
-**Historical parent validation at `3cd93494` only:** `uv run --frozen --group analysis pytest -q --tb=short` completed with **2,021 passed, 3 skipped, 5 deselected**; `ruff check .` and `ruff format --check src tests` passed (264 files). That result predates these two capability additions and does **not** complete the current full-suite gate. The parent will rerun the full suite; it was not duplicated here.
+**Latest parent validation at `3ff30c63`:** the fresh full suite completed with **2,048 passed, 3 skipped, 5 deselected**. `ruff check .` passed, and `ruff format --check src tests` confirmed **264 formatted files**. This validates the Task 14 capability additions and supersedes the earlier `3cd93494` baseline result. No full suite was rerun for this documentation-only evidence update.
 
 **Current focused evidence:** TDD initially produced 32 failures / 2 passes for the missing flag/request field and workflow selection. After implementation and correcting test expectations for Rich wrapping and existing setup-failure `not_run` phases, the seven affected CLI/lifecycle/workflow/rehearsal/result/summary/contract suites passed **473 tests**. Current `ruff check .` and `ruff format --check src tests` both pass (264 files). These are local tests, not real canaries or independent approvals.
 
-Reviews remain controller-owned, and no production canaries have run. The local Docker daemon is off, only Store PowerShell is available, BcContainerHelper is 6.1.14 rather than 6.1.18, and runner enumeration was denied (403); do not change the host to force a real canary.
+**Specification review:** reviewer `9028b6cd` **APPROVED** the implementation and documentation at `3ff30c63`, with external gates pending. Final quality/integration review remains pending and controller-owned; no production canaries have run. The local Docker daemon is off, only Store PowerShell is available, BcContainerHelper is 6.1.14 rather than 6.1.18, and runner enumeration was denied (403); do not change the host to force a real canary.
 
 **Documentation verification:** Copilot/Claude/replay examples use `uv run --frozen --no-sync`; the public timeout marker and `gh workflow run --json --ref` dispatch syntax are checked without running evaluations or dispatching. Dataset listing still returns four; selection tests execute the actual workflow Python step against real dataset IDs and verify exactly five output IDs, default passthrough, and invalid-input rejection. Runbook PowerShell syntax, local link/anchor targets, unchanged leaderboard tables/Liquid/front matter, and metric projections are checked locally. GitHub source links target eventual `main` publication; this branch remains unpublished, so local target checks do not establish remote availability. Self-review is not a real canary or an independent approval.
 
@@ -2003,17 +2003,17 @@ Result: 473 passed. Includes both harnesses, owned cleanup on invalid flag combi
 
 - [x] **Step 4: Run formatting and linting**
 
-Current checks: `uv run --frozen --no-sync ruff check .` and `uv run --frozen --no-sync ruff format --check src tests` both passed; formatting covered 264 files.
+Current checks: `uv run --frozen --no-sync ruff check .` and `uv run --frozen --no-sync ruff format --check src tests` both passed; formatting covered 264 files. The parent reconfirmed both checks at `3ff30c63`.
 
-- [ ] **Step 5: Run the full non-e2e suite**
+- [x] **Step 5: Run the full non-e2e suite**
 
-Parent-owned rerun required after the Task 14 code changes:
+Full-suite command (not rerun for this documentation-only update):
 
 ```powershell
 uv run --frozen --group analysis pytest -q --tb=short
 ```
 
-Prior result at `3cd93494`: **2,021 passed, 3 skipped, 5 deselected**. Do not apply that count to the new revision or mark the current gate complete until the parent reports its rerun.
+Parent-reported result at `3ff30c63`: **2,048 passed, 3 skipped, 5 deselected**. The current local full-suite gate is complete; this does not complete final quality/integration review or any actual production gate.
 
 - [ ] **Step 6: Run a deterministic replay canary**
 
@@ -2070,15 +2070,16 @@ git commit -m "Complete timeout replay and five-entry canary preparation" -m "Co
 
 - [ ] **Step 11: Request code review**
 
-Separate specification, quality, and final reviews are controller-owned. Skills are unavailable for this handoff and no subagents are authorized. Do not mark these gates complete from self-review or documentation checks; address findings tied to this lifecycle and let the controller record final validation.
+Specification review by `9028b6cd` approved implementation/docs at `3ff30c63` with external gates pending. Final quality/integration review is still pending and controller-owned, so this step remains open. Skills are unavailable for this handoff and no subagents are authorized. Do not mark the remaining reviews complete from self-review or documentation checks.
 
 ## Promotion Checklist
 
 Do not make the production lifecycle the default until all are true:
 
 - [x] Current focused suites pass (473 tests), and Ruff lint/format checks pass (264 files).
-- [ ] Parent reruns the full non-e2e suite after the Task 14 capability changes.
-- [ ] Controller records independent specification, quality, and final-review gates for the final revision.
+- [x] Parent full non-e2e validation passes at `3ff30c63`: 2,048 passed / 3 skipped / 5 deselected; Ruff checks also pass (264 files).
+- [x] Specification reviewer `9028b6cd` approves implementation/docs at `3ff30c63`, with external gates pending.
+- [ ] Controller records final quality/integration review approval.
 - [ ] Contained-process timeout leaves no child or grandchild processes.
 - [ ] Restricted agent identity cannot read protected storage or invoke Docker.
 - [ ] Ten consecutive checkpoint restores pass across two representative entries.
