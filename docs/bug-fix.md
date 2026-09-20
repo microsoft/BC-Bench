@@ -150,7 +150,7 @@ Keep result output outside both owned roots. Successful result persistence write
 
 The workflow allocates paths before setup and uses this finalizer in an `always()` step, so it does not depend on setup having exported a complete environment. For standalone operations use the same pattern:
 
-<details>
+<details markdown="1">
 <summary>Standalone per-entry setup and guaranteed finalization (approved production runner only)</summary>
 
 The public setup script writes environment exports to `GITHUB_ENV` / `GITHUB_OUTPUT`; it does **not** set the caller's process environment. This operator helper instead calls its exported PowerShell module entry point in-process and maps the returned setup context into process environment variables. No secret JSON configuration file or password-bearing subprocess argument is needed. This is a runbook helper, not a new `bcbench` command. Run from the benchmark checkout with all tools already provisioned and evaluator credentials injected as `BC_SERVER_USERNAME` / `BC_SERVER_PASSWORD`. Repository tokens, if needed, are `GH_TOKEN` and `ADO_TOKEN`. Do not log the returned setup context.
