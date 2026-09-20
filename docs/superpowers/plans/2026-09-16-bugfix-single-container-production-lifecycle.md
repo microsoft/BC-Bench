@@ -1950,7 +1950,9 @@ git commit -m "Add bug-fix checkpoint rehearsal" -m "Co-authored-by: Copilot <22
 
 Known limits: public replay accepts a patch but cannot mark its agent outcome as timed out; this fifth replay class needs a separately approved capability or gate correction. Dataset `--test-run` selects four entries. Dedicated rehearsal explicitly narrows that sample to two; an exact-five live canary uses five per-entry setup/CLI invocations, not `test-run: true`. Exact-five workflow dispatch selection is not implemented.
 
-Validation/reviews remain controller-owned. Prior evidence supplied for this handoff: 2,013 passed / 3 skipped / 5 deselected at `0c827d01`; after the `3cd93494` baseline guard correction, 275 focused tests passed / 1 deselected and Ruff was clean. These are historical results, not a claim that the final documentation revision received full validation or independent review. The local Docker daemon is off, only Store PowerShell is available, BcContainerHelper is 6.1.14 rather than 6.1.18, and runner enumeration was denied (403); do not change the host to force a real canary.
+**Final parent code validation at `3cd93494`:** `uv run --frozen --group analysis pytest -q --tb=short` completed with **2,021 passed, 3 skipped, 5 deselected**. `ruff check .` and `ruff format --check src tests` both passed (264 files checked for formatting). This supersedes the earlier full-suite count; the previously reported focused run at that baseline had 275 passed / 1 deselected. These are controller-supplied code-validation results, not independent approval of this documentation or evidence of production canaries. No full suite was rerun for the documentation-only changes.
+
+Reviews remain controller-owned, and no production canaries have run. The local Docker daemon is off, only Store PowerShell is available, BcContainerHelper is 6.1.14 rather than 6.1.18, and runner enumeration was denied (403); do not change the host to force a real canary.
 
 **Documentation verification:** Copilot/Claude/replay example arguments accepted in help-only mode with `uv run --frozen --no-sync`; lifecycle cleanup, dataset, and rehearsal help inspected. Dataset listing returned four and the explicit selector returned five distinct IDs from 52. All eight runbook PowerShell blocks parsed, with repository command parameters checked against their declarations. Link/anchor targets, unchanged leaderboard tables/Liquid/front matter, and all five documented metric projections (including 75% rate / 80% coverage) were checked locally. GitHub source links target eventual `main` publication; this branch remains unpublished, so local target checks do not establish remote availability. Self-review is not a real canary or an independent approval.
 
@@ -1994,26 +1996,19 @@ uv run pytest tests\test_bugfix_lifecycle_results.py tests\test_bugfix_lifecycle
 
 Expected: all targeted tests pass.
 
-- [ ] **Step 4: Run formatting and linting**
+- [x] **Step 4: Run formatting and linting**
 
-Run:
+Parent-verified at `3cd93494`: `ruff check .` and `ruff format --check src tests` both passed; formatting covered 264 files. No formatter or linter rerun was needed for this evidence-only documentation update.
 
-```powershell
-uv run ruff format --check
-uv run ruff check
-```
+- [x] **Step 5: Run the full non-e2e suite**
 
-Expected: no remaining formatting or lint errors.
-
-- [ ] **Step 5: Run the full non-e2e suite**
-
-Run:
+Parent-verified command at `3cd93494`:
 
 ```powershell
-uv run pytest
+uv run --frozen --group analysis pytest -q --tb=short
 ```
 
-Expected: all non-e2e tests pass.
+Result: **2,021 passed, 3 skipped, 5 deselected**. This local gate is complete; it does not complete replay, real-runner rehearsal, live canaries, or independent review.
 
 - [ ] **Step 6: Run a deterministic replay canary**
 
@@ -2073,7 +2068,8 @@ Separate specification, quality, and final reviews are controller-owned. Skills 
 
 Do not make the production lifecycle the default until all are true:
 
-- [ ] Unit, targeted, lint, and full non-e2e suites pass.
+- [x] Full non-e2e suite and Ruff pass at code baseline `3cd93494` (2,021 passed / 3 skipped / 5 deselected; 264 files format-checked).
+- [ ] Controller records remaining targeted-validation and independent-review gates for the final revision.
 - [ ] Contained-process timeout leaves no child or grandchild processes.
 - [ ] Restricted agent identity cannot read protected storage or invoke Docker.
 - [ ] Ten consecutive checkpoint restores pass across two representative entries.
