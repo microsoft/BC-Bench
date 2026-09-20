@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import traceback
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import Enum
@@ -594,6 +595,7 @@ class ProductionBugFixLifecycle:
         entry: BugFixEntry,
         *,
         powershell_runner: PowerShellRunner,
+        baseline_operation_guard: Callable[[], AbstractContextManager[None]] = nullcontext,
     ) -> ProductionBugFixLifecycle:
         evidence = EvidenceStore(resources.paths)
         workspace = TrustedWorkspaceBuilder(resources.paths)
@@ -621,15 +623,16 @@ class ProductionBugFixLifecycle:
             repo_path: Path,
             project_paths: tuple[str, ...],
         ) -> ProjectPublication:
-            evidence_directory = resources.paths.evidence / "baseline-publication"
-            publication = publisher.build_and_publish_with_evidence(
-                repo_path,
-                project_paths,
-                evidence_directory,
-            )
-            for path in publication.evidence_paths:
-                evidence.protect_artifact(path, "baseline-publication-evidence")
-            return replace(publication, package_paths=tuple(evidence.protect_artifact(path, "baseline-package") for path in publication.package_paths))
+            with baseline_operation_guard():
+                evidence_directory = resources.paths.evidence / "baseline-publication"
+                publication = publisher.build_and_publish_with_evidence(
+                    repo_path,
+                    project_paths,
+                    evidence_directory,
+                )
+                for path in publication.evidence_paths:
+                    evidence.protect_artifact(path, "baseline-publication-evidence")
+                return replace(publication, package_paths=tuple(evidence.protect_artifact(path, "baseline-package") for path in publication.package_paths))
 
         def phase_runner_factory(trusted_source: TrustedSource) -> BugFixPhaseRunner:
             return BugFixPhaseRunner(

@@ -19,7 +19,7 @@ from bcbench.evaluate.bugfix_lifecycle.models import (
 from bcbench.evaluate.bugfix_lifecycle.path_safety import reject_reparse_components, require_strict_descendant, validate_provisioned_lifecycle_resources
 from bcbench.evaluate.bugfix_lifecycle.phases import classify_phase_error
 from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalFault, run_checkpoint_rehearsal, select_rehearsal_app, write_rehearsal_record
-from bcbench.evaluate.bugfix_lifecycle.rehearsal_adapter import PowerShellRehearsalAdapter, evaluator_powershell
+from bcbench.evaluate.bugfix_lifecycle.rehearsal_adapter import PowerShellRehearsalAdapter, RehearsalExecutionGuard
 from bcbench.evaluate.bugfix_lifecycle.rehearsal_execution import run_rehearsal_worker
 from bcbench.exceptions import CleanupInfrastructureError
 from bcbench.types import ContainerConfig
@@ -49,9 +49,17 @@ def _worker(path: Path) -> None:
     checkpoint_path = require_strict_descendant(Path(payload["checkpoint_path"]), resources.paths.checkpoints, "checkpoint manifest", "protected checkpoints")
     if checkpoint_path.exists():
         raise ValueError("Official checkpoint manifest already exists")
+    execution_guard = RehearsalExecutionGuard()
     if payload["s0"] is None:
-        lifecycle = ProductionBugFixLifecycle.from_resources(resources, container, entry, powershell_runner=evaluator_powershell)
-        _, s0 = lifecycle.prepare_baseline(resources, entry)
+        lifecycle = ProductionBugFixLifecycle.from_resources(
+            resources,
+            container,
+            entry,
+            powershell_runner=execution_guard.run,
+            baseline_operation_guard=execution_guard.operation,
+        )
+        with execution_guard.operation():
+            _, s0 = lifecycle.prepare_baseline(resources, entry)
         publication = lifecycle.baseline_publication
         if publication is None:
             raise ValueError("Official baseline publication has no package provenance")
@@ -71,7 +79,7 @@ def _worker(path: Path) -> None:
         reject_reparse_components(package, resources.paths.protected_root)
     app = select_rehearsal_app(publication, s0.apps, entry.project_paths)
     output = resources.paths.final_results / "rehearsal"
-    adapter = PowerShellRehearsalAdapter(resources, container, s0, output, tuple(entry.pass_to_pass))
+    adapter = PowerShellRehearsalAdapter(resources, container, s0, output, tuple(entry.pass_to_pass), execution_guard=execution_guard)
     checkpoint = CheckpointManager(
         resources.paths,
         EvidenceStore(resources.paths),

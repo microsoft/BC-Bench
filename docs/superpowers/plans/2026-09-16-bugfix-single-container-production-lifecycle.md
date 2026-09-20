@@ -1834,6 +1834,12 @@ cannot authorize destructive cleanup merely because process drainage finished.
 Failed test invocations latch the adapter unsafe just like failed PowerShell
 operations. No subsequent restore or clean-S0 success record is allowed while
 test-descendant shutdown remains unverified; the worker retains quarantine.
+The shared execution guard is created before dedicated-worker baseline
+preparation and also guards baseline publication and checkpoint capture.
+A capture timeout or interruption therefore blocks the checkpoint manager's
+service-recovery subprocess until outer-worker drainage is verified. Recovery
+after a completed operation remains available; the checkpoint manager's normal
+recovery behavior is unchanged.
 Evaluator credentials pass through an explicit parent-environment channel, not
 request JSON or command arguments; restricted agent workers cannot use it.
 Only nonsecret protected evidence is uploaded, never database backups or

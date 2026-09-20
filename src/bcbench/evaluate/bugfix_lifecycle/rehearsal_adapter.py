@@ -2,6 +2,8 @@ import base64
 import json
 import secrets
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 
@@ -25,6 +27,26 @@ def evaluator_powershell(script: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+class RehearsalExecutionGuard:
+    def __init__(self) -> None:
+        self._operations_safe = True
+
+    @contextmanager
+    def operation(self) -> Iterator[None]:
+        if not self._operations_safe:
+            raise CheckpointInfrastructureError("Rehearsal adapter shutdown is unverified; no further container operations are safe")
+        try:
+            yield
+        except BaseException:
+            # Only the outer contained worker can establish drainage after an interrupted operation.
+            self._operations_safe = False
+            raise
+
+    def run(self, script: str) -> subprocess.CompletedProcess[str]:
+        with self.operation():
+            return evaluator_powershell(script)
+
+
 class PowerShellRehearsalAdapter:
     def __init__(
         self,
@@ -33,6 +55,8 @@ class PowerShellRehearsalAdapter:
         s0: CheckpointManifest,
         output: Path,
         tests: tuple[TestEntry, ...],
+        *,
+        execution_guard: RehearsalExecutionGuard | None = None,
     ) -> None:
         self.resources = resources
         self.container = container
@@ -42,7 +66,7 @@ class PowerShellRehearsalAdapter:
         self.probe_name = "BCBenchRehearsal_" + secrets.token_hex(16)
         self.fault = RehearsalFault.NONE
         self.fault_applied = False
-        self._operations_safe = True
+        self._execution_guard = execution_guard or RehearsalExecutionGuard()
         self.module = resources.benchmark_root / "scripts" / "BugFixLifecycleRehearsal.psm1"
 
     def set_fault(self, fault: RehearsalFault) -> None:
@@ -51,8 +75,6 @@ class PowerShellRehearsalAdapter:
             self.fault_applied = False
 
     def run(self, script: str) -> subprocess.CompletedProcess[str]:
-        if not self._operations_safe:
-            raise CheckpointInfrastructureError("Rehearsal adapter shutdown is unverified; no further container operations are safe")
         if self.fault is not RehearsalFault.NONE and "$result = Restore-BCBenchCheckpoint `" in script:
             if script.count("$result = Restore-BCBenchCheckpoint `") != 1:
                 raise CheckpointInfrastructureError("Ambiguous restore adapter boundary")
@@ -63,11 +85,7 @@ class PowerShellRehearsalAdapter:
                 f"-StagingRoot '{str(self.resources.paths.mounted_staging).replace(chr(39), chr(39) * 2)}' `",
             )
             self.fault_applied = True
-        try:
-            return evaluator_powershell(script)
-        except BaseException:
-            self._operations_safe = False
-            raise
+        return self._execution_guard.run(script)
 
     def _invoke(self, body: str, app: AppInventoryEntry | None = None) -> dict[str, object]:
         config = {
@@ -142,7 +160,7 @@ $result = @{ mutated = $true }
         directory = self.output / f"test-evidence-{iteration:04d}"
         # Verify immutable ownership immediately before the production test operation.
         self._invoke("Assert-BCBenchContainerOwnership @owned -Operations @{} | Out-Null\n$result = @{ owned = $true }")
-        try:
+        with self._execution_guard.operation():
             run_test_suite_with_evidence(
                 list(tests),
                 TestExpectation.ALL_PASS,
@@ -150,8 +168,4 @@ $result = @{ mutated = $true }
                 self.resources.benchmark_root,
                 directory,
             )
-        except BaseException:
-            # Only the outer contained worker can verify drainage after a failed test invocation.
-            self._operations_safe = False
-            raise
         return directory, tests

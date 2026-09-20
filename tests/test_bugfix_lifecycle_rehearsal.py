@@ -1075,3 +1075,184 @@ def test_success_evidence_is_durable_before_cleanup_eligibility(tmp_path: Path, 
     assert result["calls"].count("remove") == 1
     assert "failed" not in result["calls"]
     assert not (root / "quarantine.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("stage", "failure"),
+    [
+        ("capture", "timeout"),
+        ("capture", "interrupt"),
+        ("capture", "unverified"),
+        ("publication", "timeout"),
+        ("publication", "interrupt"),
+        ("publication", "unverified"),
+        ("capture", "completed_error"),
+        ("capture", None),
+    ],
+)
+def test_baseline_guard(tmp_path: Path, monkeypatch, stage: str, failure: str | None) -> None:
+    from contextlib import suppress
+
+    from bcbench.agent.shared.contained_process import ContainedProcessInfrastructureError, ContainedProcessResult
+    from bcbench.commands import bugfix_rehearsal as command
+    from bcbench.evaluate.bugfix_lifecycle import ProductionBugFixLifecycle, sha256_file
+    from bcbench.evaluate.bugfix_lifecycle import rehearsal_execution as supervisor
+    from bcbench.evaluate.bugfix_lifecycle.phases import DefaultProjectPublisher
+    from bcbench.exceptions import BuildTimeoutExpired, CheckpointInfrastructureError
+    from tests.test_bugfix_lifecycle_checkpoint import FakePowerShellRunner, _app, _identity
+    from tests.test_bugfix_production_lifecycle import FakeWorkspace, _harness
+
+    request, *_ = _harness(tmp_path)
+    resources = request.provisioned_resources
+    paths = resources.paths
+    for directory in (paths.mounted_staging, paths.checkpoints, paths.evidence, paths.final_results):
+        directory.mkdir(parents=True, exist_ok=True)
+    entry = request.context.entry.model_copy(update={"project_paths": ["src/Tests"]})
+    (paths.protected_root / "workflow-execution.json").write_text(
+        json.dumps(
+            {
+                "status": "launching",
+                "container_id": resources.expected_container_id,
+                "invocation_id": resources.expected_container_invocation_id,
+            }
+        )
+    )
+    trace = []
+    lifecycles = []
+    app = _app(name="Entry Tests", package_id=None)
+    runner = FakePowerShellRunner(paths, app, _identity())
+    project = paths.baseline_workspace / "src" / "Tests"
+
+    def setup_repo(_entry, _path):
+        project.mkdir(parents=True)
+        (project / "app.json").write_text(
+            json.dumps(
+                {
+                    "id": app.app_id,
+                    "name": app.name,
+                    "publisher": app.publisher,
+                    "version": app.version,
+                }
+            )
+        )
+
+    class FixtureLifecycle(ProductionBugFixLifecycle):
+        def __init__(self, **kwargs):
+            super().__init__(
+                **kwargs,
+                setup_repo=setup_repo,
+                copy_problem=lambda *_: None,
+                set_runtime=lambda *_: None,
+                commit_changes=lambda *_: None,
+            )
+            self._workspace_builder = FakeWorkspace(paths, trace)
+            lifecycles.append(self)
+
+    # Keep the real from_resources factory, baseline publisher, and CheckpointManager.
+    monkeypatch.setattr(command, "ProductionBugFixLifecycle", FixtureLifecycle)
+    monkeypatch.setattr(supervisor.shutil, "which", lambda _: "C:\\PowerShell\\pwsh.exe")
+
+    def completed(script, payload, code=0):
+        return subprocess.CompletedProcess(["fixture"], code, json.dumps(payload), "")
+
+    def subprocess_boundary(args, **_kwargs):
+        script = args[-1]
+        operation = (
+            "publication"
+            if "Invoke-AppBuildAndPublish" in script
+            else "capture"
+            if "Backup-BCBenchCheckpoint" in script
+            else "service-recovery"
+            if "Start-BCBenchServiceTier" in script
+            else "inventory"
+            if "Get-BCBenchAppInventory" in script
+            else "identity"
+        )
+        if operation == stage and failure in ("timeout", "interrupt", "unverified"):
+            trace.append(f"{stage}-{failure}-drain-unknown")
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(["fixture"], 1200)
+            if failure == "unverified":
+                raise ContainedProcessInfrastructureError(
+                    None,
+                    child_stdout="",
+                    child_stderr="",
+                    wrapper_stdout="",
+                    wrapper_stderr="",
+                    reason="fixture descendant drainage unverified",
+                )
+            raise KeyboardInterrupt
+        trace.append(operation)
+        if operation == "publication":
+            package = project / "output" / "test.app"
+            package.parent.mkdir()
+            package.write_bytes(b"published test app fixture")
+            runner.app = replace(app, content_hash=sha256_file(package))
+            return completed(script, {})
+        if operation == "capture" and failure == "completed_error":
+            return completed(script, {}, code=1)
+        if operation in ("capture", "service-recovery"):
+            return runner(script)
+        if operation == "inventory":
+            return completed(script, [runner.app.to_dict()])
+        return completed(script, _identity().to_dict())
+
+    monkeypatch.setattr("bcbench.operations.bc_operations.subprocess.run", subprocess_boundary)
+
+    def cycles(checkpoint, s0, adapter, selected, _output, **_kwargs):
+        assert s0.name == "baseline"
+        assert s0.backup_path.is_file()
+        assert sha256_file(s0.backup_path) == s0.sha256
+        assert selected == runner.app
+        assert adapter._execution_guard is lifecycles[0]._checkpoint_manager._powershell_runner.__self__
+        assert checkpoint._powershell_runner.__self__ is adapter
+        trace.append("baseline-ready-for-cycles")
+
+    monkeypatch.setattr(command, "run_checkpoint_rehearsal", cycles)
+
+    def verify_baseline(*_args):
+        assert "baseline-ready-for-cycles" in trace
+
+    monkeypatch.setattr(supervisor, "require_rehearsal_evidence", verify_baseline)
+
+    def child(spec):
+        try:
+            command._worker(Path(spec.command[-1]))
+        except (CheckpointInfrastructureError, BuildTimeoutExpired, ContainedProcessInfrastructureError, KeyboardInterrupt, BaseExceptionGroup):
+            if failure in ("timeout", "interrupt", "unverified"):
+
+                def late_publication(*_args, **_kwargs):
+                    trace.append("late-publication-entered")
+                    raise AssertionError("Publication must be blocked before entering its adapter")
+
+                with monkeypatch.context() as patch:
+                    patch.setattr(DefaultProjectPublisher, "build_and_publish_with_evidence", late_publication)
+                    for operation in (
+                        lifecycles[0]._ownership_api.read_app_inventory,
+                        lambda: lifecycles[0]._baseline_publisher(paths.baseline_workspace, tuple(entry.project_paths)),
+                    ):
+                        with suppress(CheckpointInfrastructureError, AssertionError):
+                            operation()
+            trace.append("outer-descendants-drained")
+            return ContainedProcessResult(1, "", "")
+        trace.append("outer-descendants-drained")
+        return ContainedProcessResult(0, "", "")
+
+    monkeypatch.setattr(supervisor, "run_contained_process", child)
+    if failure is None:
+        supervisor.run_rehearsal_worker(resources, request.evaluator_container, entry, iterations=1)
+        assert trace.count("service-recovery") == 1
+        assert "baseline-ready-for-cycles" in trace
+        assert not (paths.protected_root / "quarantine.json").exists()
+        assert json.loads((paths.protected_root / "workflow-execution.json").read_text())["status"] == "shutdown_verified"
+    else:
+        with pytest.raises(CheckpointInfrastructureError, match="worker failed"):
+            supervisor.run_rehearsal_worker(resources, request.evaluator_container, entry, iterations=1)
+        if failure == "completed_error":
+            assert trace.count("service-recovery") == 1
+        else:
+            lost = trace.index(f"{stage}-{failure}-drain-unknown")
+            assert trace[lost + 1 :] == ["outer-descendants-drained"]
+        assert (paths.protected_root / "quarantine.json").exists()
+        assert json.loads((paths.protected_root / "workflow-execution.json").read_text())["status"] == "rehearsal_running"
+        assert not (paths.final_results / "rehearsal" / "clean-s0.json").exists()
