@@ -677,7 +677,7 @@ class ProductionBugFixLifecycle:
         full_patch = ""
         full_patch_hash: str | None = None
         submission_frozen = False
-        timeout = False
+        timeout = request.replay_timeout
         execution_mode = "replay" if request.replay_patch is not None else "live"
         agent_stdout: str | None = None
         agent_stderr: str | None = None
@@ -706,7 +706,7 @@ class ProductionBugFixLifecycle:
                     sf=None,
                     analysis=None,
                     execution_mode=execution_mode,
-                    timeout=False,
+                    timeout=timeout,
                     agent_stdout=None,
                     agent_stderr=None,
                     error_message=f"Lifecycle setup failed: {error}",

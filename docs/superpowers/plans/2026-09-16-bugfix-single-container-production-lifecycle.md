@@ -1946,20 +1946,25 @@ git commit -m "Add bug-fix checkpoint rehearsal" -m "Co-authored-by: Copilot <22
 
 ## Task 14: Document, Validate, and Prepare Promotion
 
-**Handoff status (2026-09-20): documentation/canary preparation only; whole Task 14 and production promotion remain incomplete.** The [operator runbook](../../bug-fix.md#opt-in-production-lifecycle) records actual command surfaces, metrics, evidence, cleanup response, and executable runner procedures. No real BC replay, checkpoint rehearsal, fault injection, or live canary has run as part of this documentation handoff. Frozen entry-specific patches and an approved production runner are still required; no AL object-ID decision is needed.
+**Handoff status (2026-09-20): canary-preparation capabilities and documentation implemented; whole Task 14 and production promotion remain incomplete.** The [operator runbook](../../bug-fix.md#opt-in-production-lifecycle) records actual command surfaces, metrics, evidence, cleanup response, and executable runner procedures. The controller explicitly expanded Task 14 to implement timeout-marked replay and exact-five workflow selection. No real BC replay, checkpoint rehearsal, fault injection, or live canary has run. Frozen entry-specific patches and an approved production runner are still required; no AL object-ID decision is needed.
 
-Known limits: public replay accepts a patch but cannot mark its agent outcome as timed out; this fifth replay class needs a separately approved capability or gate correction. Dataset `--test-run` selects four entries. Dedicated rehearsal explicitly narrows that sample to two; an exact-five live canary uses five per-entry setup/CLI invocations, not `test-run: true`. Exact-five workflow dispatch selection is not implemented.
+**Closed preparation gaps:** both lifecycle harness commands now accept `--replay-timeout` only with a replay patch, with combination validation after cleanup ownership. The request carries the marker to the existing timeout/result projection without invoking an agent. The optional workflow `canary-entries` JSON-array input validates exactly five distinct IDs against reusable `get-entries` output before evaluation or rehearsal provisioning and drives the matrix. Empty input preserves four-entry/full defaults; dedicated two-entry/ten-cycle selection, cleanup, artifacts, and disabled leaderboard publication are unchanged.
 
-**Final parent code validation at `3cd93494`:** `uv run --frozen --group analysis pytest -q --tb=short` completed with **2,021 passed, 3 skipped, 5 deselected**. `ruff check .` and `ruff format --check src tests` both passed (264 files checked for formatting). This supersedes the earlier full-suite count; the previously reported focused run at that baseline had 275 passed / 1 deselected. These are controller-supplied code-validation results, not independent approval of this documentation or evidence of production canaries. No full suite was rerun for the documentation-only changes.
+**Historical parent validation at `3cd93494` only:** `uv run --frozen --group analysis pytest -q --tb=short` completed with **2,021 passed, 3 skipped, 5 deselected**; `ruff check .` and `ruff format --check src tests` passed (264 files). That result predates these two capability additions and does **not** complete the current full-suite gate. The parent will rerun the full suite; it was not duplicated here.
+
+**Current focused evidence:** TDD initially produced 32 failures / 2 passes for the missing flag/request field and workflow selection. After implementation and correcting test expectations for Rich wrapping and existing setup-failure `not_run` phases, the seven affected CLI/lifecycle/workflow/rehearsal/result/summary/contract suites passed **473 tests**. Current `ruff check .` and `ruff format --check src tests` both pass (264 files). These are local tests, not real canaries or independent approvals.
 
 Reviews remain controller-owned, and no production canaries have run. The local Docker daemon is off, only Store PowerShell is available, BcContainerHelper is 6.1.14 rather than 6.1.18, and runner enumeration was denied (403); do not change the host to force a real canary.
 
-**Documentation verification:** Copilot/Claude/replay example arguments accepted in help-only mode with `uv run --frozen --no-sync`; lifecycle cleanup, dataset, and rehearsal help inspected. Dataset listing returned four and the explicit selector returned five distinct IDs from 52. All eight runbook PowerShell blocks parsed, with repository command parameters checked against their declarations. Link/anchor targets, unchanged leaderboard tables/Liquid/front matter, and all five documented metric projections (including 75% rate / 80% coverage) were checked locally. GitHub source links target eventual `main` publication; this branch remains unpublished, so local target checks do not establish remote availability. Self-review is not a real canary or an independent approval.
+**Documentation verification:** Copilot/Claude/replay examples use `uv run --frozen --no-sync`; the public timeout marker and `gh workflow run --json --ref` dispatch syntax are checked without running evaluations or dispatching. Dataset listing still returns four; selection tests execute the actual workflow Python step against real dataset IDs and verify exactly five output IDs, default passthrough, and invalid-input rejection. Runbook PowerShell syntax, local link/anchor targets, unchanged leaderboard tables/Liquid/front matter, and metric projections are checked locally. GitHub source links target eventual `main` publication; this branch remains unpublished, so local target checks do not establish remote availability. Self-review is not a real canary or an independent approval.
 
 **Files:**
 - Modify: `docs\bug-fix.md`
 - Modify: `README.md`
 - Modify: this plan's Task 14 status/procedures
+- Modify: `src\bcbench\cli_options.py`, `src\bcbench\commands\bugfix_lifecycle.py`, `src\bcbench\evaluate\bugfix_lifecycle\models.py`, `src\bcbench\evaluate\bugfix_lifecycle\lifecycle.py`
+- Modify: `.github\workflows\bugfix-production-evaluation.yml`
+- Modify: `tests\test_cli_commands.py`, `tests\test_bugfix_production_lifecycle.py`, `tests\test_bugfix_lifecycle_workflow.py`
 - Modify: `docs\superpowers\specs\2026-09-16-bugfix-single-container-production-lifecycle-design.md` only if implementation reveals an approved design correction
 
 - [x] **Step 1: Document the opt-in command and metrics**
@@ -1986,29 +1991,29 @@ Document in `README.md`:
 - all three quarantine marker locations and manual containment when identity security is unverified;
 - evaluator versus agent credential variables.
 
-- [ ] **Step 3: Run all targeted tests**
+- [x] **Step 3: Run focused lifecycle regression tests**
 
-Run:
+Run with `UV_NO_SYNC=1` inherited by workflow-script subprocesses:
 
 ```powershell
-uv run pytest tests\test_bugfix_lifecycle_results.py tests\test_bugfix_lifecycle_summary.py tests\test_submission_freeze.py tests\test_bugfix_output.py tests\test_bugfix_lifecycle_evidence.py tests\test_bugfix_lifecycle_workspace.py tests\test_contained_process.py tests\test_agent_env.py tests\test_copilot_cli.py tests\test_claude_agent.py tests\test_bugfix_lifecycle_powershell.py tests\test_bugfix_lifecycle_checkpoint.py tests\test_bugfix_lifecycle_phases.py tests\test_bugfix_production_lifecycle.py tests\test_cli_commands.py tests\test_bugfix_lifecycle_workflow.py tests\test_bugfix_lifecycle_rehearsal.py -v
+uv run --frozen --no-sync pytest -q --tb=short tests\test_cli_commands.py tests\test_bugfix_production_lifecycle.py tests\test_bugfix_lifecycle_workflow.py tests\test_bugfix_lifecycle_rehearsal.py tests\test_bugfix_lifecycle_results.py tests\test_bugfix_lifecycle_summary.py tests\test_bugfix_lifecycle_contracts.py
 ```
 
-Expected: all targeted tests pass.
+Result: 473 passed. Includes both harnesses, owned cleanup on invalid flag combinations, no agent invocation, persisted timeout metadata and passing/unknown metric coverage, five actual matrix IDs, bad input rejection, unchanged defaults, and optional rehearsal dependencies.
 
 - [x] **Step 4: Run formatting and linting**
 
-Parent-verified at `3cd93494`: `ruff check .` and `ruff format --check src tests` both passed; formatting covered 264 files. No formatter or linter rerun was needed for this evidence-only documentation update.
+Current checks: `uv run --frozen --no-sync ruff check .` and `uv run --frozen --no-sync ruff format --check src tests` both passed; formatting covered 264 files.
 
-- [x] **Step 5: Run the full non-e2e suite**
+- [ ] **Step 5: Run the full non-e2e suite**
 
-Parent-verified command at `3cd93494`:
+Parent-owned rerun required after the Task 14 code changes:
 
 ```powershell
 uv run --frozen --group analysis pytest -q --tb=short
 ```
 
-Result: **2,021 passed, 3 skipped, 5 deselected**. This local gate is complete; it does not complete replay, real-runner rehearsal, live canaries, or independent review.
+Prior result at `3cd93494`: **2,021 passed, 3 skipped, 5 deselected**. Do not apply that count to the new revision or mark the current gate complete until the parent reports its rerun.
 
 - [ ] **Step 6: Run a deterministic replay canary**
 
@@ -2022,7 +2027,7 @@ On a production runner, replay at least these frozen submission classes:
 
 For every replay, verify phase evidence, legacy projection, metric coverage, package inventory, container deletion, and absence of quarantine.
 
-Pending: reviewed frozen fixtures and production runner. `--replay-patch` does not carry timeout metadata; no public timeout-marked replay input exists. Do not relabel a unit mock or edited result as this fifth real canary.
+Pending: reviewed frozen fixtures and production runner. For the fifth class use `--replay-patch <protected-patch> --replay-timeout`; this records provenance without running an agent. Do not relabel a unit mock or edited result as a real canary.
 
 - [ ] **Step 7: Run checkpoint rehearsal**
 
@@ -2042,7 +2047,7 @@ Run each supported fault once with fresh setup; see the runbook for exact fault 
 
 - [ ] **Step 9: Run a five-entry live canary**
 
-Use the runbook's five explicit per-entry setup/CLI invocations and one-cycle pre-agent rehearsal hook, inspect every evidence artifact, and confirm:
+Use the runbook's exact-five `canary-entries` workflow dispatch with `test-run: true` and `rehearsal: true`, inspect every evidence artifact, and confirm:
 
 - every phase starts from the intended checkpoint;
 - package inventories match;
@@ -2051,13 +2056,16 @@ Use the runbook's five explicit per-entry setup/CLI invocations and one-cycle pr
 - every container is absent after completion;
 - no unexplained infrastructure classification occurs.
 
-The existing workflow's `test-run: true` runs four sampled entries, not five. `rehearsal: true` separately selects two of the four for ten cycles each. Do not dispatch a full 52-entry run to obtain a fifth entry; an exact-five workflow selection input would be a separate change.
+With empty `canary-entries`, `test-run: true` still runs four sampled entries, not five. Providing five valid IDs overrides only the evaluation matrix; full dataset retrieval is used for membership validation, not a 52-entry run. `rehearsal: true` separately selects two IDs from the four-entry sample for ten cycles each. Actual dispatch remains pending operator approval and a published workflow/production runner.
 
-- [x] **Step 10: Commit documentation**
+- [x] **Step 10: Commit Task 14 capabilities and documentation**
 
 ```powershell
-git add docs\bug-fix.md README.md docs\superpowers\plans\2026-09-16-bugfix-single-container-production-lifecycle.md
-git commit -m "Document bug-fix production evaluation" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+git add README.md docs\bug-fix.md docs\superpowers\plans\2026-09-16-bugfix-single-container-production-lifecycle.md `
+  .github\workflows\bugfix-production-evaluation.yml src\bcbench\cli_options.py src\bcbench\commands\bugfix_lifecycle.py `
+  src\bcbench\evaluate\bugfix_lifecycle\models.py src\bcbench\evaluate\bugfix_lifecycle\lifecycle.py `
+  tests\test_cli_commands.py tests\test_bugfix_production_lifecycle.py tests\test_bugfix_lifecycle_workflow.py
+git commit -m "Complete timeout replay and five-entry canary preparation" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
 - [ ] **Step 11: Request code review**
@@ -2068,8 +2076,9 @@ Separate specification, quality, and final reviews are controller-owned. Skills 
 
 Do not make the production lifecycle the default until all are true:
 
-- [x] Full non-e2e suite and Ruff pass at code baseline `3cd93494` (2,021 passed / 3 skipped / 5 deselected; 264 files format-checked).
-- [ ] Controller records remaining targeted-validation and independent-review gates for the final revision.
+- [x] Current focused suites pass (473 tests), and Ruff lint/format checks pass (264 files).
+- [ ] Parent reruns the full non-e2e suite after the Task 14 capability changes.
+- [ ] Controller records independent specification, quality, and final-review gates for the final revision.
 - [ ] Contained-process timeout leaves no child or grandchild processes.
 - [ ] Restricted agent identity cannot read protected storage or invoke Docker.
 - [ ] Ten consecutive checkpoint restores pass across two representative entries.

@@ -99,9 +99,12 @@ class BugFixLifecycleRequest:
     agent_runtime: AgentRuntimeConfig
     agent_execution_policy: AgentExecutionPolicy
     replay_patch: Path | None = None
+    replay_timeout: bool = False
     rehearsal_iterations: int = 0
 
     def __post_init__(self) -> None:
+        if self.replay_timeout and self.replay_patch is None:
+            raise ValueError("replay_timeout requires replay_patch")
         if type(self.rehearsal_iterations) is not int or not 0 <= self.rehearsal_iterations <= 100:
             raise ValueError("rehearsal_iterations must be an integer between 0 and 100")
         if self.context.entry.instance_id != self.provisioned_resources.instance_id:

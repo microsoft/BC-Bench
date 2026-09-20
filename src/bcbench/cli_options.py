@@ -93,6 +93,14 @@ LifecycleReplayPatch = Annotated[
     ),
 ]
 
+LifecycleReplayTimeout = Annotated[
+    bool,
+    typer.Option(
+        "--replay-timeout",
+        help="Mark a replay patch as originating from a timed-out agent; requires --replay-patch and never runs an agent",
+    ),
+]
+
 LifecycleAgentOsUsername = Annotated[
     str,
     typer.Option(

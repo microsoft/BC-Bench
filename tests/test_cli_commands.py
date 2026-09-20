@@ -679,6 +679,7 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert request.context.agent_name is agent_name
     assert request.context.agent_version == "1.2.3"
     assert request.context.model == default_model
+    assert request.replay_timeout is False
     assert request.context.result_dir == lifecycle_cli_fixture.protected_root.parent / "evaluation_results" / "lifecycle-run"
     assert request.context.result_dir != request.paths.agent_logs
     assert request.paths.baseline_workspace == lifecycle_cli_fixture.entry_root / "baseline-workspace"
@@ -717,7 +718,15 @@ def test_bugfix_lifecycle_composes_production_request_and_agent_runner(
     assert run_agent.call_args.kwargs["execution_policy"] is request.agent_execution_policy
 
 
-def test_bugfix_lifecycle_replay_skips_agent_runner_and_hides_secrets(lifecycle_cli_fixture: LifecycleCliFixture):
+@pytest.mark.parametrize(
+    ("command", "version_function", "runner_function"),
+    [
+        ("copilot", "get_copilot_version", "run_copilot_agent"),
+        ("claude", "get_claude_version", "run_claude_code"),
+    ],
+)
+@pytest.mark.parametrize("replay_timeout", [False, True])
+def test_bugfix_lifecycle_replay_skips_agent_runner_and_hides_secrets(lifecycle_cli_fixture: LifecycleCliFixture, command, version_function, runner_function, replay_timeout):
     captured: dict[str, Any] = {}
 
     class Lifecycle:
@@ -729,17 +738,47 @@ def test_bugfix_lifecycle_replay_skips_agent_runner_and_hides_secrets(lifecycle_
     with (
         patch.object(BugFixEntry, "load", return_value=[lifecycle_cli_fixture.entry]),
         patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request", return_value=Lifecycle()),
-        patch.object(bugfix_lifecycle_commands, "get_copilot_version", return_value="1.2.3"),
-        patch.object(bugfix_lifecycle_commands, "run_copilot_agent") as run_agent,
+        patch.object(bugfix_lifecycle_commands, version_function, return_value="1.2.3"),
+        patch.object(bugfix_lifecycle_commands, runner_function) as run_agent,
     ):
-        result = runner.invoke(app, ["--verbose", *lifecycle_cli_fixture.args("copilot", replay=True)])
+        args = ["--verbose", *lifecycle_cli_fixture.args(command, replay=True)]
+        if replay_timeout:
+            args.append("--replay-timeout")
+        result = runner.invoke(app, args)
 
     assert result.exit_code == 0, result.stdout
     assert captured["request"].replay_patch == lifecycle_cli_fixture.replay_patch
+    assert captured["request"].replay_timeout is replay_timeout
     run_agent.assert_not_called()
     for secret in ("os-secret", "bc-secret", "evaluator-secret"):
         assert secret not in result.stdout
         assert secret not in result.stderr
+
+
+@pytest.mark.parametrize("command", ["copilot", "claude"])
+def test_bugfix_lifecycle_replay_timeout_without_patch_cleans_up_before_rejecting(lifecycle_cli_fixture: LifecycleCliFixture, command):
+    with (
+        patch.object(BugFixEntry, "load") as load_entry,
+        patch.object(bugfix_lifecycle_commands, "get_copilot_version") as copilot_version,
+        patch.object(bugfix_lifecycle_commands, "get_claude_version") as claude_version,
+        patch.object(bugfix_lifecycle_commands.ProductionBugFixLifecycle, "from_request") as lifecycle_factory,
+        patch.object(bugfix_lifecycle_commands.LifecycleCleanup, "run", autospec=True, return_value=None) as cleanup,
+        patch.object(bugfix_lifecycle_commands.RawSetupCleanup, "run") as raw_cleanup,
+    ):
+        result = runner.invoke(app, [*lifecycle_cli_fixture.args(command), "--replay-timeout"])
+
+    assert result.exit_code == 2
+    for message in ("--replay-timeout", "requires", "--replay-patch"):
+        assert message in result.stdout + result.stderr
+    cleanup.assert_called_once()
+    resources = cleanup.call_args.args[0].resources
+    assert resources.paths.entry_root == lifecycle_cli_fixture.entry_root
+    assert resources.expected_container_id == "container-id"
+    raw_cleanup.assert_not_called()
+    load_entry.assert_not_called()
+    copilot_version.assert_not_called()
+    claude_version.assert_not_called()
+    lifecycle_factory.assert_not_called()
 
 
 @pytest.mark.parametrize("mcp_env", [None, ""])

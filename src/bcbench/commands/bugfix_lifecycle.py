@@ -45,6 +45,7 @@ from bcbench.cli_options import (
     LifecycleProtectedRoot,
     LifecyclePythonBasePrefix,
     LifecycleReplayPatch,
+    LifecycleReplayTimeout,
     LifecycleStagedWorkerPath,
     LifecycleStagedWorkerSha256,
     RunId,
@@ -124,6 +125,7 @@ def bugfix_lifecycle_copilot(
     cleanup_tool_roots_json: LifecycleCleanupToolRootsJson = None,
     owned_compiler_helper_roots: LifecycleOwnedCompilerHelperRoots = None,
     replay_patch: LifecycleReplayPatch = None,
+    replay_timeout: LifecycleReplayTimeout = False,
     evaluator_container_config: LifecycleEvaluatorContainerConfig = None,
     agent_container_config: LifecycleAgentContainerConfig = None,
     container_name: ContainerName = "",
@@ -147,6 +149,7 @@ def bugfix_lifecycle_copilot(
         protected_root=protected_root,
         dataset_path=dataset_path,
         replay_patch=replay_patch,
+        replay_timeout=replay_timeout,
         agent_os_username=agent_os_username,
         agent_os_password=agent_os_password,
         agent_bc_username=agent_bc_username,
@@ -211,6 +214,7 @@ def bugfix_lifecycle_claude(
     cleanup_tool_roots_json: LifecycleCleanupToolRootsJson = None,
     owned_compiler_helper_roots: LifecycleOwnedCompilerHelperRoots = None,
     replay_patch: LifecycleReplayPatch = None,
+    replay_timeout: LifecycleReplayTimeout = False,
     evaluator_container_config: LifecycleEvaluatorContainerConfig = None,
     agent_container_config: LifecycleAgentContainerConfig = None,
     container_name: ContainerName = "",
@@ -234,6 +238,7 @@ def bugfix_lifecycle_claude(
         protected_root=protected_root,
         dataset_path=dataset_path,
         replay_patch=replay_patch,
+        replay_timeout=replay_timeout,
         agent_os_username=agent_os_username,
         agent_os_password=agent_os_password,
         agent_bc_username=agent_bc_username,
@@ -284,6 +289,7 @@ def _run_lifecycle(
     protected_root: Path,
     dataset_path: Path,
     replay_patch: Path | None,
+    replay_timeout: bool,
     agent_os_username: str,
     agent_os_password: str,
     agent_bc_username: str,
@@ -368,6 +374,7 @@ def _run_lifecycle(
             protected_root=protected_root,
             dataset_path=dataset_path,
             replay_patch=replay_patch,
+            replay_timeout=replay_timeout,
             agent_os_username=agent_os_username,
             agent_os_password=agent_os_password,
             agent_bc_username=agent_bc_username,
@@ -416,6 +423,7 @@ def _run_lifecycle_after_lease(
     protected_root: Path,
     dataset_path: Path,
     replay_patch: Path | None,
+    replay_timeout: bool,
     agent_os_username: str,
     agent_os_password: str,
     agent_bc_username: str,
@@ -449,6 +457,8 @@ def _run_lifecycle_after_lease(
     agent_version: Callable[[], str],
     agent_runner: LifecycleAgentInvoker,
 ) -> None:
+    if replay_timeout and replay_patch is None:
+        raise typer.BadParameter("--replay-timeout requires --replay-patch", param_hint="--replay-timeout")
     if output_dir.exists():
         _require_directory(output_dir, "--output-dir")
     paths = _validated_paths(entry_root, protected_root)
@@ -548,6 +558,7 @@ def _run_lifecycle_after_lease(
         cleanup_lease=cleanup_lease,
         dataset_path=dataset_path,
         replay_patch=replay_patch,
+        replay_timeout=replay_timeout,
         staged_worker_sha256=staged_worker_sha256,
         agent_os_password=agent_os_password,
         evaluator_container=evaluator_container,
@@ -566,6 +577,7 @@ def _run_lifecycle_with_cleanup_lease(
     cleanup_lease: CleanupLease,
     dataset_path: Path,
     replay_patch: Path | None,
+    replay_timeout: bool,
     staged_worker_sha256: str,
     agent_os_password: str,
     evaluator_container: ContainerConfig,
@@ -629,6 +641,7 @@ def _run_lifecycle_with_cleanup_lease(
             agent_runtime=agent_runtime,
             agent_execution_policy=execution_policy,
             replay_patch=replay_patch,
+            replay_timeout=replay_timeout,
             rehearsal_iterations=int(os.environ.get("BCBENCH_LIFECYCLE_REHEARSAL_ITERATIONS", "0")),
         )
     except ValueError as error:

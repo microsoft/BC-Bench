@@ -75,7 +75,7 @@ Comparing experimental configurations for GitHub Copilot with **claude-opus-4.6*
 
 **Workflow:** [Opt-in production bug-fix evaluation](https://github.com/microsoft/BC-Bench/blob/main/.github/workflows/bugfix-production-evaluation.yml), file `.github\workflows\bugfix-production-evaluation.yml`. It runs only by explicit dispatch, uses `production: true` in summarization, and keeps `skip-leaderboard: true`. Do not change the default workflows or publish these results to the legacy leaderboard as part of a canary.
 
-**Status:** documentation and operator preparation do not establish production readiness. Real-runner replay fixtures, checkpoint/fault rehearsals, and live canaries remain pending. The timeout-marked replay class also lacks a public input, described below. No production runner or frozen canary patches are supplied by this runbook.
+**Status:** timeout-marked replay and explicit five-entry workflow selection are implemented, but operator preparation does not establish production readiness. Real-runner replay fixtures, checkpoint/fault rehearsals, live canaries, and controller validation/reviews remain pending. No production runner or frozen canary patches are supplied by this runbook.
 
 ### Methodology and metrics
 
@@ -136,9 +136,15 @@ uv run --frozen --no-sync bcbench bugfix-lifecycle copilot $InstanceId `
   --model claude-sonnet-5 --replay-patch $env:BCBENCH_LIFECYCLE_REPLAY_PATCH `
   --dataset-path $env:BCBENCH_LIFECYCLE_DATASET_PATH `
   --output-dir C:\bcbench-results --run-id task14-replay
+
+# Alternative timeout-marked replay, also supported by copilot:
+uv run --frozen --no-sync bcbench bugfix-lifecycle claude $InstanceId `
+  --model claude-sonnet-5 --replay-patch $env:BCBENCH_LIFECYCLE_REPLAY_PATCH --replay-timeout `
+  --dataset-path $env:BCBENCH_LIFECYCLE_DATASET_PATH `
+  --output-dir C:\bcbench-results --run-id task14-timeout-replay
 ```
 
-The replay input is a complete frozen diff against that entry's trusted prepared source, not a fabricated gold fix/test pair. Setup copies `-ReplayPatch` into `<ProtectedRoot>\replay.patch`; the CLI's `--replay-patch` must be a regular file **inside the protected root**. Replay bypasses agent execution, not baseline setup, isolation checks, official phases, or cleanup. A replay run writes `execution_mode: replay`.
+The replay input is a complete frozen diff against that entry's trusted prepared source, not a fabricated gold fix/test pair. Setup copies `-ReplayPatch` into `<ProtectedRoot>\replay.patch`; the CLI's `--replay-patch` must be a regular file **inside the protected root**. Replay bypasses agent execution, not baseline setup, isolation checks, official phases, or cleanup. A replay run writes `execution_mode: replay`. `--replay-timeout` records that the patch originated from a timed-out agent; it never launches, sleeps, or times out an agent. Without a replay patch it is an explicit error after cleanup ownership is acquired.
 
 Keep result output outside both owned roots. Successful result persistence writes `<output-dir>\<run-id>\<instance-id>.jsonl` plus `<ProtectedRoot>\final-results\final-result.json`. Use a new run ID for independent attempts; do not infer successful evaluation from CLI exit code alone. Read the result and cleanup evidence. Always finalize even when setup/CLI fails:
 
@@ -310,10 +316,13 @@ These are necessary checks, not substitutes for phase evidence or verified Job O
 
 Obtain reviewed, frozen **entry-specific** patches and record their SHA-256, source/dataset revision, expected test identity, and expected class before execution. They are **not available here**. Do not manufacture them by copying the trusted gold/benchmark patches, substitute a unit mock, or claim replay success from a schema test.
 
-For each available class below, set `$InstanceId` to its dataset entry and `$ReplaySource` to the reviewed patch file, then run on a fresh provisioned runner invocation. With the standalone helper defined above:
+For each class below, set `$InstanceId` to its dataset entry and `$ReplaySource` to the reviewed patch file, then run on a fresh provisioned runner invocation. Set `$ReplayTimedOut` to `$true` only for the timeout-marked class and record that provenance with the fixture hash. With the standalone helper defined above:
 
 ```powershell
 $runId = 'task14-replay-' + [Guid]::NewGuid().ToString('N')
+$ReplayTimedOut = $false # Set to $true for the timeout-marked fixture.
+$replayOptions = @()
+if ($ReplayTimedOut) { $replayOptions += '--replay-timeout' }
 Get-FileHash -LiteralPath $ReplaySource -Algorithm SHA256
 Invoke-PreparedCanary -InstanceId $InstanceId -ReplaySource $ReplaySource -Operation {
   param($InstanceId)
@@ -322,7 +331,7 @@ Invoke-PreparedCanary -InstanceId $InstanceId -ReplaySource $ReplaySource -Opera
     -ExpectedInvocationId $env:BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID
   uv run --frozen --no-sync bcbench bugfix-lifecycle copilot $InstanceId `
     --model claude-sonnet-5 --replay-patch $env:BCBENCH_LIFECYCLE_REPLAY_PATCH `
-    --output-dir C:\bcbench-results --run-id $runId
+    --output-dir C:\bcbench-results --run-id $runId @replayOptions
   if ($LASTEXITCODE -ne 0) { throw 'Replay execution failed; inspect protected evidence.' }
 }
 ```
@@ -335,9 +344,9 @@ These expected outcomes assume the fixture isolates the named condition and all 
 | Invalid T, valid F | I / I / P / I / P; structural T rejection, but fixed package/SF and benchmark evidence still exist | false / false / true / true / false | Validity, transition, Resolution are invalid; FixBuild/FixQuality pass. All five determined. |
 | Generated **fix** build failure, valid T | P / P / F / N / N; generated-product compiler failure, no SF, pair/benchmark state their missing prerequisite | true / false / false / false / false | Validity passes; FixBuild and Resolution fail. Transition/FixQuality unknown (0% coverage for those metrics), not fabricated test failures. |
 | Wrong red outcome, otherwise valid pair/fix | F / P / P / P / P; exact generated test executed but passed on O | false / true / true / true / false | Validity/transition/Resolution fail; FixBuild/FixQuality pass. All five determined. |
-| Timeout-marked otherwise successful patch | Intended: P / P / P / P / P plus `timeout: true` | true / true / true / true / false | Intended: first four pass, Resolution known failure. **Public replay cannot currently supply this marker.** |
+| Timeout-marked otherwise successful patch (`--replay-timeout`) | P / P / P / P / P plus `timeout: true`, `execution_mode: replay` | true / true / true / true / false | First four pass, Resolution is a known failure. Diagnostic phase outcomes and coverage are retained. |
 
-**Timeout replay gap:** `--replay-patch` accepts only patch text. Neither lifecycle CLI nor `BugFixLifecycleRequest` provides a replay timeout/outcome input; `timeout` is set when a **live** runner raises `AgentTimeoutError`. There is no supported `--replay-timeout` flag or marker embedded in a patch. Replaying a patch captured after an actual timeout loses that timeout metadata and does not complete this gate. An approved public replay-outcome capability (with provenance/validation) or an explicitly revised gate is required from the controller before this fifth deterministic class can run. Editing result JSON after the fact is not acceptable evidence. No feature implementation is included in this documentation task.
+**Timeout provenance:** both `copilot` and `claude` accept `--replay-timeout` with `--replay-patch` (including a patch supplied by the setup environment). The underlying `BugFixLifecycleRequest.replay_timeout` defaults to false and requires `replay_patch`. Marked replay persists `timeout: true` in both result JSONL and protected final JSON, uses the existing Resolution rule, and still never invokes the agent. Even when baseline/diagnostic phases are unknown, Resolution remains a determined failure with full coverage for that metric; other metrics retain their own coverage. Plain replay/live behavior is unchanged. The flag is provenance supplied by the operator, not proof of a newly observed timeout: there is no JSON patch-metadata format, patch-content inference, or permission to edit result JSON after the fact. Actual frozen fixtures and real-runner evidence are still required to complete all five replay gates.
 
 ### Checkpoint rehearsal and fault injection
 
@@ -397,9 +406,13 @@ Inspect `final-results\rehearsal\checkpoints.json`, `iteration-0001.json` throug
 
 ### Five-entry live canary and promotion
 
-`uv run bcbench dataset list --category bug-fix --test-run` returns **four** sampled entries, not two or five. The existing workflow has no explicit entry-list/count input: `test-run: true` runs four; `false` selects the full dataset (currently 52). **Do not use `test-run: false` to get a fifth entry or call a four-entry run a five-entry canary.**
+`uv run bcbench dataset list --category bug-fix --test-run` still returns **four** sampled entries, not two or five. With empty `canary-entries`, the workflow preserves its defaults: `test-run: true` runs four; `false` selects the full dataset (currently 52). **Do not use a full run to get a fifth entry or call a four-entry run a five-entry canary.**
 
-The supported exact-five path is **per-entry lifecycle CLI execution**, with separate setup/finalization per ID. Select five distinct reviewed IDs from the actual dataset, record the selection/revision before any paid execution, and keep one agent/model/tooling configuration for the run. This executable selection example chooses five sorted IDs; replace that selection with a reviewed representative five when appropriate, still enforcing the count:
+Supply **`canary-entries`**, a JSON-array string of exactly five distinct bug-fix IDs, for the exact-five **workflow** path. The reusable `get-entries` job retrieves all bug-fix IDs for membership validation only; this does not schedule a full evaluation. The selection job rejects malformed, duplicate, wrong-count, non-string, and unknown values before **either evaluation or dedicated rehearsal provisions resources**. It preserves requested order and passes the validated list to the evaluation matrix (`max-parallel: 4`). Input data travels through environment variables, not shell-source interpolation.
+
+The selection overrides only the matrix. Keep **`test-run: true`** for the one-cycle pre-agent rehearsal on each selected entry and canary artifact retention; `rehearsal: true` additionally retains the separate two-entry/ten-cycle gate. Its two IDs still come from the ordinary four-entry sample, not from the explicit five. Cleanup, separate artifacts, summary filtering, and `skip-leaderboard: true` remain unchanged.
+
+Select five reviewed IDs from the actual dataset and record the selection/revision before any paid execution. This example selects five sorted IDs; replace them with a reviewed representative five as appropriate. The dispatch is an **operator action only after the matching workflow revision is published/available, a production runner is approved, and the earlier gates pass**; it has not been executed here:
 
 ```powershell
 Import-Module .\scripts\BCBenchUtils.psm1 -Force -DisableNameChecking
@@ -408,32 +421,29 @@ $entries = @(Get-Content -LiteralPath $dataset | Where-Object { $_.Trim() } |
   ForEach-Object { ($_ | ConvertFrom-Json).instance_id } | Sort-Object -Unique | Select-Object -First 5)
 if ($entries.Count -ne 5) { throw 'Exactly five distinct dataset entries are required.' }
 $entries
-$runId = 'task14-live-' + [Guid]::NewGuid().ToString('N')
-# Requires operator approval, provisioned runner, and agent auth in ENV.
-foreach ($entry in $entries) {
-  Invoke-PreparedCanary -InstanceId $entry -Operation {
-    param($InstanceId)
-    $env:BCBENCH_LIFECYCLE_REHEARSAL_ITERATIONS = '1'
-    Start-BCBenchWorkflowExecution -ProtectedRoot $env:BCBENCH_LIFECYCLE_PROTECTED_ROOT `
-      -ExpectedContainerId $env:BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID `
-      -ExpectedInvocationId $env:BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID
-    uv run --frozen --no-sync bcbench bugfix-lifecycle copilot $InstanceId `
-      --model claude-sonnet-5 --output-dir C:\bcbench-results --run-id $runId
-    if ($LASTEXITCODE -ne 0) { throw 'Live canary execution failed; inspect evidence before continuing.' }
-  }
+$ref = git branch --show-current
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ref)) {
+  throw 'Check out the approved published workflow branch first.'
 }
+$dispatch = @{
+  agent = 'copilot'
+  model = 'claude-sonnet-5'
+  'test-run' = 'true'
+  rehearsal = 'true'
+  'canary-entries' = (ConvertTo-Json -InputObject $entries -Compress)
+} | ConvertTo-Json -Compress
+$dispatch | gh workflow run bugfix-production-evaluation.yml --ref $ref --json
+if ($LASTEXITCODE -ne 0) { throw 'Canary dispatch failed.' }
 ```
 
-Use `claude` instead of `copilot` for a separate approved Claude canary, not a mixed five-entry denominator. Archive all five protected evidence roots and result JSONL files manually for this CLI path; workflow artifact uploads do not run locally. Require five results with the chosen IDs and `execution_mode: live`, the one-cycle pre-agent rehearsal, phase/inventory/test evidence, and successful cleanup without quarantine. Success here means **valid evaluation and cleanup**, not requiring the agent to solve every task.
-
-If GitHub Actions must own exact-five selection, an explicit-list/count workflow capability remains a **separate, unimplemented change**. The current four-entry dispatch can be an additional smoke run, but does not complete this gate. No dispatch or full-dataset run is part of documentation preparation.
+Use `claude` instead of `copilot` for a separate approved Claude canary, not a mixed five-entry denominator. Inspect all five result/evidence artifacts and their selected IDs, `execution_mode: live`, one-cycle pre-agent rehearsal, phase/inventory/test evidence, and successful cleanup without quarantine. Success here means **valid evaluation and cleanup**, not requiring the agent to solve every task. Per-entry lifecycle CLI execution remains available for local operators, but the workflow now supports the exact-five gate directly. No dispatch or full-dataset run is part of this preparation.
 
 **Promotion gates remain unchecked until the controller records real evidence:**
 
 - [ ] Controller-owned targeted/full non-E2E tests, Ruff, and separate specification/quality/final reviews pass for the final revision.
 - [ ] Real restricted-identity access denial and contained-process timeout leave no surviving children/grandchildren; native PowerShell cleanup is verified.
 - [ ] Two representative entries each complete ten consecutive checkpoint cycles, all supported injected faults are correctly classified, and clean official S0 is verified.
-- [ ] All five deterministic submission classes are replayed with reviewed fixtures; resolve the missing public timeout-marker capability first.
+- [ ] All five deterministic submission classes are replayed with reviewed fixtures, including explicit `--replay-timeout` provenance for the timeout-marked class.
 - [ ] Five distinct live entries have complete result/evidence/coverage and verified deletion with no unexplained infrastructure failures or quarantine.
 - [ ] All five metric summaries have correct per-metric counts/rate/coverage, and isolation modes have distinct combination keys.
 - [ ] Opt-in results remain excluded from leaderboard publication while the gates are pending.

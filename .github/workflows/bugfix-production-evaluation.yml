@@ -18,6 +18,11 @@ on:
         description: Evaluate four sampled canary entries rather than the full dataset
         type: boolean
         default: true
+      canary-entries:
+        description: Optional JSON array of exactly five distinct bug-fix entry IDs; overrides the evaluation matrix
+        type: string
+        required: false
+        default: ""
       al-mcp:
         description: Enable evaluator-owned AL MCP
         type: boolean
@@ -77,10 +82,42 @@ jobs:
     uses: $/.github/workflows/get-entries.yml
     with:
       category: bug-fix
-      test-run: ${{ inputs.test-run }}
+      test-run: ${{ inputs.canary-entries == '' && inputs.test-run }}
+
+  select-entries:
+    needs: get-entries
+    runs-on: ubuntu-latest
+    outputs:
+      entries: ${{ steps.select.outputs.entries }}
+    steps:
+      - name: Validate explicit canary selection before any provisioning
+        id: select
+        shell: python {0}
+        env:
+          ENTRIES: ${{ needs.get-entries.outputs.entries }}
+          CANARY_ENTRIES: ${{ inputs.canary-entries }}
+        run: |
+          import json
+          import os
+          entries = json.loads(os.environ["ENTRIES"])
+          if not isinstance(entries, list) or not all(isinstance(entry, str) and entry.strip() for entry in entries):
+              raise SystemExit("Expected a JSON array of bug-fix dataset entry IDs.")
+          requested = os.environ["CANARY_ENTRIES"]
+          if requested:
+              try:
+                  selected = json.loads(requested)
+              except json.JSONDecodeError as error:
+                  raise SystemExit("canary-entries must be a JSON array of exactly five distinct bug-fix entry IDs.") from error
+              if not isinstance(selected, list) or len(selected) != 5 or not all(isinstance(entry, str) and entry.strip() for entry in selected) or len(set(selected)) != 5:
+                  raise SystemExit("canary-entries must contain exactly five distinct bug-fix entry IDs.")
+              if not set(selected).issubset(entries):
+                  raise SystemExit("canary-entries contains unknown bug-fix entry IDs.")
+              entries = selected
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("entries=" + json.dumps(entries) + "\n")
 
   rehearsal-entries:
-    needs: validate
+    needs: select-entries
     if: inputs.rehearsal
     uses: $/.github/workflows/get-entries.yml
     with:
@@ -216,8 +253,8 @@ jobs:
           }
 
   evaluate:
-    needs: [get-entries, rehearsal]
-    if: always() && !cancelled() && needs.get-entries.result == 'success' && needs.get-entries.outputs.entries != '[]' && (needs.rehearsal.result == 'success' || (!inputs.rehearsal && needs.rehearsal.result == 'skipped'))
+    needs: [select-entries, rehearsal]
+    if: always() && !cancelled() && needs.select-entries.result == 'success' && needs.select-entries.outputs.entries != '[]' && (needs.rehearsal.result == 'success' || (!inputs.rehearsal && needs.rehearsal.result == 'skipped'))
     runs-on: GitHub-BCBench
     environment:
       name: ado-read
@@ -230,7 +267,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry: ${{ fromJson(needs.select-entries.outputs.entries) }}
     name: ${{ inputs.agent }} - ${{ matrix.entry }}
     steps:
       - uses: actions/checkout@v5

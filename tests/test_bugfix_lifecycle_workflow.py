@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from collections import Counter
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from bcbench.commands.dataset import list_entries
+from bcbench.types import EvaluationCategory
 from tests.conftest import create_dataset_entry
 
 ROOT = Path(__file__).parents[1]
@@ -31,20 +34,108 @@ def test_opt_in_dispatch_and_fixed_bugfix_matrix() -> None:
     # PyYAML's YAML 1.1 loader treats the unquoted Actions "on" key as True.
     assert set(workflow[True]) == {"workflow_dispatch"}
     inputs = workflow[True]["workflow_dispatch"]["inputs"]
-    assert set(inputs) == {"agent", "model", "test-run", "al-mcp", "al-lsp", "bc-mcp", "rehearsal"}
+    assert set(inputs) == {"agent", "model", "test-run", "al-mcp", "al-lsp", "bc-mcp", "rehearsal", "canary-entries"}
     assert inputs["agent"]["options"] == ["copilot", "claude"]
     assert inputs["model"]["type"] == "string"
     assert inputs["rehearsal"]["default"] is False
+    assert inputs["test-run"]["default"] is True
+    assert inputs["canary-entries"]["type"] == "string"
+    assert inputs["canary-entries"]["default"] == ""
+    assert inputs["canary-entries"]["required"] is False
     jobs = workflow["jobs"]
     assert jobs["get-entries"]["uses"] == "$/.github/workflows/get-entries.yml"
-    assert jobs["get-entries"]["with"] == {"category": "bug-fix", "test-run": "${{ inputs.test-run }}"}
+    assert jobs["get-entries"]["with"] == {"category": "bug-fix", "test-run": "${{ inputs.canary-entries == '' && inputs.test-run }}"}
     evaluate = jobs["evaluate"]
     assert evaluate["runs-on"] == "GitHub-BCBench"
     assert evaluate["strategy"] == {
         "fail-fast": False,
         "max-parallel": 4,
-        "matrix": {"entry": "${{ fromJson(needs.get-entries.outputs.entries) }}"},
+        "matrix": {"entry": "${{ fromJson(needs.select-entries.outputs.entries) }}"},
     }
+
+
+def _dataset_entry_ids(tmp_path: Path, monkeypatch, *, test_run: bool) -> list[str]:
+    output = tmp_path / "dataset-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    list_entries(category=EvaluationCategory.BUG_FIX, github_output="entries", test_run=test_run)
+    return json.loads(output.read_text(encoding="utf-8").split("=", 1)[1])
+
+
+def _run_canary_selection(tmp_path: Path, entries: list[str], canary_entries: str) -> tuple[subprocess.CompletedProcess[str], Path]:
+    job = _load(WORKFLOW)["jobs"]["select-entries"]
+    assert job["needs"] == "get-entries"
+    assert job["runs-on"] == "ubuntu-latest"
+    assert job["outputs"]["entries"] == "${{ steps.select.outputs.entries }}"
+    step = _step(job["steps"], "select")
+    assert step["shell"] == "python {0}"
+    assert step["env"] == {"ENTRIES": "${{ needs.get-entries.outputs.entries }}", "CANARY_ENTRIES": "${{ inputs.canary-entries }}"}
+    assert "${{" not in step["run"]
+    output = tmp_path / "selected-output"
+    result = subprocess.run(
+        [sys.executable, "-c", step["run"]],
+        env={**os.environ, "ENTRIES": json.dumps(entries), "CANARY_ENTRIES": canary_entries, "GITHUB_OUTPUT": str(output)},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    return result, output
+
+
+def test_explicit_canary_matrix_contains_exactly_five_actual_dataset_ids(tmp_path: Path, monkeypatch) -> None:
+    entries = _dataset_entry_ids(tmp_path, monkeypatch, test_run=False)
+    selected = list(reversed(sorted(entries)[:5]))
+    assert len(entries) > 5
+    result, output = _run_canary_selection(tmp_path, entries, json.dumps(selected))
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text(encoding="utf-8").split("=", 1)[1]) == selected
+    assert _load(WORKFLOW)["jobs"]["evaluate"]["strategy"]["matrix"]["entry"] == "${{ fromJson(needs.select-entries.outputs.entries) }}"
+
+
+@pytest.mark.parametrize("test_run", [False, True])
+def test_empty_canary_selection_preserves_actual_full_or_four_entry_output(tmp_path: Path, monkeypatch, test_run: bool) -> None:
+    entries = _dataset_entry_ids(tmp_path, monkeypatch, test_run=test_run)
+    assert len(entries) == 4 if test_run else len(entries) > 5
+    result, output = _run_canary_selection(tmp_path, entries, "")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text(encoding="utf-8").split("=", 1)[1]) == entries
+
+
+@pytest.mark.parametrize("invalid", ["malformed", "whitespace", "object", "null", "four", "six", "duplicate", "unknown", "non-string", "blank", "nested", "injection"])
+def test_invalid_canary_selection_emits_no_provisioning_matrix(tmp_path: Path, monkeypatch, invalid: str) -> None:
+    entries = _dataset_entry_ids(tmp_path, monkeypatch, test_run=False)
+    selected = entries[:5]
+    raw = {
+        "malformed": "[",
+        "whitespace": " ",
+        "object": "{}",
+        "null": "null",
+        "four": json.dumps(entries[:4]),
+        "six": json.dumps(entries[:6]),
+        "duplicate": json.dumps([*selected[:4], selected[0]]),
+        "unknown": json.dumps([*selected[:4], "not-a-bugfix-entry"]),
+        "non-string": json.dumps([*selected[:4], 123]),
+        "blank": json.dumps([*selected[:4], ""]),
+        "nested": json.dumps([*selected[:4], [selected[4]]]),
+        "injection": json.dumps([*selected[:4], "'; throw 'injected"]),
+    }[invalid]
+    result, output = _run_canary_selection(tmp_path, entries, raw)
+    assert result.returncode != 0
+    assert "canary-entries" in result.stderr
+    assert not output.exists()
+
+
+def test_selection_validation_gates_all_provisioning_with_optional_rehearsal() -> None:
+    jobs = _load(WORKFLOW)["jobs"]
+    assert jobs["get-entries"]["needs"] == "validate"
+    assert jobs["rehearsal-entries"]["needs"] == "select-entries"
+    assert jobs["select-rehearsal-entries"]["needs"] == "rehearsal-entries"
+    assert jobs["rehearsal"]["needs"] == "select-rehearsal-entries"
+    evaluate = jobs["evaluate"]
+    assert evaluate["needs"] == ["select-entries", "rehearsal"]
+    assert "needs.select-entries.result == 'success'" in evaluate["if"]
+    assert "needs.select-entries.outputs.entries != '[]'" in evaluate["if"]
+    assert "(needs.rehearsal.result == 'success' || (!inputs.rehearsal && needs.rehearsal.result == 'skipped'))" in evaluate["if"]
 
 
 def test_tooling_precedes_restricted_setup_and_cli_uses_environment_contract() -> None:

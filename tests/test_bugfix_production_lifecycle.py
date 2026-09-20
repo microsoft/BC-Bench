@@ -1442,20 +1442,63 @@ def test_agent_error_freezes_result_then_propagates_after_cleanup(tmp_path: Path
     assert calls.index("save-final-result") < calls.index("remove-container")
 
 
-def test_replay_skips_agent_and_still_cleans_up(tmp_path: Path) -> None:
-    request, lifecycle, calls, _, _, _ = _harness(tmp_path)
+@pytest.mark.parametrize("replay_timeout", [False, True])
+@pytest.mark.parametrize("diagnostics", ["passed", "unknown", "setup-failure"])
+def test_replay_skips_agent_and_still_cleans_up(tmp_path: Path, replay_timeout: bool, diagnostics: str) -> None:
+    request, lifecycle, calls, _, _, phases = _harness(tmp_path)
     replay = request.paths.protected_root / "replay.patch"
     replay.parent.mkdir(parents=True)
     replay.write_text("F+T", encoding="utf-8")
-    request = BugFixLifecycleRequest(**{**request.__dict__, "replay_patch": replay})
+    request = replace(request, replay_patch=replay, replay_timeout=replay_timeout)
+    if diagnostics == "unknown":
+        phases.statuses = dict.fromkeys(phases.statuses, BugFixPhaseStatus.INFRASTRUCTURE_ERROR)
+    elif diagnostics == "setup-failure":
+        lifecycle._setup_repo = Mock(side_effect=RuntimeError("baseline unavailable"))
 
-    result = lifecycle.run(request, _agent(calls))
+    agent = Mock(side_effect=AssertionError("Replay must never invoke an agent"))
+    result = lifecycle.run(request, agent)
 
+    agent.assert_not_called()
     assert "agent" not in calls
     assert "freeze" not in calls
     assert result.execution_mode == "replay"
-    assert result.timeout is False
+    assert result.timeout is replay_timeout
     assert "remove-container" in calls
+    expected = {
+        "passed": BugFixPhaseStatus.PASSED,
+        "unknown": BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+        "setup-failure": BugFixPhaseStatus.NOT_RUN,
+    }[diagnostics]
+    assert result.test_red.status is expected
+    assert result.test_gold.status is expected
+    assert result.fix_build.status is expected
+    summary = BugFixResultSummary.from_results([result], run_id="replay")
+    for metric in BugFixMetricName:
+        metric_summary = summary.metric_summaries[metric]
+        if metric is BugFixMetricName.RESOLUTION and replay_timeout:
+            assert result.metric_status(metric) is BugFixPhaseStatus.FAILED
+            assert metric_summary.determined_failures == 1
+            assert metric_summary.rate == 0
+            assert metric_summary.coverage == 1
+        else:
+            assert metric_summary.successes == (diagnostics == "passed")
+            assert metric_summary.unknown == (diagnostics != "passed")
+            assert metric_summary.coverage == (diagnostics == "passed")
+    assert result.resolved is (diagnostics == "passed" and not replay_timeout)
+    assert result.infrastructure_failure is (diagnostics != "passed" and not replay_timeout)
+    for path in (request.paths.final_results / "final-result.json", request.context.result_dir / f"{request.context.entry.instance_id}.jsonl"):
+        persisted = json.loads(path.read_text(encoding="utf-8"))
+        assert persisted["timeout"] is replay_timeout
+        assert persisted["execution_mode"] == "replay"
+        assert persisted["resolved"] is result.resolved
+        assert persisted["test_red"]["status"] == expected.value
+
+
+def test_replay_timeout_request_requires_replay_patch(tmp_path: Path) -> None:
+    request, _, calls, _, _, _ = _harness(tmp_path)
+    with pytest.raises(ValueError, match="replay_timeout requires replay_patch"):
+        replace(request, replay_timeout=True)
+    assert calls == []
 
 
 def test_unexpected_exception_persists_emergency_and_cleans_up(tmp_path: Path) -> None:
