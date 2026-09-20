@@ -1946,12 +1946,21 @@ git commit -m "Add bug-fix checkpoint rehearsal" -m "Co-authored-by: Copilot <22
 
 ## Task 14: Document, Validate, and Prepare Promotion
 
+**Handoff status (2026-09-20): documentation/canary preparation only; whole Task 14 and production promotion remain incomplete.** The [operator runbook](../../bug-fix.md#opt-in-production-lifecycle) records actual command surfaces, metrics, evidence, cleanup response, and executable runner procedures. No real BC replay, checkpoint rehearsal, fault injection, or live canary has run as part of this documentation handoff. Frozen entry-specific patches and an approved production runner are still required; no AL object-ID decision is needed.
+
+Known limits: public replay accepts a patch but cannot mark its agent outcome as timed out; this fifth replay class needs a separately approved capability or gate correction. Dataset `--test-run` selects four entries. Dedicated rehearsal explicitly narrows that sample to two; an exact-five live canary uses five per-entry setup/CLI invocations, not `test-run: true`. Exact-five workflow dispatch selection is not implemented.
+
+Validation/reviews remain controller-owned. Prior evidence supplied for this handoff: 2,013 passed / 3 skipped / 5 deselected at `0c827d01`; after the `3cd93494` baseline guard correction, 275 focused tests passed / 1 deselected and Ruff was clean. These are historical results, not a claim that the final documentation revision received full validation or independent review. The local Docker daemon is off, only Store PowerShell is available, BcContainerHelper is 6.1.14 rather than 6.1.18, and runner enumeration was denied (403); do not change the host to force a real canary.
+
+**Documentation verification:** Copilot/Claude/replay example arguments accepted in help-only mode with `uv run --frozen --no-sync`; lifecycle cleanup, dataset, and rehearsal help inspected. Dataset listing returned four and the explicit selector returned five distinct IDs from 52. All eight runbook PowerShell blocks parsed, with repository command parameters checked against their declarations. Link/anchor targets, unchanged leaderboard tables/Liquid/front matter, and all five documented metric projections (including 75% rate / 80% coverage) were checked locally. GitHub source links target eventual `main` publication; this branch remains unpublished, so local target checks do not establish remote availability. Self-review is not a real canary or an independent approval.
+
 **Files:**
 - Modify: `docs\bug-fix.md`
 - Modify: `README.md`
+- Modify: this plan's Task 14 status/procedures
 - Modify: `docs\superpowers\specs\2026-09-16-bugfix-single-container-production-lifecycle-design.md` only if implementation reveals an approved design correction
 
-- [ ] **Step 1: Document the opt-in command and metrics**
+- [x] **Step 1: Document the opt-in command and metrics**
 
 Update `docs\bug-fix.md` with:
 
@@ -1964,15 +1973,15 @@ Update `docs\bug-fix.md` with:
 - evidence artifact contents;
 - warning not to aggregate different isolation modes.
 
-- [ ] **Step 2: Add operator prerequisites**
+- [x] **Step 2: Add operator prerequisites**
 
 Document in `README.md`:
 
 - Windows self-hosted runner with local-user administration;
 - Docker/BcContainerHelper access for evaluator identity;
-- PowerShell 7;
+- native PowerShell 7, not Store/WindowsApps activation;
 - protected storage and mounted staging requirements;
-- quarantine marker location;
+- all three quarantine marker locations and manual containment when identity security is unverified;
 - evaluator versus agent credential variables.
 
 - [ ] **Step 3: Run all targeted tests**
@@ -1990,8 +1999,6 @@ Expected: all targeted tests pass.
 Run:
 
 ```powershell
-uv run ruff format
-uv run ruff check --fix
 uv run ruff format --check
 uv run ruff check
 ```
@@ -2020,23 +2027,27 @@ On a production runner, replay at least these frozen submission classes:
 
 For every replay, verify phase evidence, legacy projection, metric coverage, package inventory, container deletion, and absence of quarantine.
 
+Pending: reviewed frozen fixtures and production runner. `--replay-patch` does not carry timeout metadata; no public timeout-marked replay input exists. Do not relabel a unit mock or edited result as this fifth real canary.
+
 - [ ] **Step 7: Run checkpoint rehearsal**
 
 Run:
 
 ```powershell
-.\scripts\Test-BugFixLifecycleCheckpoint.ps1 -ContainerName $env:BC_CONTAINER_NAME -CheckpointPath $env:BCBENCH_LIFECYCLE_CHECKPOINTS -Iterations 10 -Fault None
+.\scripts\Test-BugFixLifecycleCheckpoint.ps1 -ContainerName $env:BC_CONTAINER_NAME `
+  -CheckpointPath (Join-Path $env:BCBENCH_LIFECYCLE_PROTECTED_ROOT 'checkpoints\official-s0.json') `
+  -Iterations 10 -Fault None
 ```
 
-Expected: ten consecutive successful restore records and exit code 0.
+Run on each of two distinct representative entries with separate setup. Expected: ten consecutive successful restore records per entry, verified clean official S0/probe absence, verified cleanup, and exit code 0. The probe uses an existing trusted entry test app plus invocation-owned SQL schema/data; it needs no new AL app or reserved object IDs.
 
 - [ ] **Step 8: Run fault-injection cases**
 
-Run each supported fault once. Expected: the evaluator emits the specified infrastructure/invalid status, does not run unsafe tests, removes the container, and creates quarantine only for cleanup failure.
+Run each supported fault once with fresh setup; see the runbook for exact fault names and records. All detected injected errors classify as `infrastructure_error`. Non-cleanup faults verify detection, restore clean S0, and clean up without quarantine. `CleanupFailure` has a passing iteration, then a failing real container-absence check, verified fault evidence, and quarantine. Any unexpected/unverified process, restore, or evidence failure must also preserve/quarantine resources; never force deletion to satisfy the nominal expectation.
 
 - [ ] **Step 9: Run a five-entry live canary**
 
-Dispatch `.github\workflows\bugfix-production-evaluation.yml` with `test-run: true`, inspect every evidence artifact, and confirm:
+Use the runbook's five explicit per-entry setup/CLI invocations and one-cycle pre-agent rehearsal hook, inspect every evidence artifact, and confirm:
 
 - every phase starts from the intended checkpoint;
 - package inventories match;
@@ -2045,16 +2056,18 @@ Dispatch `.github\workflows\bugfix-production-evaluation.yml` with `test-run: tr
 - every container is absent after completion;
 - no unexplained infrastructure classification occurs.
 
-- [ ] **Step 10: Commit documentation**
+The existing workflow's `test-run: true` runs four sampled entries, not five. `rehearsal: true` separately selects two of the four for ten cycles each. Do not dispatch a full 52-entry run to obtain a fifth entry; an exact-five workflow selection input would be a separate change.
+
+- [x] **Step 10: Commit documentation**
 
 ```powershell
-git add docs\bug-fix.md README.md
+git add docs\bug-fix.md README.md docs\superpowers\plans\2026-09-16-bugfix-single-container-production-lifecycle.md
 git commit -m "Document bug-fix production evaluation" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
 - [ ] **Step 11: Request code review**
 
-Invoke the `requesting-code-review` skill. Address only findings tied to this lifecycle, rerun the smallest affected tests, then rerun `uv run pytest`.
+Separate specification, quality, and final reviews are controller-owned. Skills are unavailable for this handoff and no subagents are authorized. Do not mark these gates complete from self-review or documentation checks; address findings tied to this lifecycle and let the controller record final validation.
 
 ## Promotion Checklist
 
