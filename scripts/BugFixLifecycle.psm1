@@ -3647,11 +3647,13 @@ function Invoke-BCBenchBugFixLifecycle {
 
         $compilerRoot = Invoke-BCBenchOperation -Operations $Operations -Name CreateCompiler -Context $context -Default {
             param($operationContext)
+            Set-StrictMode -Off
             Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+            Import-Module (Join-Path $PSScriptRoot "BCContainerManagement.psm1") -Force -DisableNameChecking
             if ([string]::IsNullOrEmpty($operationContext.ArtifactUrl)) {
                 throw "ArtifactUrl was not set by container creation."
             }
-            return New-BcCompilerFolder -artifactUrl $operationContext.ArtifactUrl -containerName $operationContext.ContainerName
+            return New-BCCompilerFolderSync -ArtifactUrl $operationContext.ArtifactUrl -ContainerName $operationContext.ContainerName
         }
         if (-not [string]::IsNullOrEmpty([string]$compilerRoot)) {
             $ownedCompilerRoot = Resolve-BCBenchAbsolutePath -Path ([string]$compilerRoot)

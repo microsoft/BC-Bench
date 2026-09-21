@@ -399,6 +399,7 @@ function New-BCCompilerFolderSync {
     [string]$compilerFolder = New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
 
     Write-Log "Compiler folder created at: $compilerFolder" -Level Success
+    return $compilerFolder
 }
 
 function Publish-MCPConfigApp {

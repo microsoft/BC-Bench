@@ -219,6 +219,20 @@ $module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.ps
     assert _last_json(_run_pwsh(script)) == {"microsoft": True, "partner": True, "extended": True}
 
 
+def test_container_compiler_wrapper_returns_owned_path(tmp_path: Path) -> None:
+    compiler_root = tmp_path / "compiler"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.psm1")} -Force -PassThru
+& $module {{
+    function New-BcCompilerFolder {{ return {_ps_quote(compiler_root)} }}
+    New-BCCompilerFolderSync -ContainerName 'test' -ArtifactUrl 'artifact'
+}} | ConvertTo-Json -Compress
+"""
+
+    assert Path(_last_json(_run_pwsh(script))) == compiler_root
+
+
 def test_setup_parameter_metadata_and_pinned_container_helper() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'
