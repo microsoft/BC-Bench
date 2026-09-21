@@ -4,9 +4,9 @@ function Initialize-BCContainerHelperOptionalConfig {
     [CmdletBinding()]
     param()
 
-    $helperModule = Get-Module BcContainerHelper
+    $helperModule = (Get-Command New-BCContainer -ErrorAction Stop).Module
     if ($null -eq $helperModule) {
-        return
+        throw "BcContainerHelper command module is unavailable."
     }
 
     & $helperModule {
