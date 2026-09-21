@@ -31,10 +31,14 @@ __all__ = [
     "EvaluationContext",
     "ExpectedOutput",
     "ExperimentConfiguration",
+    "HistoryQuery",
+    "HistorySettings",
+    "InvestigationTrace",
     "JudgeCalibrationReport",
     "PRReviewMetrics",
     "PluginConfig",
     "RepoSlug",
+    "ScopeSnapshot",
 ]
 
 
@@ -60,6 +64,42 @@ type CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{40}$")]
 
 # A GitHub repository in "owner/repo" form
 type RepoSlug = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$")]
+
+
+class HistorySettings(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = False
+    measure_scope: bool = False
+    max_commits: int = Field(default=5, gt=0)
+    max_files: int = Field(default=10, gt=0)
+    history_depth: int = Field(default=200, gt=0)
+    max_requests: int = Field(default=5, gt=0)
+
+
+class ScopeSnapshot(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    files: list[str]
+    note: str = ""
+
+
+class HistoryQuery(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    files: list[str]
+    elapsed_seconds: float = Field(ge=0)
+    commit_ids: list[CommitSha] = []
+    report_name: str | None = None
+    error: str | None = None
+
+
+class InvestigationTrace(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    initial_scope: ScopeSnapshot | None = None
+    final_scope: ScopeSnapshot | None = None
+    queries: list[HistoryQuery] = []
 
 
 class AgentMetrics(BaseModel):
@@ -89,6 +129,9 @@ class AgentMetrics(BaseModel):
 
     # Tool usage statistics from agent logs
     tool_usage: dict[str, int] | None = None
+
+    # Transport between the runner and scoped results; never leak into unrelated metrics payloads.
+    investigation: InvestigationTrace | None = Field(default=None, exclude=True)
 
 
 class PRReviewMetrics(AgentMetrics):
@@ -145,13 +188,23 @@ class ExperimentConfiguration(BaseModel):
     # Plugins loaded for this experiment: "<name>@<revision>" (github) or "<name>@local"
     plugins: list[str] | None = None
 
+    history: HistorySettings | None = Field(default=None, exclude_if=lambda value: value is None)
+
     def is_empty(self) -> bool:
         """Check if this configuration has all default/empty values.
 
         An empty configuration means no special experiment settings were used.
         This is useful for comparing with None (no experiment) vs default experiment.
         """
-        return self.mcp_servers is None and self.al_lsp_enabled is False and self.custom_instructions is False and self.skills_enabled is False and self.custom_agent is None and self.plugins is None
+        return (
+            self.mcp_servers is None
+            and self.al_lsp_enabled is False
+            and self.custom_instructions is False
+            and self.skills_enabled is False
+            and self.custom_agent is None
+            and self.plugins is None
+            and self.history is None
+        )
 
 
 # Where an agent plugin comes from: local, or cloned from GitHub
@@ -280,6 +333,10 @@ class EvaluationCategory(StrEnum):
     EXT_REQUEST_IMPLEMENT = "extensibility-request-implement"
     # Triage a single extensibility request: emit managed labels, an advisory comment, and open/closed state.
     EXT_REQUEST_TRIAGE = "extensibility-request-triage"
+
+    @property
+    def supports_history(self) -> bool:
+        return self in (EvaluationCategory.BUG_FIX, EvaluationCategory.TEST_GENERATION)
 
     @property
     def dataset_path(self) -> Path:

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from tools import generate_history_report as history
-from tools.generate_history_report import build_report, main
+from bcbench import history_report as history
+from bcbench.history_report import build_report, main
 
 
 def git(repo, *args, date=None):

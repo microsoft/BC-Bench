@@ -5,7 +5,8 @@ from jinja2.sandbox import SandboxedEnvironment
 
 from bcbench.config import get_config
 from bcbench.dataset import BaseDatasetEntry
-from bcbench.types import EvaluationCategory
+from bcbench.exceptions import AgentError
+from bcbench.types import EvaluationCategory, HistorySettings
 
 _config = get_config()
 
@@ -17,7 +18,7 @@ def _transform_image_paths(content: str) -> str:
     return re.sub(r"!\[([^\]]*)\]\(\./([^)]+)\)", rf"![\1]({dest_dir}/\2)", content)
 
 
-def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False) -> str:
+def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, category: EvaluationCategory, al_mcp: bool = False, history: HistorySettings | None = None) -> str:
     prompt_config = config.get("prompt", {})
     template_str = prompt_config.get(f"{category.value}-template")
     include_project_paths = prompt_config.get("include_project_paths")
@@ -28,7 +29,7 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
 
     task = _transform_image_paths(entry.get_task())
 
-    return _jinja.from_string(template_str).render(
+    prompt = _jinja.from_string(template_str).render(
         repo_path=repo_path,
         task=task,
         project_paths=", ".join(entry.project_paths),
@@ -37,3 +38,10 @@ def build_prompt(entry: BaseDatasetEntry, repo_path: Path, config: dict, categor
         is_problem_statement=is_problem_statement,  # only relevant for test-generation
         al_mcp=al_mcp,  # whether AL MCP server is enabled
     )
+    if category.supports_history and history is not None and (history.enabled or history.measure_scope):
+        investigation_template = prompt_config.get("investigation-template")
+        if not investigation_template:
+            raise AgentError("Scope/history measurements require prompt.investigation-template")
+        instructions = _jinja.from_string(investigation_template).render(history_enabled=history.enabled)
+        return f"{prompt}\n\n{instructions}"
+    return prompt

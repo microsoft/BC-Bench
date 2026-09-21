@@ -1,10 +1,10 @@
 from typing import Self
 
-from bcbench.results.base import ExecutionBasedEvaluationResult
+from bcbench.results.investigation import InvestigatedExecutionResult
 from bcbench.types import EvaluationContext
 
 
-class BugFixResult(ExecutionBasedEvaluationResult):
+class BugFixResult(InvestigatedExecutionResult):
     """Result class for bug-fix evaluation category."""
 
     @classmethod

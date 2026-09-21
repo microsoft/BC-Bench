@@ -13,6 +13,32 @@ prompt:
   # - both: Agent sees both the bug description and the fixed code                       => Combined context for test generation
   test-generation-input: "both"
 
+  investigation-template: |
+    Scope-discovery experiment:
+    - First investigate the issue and current source. Identify the suspect files yourself.
+    - Before editing code or consulting history, call record_scope with stage="initial",
+      the repository-relative files you identified, and a brief evidence-based note.
+      Do not infer the scope from benchmark metadata or hidden reference artifacts.
+    {% if history_enabled %}
+    - Then call get_history for those identified files. The harness pins the repository,
+      exclusive cutoff, and limits; do not select a different revision or repository.
+    - Use historical co-changes to identify related objects worth investigating. Verify
+      their relevance against current source before expanding the fix or test scope.
+      Co-occurrence in a commit is a lead, not a requirement to modify every listed file.
+    - If history is unavailable or empty, note that limitation and continue with current
+      source; do not work around the cutoff or retrieve newer information elsewhere.
+    {% else %}
+    - This is the source-only control: investigate the current checkout without history.
+    {% endif %}
+    - Historical investigation is allowed only through get_history when that tool is
+      available. Do not use git log, historical git show, remote Git, or web/API lookups
+      as alternative history sources. You may inspect the current working diff normally.
+    - Before your final response, call record_scope with stage="final", the source and
+      test files you consider relevant, and a brief justification for scope changes.
+      Include relevant files even if you did not edit them. If further investigation
+      changes your scope, update the final snapshot.
+    - These snapshots describe your proposed scope, not proof that each file was read.
+
   bug-fix-template: |
     You are working with a Business Central (AL) code repository at {{repo_path}}.
 
@@ -134,6 +160,15 @@ prompt:
 # NOTE: this will copy any files in the instructions/<sanitized-repo>/ folder, including skills and custom agents
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentHarness.instruction_filename) during setup
+history:
+  enabled: false
+  # Enable alone for an instrumented source-only control. History always enables scope measurement.
+  measure_scope: false
+  max_commits: 5
+  max_files: 10
+  history_depth: 200
+  max_requests: 5
+
 instructions:
   enabled: false
 

@@ -9,7 +9,9 @@ agent-selected files. Every changed file is listed, but patch content is limited
 existing files and a configurable number of distinct filenames. No existing clone or
 `--repo-path` is needed.
 
-The script runs on a cloud runner (or locally) with Python and Git. It creates an isolated,
+The script runs on a cloud runner (or locally) with Python and Git. The reusable implementation
+is `src/bcbench/history_report.py`; the `tools/` entry point remains a standard-library
+launcher and does not require importing the installed benchmark package. It creates an isolated,
 temporary Git object cache per repository, fetches only the supplied cutoff's history, and
 deletes the cache afterward. It requests blob filtering so file content can be downloaded
 only when needed for historical diffs; server support determines transfer volume. There is
@@ -133,8 +135,12 @@ The helper queries the named authoritative remote, not the BCAppsBugFix checkout
 current history. BCAppsBugFix's non-squash sync preserves BCApps ancestry, but older NAV
 history imported as a snapshot still requires querying NAV with its own approved cutoff.
 
-No category pipeline, default prompt, or agent workflow automatically invokes this tool.
-Providing it does not enable the production agent's issue-fetch, commit/push, or PR steps.
+BC-Bench's optional `history` configuration registers a task-pinned MCP wrapper for bug-fix
+and test-generation. It creates no report until the agent selects files and calls the tool.
+See [History-assisted scope discovery](../EXPERIMENT.md#history-assisted-scope-discovery)
+for the history arm, source-only measurement control, and result metrics. Both switches
+are off by default. Providing this capability does not enable the production agent's
+issue-fetch, commit/push, or PR steps.
 
 ## `altest/`
 

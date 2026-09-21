@@ -1,10 +1,10 @@
 from typing import Self
 
-from bcbench.results.base import ExecutionBasedEvaluationResult
+from bcbench.results.investigation import InvestigatedExecutionResult
 from bcbench.types import EvaluationContext
 
 
-class TestGenerationResult(ExecutionBasedEvaluationResult):
+class TestGenerationResult(InvestigatedExecutionResult):
     """Result class for test-generation evaluation category."""
 
     pre_patch_failed: bool = False
@@ -17,6 +17,7 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
     @property
     def display_row(self) -> dict[str, str]:
         return {
+            **super().display_row,
             "Pre-Patch Failed": "Yes" if self.pre_patch_failed else "No",
             "Post-Patch Passed": "Yes" if self.post_patch_passed else "No",
         }
