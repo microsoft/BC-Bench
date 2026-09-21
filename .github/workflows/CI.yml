@@ -111,7 +111,7 @@ jobs:
         uses: $/.github/actions/setup-python-uv
 
       - name: Run mock evaluation for ${{ matrix.entry }}
-        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ needs.select-category.outputs.category }} --output-dir evaluation_results --run-id ${{ github.run_id }}
+        run: uv run bcbench evaluate mock "${{ matrix.entry }}" --category ${{ needs.select-category.outputs.category }} --output-dir evaluation_results --run-id ${{ github.run_id }} --consistent-experiment
 
       - name: Upload mock evaluation results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
