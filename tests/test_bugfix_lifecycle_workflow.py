@@ -161,6 +161,10 @@ def test_tooling_precedes_restricted_setup_and_cli_uses_environment_contract() -
     assert setup["uses"] == "$/.github/actions/setup-bugfix-lifecycle"
     for action in ("setup-python-uv", "install-agent-harnesses"):
         assert next(i for i, step in enumerate(steps) if action in step.get("uses", "")) < steps.index(setup)
+    python = next(step for step in steps if step.get("uses", "").startswith("actions/setup-python@"))
+    uv = next(step for step in steps if "setup-python-uv" in step.get("uses", ""))
+    assert steps.index(python) < steps.index(uv)
+    assert uv["with"]["install-python"] is False
     assert next(i for i, step in enumerate(steps) if "actions/setup-node@" in step.get("uses", "")) < steps.index(setup)
     run = _step(steps, "evaluate")
     assert "uv run bcbench bugfix-lifecycle" in run["run"]
@@ -302,6 +306,17 @@ def test_setup_pins_helper_and_resolves_exact_dataset_before_tooling() -> None:
     ):
         assert action["outputs"][name.lower()]["value"] == "${{ steps.setup.outputs.BCBENCH_LIFECYCLE_" + name + " }}"
     assert not any("password" in name for name in action["outputs"])
+
+
+def test_rehearsal_uses_physical_python_before_lifecycle_setup() -> None:
+    steps = _load(WORKFLOW)["jobs"]["rehearsal"]["steps"]
+    python = next(step for step in steps if step.get("uses", "").startswith("actions/setup-python@"))
+    uv = next(step for step in steps if "setup-python-uv" in step.get("uses", ""))
+    setup = _step(steps, "setup")
+
+    assert steps.index(python) < steps.index(uv) < steps.index(setup)
+    assert python["with"]["python-version"] == "3.13"
+    assert uv["with"]["install-python"] is False
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell required")

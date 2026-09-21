@@ -225,7 +225,12 @@ jobs:
           "entry_root=C:\bcbench\entries\$invocation" >> $env:GITHUB_OUTPUT
           "protected_root=C:\bcbench-protected\$invocation" >> $env:GITHUB_OUTPUT
           "container_name=bcbench-$invocation" >> $env:GITHUB_OUTPUT
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
       - uses: $/.github/actions/setup-python-uv
+        with:
+          install-python: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
@@ -326,7 +331,12 @@ jobs:
           "entry_root=C:\bcbench\entries\$invocation" >> $env:GITHUB_OUTPUT
           "protected_root=C:\bcbench-protected\$invocation" >> $env:GITHUB_OUTPUT
           "container_name=bcbench-$invocation" >> $env:GITHUB_OUTPUT
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
       - uses: $/.github/actions/setup-python-uv
+        with:
+          install-python: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
