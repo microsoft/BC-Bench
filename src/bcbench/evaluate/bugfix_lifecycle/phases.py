@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_lifecycle.checkpoint import CheckpointManager
@@ -59,8 +59,11 @@ from bcbench.types import ContainerConfig
 PatchApplier = Callable[[Path, str, str], None]
 WorkspaceCleaner = Callable[[Path], None]
 WorkspaceHasher = Callable[[Path], str]
+LegacyProjectPublisher = Callable[[Path, tuple[str, ...], ContainerConfig, str, Path], ProjectPublication]
+LegacyExactTestRunner = Callable[[tuple[TestEntry, ...], TestExpectation, ContainerConfig, Path, Path], TestRunSummary | TestSuiteEvidence]
 
 
+@runtime_checkable
 class ProjectPublisher(Protocol):
     def build_and_publish(
         self,
@@ -69,6 +72,7 @@ class ProjectPublisher(Protocol):
     ) -> tuple[Path, ...]: ...
 
 
+@runtime_checkable
 class EvidenceProjectPublisher(ProjectPublisher, Protocol):
     def build_and_publish_with_evidence(
         self,
@@ -78,6 +82,7 @@ class EvidenceProjectPublisher(ProjectPublisher, Protocol):
     ) -> ProjectPublication: ...
 
 
+@runtime_checkable
 class ExactTestRunner(Protocol):
     def run(
         self,
@@ -87,6 +92,7 @@ class ExactTestRunner(Protocol):
     ) -> TestRunSummary: ...
 
 
+@runtime_checkable
 class EvidenceExactTestRunner(ExactTestRunner, Protocol):
     def run_with_evidence(
         self,
@@ -281,8 +287,8 @@ class BugFixPhaseRunner:
         container: ContainerConfig,
         version: str,
         project_paths: Sequence[str] = (),
-        publisher: ProjectPublisher | EvidenceProjectPublisher | None = None,
-        test_runner: ExactTestRunner | EvidenceExactTestRunner | None = None,
+        publisher: ProjectPublisher | EvidenceProjectPublisher | LegacyProjectPublisher | None = None,
+        test_runner: ExactTestRunner | EvidenceExactTestRunner | LegacyExactTestRunner | None = None,
         patch_applier: PatchApplier = apply_patch,
         workspace_cleaner: WorkspaceCleaner = remove_tree,
         workspace_hasher: WorkspaceHasher = materialized_workspace_tree_hash,
@@ -325,7 +331,7 @@ class BugFixPhaseRunner:
         def action(state: _PhaseState) -> None:
             self._restore_and_verify(state, s0)
             self._require_single_generated_test(submission)
-            self._create_phase_workspace(state)
+            workspace = self._create_phase_workspace(state)
             self._apply_generated(
                 state,
                 submission.test_patch,
@@ -351,7 +357,7 @@ class BugFixPhaseRunner:
                 state,
                 submission.tests,
                 TestExpectation.ALL_FAIL,
-                state.workspace,
+                workspace,
             )
 
         return self._execute_phase(
@@ -381,7 +387,7 @@ class BugFixPhaseRunner:
         def action(state: _PhaseState) -> None:
             self._restore_and_verify(state, s0)
             self._require_single_generated_test(submission)
-            self._create_phase_workspace(state)
+            workspace = self._create_phase_workspace(state)
             self._apply_trusted(
                 state,
                 gold_patch,
@@ -423,7 +429,7 @@ class BugFixPhaseRunner:
                 state,
                 submission.tests,
                 TestExpectation.ALL_PASS,
-                state.workspace,
+                workspace,
             )
 
         return self._execute_phase(
@@ -447,7 +453,7 @@ class BugFixPhaseRunner:
         def action(state: _PhaseState) -> None:
             nonlocal fixed_manifest
             self._restore_and_verify(state, s0)
-            self._create_phase_workspace(state)
+            workspace = self._create_phase_workspace(state)
             self._apply_generated(
                 state,
                 submission.fix_patch,
@@ -456,7 +462,7 @@ class BugFixPhaseRunner:
             )
             self._capture_materialized_source(state)
             self._assert_projects_have_no_packages(
-                state.workspace,
+                workspace,
                 submission.test_projects,
                 "generated test",
             )
@@ -467,7 +473,7 @@ class BugFixPhaseRunner:
                 trusted=False,
             )
             self._verify_no_unexpected_workspace_packages(state)
-            self._assert_no_forbidden_package_hashes(state.workspace)
+            self._assert_no_forbidden_package_hashes(workspace)
             fixed_manifest = self._checkpoint_manager.capture(
                 "fixed",
                 state.expected_apps,
@@ -519,7 +525,7 @@ class BugFixPhaseRunner:
         def action(state: _PhaseState) -> None:
             self._verify_checkpoint_inventory(state, sf)
             self._require_single_generated_test(submission)
-            self._create_phase_workspace(state)
+            workspace = self._create_phase_workspace(state)
             self._apply_generated(
                 state,
                 submission.fix_patch,
@@ -545,7 +551,7 @@ class BugFixPhaseRunner:
                 state,
                 submission.tests,
                 TestExpectation.ALL_PASS,
-                state.workspace,
+                workspace,
             )
 
         return self._execute_phase(
@@ -573,9 +579,9 @@ class BugFixPhaseRunner:
 
         def action(state: _PhaseState) -> None:
             self._restore_and_verify(state, sf)
-            self._create_phase_workspace(state)
+            workspace = self._create_phase_workspace(state)
             self._assert_projects_have_no_packages(
-                state.workspace,
+                workspace,
                 submission.test_projects,
                 "generated test",
             )
@@ -593,7 +599,7 @@ class BugFixPhaseRunner:
             )
             self._capture_materialized_source(state)
             self._assert_projects_have_no_packages(
-                state.workspace,
+                workspace,
                 submission.test_projects,
                 "generated test",
             )
@@ -604,12 +610,12 @@ class BugFixPhaseRunner:
                 trusted=True,
             )
             self._verify_no_unexpected_workspace_packages(state)
-            self._assert_no_forbidden_package_hashes(state.workspace)
+            self._assert_no_forbidden_package_hashes(workspace)
             state.summary = self._run_exact_tests(
                 state,
                 benchmark_tests,
                 TestExpectation.ALL_PASS,
-                state.workspace,
+                workspace,
             )
 
         return self._execute_phase(
@@ -737,10 +743,11 @@ class BugFixPhaseRunner:
         except (OSError, ValueError) as error:
             raise BugFixLifecycleInfrastructureError(f"Failed to create evaluator workspace for {name}: {error}") from error
 
-    def _create_phase_workspace(self, state: _PhaseState) -> None:
+    def _create_phase_workspace(self, state: _PhaseState) -> Path:
         self._verify_phase_patch_hashes(state)
         state.workspace = self._create_workspace(state.name)
         state.trusted_source_hash = self._hash_workspace(state.workspace)
+        return state.workspace
 
     def _hash_workspace(self, workspace: Path) -> str:
         try:
@@ -839,30 +846,28 @@ class BugFixPhaseRunner:
         self._verify_materialized_source(state)
         try:
             requested_projects = tuple(project_paths)
-            publish_with_evidence = getattr(self._publisher, "build_and_publish_with_evidence", None)
-            if publish_with_evidence is not None:
-                returned = publish_with_evidence(
+            if isinstance(self._publisher, EvidenceProjectPublisher):
+                returned = self._publisher.build_and_publish_with_evidence(
                     state.workspace,
                     requested_projects,
                     evidence_directory,
                 )
+            elif isinstance(self._publisher, ProjectPublisher):
+                package_paths = self._publisher.build_and_publish(state.workspace, requested_projects)
+                returned = ProjectPublication(
+                    project_paths=requested_projects,
+                    package_paths=tuple(package_paths),
+                )
+            elif callable(self._publisher):
+                returned = self._publisher(
+                    state.workspace,
+                    requested_projects,
+                    self._container,
+                    self._version,
+                    evidence_directory,
+                )
             else:
-                build_and_publish = getattr(self._publisher, "build_and_publish", None)
-                if build_and_publish is not None:
-                    package_paths = build_and_publish(state.workspace, requested_projects)
-                    returned = ProjectPublication(
-                        project_paths=requested_projects,
-                        package_paths=tuple(package_paths),
-                    )
-                else:
-                    legacy_publish = getattr(self._publisher, "publish", self._publisher)
-                    returned = legacy_publish(
-                        state.workspace,
-                        requested_projects,
-                        self._container,
-                        self._version,
-                        evidence_directory,
-                    )
+                raise PackageInventoryError("Project publisher has no supported publication method")
         except BuildError as error:
             if trusted:
                 raise BugFixLifecycleInfrastructureError(f"Trusted project publication failed: {error}") from error
@@ -1001,27 +1006,25 @@ class BugFixPhaseRunner:
         evidence_directory = self._operation_evidence_directory(state, "tests")
         try:
             requested_tests = tuple(tests)
-            run_with_evidence = getattr(self._test_runner, "run_with_evidence", None)
-            if run_with_evidence is not None:
-                returned = run_with_evidence(
+            if isinstance(self._test_runner, EvidenceExactTestRunner):
+                returned = self._test_runner.run_with_evidence(
                     requested_tests,
                     expectation,
                     workspace,
                     evidence_directory,
                 )
-            else:
-                run = getattr(self._test_runner, "run", None)
-                returned = (
-                    run(requested_tests, expectation, workspace)
-                    if run is not None
-                    else self._test_runner(
-                        requested_tests,
-                        expectation,
-                        self._container,
-                        workspace,
-                        evidence_directory,
-                    )
+            elif isinstance(self._test_runner, ExactTestRunner):
+                returned = self._test_runner.run(requested_tests, expectation, workspace)
+            elif callable(self._test_runner):
+                returned = self._test_runner(
+                    requested_tests,
+                    expectation,
+                    self._container,
+                    workspace,
+                    evidence_directory,
                 )
+            else:
+                raise BugFixLifecycleInfrastructureError("Exact test runner has no supported execution method")
         except (OSError, ValueError, ET.ParseError) as error:
             raise BugFixLifecycleInfrastructureError(f"Invalid exact test evidence: {error}") from error
         if isinstance(returned, TestSuiteEvidence):

@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import zipfile
 from collections.abc import Sequence
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from shutil import rmtree
+from typing import Any, cast
 
 import pytest
 
@@ -95,7 +97,7 @@ def _summary(
     *,
     discovered: Sequence[TestIdentity] | None = None,
     executed: Sequence[TestIdentity] | None = None,
-) -> TestSuiteEvidence:
+) -> TestRunSummary:
     requested = tuple(TestIdentity(test.codeunitID, function_name) for test in tests for function_name in sorted(test.functionName))
     discovered_identities = tuple(discovered) if discovered is not None else requested
     executed_identities = tuple(executed) if executed is not None else requested
@@ -278,7 +280,7 @@ class FakeTestRunner:
         _container: ContainerConfig,
         _repo_path: Path,
         evidence_directory: Path,
-    ) -> TestRunSummary:
+    ) -> TestSuiteEvidence:
         self.calls.append(("test", expectation, tuple(tests)))
         evidence_directory.mkdir(parents=True, exist_ok=True)
         (evidence_directory / "command.json").write_text("test command", encoding="utf-8")
@@ -350,7 +352,7 @@ class ContractTestRunner:
 
 
 @pytest.fixture
-def harness(tmp_path: Path):
+def harness(tmp_path: Path) -> dict[str, Any]:
     calls: list[tuple[object, ...]] = []
     source = TrustedSource(repository=tmp_path / "source.git", commit="1" * 40)
     s0 = _manifest(tmp_path, "baseline")
@@ -394,9 +396,9 @@ def harness(tmp_path: Path):
 
     runner = BugFixPhaseRunner(
         trusted_source=source,
-        workspace_builder=workspace_builder,
-        checkpoint_manager=checkpoint_manager,
-        evidence_store=evidence_store,
+        workspace_builder=cast(Any, workspace_builder),
+        checkpoint_manager=cast(Any, checkpoint_manager),
+        evidence_store=cast(Any, evidence_store),
         container=ContainerConfig(name="bc", username="user", password="password", company="CRONUS"),
         version="27.0",
         project_paths=("src/App", "src/Benchmark/tests"),
@@ -702,7 +704,7 @@ def test_phase_runner_requires_evidence_store(harness) -> None:
             trusted_source=harness["source"],
             workspace_builder=harness["workspace_builder"],
             checkpoint_manager=harness["checkpoint_manager"],
-            evidence_store=None,
+            evidence_store=cast(Any, None),
             container=ContainerConfig(name="bc", username="user", password="pass", company="CRONUS"),
             version="27.0",
             inventory_reader=lambda: (_app(),),
@@ -936,13 +938,11 @@ def test_exact_checkpoint_inventory_rejects_missing_duplicate_and_unexpected(
     inventory_kind: str,
 ) -> None:
     baseline = _app()
-    unexpected = AppInventoryEntry(
-        **{
-            **baseline.to_dict(),
-            "app_id": "99999999-9999-9999-9999-999999999999",
-            "name": "Unexpected",
-            "content_hash": "b" * 64,
-        }
+    unexpected = replace(
+        baseline,
+        app_id="99999999-9999-9999-9999-999999999999",
+        name="Unexpected",
+        content_hash="b" * 64,
     )
     inventories = {
         "missing": (),
@@ -963,12 +963,10 @@ def test_exact_checkpoint_inventory_rejects_missing_duplicate_and_unexpected(
 
 def test_inventory_rejects_same_hash_with_different_identity(harness) -> None:
     baseline = _app()
-    forged = AppInventoryEntry(
-        **{
-            **baseline.to_dict(),
-            "app_id": "99999999-9999-9999-9999-999999999999",
-            "name": "Forged",
-        }
+    forged = replace(
+        baseline,
+        app_id="99999999-9999-9999-9999-999999999999",
+        name="Forged",
     )
     harness["runner"]._inventory_verifier = InventoryVerifier(
         lambda: (forged,),

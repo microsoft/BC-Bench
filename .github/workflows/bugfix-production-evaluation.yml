@@ -39,6 +39,50 @@ on:
         description: Require ten checkpoint restore rehearsals on each of the two canary entries before evaluation
         type: boolean
         default: false
+      rehearsal-only:
+        description: Run checkpoint rehearsals without launching an agent or summarizing results
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      agent:
+        description: Agent harness
+        type: string
+        default: copilot
+        required: true
+      model:
+        description: Model ID from the selected harness registry
+        type: string
+        default: claude-sonnet-5
+        required: true
+      test-run:
+        description: Evaluate four sampled canary entries rather than the full dataset
+        type: boolean
+        default: true
+      canary-entries:
+        description: Optional JSON array of exactly five distinct bug-fix entry IDs; overrides the evaluation matrix
+        type: string
+        default: ""
+      al-mcp:
+        description: Enable evaluator-owned AL MCP
+        type: boolean
+        default: false
+      al-lsp:
+        description: Enable restricted AL LSP
+        type: boolean
+        default: false
+      bc-mcp:
+        description: Enable BC MCP gateway
+        type: boolean
+        default: false
+      rehearsal:
+        description: Require ten checkpoint restore rehearsals on each of the two canary entries before evaluation
+        type: boolean
+        default: false
+      rehearsal-only:
+        description: Run checkpoint rehearsals without launching an agent or summarizing results
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,7 +98,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
       - uses: $/.github/actions/setup-python-uv
@@ -118,7 +162,7 @@ jobs:
 
   rehearsal-entries:
     needs: select-entries
-    if: inputs.rehearsal
+    if: inputs.rehearsal || inputs.rehearsal-only
     uses: $/.github/workflows/get-entries.yml
     with:
       category: bug-fix
@@ -126,7 +170,7 @@ jobs:
 
   select-rehearsal-entries:
     needs: rehearsal-entries
-    if: inputs.rehearsal && needs.rehearsal-entries.outputs.entries != '[]'
+    if: (inputs.rehearsal || inputs.rehearsal-only) && needs.rehearsal-entries.outputs.entries != '[]'
     runs-on: ubuntu-latest
     outputs:
       entries: ${{ steps.select.outputs.entries }}
@@ -150,7 +194,7 @@ jobs:
 
   rehearsal:
     needs: select-rehearsal-entries
-    if: inputs.rehearsal && needs.select-rehearsal-entries.outputs.entries != '[]'
+    if: (inputs.rehearsal || inputs.rehearsal-only) && needs.select-rehearsal-entries.outputs.entries != '[]'
     runs-on: GitHub-BCBench
     timeout-minutes: 240
     environment:
@@ -165,7 +209,7 @@ jobs:
       matrix:
         entry: ${{ fromJson(needs.select-rehearsal-entries.outputs.entries) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
       - name: Allocate owned rehearsal paths
@@ -182,7 +226,7 @@ jobs:
           "protected_root=C:\bcbench-protected\$invocation" >> $env:GITHUB_OUTPUT
           "container_name=bcbench-$invocation" >> $env:GITHUB_OUTPUT
       - uses: $/.github/actions/setup-python-uv
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
       - name: Setup isolated checkpoint rehearsal
@@ -222,7 +266,7 @@ jobs:
       - name: Upload protected rehearsal evidence, never backups or leaderboard results
         id: evidence
         if: always() && steps.paths.outputs.protected_root != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: rehearsal-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
           path: |
@@ -232,7 +276,7 @@ jobs:
       - name: Preserve quarantine markers
         id: quarantine
         if: always() && steps.paths.outputs.protected_root != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: rehearsal-quarantine-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
           path: |
@@ -254,7 +298,7 @@ jobs:
 
   evaluate:
     needs: [select-entries, rehearsal]
-    if: always() && !cancelled() && needs.select-entries.result == 'success' && needs.select-entries.outputs.entries != '[]' && (needs.rehearsal.result == 'success' || (!inputs.rehearsal && needs.rehearsal.result == 'skipped'))
+    if: always() && !cancelled() && !inputs.rehearsal-only && needs.select-entries.result == 'success' && needs.select-entries.outputs.entries != '[]' && (needs.rehearsal.result == 'success' || (!inputs.rehearsal && needs.rehearsal.result == 'skipped'))
     runs-on: GitHub-BCBench
     environment:
       name: ado-read
@@ -270,7 +314,7 @@ jobs:
         entry: ${{ fromJson(needs.select-entries.outputs.entries) }}
     name: ${{ inputs.agent }} - ${{ matrix.entry }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
       - name: Allocate unique paths before any setup side effects
@@ -283,7 +327,7 @@ jobs:
           "protected_root=C:\bcbench-protected\$invocation" >> $env:GITHUB_OUTPUT
           "container_name=bcbench-$invocation" >> $env:GITHUB_OUTPUT
       - uses: $/.github/actions/setup-python-uv
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
       - uses: $/.github/actions/install-agent-harnesses
@@ -344,7 +388,7 @@ jobs:
       - name: Upload only result JSONL for summary
         id: results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
           overwrite: true
@@ -353,7 +397,7 @@ jobs:
       - name: Upload protected lifecycle evidence separately
         id: evidence
         if: always() && steps.paths.outputs.protected_root != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: lifecycle-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
           path: |
@@ -363,7 +407,7 @@ jobs:
       - name: Upload quarantine markers
         id: quarantine
         if: always() && steps.paths.outputs.protected_root != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: lifecycle-quarantine-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.entry }}
           path: |

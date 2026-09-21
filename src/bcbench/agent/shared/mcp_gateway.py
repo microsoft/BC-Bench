@@ -68,23 +68,25 @@ class _GatewayHttpServer(ThreadingHTTPServer):
         self.thread_lock = threading.Lock()
         self.stopping = threading.Event()
 
-    def process_request(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+    def process_request(self, request: socket.socket | tuple[bytes, socket.socket], client_address: tuple[str, int]) -> None:
+        connection = request if isinstance(request, socket.socket) else request[1]
         thread = threading.Thread(target=self.process_request_thread, args=(request, client_address), daemon=True)
         with self.thread_lock:
             if self.stopping.is_set():
                 self.shutdown_request(request)
                 return
-            self.active_connections.add(request)
+            self.active_connections.add(connection)
             self.active_threads.add(thread)
             thread.start()
 
-    def process_request_thread(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+    def process_request_thread(self, request: socket.socket | tuple[bytes, socket.socket], client_address: tuple[str, int]) -> None:
+        connection = request if isinstance(request, socket.socket) else request[1]
         try:
             super().process_request_thread(request, client_address)
         finally:
             with self.thread_lock:
                 self.active_threads.remove(threading.current_thread())
-                self.active_connections.discard(request)
+                self.active_connections.discard(connection)
 
     def register_connection(self, connection: socket.socket | None) -> None:
         if connection is None:

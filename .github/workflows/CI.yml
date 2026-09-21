@@ -52,6 +52,8 @@ jobs:
 
       - name: Setup Python with UV
         uses: $/.github/actions/setup-python-uv
+        with:
+          all-groups: true
 
       - name: Checkout BCQuality
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5

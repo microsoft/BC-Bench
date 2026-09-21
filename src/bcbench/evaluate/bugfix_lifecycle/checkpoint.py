@@ -84,7 +84,7 @@ class CheckpointManager:
             )
             service_value = payload.get("service")
             if isinstance(service_value, Mapping):
-                service = service_value
+                service = _string_keyed_mapping(service_value, "Checkpoint capture service state")
                 service_stopped = service.get("state") == "Stopped"
             self._validate_capture_service(payload)
             captured = self._parse_manifest(payload, "capture")
@@ -380,9 +380,7 @@ class CheckpointManager:
             payload = json.loads(output_lines[-1])
         except json.JSONDecodeError as exc:
             raise CheckpointInfrastructureError(f"Checkpoint {operation} PowerShell returned malformed JSON: {_diagnostics(result.stdout, result.stderr)}") from exc
-        if not isinstance(payload, Mapping):
-            raise CheckpointInfrastructureError(f"Checkpoint {operation} PowerShell JSON must be an object")
-        return payload
+        return _string_keyed_mapping(payload, f"Checkpoint {operation} PowerShell JSON must be an object")
 
     def _parse_manifest(self, payload: Mapping[str, object], operation: str) -> CheckpointManifest:
         try:
@@ -391,9 +389,7 @@ class CheckpointManager:
             raise CheckpointInfrastructureError(f"Checkpoint {operation} returned an invalid manifest: {exc}") from exc
 
     def _validate_capture_service(self, payload: Mapping[str, object]) -> None:
-        service = payload.get("service")
-        if not isinstance(service, Mapping):
-            raise CheckpointInfrastructureError("Checkpoint capture returned no stopped service state")
+        service = _string_keyed_mapping(payload.get("service"), "Checkpoint capture returned no stopped service state")
         try:
             _required_mapping_string(service, "server_instance")
             _required_mapping_int(service, "previous_process_id")
@@ -487,10 +483,12 @@ class CheckpointManager:
         apps_value = payload.get("apps")
         if not isinstance(container_value, Mapping):
             raise CheckpointInfrastructureError("Checkpoint restore returned invalid verification: container identity is missing")
-        if not isinstance(apps_value, list) or not all(isinstance(app, Mapping) for app in apps_value):
+        if not isinstance(apps_value, list):
             raise CheckpointInfrastructureError("Checkpoint restore returned invalid verification: application inventory is missing")
         try:
-            return ContainerIdentity.from_dict(container_value), tuple(AppInventoryEntry.from_dict(app) for app in apps_value)
+            container = _string_keyed_mapping(container_value, "Checkpoint restore container identity is invalid")
+            apps = tuple(AppInventoryEntry.from_dict(_string_keyed_mapping(app, "Checkpoint restore application inventory is invalid")) for app in apps_value)
+            return ContainerIdentity.from_dict(container), apps
         except (TypeError, ValueError) as exc:
             raise CheckpointInfrastructureError(f"Checkpoint restore returned invalid verification: {exc}") from exc
 
@@ -615,9 +613,10 @@ def _raise_checkpoint_failures(
         if not isinstance(errors[0], Exception):
             raise errors[0].with_traceback(errors[0].__traceback__)
         raise combined from errors[0]
-    if any(not isinstance(error, Exception) for error in errors):
+    exceptions = tuple(error for error in errors if isinstance(error, Exception))
+    if len(exceptions) != len(errors):
         raise BaseExceptionGroup(". ".join(messages), errors)
-    raise combined from ExceptionGroup(f"Checkpoint {operation} failures", errors)
+    raise combined from ExceptionGroup(f"Checkpoint {operation} failures", exceptions)
 
 
 def _checkpoint_failure_message(operation: str, error: BaseException, *, primary: bool) -> str:
@@ -639,6 +638,17 @@ def _safe_name(name: str) -> str:
     if not name or name in {".", ".."} or any(character in name for character in ("/", "\\", ":", "\0")):
         raise CheckpointInfrastructureError(f"Invalid checkpoint name: {name!r}")
     return name
+
+
+def _string_keyed_mapping(value: object, error: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise CheckpointInfrastructureError(error)
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise CheckpointInfrastructureError(f"{error}; object keys must be strings")
+        result[key] = item
+    return result
 
 
 def _ps_quote(value: str | Path) -> str:

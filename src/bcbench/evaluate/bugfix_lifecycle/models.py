@@ -252,14 +252,11 @@ class ContainerIdentity:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, object]) -> ContainerIdentity:
-        mounts = value.get("mounts")
-        if not isinstance(mounts, list) or not all(isinstance(mount, str) for mount in mounts):
-            raise ValueError("Container identity mounts must be a list of strings")
         return cls(
             container_id=_required_string(value, "container_id"),
             image_id=_required_string(value, "image_id"),
             hostname=_required_string(value, "hostname"),
-            mounts=tuple(mounts),
+            mounts=_required_string_tuple(value, "mounts"),
         )
 
 
@@ -334,20 +331,14 @@ class CheckpointManifest:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, object]) -> CheckpointManifest:
-        container = value.get("container")
-        apps = value.get("apps")
-        if not isinstance(container, Mapping):
-            raise TypeError("Checkpoint container identity must be an object")
-        if not isinstance(apps, list) or not all(isinstance(app, Mapping) for app in apps):
-            raise ValueError("Checkpoint application inventory must be a list of objects")
         return cls(
             name=_required_string(value, "name"),
             backup_path=Path(_required_string(value, "backup_path")),
             sha256=_required_string(value, "sha256"),
             database_name=_required_string(value, "database_name"),
             database_folder=_required_string(value, "database_folder"),
-            container=ContainerIdentity.from_dict(container),
-            apps=tuple(AppInventoryEntry.from_dict(app) for app in apps),
+            container=ContainerIdentity.from_dict(_required_mapping(value, "container")),
+            apps=tuple(AppInventoryEntry.from_dict(app) for app in _required_mapping_tuple(value, "apps")),
         )
 
 
@@ -376,6 +367,40 @@ def _required_string(value: Mapping[str, object], name: str) -> str:
     if not isinstance(item, str) or not item:
         raise ValueError(f"{name} must be a non-empty string")
     return item
+
+
+def _required_string_tuple(value: Mapping[str, object], name: str) -> tuple[str, ...]:
+    field = value.get(name)
+    if not isinstance(field, list):
+        raise TypeError(f"{name} must be a list of strings")
+    strings: list[str] = []
+    for item in field:
+        if not isinstance(item, str):
+            raise TypeError(f"{name} must be a list of strings")
+        strings.append(item)
+    return tuple(strings)
+
+
+def _required_mapping(value: Mapping[str, object], name: str) -> Mapping[str, object]:
+    return _string_keyed_mapping(value.get(name), f"{name} must be an object")
+
+
+def _required_mapping_tuple(value: Mapping[str, object], name: str) -> tuple[Mapping[str, object], ...]:
+    field = value.get(name)
+    if not isinstance(field, list):
+        raise TypeError(f"{name} must be a list of objects")
+    return tuple(_string_keyed_mapping(item, f"{name} must contain objects") for item in field)
+
+
+def _string_keyed_mapping(value: object, error: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise TypeError(error)
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise TypeError(f"{error}; object keys must be strings")
+        result[key] = item
+    return result
 
 
 def _required_bool(value: Mapping[str, object], name: str) -> bool:

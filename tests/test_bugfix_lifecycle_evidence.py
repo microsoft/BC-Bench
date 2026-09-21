@@ -49,9 +49,9 @@ def test_lifecycle_models_are_immutable(tmp_path: Path) -> None:
     trusted_source = TrustedSource(repository=paths.trusted_source, commit="a" * 40)
 
     with pytest.raises(FrozenInstanceError):
-        paths.evidence = tmp_path / "other"  # type: ignore[misc]
+        paths.evidence = tmp_path / "other"  # ty: ignore[invalid-assignment] - verifies frozen model rejection
     with pytest.raises(FrozenInstanceError):
-        trusted_source.commit = "b" * 40  # type: ignore[misc]
+        trusted_source.commit = "b" * 40  # ty: ignore[invalid-assignment] - verifies frozen model rejection
 
 
 def test_sha256_helpers_match_known_digest(tmp_path: Path) -> None:

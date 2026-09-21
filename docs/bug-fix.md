@@ -77,6 +77,10 @@ Comparing experimental configurations for GitHub Copilot with **claude-opus-4.6*
 
 **Status:** timeout-marked replay and explicit five-entry workflow selection are implemented, but operator preparation does not establish production readiness. Real-runner replay fixtures, checkpoint/fault rehearsals, live canaries, and controller validation/reviews remain pending. No production runner or frozen canary patches are supplied by this runbook.
 
+The workflow also exposes `workflow_call`. Before the workflow file is registered on the default branch, an approved experiment branch can use the already registered `.github\workflows\claude-evaluation.yml` as a launcher by dispatching that workflow at the candidate ref with `production-lifecycle: true`. The branch launcher fixes `agent: claude`, requires `category: bug-fix` and `repeat: "1"`, and gates every legacy Claude job off so the two evaluators cannot run together. Leaving `production-lifecycle` false preserves the legacy workflow.
+
+Set `rehearsal-only: true` to run the two-entry, ten-restore checkpoint gate without launching an agent, uploading evaluation-result artifacts, invoking summarization, or publishing leaderboard data. This mode implies the rehearsal path even when `rehearsal` is false. A successful rehearsal-only dispatch is acceptance evidence, not permission to skip the remaining replay, fault-injection, live-canary, cleanup, and controller-review gates.
+
 ### Methodology and metrics
 
 The result's `runtime_isolation` is **`database-checkpointed-single-container`**, not the legacy `package-normalized`. Each invocation owns one container, trusted prepared source **O**, a clean baseline database checkpoint **S0**, and, after a successful generated fix build, a fixed database checkpoint **SF**. The agent's complete patch is frozen only after its process tree and managed MCP clients have stopped with verified shutdown. **T** is the generated test, **F** the generated fix, **G** the trusted gold fix, and **B** the independent benchmark tests.

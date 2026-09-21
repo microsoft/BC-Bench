@@ -319,14 +319,14 @@ def test_checkpoint_models_are_immutable_and_json_paths_are_explicit(tmp_path: P
     )
 
     with pytest.raises(FrozenInstanceError):
-        identity.hostname = "changed"  # type: ignore[misc]
+        identity.hostname = "changed"  # ty: ignore[invalid-assignment] - verifies frozen model rejection
     with pytest.raises(FrozenInstanceError):
-        manifest.name = "changed"  # type: ignore[misc]
+        manifest.name = "changed"  # ty: ignore[invalid-assignment] - verifies frozen model rejection
 
     payload = manifest.to_dict()
     assert payload["backup_path"] == str(backup)
     assert payload["database_folder"] == "C:\\databases"
-    assert payload["container"]["mounts"] == sorted(identity.mounts)
+    assert payload["container"] == identity.to_dict()
     assert CheckpointManifest.from_dict(payload) == manifest
 
 
@@ -376,11 +376,13 @@ def test_capture_uses_unique_staging_without_deleting_preexisting_named_path(tmp
     first = manager.capture("baseline", (app,))
     second = manager.capture("baseline", (app,))
 
-    staging_paths = [
-        re.search(r"-StagingDirectory '([^']+)'", call).group(1)  # type: ignore[union-attr]
-        for call in runner.calls
-        if "Backup-BCBenchCheckpoint" in call
-    ]
+    staging_paths = []
+    for call in runner.calls:
+        if "Backup-BCBenchCheckpoint" not in call:
+            continue
+        match = re.search(r"-StagingDirectory '([^']+)'", call)
+        assert match is not None
+        staging_paths.append(match.group(1))
     assert len(set(staging_paths)) == 2
     assert marker.read_text(encoding="utf-8") == "keep"
     assert first == second
@@ -757,7 +759,17 @@ def test_restore_rejects_verification_mismatch(
         "company_endpoint_ready": True,
         "test_discovery_ready": True,
     }
-    payload[field] = value.to_dict() if isinstance(value, ContainerIdentity) else [entry.to_dict() for entry in value] if field == "apps" else value
+    if isinstance(value, ContainerIdentity):
+        payload[field] = value.to_dict()
+    elif field == "apps":
+        assert isinstance(value, tuple)
+        apps: list[dict[str, object]] = []
+        for entry in value:
+            assert isinstance(entry, AppInventoryEntry)
+            apps.append(entry.to_dict())
+        payload[field] = apps
+    else:
+        payload[field] = value
     runner.restore_payload = payload
 
     with pytest.raises(CheckpointInfrastructureError, match=message):
@@ -830,10 +842,9 @@ def test_restore_unexpected_post_staging_failures_cleanup_recover_and_skip_callb
 
         monkeypatch.setattr(manager, "_validate_hash", fail_staged_hash)
     elif seam == "invoke":
-        original = manager._invoke_json
 
         def fail_after_restore(operation: str, script: str):
-            payload = original(operation, script)
+            payload = CheckpointManager._invoke_json(manager, operation, script)
             if operation == "restore":
                 raise RuntimeError("unexpected restore failure")
             return payload

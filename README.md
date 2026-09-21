@@ -41,7 +41,7 @@ BC-Bench is open source, and you're welcome to fork and adapt it for your own us
 
 ### Isolated bug-fix lifecycle
 
-The **Opt-in production bug-fix evaluation** workflow (`.github\workflows\bugfix-production-evaluation.yml`) is separate from the legacy default and keeps leaderboard updates disabled. See the [operator runbook](docs/bug-fix.md#opt-in-production-lifecycle) for setup, Copilot/Claude/replay commands, metrics, evidence, and pending promotion gates.
+The **Opt-in production bug-fix evaluation** workflow (`.github\workflows\bugfix-production-evaluation.yml`) is separate from the legacy default and keeps leaderboard updates disabled. It supports a rehearsal-only gate that cannot launch a paid agent. See the [operator runbook](docs/bug-fix.md#opt-in-production-lifecycle) for setup, branch-launcher, Copilot/Claude/replay commands, metrics, evidence, and pending promotion gates.
 
 Both lifecycle harness commands support `--replay-patch` with optional `--replay-timeout` provenance; neither runs an agent during replay. The workflow's optional `canary-entries` JSON array selects exactly five validated IDs before provisioning. Leaving it empty preserves the existing four-entry `test-run` sample or full-dataset selection.
 

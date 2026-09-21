@@ -70,7 +70,7 @@ from bcbench.operations import (
 from bcbench.operations.filesystem_operations import remove_tree
 from bcbench.operations.git_operations import resolve_trusted_commit
 from bcbench.operations.project_operations import find_project_path, is_test_project, order_project_paths
-from bcbench.results.bugfix import BugFixMetricName, BugFixPhaseResult, BugFixPhaseStatus, BugFixResult
+from bcbench.results.bugfix import BugFixExecutionMode, BugFixMetricName, BugFixPhaseResult, BugFixPhaseStatus, BugFixResult
 from bcbench.types import AgentMetrics, ContainerConfig, EvaluationContext, ExperimentConfiguration
 
 logger = get_logger(__name__)
@@ -1205,7 +1205,7 @@ class ProductionBugFixLifecycle:
         s0: CheckpointManifest | None,
         sf: CheckpointManifest | None,
         analysis: SubmissionAnalysis | None,
-        execution_mode: str,
+        execution_mode: BugFixExecutionMode,
         timeout: bool,
         agent_stdout: str | None,
         agent_stderr: str | None,
@@ -1578,9 +1578,9 @@ class PowerShellLifecycleOwnershipApi:
                 )
             )
         )
-        if not isinstance(payload, list) or not all(isinstance(item, Mapping) for item in payload):
+        if not isinstance(payload, list):
             raise BugFixLifecycleInfrastructureError("Application inventory PowerShell output must be a list")
-        return tuple(AppInventoryEntry.from_dict(item) for item in payload)
+        return tuple(AppInventoryEntry.from_dict(_string_keyed_mapping(item, "Application inventory entry must be an object")) for item in payload)
 
     def close_contained_group(self) -> None:
         # The synchronous contained-process wrapper closes its Windows job before returning.
@@ -1753,9 +1753,7 @@ class PowerShellLifecycleOwnershipApi:
 
     def _invoke_json(self, script: str) -> Mapping[str, object]:
         payload = self._invoke_json_value(script)
-        if not isinstance(payload, Mapping):
-            raise BugFixLifecycleInfrastructureError("Lifecycle PowerShell JSON must be an object")
-        return payload
+        return _string_keyed_mapping(payload, "Lifecycle PowerShell JSON must be an object")
 
     def _invoke_json_value(self, script: str) -> object:
         result = self._invoke(script)
@@ -1830,3 +1828,14 @@ def _ps_single_quote(value: str) -> str:
 
 def _ps_quote(value: str | Path) -> str:
     return f"'{_ps_single_quote(str(value))}'"
+
+
+def _string_keyed_mapping(value: object, error: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise BugFixLifecycleInfrastructureError(error)
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise BugFixLifecycleInfrastructureError(f"{error}; object keys must be strings")
+        result[key] = item
+    return result

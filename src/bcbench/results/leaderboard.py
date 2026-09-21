@@ -296,8 +296,14 @@ class Leaderboard(BaseModel):
         if not isinstance(payload, dict):
             return payload
 
-        raw_runs = payload.get("runs")
-        raw_aggregates = payload.get("aggregate")
+        data: dict[str, Any] = {}
+        for key, value in payload.items():
+            if not isinstance(key, str):
+                return payload
+            data[key] = value
+
+        raw_runs = data.get("runs")
+        raw_aggregates = data.get("aggregate")
         if not isinstance(raw_runs, list) or not isinstance(raw_aggregates, list):
             return payload
 
@@ -324,7 +330,7 @@ class Leaderboard(BaseModel):
 
         if not rebuilt:
             return payload
-        return {**payload, "runs": runs, "aggregate": aggregates}
+        return {**data, "runs": runs, "aggregate": aggregates}
 
     @field_validator("runs", mode="before")
     @classmethod

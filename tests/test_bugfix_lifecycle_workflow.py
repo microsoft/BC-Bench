@@ -32,16 +32,31 @@ def _step(steps: list[dict], step_id: str) -> dict:
 def test_opt_in_dispatch_and_fixed_bugfix_matrix() -> None:
     workflow = _load(WORKFLOW)
     # PyYAML's YAML 1.1 loader treats the unquoted Actions "on" key as True.
-    assert set(workflow[True]) == {"workflow_dispatch"}
+    assert set(workflow[True]) == {"workflow_dispatch", "workflow_call"}
     inputs = workflow[True]["workflow_dispatch"]["inputs"]
-    assert set(inputs) == {"agent", "model", "test-run", "al-mcp", "al-lsp", "bc-mcp", "rehearsal", "canary-entries"}
+    assert set(inputs) == {
+        "agent",
+        "model",
+        "test-run",
+        "al-mcp",
+        "al-lsp",
+        "bc-mcp",
+        "rehearsal",
+        "rehearsal-only",
+        "canary-entries",
+    }
     assert inputs["agent"]["options"] == ["copilot", "claude"]
     assert inputs["model"]["type"] == "string"
     assert inputs["rehearsal"]["default"] is False
+    assert inputs["rehearsal-only"]["default"] is False
     assert inputs["test-run"]["default"] is True
     assert inputs["canary-entries"]["type"] == "string"
     assert inputs["canary-entries"]["default"] == ""
     assert inputs["canary-entries"]["required"] is False
+    reusable_inputs = workflow[True]["workflow_call"]["inputs"]
+    assert set(reusable_inputs) == set(inputs)
+    assert reusable_inputs["agent"]["type"] == "string"
+    assert reusable_inputs["rehearsal-only"]["type"] == "boolean"
     jobs = workflow["jobs"]
     assert jobs["get-entries"]["uses"] == "$/.github/workflows/get-entries.yml"
     assert jobs["get-entries"]["with"] == {"category": "bug-fix", "test-run": "${{ inputs.canary-entries == '' && inputs.test-run }}"}
@@ -52,6 +67,7 @@ def test_opt_in_dispatch_and_fixed_bugfix_matrix() -> None:
         "max-parallel": 4,
         "matrix": {"entry": "${{ fromJson(needs.select-entries.outputs.entries) }}"},
     }
+    assert "!inputs.rehearsal-only" in evaluate["if"]
 
 
 def _dataset_entry_ids(tmp_path: Path, monkeypatch, *, test_run: bool) -> list[str]:
@@ -135,6 +151,7 @@ def test_selection_validation_gates_all_provisioning_with_optional_rehearsal() -
     assert evaluate["needs"] == ["select-entries", "rehearsal"]
     assert "needs.select-entries.result == 'success'" in evaluate["if"]
     assert "needs.select-entries.outputs.entries != '[]'" in evaluate["if"]
+    assert "!inputs.rehearsal-only" in evaluate["if"]
     assert "(needs.rehearsal.result == 'success' || (!inputs.rehearsal && needs.rehearsal.result == 'skipped'))" in evaluate["if"]
 
 
@@ -170,7 +187,7 @@ def test_cleanup_and_separate_artifacts_always_run() -> None:
     quarantine = _step(steps, "quarantine")
     for step in (results, evidence, quarantine):
         assert "always()" in step["if"]
-        assert step["uses"] == "actions/upload-artifact@v6"
+        assert step["uses"].startswith("actions/upload-artifact@")
         assert steps.index(step) > steps.index(cleanup)
     for step in (evidence, quarantine):
         assert "steps.paths.outputs.protected_root != ''" in step["if"]
@@ -250,8 +267,9 @@ def test_setup_pins_helper_and_resolves_exact_dataset_before_tooling() -> None:
     assert "throw" in preflight["run"]
     assert steps.index(preflight) < steps.index(_step(steps, "setup"))
     assert "Install-Module -Name BcContainerHelper -RequiredVersion 6.1.18" in source
-    assert any(step.get("uses") == "azure/login@v3" for step in steps)
-    assert any(step.get("uses") == "actions/cache@v5" for step in steps)
+    assert any(step.get("uses", "").startswith("azure/login@") for step in steps)
+    assert any(step.get("uses", "").startswith("actions/cache@") for step in steps)
+    assert any(step.get("uses", "").startswith("actions/setup-dotnet@") for step in steps)
     resolve = _step(steps, "resolve")["run"]
     assert "Get-BCBenchDatasetPath -Category bug-fix" in resolve
     assert "Get-BCBenchEntryVersion" in resolve

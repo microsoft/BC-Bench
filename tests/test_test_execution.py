@@ -4,6 +4,7 @@ import subprocess
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from xml.etree.ElementTree import ParseError
 
 import pytest
@@ -54,7 +55,9 @@ def entries_json_from_command(command: str) -> str:
 
 @pytest.fixture
 def container(tmp_path: Path) -> ContainerConfig:
-    return create_evaluation_context(tmp_path).container
+    container = create_evaluation_context(tmp_path).container
+    assert container is not None
+    return container
 
 
 def test_test_execution_enum_values():
@@ -889,7 +892,7 @@ def test_run_tests_combines_fail_to_pass_and_pass_to_pass_summaries(tmp_path: Pa
 
     monkeypatch.setattr(bc_operations, "run_test_suite", run_test_suite)
 
-    summary = bc_operations.run_tests(entry, container, repo_path)
+    summary = bc_operations.run_tests(cast(Any, entry), container, repo_path)
 
     assert calls == [
         ([first], TestExpectation.ALL_PASS, container, repo_path),
@@ -902,7 +905,7 @@ def test_run_tests_rejects_empty_benchmark_selection_as_infrastructure_failure(t
     entry = SimpleNamespace(fail_to_pass=[], pass_to_pass=[])
 
     with pytest.raises(TestInfrastructureError) as error:
-        bc_operations.run_tests(entry, container, tmp_path)
+        bc_operations.run_tests(cast(Any, entry), container, tmp_path)
 
     assert error.value.reason == "No tests were requested."
     assert error.value.expectation is TestExpectation.ALL_PASS
@@ -931,7 +934,7 @@ def test_run_tests_treats_missing_hidden_benchmark_evidence_as_infrastructure_fa
     )
 
     with pytest.raises(TestInfrastructureError) as error:
-        bc_operations.run_tests(entry, container, repo_path)
+        bc_operations.run_tests(cast(Any, entry), container, repo_path)
 
     expected_prefix = "Discovery" if missing_evidence == "discovery" else "Execution"
     assert error.value.reason.startswith(f"{expected_prefix} evidence mismatch: missing 1")
@@ -961,7 +964,7 @@ def test_run_tests_keeps_hidden_assertion_failure_as_model_failure(
     )
 
     with pytest.raises(TestExecutionError) as error:
-        bc_operations.run_tests(entry, container, repo_path)
+        bc_operations.run_tests(cast(Any, entry), container, repo_path)
 
     assert error.value.failure_kind is TestExecutionFailureKind.OUTCOME
     assert error.value.reason == "Expected every test to pass, but 1 did not."

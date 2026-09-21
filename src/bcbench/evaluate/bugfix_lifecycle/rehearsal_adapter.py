@@ -2,7 +2,7 @@ import base64
 import json
 import secrets
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -25,6 +25,17 @@ def evaluator_powershell(script: str) -> subprocess.CompletedProcess[str]:
         check=False,
         timeout=1200,
     )
+
+
+def _string_keyed_mapping(value: object) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise CheckpointInfrastructureError("Rehearsal inventory entry must be an object")
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise CheckpointInfrastructureError("Rehearsal inventory entry keys must be strings")
+        result[key] = item
+    return result
 
 
 class RehearsalExecutionGuard:
@@ -135,9 +146,9 @@ $result | Add-Member -NotePropertyName discovered -NotePropertyValue $discovered
     def read_inventory(self) -> tuple[AppInventoryEntry, ...]:
         payload = self._invoke("$result = @{ apps = @(Get-BCBenchAppInventory @owned) }")
         apps = payload.get("apps")
-        if not isinstance(apps, list) or not all(isinstance(app, dict) for app in apps):
+        if not isinstance(apps, list):
             raise CheckpointInfrastructureError("Rehearsal inventory response is invalid")
-        return tuple(AppInventoryEntry.from_dict(app) for app in apps)
+        return tuple(AppInventoryEntry.from_dict(_string_keyed_mapping(app)) for app in apps)
 
     def create_probe(self) -> None:
         self._invoke("Invoke-BCBenchRehearsalProbe @probe -Mode Create | Out-Null\n$result = @{ created = $true }")

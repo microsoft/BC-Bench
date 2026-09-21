@@ -175,6 +175,7 @@ class TestAltoolEnvForwarding:
 
         config_json, names = build_mcp_config(config, entry, repo_path, runtime=_runtime(container, al_mcp=True), managed_clients=clients, require_evaluator_bridge=True)
 
+        assert config_json is not None
         assert json.loads(config_json)["mcpServers"]["altool"] == {"type": "http", "url": clients.start_al_mcp.return_value}
         assert "protected-bridge-secret" not in config_json
         assert "BC_SERVER_PASSWORD" not in config_json

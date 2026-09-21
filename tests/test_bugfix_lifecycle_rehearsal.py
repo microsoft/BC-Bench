@@ -3,12 +3,13 @@ import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from bcbench.dataset import TestEntry
 from bcbench.evaluate.bugfix_lifecycle.phases import classify_phase_error
-from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalFault, inject_test_evidence_fault
+from bcbench.evaluate.bugfix_lifecycle.rehearsal import RehearsalAdapter, RehearsalFault, inject_test_evidence_fault
 from bcbench.exceptions import TestExecutionError, TestInfrastructureError
 from bcbench.operations.bc_operations import require_test_evidence
 from bcbench.operations.test_execution import TestExpectation
@@ -176,8 +177,10 @@ def test_rehearsal_workflow_uses_two_entries_and_optional_success_gate() -> None
     jobs = yaml.safe_load((root / ".github" / "workflows" / "bugfix-production-evaluation.yml").read_text())["jobs"]
     assert jobs["rehearsal-entries"]["with"] == {"category": "bug-fix", "test-run": True}
     assert "inputs.rehearsal" in jobs["rehearsal-entries"]["if"]
+    assert "inputs.rehearsal-only" in jobs["rehearsal-entries"]["if"]
     assert "rehearsal" in jobs["evaluate"]["needs"]
     assert "always()" in jobs["evaluate"]["if"]
+    assert "!inputs.rehearsal-only" in jobs["evaluate"]["if"]
     for status in ("success", "skipped"):
         assert f"needs.rehearsal.result == '{status}'" in jobs["evaluate"]["if"]
     steps = jobs["rehearsal"]["steps"]
@@ -257,8 +260,12 @@ def test_real_checkpoint_manager_restores_sql_fixture_and_stops_on_first_mismatc
 
     def runner(script):
         if "Backup-BCBenchCheckpoint" in script:
-            staging = Path(re.search(r"-StagingDirectory '([^']+)'", script).group(1))
-            name = re.search(r"-Name '([^']+)'", script).group(1)
+            staging_match = re.search(r"-StagingDirectory '([^']+)'", script)
+            name_match = re.search(r"-Name '([^']+)'", script)
+            assert staging_match is not None
+            assert name_match is not None
+            staging = Path(staging_match.group(1))
+            name = name_match.group(1)
             backup = staging / "database.bak"
             backup.write_bytes(database.read_bytes())
             calls.append(f"capture:{name}")
@@ -274,7 +281,9 @@ def test_real_checkpoint_manager_restores_sql_fixture_and_stops_on_first_mismatc
             }
         else:
             if "Restore-BCBenchCheckpoint" in script:
-                encoded = re.search(r"FromBase64String\('([^']+)'\)", script).group(1)
+                encoded_match = re.search(r"FromBase64String\('([^']+)'\)", script)
+                assert encoded_match is not None
+                encoded = encoded_match.group(1)
                 manifest = json.loads(base64.b64decode(encoded))
                 calls.append(f"restore:{manifest['name']}")
                 database.write_bytes(Path(manifest["backup_path"]).read_bytes())
@@ -343,9 +352,9 @@ def test_real_checkpoint_manager_restores_sql_fixture_and_stops_on_first_mismatc
     output = paths.final_results / "rehearsal"
     if failure:
         with pytest.raises((CheckpointInfrastructureError, RuntimeError, KeyboardInterrupt)):
-            run_checkpoint_rehearsal(manager, s0, Adapter(), app, output, iterations=3)
+            run_checkpoint_rehearsal(manager, s0, cast(RehearsalAdapter, Adapter()), app, output, iterations=3)
     else:
-        run_checkpoint_rehearsal(manager, s0, Adapter(), app, output, iterations=3)
+        run_checkpoint_rehearsal(manager, s0, cast(RehearsalAdapter, Adapter()), app, output, iterations=3)
     records = [json.loads(path.read_text()) for path in sorted(output.glob("iteration-*.json"))]
     assert len(records) == (1 if failure else 3)
     assert all(record["verified"] is (failure is None) for record in records)
@@ -723,7 +732,7 @@ def test_probe_creation_refusal_does_not_restore_over_an_unowned_object(tmp_path
             pass
 
     with pytest.raises(CheckpointInfrastructureError, match="existing SQL probe"):
-        run_checkpoint_rehearsal(manager, s0, RefusedProbe(), app, paths.final_results / "rehearsal")
+        run_checkpoint_rehearsal(manager, s0, cast(RehearsalAdapter, RefusedProbe()), app, paths.final_results / "rehearsal")
     assert runner.calls == []
 
 
@@ -797,10 +806,10 @@ def test_injected_evidence_accepts_only_its_specific_production_failure(tmp_path
         (evidence / "results-50200.xml").write_text('<testsuite><testcase name="Other"/></testsuite>')
     monkeypatch.setattr(module, "inject_test_evidence_fault", inject)
     if attack is None:
-        assert module._run_iteration(manager, manifest, adapter, app, expected, 1, fault, {}) is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+        assert module._run_iteration(manager, manifest, cast(RehearsalAdapter, adapter), app, expected, 1, fault, {}) is BugFixPhaseStatus.INFRASTRUCTURE_ERROR
     else:
         with pytest.raises((CheckpointInfrastructureError, TestExecutionError, TestInfrastructureError)):
-            module._run_iteration(manager, manifest, adapter, app, expected, 1, fault, {})
+            module._run_iteration(manager, manifest, cast(RehearsalAdapter, adapter), app, expected, 1, fault, {})
 
 
 @pytest.mark.parametrize(
@@ -818,7 +827,7 @@ def test_every_database_file_must_be_online_even_when_snapshots_are_identical(se
     from bcbench.exceptions import CheckpointInfrastructureError
 
     files = (r"BC:1:ROWS:C:\databases\BC.mdf:ONLINE", secondary)
-    payload = {"database_files": list(files), "columns": [], "rows": [], "discovered": ["50100:Probe"]}
+    payload: dict[str, object] = {"database_files": list(files), "columns": [], "rows": [], "discovered": ["50100:Probe"]}
     with pytest.raises(CheckpointInfrastructureError, match="database_files"):
         RehearsalProbe.from_dict(payload)
     probe = RehearsalProbe(files, (), (), ("50100:Probe",))
@@ -851,7 +860,7 @@ def test_persistently_offline_baseline_file_blocks_probe_creation(tmp_path: Path
             pytest.fail("Probe creation must not run with an OFFLINE database file")
 
     with pytest.raises(CheckpointInfrastructureError, match="database_files"):
-        run_checkpoint_rehearsal(manager, s0, OfflineBaseline(), app, paths.final_results / "rehearsal")
+        run_checkpoint_rehearsal(manager, s0, cast(RehearsalAdapter, OfflineBaseline()), app, paths.final_results / "rehearsal")
     assert runner.calls == []
 
 
@@ -880,9 +889,13 @@ def test_test_shutdown_latch(tmp_path: Path, monkeypatch, failure: str) -> None:
         result = runner(script)
         payload = json.loads(result.stdout)
         if "Backup-BCBenchCheckpoint" in script:
-            payload["name"] = re.search(r"-Name '([^']+)'", script).group(1)
+            name_match = re.search(r"-Name '([^']+)'", script)
+            assert name_match is not None
+            payload["name"] = name_match.group(1)
         if "Restore-BCBenchCheckpoint" in script:
-            manifest = json.loads(base64.b64decode(re.search(r"FromBase64String\('([^']+)'\)", script).group(1)))
+            manifest_match = re.search(r"FromBase64String\('([^']+)'\)", script)
+            assert manifest_match is not None
+            manifest = json.loads(base64.b64decode(manifest_match.group(1)))
             state.update(probe=manifest["name"] != "baseline", mutated=False)
         return subprocess.CompletedProcess(result.args, result.returncode, json.dumps(payload), result.stderr)
 

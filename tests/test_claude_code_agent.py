@@ -472,12 +472,16 @@ def test_claude_code_contained_errors_preserve_class_and_stop_gateway(
         assert "status 3" in str(error.value)
         assert "agent stderr" not in str(error.value)
     if expected_error is AgentTimeoutError:
+        assert isinstance(error.value, AgentTimeoutError)
+        assert error.value.metrics is not None
+        assert error.value.metrics.execution_time is not None
         assert error.value.metrics.execution_time > 0
         assert error.value.config is not None
         assert error.value.stdout == "partial \ufffd"
         assert error.value.stderr == "timed out \ufffd"
         assert error.value.__cause__ is None
     if expected_error is ContainedProcessInfrastructureError:
+        assert isinstance(error.value, ContainedProcessInfrastructureError)
         if isinstance(contained_error, subprocess.CalledProcessError):
             assert error.value.__cause__ is contained_error
             assert error.value.wrapper_returncode == 17

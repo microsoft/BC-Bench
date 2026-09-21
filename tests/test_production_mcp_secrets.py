@@ -11,6 +11,7 @@ import pytest
 
 from bcbench.agent.claude.agent import run_claude_code
 from bcbench.agent.copilot.agent import run_copilot_agent
+from bcbench.agent.shared.al_mcp_bridge import AlMcpBridge
 from bcbench.agent.shared.contained_process import AgentExecutionPolicy, ContainedProcessRequest, WindowsIdentity, run_contained_process
 from bcbench.agent.shared.env import agent_subprocess_env
 from bcbench.agent.shared.managed_clients import ManagedAgentClients
@@ -99,21 +100,33 @@ def test_preprovisioned_restricted_identity_cannot_read_bridge_configuration(tmp
     values = {key: os.environ.get(f"BCBENCH_BRIDGE_TEST_{key}") for key in required}
     if not all(values.values()):
         pytest.skip("requires an explicitly provisioned disposable restricted bridge test identity, workspace, Python and worker")
-    workspace = Path(values["WORKSPACE"])
-    python = Path(values["PYTHON"])
-    worker = Path(values["WORKER"])
+    username = values["USERNAME"]
+    password = values["PASSWORD"]
+    workspace_value = values["WORKSPACE"]
+    python_value = values["PYTHON"]
+    worker_value = values["WORKER"]
+    assert username is not None
+    assert password is not None
+    assert workspace_value is not None
+    assert python_value is not None
+    assert worker_value is not None
+    workspace = Path(workspace_value)
+    python = Path(python_value)
+    worker = Path(worker_value)
     if not workspace.is_dir() or not python.is_file() or not worker.is_file():
         pytest.fail("preprovisioned bridge test paths must exist")
     secret = "synthetic-bc-credential-restricted-probe"
     clients = ManagedAgentClients()
     runtime = AgentRuntimeConfig(ContainerConfig("test", "agent", secret, "CRONUS"), al_mcp=True)
     config = {"mcp": {"servers": [{"name": "altool", "type": "stdio", "command": sys.executable, "args": [str(_SERVER), "launchmcpserver"]}]}}
-    identity = WindowsIdentity(values["USERNAME"], values["PASSWORD"])
+    identity = WindowsIdentity(username, password)
     # The probe is passed as code because the production identity cannot read this benchmark tree.
     code = _PROBE.read_text(encoding="utf-8")
     try:
         mcp, _ = build_mcp_config(config, create_dataset_entry(), tmp_path, runtime, managed_clients=clients, require_evaluator_bridge=True)
-        bridge = clients._stoppers[0].__self__
+        assert mcp is not None
+        bridge = getattr(clients._stoppers[0], "__self__", None)
+        assert isinstance(bridge, AlMcpBridge)
         result = run_contained_process(
             ContainedProcessRequest(
                 (str(python), "-c", code, mcp, str(bridge._root / "server.json")),

@@ -24,7 +24,23 @@ def _read_evidence(path: Path, root: Path) -> dict[str, object]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise TypeError("Expected an evidence object")
-    return value
+    evidence: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise TypeError("Expected evidence object keys to be strings")
+        evidence[key] = item
+    return evidence
+
+
+def _evidence_mapping(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{name} evidence must be an object")
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise TypeError(f"{name} evidence keys must be strings")
+        result[key] = item
+    return result
 
 
 def require_rehearsal_evidence(
@@ -47,10 +63,8 @@ def _validate_rehearsal_evidence(
     output = resources.paths.final_results / "rehearsal"
     checkpoints = _read_evidence(output / "checkpoints.json", root)
     official_value, rehearsal_value = checkpoints["official_s0"], checkpoints["rehearsal_only"]
-    if not isinstance(official_value, dict) or not isinstance(rehearsal_value, dict):
-        raise TypeError("Checkpoint evidence must contain two manifests")
-    official = CheckpointManifest.from_dict(official_value)
-    rehearsal = CheckpointManifest.from_dict(rehearsal_value)
+    official = CheckpointManifest.from_dict(_evidence_mapping(official_value, "Official checkpoint"))
+    rehearsal = CheckpointManifest.from_dict(_evidence_mapping(rehearsal_value, "Rehearsal checkpoint"))
     for manifest in (official, rehearsal):
         require_strict_descendant(manifest.backup_path, resources.paths.checkpoints, "backup", "protected checkpoints")
         reject_reparse_components(manifest.backup_path, root)

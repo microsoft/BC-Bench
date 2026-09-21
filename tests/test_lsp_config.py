@@ -81,6 +81,7 @@ class TestSharedBehavior:
         (default / "keep.txt").write_text("nonproduction")
         result = build_al_lsp_plugin(entry, EvaluationCategory.BUG_FIX, repo_path, harness, _runtime(), plugin_root=production_root)
         assert result == production_root / _PLUGIN_FOLDER
+        assert result is not None
         server = _read_lsp(production_root)
         assert ("lspServers" in server) == (harness is AgentHarness.COPILOT)
         build_al_lsp_plugin(entry, EvaluationCategory.BUG_FIX, repo_path, harness, None, plugin_root=production_root)

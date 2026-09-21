@@ -11,6 +11,7 @@ import time
 from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -328,9 +329,9 @@ def test_public_models_are_immutable():
     assert request.identity is identity
     assert result.returncode == 0
     with pytest.raises(AttributeError):
-        identity.username = "other"
+        identity.username = "other"  # ty: ignore[invalid-assignment] - verifies frozen model rejection
     with pytest.raises(TypeError):
-        policy.environment_overrides["TMP"] = r"C:\agent-logs\temp"
+        cast(dict[str, str], policy.environment_overrides)["TMP"] = r"C:\agent-logs\temp"
 
 
 def test_powershell_uses_checked_job_object_wrapper_methods():

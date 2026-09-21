@@ -147,7 +147,7 @@ def run_scan(
         scan_kwargs["attack_strategies"] = attack_strategies
 
     logger.info(f"Starting red team scan -> {output_path}")
-    result = asyncio.run(red_team.scan(**scan_kwargs))  # ty: ignore[unresolved-attribute]
+    result = asyncio.run(red_team.scan(**scan_kwargs))
     # A non-empty attack list can still be entirely unscored, which the SDK reports as a 0% ASR scorecard.
     if not result.attack_details or not any(detail.get("attack_success") is not None for detail in result.attack_details):
         raise RuntimeError("Red team scan completed without any evaluated attacks. Inspect the scan logs for incomplete objectives.") from last_target_error

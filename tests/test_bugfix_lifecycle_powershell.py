@@ -7,7 +7,7 @@ import subprocess
 import sys
 from hashlib import sha256
 from pathlib import Path
-from typing import get_args
+from typing import Any, get_args
 from unittest.mock import patch
 
 import pytest
@@ -113,7 +113,7 @@ def _run_pwsh(script: str, env: dict[str, str] | None = None) -> str:
     return result.stdout.strip()
 
 
-def _last_json(output: str) -> object:
+def _last_json(output: str) -> Any:
     return json.loads(output.splitlines()[-1])
 
 
@@ -2499,7 +2499,7 @@ catch {{
             assert "inspect-id:owned-id" in payload["order"]
 
 
-def _run_setup_failure_with_compiler_root(tmp_path: Path, failure_mode: str) -> dict[str, object]:
+def _run_setup_failure_with_compiler_root(tmp_path: Path, failure_mode: str) -> dict[str, Any]:
     entry_root = tmp_path / "entry"
     protected_root = tmp_path / "protected"
     compiler_root = tmp_path / "compiler"
@@ -2837,7 +2837,7 @@ catch {{
     assert f"::add-mask::{output_values['BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG']}" in raw_output
     assert f"::add-mask::{output_values['BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG']}" in raw_output
 
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
     entry = create_dataset_entry(instance_id="owner__repo-11")
 
     class Lifecycle:

@@ -761,8 +761,12 @@ def test_leaderboard_rebuilds_existing_bugfix_aggregate_after_synthetic_identity
 
     leaderboard = Leaderboard.load(path)
 
-    assert all(run.instance_results_complete is False for run in leaderboard.runs)
-    assert leaderboard.aggregate[0].pass_hat_5 is None
+    bugfix_runs = [run for run in leaderboard.runs if isinstance(run, BugFixResultSummary)]
+    assert len(bugfix_runs) == len(leaderboard.runs)
+    assert all(run.instance_results_complete is False for run in bugfix_runs)
+    bugfix_aggregate = leaderboard.aggregate[0]
+    assert isinstance(bugfix_aggregate, BugFixLeaderboardAggregate)
+    assert bugfix_aggregate.pass_hat_5 is None
 
 
 def test_checkpointed_bugfix_aggregate_round_trips():

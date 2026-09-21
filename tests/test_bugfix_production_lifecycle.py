@@ -8,6 +8,7 @@ import tempfile
 from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
@@ -132,7 +133,7 @@ class FakeEvidence:
         self.calls.append(f"save-phase:{name}:{result.status.value}")
         return self.save_text(f"{name}.json", result.model_dump_json())
 
-    def save_final_result(self, result: object) -> Path:
+    def save_final_result(self, result: Any) -> Path:
         self.calls.append("save-final-result")
         self.final_result_attempts += 1
         if self.final_result_failure == "before" and self.final_result_attempts == 1:
@@ -403,10 +404,10 @@ def _harness(tmp_path: Path):
         return "F+T"
 
     lifecycle = BugFixProductionLifecycle(
-        evidence_store=evidence,
-        workspace_builder=workspace,
-        checkpoint_manager=checkpoint,
-        phase_runner_factory=lambda trusted: phases,
+        evidence_store=cast(Any, evidence),
+        workspace_builder=cast(Any, workspace),
+        checkpoint_manager=cast(Any, checkpoint),
+        phase_runner_factory=cast(Any, lambda trusted: phases),
         ownership_api=ownership,
         baseline_publisher=baseline_publish,
         analyzer=lambda repo, patch, trusted, allowed: _submission(),

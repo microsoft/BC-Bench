@@ -279,7 +279,11 @@ class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
         if not isinstance(payload, dict):
             return payload
 
-        data: dict[str, Any] = dict(payload)
+        data: dict[str, Any] = {}
+        for key, value in payload.items():
+            if not isinstance(key, str):
+                raise TypeError("Bug-fix summary keys must be strings")
+            data[key] = value
         runtime_isolation = data.get("runtime_isolation", "package-normalized")
         has_instance_results = "instance_results" in data
         if "instance_results_complete" not in data and _uses_legacy_synthetic_instance_ids(data.get("instance_results")):

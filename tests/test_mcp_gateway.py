@@ -140,6 +140,7 @@ def idle_sse_gateway():
     listener.start()
     gateway = BcMcpGateway(f"http://127.0.0.1:{upstream.server_address[1]}/BC", "admin", "secret", None).start()
     server = gateway._server
+    assert server is not None
     try:
         yield gateway, release
     finally:

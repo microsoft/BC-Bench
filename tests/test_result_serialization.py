@@ -3,7 +3,8 @@ import json
 import pytest
 
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.summary import EvaluationResultSummary
+from bcbench.results.bugfix import BugFixResult
+from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
@@ -60,6 +61,7 @@ class TestCategorySerialization:
 
         result = BaseEvaluationResult.from_json(payload)
 
+        assert isinstance(result, BugFixResult)
         assert result.category == EvaluationCategory.BUG_FIX
         assert result.infrastructure_failure is False
 
@@ -142,6 +144,7 @@ class TestCategorySerialization:
         summary = EvaluationResultSummary.from_json(payload)
 
         # Pydantic handles the enum conversion automatically
+        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
         assert summary.category == EvaluationCategory.TEST_GENERATION
         assert summary.infrastructure_failed == 0
 
@@ -158,6 +161,7 @@ class TestCategorySerialization:
         loaded = BaseEvaluationResult.from_json(payload)
 
         assert payload["infrastructure_failure"] is True
+        assert isinstance(loaded, BugFixResult)
         assert loaded.infrastructure_failure is True
 
     def test_test_generation_pre_patch_failed_in_jsonl(self, tmp_path):

@@ -473,6 +473,9 @@ def test_run_copilot_agent_preserves_error_class_and_stops_gateway(
         assert "status 3" in str(error.value)
         assert "agent stderr" not in str(error.value)
     if isinstance(agent_failure, subprocess.TimeoutExpired):
+        assert isinstance(error.value, AgentTimeoutError)
+        assert error.value.metrics is not None
+        assert error.value.metrics.execution_time is not None
         assert error.value.metrics.execution_time > 0
         assert error.value.config is not None
         assert error.value.stdout == "partial \ufffd"
