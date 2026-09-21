@@ -23,6 +23,9 @@ class TestEvaluationResultFactories:
         assert result.model == "test-model"
         assert result.agent_name == AgentHarness.COPILOT
         assert result.error_message is None
+        assert result.generated_test_pre_patch_failed is True
+        assert result.generated_test_post_patch_passed is True
+        assert result.benchmark_test_passed is True
 
     def test_create_build_failure_result_fills_all_fields_correctly(self, sample_evaluation_context):
         error_msg = "Build failed: src/app"
@@ -46,6 +49,9 @@ class TestEvaluationResultFactories:
         assert result.model == "test-model"
         assert result.agent_name == AgentHarness.COPILOT
         assert result.error_message == "Tests failed"
+        assert result.generated_test_pre_patch_failed is False
+        assert result.generated_test_post_patch_passed is False
+        assert result.benchmark_test_passed is False
 
     def test_different_context_values_are_correctly_populated(self, tmp_path):
         entry = create_dataset_entry(
