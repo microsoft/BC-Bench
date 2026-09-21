@@ -1655,7 +1655,7 @@ function New-BCBenchAgentBcUser {
 
     & {
         Set-StrictMode -Off
-        Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+        Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking -Global
     }
     $username = New-BCBenchScopedUsername -Prefix bca -InstanceId $InstanceId
     $password = New-BCBenchPassword
@@ -1725,7 +1725,7 @@ function Remove-BCBenchAgentBcUser {
     if ($Username -notmatch "^bca-[a-f0-9]{7}-[a-f0-9]{6}$") {
         throw "Refusing to remove unexpected BC username '$Username'."
     }
-    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking -Global
     $context = [PSCustomObject]@{
         ContainerName         = $ContainerName
         ContainerId           = $ExpectedContainerId

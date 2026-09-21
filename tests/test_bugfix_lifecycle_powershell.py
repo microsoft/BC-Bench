@@ -269,6 +269,7 @@ $metadata | ConvertTo-Json -Compress -Depth 8
     assert any('ValidateSet("bug-fix")' in attribute for attribute in metadata["Category"])
     assert not any("Mandatory" in attribute for attribute in metadata["ReplayPatch"])
     assert "Import-Module BcContainerHelper -RequiredVersion 6.1.18" in source
+    assert source.count("Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking -Global") == 2
     assert "New-BCContainerSync" in source
     assert 'Join-Path $EntryRoot "agent-tools"' in source
     assert '"--label"' in source
