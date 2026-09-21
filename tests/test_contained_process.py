@@ -106,7 +106,11 @@ kernel32.ExitProcess(int(sys.argv[1], 0))
 
 
 def _pid_is_running(pid: int) -> bool:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    if sys.platform != "win32":
+        raise OSError("Windows process APIs are unavailable on this platform")
+    from ctypes import WinDLL, WinError, get_last_error
+
+    kernel32 = WinDLL("kernel32", use_last_error=True)
     kernel32.OpenProcess.argtypes = (ctypes.c_ulong, ctypes.c_bool, ctypes.c_ulong)
     kernel32.OpenProcess.restype = ctypes.c_void_p
     kernel32.GetExitCodeProcess.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong))
@@ -119,7 +123,7 @@ def _pid_is_running(pid: int) -> bool:
     try:
         exit_code = ctypes.c_ulong()
         if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise WinError(get_last_error())
         return exit_code.value == _STILL_ACTIVE
     finally:
         kernel32.CloseHandle(handle)
@@ -266,11 +270,19 @@ def _created_pid(events: list[str]) -> int:
 
 
 def _is_elevated() -> bool:
-    return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    if sys.platform != "win32":
+        return False
+    from ctypes import windll
+
+    return bool(windll.shell32.IsUserAnAdmin())
 
 
 def _can_open_named_pipe(path: str) -> bool:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    if sys.platform != "win32":
+        return False
+    from ctypes import WinDLL
+
+    kernel32 = WinDLL("kernel32", use_last_error=True)
     kernel32.CreateFileW.argtypes = (
         ctypes.c_wchar_p,
         ctypes.c_ulong,
