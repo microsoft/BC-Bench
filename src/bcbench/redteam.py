@@ -147,9 +147,14 @@ def run_scan(
         scan_kwargs["attack_strategies"] = attack_strategies
 
     logger.info(f"Starting red team scan -> {output_path}")
-    result = asyncio.run(red_team.scan(**scan_kwargs))
+    scan = getattr(red_team, "scan", None)
+    if not callable(scan):
+        raise TypeError("The installed Azure evaluation SDK does not expose RedTeam.scan")
+    scan_result = scan(**scan_kwargs)
+    result = asyncio.run(scan_result) if isinstance(scan_result, Coroutine) else scan_result
+    attack_details = getattr(result, "attack_details", None)
     # A non-empty attack list can still be entirely unscored, which the SDK reports as a 0% ASR scorecard.
-    if not result.attack_details or not any(detail.get("attack_success") is not None for detail in result.attack_details):
+    if not isinstance(attack_details, list) or not attack_details or not any(isinstance(detail, dict) and detail.get("attack_success") is not None for detail in attack_details):
         raise RuntimeError("Red team scan completed without any evaluated attacks. Inspect the scan logs for incomplete objectives.") from last_target_error
     logger.info(f"Red team scan complete: {output_path}")
     return output_path
