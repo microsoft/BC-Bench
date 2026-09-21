@@ -44,6 +44,8 @@ from bcbench.results.bugfix import BugFixMetricName, BugFixPhaseResult, BugFixPh
 from bcbench.types import AgentMetrics, AgentRuntimeConfig, ContainerConfig, ExperimentConfiguration
 from tests.conftest import create_evaluation_context
 
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Production bug-fix lifecycle requires Windows")
+
 
 def _paths(tmp_path: Path) -> BugFixLifecyclePaths:
     entry = tmp_path / "entry"

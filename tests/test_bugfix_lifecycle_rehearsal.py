@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -14,6 +15,8 @@ from bcbench.exceptions import TestExecutionError, TestInfrastructureError
 from bcbench.operations.bc_operations import require_test_evidence
 from bcbench.operations.test_execution import TestExpectation
 from bcbench.results.bugfix import BugFixPhaseStatus
+
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Production bug-fix rehearsal requires Windows")
 
 
 def _valid_evidence(directory: Path) -> tuple[TestEntry, ...]:

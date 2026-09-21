@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -156,6 +157,8 @@ class LifecycleCliFixture:
 
 @pytest.fixture
 def lifecycle_cli_fixture(tmp_path: Path) -> LifecycleCliFixture:
+    if sys.platform != "win32":
+        pytest.skip("Production bug-fix lifecycle CLI requires Windows")
     entry = create_dataset_entry()
     entry_root = tmp_path / "entry"
     protected_root = tmp_path / "protected"
