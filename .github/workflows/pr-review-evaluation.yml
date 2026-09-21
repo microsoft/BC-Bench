@@ -9,19 +9,39 @@ on:
       model:
         description: "Copilot model used internally by BC PR Review"
         required: false
-        default: "gpt-5.6-luna"
+        default: "gpt-5.6-sol"
         type: choice
         options:
-          - "claude-sonnet-5"
-          - "claude-opus-5"
+          - "gpt-5.4"
           - "gpt-5.6-sol"
           - "gpt-5.6-terra"
           - "gpt-5.6-luna"
           - "gpt-5.3-codex"
           - "mai-code-1.1-flash"
-          - "gemini-3.7-flash"
+      leaf-model:
+        description: "Model requested for domain leaf agents"
+        required: false
+        default: "gpt-5.6-luna"
+        type: choice
+        options:
+          - "gpt-5.4"
+          - "gpt-5.6-luna"
+          - "mai-code-1.1-flash"
+      leaf-execution:
+        description: "Deterministic leaf scheduling mode"
+        required: false
+        default: "serial"
+        type: choice
+        options:
+          - "serial"
+          - "parallel"
+      max-leaf-concurrency:
+        description: "Maximum simultaneous leaves in parallel mode"
+        required: false
+        default: "4"
+        type: string
       engine-sha:
-        description: "Full BC-ALAgents commit SHA (blank uses the default pin)"
+        description: "Full BC-ALAgents commit SHA"
         required: false
         default: ""
         type: string
@@ -46,6 +66,11 @@ on:
           - "3"
           - "4"
           - "5"
+      entries:
+        description: "Optional JSON array of entry IDs for a focused experiment"
+        required: false
+        default: ""
+        type: string
       git-ref:
         description: "Branch to record for experiment tracking (auto-filled on requeue; leave blank for manual runs)"
         required: false
@@ -95,7 +120,7 @@ jobs:
       fail-fast: false
       max-parallel: 64
       matrix:
-        entry: ${{ fromJson(needs.get-entries.outputs.entries) }}
+        entry: ${{ fromJson(inputs.entries != '' && inputs.entries || needs.get-entries.outputs.entries) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -128,6 +153,12 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          COPILOT_REVIEW_CLI_VERSION: "1.0.83"
+          COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}
+          COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}
+          COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}
+          MINIMUM_SEVERITY: Medium
+          AGENT_MINIMUM_SEVERITY: Medium
         run: |
           Write-Output "::add-mask::$env:COPILOT_GITHUB_TOKEN"
 
@@ -135,14 +166,65 @@ jobs:
             --model "${{ inputs.model }}" `
             --engine-path "${{ steps.install-harnesses.outputs.bc-alagents-path }}" `
             --repo-path "${{ steps.setup-env.outputs.repo_path }}" `
-            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}"
+            --output-dir "${{ env.EVALUATION_RESULTS_DIR }}" 2>&1 |
+            Tee-Object -FilePath evaluation.log
+          exit $LASTEXITCODE
+
+      - name: Collect experiment diagnostics
+        if: always()
+        shell: pwsh
+        env:
+          TARGET_REPO: ${{ steps.setup-env.outputs.repo_path }}
+          ENTRY_ID: ${{ matrix.entry }}
+        run: |
+          $destination = New-Item -ItemType Directory -Path diagnostics -Force
+          $allowed = @(
+            '_run-manifest.json', '_run-metrics.json', '_review-report.json',
+            '_filter-report.json', 'al-code-review-findings.json',
+            'al-code-review-raw.txt', 'agent-output.txt', 'task-context.json'
+          )
+          if (Test-Path -LiteralPath $env:EVALUATION_RESULTS_DIR) {
+            $root = (Resolve-Path -LiteralPath $env:EVALUATION_RESULTS_DIR).Path
+            Get-ChildItem -LiteralPath $root -Recurse -File |
+              Where-Object { $_.Name -in $allowed } |
+              ForEach-Object {
+                $relative = [IO.Path]::GetRelativePath($root, $_.FullName)
+                $target = Join-Path $destination.FullName $relative
+                New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
+                Copy-Item -LiteralPath $_.FullName -Destination $target
+              }
+          }
+          if ($env:TARGET_REPO) {
+            foreach ($name in @('review.json', 'judge_results.json')) {
+              $source = Join-Path $env:TARGET_REPO $name
+              if (Test-Path -LiteralPath $source -PathType Leaf) {
+                Copy-Item -LiteralPath $source -Destination $destination.FullName
+              }
+            }
+          }
+          if (Test-Path -LiteralPath evaluation.log) {
+            Copy-Item -LiteralPath evaluation.log -Destination $destination.FullName
+          }
+          tar -czf "diagnostics-$env:ENTRY_ID.tar.gz" -C $destination.FullName .
+          if ($LASTEXITCODE -ne 0) { throw "Could not archive experiment diagnostics." }
+
+      - name: Upload experiment diagnostics
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: diagnostics-${{ github.run_id }}-${{ matrix.entry }}
+          path: diagnostics-${{ matrix.entry }}.tar.gz
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
           name: evaluation-results-${{ github.run_id }}-${{ matrix.entry }}
-          path: ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+          path: |
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/*.jsonl
+            ${{ env.EVALUATION_RESULTS_DIR }}/**/_run-manifest.json
           retention-days: ${{ (inputs.test-run || inputs.modified-only) && 1 || 30 }}
 
   summarize-results:
@@ -157,7 +239,7 @@ jobs:
       agent: "BC PR Review"
       # Scores only the modified entries, so publishing it to Braintrust/Kusto or the
       # leaderboard would record a partial corpus as a benchmark result.
-      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}
+      mock: ${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.entries != '' }}
       category: code-review
       git-ref: ${{ inputs.git-ref || github.ref_name }}
     secrets: inherit
@@ -174,4 +256,4 @@ jobs:
       repeat: ${{ inputs.repeat }}
       existing-tag: ${{ needs.pin-commit.outputs.tag-name }}
       workflow-inputs: |
-        {"model": "${{ inputs.model }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "git-ref": "${{ inputs.git-ref || github.ref_name }}"}
+        {"model": "${{ inputs.model }}", "leaf-model": "${{ inputs.leaf-model }}", "leaf-execution": "${{ inputs.leaf-execution }}", "max-leaf-concurrency": "${{ inputs.max-leaf-concurrency }}", "engine-sha": ${{ toJSON(inputs.engine-sha) }}, "test-run": "${{ inputs.test-run }}", "entries": ${{ toJSON(inputs.entries) }}, "git-ref": "${{ inputs.git-ref || github.ref_name }}"}

@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "ecf8e31759d6ddd6d78e3a0b7836b40134368009"
+DEFAULT_ENGINE_SHA = "1fcaa40fa0934c22887f1a89000f33728f831a8f"
 PWSH = shutil.which("pwsh")
 
 
@@ -40,6 +41,8 @@ def test_claude_workflow_routes_code_review_through_claude() -> None:
 
 def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
+    workflow_data = yaml.safe_load(workflow)
+    inputs = workflow_data[True]["workflow_dispatch"]["inputs"]
     config = yaml.safe_load(AGENT_CONFIG.read_text(encoding="utf-8"))
 
     assert "category: code-review" in workflow
@@ -54,10 +57,98 @@ def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     assert 'agent: "BC PR Review"' in workflow
     assert '"mai-code-1.1-flash"' in workflow
     assert "mai-code-1-flash-picker" not in workflow
-    assert '"gemini-3.7-flash"' in workflow
-    assert "gemini-3.6-flash" not in workflow
-    for input_name in ("model:", "engine-sha:", "test-run:", "repeat:", "git-ref:", "modified-only:"):
+    assert "claude-" not in workflow
+    assert "gemini-" not in workflow
+    assert inputs["model"]["default"] == "gpt-5.6-sol"
+    assert inputs["model"]["options"] == [
+        "gpt-5.4",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.3-codex",
+        "mai-code-1.1-flash",
+    ]
+    assert inputs["leaf-model"]["default"] == "gpt-5.6-luna"
+    assert inputs["leaf-model"]["options"] == ["gpt-5.4", "gpt-5.6-luna", "mai-code-1.1-flash"]
+    assert 'leaf-execution:\n        description: "Deterministic leaf scheduling mode"\n        required: false\n        default: "serial"' in workflow
+    assert 'max-leaf-concurrency:\n        description: "Maximum simultaneous leaves in parallel mode"' in workflow
+    assert 'COPILOT_REVIEW_CLI_VERSION: "1.0.83"' in workflow
+    assert "COPILOT_REVIEW_LEAF_MODEL: ${{ inputs.leaf-model }}" in workflow
+    assert "COPILOT_REVIEW_LEAF_EXECUTION: ${{ inputs.leaf-execution }}" in workflow
+    assert "COPILOT_REVIEW_MAX_LEAF_CONCURRENCY: ${{ inputs.max-leaf-concurrency }}" in workflow
+    assert workflow_data["concurrency"]["group"] == "pr-review-evaluation-${{ inputs.modified-only && 'modified' || inputs.test-run && 'test' || 'full' }}"
+    assert "repetition-id" not in workflow
+    for input_name in (
+        "model:",
+        "leaf-model:",
+        "leaf-execution:",
+        "max-leaf-concurrency:",
+        "engine-sha:",
+        "test-run:",
+        "modified-only:",
+        "repeat:",
+        "entries:",
+        "git-ref:",
+    ):
         assert input_name in workflow
+
+
+def test_pr_review_focused_selection_and_diagnostics_are_wired() -> None:
+    workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
+    job = workflow["jobs"]["evaluate-with-pr-review"]
+    assert job["strategy"]["matrix"]["entry"] == "${{ fromJson(inputs.entries != '' && inputs.entries || needs.get-entries.outputs.entries) }}"
+    assert job["strategy"]["max-parallel"] == 64
+    run = next(step for step in job["steps"] if step["name"].startswith("Run BC PR Review"))
+    assert run["env"]["MINIMUM_SEVERITY"] == "Medium"
+    assert run["env"]["AGENT_MINIMUM_SEVERITY"] == "Medium"
+    assert "Tee-Object -FilePath evaluation.log" in run["run"]
+    assert "exit $LASTEXITCODE" in run["run"]
+    collect = next(step for step in job["steps"] if step["name"] == "Collect experiment diagnostics")
+    upload = next(step for step in job["steps"] if step["name"] == "Upload experiment diagnostics")
+    assert collect["if"] == upload["if"] == "always()"
+    assert "Where-Object { $_.Name -in $allowed }" in collect["run"]
+    assert "judge_results.json" in collect["run"]
+    assert upload["with"]["path"] == "diagnostics-${{ matrix.entry }}.tar.gz"
+    assert upload["with"]["if-no-files-found"] == "error"
+
+
+@pytest.mark.skipif(PWSH is None or shutil.which("tar") is None, reason="PowerShell and tar are required to test diagnostics")
+def test_pr_review_diagnostics_archive_only_allowed_outputs(tmp_path: Path) -> None:
+    assert PWSH is not None
+    workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
+    collect = next(step for step in workflow["jobs"]["evaluate-with-pr-review"]["steps"] if step["name"] == "Collect experiment diagnostics")
+    results = tmp_path / "evaluation_results"
+    leaf = results / "run" / "leaf-results" / "performance"
+    leaf.mkdir(parents=True)
+    (leaf / "_review-report.json").write_text("{}", encoding="utf-8")
+    (leaf / "unrelated.json").write_text("not an output", encoding="utf-8")
+    (results / "run" / "_run-manifest.json").write_text("{}", encoding="utf-8")
+    target_repo = tmp_path / "target"
+    target_repo.mkdir()
+    (target_repo / "review.json").write_text("[]", encoding="utf-8")
+    (target_repo / "judge_results.json").write_text("[]", encoding="utf-8")
+    (target_repo / ".env").write_text("do not upload", encoding="utf-8")
+    (tmp_path / "evaluation.log").write_text("redacted log", encoding="utf-8")
+
+    result = subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", collect["run"]],
+        cwd=tmp_path,
+        env={**os.environ, "EVALUATION_RESULTS_DIR": str(results), "TARGET_REPO": str(target_repo), "ENTRY_ID": "synthetic__performance-009"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    with tarfile.open(tmp_path / "diagnostics-synthetic__performance-009.tar.gz") as archive:
+        names = {member.name.removeprefix("./") for member in archive.getmembers() if member.isfile()}
+    assert names == {
+        "run/leaf-results/performance/_review-report.json",
+        "run/_run-manifest.json",
+        "review.json",
+        "judge_results.json",
+        "evaluation.log",
+    }
 
 
 def test_pr_review_workflow_passes_optional_engine_sha_to_harness_action() -> None:
@@ -77,7 +168,7 @@ def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     summarize = workflow["jobs"]["summarize-results"]["with"]
 
-    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' }}"
+    assert summarize["mock"] == "${{ inputs.test-run || inputs.modified-only || inputs.engine-sha != '' || inputs.entries != '' }}"
     # Repeats stay available so an override can be measured over several runs.
     assert "inputs.engine-sha" not in workflow["jobs"]["requeue"]["if"]
 
@@ -86,10 +177,12 @@ def test_engine_sha_override_is_never_published_as_a_benchmark_result() -> None:
 def test_pr_review_requeue_preserves_engine_sha(engine_sha: str) -> None:
     workflow = yaml.safe_load(_workflow("pr-review-evaluation.yml"))
     payload = workflow["jobs"]["requeue"]["with"]["workflow-inputs"]
-    expression = "${{ toJSON(inputs.engine-sha) }}"
+    engine_expression = "${{ toJSON(inputs.engine-sha) }}"
+    entries_expression = "${{ toJSON(inputs.entries) }}"
 
-    assert expression in payload
-    assert json.loads(payload.replace(expression, json.dumps(engine_sha)))["engine-sha"] == engine_sha
+    assert engine_expression in payload
+    parsed = json.loads(payload.replace(engine_expression, json.dumps(engine_sha)).replace(entries_expression, json.dumps("")))
+    assert parsed["engine-sha"] == engine_sha
 
 
 def test_requeue_workflow_reads_inputs_from_environment() -> None:
@@ -128,7 +221,7 @@ def test_pr_review_workflow_treats_modified_only_as_a_partial_run() -> None:
 def test_agent_harness_action_pins_published_copilot_version() -> None:
     action = (ACTIONS / "install-agent-harnesses" / "action.yml").read_text(encoding="utf-8")
 
-    assert "@github/copilot@1.0.82" in action
+    assert "@github/copilot@1.0.83" in action
 
 
 def test_agent_harness_action_pins_and_exports_bc_alagents() -> None:

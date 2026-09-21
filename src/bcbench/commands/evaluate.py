@@ -203,6 +203,7 @@ def evaluate_pr_review(
 
     logger.info(f"Running evaluation on entry {entry_id} with the BC-ALAgents review engine")
 
+    agent_version = get_pr_review_version(engine_path)
     context = EvaluationContext(
         entry=entry,
         repo_path=repo_path,
@@ -210,7 +211,7 @@ def evaluate_pr_review(
         container=None,
         model=model,
         agent_name=AgentHarness.PR_REVIEW,
-        agent_version=get_pr_review_version(engine_path),
+        agent_version=agent_version,
         category=category,
     )
 
@@ -222,6 +223,7 @@ def evaluate_pr_review(
             category=category,
             model=ctx.model,
             output_dir=ctx.result_dir,
+            agent_version=agent_version,
             engine_path=engine_path,
         ),
     )
