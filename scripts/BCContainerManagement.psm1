@@ -4,11 +4,14 @@ function Initialize-BCContainerHelperOptionalConfig {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
-        [string]$CommandName = "New-BCContainer"
+        [string]$CommandName = "New-BCContainer",
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSModuleInfo]$HelperModule
     )
 
     $commandModule = (Get-Command $CommandName -ErrorAction Stop).Module
-    $candidateModules = @($commandModule) + @(Get-Module -All BcContainerHelper)
+    $candidateModules = @($HelperModule, $commandModule) + @(Get-Module -All BcContainerHelper)
     $defaults = @{
         MicrosoftTelemetryConnectionString = ""
         PartnerTelemetryConnectionString   = ""
@@ -397,14 +400,25 @@ function New-BCCompilerFolderSync {
         [string]$ContainerName,
 
         [Parameter(Mandatory = $true)]
-        [string]$ArtifactUrl
+        [string]$ArtifactUrl,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSModuleInfo]$HelperModule
     )
 
     Write-Log "Creating compiler folder for container: $ContainerName" -Level Info
-    Initialize-BCContainerHelperOptionalConfig -CommandName "New-BcCompilerFolder"
+    Initialize-BCContainerHelperOptionalConfig -CommandName "New-BcCompilerFolder" -HelperModule $HelperModule
 
     Set-StrictMode -Off
-    [string]$compilerFolder = New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
+    [string]$compilerFolder = if ($null -eq $HelperModule) {
+        New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
+    }
+    else {
+        & $HelperModule {
+            param($helperArtifactUrl, $helperContainerName)
+            New-BcCompilerFolder -artifactUrl $helperArtifactUrl -containerName $helperContainerName
+        } $ArtifactUrl $ContainerName
+    }
 
     Write-Log "Compiler folder created at: $compilerFolder" -Level Success
     return $compilerFolder

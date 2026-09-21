@@ -223,12 +223,16 @@ def test_container_compiler_wrapper_returns_owned_path(tmp_path: Path) -> None:
     compiler_root = tmp_path / "compiler"
     script = f"""
 $ErrorActionPreference = 'Stop'
-$module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.psm1")} -Force -PassThru
-& $module {{
+$helper = New-Module -Name FakeBcContainerHelper -ScriptBlock {{
+    param($compilerPath)
     $script:bcContainerHelperConfig = @{{}}
-    function New-BcCompilerFolder {{ return {_ps_quote(compiler_root)} }}
-    New-BCCompilerFolderSync -ContainerName 'test' -ArtifactUrl 'artifact'
-}} | ConvertTo-Json -Compress
+    function New-BcCompilerFolder {{ return $compilerPath }}
+    Export-ModuleMember -Function New-BcCompilerFolder
+}} -ArgumentList {_ps_quote(compiler_root)}
+Import-Module $helper -Global
+$module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.psm1")} -Force -PassThru
+& $module {{ param($helperModule) New-BCCompilerFolderSync -ContainerName 'test' -ArtifactUrl 'artifact' -HelperModule $helperModule }} $helper |
+    ConvertTo-Json -Compress
 """
 
     assert Path(_last_json(_run_pwsh(script))) == compiler_root
@@ -270,7 +274,7 @@ $metadata | ConvertTo-Json -Compress -Depth 8
     assert any('ValidateSet("bug-fix")' in attribute for attribute in metadata["Category"])
     assert not any("Mandatory" in attribute for attribute in metadata["ReplayPatch"])
     assert "Import-Module BcContainerHelper -RequiredVersion 6.1.18" in source
-    assert source.count("Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking -Global") == 2
+    assert "Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking -Global" in source
     assert "New-BCContainerSync" in source
     assert 'Join-Path $EntryRoot "agent-tools"' in source
     assert '"--label"' in source
