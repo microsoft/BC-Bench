@@ -75,7 +75,7 @@ class BaseEvaluationResult(BaseModel):
         return "Completed"
 
     @property
-    def category_metrics(self) -> dict[str, int | float | bool]:
+    def category_metrics(self) -> dict[str, int | float | bool | str]:
         """Category-specific metrics included in bceval export metadata.
 
         Keys become metadata fields; values must be JSON-serializable scalars.
@@ -111,6 +111,7 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
 
     resolved: bool = False
     build: bool = False
+    infrastructure_failure: bool = False
 
     @classmethod
     def create_success(cls, context: "EvaluationContext", output: str) -> Self:
@@ -132,8 +133,12 @@ class ExecutionBasedEvaluationResult(BaseEvaluationResult):
         return "Success" if self.resolved else "Failed"
 
     @property
-    def category_metrics(self) -> dict[str, int | float | bool]:
-        return {"resolved": self.resolved, "build": self.build}
+    def category_metrics(self) -> dict[str, int | float | bool | str]:
+        return {
+            "resolved": self.resolved,
+            "build": self.build,
+            "infrastructure_failure": self.infrastructure_failure,
+        }
 
 
 class JudgeScoredEvaluationResult(BaseEvaluationResult):

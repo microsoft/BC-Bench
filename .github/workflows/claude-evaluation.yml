@@ -48,6 +48,26 @@ on:
         required: false
         default: false
         type: boolean
+      production-lifecycle:
+        description: "Run the opt-in checkpointed bug-fix lifecycle instead of the legacy evaluator"
+        required: false
+        default: false
+        type: boolean
+      canary-entries:
+        description: "Optional JSON array of exactly five bug-fix entry IDs for the production lifecycle"
+        required: false
+        default: ""
+        type: string
+      rehearsal:
+        description: "Run the two-entry, ten-restore production lifecycle rehearsal before evaluation"
+        required: false
+        default: false
+        type: boolean
+      rehearsal-only:
+        description: "Run production lifecycle rehearsals without launching Claude or summarizing results"
+        required: false
+        default: false
+        type: boolean
       repeat:
         description: "Number of times to run sequentially (ignored for test runs)"
         required: false
@@ -73,7 +93,46 @@ env:
   EVALUATION_RESULTS_DIR: evaluation_results
 
 jobs:
+  validate-production-lifecycle:
+    if: inputs.production-lifecycle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate production lifecycle launcher inputs
+        shell: pwsh
+        env:
+          CATEGORY: ${{ inputs.category }}
+          REPEAT: ${{ inputs.repeat }}
+        run: |
+          if ($env:CATEGORY -ne 'bug-fix') {
+            throw "The production lifecycle launcher only supports the bug-fix category."
+          }
+          if ($env:REPEAT -ne '1') {
+            throw "The production lifecycle launcher does not support workflow repeats."
+          }
+
+  production-lifecycle:
+    needs: validate-production-lifecycle
+    if: inputs.production-lifecycle && needs.validate-production-lifecycle.result == 'success'
+    uses: $/.github/workflows/bugfix-production-evaluation.yml
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      copilot-requests: write
+    with:
+      agent: claude
+      model: ${{ inputs.model }}
+      test-run: ${{ inputs.test-run }}
+      canary-entries: ${{ inputs.canary-entries }}
+      al-mcp: ${{ inputs.al-mcp }}
+      al-lsp: ${{ inputs.al-lsp }}
+      bc-mcp: ${{ inputs.bc-mcp }}
+      rehearsal: ${{ inputs.rehearsal }}
+      rehearsal-only: ${{ inputs.rehearsal-only }}
+    secrets: inherit
+
   pin-commit:
+    if: ${{ !inputs.production-lifecycle }}
     uses: $/.github/workflows/pin-evaluation-commit.yml
     permissions:
       contents: write
@@ -83,6 +142,7 @@ jobs:
       repeat: ${{ inputs.repeat }}
 
   get-entries:
+    if: ${{ !inputs.production-lifecycle }}
     uses: $/.github/workflows/get-entries.yml
     with:
       test-run: ${{ inputs.test-run }}
@@ -93,7 +153,7 @@ jobs:
     needs: get-entries
     outputs:
       results-dir: ${{ env.EVALUATION_RESULTS_DIR }}
-    if: needs.get-entries.outputs.entries != '[]'
+    if: ${{ !inputs.production-lifecycle && needs.get-entries.outputs.entries != '[]' }}
     environment:
       name: ado-read
       deployment: false
@@ -168,6 +228,7 @@ jobs:
 
   summarize-results:
     needs: evaluate-with-claude-code
+    if: ${{ !inputs.production-lifecycle }}
     uses: $/.github/workflows/summarize-results.yml
     permissions:
       contents: write
@@ -183,7 +244,7 @@ jobs:
 
   requeue:
     needs: [summarize-results, pin-commit]
-    if: ${{ !cancelled() && !failure() && !inputs.test-run }}
+    if: ${{ !inputs.production-lifecycle && !cancelled() && !failure() && !inputs.test-run }}
     uses: $/.github/workflows/requeue-evaluation.yml
     permissions:
       contents: write

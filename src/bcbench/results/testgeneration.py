@@ -11,7 +11,7 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
     post_patch_passed: bool = False
 
     @property
-    def category_metrics(self) -> dict[str, int | float | bool]:
+    def category_metrics(self) -> dict[str, int | float | bool | str]:
         return {**super().category_metrics, "pre_patch_failed": self.pre_patch_failed, "post_patch_passed": self.post_patch_passed}
 
     @property
@@ -46,6 +46,26 @@ class TestGenerationResult(ExecutionBasedEvaluationResult):
             resolved=False,
             build=True,
             pre_patch_failed=True,
+            post_patch_passed=False,
+        )
+
+    @classmethod
+    def create_test_infrastructure_failure(
+        cls,
+        context: "EvaluationContext",
+        output: str,
+        error_message: str,
+        *,
+        pre_patch_failed: bool,
+    ) -> Self:
+        return cls(
+            **cls._base_fields(context),
+            output=output,
+            error_message=error_message,
+            resolved=False,
+            build=True,
+            infrastructure_failure=True,
+            pre_patch_failed=pre_patch_failed,
             post_patch_passed=False,
         )
 

@@ -1,3 +1,44 @@
+using module .\BCBenchUtils.psm1
+
+function Initialize-BCContainerHelperOptionalConfig {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$CommandName = "New-BCContainer",
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSModuleInfo]$HelperModule
+    )
+
+    $commandModule = (Get-Command $CommandName -ErrorAction Stop).Module
+    $candidateModules = @($HelperModule, $commandModule) + @(Get-Module -All BcContainerHelper)
+    $defaults = @{
+        MicrosoftTelemetryConnectionString = ""
+        PartnerTelemetryConnectionString   = ""
+        SendExtendedTelemetryToMicrosoft   = $false
+    }
+    foreach ($helperModule in @($candidateModules | Where-Object { $null -ne $_ } | Select-Object -Unique)) {
+        $config = & $helperModule {
+            (Get-Variable -Name bcContainerHelperConfig -Scope Script -ErrorAction SilentlyContinue).Value
+        }
+        if ($null -eq $config) {
+            continue
+        }
+        foreach ($name in $defaults.Keys) {
+            if ($config -is [System.Collections.IDictionary]) {
+                if (-not $config.Contains($name)) {
+                    $config[$name] = $defaults[$name]
+                }
+            }
+            elseif ($null -eq $config.PSObject.Properties[$name]) {
+                $config | Add-Member -NotePropertyName $name -NotePropertyValue $defaults[$name]
+            }
+        }
+        return
+    }
+    throw "BcContainerHelper configuration is unavailable for command '$CommandName'."
+}
+
 <#
 .SYNOPSIS
     BC Container Management Module
@@ -181,9 +222,18 @@ function Initialize-ContainerForDevelopment() {
         [System.Version] $RepoVersion
     )
 
-    $BCContainerModule = "$PSScriptRoot\BCContainerManagement.psm1"
+    $containerModuleNames = @(
+        "DatasetEntry.psm1",
+        "BCBenchUtils.psm1",
+        "BCContainerManagement.psm1"
+    )
     $containerModulePath = "C:\Run\bcbench\BCContainerManagement.psm1"
-    Copy-FileToBcContainer -containerName $ContainerName -localpath $BCContainerModule -containerPath $containerModulePath
+    foreach ($moduleName in $containerModuleNames) {
+        Copy-FileToBcContainer `
+            -containerName $ContainerName `
+            -localpath (Join-Path $PSScriptRoot $moduleName) `
+            -containerPath (Join-Path "C:\Run\bcbench" $moduleName)
+    }
 
     Invoke-ScriptInBcContainer -containerName $ContainerName -scriptblock {
         param([string] $ContainerModule, [System.Version] $RepoVersion, [string] $DatabaseName = "CRONUS")
@@ -291,10 +341,14 @@ function New-BCContainerSync {
         [string]$AuthType = "UserPassword",
 
         [Parameter(Mandatory = $false)]
-        [string[]]$AdditionalFolders = @()
+        [string[]]$AdditionalFolders = @(),
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$AdditionalParameters = @()
     )
 
     Write-Log "Creating container: $ContainerName" -Level Info
+    Initialize-BCContainerHelperOptionalConfig
 
     $params = @{
         artifactUrl              = $ArtifactUrl
@@ -317,6 +371,9 @@ function New-BCContainerSync {
         $params.accept_insiderEula = $true
     }
 
+    if ($AdditionalFolders.Count -gt 0 -and $AdditionalParameters.Count -gt 0) {
+        throw "AdditionalFolders and AdditionalParameters cannot be used together."
+    }
     if ($AdditionalFolders -and $AdditionalFolders.Count -gt 0) {
         [string[]]$volumeMappings = @()
         foreach ($folder in $AdditionalFolders) {
@@ -325,7 +382,11 @@ function New-BCContainerSync {
         }
         $params.additionalParameters = $volumeMappings
     }
+    elseif ($AdditionalParameters.Count -gt 0) {
+        $params.additionalParameters = $AdditionalParameters
+    }
 
+    Set-StrictMode -Off
     New-BCContainer @params
 
     # Workaround: BC v24 artifacts predate manifest.json, so BcContainerHelper cannot determine the required .NET major
@@ -348,14 +409,28 @@ function New-BCCompilerFolderSync {
         [string]$ContainerName,
 
         [Parameter(Mandatory = $true)]
-        [string]$ArtifactUrl
+        [string]$ArtifactUrl,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSModuleInfo]$HelperModule
     )
 
     Write-Log "Creating compiler folder for container: $ContainerName" -Level Info
+    Initialize-BCContainerHelperOptionalConfig -CommandName "New-BcCompilerFolder" -HelperModule $HelperModule
 
-    [string]$compilerFolder = New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
+    Set-StrictMode -Off
+    [string]$compilerFolder = if ($null -eq $HelperModule) {
+        New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
+    }
+    else {
+        & $HelperModule {
+            param($helperArtifactUrl, $helperContainerName)
+            New-BcCompilerFolder -artifactUrl $helperArtifactUrl -containerName $helperContainerName
+        } $ArtifactUrl $ContainerName
+    }
 
     Write-Log "Compiler folder created at: $compilerFolder" -Level Success
+    return $compilerFolder
 }
 
 function Publish-MCPConfigApp {

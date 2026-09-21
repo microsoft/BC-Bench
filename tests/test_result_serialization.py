@@ -3,7 +3,8 @@ import json
 import pytest
 
 from bcbench.results.base import BaseEvaluationResult
-from bcbench.results.summary import EvaluationResultSummary
+from bcbench.results.bugfix import BugFixResult
+from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import AgentHarness, AgentMetrics, EvaluationCategory, ExperimentConfiguration, PRReviewMetrics
 from tests.conftest import create_bugfix_result, create_codereview_result, create_testgen_result
 
@@ -60,7 +61,9 @@ class TestCategorySerialization:
 
         result = BaseEvaluationResult.from_json(payload)
 
+        assert isinstance(result, BugFixResult)
         assert result.category == EvaluationCategory.BUG_FIX
+        assert result.infrastructure_failure is False
 
     def test_test_generation_category_loads_from_string(self):
         payload = {
@@ -141,7 +144,25 @@ class TestCategorySerialization:
         summary = EvaluationResultSummary.from_json(payload)
 
         # Pydantic handles the enum conversion automatically
+        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
         assert summary.category == EvaluationCategory.TEST_GENERATION
+        assert summary.infrastructure_failed == 0
+
+    def test_infrastructure_failure_round_trips(self, tmp_path):
+        original = create_bugfix_result(
+            instance_id="infrastructure-failure",
+            resolved=False,
+            infrastructure_failure=True,
+            error_message="Test infrastructure failed",
+        )
+
+        original.save(tmp_path, "result.jsonl")
+        payload = json.loads((tmp_path / "result.jsonl").read_text(encoding="utf-8"))
+        loaded = BaseEvaluationResult.from_json(payload)
+
+        assert payload["infrastructure_failure"] is True
+        assert isinstance(loaded, BugFixResult)
+        assert loaded.infrastructure_failure is True
 
     def test_test_generation_pre_patch_failed_in_jsonl(self, tmp_path):
         result = create_testgen_result(
@@ -160,6 +181,19 @@ class TestCategorySerialization:
 
         assert "pre_patch_failed" in data
         assert data["pre_patch_failed"] is True
+
+    def test_bugfix_verification_gates_in_jsonl(self, tmp_path):
+        result = create_bugfix_result(instance_id="test__dual-verification", resolved=True)
+
+        output_file = tmp_path / "result.jsonl"
+        result.save(tmp_path, "result.jsonl")
+
+        with output_file.open() as f:
+            data = json.loads(f.readline())
+
+        assert data["generated_test_pre_patch_failed"] is True
+        assert data["generated_test_post_patch_passed"] is True
+        assert data["benchmark_test_passed"] is True
 
     def test_no_experiment_saves_as_none(self, tmp_path, sample_result_bug_fix):
         output_file = tmp_path / "result.jsonl"

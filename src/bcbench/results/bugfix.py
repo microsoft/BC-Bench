@@ -1,12 +1,437 @@
-from typing import Self
+import re
+from collections import Counter
+from collections.abc import Sequence
+from datetime import datetime
+from enum import StrEnum
+from typing import Any, Literal, Self
 
-from bcbench.results.base import ExecutionBasedEvaluationResult
-from bcbench.types import EvaluationContext
+from pydantic import BaseModel, Field, model_validator
+
+from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult
+from bcbench.results.summary import ExecutionBasedEvaluationResultSummary
+from bcbench.types import EvaluationCategory, EvaluationContext
+
+
+class BugFixPhaseStatus(StrEnum):
+    PASSED = "passed"
+    FAILED = "failed"
+    INVALID_SUBMISSION = "invalid_submission"
+    INFRASTRUCTURE_ERROR = "infrastructure_error"
+    NOT_RUN = "not_run"
+
+
+class BugFixMetricName(StrEnum):
+    GENERATED_TEST_VALIDITY = "GeneratedTestValidity"
+    GENERATED_PAIR_TRANSITION = "GeneratedPairTransition"
+    FIX_BUILD = "FixBuild"
+    FIX_QUALITY = "FixQuality"
+    RESOLUTION = "Resolution"
+
+
+class BugFixMetricSummary(BaseModel):
+    successes: int = Field(ge=0)
+    determined_failures: int = Field(ge=0)
+    unknown: int = Field(ge=0)
+    scheduled: int = Field(ge=0)
+    rate: float | None = Field(ge=0.0, le=1.0)
+    coverage: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_counts_and_rates(self) -> Self:
+        if self.scheduled != self.successes + self.determined_failures + self.unknown:
+            raise ValueError("scheduled must equal successes + determined_failures + unknown")
+
+        determined = self.successes + self.determined_failures
+        expected_rate = self.successes / determined if determined else None
+        if self.rate != expected_rate:
+            raise ValueError("rate must equal successes / (successes + determined_failures), or None when no results are determined")
+
+        expected_coverage = determined / self.scheduled if self.scheduled else 0.0
+        if self.coverage != expected_coverage:
+            raise ValueError("coverage must equal (successes + determined_failures) / scheduled, or 0 when nothing is scheduled")
+        return self
+
+    @classmethod
+    def from_statuses(cls, statuses: Sequence[BugFixPhaseStatus]) -> "BugFixMetricSummary":
+        successes = statuses.count(BugFixPhaseStatus.PASSED)
+        determined_failures = sum(statuses.count(status) for status in (BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION))
+        unknown = sum(statuses.count(status) for status in (BugFixPhaseStatus.INFRASTRUCTURE_ERROR, BugFixPhaseStatus.NOT_RUN))
+        scheduled = len(statuses)
+        return cls._from_counts(successes, determined_failures, unknown, scheduled)
+
+    @classmethod
+    def _from_counts(cls, successes: int, determined_failures: int, unknown: int, scheduled: int) -> "BugFixMetricSummary":
+        determined = successes + determined_failures
+        return cls(
+            successes=successes,
+            determined_failures=determined_failures,
+            unknown=unknown,
+            scheduled=scheduled,
+            rate=successes / determined if determined else None,
+            coverage=determined / scheduled if scheduled else 0.0,
+        )
+
+
+class BugFixPhaseResult(BaseModel):
+    status: BugFixPhaseStatus = BugFixPhaseStatus.NOT_RUN
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    source_hash: str | None = None
+    materialized_source_hash: str | None = None
+    trusted_source_commit: str | None = None
+    trusted_source_hash: str | None = None
+    generated_fix_patch_hash: str | None = None
+    generated_test_patch_hash: str | None = None
+    gold_patch_hash: str | None = None
+    benchmark_patch_hash: str | None = None
+    container_id: str | None = None
+    image_id: str | None = None
+    hostname: str | None = None
+    mounts: tuple[str, ...] = ()
+    checkpoint_hash: str | None = None
+    package_hashes: tuple[str, ...] = ()
+    requested_tests: tuple[str, ...] = ()
+    discovered_tests: tuple[str, ...] = ()
+    executed_tests: tuple[str, ...] = ()
+    evidence: dict[str, str] = Field(default_factory=dict)
+
+
+RuntimeIsolation = Literal["package-normalized", "database-checkpointed-single-container"]
+BugFixExecutionMode = Literal["live", "replay"]
+
+
+def _combine_required_statuses(*statuses: BugFixPhaseStatus) -> BugFixPhaseStatus:
+    for status in (
+        BugFixPhaseStatus.INVALID_SUBMISSION,
+        BugFixPhaseStatus.FAILED,
+        BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+        BugFixPhaseStatus.NOT_RUN,
+        BugFixPhaseStatus.PASSED,
+    ):
+        if status in statuses:
+            return status
+    return BugFixPhaseStatus.PASSED
 
 
 class BugFixResult(ExecutionBasedEvaluationResult):
     """Result class for bug-fix evaluation category."""
 
+    generated_test_pre_patch_failed: bool = False
+    generated_test_post_patch_passed: bool = False
+    benchmark_test_passed: bool = False
+    runtime_isolation: RuntimeIsolation = "package-normalized"
+    execution_mode: BugFixExecutionMode = "live"
+    trusted_source_commit: str | None = None
+    generated_patch_hash: str | None = None
+    generated_fix_hash: str | None = None
+    generated_test_hash: str | None = None
+    baseline_checkpoint_hash: str | None = None
+    fixed_checkpoint_hash: str | None = None
+    agent_stdout: str | None = None
+    agent_stderr: str | None = None
+    provenance: dict[str, str] = Field(default_factory=dict)
+    artifact_manifest: dict[str, str] = Field(default_factory=dict)
+    test_red: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)
+    test_gold: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)
+    fix_build: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)
+    generated_pair: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)
+    benchmark_fix: BugFixPhaseResult = Field(default_factory=BugFixPhaseResult)
+
+    def metric_status(self, metric: BugFixMetricName) -> BugFixPhaseStatus:
+        if self.runtime_isolation == "package-normalized":
+            if metric in (BugFixMetricName.GENERATED_TEST_VALIDITY, BugFixMetricName.GENERATED_PAIR_TRANSITION):
+                return BugFixPhaseStatus.NOT_RUN
+            if self.infrastructure_failure:
+                return BugFixPhaseStatus.INFRASTRUCTURE_ERROR
+            legacy_status = {
+                BugFixMetricName.FIX_BUILD: self.build,
+                BugFixMetricName.FIX_QUALITY: self.benchmark_test_passed,
+                BugFixMetricName.RESOLUTION: self.resolved,
+            }
+            return BugFixPhaseStatus.PASSED if legacy_status[metric] else BugFixPhaseStatus.FAILED
+
+        if metric is BugFixMetricName.GENERATED_TEST_VALIDITY:
+            return _combine_required_statuses(self.test_red.status, self.test_gold.status)
+        if metric is BugFixMetricName.GENERATED_PAIR_TRANSITION:
+            return _combine_required_statuses(self.test_red.status, self.generated_pair.status)
+        if metric is BugFixMetricName.FIX_BUILD:
+            return self.fix_build.status
+        if metric is BugFixMetricName.FIX_QUALITY:
+            return self.benchmark_fix.status
+        resolution_statuses = [
+            self.metric_status(BugFixMetricName.GENERATED_TEST_VALIDITY),
+            self.metric_status(BugFixMetricName.GENERATED_PAIR_TRANSITION),
+            self.metric_status(BugFixMetricName.FIX_QUALITY),
+        ]
+        if self.timeout:
+            resolution_statuses.append(BugFixPhaseStatus.FAILED)
+        fix_build_status = self.metric_status(BugFixMetricName.FIX_BUILD)
+        if fix_build_status in (BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION):
+            resolution_statuses.append(fix_build_status)
+        return _combine_required_statuses(*resolution_statuses)
+
+    @property
+    def category_metrics(self) -> dict[str, int | float | bool | str]:
+        return {
+            **super().category_metrics,
+            "generated_test_pre_patch_failed": self.generated_test_pre_patch_failed,
+            "generated_test_post_patch_passed": self.generated_test_post_patch_passed,
+            "benchmark_test_passed": self.benchmark_test_passed,
+            "generated_test_validity_status": self.metric_status(BugFixMetricName.GENERATED_TEST_VALIDITY).value,
+            "generated_pair_transition_status": self.metric_status(BugFixMetricName.GENERATED_PAIR_TRANSITION).value,
+            "fix_build_status": self.metric_status(BugFixMetricName.FIX_BUILD).value,
+            "fix_quality_status": self.metric_status(BugFixMetricName.FIX_QUALITY).value,
+            "resolution_status": self.metric_status(BugFixMetricName.RESOLUTION).value,
+            "runtime_isolation": self.runtime_isolation,
+        }
+
+    @property
+    def display_row(self) -> dict[str, str]:
+        return {
+            "Generated Test Failed Before Fix": "Yes" if self.generated_test_pre_patch_failed else "No",
+            "Generated Test Passed After Fix": "Yes" if self.generated_test_post_patch_passed else "No",
+            "Benchmark Test Passed": "Yes" if self.benchmark_test_passed else "No",
+        }
+
+    @classmethod
+    def create_success(cls, context: "EvaluationContext", output: str) -> Self:
+        return cls(
+            **cls._base_fields(context),
+            output=output,
+            resolved=True,
+            build=True,
+            generated_test_pre_patch_failed=True,
+            generated_test_post_patch_passed=True,
+            benchmark_test_passed=True,
+        )
+
+    @classmethod
+    def create_verification_failure(
+        cls,
+        context: "EvaluationContext",
+        output: str,
+        error_message: str,
+        *,
+        build: bool,
+        infrastructure_failure: bool = False,
+        generated_test_pre_patch_failed: bool = False,
+        generated_test_post_patch_passed: bool = False,
+    ) -> Self:
+        return cls(
+            **cls._base_fields(context),
+            output=output,
+            error_message=error_message,
+            resolved=False,
+            build=build,
+            infrastructure_failure=infrastructure_failure,
+            generated_test_pre_patch_failed=generated_test_pre_patch_failed,
+            generated_test_post_patch_passed=generated_test_post_patch_passed,
+            benchmark_test_passed=False,
+        )
+
+    @classmethod
+    def create_test_infrastructure_failure(
+        cls,
+        context: "EvaluationContext",
+        output: str,
+        error_message: str,
+        *,
+        generated_test_pre_patch_failed: bool = False,
+        generated_test_post_patch_passed: bool = False,
+    ) -> Self:
+        return cls.create_verification_failure(
+            context,
+            output,
+            error_message,
+            build=True,
+            infrastructure_failure=True,
+            generated_test_pre_patch_failed=generated_test_pre_patch_failed,
+            generated_test_post_patch_passed=generated_test_post_patch_passed,
+        )
+
     @classmethod
     def create_test_failure(cls, context: "EvaluationContext", output: str, error_message: str = "Tests failed") -> Self:
-        return cls(**cls._base_fields(context), output=output, error_message=error_message, resolved=False, build=True)
+        return cls.create_verification_failure(context, output, error_message, build=True)
+
+
+def _empty_metric_summaries() -> dict[BugFixMetricName, BugFixMetricSummary]:
+    return {metric: BugFixMetricSummary.from_statuses(()) for metric in BugFixMetricName}
+
+
+_LEGACY_SYNTHETIC_INSTANCE_ID = re.compile(r"legacy-(?:resolved|failed)-\d+")
+
+
+def _uses_legacy_synthetic_instance_ids(instance_results: object) -> bool:
+    return (
+        isinstance(instance_results, dict) and bool(instance_results) and all(isinstance(instance_id, str) and _LEGACY_SYNTHETIC_INSTANCE_ID.fullmatch(instance_id) for instance_id in instance_results)
+    )
+
+
+class BugFixResultSummary(ExecutionBasedEvaluationResultSummary):
+    runtime_isolation: RuntimeIsolation = "package-normalized"
+    instance_results_complete: bool = True
+    metric_summaries: dict[BugFixMetricName, BugFixMetricSummary] = Field(default_factory=_empty_metric_summaries)
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_legacy_metric_summaries(cls, payload: object) -> object:
+        if not isinstance(payload, dict):
+            return payload
+
+        data: dict[str, Any] = {}
+        for key, value in payload.items():
+            if not isinstance(key, str):
+                raise TypeError("Bug-fix summary keys must be strings")
+            data[key] = value
+        runtime_isolation = data.get("runtime_isolation", "package-normalized")
+        has_instance_results = "instance_results" in data
+        if "instance_results_complete" not in data and _uses_legacy_synthetic_instance_ids(data.get("instance_results")):
+            data["instance_results_complete"] = False
+            data["instance_results"] = {}
+        data.setdefault("instance_results_complete", has_instance_results)
+        data.setdefault("instance_results", {})
+
+        if "metric_summaries" in data:
+            return data
+        if runtime_isolation != "package-normalized":
+            raise ValueError("metric_summaries is required for checkpointed bug-fix summaries")
+
+        total = int(data["total"])
+        resolved = int(data.get("resolved", 0))
+        failed = int(data.get("failed", 0))
+        infrastructure_failed = int(data.get("infrastructure_failed", 0))
+        build = int(data.get("build", 0))
+
+        resolution_unknown = total - resolved - failed
+        fix_build_failures = total - infrastructure_failed - build
+        if resolution_unknown < 0 or fix_build_failures < 0:
+            raise ValueError("Legacy bug-fix summary counts cannot exceed total")
+
+        data["metric_summaries"] = {
+            BugFixMetricName.GENERATED_TEST_VALIDITY: BugFixMetricSummary._from_counts(0, 0, total, total),
+            BugFixMetricName.GENERATED_PAIR_TRANSITION: BugFixMetricSummary._from_counts(0, 0, total, total),
+            BugFixMetricName.FIX_BUILD: BugFixMetricSummary._from_counts(
+                build,
+                fix_build_failures,
+                infrastructure_failed,
+                total,
+            ),
+            BugFixMetricName.FIX_QUALITY: BugFixMetricSummary._from_counts(0, 0, total, total),
+            BugFixMetricName.RESOLUTION: BugFixMetricSummary._from_counts(
+                resolved,
+                failed,
+                resolution_unknown,
+                total,
+            ),
+        }
+        return data
+
+    @model_validator(mode="after")
+    def validate_metric_summaries(self) -> Self:
+        expected_metrics = set(BugFixMetricName)
+        actual_metrics = set(self.metric_summaries)
+        if actual_metrics != expected_metrics:
+            missing = sorted(metric.value for metric in expected_metrics - actual_metrics)
+            extra = sorted(str(metric) for metric in actual_metrics - expected_metrics)
+            raise ValueError(f"metric_summaries must contain exactly every BugFixMetricName; missing={missing}, extra={extra}")
+
+        for metric, summary in self.metric_summaries.items():
+            if summary.scheduled != self.total:
+                raise ValueError(f"metric_summaries[{metric.value}].scheduled must equal total")
+
+        resolution = self.metric_summaries[BugFixMetricName.RESOLUTION]
+        fix_build = self.metric_summaries[BugFixMetricName.FIX_BUILD]
+        expected_percentage = round(resolution.rate * 100, 1) if resolution.rate is not None else None
+        projections = {
+            "resolved": (self.resolved, resolution.successes),
+            "failed": (self.failed, resolution.determined_failures),
+            "infrastructure_failed": (self.infrastructure_failed, resolution.unknown),
+            "build": (self.build, fix_build.successes),
+            "percentage": (self.percentage, expected_percentage),
+        }
+        for field, (actual, expected) in projections.items():
+            if actual != expected:
+                raise ValueError(f"{field} must match its metric summary projection")
+
+        if self.instance_results_complete and _uses_legacy_synthetic_instance_ids(self.instance_results):
+            raise ValueError("complete instance_results cannot use legacy synthetic instance identities")
+        if self.instance_results_complete:
+            true_count = sum(self.instance_results.values())
+            false_count = len(self.instance_results) - true_count
+            if true_count != self.resolved or false_count != self.failed or len(self.instance_results) != self.resolved + self.failed:
+                raise ValueError("complete instance_results counts must match resolved and failed")
+        elif self.instance_results:
+            raise ValueError("incomplete instance_results must be empty")
+        return self
+
+    @classmethod
+    def from_results(cls, results: Sequence[BaseEvaluationResult], run_id: str) -> "BugFixResultSummary":
+        if not results:
+            raise ValueError("Cannot summarize an empty bug-fix results list")
+
+        non_bugfix_results = [result for result in results if not isinstance(result, BugFixResult)]
+        if non_bugfix_results:
+            result_types = sorted({type(result).__name__ for result in non_bugfix_results})
+            raise ValueError(f"BugFixResultSummary requires only BugFixResult instances, got: {result_types}")
+
+        bugfix_results = [result for result in results if isinstance(result, BugFixResult)]
+        duplicate_instance_ids = sorted(instance_id for instance_id, count in Counter(result.instance_id for result in bugfix_results).items() if count > 1)
+        if duplicate_instance_ids:
+            raise ValueError(f"Cannot summarize bug-fix results with duplicate instance_id values: {duplicate_instance_ids}")
+
+        identity_fields = ("model", "agent_name", "agent_version", "experiment", "category", "runtime_isolation")
+        first_result = bugfix_results[0]
+        inconsistent_fields = [field for field in identity_fields if any(getattr(result, field) != getattr(first_result, field) for result in bugfix_results[1:])]
+        if inconsistent_fields:
+            raise ValueError(f"Cannot summarize bug-fix results with inconsistent run identity fields: {', '.join(inconsistent_fields)}")
+
+        categories = {result.category for result in bugfix_results}
+        if categories != {EvaluationCategory.BUG_FIX}:
+            raise ValueError(f"BugFixResultSummary requires the bug-fix category, got: {categories}")
+
+        runtime_isolations = {result.runtime_isolation for result in bugfix_results}
+
+        runtime_isolation = runtime_isolations.pop()
+        metric_summaries = {metric: BugFixMetricSummary.from_statuses([result.metric_status(metric) for result in bugfix_results]) for metric in BugFixMetricName}
+        resolution_statuses = {result.instance_id: result.metric_status(BugFixMetricName.RESOLUTION) for result in bugfix_results}
+        resolution = metric_summaries[BugFixMetricName.RESOLUTION]
+        fix_build = metric_summaries[BugFixMetricName.FIX_BUILD]
+        instance_results = {
+            instance_id: status is BugFixPhaseStatus.PASSED
+            for instance_id, status in resolution_statuses.items()
+            if status in (BugFixPhaseStatus.PASSED, BugFixPhaseStatus.FAILED, BugFixPhaseStatus.INVALID_SUBMISSION)
+        }
+        return cls.model_validate(
+            {
+                **cls._base_fields(results, run_id),
+                "resolved": resolution.successes,
+                "failed": resolution.determined_failures,
+                "infrastructure_failed": resolution.unknown,
+                "build": fix_build.successes,
+                "percentage": round(resolution.rate * 100, 1) if resolution.rate is not None else None,
+                "instance_results": instance_results,
+                "instance_results_complete": True,
+                "runtime_isolation": runtime_isolation,
+                "metric_summaries": metric_summaries,
+            }
+        )
+
+    def render_github_metrics_markdown(self) -> str:
+        labels = {
+            BugFixMetricName.GENERATED_TEST_VALIDITY: "Generated Test Validity",
+            BugFixMetricName.GENERATED_PAIR_TRANSITION: "Generated Pair Transition",
+            BugFixMetricName.FIX_BUILD: "Fix Build",
+            BugFixMetricName.FIX_QUALITY: "Fix Quality",
+            BugFixMetricName.RESOLUTION: "Resolution",
+        }
+        production_metrics = ["\n## Production Metrics\n"]
+        for metric in BugFixMetricName:
+            metric_summary = self.metric_summaries[metric]
+            rate = f"{metric_summary.rate * 100:.1f}%" if metric_summary.rate is not None else "N/A"
+            determined = metric_summary.successes + metric_summary.determined_failures
+            production_metrics.append(f"- {labels[metric]}: {rate} (coverage {metric_summary.coverage * 100:.1f}%, {determined}/{metric_summary.scheduled} determined)\n")
+        return super().render_github_metrics_markdown() + "".join(production_metrics)
+
+    def combination_key(self) -> tuple[str | None, ...]:
+        return (*super().combination_key(), self.runtime_isolation)

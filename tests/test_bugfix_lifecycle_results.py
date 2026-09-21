@@ -1,0 +1,213 @@
+import pytest
+from pydantic import TypeAdapter
+
+from bcbench.results import bugfix as bugfix_results
+from tests.conftest import create_bugfix_result
+
+
+def test_phase_result_provenance_fields_preserve_legacy_defaults() -> None:
+    phase = TypeAdapter(bugfix_results.BugFixPhaseResult).validate_python(
+        {
+            "status": "passed",
+            "source_hash": "legacy-source",
+        }
+    )
+
+    assert phase.source_hash == "legacy-source"
+    assert phase.materialized_source_hash is None
+    assert phase.trusted_source_commit is None
+    assert phase.trusted_source_hash is None
+    assert phase.generated_fix_patch_hash is None
+    assert phase.generated_test_patch_hash is None
+    assert phase.gold_patch_hash is None
+    assert phase.benchmark_patch_hash is None
+    assert phase.container_id is None
+    assert phase.image_id is None
+    assert phase.hostname is None
+    assert phase.mounts == ()
+
+
+def test_checkpointed_full_success_passes_all_metrics() -> None:
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=passed,
+        test_gold=passed,
+        fix_build=passed,
+        generated_pair=passed,
+        benchmark_fix=passed,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.GENERATED_TEST_VALIDITY) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.metric_status(bugfix_results.BugFixMetricName.GENERATED_PAIR_TRANSITION) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.metric_status(bugfix_results.BugFixMetricName.FIX_BUILD) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.metric_status(bugfix_results.BugFixMetricName.FIX_QUALITY) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.generated_test_pre_patch_failed is True
+    assert result.generated_test_post_patch_passed is True
+    assert result.build is True
+    assert result.benchmark_test_passed is True
+    assert result.resolved is True
+
+
+def test_invalid_generated_test_preserves_successful_fix_quality() -> None:
+    invalid = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.INVALID_SUBMISSION)
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=invalid,
+        test_gold=passed,
+        fix_build=passed,
+        generated_pair=passed,
+        benchmark_fix=passed,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.GENERATED_TEST_VALIDITY) is bugfix_results.BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.metric_status(bugfix_results.BugFixMetricName.FIX_QUALITY) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.INVALID_SUBMISSION
+    assert result.benchmark_test_passed is True
+    assert result.resolved is False
+
+
+def test_failed_required_phase_precedes_infrastructure_error() -> None:
+    failed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.FAILED)
+    infrastructure_error = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.INFRASTRUCTURE_ERROR)
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=failed,
+        test_gold=passed,
+        fix_build=passed,
+        generated_pair=passed,
+        benchmark_fix=infrastructure_error,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.FAILED
+
+
+@pytest.mark.parametrize("fix_build_status", [bugfix_results.BugFixPhaseStatus.FAILED, bugfix_results.BugFixPhaseStatus.INVALID_SUBMISSION])
+def test_determined_fix_build_failure_determines_resolution_when_downstream_phases_are_not_run(fix_build_status) -> None:
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+    fix_build = bugfix_results.BugFixPhaseResult(status=fix_build_status)
+    not_run = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=passed,
+        test_gold=passed,
+        fix_build=fix_build,
+        generated_pair=not_run,
+        benchmark_fix=not_run,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is fix_build_status
+
+
+@pytest.mark.parametrize("fix_build_status", [bugfix_results.BugFixPhaseStatus.INFRASTRUCTURE_ERROR, bugfix_results.BugFixPhaseStatus.NOT_RUN])
+def test_unknown_fix_build_status_does_not_determine_resolution(fix_build_status) -> None:
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+    fix_build = bugfix_results.BugFixPhaseResult(status=fix_build_status)
+    not_run = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=passed,
+        test_gold=passed,
+        fix_build=fix_build,
+        generated_pair=not_run,
+        benchmark_fix=not_run,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.NOT_RUN
+
+
+def test_timeout_only_forces_resolution_to_failed() -> None:
+    passed = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.PASSED)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        timeout=True,
+        test_red=passed,
+        test_gold=passed,
+        fix_build=passed,
+        generated_pair=passed,
+        benchmark_fix=passed,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.FIX_QUALITY) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.FAILED
+    assert result.benchmark_test_passed is True
+    assert result.resolved is False
+
+
+def test_coarse_infrastructure_failure_requires_every_production_metric_unknown() -> None:
+    from bcbench.evaluate.bugfix_lifecycle.lifecycle import ProductionBugFixLifecycle
+
+    infrastructure_error = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.INFRASTRUCTURE_ERROR)
+    not_run = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=infrastructure_error,
+        test_gold=not_run,
+        fix_build=infrastructure_error,
+        generated_pair=not_run,
+        benchmark_fix=not_run,
+    )
+    projected = ProductionBugFixLifecycle._with_result_projections(result)
+
+    assert all(
+        projected.metric_status(metric)
+        in (
+            bugfix_results.BugFixPhaseStatus.INFRASTRUCTURE_ERROR,
+            bugfix_results.BugFixPhaseStatus.NOT_RUN,
+        )
+        for metric in bugfix_results.BugFixMetricName
+    )
+    assert projected.infrastructure_failure is True
+
+
+@pytest.mark.parametrize(
+    "determined_status",
+    [
+        bugfix_results.BugFixPhaseStatus.PASSED,
+        bugfix_results.BugFixPhaseStatus.FAILED,
+        bugfix_results.BugFixPhaseStatus.INVALID_SUBMISSION,
+    ],
+)
+def test_partial_metric_separability_clears_coarse_infrastructure_failure(
+    determined_status,
+) -> None:
+    from bcbench.evaluate.bugfix_lifecycle.lifecycle import ProductionBugFixLifecycle
+
+    phase = bugfix_results.BugFixPhaseResult(status=determined_status)
+    unknown = bugfix_results.BugFixPhaseResult(status=bugfix_results.BugFixPhaseStatus.NOT_RUN)
+    result = create_bugfix_result(
+        runtime_isolation="database-checkpointed-single-container",
+        test_red=unknown,
+        test_gold=unknown,
+        fix_build=phase,
+        generated_pair=unknown,
+        benchmark_fix=unknown,
+    )
+
+    projected = ProductionBugFixLifecycle._with_result_projections(result)
+
+    assert projected.infrastructure_failure is False
+
+
+def test_package_normalized_metrics_map_legacy_fields() -> None:
+    result = create_bugfix_result(
+        build=False,
+        benchmark_test_passed=True,
+        resolved=False,
+    )
+
+    assert result.metric_status(bugfix_results.BugFixMetricName.GENERATED_TEST_VALIDITY) is bugfix_results.BugFixPhaseStatus.NOT_RUN
+    assert result.metric_status(bugfix_results.BugFixMetricName.GENERATED_PAIR_TRANSITION) is bugfix_results.BugFixPhaseStatus.NOT_RUN
+    assert result.metric_status(bugfix_results.BugFixMetricName.FIX_BUILD) is bugfix_results.BugFixPhaseStatus.FAILED
+    assert result.metric_status(bugfix_results.BugFixMetricName.FIX_QUALITY) is bugfix_results.BugFixPhaseStatus.PASSED
+    assert result.metric_status(bugfix_results.BugFixMetricName.RESOLUTION) is bugfix_results.BugFixPhaseStatus.FAILED

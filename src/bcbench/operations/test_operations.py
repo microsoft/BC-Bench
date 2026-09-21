@@ -1,10 +1,367 @@
 import re
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 
 from bcbench.dataset import TestEntry
-from bcbench.exceptions import NoTestsExtractedError
+from bcbench.exceptions import NoTestsExtractedError, TestExtractionError
 from bcbench.logger import get_logger
+from bcbench.operations.patch_operations import extract_git_diff_paths, split_git_diff_blocks
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class TestOccurrence:
+    codeunit_id: int
+    function_name: str
+    start_line: int
+    end_line: int
+
+
+@dataclass(frozen=True)
+class ExecutableMemberOccurrence:
+    kind: str
+    name: str
+    signature: tuple[str, ...]
+    occurrence_index: int
+    start_line: int
+    end_line: int
+    is_test: bool
+    semantic_tokens: tuple[str, ...] = field(default=(), repr=False, compare=False)
+    attributes: tuple[str, ...] = field(default=(), compare=False)
+    access_modifier: str | None = field(default=None, compare=False)
+    start_token_index: int | None = field(default=None, repr=False, compare=False)
+    end_token_index: int | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def identity(self) -> tuple[str, str, tuple[str, ...], int]:
+        return (self.kind, self.name.casefold(), self.signature, self.occurrence_index)
+
+
+@dataclass(frozen=True)
+class _ALToken:
+    kind: str
+    value: str
+    line: int
+
+
+def _tokenize_al(content: str) -> tuple[_ALToken, ...]:
+    tokens: list[_ALToken] = []
+    index = 0
+    line = 1
+
+    while index < len(content):
+        character = content[index]
+        next_character = content[index + 1] if index + 1 < len(content) else ""
+
+        if character.isspace():
+            if character == "\n":
+                line += 1
+            index += 1
+        elif character == "/" and next_character == "/":
+            newline_index = content.find("\n", index + 2)
+            index = len(content) if newline_index == -1 else newline_index
+        elif character == "/" and next_character == "*":
+            comment_end = content.find("*/", index + 2)
+            token_end = len(content) if comment_end == -1 else comment_end + 2
+            line += content[index:token_end].count("\n")
+            index = token_end
+        elif character == "'":
+            literal: list[str] = []
+            token_line = line
+            index += 1
+            while index < len(content):
+                if content[index] == "\n":
+                    literal.append(content[index])
+                    line += 1
+                    index += 1
+                elif content[index] != "'":
+                    literal.append(content[index])
+                    index += 1
+                elif index + 1 < len(content) and content[index + 1] == "'":
+                    literal.append("'")
+                    index += 2
+                else:
+                    index += 1
+                    break
+            tokens.append(_ALToken(kind="string_literal", value="".join(literal), line=token_line))
+        elif character == '"':
+            identifier: list[str] = []
+            token_line = line
+            index += 1
+            while index < len(content):
+                if content[index] == "\n":
+                    identifier.append(content[index])
+                    line += 1
+                    index += 1
+                elif content[index] != '"':
+                    identifier.append(content[index])
+                    index += 1
+                elif index + 1 < len(content) and content[index + 1] == '"':
+                    identifier.append('"')
+                    index += 2
+                else:
+                    index += 1
+                    break
+            tokens.append(_ALToken(kind="quoted_identifier", value="".join(identifier), line=token_line))
+        elif character.isalpha() or character == "_":
+            identifier_end = index + 1
+            while identifier_end < len(content) and (content[identifier_end].isalnum() or content[identifier_end] == "_"):
+                identifier_end += 1
+            tokens.append(_ALToken(kind="identifier", value=content[index:identifier_end], line=line))
+            index = identifier_end
+        elif character.isdigit():
+            number_end = index + 1
+            while number_end < len(content) and content[number_end].isdigit():
+                number_end += 1
+            tokens.append(_ALToken(kind="number", value=content[index:number_end], line=line))
+            index = number_end
+        else:
+            tokens.append(_ALToken(kind="symbol", value=character, line=line))
+            index += 1
+
+    return tuple(tokens)
+
+
+def _is_identifier(token: _ALToken) -> bool:
+    return token.kind in {"identifier", "quoted_identifier"}
+
+
+def _is_keyword(token: _ALToken, keyword: str) -> bool:
+    return token.kind == "identifier" and token.value.casefold() == keyword
+
+
+def _find_codeunit_id(tokens: tuple[_ALToken, ...], file_path: str) -> int:
+    for index, token in enumerate(tokens[:-2]):
+        id_token = tokens[index + 1]
+        name_token = tokens[index + 2]
+        if _is_keyword(token, "codeunit") and id_token.kind == "number" and _is_identifier(name_token):
+            return int(id_token.value)
+    raise TestExtractionError(f"No codeunit ID found in {file_path}")
+
+
+def _find_attribute_end(tokens: tuple[_ALToken, ...], start_index: int) -> int | None:
+    bracket_depth = 0
+    for index in range(start_index, len(tokens)):
+        if tokens[index].value == "[":
+            bracket_depth += 1
+        elif tokens[index].value == "]":
+            bracket_depth -= 1
+            if bracket_depth == 0:
+                return index
+    return None
+
+
+def _find_member_bounds(tokens: tuple[_ALToken, ...], member_index: int) -> tuple[int, int] | None:
+    body_start = None
+    for index in range(member_index + 2, len(tokens)):
+        if _is_keyword(tokens[index], "procedure") or _is_keyword(tokens[index], "trigger"):
+            return None
+        if _is_keyword(tokens[index], "begin"):
+            body_start = index
+            break
+    if body_start is None:
+        return None
+
+    block_stack = ["begin"]
+    for index in range(body_start + 1, len(tokens)):
+        token = tokens[index]
+        if token.kind != "identifier":
+            continue
+
+        keyword = token.value.casefold()
+        if keyword in {"begin", "case", "repeat"}:
+            block_stack.append(keyword)
+        elif (keyword == "end" and block_stack[-1] in {"begin", "case"}) or (keyword == "until" and block_stack[-1] == "repeat"):
+            block_stack.pop()
+
+        if not block_stack:
+            semicolon_index = index + 1
+            if semicolon_index < len(tokens) and tokens[semicolon_index].value == ";":
+                return body_start, semicolon_index
+            return body_start, index
+    return None
+
+
+def _canonical_signature(tokens: tuple[_ALToken, ...], name_index: int, body_start: int) -> tuple[str, ...]:
+    signature_end = body_start
+    parenthesis_depth = 0
+    for index in range(name_index + 1, body_start):
+        token = tokens[index]
+        if token.value == "(":
+            parenthesis_depth += 1
+        elif token.value == ")":
+            parenthesis_depth -= 1
+        elif parenthesis_depth == 0 and _is_keyword(token, "var"):
+            signature_end = index
+            break
+
+    return _canonical_tokens(tokens[name_index + 1 : signature_end])
+
+
+def _canonical_tokens(tokens: tuple[_ALToken, ...]) -> tuple[str, ...]:
+    return tuple(token.value.casefold() if _is_identifier(token) else token.value for token in tokens)
+
+
+def _find_executable_members(tokens: tuple[_ALToken, ...]) -> tuple[ExecutableMemberOccurrence, ...]:
+    members: list[ExecutableMemberOccurrence] = []
+    occurrence_counts: dict[tuple[str, str, tuple[str, ...]], int] = {}
+    member_start_line: int | None = None
+    member_start_index: int | None = None
+    attributes: list[str] = []
+    access_modifier: str | None = None
+    index = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+        if token.value == "[":
+            attribute_end = _find_attribute_end(tokens, index)
+            if attribute_end is None:
+                break
+            member_start_line = token.line if member_start_line is None else member_start_line
+            member_start_index = index if member_start_index is None else member_start_index
+            if index + 1 < attribute_end and _is_identifier(tokens[index + 1]):
+                attributes.append(tokens[index + 1].value)
+            index = attribute_end + 1
+            continue
+
+        if any(_is_keyword(token, modifier) for modifier in ("local", "internal", "public", "protected")):
+            member_start_line = token.line if member_start_line is None else member_start_line
+            member_start_index = index if member_start_index is None else member_start_index
+            access_modifier = token.value.casefold()
+            index += 1
+            continue
+
+        member_kind = next((kind for kind in ("procedure", "trigger") if _is_keyword(token, kind)), None)
+        if member_kind is not None:
+            name_index = index + 1
+            member_bounds = _find_member_bounds(tokens, index)
+            if name_index < len(tokens) and _is_identifier(tokens[name_index]) and member_bounds is not None:
+                body_start, member_end = member_bounds
+                signature = _canonical_signature(tokens, name_index, body_start)
+                identity_without_occurrence = (member_kind, tokens[name_index].value.casefold(), signature)
+                occurrence_index = occurrence_counts.get(identity_without_occurrence, 0)
+                occurrence_counts[identity_without_occurrence] = occurrence_index + 1
+                semantic_start = member_start_index if member_start_index is not None else index
+                members.append(
+                    ExecutableMemberOccurrence(
+                        kind=member_kind,
+                        name=tokens[name_index].value,
+                        signature=signature,
+                        occurrence_index=occurrence_index,
+                        start_line=member_start_line if member_start_line is not None else token.line,
+                        end_line=tokens[member_end].line,
+                        is_test=any(attribute.casefold() == "test" for attribute in attributes),
+                        semantic_tokens=_canonical_tokens(tokens[semantic_start : member_end + 1]),
+                        attributes=tuple(attributes),
+                        access_modifier=access_modifier,
+                        start_token_index=semantic_start,
+                        end_token_index=member_end,
+                    )
+                )
+            member_start_line = None
+            member_start_index = None
+            attributes = []
+            access_modifier = None
+            index = member_bounds[1] + 1 if member_bounds is not None else index + 1
+            continue
+
+        member_start_line = None
+        member_start_index = None
+        attributes = []
+        access_modifier = None
+        index += 1
+
+    return tuple(members)
+
+
+def extract_executable_member_occurrences_from_content(content: str) -> tuple[ExecutableMemberOccurrence, ...]:
+    return _find_executable_members(_tokenize_al(content))
+
+
+def added_lines_belong_to_members(
+    content: str,
+    added_lines: set[int],
+    members: Iterable[ExecutableMemberOccurrence],
+) -> bool:
+    tokens = _tokenize_al(content)
+    member_tuple = tuple(members)
+    occupied_token_indexes = {
+        token_index
+        for member in member_tuple
+        if member.start_token_index is not None and member.end_token_index is not None
+        for token_index in range(member.start_token_index, member.end_token_index + 1)
+    }
+    token_indexes_by_line: dict[int, list[int]] = {}
+    for token_index, token in enumerate(tokens):
+        token_indexes_by_line.setdefault(token.line, []).append(token_index)
+
+    member_lines = {line_number for member in member_tuple for line_number in range(member.start_line, member.end_line + 1)}
+    content_lines = content.splitlines()
+    allowed_lines = set(member_lines)
+    unassigned_blank_lines = {line_number for line_number in added_lines if line_number <= len(content_lines) and not content_lines[line_number - 1].strip() and line_number not in allowed_lines}
+    while adjacent_blank_lines := {line_number for line_number in unassigned_blank_lines if line_number - 1 in allowed_lines or line_number + 1 in allowed_lines}:
+        allowed_lines.update(adjacent_blank_lines)
+        unassigned_blank_lines.difference_update(adjacent_blank_lines)
+
+    for line_number in added_lines:
+        token_indexes = token_indexes_by_line.get(line_number, [])
+        if token_indexes and not all(token_index in occupied_token_indexes for token_index in token_indexes):
+            return False
+        if not token_indexes and line_number not in allowed_lines:
+            return False
+    return True
+
+
+def has_only_codeunit_wrapper_outside_members(
+    content: str,
+    members: Iterable[ExecutableMemberOccurrence],
+    *,
+    allow_test_subtype: bool = False,
+) -> bool:
+    tokens = _tokenize_al(content)
+    occupied_token_indexes = {
+        token_index for member in members if member.start_token_index is not None and member.end_token_index is not None for token_index in range(member.start_token_index, member.end_token_index + 1)
+    }
+    wrapper_tokens = tuple(token for token_index, token in enumerate(tokens) if token_index not in occupied_token_indexes)
+    has_codeunit_wrapper = (
+        len(wrapper_tokens) >= 5
+        and _is_keyword(wrapper_tokens[0], "codeunit")
+        and wrapper_tokens[1].kind == "number"
+        and _is_identifier(wrapper_tokens[2])
+        and wrapper_tokens[3].value == "{"
+        and wrapper_tokens[-1].value == "}"
+    )
+    if not has_codeunit_wrapper:
+        return False
+    if len(wrapper_tokens) == 5:
+        return True
+    return (
+        allow_test_subtype
+        and len(wrapper_tokens) == 9
+        and _is_keyword(wrapper_tokens[4], "subtype")
+        and wrapper_tokens[5].value == "="
+        and _is_keyword(wrapper_tokens[6], "test")
+        and wrapper_tokens[7].value == ";"
+    )
+
+
+def extract_test_occurrences_from_content(content: str, file_path: str) -> tuple[TestOccurrence, ...]:
+    tokens = _tokenize_al(content)
+    test_members = tuple(member for member in _find_executable_members(tokens) if member.kind == "procedure" and member.is_test)
+    if not test_members:
+        return ()
+
+    codeunit_id = _find_codeunit_id(tokens, file_path)
+    return tuple(
+        TestOccurrence(
+            codeunit_id=codeunit_id,
+            function_name=member.name,
+            start_line=member.start_line,
+            end_line=member.end_line,
+        )
+        for member in test_members
+    )
 
 
 def extract_codeunit_id_from_content(content: str, file_path: str) -> int:
@@ -17,72 +374,69 @@ def extract_codeunit_id_from_content(content: str, file_path: str) -> int:
     Returns:
         Codeunit ID (always returns int, raises exception if not found)
     """
-    codeunit_pattern = r'codeunit\s+(\d+)\s+"[^"]*"'
-    match = re.search(codeunit_pattern, content)
-    if match:
-        return int(match.group(1))
-    raise ValueError(f"No codeunit ID found in {file_path}")
+    return _find_codeunit_id(_tokenize_al(content), file_path)
+
+
+def extract_test_occurrences_from_patch(generated_patch: str, file_contents: dict[str, str]) -> tuple[TestOccurrence, ...]:
+    occurrences: list[TestOccurrence] = []
+    procedure_pattern = re.compile(r"^\+\s*procedure\s+(\w+)\s*\(", flags=re.IGNORECASE)
+    test_attribute_pattern = re.compile(r"^\+\s*\[Test\]", flags=re.IGNORECASE)
+    hunk_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+    for diff_block in split_git_diff_blocks(generated_patch):
+        paths = extract_git_diff_paths(diff_block)
+        if paths is None or paths.target == "/dev/null":
+            continue
+
+        current_file_path = paths.target.replace("\\", "/")
+        if not current_file_path.lower().endswith(".codeunit.al") or current_file_path not in file_contents:
+            continue
+
+        current_codeunit_id = extract_codeunit_id_from_content(file_contents[current_file_path], current_file_path)
+        found_test_attribute = False
+        attribute_start_line: int | None = None
+        target_line: int | None = None
+        for line in diff_block.splitlines():
+            hunk_match = hunk_pattern.match(line)
+            if hunk_match:
+                target_line = int(hunk_match.group(1))
+                continue
+
+            if test_attribute_pattern.match(line):
+                found_test_attribute = True
+                attribute_start_line = target_line
+            elif found_test_attribute:
+                procedure_match = procedure_pattern.match(line)
+                if procedure_match and attribute_start_line is not None and target_line is not None:
+                    occurrences.append(
+                        TestOccurrence(
+                            codeunit_id=current_codeunit_id,
+                            function_name=procedure_match.group(1),
+                            start_line=attribute_start_line,
+                            end_line=target_line,
+                        )
+                    )
+                    found_test_attribute = False
+                    attribute_start_line = None
+                elif not line.startswith("+"):
+                    found_test_attribute = False
+                    attribute_start_line = None
+
+            if target_line is not None and (line.startswith("+") or not line.startswith("-")):
+                target_line += 1
+
+    if not occurrences:
+        raise NoTestsExtractedError
+    return tuple(occurrences)
+
+
+def normalize_test_occurrences(occurrences: Iterable[TestOccurrence]) -> list[TestEntry]:
+    codeunit_functions: dict[int, set[str]] = {}
+    for occurrence in occurrences:
+        codeunit_functions.setdefault(occurrence.codeunit_id, set()).add(occurrence.function_name)
+    return [TestEntry(codeunitID=codeunit_id, functionName=frozenset(function_names)) for codeunit_id, function_names in codeunit_functions.items()]
 
 
 def extract_tests_from_patch(generated_patch: str, file_contents: dict[str, str]) -> list[TestEntry]:
-    """Extract test entries from an AL code patch by finding NEW test procedures.
-
-    Args:
-        generated_patch: A git diff patch containing AL code with test procedures
-        file_contents: Dict mapping file paths to their content
-
-    Returns:
-        List of TestEntry dicts with codeunitID and functionName
-
-    Raises:
-        NoTestsExtractedError: If no test entries are found in the patch
-    """
-    # Accumulator: codeunit_id -> set of function names (mutable during processing)
-    codeunit_functions: dict[int, set[str]] = {}
-    current_codeunit_id: int | None = None
-
-    # Pattern to match test procedure declarations that are ADDED (have + marker)
-    procedure_pattern = r"^\+\s*procedure\s+(\w+)\s*\("
-
-    # Pattern to match [Test] attribute that is ADDED (have + marker)
-    test_attribute_pattern = r"^\+\s*\[Test\]"
-
-    # Pattern to match diff file headers: diff --git a/<path> b/<path>
-    file_header_pattern = r"^diff --git a/(.+) b/(.+)$"
-
-    lines = generated_patch.split("\n")
-    found_test_attribute = False
-
-    for line in lines:
-        file_header_match = re.match(file_header_pattern, line)
-        if file_header_match:
-            current_file_path = file_header_match.group(2)
-            # Only process codeunit files (*.Codeunit.al, case-insensitive)
-            if current_file_path and current_file_path.lower().endswith(".codeunit.al"):
-                if current_file_path in file_contents:
-                    content = file_contents[current_file_path]
-                    current_codeunit_id = extract_codeunit_id_from_content(content, current_file_path)
-            else:
-                # Reset codeunit ID for non-codeunit files
-                current_codeunit_id = None
-
-            continue
-
-        if re.match(test_attribute_pattern, line):
-            found_test_attribute = True
-            continue
-
-        if found_test_attribute and current_codeunit_id is not None:
-            procedure_match = re.match(procedure_pattern, line)
-            if procedure_match:
-                function_name = procedure_match.group(1)
-                codeunit_functions.setdefault(current_codeunit_id, set()).add(function_name)
-                found_test_attribute = False
-            elif not line.startswith("+"):
-                found_test_attribute = False
-
-    if not codeunit_functions:
-        raise NoTestsExtractedError
-
-    # Convert to immutable TestEntry objects
-    return [TestEntry(codeunitID=codeunit_id, functionName=frozenset(funcs)) for codeunit_id, funcs in codeunit_functions.items()]
+    occurrences = extract_test_occurrences_from_patch(generated_patch, file_contents)
+    return normalize_test_occurrences(occurrences)

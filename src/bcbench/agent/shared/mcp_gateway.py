@@ -14,8 +14,10 @@ from typed container configuration populated at the CLI boundary.
 
 import base64
 import json
+import socket
 import threading
 import time
+from collections.abc import Callable
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import cast
@@ -55,6 +57,68 @@ _STREAM_CHUNK_BYTES = 8192
 _PROBE_TIMEOUT_SECONDS = 120
 _WARMUP_BUDGET_SECONDS = 600
 _WARMUP_RETRY_DELAY_SECONDS = 5
+
+
+class _GatewayHttpServer(ThreadingHTTPServer):
+    def __init__(self, address: tuple[str, int], handler: type[BaseHTTPRequestHandler]) -> None:
+        super().__init__(address, handler)
+        self.active_threads: set[threading.Thread] = set()
+        self.active_connections: set[socket.socket] = set()
+        self.shutdown_errors: list[str] = []
+        self.thread_lock = threading.Lock()
+        self.stopping = threading.Event()
+
+    def process_request(self, request: socket.socket | tuple[bytes, socket.socket], client_address: tuple[str, int]) -> None:
+        connection = request if isinstance(request, socket.socket) else request[1]
+        thread = threading.Thread(target=self.process_request_thread, args=(request, client_address), daemon=True)
+        with self.thread_lock:
+            if self.stopping.is_set():
+                self.shutdown_request(request)
+                return
+            self.active_connections.add(connection)
+            self.active_threads.add(thread)
+            thread.start()
+
+    def process_request_thread(self, request: socket.socket | tuple[bytes, socket.socket], client_address: tuple[str, int]) -> None:
+        connection = request if isinstance(request, socket.socket) else request[1]
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self.thread_lock:
+                self.active_threads.remove(threading.current_thread())
+                self.active_connections.discard(connection)
+
+    def register_connection(self, connection: socket.socket | None) -> None:
+        if connection is None:
+            raise ConnectionError("BC MCP upstream connection has no socket")
+        with self.thread_lock:
+            if self.stopping.is_set():
+                raise ConnectionAbortedError("BC MCP gateway is stopping")
+            self.active_connections.add(connection)
+
+    def unregister_connection(self, connection: socket.socket) -> None:
+        with self.thread_lock:
+            self.active_connections.discard(connection)
+
+    def stop_connections(self) -> None:
+        with self.thread_lock:
+            self.stopping.set()
+            connections = tuple(self.active_connections)
+        for connection in connections:
+            try:
+                # close() alone cannot wake a read held by an HTTPResponse's socket.makefile().
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError as error:
+                logger.debug("BC MCP gateway socket shutdown returned %s; request thread termination must still be verified", type(error).__name__)
+            try:
+                # On Windows a timed read can stay in select() after shutdown; close even with makefile references.
+                descriptor = connection.detach()
+                if descriptor != -1:
+                    socket.close(descriptor)
+            except OSError as error:
+                with self.thread_lock:
+                    self.shutdown_errors.append(type(error).__name__)
+                logger.exception("BC MCP gateway socket close failed")
 
 
 def _header_safe(key: str, value: str) -> bool:
@@ -123,8 +187,9 @@ class BcMcpGateway:
             injected["Company"] = company
         self._injected_headers: dict[str, str] = injected
 
-        self._server: ThreadingHTTPServer | None = None
+        self._server: _GatewayHttpServer | None = None
         self._thread: threading.Thread | None = None
+        self._shutdown_failure: AgentError | None = None
         self._lock = threading.Lock()
         self._forwarded_count = 0
         self.base_url: str | None = None
@@ -146,7 +211,7 @@ class BcMcpGateway:
 
     def start(self) -> "BcMcpGateway":
         gateway = self
-        server = ThreadingHTTPServer(("127.0.0.1", 0), _build_handler(gateway))
+        server = _GatewayHttpServer(("127.0.0.1", 0), _build_handler(gateway))
         self._server = server
         port = server.server_address[1]
         self.base_url = f"http://127.0.0.1:{port}{self._base_path}"
@@ -155,14 +220,43 @@ class BcMcpGateway:
         return self
 
     def stop(self) -> None:
-        if self._server is not None:
-            self._server.shutdown()
-            self._server.server_close()
+        server, thread = self._server, self._thread
+        deadline = time.monotonic() + 5
+        if server is not None:
+            server.stop_connections()
+            server.shutdown()
+            server.server_close()
+        if thread is not None:
+            thread.join(timeout=max(0, deadline - time.monotonic()))
+        clients: tuple[threading.Thread, ...] = ()
+        if server is not None:
+            with server.thread_lock:
+                clients = tuple(server.active_threads)
+            for client in clients:
+                client.join(timeout=max(0, deadline - time.monotonic()))
+        if (thread is not None and thread.is_alive()) or any(client.is_alive() for client in clients) or (server is not None and server.shutdown_errors):
+            logger.error("BC MCP gateway shutdown left active threads or unverified socket closure")
+        else:
             self._server = None
-        if self._thread is not None:
-            self._thread.join(timeout=5)
             self._thread = None
         logger.info(f"BC MCP gateway forwarded {self.forwarded_count} request(s) to the BC MCP endpoint")
+
+    def stop_verified(self) -> None:
+        if self._shutdown_failure is not None:
+            raise self._shutdown_failure
+        server, thread = self._server, self._thread
+        self.stop()
+        if thread is not None and thread.is_alive():
+            self._shutdown_failure = AgentError("BC MCP gateway listener termination was not verified")
+        if server is not None:
+            with server.thread_lock:
+                clients = tuple(server.active_threads)
+            if any(client.is_alive() for client in clients):
+                self._shutdown_failure = AgentError("BC MCP gateway still has active client requests")
+            if server.shutdown_errors:
+                self._shutdown_failure = AgentError(f"BC MCP gateway socket shutdown was not verified: {', '.join(server.shutdown_errors)}")
+        if self._shutdown_failure is not None:
+            raise self._shutdown_failure
 
     def _rpc(self, host: str, port: int, extra_headers: dict[str, str], method: str, params: dict | None, request_id: int | None = None, session_id: str | None = None) -> tuple[str | None, dict]:
         connection = HTTPConnection(host, port, timeout=_PROBE_TIMEOUT_SECONDS)
@@ -242,6 +336,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             return path_only == gateway._mcp_path or path_only.startswith(gateway._mcp_path + "/")
 
         def _handle(self) -> None:
+            server = cast(_GatewayHttpServer, self.server)
             if not self._path_allowed():
                 self.send_error(403, "Forbidden")
                 return
@@ -250,6 +345,9 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             body: bytes | None = self.rfile.read(int(length)) if length else None
             rpc_method, rpc_id = _jsonrpc_method_and_id(body)
             self._response_started = False
+            if server.stopping.is_set():
+                self.close_connection = True
+                return
 
             if rpc_method == "tools/list" and self._serve_cached_tools(rpc_id):
                 return
@@ -259,7 +357,13 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             request_headers.update(gateway._injected_headers)
 
             connection = HTTPConnection(gateway._origin_host, gateway._origin_port, timeout=_UPSTREAM_TIMEOUT_SECONDS)
+            upstream_socket: socket.socket | None = None
+            response = None
             try:
+                connection.connect()
+                upstream_socket = connection.sock
+                # Keep the actual socket: getresponse() clears connection.sock for close-delimited SSE.
+                server.register_connection(upstream_socket)
                 connection.request(self.command, self.path, body=body, headers=request_headers)
                 response = connection.getresponse()
                 gateway._note_forwarded()
@@ -275,7 +379,10 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
             except (ConnectionError, OSError) as error:
                 # The client (agent) closing its side mid-stream is normal; don't misreport it as an
                 # upstream failure, and don't try to send an error once the response has begun.
-                if self._response_started:
+                if server.stopping.is_set():
+                    logger.debug("BC MCP gateway request interrupted by shutdown")
+                    self.close_connection = True
+                elif self._response_started:
                     logger.debug(f"BC MCP gateway client disconnected during {self.command} {rpc_method or self.path}: {error}")
                     self.close_connection = True
                 else:
@@ -286,7 +393,13 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
                 if not self._response_started:
                     self.send_error(502, "Bad Gateway")
             finally:
+                if response is not None:
+                    response.close()
                 connection.close()
+                if upstream_socket is not None:
+                    server.unregister_connection(upstream_socket)
+                if server.stopping.is_set():
+                    self.close_connection = True
 
         def _serve_cached_tools(self, request_id: object) -> bool:
             """Answer tools/list from the warm-up cache, bypassing BC's slow per-session composition.
@@ -405,7 +518,7 @@ def _build_handler(gateway: BcMcpGateway) -> type[BaseHTTPRequestHandler]:
     return _ProxyHandler
 
 
-def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None) -> BcMcpGateway | None:
+def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None, *, register: Callable[[Callable[[], None]], None] | None = None) -> BcMcpGateway | None:
     """Start a localhost MCP gateway in front of the BC container, or return None when disabled."""
     if runtime is None or not runtime.bc_mcp:
         return None
@@ -416,7 +529,10 @@ def start_bc_mcp_gateway(runtime: AgentRuntimeConfig | None) -> BcMcpGateway | N
         username=container.username,
         password=container.password,
         company=container.company,
-    ).start()
+    )
+    if register is not None:
+        register(gateway.stop_verified)
+    gateway.start()
     logger.info(f"BC MCP gateway listening at {gateway.base_url}/mcp (credential-free; path-restricted to /mcp)")
     gateway.warm_up()
     return gateway

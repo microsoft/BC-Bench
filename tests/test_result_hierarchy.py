@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from bcbench.results.base import BaseEvaluationResult, ExecutionBasedEvaluationResult, JudgeBasedEvaluationResult
-from bcbench.results.bugfix import BugFixResult
+from bcbench.results.bugfix import BugFixResult, BugFixResultSummary
 from bcbench.results.display import create_console_summary, create_github_job_summary
 from bcbench.results.summary import (
     EvaluationResultSummary,
@@ -56,6 +56,7 @@ class TestBaseEvaluationResult:
     def test_execution_based_has_resolved_and_build(self):
         assert "resolved" in ExecutionBasedEvaluationResult.model_fields
         assert "build" in ExecutionBasedEvaluationResult.model_fields
+        assert "infrastructure_failure" in ExecutionBasedEvaluationResult.model_fields
 
     def test_bugfix_inherits_execution_based(self):
         assert issubclass(BugFixResult, ExecutionBasedEvaluationResult)
@@ -96,25 +97,58 @@ class TestStatusLabel:
 class TestCategoryMetrics:
     def test_bugfix_category_metrics(self):
         result = create_bugfix_result(resolved=True, build=True)
-        assert result.category_metrics == {"resolved": True, "build": True}
+        assert result.category_metrics == {
+            "resolved": True,
+            "build": True,
+            "infrastructure_failure": False,
+            "generated_test_pre_patch_failed": True,
+            "generated_test_post_patch_passed": True,
+            "benchmark_test_passed": True,
+            "generated_test_validity_status": "not_run",
+            "generated_pair_transition_status": "not_run",
+            "fix_build_status": "passed",
+            "fix_quality_status": "passed",
+            "resolution_status": "passed",
+            "runtime_isolation": "package-normalized",
+        }
 
     def test_bugfix_failed_category_metrics(self):
         result = create_bugfix_result(resolved=False, build=False)
-        assert result.category_metrics == {"resolved": False, "build": False}
+        assert result.category_metrics == {
+            "resolved": False,
+            "build": False,
+            "infrastructure_failure": False,
+            "generated_test_pre_patch_failed": False,
+            "generated_test_post_patch_passed": False,
+            "benchmark_test_passed": False,
+            "generated_test_validity_status": "not_run",
+            "generated_pair_transition_status": "not_run",
+            "fix_build_status": "failed",
+            "fix_quality_status": "failed",
+            "resolution_status": "failed",
+            "runtime_isolation": "package-normalized",
+        }
 
     def test_testgen_category_metrics_includes_extra_fields(self):
         result = create_testgen_result(resolved=True, build=True, pre_patch_failed=True, post_patch_passed=True)
         metrics = result.category_metrics
         assert metrics["resolved"] is True
         assert metrics["build"] is True
+        assert metrics["infrastructure_failure"] is False
         assert metrics["pre_patch_failed"] is True
         assert metrics["post_patch_passed"] is True
 
     def test_testgen_category_metrics_defaults(self):
         result = create_testgen_result()
         metrics = result.category_metrics
+        assert metrics["infrastructure_failure"] is False
         assert metrics["pre_patch_failed"] is False
         assert metrics["post_patch_passed"] is False
+
+    def test_infrastructure_failure_is_machine_readable(self):
+        result = create_bugfix_result(resolved=False, infrastructure_failure=True)
+
+        assert result.category_metrics["infrastructure_failure"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +157,13 @@ class TestCategoryMetrics:
 
 
 class TestDisplayRow:
-    def test_bugfix_display_row_is_empty(self):
+    def test_bugfix_display_row_includes_verification_gates(self):
         result = create_bugfix_result()
-        assert result.display_row == {}
+        assert result.display_row == {
+            "Generated Test Failed Before Fix": "Yes",
+            "Generated Test Passed After Fix": "Yes",
+            "Benchmark Test Passed": "Yes",
+        }
 
     def test_testgen_display_row_has_columns(self):
         result = create_testgen_result(pre_patch_failed=True, post_patch_passed=False)
@@ -215,10 +253,10 @@ class TestCreateAgentTimeout:
 
 
 class TestSummaryFromResults:
-    def test_base_dispatches_to_execution_based_for_bugfix(self):
+    def test_base_dispatches_to_bugfix_summary_for_bugfix(self):
         results = [create_bugfix_result(instance_id="test__1", resolved=True)]
         summary = EvaluationResultSummary.from_results(results, run_id="run1")
-        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        assert isinstance(summary, BugFixResultSummary)
 
     def test_base_dispatches_to_execution_based_for_testgen(self):
         results = [create_testgen_result(instance_id="test__1")]
@@ -304,7 +342,11 @@ class TestMetricsRendering:
 
     def test_execution_based_github_metrics_markdown(self):
         markdown = self._summary().render_github_metrics_markdown()
-        assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Build: 9\n- Pass Rate: 70.0%\n"
+        assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Infrastructure Failed: 0\n- Build: 9\n- Pass Rate: 70.0%\n"
+
+    def test_execution_based_github_metrics_markdown_renders_unscored_rate(self):
+        markdown = self._summary().model_copy(update={"percentage": None}).render_github_metrics_markdown()
+        assert markdown == "## Result Summary\n- Resolved: 7\n- Failed: 3\n- Infrastructure Failed: 0\n- Build: 9\n- Pass Rate: N/A\n"
 
     def test_execution_based_console_metrics_renders_nothing(self):
         # execution-based categories intentionally render no console metrics block
@@ -334,7 +376,7 @@ class TestMetricsRendering:
 
 
 class TestSummaryFromJson:
-    def test_from_json_returns_execution_based_for_bugfix(self):
+    def test_from_json_returns_bugfix_summary_for_bugfix(self):
         payload = {
             "total": 5,
             "resolved": 3,
@@ -351,7 +393,7 @@ class TestSummaryFromJson:
             "benchmark_version": "0.1.0",
         }
         summary = EvaluationResultSummary.from_json(payload)
-        assert isinstance(summary, ExecutionBasedEvaluationResultSummary)
+        assert isinstance(summary, BugFixResultSummary)
         assert summary.resolved == 3
 
     def test_from_json_unknown_category_raises(self):
@@ -455,7 +497,8 @@ class TestGitHubJobSummary:
         assert "bug-fix" in content
         assert "- Custom Agent: N/A\n" in content
         assert "- Plugins: None\n\n## Result Summary" in content
-        assert "- Pass Rate: 50.0%\n\n## Detailed Results" in content
+        assert "- Pass Rate: 50.0%\n\n## Production Metrics" in content
+        assert "- Resolution: 50.0% (coverage 100.0%, 2/2 determined)\n\n## Detailed Results" in content
 
     def test_github_summary_shows_plugins_when_present(self, tmp_path, monkeypatch):
         summary_file = tmp_path / "summary.md"

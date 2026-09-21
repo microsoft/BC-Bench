@@ -38,6 +38,27 @@ def test_claude_workflow_routes_code_review_through_claude() -> None:
     assert 'agent: "Claude Code"' in workflow
 
 
+def test_claude_workflow_can_launch_production_lifecycle_without_legacy_jobs() -> None:
+    workflow = yaml.safe_load(_workflow("claude-evaluation.yml"))
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    jobs = workflow["jobs"]
+
+    assert inputs["production-lifecycle"] == {
+        "description": "Run the opt-in checkpointed bug-fix lifecycle instead of the legacy evaluator",
+        "required": False,
+        "default": False,
+        "type": "boolean",
+    }
+    assert inputs["rehearsal-only"]["default"] is False
+    production = jobs["production-lifecycle"]
+    assert production["uses"] == "$/.github/workflows/bugfix-production-evaluation.yml"
+    assert production["with"]["agent"] == "claude"
+    assert production["with"]["rehearsal-only"] == "${{ inputs.rehearsal-only }}"
+    assert production["secrets"] == "inherit"
+    for job_name in ("pin-commit", "get-entries", "evaluate-with-claude-code", "summarize-results", "requeue"):
+        assert "!inputs.production-lifecycle" in jobs[job_name]["if"]
+
+
 def test_pr_review_workflow_is_fixed_to_code_review() -> None:
     workflow = _workflow("pr-review-evaluation.yml")
     config = yaml.safe_load(AGENT_CONFIG.read_text(encoding="utf-8"))

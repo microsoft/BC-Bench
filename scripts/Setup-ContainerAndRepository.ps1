@@ -102,12 +102,13 @@ if (-not $SkipContainer) {
     foreach ($key in $categoryArtifactConfig.Keys) {
         $artifactParameters[$key] = $categoryArtifactConfig[$key]
     }
+    $acceptInsiderEula = $categoryArtifactConfig.ContainsKey("accept_insiderEula") -and [bool]$categoryArtifactConfig["accept_insiderEula"]
 
     [string] $url = Get-BCArtifactUrl @artifactParameters
     Write-Log "Retrieved artifact URL: $url" -Level Info
 
     # Create container synchronously with NAV folder shared
-    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula ([bool]$categoryArtifactConfig.accept_insiderEula)
+    New-BCContainerSync -ContainerName $ContainerName -Version $Version -ArtifactUrl $url -Credential $credential -AdditionalFolders @($RepoPath) -AcceptInsiderEula $acceptInsiderEula
 
     # Create compiler folder synchronously
     New-BCCompilerFolderSync -ContainerName $ContainerName -ArtifactUrl $url

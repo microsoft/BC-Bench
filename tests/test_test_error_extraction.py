@@ -1,3 +1,4 @@
+from bcbench import exceptions
 from bcbench.exceptions import _extract_test_errors
 
 SAMPLE_TEST_OUTPUT = """\
@@ -82,12 +83,29 @@ class TestExtractTestErrors:
         lines = result.splitlines()
         assert len(lines) == 3
 
+    def test_prioritizes_late_failure_block(self):
+        output = "\n".join(
+            [
+                *(f"Completed successful test {line}" for line in range(25)),
+                "Codeunit 50100 Regression Tests",
+                "    Testfunction LateRegressionTest Failure (0.25 seconds)",
+                "      Error:",
+                "        Assert.AreEqual failed. Expected:<1>. Actual:<2>.",
+            ]
+        )
+
+        result = _extract_test_errors(output)
+
+        assert "Testfunction LateRegressionTest Failure" in result
+        assert "Assert.AreEqual failed" in result
+        assert "Completed successful test 0" not in result
+
 
 class TestTestExecutionErrorMessage:
     def test_error_message_is_concise(self):
         from bcbench.exceptions import TestExecutionError
 
-        error = TestExecutionError("Pass", stderr="", stdout=SAMPLE_TEST_OUTPUT)
+        error = TestExecutionError("Pass", stderr="PowerShell diagnostic", stdout=SAMPLE_TEST_OUTPUT)
         message = str(error)
 
         # Should include the expectation
@@ -95,8 +113,46 @@ class TestTestExecutionErrorMessage:
 
         # Should include the key error info
         assert "Assert.AreEqual failed" in message
+        assert "Standard error:" in message
+        assert "PowerShell diagnostic" in message
 
         # Should NOT include verbose BCContainerHelper output
         assert "BcContainerHelper version" not in message
         assert "Using Container" not in message
         assert "TaskScheduler" not in message
+
+        assert error.diagnostic_message == message
+
+    def test_error_message_bounds_stderr(self):
+        from bcbench.exceptions import TestExecutionError
+
+        stderr = "\n".join(f"stderr line {line}" for line in range(30))
+
+        error = TestExecutionError("Pass", stderr=stderr, stdout=SAMPLE_TEST_OUTPUT)
+
+        assert "stderr line 19" in error.diagnostic_message
+        assert "stderr line 20" not in error.diagnostic_message
+
+
+def test_test_infrastructure_error_preserves_diagnostics():
+    exception_type = getattr(exceptions, "TestInfrastructureError", None)
+
+    assert exception_type is not None
+
+    summary = object()
+    error = exception_type(
+        "all-pass",
+        reason="PowerShell exited before evidence validation",
+        stdout=SAMPLE_TEST_OUTPUT,
+        stderr="pwsh failure detail",
+        summary=summary,
+    )
+
+    assert error.expectation == "all-pass"
+    assert error.reason == "PowerShell exited before evidence validation"
+    assert error.stdout == SAMPLE_TEST_OUTPUT
+    assert error.stderr == "pwsh failure detail"
+    assert error.summary is summary
+    assert "Test infrastructure failed" in str(error)
+    assert "Assert.AreEqual failed" in str(error)
+    assert "pwsh failure detail" in str(error)

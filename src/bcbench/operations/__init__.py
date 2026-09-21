@@ -1,13 +1,18 @@
 """Operations for Business Central and Git."""
 
 from bcbench.operations.bc_operations import (
+    ProjectBuildEvidence,
+    ProjectPublicationEvidence,
+    TestSuiteEvidence,
     build_and_publish_projects,
+    build_and_publish_projects_with_evidence,
     build_ps_app_build_and_publish,
     build_ps_dataset_tests_script,
     build_ps_test_script,
     copy_symbol_apps,
     execute_al_query,
     resolve_artifact_version_root,
+    run_test_suite_with_evidence,
     run_tests,
     wrap_query_as_api,
 )
@@ -22,18 +27,36 @@ from bcbench.operations.git_operations import (
     fetch_commit_if_missing,
     has_changes,
     init_repo,
+    resolve_trusted_commit,
+    stage_and_get_complete_diff,
     stage_and_get_diff,
 )
 from bcbench.operations.instruction_operations import copy_problem_statement_folder, setup_custom_agent, setup_instructions_from_config
-from bcbench.operations.project_operations import categorize_projects
+from bcbench.operations.project_operations import categorize_projects, find_project_path, is_test_project, order_project_paths
 from bcbench.operations.setup_operations import bootstrap_app_json, set_runtime_version, setup_repo_prebuild
 from bcbench.operations.skills_operations import setup_agent_skills
-from bcbench.operations.test_operations import extract_tests_from_patch
+from bcbench.operations.test_execution import TestExpectation, TestRunSummary
+from bcbench.operations.test_operations import (
+    added_lines_belong_to_members,
+    extract_executable_member_occurrences_from_content,
+    extract_test_occurrences_from_content,
+    extract_test_occurrences_from_patch,
+    extract_tests_from_patch,
+    has_only_codeunit_wrapper_outside_members,
+    normalize_test_occurrences,
+)
 
 __all__ = [
+    "ProjectBuildEvidence",
+    "ProjectPublicationEvidence",
+    "TestExpectation",
+    "TestRunSummary",
+    "TestSuiteEvidence",
+    "added_lines_belong_to_members",
     "apply_patch",
     "bootstrap_app_json",
     "build_and_publish_projects",
+    "build_and_publish_projects_with_evidence",
     "build_ps_app_build_and_publish",
     "build_ps_dataset_tests_script",
     "build_ps_test_script",
@@ -47,19 +70,30 @@ __all__ = [
     "copy_problem_statement_folder",
     "copy_symbol_apps",
     "execute_al_query",
+    "extract_executable_member_occurrences_from_content",
+    "extract_test_occurrences_from_content",
+    "extract_test_occurrences_from_patch",
     "extract_tests_from_patch",
     "fetch_commit_if_missing",
+    "find_project_path",
     "has_changes",
+    "has_only_codeunit_wrapper_outside_members",
     "init_repo",
+    "is_test_project",
+    "normalize_test_occurrences",
+    "order_project_paths",
     "prepare_run_dir",
     "remove_tree",
     "resolve_artifact_version_root",
+    "resolve_trusted_commit",
+    "run_test_suite_with_evidence",
     "run_tests",
     "set_runtime_version",
     "setup_agent_skills",
     "setup_custom_agent",
     "setup_instructions_from_config",
     "setup_repo_prebuild",
+    "stage_and_get_complete_diff",
     "stage_and_get_diff",
     "wrap_query_as_api",
 ]

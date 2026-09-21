@@ -97,6 +97,36 @@ class TestPluginConfigValidation:
 
 @pytest.mark.usefixtures("plugin_root")
 class TestResolveConfigPlugins:
+    @pytest.mark.parametrize("name", [".bcbench-owned", "al-lsp-plugin"])
+    def test_production_rejects_reserved_plugin_names(self, tmp_path, name):
+        with pytest.raises(AgentError, match="setup metadata"):
+            resolve_config_plugins({"plugins": [_local_entry(tmp_path, name=name)]}, plugin_root=tmp_path / "plugins")
+
+    def test_production_rejects_source_containing_staging_destination(self, tmp_path):
+        source = _make_plugin(tmp_path / "source")
+        with pytest.raises(AgentError, match="must not overlap"):
+            resolve_config_plugins({"plugins": [_local_entry(source)]}, plugin_root=source / "plugins")
+
+    def test_production_local_plugin_is_copied_under_setup_root(self, tmp_path, plugin_root):
+        source = _make_plugin(tmp_path / "benchmark" / "local-plugin")
+        (source / "knowledge.txt").write_text("plugin knowledge")
+        production_root = tmp_path / "entry" / "agent-tools" / "plugins"
+        production_root.mkdir(parents=True)
+        resolved = resolve_config_plugins({"plugins": [_local_entry(source)]}, plugin_root=production_root)
+        assert resolved[0][1] == production_root / "probe"
+        assert (resolved[0][1] / "knowledge.txt").read_text() == "plugin knowledge"
+        assert not (plugin_root / "probe").exists()
+        assert (source / "knowledge.txt").read_text() == "plugin knowledge"
+
+    def test_production_github_plugin_uses_setup_root(self, tmp_path, plugin_root):
+        production_root = tmp_path / "entry" / "agent-tools" / "plugins"
+        production_root.mkdir(parents=True)
+        with patch("bcbench.agent.shared.plugin.clone_repo_at_revision", side_effect=lambda repo, revision, destination: _make_plugin(destination)) as clone:
+            resolved = resolve_config_plugins({"plugins": [_github_entry()]}, plugin_root=production_root)
+        clone.assert_called_once_with("obra/superpowers", "a" * 40, production_root / "superpowers")
+        assert resolved[0][1] == production_root / "superpowers"
+        assert not (plugin_root / "superpowers").exists()
+
     def test_no_enabled_entries_resolves_to_nothing(self, tmp_path):
         assert resolve_config_plugins({"plugins": [_local_entry(tmp_path, enabled=False)]}) == []
 

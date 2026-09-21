@@ -1,11 +1,13 @@
 import json
 import shutil
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 from jinja2.sandbox import SandboxedEnvironment
 
 from bcbench.agent.shared.altool_paths import build_assembly_probing_paths, compiler_symbol_folder_for_container
+from bcbench.agent.shared.managed_clients import ManagedAgentClients
 from bcbench.dataset import BaseDatasetEntry
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
@@ -47,7 +49,7 @@ def _build_server_entry(server: dict[str, Any], template_context: dict[str, Any]
                 stdio_entry["env"] = env
             return server_name, stdio_entry
         case _:
-            logger.error(f"Unsupported MCP server type: {server_type}, {server}")
+            logger.error("Unsupported MCP server type: name=%s type=%s", server_name, server_type)
             raise AgentError(f"Unsupported MCP server type: {server_type}")
 
 
@@ -72,8 +74,10 @@ def build_mcp_config(
     repo_path: Path,
     runtime: AgentRuntimeConfig | None = None,
     bc_mcp_gateway_url: str | None = None,
+    managed_clients: ManagedAgentClients | None = None,
+    require_evaluator_bridge: bool = False,
 ) -> tuple[str | None, list[str] | None]:
-    mcp_servers: list[dict[str, Any]] = config.get("mcp", {}).get("servers", [])
+    mcp_servers: list[dict[str, Any]] = deepcopy(config.get("mcp", {}).get("servers", []))
 
     if runtime is None or not runtime.al_mcp:
         mcp_servers = list(filter(lambda s: s.get("name") != "altool", mcp_servers))
@@ -90,6 +94,8 @@ def build_mcp_config(
         _configure_bc_mcp_server(next(s for s in mcp_servers if s["name"] == _BC_MCP_SERVER_NAME), bc_mcp_gateway_url)
 
     if runtime is not None and runtime.al_mcp:
+        if require_evaluator_bridge and managed_clients is None:
+            raise AgentError("Production AL MCP requires an evaluator-owned bridge")
         container: ContainerConfig = runtime.container
         compiler_folder, symbols_folder = compiler_symbol_folder_for_container(container.name)
         template_context["package_cache_path"] = str(symbols_folder)
@@ -121,14 +127,22 @@ def build_mcp_config(
         }
         if forwarded:
             al_server["env"] = forwarded
-            logger.info(f"Forwarding env vars to altool MCP: {list(forwarded.keys())}")
+            logger.info("Forwarding %d connection environment variables to altool MCP", len(forwarded))
 
     mcp_server_names: list[str] = [server["name"] for server in mcp_servers]
     mcp_config = {"mcpServers": dict(map(lambda s: _build_server_entry(s, template_context), mcp_servers))}
+    if runtime is not None and runtime.al_mcp and managed_clients is not None:
+        url = managed_clients.start_al_mcp(mcp_config["mcpServers"]["altool"], repo_path)
+        mcp_config["mcpServers"]["altool"] = {"type": "http", "url": url}
+    mcp_server_types = {name: entry["type"] for name, entry in mcp_config["mcpServers"].items()}
 
     logger.info(f"Using MCP servers: {mcp_server_names}")
-    # The BC container password (if forwarded to altool) is already masked in CI logs via ::add-mask::,
-    # and the bcmcp entry is credential-free (the gateway injects auth upstream), so no extra redaction.
-    logger.debug(f"MCP configuration: {json.dumps(mcp_config, indent=2)}")
+    logger.debug(
+        "MCP configuration summary: servers=%s types=%s al_mcp=%s bc_mcp=%s",
+        mcp_server_names,
+        mcp_server_types,
+        bool(runtime and runtime.al_mcp),
+        bool(runtime and runtime.bc_mcp),
+    )
 
     return json.dumps(mcp_config, separators=(",", ":")), mcp_server_names

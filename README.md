@@ -39,6 +39,20 @@ BC PR Review is the production-fidelity BC-ALAgents + BCQuality runner for the `
 
 BC-Bench is open source, and you're welcome to fork and adapt it for your own use. We are not accepting external contributions in this repository at this time. You can run evaluations locally and replace the dataset under `dataset/` with tasks from your own codebase.
 
+### Isolated bug-fix lifecycle
+
+The **Opt-in production bug-fix evaluation** workflow (`.github\workflows\bugfix-production-evaluation.yml`) is separate from the legacy default and keeps leaderboard updates disabled. It supports a rehearsal-only gate that cannot launch a paid agent. See the [operator runbook](docs/bug-fix.md#opt-in-production-lifecycle) for setup, branch-launcher, Copilot/Claude/replay commands, metrics, evidence, and pending promotion gates.
+
+Both lifecycle harness commands support `--replay-patch` with optional `--replay-timeout` provenance; neither runs an agent during replay. The workflow's optional `canary-entries` JSON array selects exactly five validated IDs before provisioning. Leaving it empty preserves the existing four-entry `test-run` sample or full-dataset selection.
+
+Use a dedicated **Windows self-hosted runner** (workflow label `GitHub-BCBench`) whose evaluator account can administer local users and ACLs, use Windows Docker, and run **BcContainerHelper 6.1.18**. **Native PowerShell 7 is required**: Store-packaged `WindowsApps` activation is not supported for contained cleanup or rehearsal. Provision Python 3.13, the locked `uv` environment, Git, Node.js 24, the selected agent harness, and the evaluator AL tools before applying restricted ACLs. The setup action pins `Microsoft.Dynamics.BusinessCentral.Development.Tools` to `18.0.37.11445-beta`, using .NET 8 for BC versions below 29 and .NET 10 otherwise; it also handles repository authentication and BC artifact setup.
+
+Allocate a fresh entry root and a separate evaluator-only protected root for every invocation, for example `C:\bcbench\entries\<invocation>` and `C:\bcbench-protected\<invocation>`. Protected source, checkpoints, and final evidence must be outside **all agent/container mounts and mounted staging**, without links or junctions. Only the entry's `mounted-staging` area is used for checkpoint transfer; it is not protected storage. Keep the exact setup dataset inside the agent-denied benchmark checkout.
+
+Evaluator BC credentials are `BC_SERVER_USERNAME` / `BC_SERVER_PASSWORD`; restricted credentials are `BCBENCH_LIFECYCLE_AGENT_OS_USERNAME` / `BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD` and `BCBENCH_LIFECYCLE_AGENT_BC_USERNAME` / `BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD`. These stay in the evaluator's environment and are not forwarded to the agent shell. Agent authentication uses `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` or `CLAUDE_CODE_OAUTH_TOKEN` (the workflow sources the latter from `secrets.ANTHROPIC_API_KEY`). **Supply secret values through environment/secret injection only, never CLI arguments, logs, or saved configuration JSON.** Setup's JSON-valued container-configuration environment variables are secret-bearing too; do not print or persist them.
+
+Check all three quarantine locations: `<ProtectedRoot>\quarantine.json`, `<ProtectedRoot>.quarantine.json`, and `<ProtectedRoot>.cleanup-pending.quarantine.json`. Any marker blocks promotion and automatic reuse: take the runner out of service, preserve owned resources/evidence/ACLs, and inspect immutable container ownership, process shutdown, and identity security before manual containment. Cleanup attempts verified identity disablement when safe; if native contained execution is unavailable or shutdown is unverified, evidence may report identity security **unverified** and the account may remain enabled. Do not assume it was disabled, delete the markers, or force-delete the container to make a run green. Follow the [quarantine response](docs/bug-fix.md#quarantine-response).
+
 ### Documentation map
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — fork setup, repo layout, versioning, day-to-day maintainer ops

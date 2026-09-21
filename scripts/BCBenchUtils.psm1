@@ -1,3 +1,5 @@
+using module .\DatasetEntry.psm1
+
 <#
 .SYNOPSIS
     BC-Bench Utilities Module

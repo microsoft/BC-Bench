@@ -232,3 +232,40 @@ class TestClaudeStreamParsing:
         )
 
         assert "Claude Code: Done." in caplog.messages
+
+    def test_without_transcript_logging_preserves_metrics_and_final_response(self, caplog: pytest.LogCaptureFixture):
+        credentials = ("agent-bc-password-value", "agent-os-password-value", "agent-token-value")
+        caplog.set_level("INFO")
+
+        metrics, final_response = parse_stream_output(
+            self._lines(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": " ".join(credentials)},
+                            {"type": "tool_use", "name": "Bash", "input": {}},
+                        ]
+                    },
+                },
+                {
+                    "type": "result",
+                    "duration_ms": 1500,
+                    "duration_api_ms": 750,
+                    "num_turns": 2,
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                    "result": "Completed safely.",
+                },
+            ),
+            log_transcript=False,
+        )
+
+        assert metrics is not None
+        assert metrics.execution_time == 1.5
+        assert metrics.llm_duration == 0.75
+        assert metrics.turn_count == 2
+        assert metrics.prompt_tokens == 10
+        assert metrics.completion_tokens == 5
+        assert metrics.tool_usage == {"Bash": 1}
+        assert final_response == "Completed safely."
+        assert all(credential not in caplog.text for credential in credentials)

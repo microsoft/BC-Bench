@@ -2,31 +2,78 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from bcbench.evaluate.bugfix_lifecycle.models import CheckpointManifest
+    from bcbench.operations.test_execution import TestRunSummary
+    from bcbench.results.bugfix import BugFixPhaseResult
     from bcbench.types import AgentMetrics, ExperimentConfiguration
 
 __all__ = [
     "AgentError",
     "BCBenchError",
+    "BugFixLifecycleInfrastructureError",
     "BuildError",
+    "CheckpointInfrastructureError",
+    "CleanupInfrastructureError",
     "CollectionError",
     "ConfigurationError",
     "DatasetError",
     "EmptyDiffError",
     "EmptyGoldResultError",
     "EntryNotFoundError",
+    "GeneratedOutputError",
+    "GeneratedSubmissionError",
     "GitOperationError",
     "InvalidEntryFormatError",
     "NoEntriesFoundError",
+    "PackageInventoryError",
     "PatchApplicationError",
+    "PhaseExecutionInfrastructureError",
+    "ProjectDiscoveryError",
     "TestExecutionError",
+    "TestExecutionFailureKind",
+    "TestExtractionError",
+    "TestInfrastructureError",
 ]
 
 
 class BCBenchError(Exception):
     """Base exception for all BC-Bench operations."""
+
+
+class BugFixLifecycleInfrastructureError(BCBenchError):
+    """Bug-fix lifecycle infrastructure failed."""
+
+
+class CheckpointInfrastructureError(BugFixLifecycleInfrastructureError):
+    """Checkpoint capture or restore failed."""
+
+
+class CleanupInfrastructureError(BugFixLifecycleInfrastructureError):
+    """Lifecycle cleanup failed."""
+
+
+class PackageInventoryError(BugFixLifecycleInfrastructureError):
+    """Built packages or installed application inventory failed verification."""
+
+
+class PhaseExecutionInfrastructureError(BugFixLifecycleInfrastructureError):
+    """Unexpected phase execution failed after its result was persisted."""
+
+    def __init__(
+        self,
+        original: BaseException,
+        result: BugFixPhaseResult,
+        phase_name: str,
+    ) -> None:
+        self.original = original
+        self.result = result
+        self.phase_name = phase_name
+        self.fixed_checkpoint: CheckpointManifest | None = None
+        super().__init__(f"Unexpected infrastructure failure in phase {phase_name}: {original}")
 
 
 class DatasetError(BCBenchError):
@@ -123,6 +170,10 @@ def _extract_compiler_errors(output: str, max_lines: int = 30) -> str:
     return "\n".join(lines[-max_lines:])
 
 
+def _bounded_output(lines: list[str], max_lines: int, max_chars: int = 4000) -> str:
+    return "\n".join(lines[:max_lines])[:max_chars]
+
+
 def _extract_test_errors(output: str, max_lines: int = 20) -> str:
     """Extract test failure information from test output, filtering verbose lines."""
     if not output:
@@ -150,10 +201,16 @@ def _extract_test_errors(output: str, max_lines: int = 20) -> str:
     filtered = list(filter(is_relevant, lines))
 
     if filtered:
-        return "\n".join(filtered[:max_lines])
+        failure_index = next(
+            (index for index, line in enumerate(filtered) if "Testfunction " in line and " Failure" in line),
+            None,
+        )
+        if failure_index is not None:
+            return _bounded_output(filtered[max(0, failure_index - 1) :], max_lines)
+        return _bounded_output(filtered, max_lines)
 
     # Fallback: return last N lines if no pattern found
-    return "\n".join(lines[-max_lines:])
+    return _bounded_output(lines[-max_lines:], max_lines)
 
 
 class BuildError(BCBenchError):
@@ -178,17 +235,68 @@ class BuildTimeoutExpired(BCBenchError):
         super().__init__(message)
 
 
+class TestExecutionFailureKind(StrEnum):
+    SELECTION_EVIDENCE = "selection-evidence"
+    OUTCOME = "outcome"
+
+
 class TestExecutionError(BCBenchError):
     """Test execution failures."""
 
-    def __init__(self, expectation: str, stderr: str = "", stdout: str = "") -> None:
+    def __init__(
+        self,
+        expectation: str,
+        stderr: str = "",
+        stdout: str = "",
+        reason: str = "",
+        summary: TestRunSummary | None = None,
+        failure_kind: TestExecutionFailureKind = TestExecutionFailureKind.OUTCOME,
+    ) -> None:
         self.expectation = expectation
         self.stderr = stderr
         self.stdout = stdout
+        self.reason = reason
+        self.summary = summary
+        self.failure_kind = TestExecutionFailureKind(failure_kind)
         self.errors = _extract_test_errors(stdout)
-        message = f"Test result did not meet expectation (expected: {expectation})"
+        super().__init__(self.diagnostic_message)
+
+    @property
+    def diagnostic_message(self) -> str:
+        message = f"Test result did not meet expectation (expected: {self.expectation})"
+        if self.reason:
+            message += f": {self.reason}"
         if self.errors:
-            message += f"\n{self.errors}"
+            message += f"\nTest output:\n{self.errors}"
+        stderr = _bounded_output(self.stderr.strip().splitlines(), max_lines=20)
+        if stderr:
+            message += f"\nStandard error:\n{stderr}"
+        return message
+
+
+class TestInfrastructureError(BCBenchError):
+    """Business Central test infrastructure failed."""
+
+    def __init__(
+        self,
+        expectation: str,
+        reason: str,
+        stdout: str = "",
+        stderr: str = "",
+        summary: TestRunSummary | None = None,
+    ) -> None:
+        self.expectation = expectation
+        self.reason = reason
+        self.stdout = stdout
+        self.stderr = stderr
+        self.summary = summary
+        self.errors = _extract_test_errors(stdout)
+
+        message = f"Test infrastructure failed (expected: {expectation}): {reason}"
+        if self.errors:
+            message += f"\nTest output:\n{self.errors}"
+        if stderr.strip():
+            message += f"\nStandard error:\n{stderr.strip()}"
         super().__init__(message)
 
 
@@ -210,6 +318,27 @@ class NoTestsExtractedError(BCBenchError):
         super().__init__(message)
 
 
+class TestExtractionError(BCBenchError, ValueError):
+    """Generated test content could not be identified."""
+
+
+class GeneratedOutputError(BCBenchError):
+    """Agent-generated output is invalid."""
+
+
+class GeneratedSubmissionError(GeneratedOutputError):
+    """Agent-generated submission violates bug-fix constraints."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        generated_patch: str | None = None,
+    ) -> None:
+        self.generated_patch = generated_patch
+        super().__init__(message)
+
+
 class AgentError(BCBenchError):
     """Agent execution errors."""
 
@@ -217,14 +346,27 @@ class AgentError(BCBenchError):
 class AgentTimeoutError(BCBenchError):
     """Agent execution timeout errors."""
 
-    def __init__(self, message: str, metrics: AgentMetrics | None = None, config: ExperimentConfiguration | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        metrics: AgentMetrics | None = None,
+        config: ExperimentConfiguration | None = None,
+        stdout: str | bytes | None = None,
+        stderr: str | bytes | None = None,
+    ) -> None:
         self.metrics = metrics
         self.config = config
+        self.stdout = stdout.decode("utf-8", errors="replace") if isinstance(stdout, bytes) else stdout
+        self.stderr = stderr.decode("utf-8", errors="replace") if isinstance(stderr, bytes) else stderr
         super().__init__(message)
 
 
 class ConfigurationError(BCBenchError):
     """Configuration-related errors."""
+
+
+class ProjectDiscoveryError(BCBenchError):
+    """AL project ownership discovery failed."""
 
 
 class CollectionError(BCBenchError):

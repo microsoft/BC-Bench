@@ -6,10 +6,11 @@ from bcbench.collection.patch_utils import extract_file_paths_from_patch
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry, TestGenEntry
 from bcbench.evaluate.base import AgentRunner, EvaluationPipeline
-from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError
+from bcbench.exceptions import BuildError, NoTestsExtractedError, TestExecutionError, TestInfrastructureError
 from bcbench.github_actions import github_log_group
 from bcbench.logger import get_logger
 from bcbench.operations import (
+    TestExpectation,
     apply_patch,
     build_and_publish_projects,
     categorize_projects,
@@ -109,7 +110,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Fail", container)
+            run_test_suite(generated_tests, TestExpectation.ANY_FAIL, container, context.repo_path)
 
             apply_patch(context.repo_path, context.entry.patch, f"{context.entry.instance_id} patch")
 
@@ -119,7 +120,7 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
                 container,
                 context.entry.environment_setup_version,
             )
-            run_test_suite(generated_tests, "Pass", container)
+            run_test_suite(generated_tests, TestExpectation.ALL_PASS, container, context.repo_path)
 
             result = TestGenerationResult.create_success(context, generated_patch)
             logger.info(f"Successfully completed {context.entry.instance_id}")
@@ -128,11 +129,21 @@ class TestGenerationPipeline(EvaluationPipeline[TestGenEntry]):
             result = TestGenerationResult.create_build_failure(context, generated_patch, str(e))
             logger.exception(f"Build failed during evaluation of {context.entry.instance_id}")
 
+        except TestInfrastructureError as e:
+            result = TestGenerationResult.create_test_infrastructure_failure(
+                context,
+                generated_patch,
+                str(e),
+                pre_patch_failed=e.expectation is not TestExpectation.ANY_FAIL,
+            )
+
+            logger.exception(f"Test infrastructure failed during evaluation of {context.entry.instance_id}")
+
         except TestExecutionError as e:
-            if e.expectation == "Fail":
-                result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, "Generated tests Passed pre-patch\n" + str(e))
+            if e.expectation is TestExpectation.ANY_FAIL:
+                result = TestGenerationResult.create_pre_patch_failure(context, generated_patch, "Generated tests Passed pre-patch\n" + e.diagnostic_message)
             else:
-                result = TestGenerationResult.create_post_patch_failure(context, generated_patch, "Generated tests Failed post-patch\n" + str(e))
+                result = TestGenerationResult.create_post_patch_failure(context, generated_patch, "Generated tests Failed post-patch\n" + e.diagnostic_message)
 
             logger.exception(f"Tests failed during evaluation of {context.entry.instance_id}")
 

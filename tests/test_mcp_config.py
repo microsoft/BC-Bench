@@ -1,6 +1,8 @@
 import json
+import logging
 from copy import deepcopy
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -164,6 +166,27 @@ class TestBcMcp:
 
 
 class TestAltoolEnvForwarding:
+    def test_production_al_mcp_config_contains_only_managed_endpoint(self, entry, repo_path):
+        clients = Mock()
+        clients.start_al_mcp.return_value = "http://127.0.0.1:54321/unguessable/mcp"
+        config = _make_config(ALTOOL_SERVER)
+        original = deepcopy(config)
+        container = ContainerConfig("bcbench", "agent", "protected-bridge-secret", "CRONUS")
+
+        config_json, names = build_mcp_config(config, entry, repo_path, runtime=_runtime(container, al_mcp=True), managed_clients=clients, require_evaluator_bridge=True)
+
+        assert config_json is not None
+        assert json.loads(config_json)["mcpServers"]["altool"] == {"type": "http", "url": clients.start_al_mcp.return_value}
+        assert "protected-bridge-secret" not in config_json
+        assert "BC_SERVER_PASSWORD" not in config_json
+        assert names == ["altool"]
+        assert clients.start_al_mcp.call_args.args[0]["env"]["BC_SERVER_PASSWORD"] == "protected-bridge-secret"
+        assert config == original
+
+    def test_production_al_mcp_fails_closed_without_evaluator_owner(self, entry, repo_path, container):
+        with pytest.raises(AgentError, match="evaluator-owned"):
+            build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, runtime=_runtime(container, al_mcp=True), require_evaluator_bridge=True)
+
     def test_forwards_container_connection(self, entry, repo_path):
         container = ContainerConfig(
             "bcbench",
@@ -216,6 +239,36 @@ class TestAltoolEnvForwarding:
             "BC_SERVER_PASSWORD": "secret",
             "BC_SERVER_USERNAME": "admin",
         }
+
+    def test_debug_logging_contains_only_safe_mcp_metadata(self, entry, repo_path, caplog):
+        secret = "distinctive-agent-bc-secret"
+        container = ContainerConfig("bcbench", "admin", secret, "CRONUS")
+        caplog.set_level(logging.DEBUG, logger="bcbench.agent.shared.mcp")
+
+        build_mcp_config(_make_config(ALTOOL_SERVER), entry, repo_path, runtime=_runtime(container, al_mcp=True))
+
+        assert secret not in caplog.text
+        assert "BC_SERVER_PASSWORD" not in caplog.text
+        assert "altool" in caplog.text
+
+
+def test_unsupported_server_logging_excludes_server_payload(entry, repo_path, caplog):
+    secret = "distinctive-invalid-server-secret"
+    caplog.set_level(logging.DEBUG, logger="bcbench.agent.shared.mcp")
+    config = _make_config(
+        {
+            "name": "unsafe-server",
+            "type": "invalid",
+            "env": {"BC_SERVER_PASSWORD": secret},
+        }
+    )
+
+    with pytest.raises(AgentError, match="Unsupported MCP server type"):
+        build_mcp_config(config, entry, repo_path)
+
+    assert secret not in caplog.text
+    assert "BC_SERVER_PASSWORD" not in caplog.text
+    assert "unsafe-server" in caplog.text
 
 
 class TestBuildAssemblyProbingPaths:

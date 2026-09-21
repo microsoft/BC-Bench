@@ -3,6 +3,7 @@
 import logging
 import re
 import sys
+from contextlib import suppress
 from typing import ClassVar
 
 from bcbench.config import get_config
@@ -106,7 +107,21 @@ class ColoredFormatter(logging.Formatter):
         return formatted
 
 
-class GitHubActionsHandler(logging.Handler):
+class _CredentialSafeHandler:
+    def handleError(self, record: logging.LogRecord) -> None:
+        if not logging.raiseExceptions or sys.__stderr__ is None:
+            return
+        with suppress(Exception):
+            sys.__stderr__.write("BC-Bench logging handler failed; log record suppressed.\n")
+
+
+class _CredentialSafeStreamHandler(_CredentialSafeHandler, logging.StreamHandler):
+    def emit(self, record: logging.LogRecord) -> None:
+        self.stream = sys.stderr
+        super().emit(record)
+
+
+class GitHubActionsHandler(_CredentialSafeHandler, logging.Handler):
     """Handler that emits GitHub Actions workflow commands for warnings and errors.
 
     This handler outputs annotations to GitHub Actions and marks records as handled
@@ -196,7 +211,7 @@ def setup_logger(verbose: bool = False) -> None:
         root_logger.addHandler(github_handler)
 
     # Create console handler with colored formatter and sensitive data filter
-    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler = _CredentialSafeStreamHandler(sys.stderr)
     console_handler.setFormatter(ColoredFormatter())
     console_handler.addFilter(SensitiveDataFilter())
     console_handler.addFilter(GitHubActionsSkipFilter())

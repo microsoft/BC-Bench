@@ -1,4 +1,5 @@
 import sys
+from typing import Annotated
 
 import typer
 
@@ -17,17 +18,22 @@ def list_categories() -> None:
 
 
 @category_app.command("bceval-config")
-def bceval_config(category: EvaluationCategoryOption) -> None:
+def bceval_config(
+    category: EvaluationCategoryOption,
+    production: Annotated[bool, typer.Option(help="Use production lifecycle evaluators.")] = False,
+) -> None:
     """
     Emit the bc-eval evaluator list and core score for a category as step outputs.
 
     The lines are appended to $GITHUB_OUTPUT so they become GitHub Actions step outputs. Outside of Actions nothing is written.
     """
+    evaluators = category.production_evaluators if production else category.evaluators
+    core_score = category.production_core_score if production else category.core_score
     outputs: dict[str, str] = {
-        "evaluators": ",".join(category.evaluators),
-        "core_score": category.core_score,
+        "evaluators": ",".join(evaluators),
+        "core_score": core_score,
     }
-    if ("lm_checklist" in category.evaluators) and (category.judge_model is not None):
+    if ("lm_checklist" in evaluators) and (category.judge_model is not None):
         outputs["judge_model"] = category.judge_model
     write_step_outputs(outputs)
 

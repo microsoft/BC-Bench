@@ -314,6 +314,7 @@ def evaluate_mock(
     category: EvaluationCategoryOption,
     output_dir: OutputDir = _config.paths.evaluation_results_path,
     run_id: RunId = "mock_run",
+    consistent_experiment: Annotated[bool, typer.Option(help="Use one empty experiment identity across independently executed mock entries")] = False,
 ) -> None:
     """
     Evaluate mock agent on single dataset entry for testing purposes.
@@ -332,7 +333,7 @@ def evaluate_mock(
         category=category,
     )
 
-    pipeline = MockEvaluationPipeline()
+    pipeline = MockEvaluationPipeline(consistent_experiment=consistent_experiment)
     pipeline.execute(context, lambda ctx: (None, None))
 
     logger.info("Mock evaluation complete!")
@@ -345,6 +346,9 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
     This pipeline simulates agent execution without requiring actual BC container setup.
     It randomly generates different scenarios to test result handling and serialization.
     """
+
+    def __init__(self, *, consistent_experiment: bool = False) -> None:
+        self._consistent_experiment = consistent_experiment
 
     def setup_workspace(self, entry: BaseDatasetEntry, repo_path: Path) -> None:
         logger.info("Mock pipeline: Skipping workspace setup")
@@ -377,7 +381,7 @@ class MockEvaluationPipeline(EvaluationPipeline[BaseDatasetEntry]):
             ExperimentConfiguration(custom_agent="custom-agent-v1"),
             ExperimentConfiguration(plugins=["superpowers@d884ae04edebef577e82ff7c4e143debd0bbec99"]),
         ]
-        context.experiment = random.choice(experiment_config_scenarios)
+        context.experiment = ExperimentConfiguration() if self._consistent_experiment else random.choice(experiment_config_scenarios)
 
         logger.info(f"Using agent metrics: {context.metrics}")
         logger.info(f"Using experiment configuration: {context.experiment}")

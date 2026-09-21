@@ -1,10 +1,15 @@
+import json
+import subprocess
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
 from bcbench.config import get_config
 from bcbench.dataset import TestEntry
+from bcbench.exceptions import BuildError
 from bcbench.operations import bc_operations
+from bcbench.operations.test_execution import TestExpectation
 from bcbench.types import ContainerConfig
 
 _config = get_config()
@@ -110,6 +115,18 @@ class TestPowerShellScriptGeneration:
         # Double quotes pass through (in PowerShell single-quoted strings)
         assert 'Test"Update' in script
 
+    def test_build_test_script_accepts_shared_evidence_directory(self):
+        script = bc_operations.build_ps_test_script(
+            "bcserver",
+            "admin",
+            "pass",
+            50100,
+            ["TestCreate"],
+            evidence_directory=Path(r"C:\repo with space\O'Brien"),
+        )
+
+        assert "$evidenceRoot = 'C:\\repo with space\\O''Brien'" in script
+
     def test_build_dataset_tests_script(self):
         test_entries = '[{"codeunit": 50100, "function": "TestCreate"}]'
 
@@ -118,17 +135,18 @@ class TestPowerShellScriptGeneration:
             username="admin",
             password="Test123",
             test_entries_json=test_entries,
-            expectation="Pass",
+            evidence_directory=Path(r"C:\repo\.bcbench-test-evidence"),
         )
 
         assert "Import-Module BcContainerHelper" in script
         assert "bcserver" in script
         assert "Invoke-DatasetTests" in script
         assert "ConvertFrom-Json" in script
-        assert "Pass" in script
+        assert "-evidenceDirectory 'C:\\repo\\.bcbench-test-evidence'" in script
+        assert "-expectation" not in script
         assert "$testEntries" in script
 
-    def test_build_dataset_tests_script_with_quotes_in_json(self):
+    def test_build_dataset_tests_script_quotes_json_and_evidence_path(self):
         # JSON with single quotes that need escaping
         test_entries = '[{"name": "Test\'s Function"}]'
 
@@ -137,17 +155,17 @@ class TestPowerShellScriptGeneration:
             username="admin",
             password="Test123",
             test_entries_json=test_entries,
-            expectation="Pass",
+            evidence_directory=Path(r"C:\repo with space\O'Brien\evidence"),
         )
 
-        # Single quotes in JSON should be escaped
         assert "Test''s Function" in script
+        assert "-evidenceDirectory 'C:\\repo with space\\O''Brien\\evidence'" in script
 
     def test_all_scripts_have_error_action_preference(self):
         scripts = [
             bc_operations.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
             bc_operations.build_ps_test_script("bc", "admin", "pass", 50100),
-            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
+            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", Path("/evidence")),
         ]
 
         for script in scripts:
@@ -157,7 +175,7 @@ class TestPowerShellScriptGeneration:
         scripts = [
             bc_operations.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
             bc_operations.build_ps_test_script("bc", "admin", "pass", 50100),
-            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
+            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", Path("/evidence")),
         ]
 
         for script in scripts:
@@ -168,7 +186,7 @@ class TestPowerShellScriptGeneration:
         scripts = [
             bc_operations.build_ps_app_build_and_publish("bc", "admin", "pass", Path("/test"), "1.0"),
             bc_operations.build_ps_test_script("bc", "admin", "pass", 50100),
-            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", "Pass"),
+            bc_operations.build_ps_dataset_tests_script("bc", "admin", "pass", "[]", Path("/evidence")),
         ]
 
         for script in scripts:
@@ -206,6 +224,101 @@ class TestPowerShellScriptGeneration:
         assert '"27.0"' not in script
 
 
+def test_app_utils_runs_each_requested_function_and_appends_junit():
+    app_utils = (_config.paths.ps_script_path / "AppUtils.psm1").read_text(encoding="utf-8")
+
+    assert "foreach ($functionName in $functionsToRun)" in app_utils
+    assert "[System.Management.Automation.WildcardPattern]::Escape($functionName)" in app_utils
+    assert "testFunction            = $testFunction" in app_utils
+    assert "AppendToJUnitResultFile = $appendToResult" in app_utils
+    assert "$functionNames -join '|'" not in app_utils
+
+
+def _invoke_bc_test(function_names: list[str] | None, tmp_path: Path) -> dict[str, list[str]]:
+    app_utils_path = bc_operations._escape_ps_string(str(_config.paths.ps_script_path / "AppUtils.psm1"))
+    evidence_path = bc_operations._escape_ps_string(str(tmp_path / "evidence"))
+    function_parameter = ""
+    if function_names is not None:
+        quoted_names = ", ".join(f"'{bc_operations._escape_ps_string(name)}'" for name in function_names)
+        function_parameter = f" -functionNames @({quoted_names})"
+
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$global:capturedFunctions = [System.Collections.Generic.List[string]]::new()
+function global:Get-TestsFromBcContainer {{
+    param(
+        [string] $containerName,
+        [PSCredential] $credential,
+        [string] $testCodeunitRange,
+        [switch] $ignoreGroups
+    )
+    [PSCustomObject]@{{
+        Id = 50100
+        Tests = @('Literal*Star', 'Literal?Question', 'Literal[Bracket')
+    }}
+}}
+function global:Run-TestsInBcContainer {{
+    param(
+        [string] $containerName,
+        [PSCredential] $credential,
+        [bool] $returnTrueIfAllPassed,
+        [string] $testCodeunitRange,
+        [string] $testFunction,
+        [bool] $detailed,
+        [string] $JUnitResultFileName,
+        [bool] $AppendToJUnitResultFile
+    )
+    $global:capturedFunctions.Add($testFunction)
+    '<testsuite />' | Set-Content -Path $JUnitResultFileName -Encoding UTF8
+    return $true
+}}
+Import-Module '{app_utils_path}' -Force
+$password = ConvertTo-SecureString 'pass' -AsPlainText -Force
+$credential = [PSCredential]::new('admin', $password)
+Invoke-BCTest -containerName 'bc' -credential $credential -codeunitID 50100{function_parameter} -evidenceDirectory '{evidence_path}' | Out-Null
+$discovery = Get-Content -Path (Join-Path '{evidence_path}' 'discovery-50100.json') -Raw | ConvertFrom-Json
+[PSCustomObject]@{{
+    filters = @($global:capturedFunctions)
+    discovery = @($discovery.functionName)
+}} | ConvertTo-Json -Compress
+"""
+    result = subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout.splitlines()[-1])
+
+
+def test_invoke_bc_test_escapes_literal_wildcard_function_names(tmp_path: Path):
+    function_names = ["Literal*Star", "Literal?Question", "Literal[Bracket"]
+
+    evidence = _invoke_bc_test(function_names, tmp_path)
+
+    assert evidence["filters"] == ["Literal`*Star", "Literal`?Question", "Literal`[Bracket"]
+    assert evidence["discovery"] == function_names
+
+
+def test_invoke_bc_test_without_function_names_discovers_all_available_functions(tmp_path: Path):
+    evidence = _invoke_bc_test(None, tmp_path)
+
+    assert evidence["filters"] == ["*"]
+    assert evidence["discovery"] == ["Literal*Star", "Literal?Question", "Literal[Bracket"]
+
+
+def test_verify_build_and_tests_uses_evidence_validation():
+    verification_script = (_config.paths.ps_script_path / "Verify-BuildAndTests.ps1").read_text(encoding="utf-8")
+
+    assert "Invoke-DatasetTestsWithExpectation" in verification_script
+    assert "load_test_run_summary" in verification_script
+    assert "-evidenceDirectory $evidenceDirectory" in verification_script
+    assert "Invoke-DatasetTests -containerName" not in verification_script
+    assert "uv run --project $bcBenchRoot python" in verification_script
+
+
 class TestRunTestSuite:
     @pytest.fixture
     def mock_subprocess(self, monkeypatch):
@@ -218,6 +331,7 @@ class TestRunTestSuite:
             return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
 
         monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(bc_operations, "load_test_run_summary", lambda *_args: Mock(require=lambda _expectation: None), raising=False)
         return calls
 
     def test_test_entries_serialized_as_json(self, mock_subprocess):
@@ -226,8 +340,9 @@ class TestRunTestSuite:
         ]
 
         bc_operations.run_test_suite(
+            repo_path=Path.cwd(),
             test_entries=test_entries,
-            expectation="Pass",
+            expectation=TestExpectation.ALL_PASS,
             container=ContainerConfig(name="bcserver", username="admin", password="Test123", company="CRONUS"),
         )
 
@@ -240,6 +355,79 @@ class TestRunTestSuite:
         # Should NOT contain Python repr format
         assert "TestEntry(" not in command
 
+
+def test_build_and_publish_with_evidence_preserves_command_output_and_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = tmp_path / "repo"
+    project_path = repo_path / "src" / "App"
+    output_path = project_path / "output"
+    output_path.mkdir(parents=True)
+    package = output_path / "App.app"
+    package.write_bytes(b"package")
+    evidence_path = repo_path / "evidence" / "build"
+
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            returncode=0,
+            stdout="build stdout",
+            stderr="build stderr",
+        ),
+    )
+
+    result = bc_operations.build_and_publish_projects_with_evidence(
+        repo_path,
+        ["src/App"],
+        ContainerConfig(name="bcserver", username="admin", password="pass", company="CRONUS"),
+        "27.0",
+        evidence_path,
+    )
+
+    record = result.projects[0]
+    assert record.package_path == package
+    assert record.command_path.read_text(encoding="utf-8")
+    assert record.stdout_path.read_text(encoding="utf-8") == "build stdout"
+    assert record.stderr_path.read_text(encoding="utf-8") == "build stderr"
+    assert record.package_hash
+
+
+def test_build_and_publish_with_evidence_preserves_failure_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_path = tmp_path / "repo"
+    (repo_path / "src" / "App").mkdir(parents=True)
+    evidence_path = repo_path / "evidence" / "build"
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            returncode=1,
+            stdout="compiler failure",
+            stderr="publish failure",
+        ),
+    )
+
+    with pytest.raises(BuildError):
+        bc_operations.build_and_publish_projects_with_evidence(
+            repo_path,
+            ["src/App"],
+            ContainerConfig(name="bcserver", username="admin", password="pass", company="CRONUS"),
+            "27.0",
+            evidence_path,
+        )
+
+    project_evidence = next(evidence_path.iterdir())
+    assert (project_evidence / "command.json").is_file()
+    assert (project_evidence / "stdout.txt").read_text(encoding="utf-8") == "compiler failure"
+    assert (project_evidence / "stderr.txt").read_text(encoding="utf-8") == "publish failure"
+    assert json.loads((project_evidence / "publication.json").read_text(encoding="utf-8"))["status"] == "failed"
+
     def test_multiple_test_entries_serialized_as_json(self, mock_subprocess):
         test_entries = [
             TestEntry(codeunitID=100, functionName=frozenset({"TestA", "TestB"})),
@@ -247,8 +435,9 @@ class TestRunTestSuite:
         ]
 
         bc_operations.run_test_suite(
+            repo_path=Path.cwd(),
             test_entries=test_entries,
-            expectation="Pass",
+            expectation=TestExpectation.ALL_PASS,
             container=ContainerConfig(name="bcserver", username="admin", password="Test123", company="CRONUS"),
         )
 

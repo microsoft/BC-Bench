@@ -5,9 +5,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from bcbench.logger import get_logger
+from bcbench.results.bugfix import BugFixMetricName, BugFixResultSummary, RuntimeIsolation
 from bcbench.results.metrics import bootstrap_ci, pass_hat_k
 from bcbench.results.summary import EvaluationResultSummary, ExecutionBasedEvaluationResultSummary
 from bcbench.types import EvaluationCategory, ExperimentConfiguration
@@ -84,7 +85,7 @@ class LeaderboardAggregate(BaseModel, ABC):
 class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
     """Aggregate for execution-based categories: resolution-rate average with bootstrap CI and pass^5."""
 
-    average: float = 0.0
+    average: float | None = None
     ci_low: float | None = None
     ci_high: float | None = None
     pass_hat_5: float | None = None
@@ -96,22 +97,96 @@ class ExecutionBasedLeaderboardAggregate(LeaderboardAggregate):
 
         execution_runs: list[ExecutionBasedEvaluationResultSummary] = [r for r in runs if isinstance(r, ExecutionBasedEvaluationResultSummary)]
 
-        per_run_resolution_rates: list[float] = [run.resolved / run.total for run in execution_runs if run.total > 0]
+        per_run_resolution_rates: list[float] = [run.resolved / evaluated for run in execution_runs if (evaluated := run.resolved + run.failed) > 0]
 
         instance_resolved: dict[str, list[bool]] = defaultdict(list)
         for run in execution_runs:
             for instance_id, outcome in run.instance_results.items():
                 instance_resolved[instance_id].append(outcome)
 
-        pass_hat_5: float | None = _calculate_pass_hat_k(instance_resolved, 5, base.num_runs) if base.num_runs >= 5 else None
+        pass_hat_5 = _calculate_pass_hat_k(instance_resolved, 5)
 
         ci = bootstrap_ci(per_run_resolution_rates)
         return base.model_copy(
             update={
-                "average": round(ci["mean"], 3) if ci["mean"] is not None else 0.0,
+                "average": round(ci["mean"], 3) if per_run_resolution_rates and ci["mean"] is not None else None,
                 "ci_low": round(ci["ci_low"], 3) if ci["ci_low"] is not None else None,
                 "ci_high": round(ci["ci_high"], 3) if ci["ci_high"] is not None else None,
                 "pass_hat_5": pass_hat_5,
+            }
+        )
+
+
+def _empty_bugfix_metric_averages() -> dict[str, float | None]:
+    return {metric.value: None for metric in BugFixMetricName}
+
+
+def _empty_bugfix_metric_coverages() -> dict[str, float]:
+    return {metric.value: 0.0 for metric in BugFixMetricName}
+
+
+class BugFixLeaderboardAggregate(ExecutionBasedLeaderboardAggregate):
+    runtime_isolation: RuntimeIsolation = "package-normalized"
+    metric_averages: dict[str, float | None] = Field(default_factory=_empty_bugfix_metric_averages)
+    metric_coverages: dict[str, float] = Field(default_factory=_empty_bugfix_metric_coverages)
+
+    @model_validator(mode="after")
+    def validate_metric_maps(self) -> "BugFixLeaderboardAggregate":
+        expected_metrics = {metric.value for metric in BugFixMetricName}
+        metric_maps = {
+            "metric_averages": self.metric_averages,
+            "metric_coverages": self.metric_coverages,
+        }
+        for field, values in metric_maps.items():
+            actual_metrics = set(values)
+            if actual_metrics != expected_metrics:
+                missing = sorted(expected_metrics - actual_metrics)
+                extra = sorted(actual_metrics - expected_metrics)
+                raise ValueError(f"{field} must contain exactly every BugFixMetricName; missing={missing}, extra={extra}")
+
+        for value in self.metric_averages.values():
+            if value is not None and not 0.0 <= value <= 1.0:
+                raise ValueError("metric_averages values must be None or within [0, 1]")
+        if any(not 0.0 <= value <= 1.0 for value in self.metric_coverages.values()):
+            raise ValueError("metric_coverages values must be within [0, 1]")
+
+        resolution_average = self.metric_averages[BugFixMetricName.RESOLUTION]
+        if self.average is not None and resolution_average is not None and round(self.average, 3) != round(resolution_average, 3):
+            raise ValueError("average must agree with metric_averages[Resolution] after rounding to 3 decimals")
+        return self
+
+    @classmethod
+    def from_runs(cls, runs: Sequence[EvaluationResultSummary]) -> "BugFixLeaderboardAggregate":
+        base = super().from_runs(runs)
+        assert isinstance(base, BugFixLeaderboardAggregate)
+
+        bugfix_runs = [run for run in runs if isinstance(run, BugFixResultSummary)]
+        if not bugfix_runs:
+            return base
+
+        first_run = bugfix_runs[0]
+        metric_averages: dict[str, float | None] = {}
+        metric_coverages: dict[str, float] = {}
+        for metric in BugFixMetricName:
+            rates = [summary.rate for run in bugfix_runs if (summary := run.metric_summaries[metric]).rate is not None]
+            coverages = [run.metric_summaries[metric].coverage for run in bugfix_runs]
+            metric_averages[metric.value] = sum(rates) / len(rates) if rates else None
+            metric_coverages[metric.value] = sum(coverages) / len(coverages)
+
+        instance_resolved: dict[str, list[bool]] = defaultdict(list)
+        for run in bugfix_runs:
+            if not run.instance_results_complete:
+                continue
+            for instance_id, outcome in run.instance_results.items():
+                instance_resolved[instance_id].append(outcome)
+
+        return cls.model_validate(
+            {
+                **base.model_dump(),
+                "pass_hat_5": _calculate_pass_hat_k(instance_resolved, 5),
+                "runtime_isolation": first_run.runtime_isolation,
+                "metric_averages": metric_averages,
+                "metric_coverages": metric_coverages,
             }
         )
 
@@ -215,6 +290,48 @@ class Leaderboard(BaseModel):
     runs: list[EvaluationResultSummary]
     aggregate: list[LeaderboardAggregate]
 
+    @model_validator(mode="before")
+    @classmethod
+    def _rebuild_bugfix_aggregates(cls, payload: object) -> object:
+        if not isinstance(payload, dict):
+            return payload
+
+        data: dict[str, Any] = {}
+        for key, value in payload.items():
+            if not isinstance(key, str):
+                return payload
+            data[key] = value
+
+        raw_runs = data.get("runs")
+        raw_aggregates = data.get("aggregate")
+        if not isinstance(raw_runs, list) or not isinstance(raw_aggregates, list):
+            return payload
+
+        runs = [EvaluationResultSummary.from_json(item) if isinstance(item, dict) else item for item in raw_runs]
+        aggregates: list[dict[str, Any] | LeaderboardAggregate] = []
+        rebuilt = False
+        for item in raw_aggregates:
+            is_bugfix = (isinstance(item, dict) and item.get("category") == EvaluationCategory.BUG_FIX) or isinstance(item, BugFixLeaderboardAggregate)
+            if not is_bugfix:
+                aggregates.append(item)
+                continue
+
+            if isinstance(item, BugFixLeaderboardAggregate) and not any(isinstance(run, BugFixResultSummary) for run in runs):
+                aggregates.append(item)
+                continue
+
+            aggregate_key = _bugfix_aggregate_combination_key(item)
+            matching_runs = [run for run in runs if isinstance(run, BugFixResultSummary) and run.combination_key() == aggregate_key]
+            if not matching_runs:
+                raise ValueError(f"Cannot rebuild bug-fix aggregate without matching runs: {aggregate_key}")
+
+            aggregates.append(BugFixLeaderboardAggregate.from_runs(matching_runs))
+            rebuilt = True
+
+        if not rebuilt:
+            return payload
+        return {**data, "runs": runs, "aggregate": aggregates}
+
     @field_validator("runs", mode="before")
     @classmethod
     def _deserialize_runs(cls, value: list[dict[str, Any] | EvaluationResultSummary]) -> list[EvaluationResultSummary]:
@@ -242,13 +359,36 @@ class Leaderboard(BaseModel):
         }
 
 
-def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int, num_trials: int) -> float:
-    if num_trials < k:
-        return 0.0
+def _calculate_pass_hat_k(instance_resolved: dict[str, list[bool]], k: int) -> float | None:
+    instance_pass_hat_k = [pass_hat_k(len(results), sum(results), k) for results in instance_resolved.values() if len(results) >= k]
+    return round(sum(instance_pass_hat_k) / len(instance_pass_hat_k), 3) if instance_pass_hat_k else None
 
-    total_pass_hat_k: float = 0.0
-    for results in instance_resolved.values():
-        success_count = sum(results[:num_trials])
-        total_pass_hat_k += pass_hat_k(num_trials, success_count, k)
 
-    return round(total_pass_hat_k / len(instance_resolved), 3)
+def _bugfix_aggregate_combination_key(aggregate: dict[str, Any] | BugFixLeaderboardAggregate) -> tuple[str | None, ...]:
+    if isinstance(aggregate, dict):
+        experiment_payload = aggregate.get("experiment")
+        experiment = ExperimentConfiguration.model_validate(experiment_payload) if isinstance(experiment_payload, dict) else experiment_payload
+        return (
+            aggregate.get("agent_name"),
+            aggregate.get("agent_version"),
+            aggregate.get("model"),
+            _experiment_combination_key(experiment),
+            aggregate.get("benchmark_version"),
+            aggregate.get("runtime_isolation", "package-normalized"),
+        )
+
+    return (
+        aggregate.agent_name,
+        aggregate.agent_version,
+        aggregate.model,
+        _experiment_combination_key(aggregate.experiment),
+        aggregate.benchmark_version,
+        aggregate.runtime_isolation,
+    )
+
+
+def _experiment_combination_key(experiment: ExperimentConfiguration | None) -> str | None:
+    experiment_key: str | None = None
+    if experiment and not experiment.is_empty():
+        experiment_key = json.dumps(experiment.model_dump(mode="json"), sort_keys=True)
+    return experiment_key

@@ -57,6 +57,58 @@ if (-not (Test-Path $RepoPath)) {
 
 Import-Module BcContainerHelper -Force -DisableNameChecking
 
+[string]$bcBenchRoot = Split-Path -Parent $PSScriptRoot
+
+function Invoke-DatasetTestsWithExpectation {
+    param(
+        [Parameter(Mandatory = $true)]
+        [TestEntry[]]$testEntries,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('any-fail', 'all-pass')]
+        [string]$expectation
+    )
+
+    if (-not $testEntries -or $testEntries.Count -eq 0) {
+        Write-Log "No test entries provided, skipping test execution" -Level Warning
+        return
+    }
+
+    [string]$evidenceDirectory = Join-Path $RepoPath ".bcbench-test-evidence-$([System.Guid]::NewGuid())"
+    [string]$testEntriesPath = Join-Path $evidenceDirectory "test-entries.json"
+    [string]$validationScript = @'
+import sys
+from pathlib import Path
+
+from pydantic import TypeAdapter
+
+from bcbench.dataset import TestEntry
+from bcbench.operations.test_execution import TestExpectation, load_test_run_summary
+
+evidence_directory = Path(sys.argv[1])
+test_entries = TypeAdapter(list[TestEntry]).validate_json(Path(sys.argv[2]).read_text(encoding="utf-8-sig"))
+load_test_run_summary(evidence_directory, test_entries).require(TestExpectation(sys.argv[3]))
+'@
+
+    try {
+        New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
+        ConvertTo-Json -InputObject @($testEntries) -Depth 10 | Set-Content -Path $testEntriesPath -Encoding UTF8
+        Invoke-DatasetTests `
+            -containerName $ContainerName `
+            -credential $credential `
+            -testEntries $testEntries `
+            -evidenceDirectory $evidenceDirectory
+
+        & uv run --project $bcBenchRoot python -c $validationScript $evidenceDirectory $testEntriesPath $expectation
+        if ($LASTEXITCODE -ne 0) {
+            throw "Test evidence did not meet expectation '$expectation'"
+        }
+    }
+    finally {
+        Remove-Item -Path $evidenceDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 [ValidationResult[]]$validationResults = @()
 
 foreach ($entry in $entries) {
@@ -83,10 +135,10 @@ foreach ($entry in $entries) {
         Write-Log "[Test Patch Only] Build completed successfully for $($entry.instance_id)" -Level Success
 
         Write-Log "[Test Patch Only] Running FAIL_TO_PASS tests for $($entry.instance_id)" -Level Info
-        Invoke-DatasetTests -containerName $ContainerName -credential $credential -testEntries $entry.FAIL_TO_PASS -expectation 'Fail'
+        Invoke-DatasetTestsWithExpectation -testEntries $entry.FAIL_TO_PASS -expectation 'any-fail'
 
         Write-Log "[Test Patch Only] Running PASS_TO_PASS tests for $($entry.instance_id)" -Level Info
-        Invoke-DatasetTests -containerName $ContainerName -credential $credential -testEntries $entry.PASS_TO_PASS -expectation 'Pass'
+        Invoke-DatasetTestsWithExpectation -testEntries $entry.PASS_TO_PASS -expectation 'all-pass'
 
         Write-Log "Applying gold patch for $($entry.instance_id)" -Level Info
         Invoke-GitApplyPatch -PatchContent $entry.patch -PatchId $entry.instance_id
@@ -101,10 +153,10 @@ foreach ($entry in $entries) {
         Write-Log "[Gold Patch Applied] Build completed successfully for $($entry.instance_id)" -Level Success
 
         Write-Log "[Gold Patch Applied] Running FAIL_TO_PASS tests for $($entry.instance_id)" -Level Info
-        Invoke-DatasetTests -containerName $ContainerName -credential $credential -testEntries $entry.FAIL_TO_PASS -expectation 'Pass'
+        Invoke-DatasetTestsWithExpectation -testEntries $entry.FAIL_TO_PASS -expectation 'all-pass'
 
         Write-Log "[Gold Patch Applied] Running PASS_TO_PASS tests for $($entry.instance_id)" -Level Info
-        Invoke-DatasetTests -containerName $ContainerName -credential $credential -testEntries $entry.PASS_TO_PASS -expectation 'Pass'
+        Invoke-DatasetTestsWithExpectation -testEntries $entry.PASS_TO_PASS -expectation 'all-pass'
 
         Write-Log "[Gold Patch Applied] Tests passed successfully" -Level Success
         $validationResults += [ValidationResult]::new($entry.instance_id, "Passed", "")

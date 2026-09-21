@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -136,3 +136,17 @@ class TestMockPipelineCoversAllCategories:
         results = [BaseEvaluationResult.from_json(json.loads(line)) for line in result_file.read_text(encoding="utf-8").splitlines()]
         assert {r.category for r in results} == {category}
         assert all(r.instance_id == entry.instance_id for r in results)
+
+    def test_consistent_experiment_mode_does_not_randomize_run_identity(self, tmp_path):
+        context = create_evaluation_context(tmp_path)
+        pipeline = MockEvaluationPipeline(consistent_experiment=True)
+        choose_metrics = Mock(return_value=AgentMetrics())
+
+        def runner(_context: EvaluationContext[BaseDatasetEntry]) -> tuple[AgentMetrics | None, ExperimentConfiguration | None]:
+            return None, None
+
+        with patch("bcbench.commands.evaluate.random.choice", choose_metrics):
+            pipeline.run_agent(context, runner)
+
+        choose_metrics.assert_called_once()
+        assert context.experiment == ExperimentConfiguration()

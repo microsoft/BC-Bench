@@ -1,3 +1,4 @@
+from bcbench.agent.shared import env as env_module
 from bcbench.agent.shared.env import agent_subprocess_env
 
 
@@ -47,3 +48,110 @@ def test_overrides_are_applied(monkeypatch):
 
     assert env["FLAG"] == "on"
     assert "BC_SERVER_PASSWORD" not in env
+
+
+def test_allowlist_preserves_only_explicit_safe_environment(monkeypatch):
+    monkeypatch.setenv("PATH", r"C:\Windows\System32")
+    monkeypatch.setenv("TEMP", r"C:\Users\runner\AppData\Local\Temp")
+    monkeypatch.setenv("USERPROFILE", r"C:\Users\runner")
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "copilot-token")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "claude-token")
+    monkeypatch.setenv("GH_TOKEN", "gh-token")
+    monkeypatch.setenv("AZURE_CLIENT_SECRET", "azure-secret")
+    monkeypatch.setenv("EVALUATOR_SECRET", "evaluator-secret")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "bc-secret")
+
+    env = agent_subprocess_env(allowlist=True)
+
+    assert env["PATH"] == r"C:\Windows\System32"
+    assert env["TEMP"] == r"C:\Users\runner\AppData\Local\Temp"
+    assert env["USERPROFILE"] == r"C:\Users\runner"
+    assert env["COPILOT_GITHUB_TOKEN"] == "copilot-token"
+    assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "claude-token"
+    assert env["GH_TOKEN"] == "gh-token"
+    assert "AZURE_CLIENT_SECRET" not in env
+    assert "EVALUATOR_SECRET" not in env
+    assert "BC_SERVER_PASSWORD" not in env
+
+
+def test_allowlist_applies_overrides_after_filtering(monkeypatch):
+    monkeypatch.setenv("AZURE_CLIENT_SECRET", "host-secret")
+    monkeypatch.setenv("BC_SERVER_PASSWORD", "host-bc-secret")
+
+    env = agent_subprocess_env(
+        {
+            "AZURE_CLIENT_SECRET": "restricted-secret",
+            "BC_SERVER_PASSWORD": "restricted-bc-secret",
+        },
+        allowlist=True,
+    )
+
+    assert env["AZURE_CLIENT_SECRET"] == "restricted-secret"
+    assert env["BC_SERVER_PASSWORD"] == "restricted-bc-secret"
+
+
+def test_final_overrides_take_precedence_over_agent_runtime_overrides(monkeypatch):
+    monkeypatch.setenv("TEMP", r"C:\host-temp")
+    profile = r"C:\agent-logs\profile"
+    roaming = profile + r"\AppData\Roaming"
+    local = profile + r"\AppData\Local"
+    temp = profile + r"\temp"
+    profile_overrides = {
+        "APPDATA": roaming,
+        "LOCALAPPDATA": local,
+        "USERPROFILE": profile,
+        "HOMEDRIVE": "C:",
+        "HOMEPATH": r"\agent-logs\profile",
+        "TEMP": temp,
+        "TMP": temp,
+    }
+
+    env = agent_subprocess_env(
+        {"TEMP": r"C:\runtime-temp", "RUNTIME_CHANNEL": "enabled"},
+        final_overrides=profile_overrides,
+        allowlist=True,
+    )
+
+    assert {name: env[name] for name in profile_overrides} == profile_overrides
+    assert env["RUNTIME_CHANNEL"] == "enabled"
+
+
+def test_allowlist_exactly_matches_task_5_and_preserves_environment_key_casing(monkeypatch):
+    allowed_names = {
+        "ALLUSERSPROFILE",
+        "APPDATA",
+        "COMSPEC",
+        "COPILOT_GITHUB_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "GH_TOKEN",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOCALAPPDATA",
+        "NODE_PATH",
+        "PATH",
+        "PATHEXT",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+        "WINDIR",
+    }
+    excluded_names = {
+        "OS",
+        "PROGRAMW6432",
+        "PSMODULEPATH",
+        "PUBLIC",
+        "USERDOMAIN",
+        "USERDOMAIN_ROAMINGPROFILE",
+        "USERNAME",
+    }
+    source_environment = {name.lower(): f"value-for-{name}" for name in allowed_names | excluded_names}
+    monkeypatch.setattr(env_module.os, "environ", source_environment)
+
+    env = agent_subprocess_env(allowlist=True)
+
+    assert env == {name.lower(): f"value-for-{name}" for name in allowed_names}

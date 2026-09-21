@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 _config = get_config()
 
 
-def write_agent_plugin(folder: str, manifest: Mapping[str, object], files: Mapping[str, object]) -> Path:
+def write_agent_plugin(folder: str, manifest: Mapping[str, object], files: Mapping[str, object], *, plugin_root: Path | None = None) -> Path:
     """Write a plugin folder and return its path.
 
     Args:
@@ -24,7 +24,7 @@ def write_agent_plugin(folder: str, manifest: Mapping[str, object], files: Mappi
     Returns:
         The plugin directory path for ``--plugin-dir``.
     """
-    plugin_dir: Path = _config.paths.plugin_root / folder
+    plugin_dir: Path = (plugin_root or _config.paths.plugin_root) / folder
 
     (plugin_dir / _config.file_patterns.plugin_manifest.parent).mkdir(parents=True, exist_ok=True)
     (plugin_dir / _config.file_patterns.plugin_manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -37,14 +37,14 @@ def write_agent_plugin(folder: str, manifest: Mapping[str, object], files: Mappi
     return plugin_dir
 
 
-def remove_agent_plugin(folder: str) -> None:
-    plugin_dir = _config.paths.plugin_root / folder
+def remove_agent_plugin(folder: str, *, plugin_root: Path | None = None) -> None:
+    plugin_dir = (plugin_root or _config.paths.plugin_root) / folder
     if plugin_dir.exists():
         shutil.rmtree(plugin_dir)
         logger.info(f"Removed stale agent plugin '{folder}': {plugin_dir}")
 
 
-def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False) -> list[tuple[PluginConfig, Path]]:
+def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool = False, plugin_root: Path | None = None) -> list[tuple[PluginConfig, Path]]:
     """Resolve the config's enabled plugin entries to loadable plugin folders.
 
     A plugin is either `local` (an absolute path on this machine) or `github` (cloned from its repo
@@ -74,7 +74,9 @@ def resolve_config_plugins(agent_config: dict, *, allow_copilot_manifest: bool =
     if duplicates:
         raise AgentError(f"Duplicate plugin name(s) among enabled plugins: {', '.join(duplicates)}")
 
-    return [(plugin, _resolve_plugin(plugin, allow_copilot_manifest)) for plugin in plugins]
+    if plugin_root is not None and any(plugin.name in {".bcbench-owned", "al-lsp-plugin"} for plugin in plugins):
+        raise AgentError("Production plugin names must not overwrite setup metadata or the AL LSP plugin")
+    return [(plugin, _resolve_plugin(plugin, allow_copilot_manifest, plugin_root)) for plugin in plugins]
 
 
 def _has_plugin_manifest(plugin_dir: Path, allow_copilot_manifest: bool) -> bool:
@@ -90,13 +92,25 @@ def _has_plugin_manifest(plugin_dir: Path, allow_copilot_manifest: bool) -> bool
     return allow_copilot_manifest and (plugin_dir / _config.file_patterns.plugin_manifest.name).is_file()
 
 
-def _resolve_plugin(plugin: PluginConfig, allow_copilot_manifest: bool) -> Path:
+def _resolve_plugin(plugin: PluginConfig, allow_copilot_manifest: bool, plugin_root: Path | None) -> Path:
     match plugin.source:
         case "local":
-            plugin_dir = Path(plugin.path).expanduser().resolve()
+            plugin_dir = Path(plugin.path).expanduser()
+            if plugin_root is not None:
+                _reject_plugin_links(plugin_dir)
+                destination = _clone_dir(plugin, plugin_root)
+                source = plugin_dir.resolve()
+                if destination.is_relative_to(source) or source.is_relative_to(destination):
+                    raise AgentError("Production plugin source and staging destination must not overlap")
+                shutil.copytree(plugin_dir, destination, ignore=shutil.ignore_patterns(".git"))
+                plugin_dir = destination
+            else:
+                plugin_dir = plugin_dir.resolve()
         case "github":
-            clone_dir: Path = _clone_dir(plugin)
+            clone_dir: Path = _clone_dir(plugin, plugin_root)
             clone_repo_at_revision(str(plugin.repo), str(plugin.revision), clone_dir)
+            if plugin_root is not None:
+                _reject_plugin_links(clone_dir)
             plugin_dir = _plugin_dir_in_clone(clone_dir, plugin)
 
     if not _has_plugin_manifest(plugin_dir, allow_copilot_manifest):
@@ -108,13 +122,22 @@ def _resolve_plugin(plugin: PluginConfig, allow_copilot_manifest: bool) -> Path:
     return plugin_dir
 
 
-def _clone_dir(plugin: PluginConfig) -> Path:
+def _clone_dir(plugin: PluginConfig, plugin_root: Path | None = None) -> Path:
     """Resolve the clone destination, rejecting names that escape the plugin root."""
-    plugin_root: Path = _config.paths.plugin_root.resolve()
+    plugin_root = (plugin_root or _config.paths.plugin_root).resolve()
     clone_dir: Path = (plugin_root / plugin.name).resolve()
     if clone_dir.parent != plugin_root:
         raise AgentError(f"Plugin '{plugin.name}': name must be a single directory directly under {plugin_root}")
     return clone_dir
+
+
+def _reject_plugin_links(root: Path) -> None:
+    for path in (*root.parents, root):
+        if path.is_symlink() or path.is_junction():
+            raise AgentError(f"Production plugin contains a link or junction: {path}")
+    for path in root.rglob("*"):
+        if path.is_symlink() or path.is_junction():
+            raise AgentError(f"Production plugin contains a link or junction: {path}")
 
 
 def _plugin_dir_in_clone(clone_dir: Path, plugin: PluginConfig) -> Path:

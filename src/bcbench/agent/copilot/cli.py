@@ -2,11 +2,17 @@
 
 import shutil
 import subprocess
-import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from bcbench.agent.copilot.metrics import parse_output
+from bcbench.agent.shared.contained_process import (
+    AgentExecutionPolicy,
+    ContainedProcessInfrastructureError,
+    ContainedProcessRequest,
+    run_contained_process,
+    should_log_transcript,
+)
 from bcbench.agent.shared.version import get_cli_version
 from bcbench.exceptions import AgentError
 from bcbench.logger import get_logger
@@ -36,7 +42,9 @@ def invoke_copilot(
     allow_all_tools: bool = False,
     custom_instructions: bool = False,
     extra_args: Sequence[str] = (),
+    mcp_server_names: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
+    execution_policy: AgentExecutionPolicy | None = None,
 ) -> tuple[AgentMetrics | None, str]:
     """Run one non-interactive Copilot CLI prompt.
 
@@ -60,23 +68,69 @@ def invoke_copilot(
         *extra_args,
         f"--prompt={prompt.replace('\r', '').replace('\n', ' ')}",
     ]
-    logger.debug("Copilot command args: %s", cmd_args)
-
-    result = subprocess.run(
-        cmd_args,
-        cwd=str(work_dir),
-        env=dict(env) if env is not None else None,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=True,
+    logger.debug(
+        "Copilot invocation: executable=%s model=%s tool_access=%s custom_instructions=%s mcp_servers=%s plugins=%d additional_dirs=%d custom_agent=%s extra_args=%d prompt_chars=%d",
+        copilot_cmd,
+        model,
+        "all" if allow_all_tools else "none",
+        custom_instructions,
+        list(mcp_server_names),
+        sum(arg.startswith("--plugin-dir") for arg in extra_args),
+        sum(arg.startswith("--add-dir") for arg in extra_args),
+        any(arg.startswith("--agent") for arg in extra_args),
+        len(extra_args),
+        len(prompt),
     )
 
-    if result.stderr:
-        sys.stderr.write(result.stderr)
-        sys.stderr.flush()
+    if execution_policy is not None and execution_policy.contain_process_tree:
+        try:
+            contained_result = run_contained_process(
+                ContainedProcessRequest(
+                    command=tuple(cmd_args),
+                    cwd=work_dir,
+                    env=dict(env) if env is not None else {},
+                    timeout_seconds=timeout,
+                    identity=execution_policy.restricted_identity,
+                    python_executable=execution_policy.python_executable,
+                    worker_path=execution_policy.worker_path,
+                    worker_sha256=execution_policy.worker_sha256,
+                )
+            )
+        except subprocess.CalledProcessError as exc:
+            raise ContainedProcessInfrastructureError.from_called_process_error(exc) from exc
+        result = subprocess.CompletedProcess(
+            args=(copilot_cmd,),
+            returncode=contained_result.returncode,
+            stdout=contained_result.stdout,
+            stderr=contained_result.stderr,
+        )
+        result.check_returncode()
+    else:
+        try:
+            result = subprocess.run(
+                cmd_args,
+                cwd=str(work_dir),
+                env=dict(env) if env is not None else None,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise subprocess.CalledProcessError(
+                exc.returncode,
+                (copilot_cmd,),
+                output=exc.output,
+                stderr=exc.stderr,
+            ) from None
 
-    metrics, final_response = parse_output(result.stdout.splitlines(), log_transcript=True)
+    if result.stderr:
+        logger.debug("Copilot CLI stderr suppressed: character_count=%d", len(result.stderr))
+
+    metrics, final_response = parse_output(
+        result.stdout.splitlines(),
+        log_transcript=should_log_transcript(execution_policy),
+    )
     return metrics, final_response or ""

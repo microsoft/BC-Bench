@@ -6,6 +6,10 @@ inputs:
     description: "Install all dependency groups (analysis, redteam) on top of the default dev group"
     required: false
     default: "false"
+  install-python:
+    description: "Install a uv-managed Python runtime instead of using Python already on PATH"
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -17,9 +21,19 @@ runs:
         enable-cache: true
 
     - name: Setup Python
+      if: inputs.install-python == 'true'
       run: uv python install
       shell: pwsh
 
     - name: Install bcbench package
-      run: uv sync ${{ inputs.all-groups == 'true' && '--all-groups' || '' }}
+      run: |
+        $arguments = @("sync")
+        if ("${{ inputs.all-groups }}" -eq "true") {
+          $arguments += "--all-groups"
+        }
+        if ("${{ inputs.install-python }}" -ne "true") {
+          $arguments += @("--python", (Get-Command python -ErrorAction Stop).Source)
+        }
+        uv @arguments
+        if ($LASTEXITCODE -ne 0) { throw "uv sync failed ($LASTEXITCODE)." }
       shell: pwsh

@@ -20,7 +20,6 @@ PRReviewEnginePath = Annotated[
         exists=True,
         file_okay=False,
         dir_okay=True,
-        resolve_path=True,
     ),
 ]
 
@@ -32,7 +31,15 @@ ContainerName = Annotated[str, typer.Option(envvar="BC_CONTAINER_NAME", help="BC
 
 ContainerUsername = Annotated[str, typer.Option(envvar="BC_SERVER_USERNAME", help="Username for BC container")]
 
-ContainerPassword = Annotated[str, typer.Option(envvar="BC_SERVER_PASSWORD", help="Password for BC container")]
+ContainerPassword = Annotated[
+    str,
+    typer.Option(
+        envvar="BC_SERVER_PASSWORD",
+        help="Password for BC container",
+        hide_input=True,
+        show_default=False,
+    ),
+]
 
 ContainerServerUrl = Annotated[str, typer.Option(envvar="BC_SERVER_URL", help="BC server URL")]
 
@@ -43,6 +50,237 @@ ContainerMcpUrl = Annotated[str | None, typer.Option(envvar="BC_MCP_URL", help="
 ContainerCompany = Annotated[str, typer.Option(envvar="BC_COMPANY", help="BC company name")]
 
 EvaluationCategoryOption = Annotated[EvaluationCategory, typer.Option(help="Category of evaluation to perform")]
+
+LifecycleOutputDir = Annotated[
+    Path,
+    typer.Option("--output-dir", parser=Path, help="Directory to save evaluation results (validated after cleanup ownership)"),
+]
+
+LifecycleEntryRoot = Annotated[
+    Path,
+    typer.Option(
+        "--entry-root",
+        envvar="BCBENCH_LIFECYCLE_ENTRY_ROOT",
+        help="Setup-owned lifecycle entry root",
+    ),
+]
+
+LifecycleProtectedRoot = Annotated[
+    Path,
+    typer.Option(
+        "--protected-root",
+        envvar="BCBENCH_LIFECYCLE_PROTECTED_ROOT",
+        help="Evaluator-only protected lifecycle root",
+    ),
+]
+
+LifecycleDatasetPath = Annotated[
+    Path,
+    typer.Option(
+        "--dataset-path",
+        parser=Path,
+        envvar="BCBENCH_LIFECYCLE_DATASET_PATH",
+        help="Exact evaluator-owned dataset file selected by lifecycle setup",
+    ),
+]
+
+LifecycleReplayPatch = Annotated[
+    Path | None,
+    typer.Option(
+        "--replay-patch",
+        envvar="BCBENCH_LIFECYCLE_REPLAY_PATCH",
+        help="Protected patch to evaluate without running an agent",
+    ),
+]
+
+LifecycleReplayTimeout = Annotated[
+    bool,
+    typer.Option(
+        "--replay-timeout",
+        help="Mark a replay patch as originating from a timed-out agent; requires --replay-patch and never runs an agent",
+    ),
+]
+
+LifecycleAgentOsUsername = Annotated[
+    str,
+    typer.Option(
+        "--agent-os-username",
+        envvar="BCBENCH_LIFECYCLE_AGENT_OS_USERNAME",
+        help="Restricted local Windows agent username",
+    ),
+]
+
+LifecycleAgentOsPassword = Annotated[
+    str,
+    typer.Option(
+        "--agent-os-password",
+        envvar="BCBENCH_LIFECYCLE_AGENT_OS_PASSWORD",
+        help="Restricted local Windows agent password",
+        hide_input=True,
+        show_default=False,
+    ),
+]
+
+LifecycleAgentBcUsername = Annotated[
+    str,
+    typer.Option(
+        "--agent-bc-username",
+        envvar="BCBENCH_LIFECYCLE_AGENT_BC_USERNAME",
+        help="Restricted Business Central agent username",
+    ),
+]
+
+LifecycleAgentBcPassword = Annotated[
+    str,
+    typer.Option(
+        "--agent-bc-password",
+        envvar="BCBENCH_LIFECYCLE_AGENT_BC_PASSWORD",
+        help="Restricted Business Central agent password",
+        hide_input=True,
+        show_default=False,
+    ),
+]
+
+LifecycleExpectedContainerId = Annotated[
+    str,
+    typer.Option(
+        "--expected-container-id",
+        envvar="BCBENCH_LIFECYCLE_EXPECTED_CONTAINER_ID",
+        help="Owned container ID recorded by lifecycle setup",
+    ),
+]
+
+LifecycleExpectedInvocationId = Annotated[
+    str,
+    typer.Option(
+        "--expected-invocation-id",
+        envvar="BCBENCH_LIFECYCLE_EXPECTED_INVOCATION_ID",
+        help="Owned lifecycle invocation ID recorded by setup",
+    ),
+]
+
+LifecycleStagedWorkerPath = Annotated[
+    Path,
+    typer.Option(
+        "--staged-worker-path",
+        envvar="BCBENCH_LIFECYCLE_STAGED_WORKER_PATH",
+        help="Setup-staged contained process worker",
+    ),
+]
+
+LifecycleStagedWorkerSha256 = Annotated[
+    str,
+    typer.Option(
+        "--staged-worker-sha256",
+        envvar="BCBENCH_LIFECYCLE_STAGED_WORKER_SHA256",
+        help="Expected SHA-256 of the staged contained process worker",
+    ),
+]
+
+LifecycleBasePython = Annotated[
+    Path,
+    typer.Option(
+        "--base-python",
+        envvar="BCBENCH_LIFECYCLE_BASE_PYTHON",
+        help="Setup-approved base Python executable",
+    ),
+]
+
+LifecyclePythonBasePrefix = Annotated[
+    Path,
+    typer.Option(
+        "--python-base-prefix",
+        envvar="BCBENCH_LIFECYCLE_PYTHON_BASE_PREFIX",
+        help="Exact setup-approved Python base prefix",
+    ),
+]
+
+LifecycleAgentOsSid = Annotated[
+    str,
+    typer.Option(
+        "--agent-os-sid",
+        envvar="BCBENCH_LIFECYCLE_AGENT_OS_SID",
+        help="Restricted Windows agent SID recorded by setup",
+    ),
+]
+
+LifecycleAclPathsJson = Annotated[
+    str | None,
+    typer.Option(
+        "--acl-paths-json",
+        envvar="BCBENCH_LIFECYCLE_ACL_PATHS_JSON",
+        help="Compact setup ACL transaction path list",
+        show_default=False,
+    ),
+]
+
+LifecycleCleanupToolRootsJson = Annotated[
+    str | None,
+    typer.Option(
+        "--cleanup-tool-roots-json",
+        envvar="BCBENCH_LIFECYCLE_CLEANUP_TOOL_ROOTS_JSON",
+        help="Compact setup-approved cleanup tool root list",
+        show_default=False,
+    ),
+]
+
+LifecycleOwnedCompilerHelperRoots = Annotated[
+    list[Path] | None,
+    typer.Option(
+        "--owned-compiler-helper-root",
+        "--owned-compiler-root",
+        "--owned-helper-root",
+        envvar="BCBENCH_LIFECYCLE_OWNED_COMPILER_HELPER_ROOTS",
+        help="Setup-owned compiler/helper root to remove during cleanup; repeat as needed",
+    ),
+]
+
+LifecycleEvaluatorContainerConfig = Annotated[
+    str | None,
+    typer.Option(
+        "--evaluator-container-config",
+        envvar="BCBENCH_LIFECYCLE_EVALUATOR_CONTAINER_CONFIG",
+        hidden=True,
+        show_default=False,
+    ),
+]
+
+LifecycleAgentContainerConfig = Annotated[
+    str | None,
+    typer.Option(
+        "--agent-container-config",
+        envvar="BCBENCH_LIFECYCLE_AGENT_CONTAINER_CONFIG",
+        hidden=True,
+        show_default=False,
+    ),
+]
+
+LifecycleAlMcp = Annotated[
+    bool,
+    typer.Option(
+        "--al-mcp",
+        envvar="BCBENCH_LIFECYCLE_AL_MCP",
+        help="Enable AL MCP server",
+    ),
+]
+
+LifecycleAlLsp = Annotated[
+    bool,
+    typer.Option(
+        "--al-lsp",
+        envvar="BCBENCH_LIFECYCLE_AL_LSP",
+        help="Enable AL LSP server",
+    ),
+]
+
+LifecycleBcMcp = Annotated[
+    bool,
+    typer.Option(
+        "--bc-mcp",
+        envvar="BCBENCH_LIFECYCLE_BC_MCP",
+        help="Enable the Business Central MCP server",
+    ),
+]
 
 
 def resolve_agent_runtime(
