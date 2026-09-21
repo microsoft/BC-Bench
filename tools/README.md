@@ -4,9 +4,10 @@ Standalone scripts for inspecting historical code and analyzing GitHub Actions a
 
 ## `generate_history_report.py`
 
-Creates a Markdown report from **remote NAV and/or BCApps history**, including full-commit
-text diffs across all changed files for commits affecting agent-selected files. No existing
-clone or `--repo-path` is needed.
+Creates a Markdown report from **remote NAV and/or BCApps history** for commits affecting
+agent-selected files. Every changed file is listed, but patch content is limited to modified
+existing files and a configurable number of distinct filenames. No existing clone or
+`--repo-path` is needed.
 
 The script runs on a cloud runner (or locally) with Python and Git. It creates an isolated,
 temporary Git object cache per repository, fetches only the supplied cutoff's history, and
@@ -23,6 +24,7 @@ python .\tools\generate_history_report.py `
     --commit $navBaseCommit `
     --file "App\Layers\W1\BaseApp\Pricing\PriceList\PriceListHeader.Table.al" `
     --max-commits 5 `
+    --max-files 10 `
     --output "$env:TEMP\history-01.md"
 ```
 
@@ -38,6 +40,7 @@ python .\tools\generate_history_report.py `
     --file "NAV=App\Layers\W1\BaseApp\Pricing\PriceList\PriceListHeader.Table.al" `
     --file "BCApps=src\Layers\W1\BaseApp\Pricing\PriceList\PriceListHeader.Table.al" `
     --max-commits 5 `
+    --max-files 10 `
     --history-depth 200 `
     --output "$env:TEMP\history-both-01.md"
 ```
@@ -52,6 +55,7 @@ error, not permission to substitute the latest revision.
 | `--commit` | Exclusive full SHA; exactly one per repo. Qualify as `REPO=SHA` for multiple repos |
 | `--file` | Repeatable literal relative path; qualify as `REPO=path` for multiple repos |
 | `--max-commits` | Maximum recent matching commits **per repository**, default `5` |
+| `--max-files` | Maximum distinct modified filenames whose content is shown **per commit**, default `10` |
 | `--history-depth` | Depth fetched starting at each cutoff, default `200` |
 | `--output` | New `.md` file; existing files are never overwritten |
 
@@ -79,8 +83,8 @@ in either repository prevents a partial report from being emitted as a complete 
 - Fetches name the pinned SHA, never a moving branch or `HEAD`. Additional lazy downloads
   obtain historical objects needed by the bounded history queries and diffs.
 - Merge diffs are against the first parent. Sync merges that did not change a selected
-  file against that parent do not consume the limit. Full-commit diffs are not restricted
-  to the selected paths; binary changes are identified without embedding binary payloads.
+  file against that parent do not consume the commit limit. Changes throughout the commit
+  are considered, not just the query paths; displayed patch content follows the rules below.
 - Shallow history is explicitly marked. Boundary commits without available parents are
   omitted rather than presented as artificial whole-tree additions. Increase
   `--history-depth` to search farther back from the same cutoff.
@@ -92,6 +96,25 @@ in either repository prevents a partial report from being emitted as a complete 
   restrict the query to the task's own repository.
 - The helper does not read gold patches or infer which files need fixing. It is not an
   access-control sandbox for an agent that already has unrestricted shell/network access.
+
+### Bounded patch content
+
+- Show patch content only for modified existing files (Git status `M`). Added, deleted,
+  copied, type-changed, and Git-detected renamed/moved files remain in the complete change
+  list with `content omitted`, but never display patch content or consume the file limit.
+  Renames with accompanying content changes are also metadata-only.
+- Group modifications by case-insensitive **basename**, ignoring their folders.
+  For example, `AT/Foo.Codeunit.al`, `DK/Foo.Codeunit.al`, and `W1/Foo.Codeunit.al`
+  count as one filename, not three.
+- Select the first `--max-files` modified-name groups in Git's reported file order.
+  Within each group, show one representative: prefer an explicitly requested path,
+  then a `W1` path, then the first occurrence.
+- List **all** changed paths and statuses, including other localization copies and names
+  beyond the limit. Grouping does not assert their diffs are identical. The representative
+  is marked `content shown`; every other path is marked `content omitted`.
+- The file limit resets for each commit. A requested file's name may fall beyond the first
+  N groups; it still appears in the change list. Increase `--max-files` to see more groups.
+  Binary changes never embed binary payloads.
 
 ### After localization, not before
 

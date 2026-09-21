@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -132,7 +133,8 @@ def test_deleted_historical_file_can_be_selected(repo):
 
 
 def test_literal_path_and_markdown_fences(repo):
-    ancestor = commit_files(repo, "Root with ``` fence", {"A[1].al": "````\n", "A1.al": "unrelated\n"})
+    commit_files(repo, "Root", {"A[1].al": "old\n", "A1.al": "unrelated\n"})
+    ancestor = commit_files(repo, "Change with ``` fence", {"A[1].al": "````\n"})
     other = commit_files(repo, "Other file", {"A1.al": "changed\n"})
     cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
 
@@ -144,7 +146,7 @@ def test_literal_path_and_markdown_fences(repo):
 
 
 def test_merge_ancestors_and_full_first_parent_diff(repo):
-    commit_files(repo, "Root", {"A.al": "root\n"})
+    commit_files(repo, "Root", {"A.al": "root\n", "Adjacent.al": "old adjacent\n"})
     git(repo, "checkout", "-b", "feature")
     feature = commit_files(repo, "Feature", {"A.al": "feature\n", "Adjacent.al": "adjacent\n"})
     git(repo, "checkout", "main")
@@ -260,6 +262,8 @@ def test_rejects_invalid_label_empty_files_and_nonpositive_limit(repo):
         build_report(repo, "NAV", cutoff, [])
     with pytest.raises(ValueError, match="positive"):
         build_report(repo, "NAV", cutoff, ["A.al"], max_commits=0)
+    with pytest.raises(ValueError, match="max-files"):
+        build_report(repo, "NAV", cutoff, ["A.al"], max_files=0)
 
 
 def test_cli_creates_report_only_on_request_and_refuses_overwrite(repo, remote, tmp_path, capsys):
@@ -322,6 +326,134 @@ def test_standalone_script_needs_no_bcbench_import():
     assert "--file" in result.stdout
     assert "--commit" in result.stdout
     assert "--repo-path" not in result.stdout
+    assert "--max-files" in result.stdout
+
+
+def test_default_limit_shows_first_ten_modified_names_and_lists_every_file(repo):
+    names = [f"File{index:02d}.al" for index in range(12)]
+    commit_files(repo, "Initial files", dict.fromkeys(names, "old\n"))
+    commit_files(repo, "Modify twelve files", {name: f"new-content-{index:02d}\n" for index, name in enumerate(names)})
+    cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
+
+    report = build_report(repo, "NAV", cutoff, [names[-1]], max_commits=1)
+
+    assert len(re.findall(r"^diff --git ", report, re.MULTILINE)) == 10
+    assert "10 of 12 distinct modified filenames (limit 10)" in report
+    for index, name in enumerate(names):
+        assert name in report
+        if index < 10:
+            assert f"+new-content-{index:02d}" in report
+        else:
+            assert f"+new-content-{index:02d}" not in report
+            assert f"M\t{name}\t[content omitted]" in report
+
+
+@pytest.mark.parametrize(
+    ("requested", "representative"),
+    [
+        ("Locales/DK/foo.AL", "Locales/DK/foo.AL"),
+        ("Locales/W1/Foo.al", "Locales/W1/Foo.al"),
+        ("Locales/W1/Other.al", "Locales/W1/Foo.al"),
+    ],
+)
+def test_localization_copies_count_once_and_prefer_requested_path_then_w1(repo, requested, representative):
+    names = ["Locales/AT/Foo.al", "Locales/DK/foo.AL", "Locales/W1/Foo.al", "Locales/W1/Other.al"]
+    commit_files(repo, "Initial files", dict.fromkeys(names, "old\n"))
+    commit_files(repo, "Propagate change", {name: f"content-for-{name}\n" for name in names})
+    cutoff = commit_files(repo, "Cutoff", {"Unrelated.al": "cutoff\n"})
+
+    report = build_report(repo, "NAV", cutoff, [requested], max_commits=1, max_files=1)
+
+    assert len(re.findall(r"^diff --git ", report, re.MULTILINE)) == 1
+    assert "1 of 2 distinct modified filenames (limit 1)" in report
+    for name in names:
+        assert name in report
+        assert (f"+content-for-{name}" in report) == (name == representative)
+
+
+def test_localization_copies_do_not_consume_slots_for_other_names(repo):
+    names = ["AT/A.al", "DK/A.al", "W1/A.al", "W1/B.al", "W1/C.al"]
+    commit_files(repo, "Initial files", dict.fromkeys(names, "old\n"))
+    commit_files(repo, "Modify", {name: f"new-{name}\n" for name in names})
+    cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
+
+    report = build_report(repo, "NAV", cutoff, ["W1/A.al"], max_commits=1, max_files=2)
+
+    assert len(re.findall(r"^diff --git ", report, re.MULTILINE)) == 2
+    assert "+new-W1/A.al" in report
+    assert "+new-W1/B.al" in report
+    assert "+new-W1/C.al" not in report
+    assert "+new-AT/A.al" not in report
+    assert "+new-DK/A.al" not in report
+
+
+def test_added_deleted_and_moved_files_are_metadata_only_and_do_not_consume_limit(repo):
+    commit_files(
+        repo,
+        "Initial",
+        {"BDeleted.al": "deleted-payload-must-not-appear\n", "Old/CMoved.al": "moved-payload-must-not-appear\n", "ZModified.al": "old\n"},
+    )
+    git(repo, "rm", "BDeleted.al")
+    (repo / "New").mkdir()
+    git(repo, "mv", "Old/CMoved.al", "New/CMoved.al")
+    commit_files(repo, "Change files", {"AAdded.al": "added-payload-must-not-appear\n", "ZModified.al": "allowed-modification\n"})
+    cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
+
+    report = build_report(repo, "NAV", cutoff, ["ZModified.al"], max_commits=1, max_files=1)
+
+    assert "A\tAAdded.al\t[content omitted]" in report
+    assert "D\tBDeleted.al\t[content omitted]" in report
+    assert "R100\tOld/CMoved.al -> New/CMoved.al\t[content omitted]" in report
+    assert "1 of 1 distinct modified filenames" in report
+    assert "+allowed-modification" in report
+    assert "added-payload-must-not-appear" not in report
+    assert "deleted-payload-must-not-appear" not in report
+    assert "moved-payload-must-not-appear" not in report
+    assert len(re.findall(r"^diff --git ", report, re.MULTILINE)) == 1
+
+
+def test_renamed_file_with_content_changes_is_still_metadata_only(repo):
+    content = "".join(f"rename-original-line-{index}\n" for index in range(30))
+    commit_files(repo, "Initial", {"Old.al": content})
+    git(repo, "mv", "Old.al", "Renamed.al")
+    renamed = commit_files(repo, "Rename and modify", {"Renamed.al": content + "renamed-addition-must-not-appear\n"})
+    cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
+
+    report = build_report(repo, "NAV", cutoff, ["Renamed.al"], max_commits=1)
+
+    assert f"## Commit {renamed}" in report
+    assert re.search(r"R\d+\tOld.al -> Renamed.al\t\[content omitted\]", report)
+    assert "metadata-only" in report
+    assert "rename-original-line" not in report
+    assert "renamed-addition-must-not-appear" not in report
+    assert "diff --git" not in report
+
+
+def test_limit_applies_independently_to_each_commit(repo):
+    names = ["A.al", "B.al"]
+    commit_files(repo, "Initial", dict.fromkeys(names, "old\n"))
+    commit_files(repo, "First", dict.fromkeys(names, "first\n"))
+    commit_files(repo, "Second", dict.fromkeys(names, "second\n"))
+    cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
+
+    report = build_report(repo, "NAV", cutoff, ["A.al"], max_commits=2, max_files=1)
+
+    assert report.count("1 of 2 distinct modified filenames (limit 1)") == 2
+    assert len(re.findall(r"^diff --git ", report, re.MULTILINE)) == 2
+
+
+def test_remote_cli_honors_file_limit(repo, remote, tmp_path):
+    commit_files(repo, "Initial", {"A.al": "old\n", "B.al": "old\n"})
+    commit_files(repo, "Modify", {"A.al": "allowed\n", "B.al": "omitted-body\n"})
+    cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
+    output = tmp_path / "limited.md"
+
+    main(["--repo", "NAV", "--commit", cutoff, "--file", "A.al", "--max-commits", "1", "--max-files", "1", "--output", str(output)])
+
+    report = output.read_text(encoding="utf-8")
+    assert "+allowed" in report
+    assert "B.al" in report
+    assert "omitted-body" not in report
 
 
 def test_remote_fetch_uses_only_cutoff_and_cleans_temporary_repository(repo, remote, monkeypatch):
@@ -400,6 +532,7 @@ def test_multi_repo_report_requires_and_respects_independent_cutoffs(repo, remot
         (["--repo", "NAV", "--commit", "a" * 40, "--file", "BCApps=A.al"], "selected repository"),
         (["--repo", "NAV", "--commit", "a" * 40, "--file", "../A.al"], "repository-relative"),
         (["--repo", "NAV", "--commit", "a" * 40, "--file", "A.al", "--history-depth", "0"], "positive"),
+        (["--repo", "NAV", "--commit", "a" * 40, "--file", "A.al", "--max-files", "0"], "max-files"),
     ],
 )
 def test_cli_rejects_ambiguous_remote_requests_before_network(args, message, tmp_path, capsys, monkeypatch):
