@@ -191,28 +191,31 @@ $module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.ps
     assert _last_json(_run_pwsh(script)) == "Write-Log"
 
 
-def test_container_helper_calls_do_not_inherit_lifecycle_strict_mode() -> None:
+def test_container_management_initializes_optional_helper_config() -> None:
+    if not _run_pwsh("(Get-Module -ListAvailable BcContainerHelper | Select-Object -First 1).Version.ToString()"):
+        pytest.skip("BcContainerHelper is not installed")
     script = f"""
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+Import-Module BcContainerHelper -Force -DisableNameChecking
+$helper = Get-Module BcContainerHelper
+& $helper {{
+    $bcContainerHelperConfig.Remove('MicrosoftTelemetryConnectionString')
+    $bcContainerHelperConfig.Remove('PartnerTelemetryConnectionString')
+    $bcContainerHelperConfig.Remove('SendExtendedTelemetryToMicrosoft')
+}}
 $module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.psm1")} -Force -PassThru
-& $module {{
-    Set-StrictMode -Off
-    function New-BCContainer {{
-        param(
-            $artifactUrl, $containerName, $auth, $credential, $includeTestToolkit,
-            $includeTestLibrariesOnly, $multitenant, $shortcuts, $memoryLimit, $isolation,
-            $accept_eula, $additionalParameters
-        )
-        $config = [PSCustomObject]@{{}}
-        $null = $config.MicrosoftTelemetryConnectionString
-    }}
-    $credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
-    New-BCContainerSync -ContainerName 'test' -Version '27.0' -ArtifactUrl 'artifact' -Credential $credential
+& $module {{ Initialize-BCContainerHelperOptionalConfig }}
+& $helper {{
+    [PSCustomObject]@{{
+        microsoft = $bcContainerHelperConfig.Contains('MicrosoftTelemetryConnectionString')
+        partner = $bcContainerHelperConfig.Contains('PartnerTelemetryConnectionString')
+        extended = $bcContainerHelperConfig.Contains('SendExtendedTelemetryToMicrosoft')
+    }} | ConvertTo-Json -Compress
 }}
 """
 
-    _run_pwsh(script)
+    assert _last_json(_run_pwsh(script)) == {"microsoft": True, "partner": True, "extended": True}
 
 
 def test_setup_parameter_metadata_and_pinned_container_helper() -> None:

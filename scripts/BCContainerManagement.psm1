@@ -1,5 +1,33 @@
 using module .\BCBenchUtils.psm1
 
+function Initialize-BCContainerHelperOptionalConfig {
+    [CmdletBinding()]
+    param()
+
+    $helperModule = Get-Module BcContainerHelper
+    if ($null -eq $helperModule) {
+        return
+    }
+
+    & $helperModule {
+        $defaults = @{
+            MicrosoftTelemetryConnectionString = ""
+            PartnerTelemetryConnectionString   = ""
+            SendExtendedTelemetryToMicrosoft   = $false
+        }
+        foreach ($name in $defaults.Keys) {
+            if ($bcContainerHelperConfig -is [System.Collections.IDictionary]) {
+                if (-not $bcContainerHelperConfig.Contains($name)) {
+                    $bcContainerHelperConfig[$name] = $defaults[$name]
+                }
+            }
+            elseif ($null -eq $bcContainerHelperConfig.PSObject.Properties[$name]) {
+                $bcContainerHelperConfig | Add-Member -NotePropertyName $name -NotePropertyValue $defaults[$name]
+            }
+        }
+    }
+}
+
 <#
 .SYNOPSIS
     BC Container Management Module
@@ -300,6 +328,7 @@ function New-BCContainerSync {
     )
 
     Write-Log "Creating container: $ContainerName" -Level Info
+    Initialize-BCContainerHelperOptionalConfig
 
     $params = @{
         artifactUrl              = $ArtifactUrl
@@ -364,6 +393,7 @@ function New-BCCompilerFolderSync {
     )
 
     Write-Log "Creating compiler folder for container: $ContainerName" -Level Info
+    Initialize-BCContainerHelperOptionalConfig
 
     Set-StrictMode -Off
     [string]$compilerFolder = New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
