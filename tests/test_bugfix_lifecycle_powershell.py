@@ -181,6 +181,16 @@ $dataQuery = Get-BCBenchArtifactConfig -Category 'data-query'
     assert payload == {"bugFix": False, "dataQuery": True}
 
 
+def test_container_management_declares_logging_dependency() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.psm1")} -Force -PassThru
+& $module {{ (Get-Command Write-Log -ErrorAction Stop).Name }} | ConvertTo-Json -Compress
+"""
+
+    assert _last_json(_run_pwsh(script)) == "Write-Log"
+
+
 def test_setup_parameter_metadata_and_pinned_container_helper() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'

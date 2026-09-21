@@ -1,3 +1,5 @@
+using module .\BCBenchUtils.psm1
+
 <#
 .SYNOPSIS
     BC Container Management Module
