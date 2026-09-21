@@ -2,18 +2,25 @@
 
 import argparse
 import base64
+import json
 import os
 import re
+import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from tempfile import TemporaryDirectory
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.request import Request, urlopen
+from uuid import UUID
 
 REPOSITORIES = {
     "NAV": "https://dev.azure.com/dynamicssmb2/Dynamics%20SMB/_git/NAV",
     "BCApps": "https://github.com/microsoft/BCApps.git",
 }
+_ADO_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798"
 
 
 @dataclass(frozen=True)
@@ -304,16 +311,76 @@ def build_report(repo_path: Path, repo: str, commit: str, files: Sequence[str], 
     return "\n\n".join(sections) + "\n"
 
 
+def _token_response(request: Request, field: str, operation: str) -> str:
+    try:
+        with urlopen(request, timeout=60) as response:
+            payload = json.load(response)
+    except HTTPError as error:
+        raise ValueError(f"{operation} failed (HTTP {error.code}); check the workflow OIDC permissions and Azure federated identity") from None
+    except URLError as error:
+        raise ValueError(f"{operation} could not reach the token endpoint: {error.reason}") from None
+    if not isinstance(payload, dict) or not isinstance(payload.get(field), str) or not payload[field]:
+        raise ValueError(f"{operation} returned no {field}")
+    return payload[field]
+
+
+def _workflow_ado_token() -> str:
+    required = (
+        "BCBENCH_HISTORY_AZURE_CLIENT_ID",
+        "BCBENCH_HISTORY_AZURE_TENANT_ID",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+    )
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        raise ValueError(f"Workflow history authentication is missing: {', '.join(missing)}")
+    client_id = str(UUID(os.environ["BCBENCH_HISTORY_AZURE_CLIENT_ID"]))
+    tenant_id = str(UUID(os.environ["BCBENCH_HISTORY_AZURE_TENANT_ID"]))
+    split = urlsplit(os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"])
+    if split.scheme != "https":
+        raise ValueError("GitHub OIDC token requests must use HTTPS")
+    query = dict(parse_qsl(split.query))
+    query["audience"] = "api://AzureADTokenExchange"
+    oidc_url = urlunsplit(split._replace(query=urlencode(query)))
+    assertion = _token_response(
+        Request(oidc_url, headers={"Authorization": f"Bearer {os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']}"}),
+        "value",
+        "GitHub OIDC token request",
+    )
+    return _token_response(
+        Request(
+            f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token",
+            data=urlencode(
+                {
+                    "client_id": client_id,
+                    "scope": f"{_ADO_RESOURCE}/.default",
+                    "grant_type": "client_credentials",
+                    "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                    "client_assertion": assertion,
+                }
+            ).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        ),
+        "access_token",
+        "Azure DevOps token exchange",
+    )
+
+
 def _remote_environment(repo: str) -> dict[str, str]:
     header: str | None = None
     if repo == "NAV":
-        if token := os.environ.get("ADO_TOKEN"):
+        if os.environ.get("BCBENCH_HISTORY_AZURE_CLIENT_ID") or os.environ.get("BCBENCH_HISTORY_AZURE_TENANT_ID"):
+            header = f"Authorization: Bearer {_workflow_ado_token()}"
+        elif token := os.environ.get("ADO_TOKEN"):
             header = f"Authorization: Bearer {token}"
         elif token := os.environ.get("AZURE_DEVOPS_EXT_PAT"):
             header = "Authorization: Basic " + base64.b64encode(f":{token}".encode()).decode()
         else:
+            az = shutil.which("az")
+            if az is None:
+                raise ValueError("Azure CLI was not found; install it and sign in, or supply ADO_TOKEN / AZURE_DEVOPS_EXT_PAT")
             result = subprocess.run(
-                ["az", "account", "get-access-token", "--resource", "499b84ac-1321-427f-aa17-267ca6975798", "--query", "accessToken", "--output", "tsv"],
+                [az, "account", "get-access-token", "--resource", _ADO_RESOURCE, "--query", "accessToken", "--output", "tsv"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

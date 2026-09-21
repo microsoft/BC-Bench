@@ -161,9 +161,9 @@ prompt:
 # NOTE: the canonical source file is AGENTS.md; it is automatically renamed
 #       to the agent-specific filename (AgentHarness.instruction_filename) during setup
 history:
-  enabled: false
+  enabled: true
   # Enable alone for an instrumented source-only control. History always enables scope measurement.
-  measure_scope: false
+  measure_scope: true
   max_commits: 5
   max_files: 10
   history_depth: 200

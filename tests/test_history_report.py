@@ -2,7 +2,9 @@ import os
 import re
 import subprocess
 import sys
+from io import BytesIO
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -576,6 +578,8 @@ def test_remote_failure_does_not_emit_partial_multi_repo_report(repo, remote, tm
 
 
 def test_nav_token_is_scoped_to_remote_and_not_persisted_in_git_config(repo, monkeypatch):
+    monkeypatch.delenv("BCBENCH_HISTORY_AZURE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("BCBENCH_HISTORY_AZURE_TENANT_ID", raising=False)
     monkeypatch.setenv("ADO_TOKEN", "test-only-token")
     environment = history._remote_environment("NAV")
     assert environment["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer test-only-token"
@@ -592,7 +596,18 @@ def test_public_bcapps_can_use_anonymous_access(monkeypatch):
     assert history._remote_environment("BCApps") == {"GIT_NO_LAZY_FETCH": "0"}
 
 
+def test_bcapps_uses_the_workflows_gh_token(monkeypatch):
+    monkeypatch.setenv("GH_TOKEN", "test-only-workflow-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "test-only-other-token")
+    environment = history._remote_environment("BCApps")
+    encoded = environment["GIT_CONFIG_VALUE_0"].removeprefix("Authorization: Basic ")
+    assert history.base64.b64decode(encoded).decode() == "x-access-token:test-only-workflow-token"
+    assert environment["GIT_CONFIG_KEY_0"] == f"http.{history.REPOSITORIES['BCApps']}.extraHeader"
+
+
 def test_nav_pat_authentication(monkeypatch):
+    monkeypatch.delenv("BCBENCH_HISTORY_AZURE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("BCBENCH_HISTORY_AZURE_TENANT_ID", raising=False)
     monkeypatch.delenv("ADO_TOKEN", raising=False)
     monkeypatch.setenv("AZURE_DEVOPS_EXT_PAT", "test-only-pat")
     environment = history._remote_environment("NAV")
@@ -602,6 +617,9 @@ def test_nav_pat_authentication(monkeypatch):
 def test_nav_azure_cli_login_is_used_when_no_token_is_supplied(monkeypatch):
     monkeypatch.delenv("ADO_TOKEN", raising=False)
     monkeypatch.delenv("AZURE_DEVOPS_EXT_PAT", raising=False)
+    monkeypatch.delenv("BCBENCH_HISTORY_AZURE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("BCBENCH_HISTORY_AZURE_TENANT_ID", raising=False)
+    monkeypatch.setattr(history.shutil, "which", lambda _: r"C:\AzureCLI\az.CMD")
     calls = []
 
     def token_command(args, **kwargs):
@@ -610,5 +628,54 @@ def test_nav_azure_cli_login_is_used_when_no_token_is_supplied(monkeypatch):
 
     monkeypatch.setattr(history.subprocess, "run", token_command)
     environment = history._remote_environment("NAV")
-    assert calls == [["az", "account", "get-access-token", "--resource", "499b84ac-1321-427f-aa17-267ca6975798", "--query", "accessToken", "--output", "tsv"]]
+    assert calls == [[r"C:\AzureCLI\az.CMD", "account", "get-access-token", "--resource", "499b84ac-1321-427f-aa17-267ca6975798", "--query", "accessToken", "--output", "tsv"]]
     assert environment["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer test-only-entra-token"
+
+
+def test_workflow_uses_fresh_oidc_with_the_existing_ado_identity(monkeypatch):
+    monkeypatch.setenv("ADO_TOKEN", "test-only-stale-token")
+    monkeypatch.setenv("AZURE_DEVOPS_EXT_PAT", "test-only-unrelated-pat")
+    monkeypatch.setenv("BCBENCH_HISTORY_AZURE_CLIENT_ID", "11111111-1111-1111-1111-111111111111")
+    monkeypatch.setenv("BCBENCH_HISTORY_AZURE_TENANT_ID", "22222222-2222-2222-2222-222222222222")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://pipelines.actions.githubusercontent.com/oidc?api-version=2.0")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "test-only-job-token")
+    calls = []
+
+    def respond(request, timeout):
+        calls.append(request)
+        assert timeout == 60
+        if request.data is None:
+            return BytesIO(b'{"value":"test-only-oidc-assertion"}')
+        return BytesIO(b'{"access_token":"test-only-ado-access-token"}')
+
+    monkeypatch.setattr(history, "urlopen", respond)
+    first = history._remote_environment("NAV")
+    history._remote_environment("NAV")
+    assert len(calls) == 4
+    assert parse_qs(urlsplit(calls[0].full_url).query)["audience"] == ["api://AzureADTokenExchange"]
+    assert calls[0].get_header("Authorization") == "Bearer test-only-job-token"
+    assert calls[1].full_url == "https://login.microsoftonline.com/22222222-2222-2222-2222-222222222222/oauth2/v2.0/token"
+    body = parse_qs(calls[1].data.decode())
+    assert body["client_id"] == ["11111111-1111-1111-1111-111111111111"]
+    assert body["scope"] == ["499b84ac-1321-427f-aa17-267ca6975798/.default"]
+    assert body["client_assertion"] == ["test-only-oidc-assertion"]
+    assert first["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer test-only-ado-access-token"
+
+
+def test_incomplete_workflow_identity_fails_instead_of_using_another_login(monkeypatch):
+    monkeypatch.delenv("ADO_TOKEN", raising=False)
+    monkeypatch.delenv("AZURE_DEVOPS_EXT_PAT", raising=False)
+    monkeypatch.setenv("BCBENCH_HISTORY_AZURE_CLIENT_ID", "11111111-1111-1111-1111-111111111111")
+    monkeypatch.delenv("BCBENCH_HISTORY_AZURE_TENANT_ID", raising=False)
+    monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_URL", raising=False)
+    monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", raising=False)
+    with pytest.raises(ValueError, match="Workflow history authentication is missing"):
+        history._remote_environment("NAV")
+
+
+def test_missing_azure_cli_has_an_actionable_authentication_error(monkeypatch):
+    for name in ("ADO_TOKEN", "AZURE_DEVOPS_EXT_PAT", "BCBENCH_HISTORY_AZURE_CLIENT_ID", "BCBENCH_HISTORY_AZURE_TENANT_ID"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(history.shutil, "which", lambda _: None)
+    with pytest.raises(ValueError, match="Azure CLI was not found"):
+        history._remote_environment("NAV")

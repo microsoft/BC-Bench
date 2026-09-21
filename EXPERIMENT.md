@@ -26,8 +26,8 @@ All configurations live in [`config.yaml`](src/bcbench/agent/shared/config.yaml)
 | `agents.enabled` and `agents.name` | `false` | Copy **only** `instructions/<profile>/agents/` and pass `--agent=<name>` to the CLI |
 | `mcp.servers` | _(none)_ | List of MCP servers to register |
 | `plugins` | _(all disabled)_ | List of agent plugins to load for the run — one entry per plugin, local or cloned from GitHub at a revision, passed to the CLI via `--plugin-dir` |
-| `history.enabled` | `false` | Offer task-pinned, on-demand commit history in `bug-fix` and `test-generation`; includes scope measurements |
-| `history.measure_scope` | `false` | Record initial/final scope without offering history, for an instrumented source-only control |
+| `history.enabled` | `true` on this experiment branch | Offer task-pinned, on-demand commit history in `bug-fix` and `test-generation`; includes scope measurements |
+| `history.measure_scope` | `true` on this experiment branch | Record initial/final scope without offering history, for an instrumented source-only control |
 
 Note: `instructions.enabled: true` is a superset — you don't also need to enable `skills` or `agents` to get them. Use `skills`/`agents` when you want to isolate the effect of just that piece.
 
@@ -37,9 +37,9 @@ Hypothesis: after locating suspect code, historical co-changes help an agent dis
 objects worth investigating or modifying, without encouraging unnecessary changes.
 
 Both Copilot and Claude support this experiment. It is restricted to `bug-fix` and
-`test-generation`; other categories ignore these settings. Both flags default to `false`,
-leaving the original prompt/tool setup unchanged. No assertion checks or pass/fail criteria
-are changed.
+`test-generation`; other categories ignore these settings. This experiment branch enables
+both flags in `config.yaml`. Setting both to `false` restores the original prompt/tool
+setup. No assertion checks or pass/fail criteria are changed.
 
 Use this instrumented source-only control:
 
@@ -83,9 +83,13 @@ authentication/history semantics are documented in [tools/README.md](tools/READM
 
 The automatic capability queries only the task's repository. It never invents a second
 repository's cutoff or uses the current BCAppsBugFix checkout as a historical boundary.
-NAV requires a runner identity with NAV read access (`ADO_TOKEN`, a read-scoped
-`AZURE_DEVOPS_EXT_PAT`, or an authenticated Azure CLI session). BCApps uses public access
-or the configured GitHub token. Credentials stay in the report runner, not the MCP tool
+NAV requires a runner identity with NAV read access. The evaluation workflows reuse the
+existing `ado-read` environment's Azure client/tenant secrets and `id-token: write`
+permission to obtain a fresh ADO token through GitHub OIDC for each history request.
+They do not depend on the setup action's step-local `ADO_TOKEN` or an aging Azure CLI
+federated assertion. Local use still supports `ADO_TOKEN`, a read-scoped
+`AZURE_DEVOPS_EXT_PAT`, or an authenticated Azure CLI session. BCApps uses public access
+or the configured GitHub token. Runtime token headers are held by the report runner, not the MCP tool
 arguments/configuration. No network query or Markdown report is generated at agent startup.
 
 #### Measurements and interpretation

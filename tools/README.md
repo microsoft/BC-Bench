@@ -70,8 +70,13 @@ in either repository prevents a partial report from being emitted as a complete 
 
 - `NAV` resolves to `https://dev.azure.com/dynamicssmb2/Dynamics%20SMB/_git/NAV`.
   Supply an Entra access token in `ADO_TOKEN`, or a read-scoped PAT in
-  `AZURE_DEVOPS_EXT_PAT`. Otherwise the script obtains a token from an already authenticated
-  Azure CLI session using the Azure DevOps resource. The identity needs NAV read access.
+  `AZURE_DEVOPS_EXT_PAT`. The evaluation workflows instead supply the existing Azure
+  client/tenant identity as `BCBENCH_HISTORY_AZURE_CLIENT_ID` and
+  `BCBENCH_HISTORY_AZURE_TENANT_ID`; each history request exchanges a fresh GitHub OIDC
+  assertion for an ADO token, avoiding an expired setup-time Azure CLI assertion.
+  This configured workflow identity takes precedence over ambient tokens on the runner.
+  Outside that workflow setup, the script uses an authenticated Azure CLI session
+  (including the Windows `az.CMD` launcher). The identity needs NAV read access.
 - `BCApps` resolves to `https://github.com/microsoft/BCApps.git`. It uses `GH_TOKEN` or
   `GITHUB_TOKEN` when supplied; otherwise public access is anonymous.
 - Authentication headers are passed through the Git subprocess environment, not command
@@ -138,8 +143,8 @@ history imported as a snapshot still requires querying NAV with its own approved
 BC-Bench's optional `history` configuration registers a task-pinned MCP wrapper for bug-fix
 and test-generation. It creates no report until the agent selects files and calls the tool.
 See [History-assisted scope discovery](../EXPERIMENT.md#history-assisted-scope-discovery)
-for the history arm, source-only measurement control, and result metrics. Both switches
-are off by default. Providing this capability does not enable the production agent's
+for the history arm, source-only measurement control, and result metrics. This experiment
+branch enables both switches; set both to `false` to disable them. Providing this capability does not enable the production agent's
 issue-fetch, commit/push, or PR steps.
 
 ## `altest/`
