@@ -238,6 +238,14 @@ $module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.ps
     assert Path(_last_json(_run_pwsh(script))) == compiler_root
 
 
+def test_container_initialization_stages_complete_module_closure() -> None:
+    source = (_ROOT / "scripts" / "BCContainerManagement.psm1").read_text(encoding="utf-8")
+
+    for module_name in ("DatasetEntry.psm1", "BCBenchUtils.psm1", "BCContainerManagement.psm1"):
+        assert f'"{module_name}"' in source
+    assert 'Join-Path "C:\\Run\\bcbench" $moduleName' in source
+
+
 def test_setup_parameter_metadata_and_pinned_container_helper() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'

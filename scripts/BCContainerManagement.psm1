@@ -222,9 +222,18 @@ function Initialize-ContainerForDevelopment() {
         [System.Version] $RepoVersion
     )
 
-    $BCContainerModule = "$PSScriptRoot\BCContainerManagement.psm1"
+    $containerModuleNames = @(
+        "DatasetEntry.psm1",
+        "BCBenchUtils.psm1",
+        "BCContainerManagement.psm1"
+    )
     $containerModulePath = "C:\Run\bcbench\BCContainerManagement.psm1"
-    Copy-FileToBcContainer -containerName $ContainerName -localpath $BCContainerModule -containerPath $containerModulePath
+    foreach ($moduleName in $containerModuleNames) {
+        Copy-FileToBcContainer `
+            -containerName $ContainerName `
+            -localpath (Join-Path $PSScriptRoot $moduleName) `
+            -containerPath (Join-Path "C:\Run\bcbench" $moduleName)
+    }
 
     Invoke-ScriptInBcContainer -containerName $ContainerName -scriptblock {
         param([string] $ContainerModule, [System.Version] $RepoVersion, [string] $DatabaseName = "CRONUS")
