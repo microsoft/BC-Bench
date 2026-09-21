@@ -218,7 +218,9 @@ def _parse_wrapper_result(wrapper_stdout: str) -> _WrapperResult:
 
 
 def _current_windows_user_sid() -> str:
-    from ctypes import wintypes
+    if sys.platform != "win32":
+        raise OSError("Windows identity APIs are unavailable on this platform")
+    from ctypes import WinDLL, WinError, get_last_error, wintypes
 
     class SidAndAttributes(ctypes.Structure):
         _fields_ = [("sid", ctypes.c_void_p), ("attributes", wintypes.DWORD)]
@@ -226,8 +228,8 @@ def _current_windows_user_sid() -> str:
     class TokenUser(ctypes.Structure):
         _fields_ = [("user", SidAndAttributes)]
 
-    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32 = WinDLL("advapi32", use_last_error=True)
+    kernel32 = WinDLL("kernel32", use_last_error=True)
     kernel32.GetCurrentProcess.argtypes = ()
     kernel32.GetCurrentProcess.restype = wintypes.HANDLE
     kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
@@ -248,19 +250,19 @@ def _current_windows_user_sid() -> str:
     advapi32.ConvertSidToStringSidW.restype = wintypes.BOOL
     token = wintypes.HANDLE()
     if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):
-        raise ctypes.WinError(ctypes.get_last_error())
+        raise WinError(get_last_error())
 
     try:
         required_size = wintypes.DWORD()
         advapi32.GetTokenInformation(token, 1, None, 0, ctypes.byref(required_size))
         buffer = ctypes.create_string_buffer(required_size.value)
         if not advapi32.GetTokenInformation(token, 1, buffer, required_size, ctypes.byref(required_size)):
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise WinError(get_last_error())
 
         token_user = ctypes.cast(buffer, ctypes.POINTER(TokenUser)).contents
         sid_string_pointer = ctypes.c_void_p()
         if not advapi32.ConvertSidToStringSidW(token_user.user.sid, ctypes.byref(sid_string_pointer)):
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise WinError(get_last_error())
         try:
             return ctypes.wstring_at(sid_string_pointer)
         finally:
@@ -270,10 +272,12 @@ def _current_windows_user_sid() -> str:
 
 
 def _protect_temp_directory(path: Path) -> None:
-    from ctypes import wintypes
+    if sys.platform != "win32":
+        raise OSError("Windows ACL APIs are unavailable on this platform")
+    from ctypes import WinDLL, WinError, get_last_error, wintypes
 
-    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32 = WinDLL("advapi32", use_last_error=True)
+    kernel32 = WinDLL("kernel32", use_last_error=True)
     kernel32.LocalFree.argtypes = (wintypes.HLOCAL,)
     kernel32.LocalFree.restype = wintypes.HLOCAL
     advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = (
@@ -293,10 +297,10 @@ def _protect_temp_directory(path: Path) -> None:
         ctypes.byref(security_descriptor),
         None,
     ):
-        raise ctypes.WinError(ctypes.get_last_error())
+        raise WinError(get_last_error())
     try:
         if not advapi32.SetFileSecurityW(str(path), 0x80000004, security_descriptor):
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise WinError(get_last_error())
     finally:
         kernel32.LocalFree(security_descriptor)
 

@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 from contextlib import ExitStack
@@ -30,6 +31,13 @@ from tests.conftest import (
     create_nl2al_entry,
     create_test_entry,
 )
+
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+def _plain_cli_output(result: Any) -> str:
+    return _ANSI_ESCAPE.sub("", result.stdout + result.stderr)
+
 
 runner = CliRunner()
 
@@ -632,7 +640,7 @@ def test_bugfix_lifecycle_requires_protected_root_when_entry_root_is_supplied(
     )
 
     assert result.exit_code != 0
-    assert "protected-root" in (result.stdout + result.stderr).lower()
+    assert "protected-root" in _plain_cli_output(result).lower()
 
 
 @pytest.mark.parametrize(
@@ -768,8 +776,9 @@ def test_bugfix_lifecycle_replay_timeout_without_patch_cleans_up_before_rejectin
         result = runner.invoke(app, [*lifecycle_cli_fixture.args(command), "--replay-timeout"])
 
     assert result.exit_code == 2
+    output = _plain_cli_output(result)
     for message in ("--replay-timeout", "requires", "--replay-patch"):
-        assert message in result.stdout + result.stderr
+        assert message in output
     cleanup.assert_called_once()
     resources = cleanup.call_args.args[0].resources
     assert resources.paths.entry_root == lifecycle_cli_fixture.entry_root
@@ -1127,8 +1136,9 @@ def test_lifecycle_output_file_is_validated_only_after_cleanup_ownership(lifecyc
     else:
         cleanup.assert_called_once()
         quarantine.assert_not_called()
-        assert "--output-dir" in result.stderr
-        assert "directory" in result.stderr.lower()
+        output = _plain_cli_output(result)
+        assert "--output-dir" in output
+        assert "directory" in output.lower()
     load_entry.assert_not_called()
     copilot_version.assert_not_called()
     claude_version.assert_not_called()
@@ -1351,7 +1361,7 @@ def test_bugfix_lifecycle_rejects_missing_replay_file_before_collaborators(lifec
         result = runner.invoke(app, args)
 
     assert result.exit_code == 2
-    assert "--replay-patch" in (result.stdout + result.stderr).lower()
+    assert "--replay-patch" in _plain_cli_output(result).lower()
     load_entry.assert_not_called()
     lifecycle_factory.assert_not_called()
 

@@ -3475,9 +3475,11 @@ finally {{
     assert payload["absentAfterRemove"] is True
 
 
-@pytest.mark.integration
+@pytest.mark.e2e
 @pytest.mark.parametrize("force_probe_failure", [False, True])
 def test_elevated_disposable_identity_access_cleans_exact_user(tmp_path: Path, force_probe_failure: bool) -> None:
+    if os.environ.get("BCBENCH_RUN_PRIVILEGED_LIFECYCLE_TESTS") != "1":
+        pytest.skip("requires an approved disposable runner for local-user and ACL mutation")
     if shutil.which("docker") is None:
         pytest.skip("requires Docker CLI")
     elevated = _run_pwsh("([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)")

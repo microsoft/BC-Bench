@@ -838,7 +838,7 @@ def test_serializes_optional_restricted_identity_and_cleans_temp_files(tmp_path,
     python_executable = Path(captured_command[captured_command.index("-PythonExecutable") + 1])
     expected_hash = captured_command[captured_command.index("-ExpectedWorkerSha256") + 1]
     assert worker_path == staged_worker
-    assert python_executable == base_python
+    assert python_executable == base_python.resolve()
     assert expected_hash == worker_hash
     assert "-m" not in captured_command
     assert all(not path.exists() for path in captured_paths)
