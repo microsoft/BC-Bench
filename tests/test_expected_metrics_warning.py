@@ -12,9 +12,9 @@ def _missing_metric_warnings(caplog) -> list[str]:
 
 
 class TestExpectedMetricsWarning:
-    def test_no_warning_when_agent_does_not_collect_metric(self, tmp_path, caplog):
+    def test_no_warning_when_bcal_collects_scenario_metrics(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=AgentHarness.BCAL)
-        context.metrics = AgentMetrics(execution_time=12.0)
+        context.metrics = AgentMetrics(execution_time=12.0, prompt_tokens=100, completion_tokens=20, turn_count=2, tool_usage={"write_file": 1})
 
         with caplog.at_level(logging.WARNING):
             BugFixResult.create_success(context, "patch")
@@ -28,7 +28,9 @@ class TestExpectedMetricsWarning:
         with caplog.at_level(logging.WARNING):
             BugFixResult.create_success(context, "patch")
 
-        assert _missing_metric_warnings(caplog) == [f"Result for {context.entry.instance_id} missing metrics: execution_time"]
+        assert _missing_metric_warnings(caplog) == [
+            f"Result for {context.entry.instance_id} missing metrics: completion_tokens, execution_time, prompt_tokens, tool_usage, turn_count"
+        ]
 
     def test_warns_when_expected_metric_is_missing(self, tmp_path, caplog):
         context = create_evaluation_context(tmp_path, agent_name=AgentHarness.COPILOT)
