@@ -2,9 +2,12 @@ using module .\BCBenchUtils.psm1
 
 function Initialize-BCContainerHelperOptionalConfig {
     [CmdletBinding()]
-    param()
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$CommandName = "New-BCContainer"
+    )
 
-    $helperModule = (Get-Command New-BCContainer -ErrorAction Stop).Module
+    $helperModule = (Get-Command $CommandName -ErrorAction Stop).Module
     if ($null -eq $helperModule) {
         throw "BcContainerHelper command module is unavailable."
     }
@@ -393,7 +396,7 @@ function New-BCCompilerFolderSync {
     )
 
     Write-Log "Creating compiler folder for container: $ContainerName" -Level Info
-    Initialize-BCContainerHelperOptionalConfig
+    Initialize-BCContainerHelperOptionalConfig -CommandName "New-BcCompilerFolder"
 
     Set-StrictMode -Off
     [string]$compilerFolder = New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName

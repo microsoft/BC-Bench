@@ -225,6 +225,7 @@ def test_container_compiler_wrapper_returns_owned_path(tmp_path: Path) -> None:
 $ErrorActionPreference = 'Stop'
 $module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.psm1")} -Force -PassThru
 & $module {{
+    $script:bcContainerHelperConfig = @{{}}
     function New-BcCompilerFolder {{ return {_ps_quote(compiler_root)} }}
     New-BCCompilerFolderSync -ContainerName 'test' -ArtifactUrl 'artifact'
 }} | ConvertTo-Json -Compress
