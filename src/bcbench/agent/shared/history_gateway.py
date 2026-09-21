@@ -9,7 +9,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Self
+from typing import Self, TypedDict, TypeGuard
 from urllib.parse import urlsplit
 
 from bcbench.dataset.dataset_entry import BaseDatasetEntry, RepoGroundedEntry
@@ -24,6 +24,20 @@ _MAX_BODY_BYTES = 65536
 _REQUEST_TIMEOUT_SECONDS = 5
 _PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")
 _REPOSITORIES = {"microsoftinternal/nav": "NAV", "microsoft/bcapps": "BCApps"}
+
+
+class _ToolDefinition(TypedDict):
+    name: str
+    description: str
+    inputSchema: dict[str, object]
+
+
+def _is_string_list(value: object) -> TypeGuard[list[str]]:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _is_json_object(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
 
 
 def resolve_history_settings(config: dict, category: EvaluationCategory) -> HistorySettings | None:
@@ -51,7 +65,7 @@ def _tool_result(text: str, *, error: bool = False) -> dict:
 
 
 def _normalize_files(value: object, *, allow_empty: bool = False) -> list[str]:
-    if not isinstance(value, list) or any(not isinstance(file, str) for file in value):
+    if not _is_string_list(value):
         raise ValueError("files must be a list of literal repository-relative file paths.")
     if not value and not allow_empty:
         raise ValueError("files must not be empty.")
@@ -127,9 +141,9 @@ class HistoryGateway:
                 self._thread = None
             self.base_url = None
 
-    def _tools(self) -> list[dict]:
+    def _tools(self) -> list[_ToolDefinition]:
         files_schema = {"type": "array", "items": {"type": "string"}}
-        tools = [
+        tools: list[_ToolDefinition] = [
             {
                 "name": "record_scope",
                 "description": (
@@ -351,13 +365,16 @@ def _build_handler(gateway: HistoryGateway) -> type[BaseHTTPRequestHandler]:
                 self._error(-32603, "Internal history gateway error.")
 
         def _dispatch(self, request: object) -> None:
-            if not isinstance(request, dict) or request.get("jsonrpc") != "2.0" or not isinstance(request.get("method"), str):
+            if not _is_json_object(request):
+                self._error(-32600, "Invalid JSON-RPC request.", status=400)
+                return
+            method = request.get("method")
+            if request.get("jsonrpc") != "2.0" or not isinstance(method, str):
                 self._error(-32600, "Invalid JSON-RPC request.", status=400)
                 return
             request_id = request.get("id")
-            method = request["method"]
             params = request.get("params", {})
-            if not isinstance(params, dict):
+            if not _is_json_object(params):
                 self._error(-32602, "params must be an object.", request_id)
                 return
             if method == "notifications/initialized" and "id" not in request:
@@ -366,6 +383,7 @@ def _build_handler(gateway: HistoryGateway) -> type[BaseHTTPRequestHandler]:
             if type(request_id) not in (str, int):
                 self._error(-32600, "Requests require a string or integer id.", status=400)
                 return
+            result: dict[str, object]
             if method == "initialize":
                 version = params.get("protocolVersion")
                 if version is not None and not isinstance(version, str):
@@ -386,7 +404,7 @@ def _build_handler(gateway: HistoryGateway) -> type[BaseHTTPRequestHandler]:
                 if not isinstance(name, str) or name not in {tool["name"] for tool in gateway._tools()}:
                     self._error(-32602, "Unknown tool.", request_id)
                     return
-                if not isinstance(arguments, dict):
+                if not _is_json_object(arguments):
                     self._error(-32602, "Tool arguments must be an object.", request_id)
                     return
                 result = gateway._call_tool(name, arguments)

@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from bcbench.agent.shared.history_gateway import HistoryGateway, resolve_history_settings, start_history_gateway
-from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry
+from bcbench.dataset.dataset_entry import BaseDatasetEntry, BugFixEntry, TestEntry
 from bcbench.exceptions import AgentError
 from bcbench.types import EvaluationCategory, HistorySettings, InvestigationTrace
 
@@ -91,7 +91,7 @@ def _entry(repo="microsoftInternal/NAV"):
         test_patch="GOLD_TEST_PATCH_MUST_NOT_LEAK",
         created_at="2026-09-21",
         environment_setup_version="26.5",
-        FAIL_TO_PASS=[{"codeunitID": 100, "functionName": ["TestSomething"]}],
+        fail_to_pass=[TestEntry(codeunitID=100, functionName=frozenset({"TestSomething"}))],
     )
 
 
@@ -349,10 +349,12 @@ def test_resolve_settings(category):
     assert resolve_history_settings({}, category) is None
     assert resolve_history_settings({"history": {"enabled": False, "measure_scope": False}}, category) is None
     settings = resolve_history_settings({"history": {"enabled": True, "measure_scope": False, "max_requests": 3}}, category)
+    assert settings is not None
     assert settings.enabled
     assert settings.measure_scope
     assert settings.max_requests == 3
     baseline = resolve_history_settings({"history": {"measure_scope": True}}, category)
+    assert baseline is not None
     assert baseline.measure_scope
     assert not baseline.enabled
 
