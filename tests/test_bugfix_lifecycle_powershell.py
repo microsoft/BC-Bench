@@ -128,6 +128,41 @@ Get-Command -Module BugFixLifecycle | Select-Object -ExpandProperty Name | Conve
     assert exports >= _EXPECTED_EXPORTS
 
 
+def test_bcbench_utils_declares_dataset_entry_type_dependency(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset.jsonl"
+    dataset.write_text(
+        json.dumps(
+            {
+                "repo": "owner/repo",
+                "instance_id": "owner__repo-1",
+                "patch": "patch",
+                "base_commit": "a" * 40,
+                "hints_text": "",
+                "created_at": "2026-01-01",
+                "test_patch": "test patch",
+                "problem_statement": "problem",
+                "environment_setup_version": "28.0",
+                "FAIL_TO_PASS": [],
+                "PASS_TO_PASS": [],
+                "project_paths": ["src"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Import-Module {_ps_quote(_ROOT / "scripts" / "BCBenchUtils.psm1")} -Force
+Import-Module {_ps_quote(_ROOT / "scripts" / "DatasetEntry.psm1")} -Force
+$entry = @(Get-DatasetEntries -DatasetPath {_ps_quote(dataset)} -InstanceId 'owner__repo-1')[0]
+Get-RepoCloneInfo -Entry $entry | ConvertTo-Json -Compress
+"""
+
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload["Url"] == "https://github.com/owner/repo.git"
+
+
 def test_setup_parameter_metadata_and_pinned_container_helper() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'
