@@ -1336,6 +1336,7 @@ $ErrorActionPreference = 'Stop'
 $global:getCalls = 0
 $global:newUsers = @()
 $global:groups = @()
+$global:descriptions = @()
 function global:Get-LocalUser {{
     param([string]$Name)
     $global:getCalls++
@@ -1345,6 +1346,7 @@ function global:Get-LocalUser {{
 function global:New-LocalUser {{
     param([string]$Name, [SecureString]$Password, [string]$Description, [switch]$AccountNeverExpires, [switch]$PasswordNeverExpires)
     $global:newUsers += $Name
+    $global:descriptions += $Description
     [PSCustomObject]@{{ Name = $Name; Sid = 'S-1-5-21-1000-1001-1002-1003' }}
 }}
 function global:Add-LocalGroupMember {{
@@ -1359,6 +1361,7 @@ $identity = New-BCBenchAgentIdentity -InstanceId 'bug-fix__entry/unsafe'
     getCalls = $global:getCalls
     newUsers = $global:newUsers
     groups = $global:groups
+    descriptions = $global:descriptions
 }} | ConvertTo-Json -Compress -Depth 6
 """
     payload = _last_json(_run_pwsh(script))
@@ -1371,6 +1374,8 @@ $identity = New-BCBenchAgentIdentity -InstanceId 'bug-fix__entry/unsafe'
     assert payload["identity"]["Password"]
     assert payload["identity"]["Domain"]
     assert payload["groups"] == ["S-1-5-32-545"]
+    assert payload["descriptions"] == ["BC-Bench restricted evaluation agent"]
+    assert len(payload["descriptions"][0]) <= 48
     assert "S-1-5-32-544" not in payload["groups"]
     assert "docker-users" not in payload["groups"]
 

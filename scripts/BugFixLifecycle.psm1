@@ -120,7 +120,7 @@ function New-BCBenchAgentIdentity {
             $localUser = New-LocalUser `
                 -Name $username `
                 -Password $securePassword `
-                -Description "BC-Bench restricted agent for $InstanceId" `
+                -Description "BC-Bench restricted evaluation agent" `
                 -AccountNeverExpires `
                 -PasswordNeverExpires
             $createdUser = $true
