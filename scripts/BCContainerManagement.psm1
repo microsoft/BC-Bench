@@ -337,6 +337,7 @@ function New-BCContainerSync {
         $params.additionalParameters = $AdditionalParameters
     }
 
+    Set-StrictMode -Off
     New-BCContainer @params
 
     # Workaround: BC v24 artifacts predate manifest.json, so BcContainerHelper cannot determine the required .NET major
@@ -364,6 +365,7 @@ function New-BCCompilerFolderSync {
 
     Write-Log "Creating compiler folder for container: $ContainerName" -Level Info
 
+    Set-StrictMode -Off
     [string]$compilerFolder = New-BcCompilerFolder -artifactUrl $ArtifactUrl -containerName $ContainerName
 
     Write-Log "Compiler folder created at: $compilerFolder" -Level Success

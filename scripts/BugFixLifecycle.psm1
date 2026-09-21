@@ -1653,7 +1653,10 @@ function New-BCBenchAgentBcUser {
         [Parameter(Mandatory = $true)][string]$ContainerName
     )
 
-    Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+    & {
+        Set-StrictMode -Off
+        Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
+    }
     $username = New-BCBenchScopedUsername -Prefix bca -InstanceId $InstanceId
     $password = New-BCBenchPassword
     $credential = [PSCredential]::new($username, (ConvertTo-SecureString $password -AsPlainText -Force))
@@ -3584,6 +3587,7 @@ function Invoke-BCBenchBugFixLifecycle {
         try {
             Invoke-BCBenchOperation -Operations $Operations -Name CreateContainer -Context $context -Default {
                 param($operationContext)
+                Set-StrictMode -Off
                 Import-Module BcContainerHelper -RequiredVersion 6.1.18 -Force -DisableNameChecking
                 Import-Module (Join-Path $PSScriptRoot "BCBenchUtils.psm1") -Force -DisableNameChecking
                 Import-Module (Join-Path $PSScriptRoot "BCContainerManagement.psm1") -Force -DisableNameChecking

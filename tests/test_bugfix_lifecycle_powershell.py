@@ -191,6 +191,30 @@ $module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.ps
     assert _last_json(_run_pwsh(script)) == "Write-Log"
 
 
+def test_container_helper_calls_do_not_inherit_lifecycle_strict_mode() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.psm1")} -Force -PassThru
+& $module {{
+    Set-StrictMode -Off
+    function New-BCContainer {{
+        param(
+            $artifactUrl, $containerName, $auth, $credential, $includeTestToolkit,
+            $includeTestLibrariesOnly, $multitenant, $shortcuts, $memoryLimit, $isolation,
+            $accept_eula, $additionalParameters
+        )
+        $config = [PSCustomObject]@{{}}
+        $null = $config.MicrosoftTelemetryConnectionString
+    }}
+    $credential = [PSCredential]::new('admin', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
+    New-BCContainerSync -ContainerName 'test' -Version '27.0' -ArtifactUrl 'artifact' -Credential $credential
+}}
+"""
+
+    _run_pwsh(script)
+
+
 def test_setup_parameter_metadata_and_pinned_container_helper() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'
