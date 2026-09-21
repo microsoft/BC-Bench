@@ -192,7 +192,8 @@ $module = Import-Module {_ps_quote(_ROOT / "scripts" / "BCContainerManagement.ps
 
 
 def test_container_management_initializes_optional_helper_config() -> None:
-    if not _run_pwsh("(Get-Module -ListAvailable BcContainerHelper | Select-Object -First 1).Version.ToString()"):
+    probe = "$module = Get-Module -ListAvailable BcContainerHelper | Select-Object -First 1; if ($null -ne $module) { $module.Version.ToString() }"
+    if not _run_pwsh(probe):
         pytest.skip("BcContainerHelper is not installed")
     script = f"""
 $ErrorActionPreference = 'Stop'
