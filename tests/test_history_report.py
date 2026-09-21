@@ -90,9 +90,17 @@ def test_multiple_files_select_union_and_deduplicate_commits(repo):
     assert report.index(f"## Commit {only_b}") < report.index(f"## Commit {both}")
 
 
-def test_commit_selection_pages_without_skipping_or_duplicating_results(repo):
+def test_commit_selection_pages_without_skipping_or_duplicating_results(repo, monkeypatch):
     commits = [commit_files(repo, f"Change {index}", {"A.al": f"{index}\n"}) for index in range(23)]
     cutoff = commit_files(repo, "Cutoff", {"Other.al": "cutoff\n"})
+    commands = []
+    run = history.GitRepository.run
+
+    def record_command(self, *args):
+        commands.append(args)
+        return run(self, *args)
+
+    monkeypatch.setattr(history.GitRepository, "run", record_command)
 
     report = build_report(repo, "NAV", cutoff, ["A.al"], max_commits=21)
 
@@ -100,6 +108,15 @@ def test_commit_selection_pages_without_skipping_or_duplicating_results(repo):
     assert f"## Commit {commits[2]}" in report
     assert f"## Commit {commits[1]}" not in report
     assert "more matching ancestors" in report
+    assert sum(command[0] == "log" for command in commands) == 2
+    assert not any(command[0] == "show" and "--name-only" in command for command in commands)
+
+
+def test_log_page_framing_preserves_hash_like_and_spaced_paths():
+    first, second = "a" * 40, "b" * 40
+    output = f"\0{first}\0\0\n{second}\0folder/a file.al\0\0{second}\0\0"
+
+    assert history._parse_log_page(output) == [(first, {second, "folder/a file.al"}), (second, set())]
 
 
 def test_root_cutoff_never_falls_back_to_head(repo):

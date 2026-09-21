@@ -89,7 +89,7 @@ class HistoryQuery(BaseModel):
 
     files: list[str]
     elapsed_seconds: float = Field(ge=0)
-    commit_ids: list[CommitSha] = []
+    commit_ids: list[CommitSha] = Field(default_factory=list)
     report_name: str | None = None
     error: str | None = None
 
@@ -99,7 +99,7 @@ class InvestigationTrace(BaseModel):
 
     initial_scope: ScopeSnapshot | None = None
     final_scope: ScopeSnapshot | None = None
-    queries: list[HistoryQuery] = []
+    queries: list[HistoryQuery] = Field(default_factory=list)
 
 
 class AgentMetrics(BaseModel):

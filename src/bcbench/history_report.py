@@ -92,43 +92,44 @@ def _shallow_boundaries(repository: GitRepository) -> list[str]:
     return shallow_path.read_text(encoding="ascii").splitlines()
 
 
+def _parse_log_page(output: str) -> list[tuple[str, set[str]]]:
+    # A commit starts with an extra NUL; a single path separator cannot mimic this header.
+    records = re.split(r"(?:^|\0)\0([0-9a-f]{40})\0", output)
+    if records[0]:
+        raise ValueError("Unexpected Git history output before the first commit")
+    return [(records[index], set(filter(None, records[index + 1].lstrip("\0").removeprefix("\n").split("\0")))) for index in range(1, len(records), 2)]
+
+
 def _log_commits(repository: GitRepository, revisions: Sequence[str], files: Sequence[str], limit: int) -> list[str]:
     if not revisions:
         return []
     commits: list[str] = []
     offset = 0
     while len(commits) < limit:
-        batch = repository.run(
-            "log",
-            "--format=%H",
-            "--full-history",
-            "--topo-order",
-            "--diff-merges=first-parent",
-            "--no-patch",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--no-renames",
-            "--max-count=20",
-            f"--skip={offset}",
-            *revisions,
-            "--",
-            *files,
-        ).split()
-        for sha in batch:
-            # Full-history traversal retains merges that did not change the selected paths.
-            changed_files = repository.run(
-                "show",
-                "--format=",
+        batch = _parse_log_page(
+            repository.run(
+                "log",
+                "--format=%x00%H%x00",
                 "--name-only",
                 "-z",
+                "--full-history",
+                "--topo-order",
                 "--diff-merges=first-parent",
+                "--no-color",
+                "--no-decorate",
+                "--no-notes",
                 "--no-renames",
                 "--no-ext-diff",
                 "--no-textconv",
-                sha,
+                "--max-count=20",
+                f"--skip={offset}",
+                *revisions,
                 "--",
                 *files,
-            ).split("\0")
+            )
+        )
+        for sha, changed_files in batch:
+            # Full-history traversal retains merges that did not change the selected paths.
             if any(file in changed_files for file in files):
                 commits.append(sha)
                 if len(commits) == limit:

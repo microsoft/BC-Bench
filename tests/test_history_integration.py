@@ -27,6 +27,17 @@ def _patch(*paths):
     return "".join(f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@\n-old\n+new\n" for path in paths)
 
 
+def test_history_models_allocate_independent_default_lists():
+    first_query = HistoryQuery(files=["A.al"], elapsed_seconds=0)
+    second_query = HistoryQuery(files=["B.al"], elapsed_seconds=0)
+    first_query.commit_ids.append("a" * 40)
+    assert second_query.commit_ids == []
+
+    first_trace, second_trace = InvestigationTrace(), InvestigationTrace()
+    first_trace.queries.append(first_query)
+    assert second_trace.queries == []
+
+
 @pytest.fixture
 def history_config():
     config_path = get_config().paths.agent_share_dir / "config.yaml"
