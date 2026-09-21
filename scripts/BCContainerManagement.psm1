@@ -7,28 +7,33 @@ function Initialize-BCContainerHelperOptionalConfig {
         [string]$CommandName = "New-BCContainer"
     )
 
-    $helperModule = (Get-Command $CommandName -ErrorAction Stop).Module
-    if ($null -eq $helperModule) {
-        throw "BcContainerHelper command module is unavailable."
+    $commandModule = (Get-Command $CommandName -ErrorAction Stop).Module
+    $candidateModules = @($commandModule) + @(Get-Module -All BcContainerHelper)
+    $defaults = @{
+        MicrosoftTelemetryConnectionString = ""
+        PartnerTelemetryConnectionString   = ""
+        SendExtendedTelemetryToMicrosoft   = $false
     }
-
-    & $helperModule {
-        $defaults = @{
-            MicrosoftTelemetryConnectionString = ""
-            PartnerTelemetryConnectionString   = ""
-            SendExtendedTelemetryToMicrosoft   = $false
+    foreach ($helperModule in @($candidateModules | Where-Object { $null -ne $_ } | Select-Object -Unique)) {
+        $config = & $helperModule {
+            (Get-Variable -Name bcContainerHelperConfig -Scope Script -ErrorAction SilentlyContinue).Value
+        }
+        if ($null -eq $config) {
+            continue
         }
         foreach ($name in $defaults.Keys) {
-            if ($bcContainerHelperConfig -is [System.Collections.IDictionary]) {
-                if (-not $bcContainerHelperConfig.Contains($name)) {
-                    $bcContainerHelperConfig[$name] = $defaults[$name]
+            if ($config -is [System.Collections.IDictionary]) {
+                if (-not $config.Contains($name)) {
+                    $config[$name] = $defaults[$name]
                 }
             }
-            elseif ($null -eq $bcContainerHelperConfig.PSObject.Properties[$name]) {
-                $bcContainerHelperConfig | Add-Member -NotePropertyName $name -NotePropertyValue $defaults[$name]
+            elseif ($null -eq $config.PSObject.Properties[$name]) {
+                $config | Add-Member -NotePropertyName $name -NotePropertyValue $defaults[$name]
             }
         }
+        return
     }
+    throw "BcContainerHelper configuration is unavailable for command '$CommandName'."
 }
 
 <#
