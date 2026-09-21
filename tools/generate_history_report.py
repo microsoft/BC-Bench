@@ -1,44 +1,58 @@
 """Generate an on-demand Markdown report from strictly pre-cutoff Git history."""
 
 import argparse
+import base64
 import os
 import re
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from tempfile import TemporaryDirectory
 
-REPOSITORIES = {"NAV": "microsoftInternal/NAV", "BCApps": "microsoft/BCApps"}
+REPOSITORIES = {
+    "NAV": "https://dev.azure.com/dynamicssmb2/Dynamics%20SMB/_git/NAV",
+    "BCApps": "https://github.com/microsoft/BCApps.git",
+}
 
 
-def _git(repo_path: Path, *args: str) -> str:
-    env = {
-        **os.environ,
-        "GIT_NO_LAZY_FETCH": "1",
-        "GIT_TERMINAL_PROMPT": "0",
-        "GIT_GRAFT_FILE": os.devnull,
-    }
-    result = subprocess.run(
-        [
-            "git",
-            "--no-pager",
-            "--no-replace-objects",
-            "--literal-pathspecs",
-            "-c",
-            "core.quotePath=false",
-            "-c",
-            "log.showSignature=false",
-            "-C",
-            str(repo_path),
-            *args,
-        ],
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-        timeout=120,
-    )
-    return result.stdout
+@dataclass(frozen=True)
+class GitRepository:
+    path: Path
+    environment: Mapping[str, str] = field(default_factory=dict, repr=False)
+
+    def run(self, *args: str) -> str:
+        env = {
+            **{key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
+            "GIT_NO_LAZY_FETCH": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_GRAFT_FILE": os.devnull,
+            **self.environment,
+        }
+        result = subprocess.run(
+            [
+                "git",
+                "--no-pager",
+                "--no-replace-objects",
+                "--literal-pathspecs",
+                "-c",
+                "core.quotePath=false",
+                "-c",
+                "log.showSignature=false",
+                "-c",
+                "credential.helper=",
+                "-C",
+                str(self.path),
+                *args,
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            timeout=120,
+        )
+        return result.stdout
 
 
 def _normalize_file(file: str) -> str:
@@ -55,23 +69,22 @@ def _fenced(text: str, language: str = "") -> str:
     return f"{fence}{language}\n{body}\n{fence}"
 
 
-def _shallow_boundaries(repo_path: Path) -> list[str]:
-    if _git(repo_path, "rev-parse", "--is-shallow-repository").strip() == "false":
+def _shallow_boundaries(repository: GitRepository) -> list[str]:
+    if repository.run("rev-parse", "--is-shallow-repository").strip() == "false":
         return []
-    shallow_path = Path(_git(repo_path, "rev-parse", "--git-path", "shallow").strip())
+    shallow_path = Path(repository.run("rev-parse", "--git-path", "shallow").strip())
     if not shallow_path.is_absolute():
-        shallow_path = repo_path / shallow_path
+        shallow_path = repository.path / shallow_path
     return shallow_path.read_text(encoding="ascii").splitlines()
 
 
-def _log_commits(repo_path: Path, revisions: Sequence[str], files: Sequence[str], limit: int) -> list[str]:
+def _log_commits(repository: GitRepository, revisions: Sequence[str], files: Sequence[str], limit: int) -> list[str]:
     if not revisions:
         return []
     commits: list[str] = []
     offset = 0
     while len(commits) < limit:
-        batch = _git(
-            repo_path,
+        batch = repository.run(
             "log",
             "--format=%H",
             "--full-history",
@@ -80,6 +93,7 @@ def _log_commits(repo_path: Path, revisions: Sequence[str], files: Sequence[str]
             "--no-patch",
             "--no-ext-diff",
             "--no-textconv",
+            "--no-renames",
             "--max-count=20",
             f"--skip={offset}",
             *revisions,
@@ -88,8 +102,7 @@ def _log_commits(repo_path: Path, revisions: Sequence[str], files: Sequence[str]
         ).split()
         for sha in batch:
             # Full-history traversal retains merges that did not change the selected paths.
-            changed_files = _git(
-                repo_path,
+            changed_files = repository.run(
                 "show",
                 "--format=",
                 "--name-only",
@@ -112,17 +125,17 @@ def _log_commits(repo_path: Path, revisions: Sequence[str], files: Sequence[str]
     return commits
 
 
-def _validate_file(repo_path: Path, cutoff: str, revisions: Sequence[str], file: str) -> None:
-    entry = _git(repo_path, "ls-tree", "-z", "--full-tree", cutoff, "--", file).rstrip("\0")
+def _validate_file(repository: GitRepository, cutoff: str, revisions: Sequence[str], file: str) -> None:
+    entry = repository.run("ls-tree", "-z", "--full-tree", cutoff, "--", file).rstrip("\0")
     if entry:
         metadata, name = entry.split("\t", 1)
         if name != file or metadata.split()[1] != "blob":
             raise ValueError(f"--file must identify a file, not a directory: {file}")
-    elif not _log_commits(repo_path, revisions, [file], 1):
+    elif not _log_commits(repository, revisions, [file], 1):
         raise ValueError(f"File not found at the cutoff or in retained earlier history: {file}")
 
 
-def build_report(repo_path: Path, repo: str, commit: str, files: Sequence[str], max_commits: int = 5) -> str:
+def _validate_request(repo: str, commit: str, files: Sequence[str], max_commits: int) -> None:
     if repo not in REPOSITORIES:
         raise ValueError(f"Unsupported repository: {repo}")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
@@ -131,29 +144,35 @@ def build_report(repo_path: Path, repo: str, commit: str, files: Sequence[str], 
         raise ValueError("--max-commits must be positive")
     if not files:
         raise ValueError("At least one agent-selected --file is required")
+    for file in files:
+        _normalize_file(file)
 
+
+def build_report(repo_path: Path, repo: str, commit: str, files: Sequence[str], max_commits: int = 5, *, environment: Mapping[str, str] | None = None) -> str:
+    _validate_request(repo, commit, files, max_commits)
     repo_path = repo_path.resolve()
-    root = Path(_git(repo_path, "rev-parse", "--show-toplevel").strip()).resolve()
+    repository = GitRepository(repo_path, environment or {})
+    root = Path(repository.run("rev-parse", "--show-toplevel").strip()).resolve()
     if root != repo_path:
-        raise ValueError("--repo-path must point to the target repository root")
-    if _git(repo_path, "cat-file", "-t", commit).strip() != "commit":
+        raise ValueError("History reader must operate at the Git repository root")
+    if repository.run("cat-file", "-t", commit).strip() != "commit":
         raise ValueError("--commit must identify a commit object")
 
     cutoff = commit.lower()
     selected_files = list(dict.fromkeys(map(_normalize_file, files)))
-    parents = _git(repo_path, "rev-list", "--parents", "--max-count=1", cutoff, "--").split()[1:]
-    boundaries = _shallow_boundaries(repo_path)
+    parents = repository.run("rev-list", "--parents", "--max-count=1", cutoff, "--").split()[1:]
+    boundaries = _shallow_boundaries(repository)
     # A shallow boundary looks like a root to Git; showing it would invent a whole-tree addition.
     revisions = [*parents, "--not", *boundaries] if parents and boundaries else parents
     for file in selected_files:
-        _validate_file(repo_path, cutoff, revisions, file)
+        _validate_file(repository, cutoff, revisions, file)
 
-    matches = _log_commits(repo_path, revisions, selected_files, max_commits + 1)
+    matches = _log_commits(repository, revisions, selected_files, max_commits + 1)
     commits = matches[:max_commits]
     sections = [
         "# Historical change report",
-        f"Repository family: **{repo}** (upstream identifier: {REPOSITORIES[repo]})",
-        "Local clone:\n\n" + _fenced(str(repo_path), "text"),
+        f"Repository: **{repo}**",
+        f"Source: {REPOSITORIES[repo]}",
         f"Exclusive cutoff: `{cutoff}`",
         "Requested files (selected by the agent, not inferred from the gold patch):\n\n" + _fenced("\n".join(selected_files), "text"),
         (
@@ -166,7 +185,7 @@ def build_report(repo_path: Path, repo: str, commit: str, files: Sequence[str], 
     ]
     if boundaries:
         sections.append(
-            "**Limited history:** this clone is shallow. Unavailable older history and shallow boundary commits are excluded; boundary diffs cannot be reconstructed reliably. No history was fetched."
+            "**Limited history:** unavailable older history and shallow boundary commits are excluded; boundary diffs cannot be reconstructed reliably. Increase --history-depth for a deeper cutoff-bounded search."
         )
     if len(matches) > max_commits:
         sections.append(f"Showing the {max_commits} most recent matching commits; more matching ancestors are available locally.")
@@ -175,8 +194,7 @@ def build_report(repo_path: Path, repo: str, commit: str, files: Sequence[str], 
     if not commits:
         sections.append("No eligible earlier commits changed these exact paths in the available history.")
     for sha in commits:
-        details = _git(
-            repo_path,
+        details = repository.run(
             "show",
             "--format=fuller",
             "--no-color",
@@ -195,13 +213,90 @@ def build_report(repo_path: Path, repo: str, commit: str, files: Sequence[str], 
     return "\n\n".join(sections) + "\n"
 
 
+def _remote_environment(repo: str) -> dict[str, str]:
+    header: str | None = None
+    if repo == "NAV":
+        if token := os.environ.get("ADO_TOKEN"):
+            header = f"Authorization: Bearer {token}"
+        elif token := os.environ.get("AZURE_DEVOPS_EXT_PAT"):
+            header = "Authorization: Basic " + base64.b64encode(f":{token}".encode()).decode()
+        else:
+            result = subprocess.run(
+                ["az", "account", "get-access-token", "--resource", "499b84ac-1321-427f-aa17-267ca6975798", "--query", "accessToken", "--output", "tsv"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=True,
+                timeout=60,
+            )
+            token = result.stdout.strip()
+            if not token:
+                raise ValueError("Azure CLI returned no ADO token; authenticate with NAV read access or supply ADO_TOKEN")
+            header = f"Authorization: Bearer {token}"
+    elif token := os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
+        header = "Authorization: Basic " + base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    environment = {"GIT_NO_LAZY_FETCH": "0"}
+    if header:
+        environment.update(
+            GIT_CONFIG_COUNT="1",
+            GIT_CONFIG_KEY_0=f"http.{REPOSITORIES[repo]}.extraHeader",
+            GIT_CONFIG_VALUE_0=header,
+        )
+    return environment
+
+
+def build_remote_report(
+    repos: Sequence[str],
+    cutoffs: Mapping[str, str],
+    files: Mapping[str, Sequence[str]],
+    max_commits: int = 5,
+    history_depth: int = 200,
+) -> str:
+    if not repos:
+        raise ValueError("At least one --repo is required")
+    if history_depth < 1:
+        raise ValueError("--history-depth must be positive")
+    if set(cutoffs) != set(repos) or set(files) != set(repos):
+        raise ValueError("Each selected repository needs its own cutoff SHA and at least one file; no unselected repositories are allowed")
+    for repo in repos:
+        _validate_request(repo, cutoffs[repo], files[repo], max_commits)
+
+    reports = []
+    for repo in dict.fromkeys(repos):
+        environment = _remote_environment(repo)
+        with TemporaryDirectory(prefix=f"bcbench-history-{repo}-") as workspace:
+            repository = GitRepository(Path(workspace), environment)
+            repository.run("init", "--quiet")
+            repository.run("remote", "add", "origin", REPOSITORIES[repo])
+            repository.run("config", "remote.origin.promisor", "true")
+            repository.run("config", "remote.origin.partialclonefilter", "blob:none")
+            repository.run("fetch", "--no-tags", f"--depth={history_depth}", "--filter=blob:none", "origin", cutoffs[repo])
+            reports.append(build_report(repository.path, repo, cutoffs[repo], files[repo], max_commits, environment=environment))
+    return "\n---\n\n".join(reports)
+
+
+def _qualified_values(repos: Sequence[str], values: Sequence[str], option: str) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for value in values:
+        if "=" in value:
+            repo, _, item = value.partition("=")
+        elif len(repos) == 1:
+            repo, item = repos[0], value
+        else:
+            raise ValueError(f"{option} must use REPO=value when selecting multiple repositories")
+        if repo not in repos or not item:
+            raise ValueError(f"Invalid {option}: {value!r}; specify a selected repository and a nonempty value")
+        result.setdefault(repo, []).append(item)
+    return result
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", choices=REPOSITORIES, required=True, help="Repository label; --repo-path selects the actual local clone")
-    parser.add_argument("--repo-path", type=Path, required=True, help="Existing NAV or BCApps clone root; this tool never clones or fetches")
-    parser.add_argument("--commit", required=True, help="Exclusive cutoff: full dataset base_commit SHA")
-    parser.add_argument("--file", action="append", required=True, help="Literal repository-relative file; repeat for multiple agent-selected files")
-    parser.add_argument("--max-commits", type=int, default=5, help="Maximum matching commits across all selected files (default: 5)")
+    parser.add_argument("--repo", choices=REPOSITORIES, nargs="+", action="extend", required=True, help="Remote repositories: NAV, BCApps, or both")
+    parser.add_argument("--commit", action="append", required=True, help="Exclusive full cutoff SHA; repeat as NAV=SHA / BCApps=SHA for multiple repos")
+    parser.add_argument("--file", action="append", required=True, help="Agent-selected relative path; repeat, qualifying as REPO=path for multiple repos")
+    parser.add_argument("--max-commits", type=int, default=5, help="Maximum matching commits per repository (default: 5)")
+    parser.add_argument("--history-depth", type=int, default=200, help="History depth fetched from each pinned cutoff (default: 200)")
     parser.add_argument("--output", type=Path, required=True, help="New Markdown file; existing files are never overwritten")
     args = parser.parse_args(argv)
 
@@ -210,12 +305,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.output.exists():
         parser.error(f"Output already exists; choose a new report path: {args.output}")
     try:
-        report = build_report(args.repo_path, args.repo, args.commit, args.file, args.max_commits)
+        repos = list(dict.fromkeys(args.repo))
+        commit_values = _qualified_values(repos, args.commit, "--commit")
+        if any(len(values) != 1 for values in commit_values.values()):
+            parser.error("Specify exactly one cutoff SHA per repository")
+        cutoffs = {repo: values[0] for repo, values in commit_values.items()}
+        files = _qualified_values(repos, args.file, "--file")
+        report = build_remote_report(repos, cutoffs, files, args.max_commits, args.history_depth)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with args.output.open("x", encoding="utf-8", newline="\n") as output:
             output.write(report)
     except subprocess.CalledProcessError as error:
-        parser.error(f"Git failed: {error.stderr.strip()}. Use a prepared local clone with the cutoff and its history; this tool never fetches.")
+        parser.error(f"Remote history/authentication command failed: {error.stderr.strip()}. Check repository access, credentials, and cutoff SHAs.")
     except subprocess.TimeoutExpired as error:
         parser.error(f"Git history command timed out after {error.timeout} seconds")
     except (OSError, ValueError) as error:

@@ -4,97 +4,114 @@ Standalone scripts for inspecting historical code and analyzing GitHub Actions a
 
 ## `generate_history_report.py`
 
-Creates a Markdown report of recent commits affecting **agent-selected files**, including
-the full text diff of each selected commit across **all** its changed files. This exposes
-related changes and mirror implementations without narrowing the report to the query files.
-It uses only Python's standard library and Git.
+Creates a Markdown report from **remote NAV and/or BCApps history**, including full-commit
+text diffs across all changed files for commits affecting agent-selected files. No existing
+clone or `--repo-path` is needed.
+
+The script runs on a cloud runner (or locally) with Python and Git. It creates an isolated,
+temporary Git object cache per repository, fetches only the supplied cutoff's history, and
+deletes the cache afterward. It requests blob filtering so file content can be downloaded
+only when needed for historical diffs; server support determines transfer volume. There is
+no source checkout and the agent workspace is not changed. This is a remote-backed CLI,
+not a deployed web service or a REST-only implementation.
+
+### One repository
 
 ```powershell
 python .\tools\generate_history_report.py `
     --repo NAV `
-    --repo-path C:\depot\NAV `
-    --commit <full-dataset-base_commit-sha> `
+    --commit $navBaseCommit `
     --file "App\Layers\W1\BaseApp\Pricing\PriceList\PriceListHeader.Table.al" `
-    --file "App\Layers\W1\BaseApp\Pricing\PriceList\PriceListLine.Table.al" `
     --max-commits 5 `
-    --output C:\reports\history-01.md
+    --output "$env:TEMP\history-01.md"
 ```
+
+### Both repositories
+
+Each repository needs **its own full cutoff SHA and its own file paths**:
+
+```powershell
+python .\tools\generate_history_report.py `
+    --repo NAV BCApps `
+    --commit "NAV=$navBaseCommit" `
+    --commit "BCApps=$bcappsBaseCommit" `
+    --file "NAV=App\Layers\W1\BaseApp\Pricing\PriceList\PriceListHeader.Table.al" `
+    --file "BCApps=src\Layers\W1\BaseApp\Pricing\PriceList\PriceListHeader.Table.al" `
+    --max-commits 5 `
+    --history-depth 200 `
+    --output "$env:TEMP\history-both-01.md"
+```
+
+Paths above are examples, not prefilled hints for evaluated agents. Use actual paths from
+the selected repository at the approved cutoff. A missing path or unavailable cutoff is an
+error, not permission to substitute the latest revision.
 
 | Argument | Meaning |
 |---|---|
-| `--repo` | `NAV` or `BCApps`; a repository-family label, not a remote lookup or repository-identity check |
-| `--repo-path` | Root of the corresponding existing local clone (the evaluation `testbed` in CI) |
-| `--commit` | Full 40-character cutoff SHA, normally the entry's `base_commit`; **exclusive** |
-| `--file` | Required, repeatable, literal repository-relative file path; one or many files |
-| `--max-commits` | Maximum recent matching commits across the union of files; default `5` |
+| `--repo` | `NAV`, `BCApps`, or `NAV BCApps`; repeated `--repo` flags also work |
+| `--commit` | Exclusive full SHA; exactly one per repo. Qualify as `REPO=SHA` for multiple repos |
+| `--file` | Repeatable literal relative path; qualify as `REPO=path` for multiple repos |
+| `--max-commits` | Maximum recent matching commits **per repository**, default `5` |
+| `--history-depth` | Depth fetched starting at each cutoff, default `200` |
 | `--output` | New `.md` file; existing files are never overwritten |
 
-Use **one or more repeatable `--file` arguments**, rather than a mandatory file-list artifact:
-the agent can begin with one suspect file, then request another report as it discovers related
-files. Spaces and Windows path separators are supported. Directories and revision expressions
-are rejected; wildcard characters are literal, not glob patterns. Paths can refer to deleted
-historical files. Renames are displayed in commit diffs, but selection does not automatically
-follow old names; explicitly supply an older path to investigate its earlier history.
+The combined report has a separate section and cutoff for each repository. It does not
+invent a cross-repository chronological order. Missing/duplicate cutoffs, missing file
+selections, and unqualified multi-repo inputs are rejected before remote access. Failure
+in either repository prevents a partial report from being emitted as a complete result.
+
+### Authentication and repository resolution
+
+- `NAV` resolves to `https://dev.azure.com/dynamicssmb2/Dynamics%20SMB/_git/NAV`.
+  Supply an Entra access token in `ADO_TOKEN`, or a read-scoped PAT in
+  `AZURE_DEVOPS_EXT_PAT`. Otherwise the script obtains a token from an already authenticated
+  Azure CLI session using the Azure DevOps resource. The identity needs NAV read access.
+- `BCApps` resolves to `https://github.com/microsoft/BCApps.git`. It uses `GH_TOKEN` or
+  `GITHUB_TOKEN` when supplied; otherwise public access is anonymous.
+- Authentication headers are passed through the Git subprocess environment, not command
+  arguments, remote URLs, Markdown output, or persisted Git configuration.
 
 ### History boundary and limitations
 
-- Commits must be reachable from the cutoff's parents. The cutoff, descendants, and unrelated
-  branches are excluded regardless of their timestamps. Merge cutoffs include both parent
-  histories. Results use Git's newest-first topological ordering.
-- Full-commit diffs are not filtered to the query files. Merge diffs are against the first
-  parent. Sync merges that did not change a selected file against that parent do not consume
-  the limit; their relevant ancestor commits can still be selected. Binary changes are
-  identified but binary payloads are not embedded.
-- The tool does not fetch, clone, checkout, modify tracked files, or consult dataset gold
-  patches. It works after the testbed's remote has been removed and disables Git replacement
-  objects and automatic lazy fetching.
-- CI testbeds currently retain shallow history (default depth 200). Reports explicitly warn
-  about shallow history and omit boundary commits whose parent diffs cannot be reconstructed.
-  Provision a deeper **cutoff-bounded** history before starting the agent if needed; do not
-  restore unrestricted remote access during evaluation.
-- The trusted caller must supply the correct repository and cutoff. This read-only helper is
-  not an access-control sandbox: it cannot prevent an agent with unrestricted shell access
-  from making separate Git or network calls.
+- Only strict ancestors of each cutoff are reported, not the cutoff itself, descendants,
+  or unrelated branches. This is a graph boundary, not a timestamp filter. Merge cutoffs
+  include both parent histories; results use newest-first topological ordering.
+- Fetches name the pinned SHA, never a moving branch or `HEAD`. Additional lazy downloads
+  obtain historical objects needed by the bounded history queries and diffs.
+- Merge diffs are against the first parent. Sync merges that did not change a selected
+  file against that parent do not consume the limit. Full-commit diffs are not restricted
+  to the selected paths; binary changes are identified without embedding binary payloads.
+- Shallow history is explicitly marked. Boundary commits without available parents are
+  omitted rather than presented as artificial whole-tree additions. Increase
+  `--history-depth` to search farther back from the same cutoff.
+- Paths are literal, not globs. Deleted historical files can be queried. Renames are shown
+  in diffs but old names are not automatically followed; supply the old path explicitly.
+- For a benchmark, the trusted harness must approve **all** cutoffs. A NAV task's SHA does
+  not define a BCApps snapshot. Do not use current BCApps `HEAD` as a secondary cutoff:
+  it may already contain the fix being evaluated. Without an approved secondary snapshot,
+  restrict the query to the task's own repository.
+- The helper does not read gold patches or infer which files need fixing. It is not an
+  access-control sandbox for an agent that already has unrestricted shell/network access.
 
-### Do not reveal likely fix files before localization
+### After localization, not before
 
-This is an **on-demand** tool, not an automatic dataset preprocessor. Make its generic usage
-available without prefilled file names; require the agent to identify suspect files from the
-issue and source first, then invoke it with those paths. Do not derive the inputs from `patch`,
-`test_patch`, changed-file labels, or other gold artifacts. Do not create or attach a report
-before the agent requests history for its own selected files. Requiring paths does not prove
-the agent has completed localization; this sequencing is a harness/instruction contract.
+Make generic tool usage available without prefilled file names. Require the agent to first
+identify suspect files from the issue and source, then request history for those paths.
+Do not generate reports from `patch`, `test_patch`, or gold changed-file labels, and do not
+attach a report before the agent requests it. Requiring paths does not prove localization;
+sequencing and immutable cutoff selection remain a harness/instruction contract.
 
-No category pipeline, default prompt, or evaluation workflow automatically invokes this tool.
-It can be used for a deliberate history-enabled experiment without changing other categories.
+In BCAppsBugFix, the natural integration points are V5 Phase 1, Step 2
+(`.github/skills/bc-fix-bug-v5/orchestrator.md`) and chained `bcfix-plan` Step 4
+(`.github/skills/bcfix-plan/SKILL.md`), where the agent already runs file-scoped `git log`.
+Keep reports in per-run temporary state, outside tracked source.
 
-### Where this fits in BCAppsBugFix
+The helper queries the named authoritative remote, not the BCAppsBugFix checkout's
+current history. BCAppsBugFix's non-squash sync preserves BCApps ancestry, but older NAV
+history imported as a snapshot still requires querying NAV with its own approved cutoff.
 
-The existing `bc-fix-bug-v5` skill investigates source in Phase 1, Step 2
-(`.github/skills/bc-fix-bug-v5/orchestrator.md`) and already asks for file-scoped
-`git log --oneline -10`. The chained `bcfix-plan` skill does the same in Step 4
-(`.github/skills/bcfix-plan/SKILL.md`). An opt-in integration should invoke this report
-**at that point, after identifying suspect files**, and read it before finalizing the plan.
-Keep the report in the agent's per-run temporary state directory, outside tracked source.
-
-Use paths and a cutoff SHA from the **same clone**: NAV's `App\Layers\...` and
-`App\Apps\...` layout is not BCAppsBugFix's `src\Layers\...` and `src\Apps\...` layout.
-Do not translate paths or treat a NAV SHA as a BCApps/mirror SHA. For a BCAppsBugFix clone,
-use `--repo BCApps` to describe the family and `--repo-path` to identify the actual clone;
-the report records both. During a benchmark, pin the cutoff to the task's trusted
-`base_commit`, never the agent's current HEAD or a moving branch.
-
-The helper neither launches the production bug-fix workflow nor changes its instructions.
-In particular, its normal issue-fetch, commit/push, and PR steps should not be enabled
-implicitly in a benchmark by providing this history tool.
-
-BCAppsBugFix's `sync-upstream.yml` fetches BCApps and performs a non-squash merge, preserving
-the upstream BCApps commits in the local ancestry. Its file-scoped `git log` therefore reads
-local history that can include original BCApps commits, not a live query against BCApps.
-This does not reconstruct older NAV history when code entered BCApps as a snapshot import.
-Use a NAV clone for NAV history and a BCApps-family clone for BCApps history; the requested
-cutoff must exist in that clone. The helper never substitutes a different repository or HEAD
-when a requested commit is unavailable.
+No category pipeline, default prompt, or agent workflow automatically invokes this tool.
+Providing it does not enable the production agent's issue-fetch, commit/push, or PR steps.
 
 ## `altest/`
 

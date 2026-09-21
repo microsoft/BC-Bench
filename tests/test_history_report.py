@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from tools import generate_history_report as history
 from tools.generate_history_report import build_report, main
 
 
@@ -42,6 +43,13 @@ def repo(tmp_path):
     git(path, "config", "commit.gpgsign", "false")
     git(path, "config", "core.autocrlf", "false")
     return path
+
+
+@pytest.fixture
+def remote(repo, monkeypatch):
+    monkeypatch.setitem(history.REPOSITORIES, "NAV", repo.as_uri())
+    monkeypatch.setattr(history, "_remote_environment", lambda _: {"GIT_NO_LAZY_FETCH": "0"})
+    return repo
 
 
 def test_excludes_cutoff_descendants_and_unrelated_old_branch_but_includes_full_diff(repo):
@@ -254,11 +262,11 @@ def test_rejects_invalid_label_empty_files_and_nonpositive_limit(repo):
         build_report(repo, "NAV", cutoff, ["A.al"], max_commits=0)
 
 
-def test_cli_creates_report_only_on_request_and_refuses_overwrite(repo, tmp_path, capsys):
+def test_cli_creates_report_only_on_request_and_refuses_overwrite(repo, remote, tmp_path, capsys):
     commit_files(repo, "Root", {"App/A.al": "root\n", "B.al": "root\n"})
     cutoff = commit_files(repo, "Cutoff", {"App/A.al": "cutoff\n"})
     output = tmp_path / "reports" / "history.md"
-    args = ["--repo", "NAV", "--repo-path", str(repo), "--commit", cutoff, "--file", r"App\A.al", "--file", "B.al", "--output", str(output)]
+    args = ["--repo", "NAV", "--commit", cutoff, "--file", r"App\A.al", "--file", "B.al", "--output", str(output)]
 
     main(args)
 
@@ -272,13 +280,13 @@ def test_cli_creates_report_only_on_request_and_refuses_overwrite(repo, tmp_path
     assert output.read_text(encoding="utf-8") == original
 
 
-def test_missing_commit_fails_without_output(repo, tmp_path, capsys):
+def test_missing_commit_fails_without_output(repo, remote, tmp_path, capsys):
     commit_files(repo, "Root", {"A.al": "root\n"})
     output = tmp_path / "history.md"
     with pytest.raises(SystemExit) as error:
-        main(["--repo", "NAV", "--repo-path", str(repo), "--commit", "0" * 40, "--file", "A.al", "--output", str(output)])
+        main(["--repo", "NAV", "--commit", "0" * 40, "--file", "A.al", "--output", str(output)])
     assert error.value.code == 2
-    assert "Git failed" in capsys.readouterr().err
+    assert "Remote history/authentication command failed" in capsys.readouterr().err
     assert not output.exists()
 
 
@@ -302,7 +310,7 @@ def test_cli_rejects_non_markdown_output(repo, tmp_path, capsys):
     cutoff = commit_files(repo, "Root", {"A.al": "root\n"})
     output = tmp_path / "history.al"
     with pytest.raises(SystemExit) as error:
-        main(["--repo", "NAV", "--repo-path", str(repo), "--commit", cutoff, "--file", "A.al", "--output", str(output)])
+        main(["--repo", "NAV", "--commit", cutoff, "--file", "A.al", "--output", str(output)])
     assert error.value.code == 2
     assert ".md extension" in capsys.readouterr().err
     assert not output.exists()
@@ -313,3 +321,161 @@ def test_standalone_script_needs_no_bcbench_import():
     result = subprocess.run([sys.executable, "-I", str(script), "--help"], capture_output=True, text=True, check=True)
     assert "--file" in result.stdout
     assert "--commit" in result.stdout
+    assert "--repo-path" not in result.stdout
+
+
+def test_remote_fetch_uses_only_cutoff_and_cleans_temporary_repository(repo, remote, monkeypatch):
+    ancestor = commit_files(repo, "Ancestor", {"A.al": "historical\n", "Sibling.al": "co-change\n"})
+    cutoff = commit_files(repo, "Cutoff secret", {"A.al": "cutoff secret\n"})
+    future = commit_files(repo, "Future secret", {"A.al": "future secret\n"})
+    calls = []
+    run = history.GitRepository.run
+
+    def record_run(self, *args):
+        calls.append((self.path, args))
+        return run(self, *args)
+
+    monkeypatch.setattr(history.GitRepository, "run", record_run)
+    report = history.build_remote_report(["NAV"], {"NAV": cutoff}, {"NAV": ["A.al"]})
+
+    assert f"## Commit {ancestor}" in report
+    assert "Sibling.al" in report
+    assert "Cutoff secret" not in report
+    assert "Future secret" not in report
+    assert future not in report
+    assert [args for _, args in calls if args[0] == "fetch"] == [("fetch", "--no-tags", "--depth=200", "--filter=blob:none", "origin", cutoff)]
+    assert all(not path.exists() for path, _ in calls)
+    assert not any(args[0] == "checkout" for _, args in calls)
+    assert git(repo, "rev-parse", "HEAD") == future
+
+
+def test_multi_repo_report_requires_and_respects_independent_cutoffs(repo, remote, tmp_path, monkeypatch):
+    nav_ancestor = commit_files(repo, "NAV history", {"App/A.al": "nav\n"})
+    nav_cutoff = commit_files(repo, "NAV cutoff", {"App/A.al": "nav cutoff\n"})
+    bcapps = tmp_path / "bcapps"
+    bcapps.mkdir()
+    git(bcapps, "init", "-b", "main")
+    git(bcapps, "config", "user.name", "History Test")
+    git(bcapps, "config", "user.email", "history@example.invalid")
+    git(bcapps, "config", "commit.gpgsign", "false")
+    bcapps_ancestor = commit_files(bcapps, "BCApps history", {"src/A.al": "bcapps\n"})
+    bcapps_cutoff = commit_files(bcapps, "BCApps cutoff", {"src/A.al": "bcapps cutoff\n"})
+    commit_files(bcapps, "BCApps future secret", {"src/A.al": "bcapps future\n"})
+    monkeypatch.setitem(history.REPOSITORIES, "BCApps", bcapps.as_uri())
+    output = tmp_path / "both.md"
+
+    main(
+        [
+            "--repo",
+            "NAV",
+            "BCApps",
+            "--commit",
+            f"NAV={nav_cutoff}",
+            "--commit",
+            f"BCApps={bcapps_cutoff}",
+            "--file",
+            r"NAV=App\A.al",
+            "--file",
+            r"BCApps=src\A.al",
+            "--output",
+            str(output),
+        ]
+    )
+
+    report = output.read_text(encoding="utf-8")
+    assert "Repository: **NAV**" in report
+    assert "Repository: **BCApps**" in report
+    assert f"## Commit {nav_ancestor}" in report
+    assert f"## Commit {bcapps_ancestor}" in report
+    assert "BCApps future secret" not in report
+    assert "Local clone:" not in report
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--repo", "NAV", "BCApps", "--commit", "a" * 40, "--file", "NAV=A.al"], "REPO=value"),
+        (["--repo", "NAV", "BCApps", "--commit", "NAV=" + "a" * 40, "--file", "NAV=A.al"], "own cutoff SHA"),
+        (["--repo", "NAV", "--commit", "a" * 40, "--commit", "b" * 40, "--file", "A.al"], "exactly one"),
+        (["--repo", "NAV", "--commit", "a" * 40, "--file", "BCApps=A.al"], "selected repository"),
+        (["--repo", "NAV", "--commit", "a" * 40, "--file", "../A.al"], "repository-relative"),
+        (["--repo", "NAV", "--commit", "a" * 40, "--file", "A.al", "--history-depth", "0"], "positive"),
+    ],
+)
+def test_cli_rejects_ambiguous_remote_requests_before_network(args, message, tmp_path, capsys, monkeypatch):
+    def no_credentials(_):
+        pytest.fail("Invalid request must not start remote access")
+
+    monkeypatch.setattr(history, "_remote_environment", no_credentials)
+    output = tmp_path / "report.md"
+    with pytest.raises(SystemExit) as error:
+        main([*args, "--output", str(output)])
+    assert error.value.code == 2
+    assert message in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_remote_failure_does_not_emit_partial_multi_repo_report(repo, remote, tmp_path, monkeypatch, capsys):
+    commit_files(repo, "NAV history", {"A.al": "nav\n"})
+    cutoff = commit_files(repo, "Cutoff", {"A.al": "cutoff\n"})
+    monkeypatch.setitem(history.REPOSITORIES, "BCApps", (tmp_path / "missing-remote").as_uri())
+    output = tmp_path / "report.md"
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--repo",
+                "NAV",
+                "BCApps",
+                "--commit",
+                f"NAV={cutoff}",
+                "--commit",
+                "BCApps=" + "a" * 40,
+                "--file",
+                "NAV=A.al",
+                "--file",
+                "BCApps=A.al",
+                "--output",
+                str(output),
+            ]
+        )
+    assert "Remote history/authentication command failed" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_nav_token_is_scoped_to_remote_and_not_persisted_in_git_config(repo, monkeypatch):
+    monkeypatch.setenv("ADO_TOKEN", "test-only-token")
+    environment = history._remote_environment("NAV")
+    assert environment["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer test-only-token"
+    assert environment["GIT_CONFIG_KEY_0"] == f"http.{history.REPOSITORIES['NAV']}.extraHeader"
+    reader = history.GitRepository(repo, environment)
+    assert reader.run("config", "--get", environment["GIT_CONFIG_KEY_0"]).strip() == environment["GIT_CONFIG_VALUE_0"]
+    assert "test-only-token" not in (repo / ".git" / "config").read_text(encoding="utf-8")
+    assert "test-only-token" not in repr(reader)
+
+
+def test_public_bcapps_can_use_anonymous_access(monkeypatch):
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    assert history._remote_environment("BCApps") == {"GIT_NO_LAZY_FETCH": "0"}
+
+
+def test_nav_pat_authentication(monkeypatch):
+    monkeypatch.delenv("ADO_TOKEN", raising=False)
+    monkeypatch.setenv("AZURE_DEVOPS_EXT_PAT", "test-only-pat")
+    environment = history._remote_environment("NAV")
+    assert environment["GIT_CONFIG_VALUE_0"] == "Authorization: Basic OnRlc3Qtb25seS1wYXQ="
+
+
+def test_nav_azure_cli_login_is_used_when_no_token_is_supplied(monkeypatch):
+    monkeypatch.delenv("ADO_TOKEN", raising=False)
+    monkeypatch.delenv("AZURE_DEVOPS_EXT_PAT", raising=False)
+    calls = []
+
+    def token_command(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout="test-only-entra-token\n")
+
+    monkeypatch.setattr(history.subprocess, "run", token_command)
+    environment = history._remote_environment("NAV")
+    assert calls == [["az", "account", "get-access-token", "--resource", "499b84ac-1321-427f-aa17-267ca6975798", "--query", "accessToken", "--output", "tsv"]]
+    assert environment["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer test-only-entra-token"
