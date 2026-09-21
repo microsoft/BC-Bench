@@ -11,7 +11,7 @@ import yaml
 WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 ACTIONS = Path(__file__).parents[1] / ".github" / "actions"
 AGENT_CONFIG = Path(__file__).parents[1] / "src" / "bcbench" / "agent" / "shared" / "config.yaml"
-DEFAULT_ENGINE_SHA = "1fcaa40fa0934c22887f1a89000f33728f831a8f"
+DEFAULT_ENGINE_SHA = "560015977cbeb69a8aef85daaddf1fe91968600c"
 PWSH = shutil.which("pwsh")
 
 
