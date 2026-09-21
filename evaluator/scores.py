@@ -41,3 +41,33 @@ class F1Score:
 class ValidReviewOutput:
     def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
         return bool(metadata.get("valid_review_output", False))
+
+
+class ScenarioCompletionRate:
+    def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
+        return bool(metadata.get("scenario_completed", False))
+
+
+class IndependentBuildRate:
+    def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
+        return bool(metadata.get("independent_build", False))
+
+
+class TraceComplianceRate:
+    def __call__(self, *, metadata: dict[str, Any], **kwargs: object) -> bool:
+        return bool(metadata.get("trace_compliance", False))
+
+
+class ScenarioCompletionRate:
+    def __call__(self, *, metadata: dict, **kwargs: object) -> bool:
+        return bool(metadata.get("scenario_completed", False))
+
+
+class IndependentBuildRate:
+    def __call__(self, *, metadata: dict, **kwargs: object) -> bool:
+        return bool(metadata.get("independent_build", False))
+
+
+class TraceComplianceRate:
+    def __call__(self, *, metadata: dict, **kwargs: object) -> bool:
+        return bool(metadata.get("trace_compliance", False))

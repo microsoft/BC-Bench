@@ -4,7 +4,7 @@ import pytest
 from bcbench_core.agent.metrics import AgentMetrics
 from pydantic import TypeAdapter
 
-from bcbench.dataset import BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
+from bcbench.dataset import BCalScenarioEntry, BugFixEntry, CodeReviewEntry, DataQueryEntry, ExtRequestAdvisorEntry, ExtRequestImplementEntry, ExtRequestTriageEntry, NL2ALEntry
 from bcbench.dataset.codereview import ReviewComment, Severity
 from bcbench.types import AgentConfig, AgentMetricsContract, AnyAgentMetrics, EvaluationCategory, HarnessName, PRReviewMetrics
 
@@ -116,6 +116,8 @@ def test_all_categories_handled_in_get_expected_output(
             entry = sample_nl2al_entry
         elif entry_cls is DataQueryEntry:
             entry = sample_data_query_entry
+        elif entry_cls is BCalScenarioEntry:
+            entry = entry_cls.load(category.dataset_path)[0]
         elif entry_cls is ExtRequestAdvisorEntry:
             entry = sample_ext_advisor_entry
         elif entry_cls is ExtRequestImplementEntry:
