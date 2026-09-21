@@ -163,6 +163,24 @@ Get-RepoCloneInfo -Entry $entry | ConvertTo-Json -Compress
     assert payload["Url"] == "https://github.com/owner/repo.git"
 
 
+def test_optional_artifact_eula_config_is_strict_mode_safe() -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+Import-Module {_ps_quote(_ROOT / "scripts" / "BCBenchUtils.psm1")} -Force
+$bugFix = Get-BCBenchArtifactConfig -Category 'bug-fix'
+$dataQuery = Get-BCBenchArtifactConfig -Category 'data-query'
+[PSCustomObject]@{{
+    bugFix = $bugFix.ContainsKey('accept_insiderEula') -and [bool]$bugFix['accept_insiderEula']
+    dataQuery = $dataQuery.ContainsKey('accept_insiderEula') -and [bool]$dataQuery['accept_insiderEula']
+}} | ConvertTo-Json -Compress
+"""
+
+    payload = _last_json(_run_pwsh(script))
+
+    assert payload == {"bugFix": False, "dataQuery": True}
+
+
 def test_setup_parameter_metadata_and_pinned_container_helper() -> None:
     script = f"""
 $ErrorActionPreference = 'Stop'

@@ -3590,6 +3590,7 @@ function Invoke-BCBenchBugFixLifecycle {
                 $artifactParameters = @{ version = $operationContext.Version; Country = $operationContext.Country }
                 $artifactConfig = Get-BCBenchArtifactConfig -Category $operationContext.Category
                 foreach ($key in $artifactConfig.Keys) { $artifactParameters[$key] = $artifactConfig[$key] }
+                $acceptInsiderEula = $artifactConfig.ContainsKey("accept_insiderEula") -and [bool]$artifactConfig["accept_insiderEula"]
                 $operationContext.ArtifactUrl = Get-BCArtifactUrl @artifactParameters
                 [string[]]$additionalParameters = @(
                     "--label",
@@ -3609,7 +3610,7 @@ function Invoke-BCBenchBugFixLifecycle {
                     -Version $operationContext.Version `
                     -ArtifactUrl $operationContext.ArtifactUrl `
                     -Credential $operationContext.EvaluatorCredential `
-                    -AcceptInsiderEula ([bool]$artifactConfig.accept_insiderEula) `
+                    -AcceptInsiderEula $acceptInsiderEula `
                     -AdditionalParameters $additionalParameters
             } | Out-Null
         }
